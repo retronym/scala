@@ -271,7 +271,7 @@ final class URLZipArchive(url: URL) extends AbstractFile with ZipContainer
   def absolute: AbstractFile = this
   def lastModified: Long =
     try url.openConnection().getLastModified()
-    catch { case _: IOException => 0 }
+    catch { case _: IOException => 0l }
 
   /** Methods we don't support but have to implement because of the design */
   def file: JFile = null

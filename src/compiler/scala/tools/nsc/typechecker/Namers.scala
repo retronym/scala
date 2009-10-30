@@ -394,7 +394,7 @@ trait Namers { self: Analyzer =>
                       assert(mods.isLazy)   // if not a field, it has to be a lazy val
                       owner.newValue(tree.pos, name + "$lzy" ).setFlag(mods.flags | MUTABLE)
                     } else {
-                      val mflag = if (mods.isLazy) MUTABLE else 0
+                      val mflag: Long = if (mods.isLazy) MUTABLE else 0l
                       val newflags = mods.flags & FieldFlags | PRIVATE | LOCAL | mflag
 
                       owner.newValue(tree.pos, nme.getterToLocal(name)) setFlag newflags
@@ -958,7 +958,7 @@ trait Namers { self: Analyzer =>
           val baseHasDefault = overrides && (baseParams.head hasFlag DEFAULTPARAM)
           if (sym hasFlag DEFAULTPARAM) {
             // generate a default getter for that argument
-            val oflag = if (baseHasDefault) OVERRIDE else 0
+            val oflag = if (baseHasDefault) OVERRIDE else 0l
             val name = (if (isConstr) "init" else meth.name) +"$default$"+ posCounter
 
             // Create trees for the defaultGetter. Uses tools from Unapplies.scala
@@ -1018,9 +1018,10 @@ trait Namers { self: Analyzer =>
             }))
             val defRhs = copyUntyped(vparam.rhs)
 
+            import PrimitiveCoercions._
             val defaultTree = atPos(vparam.pos.focus) {
               DefDef(
-                Modifiers(meth.flags & (PRIVATE | PROTECTED | FINAL).toLong) | SYNTHETIC | DEFAULTPARAM | oflag.toLong,
+                Modifiers(meth.flags & (PRIVATE | PROTECTED | FINAL)) | SYNTHETIC | DEFAULTPARAM | oflag,
                 name, deftParams, defvParamss, defTpt, defRhs)
             }
             meth.owner.resetFlag(INTERFACE) // there's a concrete member now
@@ -1238,14 +1239,14 @@ trait Namers { self: Analyzer =>
      *   - declarations only in mixins or abstract classes (when not @native)
      */
     def validate(sym: Symbol) {
-      def checkNoConflict(flag1: Int, flag2: Int) {
-        if (sym.hasFlag(flag1.toLong) && sym.hasFlag(flag2.toLong))
+      def checkNoConflict(flag1: Long, flag2: Long) {
+        if (sym.hasFlag(flag1) && sym.hasFlag(flag2))
           context.error(sym.pos,
             if (flag1 == DEFERRED)
-              "abstract member may not have " + Flags.flagsToString(flag2.toLong) + " modifier";
+              "abstract member may not have " + Flags.flagsToString(flag2) + " modifier";
             else
               "illegal combination of modifiers: " +
-              Flags.flagsToString(flag1.toLong) + " and " + Flags.flagsToString(flag2.toLong) +
+              Flags.flagsToString(flag1) + " and " + Flags.flagsToString(flag2) +
               " for: " + sym);
       }
 

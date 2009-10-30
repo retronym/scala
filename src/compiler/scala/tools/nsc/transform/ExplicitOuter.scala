@@ -328,12 +328,12 @@ abstract class ExplicitOuter extends InfoTransform
     }
 
     /** If FLAG is set on symbol, sets notFLAG (this exists in anticipation of generalizing). */
-    def setNotFlags(sym: Symbol, flags: Int*) {
+    def setNotFlags(sym: Symbol, flags: Long*) {
       val notMap = Map(
         PRIVATE -> notPRIVATE,
         PROTECTED -> notPROTECTED
       )
-      for (f <- flags ; notFlag <- notMap get f ; if sym hasFlag f.toLong)
+      for (f <- flags ; notFlag <- notMap get f ; if sym hasFlag f)
         sym setFlag notFlag
     }
 

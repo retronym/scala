@@ -668,7 +668,7 @@ trait Scanners {
 
     /** Convert current strVal to char value
      */
-    def charVal: Char = if (strVal.length > 0) strVal.charAt(0) else 0
+    def charVal: Char = if (strVal.length > 0) strVal.charAt(0) else 0.toChar
 
     /** Convert current strVal, base to long value
      *  This is tricky because of max negative value.
@@ -677,7 +677,7 @@ trait Scanners {
       if (token == CHARLIT && !negated) {
         charVal.toLong
       } else {
-        var value: Long = 0
+        var value = 0l
         val divider = if (base == 10) 1 else 2
         val limit: Long =
           if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT.toLong
@@ -687,14 +687,14 @@ trait Scanners {
           val d = digit2int(strVal charAt i, base)
           if (d < 0) {
             syntaxError("malformed integer number")
-            return 0
+            return 0l
           }
           if (value < 0 ||
               limit / (base / divider) < value ||
               limit - (d / divider) < value * (base / divider) &&
               !(negated && limit == value * base - 1 + d)) {
                 syntaxError("integer number too large")
-                return 0
+                return 0l
               }
           value = value * base + d
           i += 1
@@ -1000,7 +1000,7 @@ trait Scanners {
   { // initialization
     enterKeywords()
     // Build keyword array
-    keyCode = Array.fill(maxKey + 1)(IDENTIFIER)
+    keyCode = Array.fill(maxKey + 1)(IDENTIFIER.toByte)
     for (j <- 0 until tokenCount if keyName(j) ne null)
       keyCode(keyName(j).start) = j.toByte
   }

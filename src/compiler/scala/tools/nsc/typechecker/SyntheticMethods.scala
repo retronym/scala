@@ -62,10 +62,10 @@ trait SyntheticMethods extends ast.TreeDSL {
       }
     }
 
-    def syntheticMethod(name: Name, flags: Int, tpeCons: Symbol => Type) =
+    def syntheticMethod(name: Name, flags: Long, tpeCons: Symbol => Type) =
       newSyntheticMethod(name, flags | OVERRIDE, tpeCons)
 
-    def newSyntheticMethod(name: Name, flags: Int, tpeCons: Symbol => Type) = {
+    def newSyntheticMethod(name: Name, flags: Long, tpeCons: Symbol => Type) = {
       val method = clazz.newMethod(clazz.pos.focus, name) setFlag (flags | SYNTHETICMETH)
       method setInfo tpeCons(method)
       clazz.info.decls.enter(method).asInstanceOf[TermSymbol]
@@ -79,18 +79,18 @@ trait SyntheticMethods extends ast.TreeDSL {
     import CODE._
 
     def productPrefixMethod: Tree = typer.typed {
-      val method = syntheticMethod(nme.productPrefix, 0, sym => PolyType(Nil, StringClass.tpe))
+      val method = syntheticMethod(nme.productPrefix, 0l, sym => PolyType(Nil, StringClass.tpe))
       DEF(method) === LIT(clazz.name.decode)
     }
 
     def productArityMethod(nargs: Int): Tree = {
-      val method = syntheticMethod(nme.productArity, 0, sym => PolyType(Nil, IntClass.tpe))
+      val method = syntheticMethod(nme.productArity, 0l, sym => PolyType(Nil, IntClass.tpe))
       typer typed { DEF(method) === LIT(nargs) }
     }
 
     def productElementMethod(accs: List[Symbol]): Tree = {
       val symToTpe  = makeTypeConstructor(List(IntClass.tpe), AnyClass.tpe)
-      val method    = syntheticMethod(nme.productElement, 0, symToTpe)
+      val method    = syntheticMethod(nme.productElement, 0l, symToTpe)
       val arg       = method ARG 0
       val default   = List( DEFAULT ==> THROW(IndexOutOfBoundsExceptionClass, arg) )
       val cases     =
@@ -113,7 +113,7 @@ trait SyntheticMethods extends ast.TreeDSL {
       val target      = getMember(ScalaRunTimeModule, "_" + name)
       val paramtypes  = target.tpe.paramTypes drop 1
       val method      = syntheticMethod(
-        name, 0, makeTypeConstructor(paramtypes, target.tpe.resultType)
+        name, 0l, makeTypeConstructor(paramtypes, target.tpe.resultType)
       )
 
       typer typed {
@@ -124,7 +124,7 @@ trait SyntheticMethods extends ast.TreeDSL {
     }
 
     def equalsSym = syntheticMethod(
-      nme.equals_, 0, makeTypeConstructor(List(AnyClass.tpe), BooleanClass.tpe)
+      nme.equals_, 0l, makeTypeConstructor(List(AnyClass.tpe), BooleanClass.tpe)
     )
 
     /** The equality method for case modules:
@@ -146,7 +146,7 @@ trait SyntheticMethods extends ast.TreeDSL {
      *  so as not to interfere.
      */
     def canEqualMethod: Tree = {
-      val method  = syntheticMethod(nme.canEqual_, 0, makeTypeConstructor(List(AnyClass.tpe), BooleanClass.tpe))
+      val method  = syntheticMethod(nme.canEqual_, 0l, makeTypeConstructor(List(AnyClass.tpe), BooleanClass.tpe))
       val that    = method ARG 0
 
       typer typed (DEF(method) === (that IS_OBJ clazz.tpe))

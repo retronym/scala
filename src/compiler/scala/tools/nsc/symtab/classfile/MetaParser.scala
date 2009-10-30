@@ -68,9 +68,9 @@ abstract class MetaParser{
     val vflag =
       if (token == "+") { nextToken(); Flags.COVARIANT }
       else if (token == "-") { nextToken(); Flags.CONTRAVARIANT }
-      else 0;
+      else 0l;
     assert(token startsWith "?", token)
-    val sym = owner.newTypeParameter(NoPosition, newTypeName(token)).setFlag(vflag.toLong)
+    val sym = owner.newTypeParameter(NoPosition, newTypeName(token)).setFlag(vflag)
     nextToken()
     val lo =
       if (token == ">") { nextToken(); parseType() }

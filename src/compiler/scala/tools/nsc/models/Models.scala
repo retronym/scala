@@ -321,7 +321,7 @@ abstract class Models {
             //val setter = sym0.owner.info.decl(name);
             val isVar = sym.isVariable;
             val mods = (ddef.mods |
-              (if (isVar) symtab.Flags.MUTABLE else 0) | symtab.Flags.DEFERRED) &
+              (if (isVar) symtab.Flags.MUTABLE else 0l) | symtab.Flags.DEFERRED) &
                 ~symtab.Flags.ACCESSOR.toLong & ~symtab.Flags.SYNTHETIC.toLong
             val tree =
               ValDef(mods, ddef.name, ddef.tpt, ddef.rhs).setPos(ddef.pos).setSymbol(sym);

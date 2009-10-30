@@ -155,7 +155,7 @@ trait JavaScanners {
       // Build keyword array
       key = new Array[Byte](maxKey + 1)
       for (i <- 0 to maxKey)
-        key(i) = IDENTIFIER
+        key(i) = IDENTIFIER.toByte
       for (j <- 0 until tokenCount)
         if (tokenName(j) ne null)
           key(tokenName(j).start) = j.asInstanceOf[Byte]
@@ -833,7 +833,7 @@ trait JavaScanners {
       if (token == CHARLIT && !negated) {
         if (name.length > 0) name(0).toLong else 0l
       } else {
-        var value: Long = 0
+        var value = 0l
         val divider = if (base == 10) 1 else 2
         val limit: Long =
           if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT.toLong
@@ -843,14 +843,14 @@ trait JavaScanners {
           val d = in.digit2int(name(i), base)
           if (d < 0) {
             syntaxError("malformed integer number")
-            return 0
+            return 0l
           }
           if (value < 0 ||
               limit / (base / divider) < value ||
               limit - (d / divider) < value * (base / divider) &&
               !(negated && limit == value * base - 1 + d)) {
                 syntaxError("integer number too large")
-                return 0
+                return 0l
               }
           value = value * base + d
           i += 1

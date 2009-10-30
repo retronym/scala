@@ -450,7 +450,7 @@ abstract class GenMSIL extends SubComponent {
         val globalMain = mmodule.DefineGlobalMethod(
           "Main", MethodAttributes.Public | MethodAttributes.Static,
           MVOID, stringArrayTypes)
-        globalMain.DefineParameter(0, ParameterAttributes.None, "args")
+        globalMain.DefineParameter(0, ParameterAttributes.None.toInt, "args")
         massembly.SetEntryPoint(globalMain)
         val code = globalMain.GetILGenerator()
         val moduleField = getModuleInstanceField(entryPoint.enclClass)
@@ -1884,10 +1884,11 @@ abstract class GenMSIL extends SubComponent {
     }
 
     def msilFieldFlags(sym: Symbol): Short = {
-      var mf: Int =
+      var mf: Int = (
         if (sym hasFlag Flags.PRIVATE) FieldAttributes.Private
         else if (sym hasFlag Flags.PROTECTED) FieldAttributes.FamORAssem
         else FieldAttributes.Public
+      ).toInt
 
       if (sym hasFlag Flags.FINAL)
         mf = mf | FieldAttributes.InitOnly
@@ -2075,7 +2076,7 @@ abstract class GenMSIL extends SubComponent {
           val constr =
             ownerType.DefineConstructor(attr, CallingConventions.Standard, paramTypes)
           for (i <- 0.until(paramTypes.length)) {
-            constr.DefineParameter(i, ParameterAttributes.None, msilName(m.params(i).sym))
+            constr.DefineParameter(i, ParameterAttributes.None.toInt, msilName(m.params(i).sym))
           }
           mapConstructor(sym, constr)
           addAttributes(constr, sym.annotations)
@@ -2084,7 +2085,7 @@ abstract class GenMSIL extends SubComponent {
           val method =
             ownerType.DefineMethod(getMethodName(sym), attr, resType, paramTypes)
           for (i <- 0.until(paramTypes.length)) {
-            method.DefineParameter(i, ParameterAttributes.None, msilName(m.params(i).sym))
+            method.DefineParameter(i, ParameterAttributes.None.toInt, msilName(m.params(i).sym))
           }
           if (!methods.contains(sym))
             mapMethod(sym, method)
@@ -2224,7 +2225,7 @@ abstract class GenMSIL extends SubComponent {
 
           var i = 0
           while (i < paramTypes.length) {
-            mirrorMethod.DefineParameter(i, ParameterAttributes.None, paramNames(i))
+            mirrorMethod.DefineParameter(i, ParameterAttributes.None.toInt, paramNames(i))
             i += 1
           }
 
@@ -2275,7 +2276,7 @@ abstract class GenMSIL extends SubComponent {
         (MethodAttributes.Final | MethodAttributes.Public | MethodAttributes.Static).toShort,
         msilType(returnType), (params map (_.tpe)).map(msilType).toArray)
       for (i <- 0 until params.length)
-        caller.DefineParameter(i, ParameterAttributes.None, "arg" + i) // FIXME: use name of parameter symbol
+        caller.DefineParameter(i, ParameterAttributes.None.toInt, "arg" + i) // FIXME: use name of parameter symbol
       val delegCtor = msilType(delegateType).GetConstructor(Array(MOBJECT, INT_PTR))
       mcode.Emit(OpCodes.Ldnull)
       mcode.Emit(OpCodes.Ldftn, caller)

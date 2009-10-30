@@ -67,7 +67,7 @@ abstract class Enumeration(initial: Int, names: String*) {
     val name = this.getClass.getName
     var string =
       if (name endsWith "$") name.substring(0, name.length - 1) else name
-    val idx1 = string.lastIndexOf('.' : Int)
+    val idx1 = string.lastIndexOf('.')
     if (idx1 != -1) string = string.substring(idx1 + 1)
     val idx2 = string.indexOf('$')
     if (idx2 != -1) string = string.substring(idx2 + 1)

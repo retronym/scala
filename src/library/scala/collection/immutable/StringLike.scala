@@ -22,10 +22,10 @@ import scala.util.matching.Regex
 object StringLike {
 
   // just statics for companion class.
-  private final val LF: Char = 0x0A
-  private final val FF: Char = 0x0C
-  private final val CR: Char = 0x0D
-  private final val SU: Char = 0x1A
+  private final val LF: Char = 0x0A.toChar
+  private final val FF: Char = 0x0C.toChar
+  private final val CR: Char = 0x0D.toChar
+  private final val SU: Char = 0x1A.toChar
 }
 
 import StringLike._

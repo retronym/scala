@@ -96,7 +96,7 @@ trait Trees {
   def Modifiers(flags: Long, privateWithin: Name): Modifiers = Modifiers(flags, privateWithin, List(), new Map.EmptyMap)
   def Modifiers(flags: Long): Modifiers = Modifiers(flags, nme.EMPTY.toTypeName)
 
-  val NoMods = Modifiers(0)
+  val NoMods = Modifiers(0l)
 
   // @M helper method for asserts that check consistency in kinding
   //def kindingIrrelevant(tp: Type) = (tp eq null) || phase.name == "erasure" || phase.erasedTypes

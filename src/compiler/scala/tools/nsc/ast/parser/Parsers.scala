@@ -1988,13 +1988,13 @@ self =>
         syntaxError("lazy not allowed here. Only vals can be lazy", false)
       in.token match {
         case VAL =>
-          patDefOrDcl(pos, mods withPosition(VAL, tokenRange(in)))
+          patDefOrDcl(pos, mods withPosition(VAL.toLong, tokenRange(in)))
         case VAR =>
-          patDefOrDcl(pos, (mods | Flags.MUTABLE) withPosition (VAR, tokenRange(in)))
+          patDefOrDcl(pos, (mods | Flags.MUTABLE) withPosition (VAR.toLong, tokenRange(in)))
         case DEF =>
-          List(funDefOrDcl(pos, mods withPosition(DEF, tokenRange(in))))
+          List(funDefOrDcl(pos, mods withPosition(DEF.toLong, tokenRange(in))))
         case TYPE =>
-          List(typeDefOrDcl(pos, mods withPosition(TYPE, tokenRange(in))))
+          List(typeDefOrDcl(pos, mods withPosition(TYPE.toLong, tokenRange(in))))
         case _ =>
           List(tmplDef(pos, mods))
       }

@@ -584,7 +584,7 @@ abstract class Pickler extends SubComponent {
         case DeBruijnIndex(l, i) =>
           writeNat(l); writeNat(i); DEBRUIJNINDEXtpe
         case c @ Constant(_) =>
-          if (c.tag == BooleanTag) writeLong(if (c.booleanValue) 1 else 0)
+          if (c.tag == BooleanTag) writeLong(if (c.booleanValue) 1l else 0l)
           else if (ByteTag <= c.tag && c.tag <= LongTag) writeLong(c.longValue)
           else if (c.tag == FloatTag) writeLong(Float.floatToIntBits(c.floatValue).toLong)
           else if (c.tag == DoubleTag) writeLong(Double.doubleToLongBits(c.doubleValue))

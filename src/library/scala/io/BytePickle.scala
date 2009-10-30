@@ -65,11 +65,11 @@ object BytePickle {
   def refDef: PU[RefDef] = new PU[RefDef] {
     def appP(b: RefDef, s: Array[Byte]): Array[Byte] =
       b match {
-        case Ref() => Array.concat(s, Array[Byte](0))
-        case Def() => Array.concat(s, Array[Byte](1))
+        case Ref() => Array.concat(s, Array(0b))
+        case Def() => Array.concat(s, Array(1b))
       };
     def appU(s: Array[Byte]): (RefDef, Array[Byte]) =
-      if (s(0) == (0: Byte)) (Ref(), s.slice(1, s.length))
+      if (s(0) == 0b) (Ref(), s.slice(1, s.length))
       else (Def(), s.slice(1, s.length));
   }
 

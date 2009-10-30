@@ -80,12 +80,12 @@ abstract class OverridingPairs {
     private val decls = new Scope
 
     // fill `decls` with overriding shadowing overridden */
-    { def fillDecls(bcs: List[Symbol], deferredflag: Int) {
+    { def fillDecls(bcs: List[Symbol], deferredflag: Long) {
         if (!bcs.isEmpty) {
           fillDecls(bcs.tail, deferredflag)
           var e = bcs.head.info.decls.elems;
           while (e ne null) {
-            if (e.sym.getFlag(DEFERRED) == deferredflag.toLong && !exclude(e.sym))
+            if (e.sym.getFlag(DEFERRED) == deferredflag && !exclude(e.sym))
               decls enter e.sym;
             e = e.next
           }
@@ -94,7 +94,7 @@ abstract class OverridingPairs {
       // first, deferred (this wil need to change if we change lookup rules!
       fillDecls(base.info.baseClasses, DEFERRED)
       // then, concrete.
-      fillDecls(base.info.baseClasses, 0)
+      fillDecls(base.info.baseClasses, 0l)
     }
 
     private val size = base.info.baseClasses.length

@@ -90,7 +90,7 @@ class ForkJoinScheduler(val initCoreSize: Int, val maxSize: Int, daemon: Boolean
         Debug.info(this+": initiating shutdown...")
         while (!pool.isQuiescent()) {
           try {
-            Thread.sleep(10)
+            Thread.sleep(10l)
           } catch {
             case ignore: InterruptedException =>
           }

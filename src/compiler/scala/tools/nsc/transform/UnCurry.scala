@@ -600,7 +600,7 @@ abstract class UnCurry extends InfoTransform with TypingTransformers {
           mainTransform(transformFunction(fun))
 
         case Template(_, _, _) =>
-          withInConstructorFlag(0) { super.transform(tree) }
+          withInConstructorFlag(0l) { super.transform(tree) }
 
         case _ =>
           val tree1 = super.transform(tree)

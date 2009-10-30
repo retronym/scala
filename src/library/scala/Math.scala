@@ -174,7 +174,7 @@ object Math {
   def min(x: Float, y: Float): Float  = java.lang.Math.min(x, y)
   def min(x: Double, y: Double): Double = java.lang.Math.min(x, y)
 
-  def signum(x: Double): Double = x match { case 0 => 0
+  def signum(x: Double): Double = x match { case 0 => 0.0
                                             case y if y < 0 => -1.0
                                             case y if y > 0 => 1.0 }
   def signum(x: Float): Float = x match { case 0f => 0f

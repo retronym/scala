@@ -174,7 +174,7 @@ class CompileSocket {
             if (attempts % 2 == 0)
               portFile(port).delete // 50% chance to stop trying on this port
 
-            Thread.sleep(100) // delay before retrying
+            Thread.sleep(100l) // delay before retrying
 
             getsock(attempts - 1)
         }
@@ -212,7 +212,7 @@ class CompileSocket {
 
     // allow some time for the server to start up
     def check = {
-      Thread sleep 100
+      Thread sleep 100l
       ff.length
     }
     if (Iterator continually check take 50 find (_ > 0) isEmpty) {

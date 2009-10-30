@@ -444,7 +444,7 @@ abstract class TreeBuilder {
 
   /** Create tree for pattern definition &lt;val pat0 = rhs&gt; */
   def makePatDef(pat: Tree, rhs: Tree): List[Tree] =
-    makePatDef(Modifiers(0), pat, rhs)
+    makePatDef(Modifiers(0l), pat, rhs)
 
   /** Create tree for pattern definition <mods val pat0 = rhs> */
   def makePatDef(mods: Modifiers, pat: Tree, rhs: Tree): List[Tree] = matchVarPattern(pat) match {

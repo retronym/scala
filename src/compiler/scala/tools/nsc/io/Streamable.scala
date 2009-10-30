@@ -27,7 +27,7 @@ object Streamable
    */
   trait Bytes {
     def inputStream(): InputStream
-    def length: Long = -1
+    def length = -1L
 
     def bufferedInput() = new BufferedInputStream(inputStream())
     def bytes(): Iterator[Byte] = bytesAsInts() map (_.toByte)

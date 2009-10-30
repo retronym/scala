@@ -162,7 +162,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         //println("creating new getter for "+field+field.locationString+(field hasFlag MUTABLE))
         clazz.newMethod(field.pos, nme.getterName(field.name))
           .setFlag(field.flags & ~(PRIVATE | LOCAL) | ACCESSOR | lateDEFERRED |
-                     (if (field hasFlag MUTABLE) 0 else STABLE))
+                     (if (field hasFlag MUTABLE) 0l else STABLE))
           .setInfo(MethodType(List(), field.info))
       }
 
@@ -237,7 +237,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             val imember = member.overriddenSymbol(iface)
             //Console.println("mixin member "+member+":"+member.tpe+member.locationString+" "+imember+" "+imember.overridingSymbol(clazz)+" to "+clazz+" with scope "+clazz.info.decls)//DEBUG
             if (imember.overridingSymbol(clazz) == NoSymbol &&
-                clazz.info.findMember(member.name, 0, lateDEFERRED, false).alternatives.contains(imember)) {
+                clazz.info.findMember(member.name, 0l, lateDEFERRED, false).alternatives.contains(imember)) {
                   val member1 = addMember(
                     clazz,
                     member.cloneSymbol(clazz) setPos clazz.pos resetFlag (DEFERRED | lateDEFERRED))
@@ -282,7 +282,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
                     addMember(clazz,
                               clazz.newValue(member.pos, nme.getterToLocal(member.name))
                               setFlag (LOCAL | PRIVATE | member.getFlag(MUTABLE | LAZY))
-                              setFlag (if (!member.hasFlag(STABLE)) MUTABLE else 0)
+                              setFlag (if (!member.hasFlag(STABLE)) MUTABLE else 0l)
                               setInfo member.tpe.resultType
                               setAnnotations member.annotations)
                 }

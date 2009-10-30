@@ -4,6 +4,8 @@ package rules
 package scalasig
 
 trait Flags {
+  import PrimitiveCoercions._
+
   def hasFlag(flag : Long) : Boolean
 
   def isImplicit = hasFlag(0x00000001)

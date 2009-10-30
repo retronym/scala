@@ -35,10 +35,10 @@ abstract class SubComponent {
   override def hashCode() = phaseName.hashCode()
 
   /** New flags defined by the phase which are not valid before */
-  def phaseNewFlags: Long = 0
+  def phaseNewFlags: Long = 0l
 
   /** New flags defined by the phase which are not valid until immediately after it */
-  def phaseNextFlags: Long = 0
+  def phaseNextFlags: Long = 0l
 
   /** The phase factory */
   def newPhase(prev: Phase): Phase

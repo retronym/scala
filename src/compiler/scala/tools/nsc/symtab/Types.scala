@@ -426,17 +426,17 @@ trait Types {
      *  Members appear in linearization order of their owners.
      *  Members with the same owner appear in reverse order of their declarations.
      */
-    def members: List[Symbol] = findMember(nme.ANYNAME, 0, 0, false).alternatives
+    def members: List[Symbol] = findMember(nme.ANYNAME, 0l, 0l, false).alternatives
 
     /** A list of all non-private members of this type (defined or inherited) */
     def nonPrivateMembers: List[Symbol] =
-      findMember(nme.ANYNAME, PRIVATE | BRIDGES, 0, false).alternatives
+      findMember(nme.ANYNAME, PRIVATE | BRIDGES, 0l, false).alternatives
 
     /** A list of all non-private members of this type  (defined or inherited),
      *  admitting members with given flags `admit`
      */
     def nonPrivateMembersAdmitting(admit: Long): List[Symbol] =
-      findMember(nme.ANYNAME, (PRIVATE | BRIDGES) & ~admit, 0, false).alternatives
+      findMember(nme.ANYNAME, (PRIVATE | BRIDGES) & ~admit, 0l, false).alternatives
 
     /** A list of all implicit symbols of this type  (defined or inherited) */
     def implicitMembers: List[Symbol] =
@@ -448,25 +448,25 @@ trait Types {
 
     /** The member with given name,
      *  an OverloadedSymbol if several exist, NoSymbol if none exist */
-    def member(name: Name): Symbol = findMember(name, BRIDGES, 0, false)
+    def member(name: Name): Symbol = findMember(name, BRIDGES, 0l, false)
 
     /** The non-private member with given name,
      *  an OverloadedSymbol if several exist, NoSymbol if none exist.
      *  Bridges are excluded from the result
      */
     def nonPrivateMember(name: Name): Symbol =
-      findMember(name, PRIVATE | BRIDGES, 0, false)
+      findMember(name, PRIVATE | BRIDGES, 0l, false)
 
     /** The non-private member with given name, admitting members with given flags `admit`
      *  an OverloadedSymbol if several exist, NoSymbol if none exist
      */
     def nonPrivateMemberAdmitting(name: Name, admit: Long): Symbol =
-      findMember(name, (PRIVATE | BRIDGES) & ~admit, 0, false)
+      findMember(name, (PRIVATE | BRIDGES) & ~admit, 0l, false)
 
     /** The non-local member with given name,
      *  an OverloadedSymbol if several exist, NoSymbol if none exist */
     def nonLocalMember(name: Name): Symbol =
-      findMember(name, LOCAL | BRIDGES, 0, false)
+      findMember(name, LOCAL | BRIDGES, 0l, false)
 
     /** The least type instance of given class which is a supertype
      *  of this type */
@@ -1929,7 +1929,7 @@ A type's typeSymbol should never be inspected directly.
 //    val tvars = quantified map (tparam => TypeVar(tparam))
       val underlying1 = underlying.instantiateTypeParams(quantified, tvars)
       op(underlying1) && {
-        solve(tvars, quantified, quantified map (x => 0), false, depth) &&
+        solve(tvars, quantified, quantified map (x => 0l), false, depth) &&
         isWithinBounds(NoPrefix, NoSymbol, quantified, tvars map (_.constr.inst))
       }
     }
@@ -3433,7 +3433,7 @@ A type's typeSymbol should never be inspected directly.
       } else if ((pre eq NoPrefix) || (pre eq NoType) || sym.owner.isPackageClass) {
         sym
       } else {
-        var rebind0 = pre.findMember(sym.name, BRIDGE, 0, true)
+        var rebind0 = pre.findMember(sym.name, BRIDGE, 0l, true)
         if (rebind0 == NoSymbol) {
           if (sym.isAliasType) throw missingAliasException
           assert(false, pre+"."+sym+" does no longer exist, phase = "+phase)
@@ -4346,14 +4346,14 @@ A type's typeSymbol should never be inspected directly.
    *  @param upper      When `true' search for max solution else min.
    */
   def solve(tvars: List[TypeVar], tparams: List[Symbol],
-            variances: List[Int], upper: Boolean): Boolean =
+            variances: List[Long], upper: Boolean): Boolean =
      solve(tvars, tparams, variances, upper, AnyDepth)
 
   def solve(tvars: List[TypeVar], tparams: List[Symbol],
-            variances: List[Int], upper: Boolean, depth: Int): Boolean = {
+            variances: List[Long], upper: Boolean, depth: Int): Boolean = {
     val config = tvars zip (tparams zip variances)
 
-    def solveOne(tvar: TypeVar, tparam: Symbol, variance: Int) {
+    def solveOne(tvar: TypeVar, tparam: Symbol, variance: Long) {
       if (tvar.constr.inst == NoType) {
         val up = if (variance != CONTRAVARIANT) upper else !upper
         tvar.constr.inst = null

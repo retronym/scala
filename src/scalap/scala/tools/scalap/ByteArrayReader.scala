@@ -75,7 +75,7 @@ class ByteArrayReader(content: Array[Byte]) {
    */
   def nextNat: Int = {
     var x = 0
-    var b: Byte = 0
+    var b: Byte = 0b
     do {
       b = buf(bp)
       bp += 1
@@ -87,7 +87,7 @@ class ByteArrayReader(content: Array[Byte]) {
   /** read the next signed number in big endian format
    */
   def nextNum(n: Int): Long = {
-    var x: Long = 0
+    var x: Long = 0l
     var i: Int = 0
     while (i < n) {
       x = (x << 8) + (nextByte & 0xff)

@@ -58,7 +58,7 @@ trait Symbols {
 
     var rawowner = initOwner
     var rawname = initName
-    var rawflags: Long = 0
+    var rawflags: Long = 0l
     private var rawpos = initPos
 
     val id = { ids += 1; ids } // identity displayed when -uniqid

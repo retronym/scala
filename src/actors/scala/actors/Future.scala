@@ -155,7 +155,7 @@ object Futures {
  	  case any => value = Some(any); k(value.get.asInstanceOf[T])
         }
       def isSet = value match {
-        case None => inputChannel.receiveWithin(0) {
+        case None => inputChannel.receiveWithin(0l) {
           case TIMEOUT => false
           case any => value = Some(any); true
         }

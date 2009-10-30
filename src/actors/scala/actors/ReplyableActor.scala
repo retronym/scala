@@ -151,7 +151,7 @@ private[actors] trait ReplyableActor extends ReplyableReactor {
           }
           val whatToDo =
             handleTimeout orElse (handleReply andThen {(x: Unit) => true})
-          inputChannel.receiveWithin(0)(whatToDo)
+          inputChannel.receiveWithin(0l)(whatToDo)
         case Some(_) => true
       }) || !exitReason.isEmpty
     }

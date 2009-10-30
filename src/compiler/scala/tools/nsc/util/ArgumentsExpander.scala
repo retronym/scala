@@ -19,6 +19,7 @@ object ArgumentsExpander {
    * Throws FileNotFoundException if the file does not exist.
    */
   private def expandFromFile(fileName: String): List[String]  = {
+    import PrimitiveCoercions._
     val f = AbstractFile.getFile(fileName)
     if (f eq null) throw new FileNotFoundException(
       "argument file "+ fileName +" could not be found")

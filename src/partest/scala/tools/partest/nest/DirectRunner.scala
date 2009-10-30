@@ -55,7 +55,7 @@ trait DirectRunner {
     var logsToDelete: List[File] = List()
     var outdirsToDelete: List[File] = List()
     workers foreach { w =>
-      receiveWithin(3600 * 1000) {
+      receiveWithin(3600l * 1000l) {
         case Results(s, f, logs, outdirs) =>
           logsToDelete = logsToDelete ::: logs.filter(_.toDelete)
           outdirsToDelete = outdirsToDelete ::: outdirs

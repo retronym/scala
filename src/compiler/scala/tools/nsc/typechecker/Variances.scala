@@ -17,45 +17,45 @@ trait Variances {
   import global._
 
   /** Convert variance to string */
-  private def varianceString(variance: Int): String =
+  private def varianceString(variance: Long): String =
     if (variance == COVARIANT) "covariant"
     else if (variance == CONTRAVARIANT) "contravariant"
     else "invariant"
 
   /** Flip between covariant and contravariant */
-  private def flip(v: Int): Int = {
+  private def flip(v: Long): Long = {
     if (v == COVARIANT) CONTRAVARIANT
     else if (v == CONTRAVARIANT) COVARIANT
     else v
   }
 
-  private def compose(v1: Int, v2: Int) =
-    if (v1 == 0) 0
+  private def compose(v1: Long, v2: Long) =
+    if (v1 == 0l) 0l
     else if (v1 == CONTRAVARIANT) flip(v2)
     else v2;
 
   /** Map everything below VARIANCES to 0 */
-  private def cut(v: Int): Int =
-    if (v == VARIANCES) v else 0
+  private def cut(v: Long): Long =
+    if (v == VARIANCES) v else 0l
 
   /** Compute variance of type parameter `tparam' in types of all symbols `sym'. */
-  def varianceInSyms(syms: List[Symbol])(tparam: Symbol): Int =
+  def varianceInSyms(syms: List[Symbol])(tparam: Symbol): Long =
     (VARIANCES /: syms) ((v, sym) => v & varianceInSym(sym)(tparam))
 
   /** Compute variance of type parameter `tparam' in type of symbol `sym'. */
-  def varianceInSym(sym: Symbol)(tparam: Symbol): Int =
+  def varianceInSym(sym: Symbol)(tparam: Symbol): Long =
     if (sym.isAliasType) cut(varianceInType(sym.info)(tparam))
     else varianceInType(sym.info)(tparam)
 
   /** Compute variance of type parameter `tparam' in all types `tps'. */
-  def varianceInTypes(tps: List[Type])(tparam: Symbol): Int =
+  def varianceInTypes(tps: List[Type])(tparam: Symbol): Long =
     (VARIANCES /: tps) ((v, tp) => v & varianceInType(tp)(tparam))
 
   /** Compute variance of type parameter `tparam' in all type arguments
    *  <code>tps</code> which correspond to formal type parameters `tparams1'.
    */
-  def varianceInArgs(tps: List[Type], tparams1: List[Symbol])(tparam: Symbol): Int = {
-    var v: Int = VARIANCES;
+  def varianceInArgs(tps: List[Type], tparams1: List[Symbol])(tparam: Symbol): Long = {
+    var v = VARIANCES;
     for ((tp, tparam1) <- tps zip tparams1) {
       val v1 = varianceInType(tp)(tparam)
       v = v & (if (tparam1.isCovariant) v1
@@ -66,17 +66,17 @@ trait Variances {
   }
 
   /** Compute variance of type parameter `tparam' in all type annotations `annots'. */
-  def varianceInAttribs(annots: List[AnnotationInfo])(tparam: Symbol): Int = {
+  def varianceInAttribs(annots: List[AnnotationInfo])(tparam: Symbol): Long = {
     (VARIANCES /: annots) ((v, annot) => v & varianceInAttrib(annot)(tparam))
   }
 
   /** Compute variance of type parameter `tparam' in type annotation `annot'. */
-  def varianceInAttrib(annot: AnnotationInfo)(tparam: Symbol): Int = {
+  def varianceInAttrib(annot: AnnotationInfo)(tparam: Symbol): Long = {
     varianceInType(annot.atp)(tparam)
   }
 
   /** Compute variance of type parameter <code>tparam</code> in type <code>tp</code>. */
-  def varianceInType(tp: Type)(tparam: Symbol): Int = tp match {
+  def varianceInType(tp: Type)(tparam: Symbol): Long = tp match {
     case ErrorType | WildcardType | NoType | NoPrefix | ThisType(_) | ConstantType(_) =>
       VARIANCES
     case SingleType(pre, sym) =>

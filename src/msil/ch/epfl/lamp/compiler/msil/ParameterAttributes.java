@@ -20,43 +20,43 @@ public final class ParameterAttributes {
     //##########################################################################
 
     /** Specifies that there is no parameter attribute. */
-    public static final short None = 0x0000;
+    public static final int None = 0x0000;
 
     /** Specifies that the parameter is an input parameter. */
-    public static final short In = 0x0001;
+    public static final int In = 0x0001;
 
     /** Specifies that the parameter is an output parameter. */
-    public static final short Out = 0x0002;
+    public static final int Out = 0x0002;
 
     /** Specifies that the parameter is a locale identifier. */
-    public static final short Lcid = 0x0004;
+    public static final int Lcid = 0x0004;
 
     /** Specifies that the parameter is a return value. */
-    public static final short Retval = 0x0008;
+    public static final int Retval = 0x0008;
 
     /** Specifies that the parameter is optional.
      *  Attention: In the specification the value is 0x0004 but
      *  in mscorlib.dll that it Lcid and Optional is 0x0010
      */
-    public static final short Optional = 0x0010;
+    public static final int Optional = 0x0010;
 
     /** Specifies that the parameter has a default value. */
-    public static final short HasDefault = 0x1000;
+    public static final int HasDefault = 0x1000;
 
     /** Specifies that the parameter has field marshaling information. */
-    public static final short HasFieldMarshal = 0x2000;
+    public static final int HasFieldMarshal = 0x2000;
 
     /** Reserved. */
-    public static final short Reserved3 = 0x4000;
+    public static final int Reserved3 = 0x4000;
 
     /** Reserved. */
-    public static final short Reserved4 = (short)0x8000;
+    public static final int Reserved4 = 0x8000;
 
     /** Specifies that the parameter is reserved. */
-    public static final short ReservedMask = (short)0xf000;
+    public static final int ReservedMask = 0xf000;
 
     /** Reserved: shall be zero in all conforming implementations. */
-    public static final short Unused = (short) 0xcfe0;
+    public static final int Unused = 0xcfe0;
 
     public static final String toString(int attrs) {
 	StringBuffer s = new StringBuffer();

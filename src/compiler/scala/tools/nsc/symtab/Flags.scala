@@ -10,60 +10,60 @@ package symtab
 object Flags {
 
   // modifiers
-  final val IMPLICIT      = 0x00000200
-  final val FINAL         = 0x00000020
-  final val PRIVATE       = 0x00000004
-  final val PROTECTED     = 0x00000001
+  final val IMPLICIT      = 0x00000200L
+  final val FINAL         = 0x00000020L
+  final val PRIVATE       = 0x00000004L
+  final val PROTECTED     = 0x00000001L
 
-  final val SEALED        = 0x00000400
-  final val OVERRIDE      = 0x00000002
-  final val CASE          = 0x00000800
-  final val ABSTRACT      = 0x00000008    // abstract class, or used in conjunction
+  final val SEALED        = 0x00000400L
+  final val OVERRIDE      = 0x00000002L
+  final val CASE          = 0x00000800L
+  final val ABSTRACT      = 0x00000008L   // abstract class, or used in conjunction
                                           // with abstract override.
                                           // Note difference to DEFERRED!
 
-  final val DEFERRED      = 0x00000010    // was `abstract' for members | trait is virtual
-  final val METHOD        = 0x00000040    // a method
-  final val MODULE        = 0x00000100    // symbol is module or class implementing a module
-  final val INTERFACE     = 0x00000080    // symbol is an interface (i.e. a trait which defines only abstract methods)
+  final val DEFERRED      = 0x00000010L   // was `abstract' for members | trait is virtual
+  final val METHOD        = 0x00000040L   // a method
+  final val MODULE        = 0x00000100L   // symbol is module or class implementing a module
+  final val INTERFACE     = 0x00000080L   // symbol is an interface (i.e. a trait which defines only abstract methods)
 
 
-  final val MUTABLE       = 0x00001000    // symbol is a mutable variable.
-  final val PARAM         = 0x00002000    // symbol is a (value or type) parameter to a method
-  final val PACKAGE       = 0x00004000    // symbol is a java package
-  final val DEPRECATED    = 0x00008000    // symbol is deprecated.
+  final val MUTABLE       = 0x00001000L   // symbol is a mutable variable.
+  final val PARAM         = 0x00002000L   // symbol is a (value or type) parameter to a method
+  final val PACKAGE       = 0x00004000L   // symbol is a java package
+  final val DEPRECATED    = 0x00008000L   // symbol is deprecated.
 
-  final val COVARIANT     = 0x00010000    // symbol is a covariant type variable
-  final val CAPTURED      = 0x00010000    // variable is accessed from nested function.
+  final val COVARIANT     = 0x00010000L   // symbol is a covariant type variable
+  final val CAPTURED      = 0x00010000L   // variable is accessed from nested function.
                                           // Set by LambdaLift
-  final val BYNAMEPARAM   = 0x00010000    // parameter is by name
-  final val CONTRAVARIANT = 0x00020000    // symbol is a contravariant type variable
-  final val LABEL         = 0x00020000    // method symbol is a label. Set by TailCall
-  final val INCONSTRUCTOR = 0x00020000    // class symbol is defined in this/superclass
+  final val BYNAMEPARAM   = 0x00010000L   // parameter is by name
+  final val CONTRAVARIANT = 0x00020000L   // symbol is a contravariant type variable
+  final val LABEL         = 0x00020000L   // method symbol is a label. Set by TailCall
+  final val INCONSTRUCTOR = 0x00020000L   // class symbol is defined in this/superclass
                                           // constructor.
-  final val ABSOVERRIDE   = 0x00040000    // combination of abstract & override
-  final val LOCAL         = 0x00080000    // symbol is local to current class (i.e. private[this] or protected[this]
+  final val ABSOVERRIDE   = 0x00040000L   // combination of abstract & override
+  final val LOCAL         = 0x00080000L   // symbol is local to current class (i.e. private[this] or protected[this]
                                           // pre: PRIVATE or PROTECTED are also set
-  final val JAVA          = 0x00100000    // symbol was defined by a Java class
-  final val SYNTHETIC     = 0x00200000    // symbol is compiler-generated
-  final val STABLE        = 0x00400000    // functions that are assumed to be stable
+  final val JAVA          = 0x00100000L   // symbol was defined by a Java class
+  final val SYNTHETIC     = 0x00200000L   // symbol is compiler-generated
+  final val STABLE        = 0x00400000L   // functions that are assumed to be stable
                                           // (typically, access methods for valdefs)
                                           // or classes that do not contain abstract types.
-  final val STATIC        = 0x00800000    // static field, method or class
+  final val STATIC        = 0x00800000L   // static field, method or class
 
-  final val CASEACCESSOR  = 0x01000000    // symbol is a case parameter (or its accessor)
-  final val TRAIT         = 0x02000000    // symbol is a trait
-  final val DEFAULTPARAM  = 0x02000000    // the parameter has a default value
-  final val BRIDGE        = 0x04000000    // function is a bridge method. Set by Erasure
-  final val ACCESSOR      = 0x08000000    // a value or variable accessor (getter or setter)
+  final val CASEACCESSOR  = 0x01000000L   // symbol is a case parameter (or its accessor)
+  final val TRAIT         = 0x02000000L   // symbol is a trait
+  final val DEFAULTPARAM  = 0x02000000L   // the parameter has a default value
+  final val BRIDGE        = 0x04000000L   // function is a bridge method. Set by Erasure
+  final val ACCESSOR      = 0x08000000L   // a value or variable accessor (getter or setter)
 
-  final val SUPERACCESSOR = 0x10000000    // a super accessor
-  final val PARAMACCESSOR = 0x20000000    // for value definitions: is an access method
+  final val SUPERACCESSOR = 0x10000000L   // a super accessor
+  final val PARAMACCESSOR = 0x20000000L   // for value definitions: is an access method
                                           // for a final val parameter
                                           // for parameters: is a val parameter
-  final val MODULEVAR     = 0x40000000    // for variables: is the variable caching a module value
-  final val SYNTHETICMETH = 0x40000000    // for methods: synthetic method, but without SYNTHETIC flag
-  final val MONOMORPHIC   = 0x40000000    // for type symbols: does not have type parameters
+  final val MODULEVAR     = 0x40000000L   // for variables: is the variable caching a module value
+  final val SYNTHETICMETH = 0x40000000L   // for methods: synthetic method, but without SYNTHETIC flag
+  final val MONOMORPHIC   = 0x40000000L   // for type symbols: does not have type parameters
   final val LAZY          = 0x80000000L   // symbol is a lazy val. can't have MUTABLE unless transformed by typer
 
   final val IS_ERROR      = 0x100000000L  // symbol is an error symbol
@@ -146,7 +146,7 @@ object Flags {
       if ((flags & INTERFACE)!=0) pflags|=INTERFACE_PKL
       pflags
     }
-    val v=new Array[Int](PKL_MASK+1)
+    val v=new Array[Int]((PKL_MASK+1).toInt)
     var i=0
     while (i<=PKL_MASK) {
       v(i)=rawFlagsToPickledAux(i)
@@ -156,8 +156,9 @@ object Flags {
   }
 
   private val p2r = {
+    import PrimitiveCoercions._
     def pickledToRawFlagsAux(pflags:Int) = {
-      var flags=0
+      var flags=0l
       if ((pflags & IMPLICIT_PKL )!=0) flags|=IMPLICIT
       if ((pflags & FINAL_PKL    )!=0) flags|=FINAL
       if ((pflags & PRIVATE_PKL  )!=0) flags|=PRIVATE
@@ -170,7 +171,7 @@ object Flags {
       if ((pflags & METHOD_PKL   )!=0) flags|=METHOD
       if ((pflags & MODULE_PKL   )!=0) flags|=MODULE
       if ((pflags & INTERFACE_PKL)!=0) flags|=INTERFACE
-      flags
+      flags.toInt
     }
     val v=new Array[Int](PKL_MASK+1)
     var i=0
@@ -189,6 +190,7 @@ object Flags {
 
   // List of the raw flags, in pickled order
   private val pickledListOrder = {
+    import PrimitiveCoercions._
     def findBit(m:Long):Int = {
       var mask=m
       var i=0

@@ -47,11 +47,11 @@ object Zero extends LowPriorityZeroImplicits {
   implicit object UnitZero extends Zero[Unit]             { val zero = () }
   implicit object StringZero extends Zero[String]         { val zero = "" }
   implicit object BooleanZero extends Zero[Boolean]       { val zero = false }
-  implicit object ByteZero extends Zero[Byte]             { val zero = (0: Byte) }
-  implicit object ShortZero extends Zero[Short]           { val zero = (0: Short) }
+  implicit object ByteZero extends Zero[Byte]             { val zero = 0b }
+  implicit object ShortZero extends Zero[Short]           { val zero = 0s }
   implicit object IntZero extends Zero[Int]               { val zero = 0 }
   implicit object LongZero extends Zero[Long]             { val zero = 0l }
-  implicit object CharZero extends Zero[Char]             { val zero = (0: Char) }
+  implicit object CharZero extends Zero[Char]             { val zero = '\u0000' }
   implicit object FloatZero extends Zero[Float]           { val zero = 0f }
   implicit object DoubleZero extends Zero[Double]         { val zero = 0d }
   implicit object BigIntZero extends Zero[BigInt]         { val zero = BigInt(0) }

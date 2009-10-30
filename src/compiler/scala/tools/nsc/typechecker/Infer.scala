@@ -148,7 +148,7 @@ trait Infer {
    *  @throws NoInstance
    */
   def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol],
-                  variances: List[Int], upper: Boolean, depth: Int): List[Type] = {
+                  variances: List[Long], upper: Boolean, depth: Int): List[Type] = {
 //    def boundsString(tvar: TypeVar) =
 //      "\n  "+
 //      ((tvar.constr.lobounds map (_ + " <: " + tvar.origin.typeSymbol.name)) :::
@@ -546,7 +546,7 @@ trait Infer {
                       pt: Type): List[Type] = {
       /** Map type variable to its instance, or, if `variance' is covariant/contravariant,
        *  to its upper/lower bound */
-      def instantiateToBound(tvar: TypeVar, variance: Int): Type = try {
+      def instantiateToBound(tvar: TypeVar, variance: Long): Type = try {
         //Console.println("instantiate "+tvar+tvar.constr+" variance = "+variance);//DEBUG
         if (tvar.constr.inst != NoType) {
           instantiate(tvar.constr.inst)

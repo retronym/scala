@@ -11,6 +11,7 @@ package scala.tools.scalap
 
 
 object Names {
+  import PrimitiveCoercions._
 
   val operatorName = new Array[String](128)
   operatorName('$') = "$"
