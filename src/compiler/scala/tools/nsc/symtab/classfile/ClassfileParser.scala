@@ -737,7 +737,8 @@ abstract class ClassfileParser {
       if (pt.typeSymbol == definitions.BooleanClass && c.tag == IntTag)
         Constant(c.value != 0)
       else
-        c convertTo pt
+        c convertToInternal pt
+        // c convertTo pt
     }
     def parseAttribute() {
       val attrName = pool.getName(in.nextChar)

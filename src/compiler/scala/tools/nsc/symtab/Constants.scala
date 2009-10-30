@@ -165,7 +165,10 @@ trait Constants {
      *  @param pt ...
      *  @return   ...
      */
-    def convertTo(pt: Type): Constant = {
+    def convertTo(pt: Type): Constant =
+      if (pt.typeSymbol == tpe.typeSymbol) this else null
+
+    def convertToInternal(pt: Type): Constant = {
       val target = pt.typeSymbol
       if (target == tpe.typeSymbol)
         this
@@ -190,6 +193,7 @@ trait Constants {
         null
       }
     }
+
 
     def stringValue: String =
       if (value == null) "null"
