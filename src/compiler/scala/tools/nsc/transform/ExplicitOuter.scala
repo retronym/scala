@@ -132,7 +132,7 @@ abstract class ExplicitOuter extends InfoTransform
           val access = if (clazz.isFinal) PRIVATE | LOCAL else PROTECTED
           decls1 enter (
             clazz.newValue(clazz.pos, nme getterToLocal nme.OUTER)
-            setFlag (SYNTHETIC | PARAMACCESSOR | access)
+            setFlag (SYNTHETIC | PARAMACCESSOR | access).toLong
             setInfo clazz.outerClass.thisType
           )
         }
@@ -333,7 +333,7 @@ abstract class ExplicitOuter extends InfoTransform
         PRIVATE -> notPRIVATE,
         PROTECTED -> notPROTECTED
       )
-      for (f <- flags ; notFlag <- notMap get f ; if sym hasFlag f)
+      for (f <- flags ; notFlag <- notMap get f ; if sym hasFlag f.toLong)
         sym setFlag notFlag
     }
 

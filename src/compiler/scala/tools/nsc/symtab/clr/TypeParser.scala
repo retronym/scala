@@ -255,7 +255,7 @@ abstract class TypeParser {
       val ENUM_CMP_NAMES = List(nme.EQ, nme.NE, nme.LT, nme.LE, nme.GT, nme.GE);
       val ENUM_BIT_LOG_NAMES = List(nme.OR, nme.AND, nme.XOR);
 
-      val flags = Flags.JAVA | Flags.FINAL
+      val flags = (Flags.JAVA | Flags.FINAL).toLong
       for (cmpName <- ENUM_CMP_NAMES) {
         val enumCmp = clazz.newMethod(NoPosition, cmpName)
         val enumCmpType = JavaMethodType(enumCmp.newSyntheticValueParams(List(clazz.tpe)), definitions.BooleanClass.tpe)
@@ -317,12 +317,12 @@ abstract class TypeParser {
     val delegateParamTypes: List[Type] = List(typClrType);
     // not ImplicitMethodType, this is for methods with implicit parameters (not implicit methods)
     val forwardViewMethodType = (msym: Symbol) => JavaMethodType(msym.newSyntheticValueParams(delegateParamTypes), funType)
-    val fmsym = createMethod(nme.view_, flags, forwardViewMethodType, null, true);
+    val fmsym = createMethod(nme.view_, flags.toLong, forwardViewMethodType, null, true);
 
     // create the backward view: function => delegate
     val functionParamTypes: List[Type] = List(funType);
     val backwardViewMethodType = (msym: Symbol) => JavaMethodType(msym.newSyntheticValueParams(functionParamTypes), typClrType)
-    val bmsym = createMethod(nme.view_, flags, backwardViewMethodType, null, true);
+    val bmsym = createMethod(nme.view_, flags.toLong, backwardViewMethodType, null, true);
   }
 
   private def createDelegateChainers(typ: MSILType) = {

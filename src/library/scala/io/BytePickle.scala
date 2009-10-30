@@ -85,7 +85,7 @@ object BytePickle {
         var b = 0;
         var x = 0;
         do {
-          b = s(num)
+          b = s(num).toInt
           num += 1
           x = (x << 7) + (b & 0x7f);
         } while ((b & 0x80) != 0);
@@ -254,7 +254,7 @@ object BytePickle {
         var b = 0
         var x = 0
         do {
-          b = s.stream(num)
+          b = s.stream(num).toInt
           num += 1
           x = (x << 7) + (b & 0x7f);
         } while ((b & 0x80) != 0);

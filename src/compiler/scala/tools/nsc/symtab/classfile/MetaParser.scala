@@ -70,7 +70,7 @@ abstract class MetaParser{
       else if (token == "-") { nextToken(); Flags.CONTRAVARIANT }
       else 0;
     assert(token startsWith "?", token)
-    val sym = owner.newTypeParameter(NoPosition, newTypeName(token)).setFlag(vflag)
+    val sym = owner.newTypeParameter(NoPosition, newTypeName(token)).setFlag(vflag.toLong)
     nextToken()
     val lo =
       if (token == ">") { nextToken(); parseType() }

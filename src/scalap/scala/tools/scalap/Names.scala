@@ -40,7 +40,7 @@ object Names {
     while (i < len) {
       val c = name.charAt(i)
       if (c < 128) {
-        val nop = operatorName(c)
+        val nop = operatorName(c.toInt)
         if (nop == null)
           res.append(c)
         else

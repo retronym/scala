@@ -352,6 +352,7 @@ abstract class GenJVM extends SubComponent {
        annot.args.isEmpty)
 
     private def emitJavaAnnotations(cpool: JConstantPool, buf: ByteBuffer, annotations: List[AnnotationInfo]): Int = {
+      import PrimitiveCoercions._
       def emitArgument(arg: ClassfileAnnotArg): Unit = arg match {
         case LiteralAnnotArg(const) =>
           const.tag match {

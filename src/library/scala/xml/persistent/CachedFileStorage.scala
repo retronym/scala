@@ -110,7 +110,7 @@ extends java.lang.Thread with scala.util.logging.Logged {
   override def run = {
     log("[run]\nstarting storage thread, checking every "+interval+" ms");
     while(true) {
-      Thread.sleep( this.interval );
+      Thread.sleep( this.interval.toLong );
       save
     }
   }

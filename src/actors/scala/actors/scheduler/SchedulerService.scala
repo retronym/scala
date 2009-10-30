@@ -32,7 +32,7 @@ abstract class SchedulerService(daemon: Boolean) extends Thread with IScheduler 
 
   private var terminating = false
 
-  protected val CHECK_FREQ = 100
+  protected val CHECK_FREQ = 100l
 
   def onShutdown(): Unit
 

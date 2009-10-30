@@ -1685,7 +1685,7 @@ self =>
      *  ClassParam        ::= {Annotation}  [{Modifier} (`val' | `var')] Id [`:' ParamType] [`=' Expr]
      */
     def paramClauses(owner: Name, contextBounds: List[Tree], ofCaseClass: Boolean): List[List[ValDef]] = {
-      var implicitmod = 0
+      var implicitmod = 0l
       var caseParam = ofCaseClass
       def param(): ValDef = {
         val start = in.offset
@@ -1708,7 +1708,7 @@ self =>
         }
         val nameOffset = in.offset
         val name = ident()
-        var bynamemod = 0
+        var bynamemod = 0l
         val tpt =
           if (settings.Xexperimental.value && !owner.isTypeName && in.token != COLON) {
             TypeTree()

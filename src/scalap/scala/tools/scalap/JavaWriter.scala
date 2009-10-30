@@ -13,6 +13,7 @@ import java.io._
 
 
 class JavaWriter(classfile: Classfile, writer: Writer) extends CodeWriter(writer) {
+  import PrimitiveCoercions._
 
   val cf = classfile
 

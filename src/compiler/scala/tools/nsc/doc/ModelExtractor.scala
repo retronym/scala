@@ -114,7 +114,7 @@ trait ModelExtractor {
         else null
       )
       def f(flag: Int, str: String) {
-        if (sym hasFlag flag) string = string + " " + str
+        if (sym hasFlag flag.toLong) string = string + " " + str
       }
       f(Flags.IMPLICIT, "implicit")
       f(Flags.SEALED, "sealed")

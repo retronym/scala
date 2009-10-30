@@ -12,6 +12,7 @@ package scala.tools.scalap
 
 class Classfile(in: ByteArrayReader) {
   import Classfiles._
+  import PrimitiveCoercions._
 
   assert(in.nextInt == JAVA_MAGIC)
   val minorVersion = in.nextChar

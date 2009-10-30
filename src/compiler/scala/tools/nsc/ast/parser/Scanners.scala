@@ -675,12 +675,12 @@ trait Scanners {
      */
     def intVal(negated: Boolean): Long = {
       if (token == CHARLIT && !negated) {
-        charVal
+        charVal.toLong
       } else {
         var value: Long = 0
         val divider = if (base == 10) 1 else 2
         val limit: Long =
-          if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT
+          if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT.toLong
         var i = 0
         val len = strVal.length
         while (i < len) {
@@ -709,7 +709,7 @@ trait Scanners {
     */
     def floatVal(negated: Boolean): Double = {
       val limit: Double =
-        if (token == DOUBLELIT) Math.MAX_DOUBLE else Math.MAX_FLOAT
+        if (token == DOUBLELIT) Math.MAX_DOUBLE else Math.MAX_FLOAT.toDouble
       try {
         val value: Double = java.lang.Double.valueOf(strVal).doubleValue()
         if (value > limit)
@@ -995,7 +995,7 @@ trait Scanners {
 
   /** Convert name to token */
   def name2token(name: Name): Int =
-    if (name.start <= maxKey) keyCode(name.start) else IDENTIFIER
+    if (name.start <= maxKey) keyCode(name.start).toInt else IDENTIFIER
 
 // Token representation ----------------------------------------------------
 

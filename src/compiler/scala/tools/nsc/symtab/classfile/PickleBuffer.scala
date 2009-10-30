@@ -96,11 +96,11 @@ class PickleBuffer(data: Array[Byte], from: Int, to: Int) {
   // -- Basic input routines --------------------------------------------
 
   /** Peek at the current byte without moving the read index */
-  def peekByte(): Int = bytes(readIndex)
+  def peekByte(): Int = bytes(readIndex).toInt
 
   /** Read a byte */
   def readByte(): Int = {
-    val x = bytes(readIndex); readIndex += 1; x
+    val x = bytes(readIndex); readIndex += 1; x.toInt
   }
 
   /** Read a natural number in big endian format, base 128.
@@ -111,7 +111,7 @@ class PickleBuffer(data: Array[Byte], from: Int, to: Int) {
     var b = 0L
     var x = 0L
     do {
-      b = readByte()
+      b = readByte().toLong
       x = (x << 7) + (b & 0x7f)
     } while ((b & 0x80) != 0L);
     x

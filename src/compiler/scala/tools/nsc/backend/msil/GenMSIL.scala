@@ -1227,9 +1227,9 @@ abstract class GenMSIL extends SubComponent {
               case UnitTag    => ()
               case BooleanTag => mcode.Emit(if (const.booleanValue) OpCodes.Ldc_I4_1
                                             else OpCodes.Ldc_I4_0)
-              case ByteTag    => loadI4(const.byteValue, mcode)
-              case ShortTag   => loadI4(const.shortValue, mcode)
-              case CharTag    => loadI4(const.charValue, mcode)
+              case ByteTag    => loadI4(const.byteValue.toInt, mcode)
+              case ShortTag   => loadI4(const.shortValue.toInt, mcode)
+              case CharTag    => loadI4(const.charValue.toInt, mcode)
               case IntTag     => loadI4(const.intValue, mcode)
               case LongTag    => mcode.Emit(OpCodes.Ldc_I8, const.longValue)
               case FloatTag   => mcode.Emit(OpCodes.Ldc_R4, const.floatValue)

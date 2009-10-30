@@ -36,7 +36,7 @@ class ThreadPoolScheduler(protected var executor: ThreadPoolExecutor,
   setDaemon(daemon)
 
   private var terminating = false // guarded by this
-  protected val CHECK_FREQ = 10
+  protected val CHECK_FREQ = 10l
 
   /* This constructor (and the var above) is currently only used to work
    * around a bug in scaladoc, which cannot deal with early initializers

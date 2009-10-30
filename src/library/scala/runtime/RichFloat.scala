@@ -15,6 +15,7 @@ package scala.runtime
 import Predef._
 
 final class RichFloat(x: Float) extends Proxy with Ordered[Float] {
+  import PrimitiveCoercions._
 
   // Proxy.self
   def self: Any = x

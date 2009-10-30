@@ -46,7 +46,7 @@ class ResizableThreadPoolScheduler(protected val terminate: Boolean,
   private val maxSize = ThreadPoolConfig.maxPoolSize
   private val numCores = Runtime.getRuntime().availableProcessors()
 
-  protected val CHECK_FREQ = 10
+  protected val CHECK_FREQ = 10l
 
   private def makeNewPool(): ThreadPoolExecutor = {
     val workQueue = new LinkedBlockingQueue

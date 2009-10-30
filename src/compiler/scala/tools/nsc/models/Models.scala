@@ -221,8 +221,7 @@ abstract class Models {
             updated = true
             val add = modelFor(mmbr2, this)
             add.update(mmbr2)
-            add.mods0 = mods1(mmbr1) &
-              ~symtab.Flags.ACCESSOR & ~symtab.Flags.SYNTHETIC
+            add.mods0 = mods1(mmbr1) & ~(symtab.Flags.ACCESSOR.toLong) & ~(symtab.Flags.SYNTHETIC.toLong)
             val sz = members.size
             members += (add)
             assert(members.size == sz + 1)
@@ -323,7 +322,7 @@ abstract class Models {
             val isVar = sym.isVariable;
             val mods = (ddef.mods |
               (if (isVar) symtab.Flags.MUTABLE else 0) | symtab.Flags.DEFERRED) &
-                ~symtab.Flags.ACCESSOR & ~symtab.Flags.SYNTHETIC
+                ~symtab.Flags.ACCESSOR.toLong & ~symtab.Flags.SYNTHETIC.toLong
             val tree =
               ValDef(mods, ddef.name, ddef.tpt, ddef.rhs).setPos(ddef.pos).setSymbol(sym);
             tree :: Nil;

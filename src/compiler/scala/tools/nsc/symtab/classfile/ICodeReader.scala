@@ -28,6 +28,7 @@ abstract class ICodeReader extends ClassfileParser {
   val global: Global
   import global._
   import icodes._
+  import PrimitiveCoercions._
 
   var instanceCode: IClass = null          // the ICode class for the current symbol
   var staticCode:   IClass = null          // the ICode class static members

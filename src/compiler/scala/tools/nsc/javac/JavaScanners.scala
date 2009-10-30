@@ -166,7 +166,7 @@ trait JavaScanners {
 
   /** Convert name to token */
   def name2token(name: Name): Int =
-    if (name.start <= maxKey) key(name.start) else IDENTIFIER
+    if (name.start <= maxKey) key(name.start).toInt else IDENTIFIER
 
   /** Returns the string representation of given token. */
   def token2string(token: Int): String = token match {
@@ -831,12 +831,12 @@ trait JavaScanners {
      */
     def intVal(negated: Boolean): Long = {
       if (token == CHARLIT && !negated) {
-        if (name.length > 0) name(0) else 0
+        if (name.length > 0) name(0).toLong else 0l
       } else {
         var value: Long = 0
         val divider = if (base == 10) 1 else 2
         val limit: Long =
-          if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT
+          if (token == LONGLIT) Math.MAX_LONG else Math.MAX_INT.toLong
         var i = 0
         val len = name.length
         while (i < len) {
@@ -864,7 +864,7 @@ trait JavaScanners {
     */
     def floatVal(negated: Boolean): Double = {
       val limit: Double =
-        if (token == DOUBLELIT) Math.MAX_DOUBLE else Math.MAX_FLOAT
+        if (token == DOUBLELIT) Math.MAX_DOUBLE else Math.MAX_FLOAT.toDouble
       try {
         val value: Double = java.lang.Double.valueOf(name.toString()).doubleValue()
         if (value > limit)

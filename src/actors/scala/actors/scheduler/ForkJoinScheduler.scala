@@ -19,7 +19,7 @@ class ForkJoinScheduler(val initCoreSize: Int, val maxSize: Int, daemon: Boolean
   // the ForkJoinPool returns.
   private var drainedTasks: Collection[ForkJoinTask[_]] = null
 
-  protected val CHECK_FREQ = 10
+  protected val CHECK_FREQ = 10l
 
   def this(d: Boolean) {
     this(ThreadPoolConfig.corePoolSize, ThreadPoolConfig.maxPoolSize, d)

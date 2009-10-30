@@ -34,6 +34,8 @@ trait ScalaNumericConversions extends jl.Number {
  */
 object BigDecimal
 {
+  import PrimitiveCoercions._
+
   @serializable
   object RoundingMode extends Enumeration(java.math.RoundingMode.values map (_.toString) : _*) {
     type RoundingMode = Value

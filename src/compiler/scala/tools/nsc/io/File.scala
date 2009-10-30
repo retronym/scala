@@ -86,7 +86,7 @@ with Streamable.Chars
   }
 
   def copyFile(destPath: Path, preserveFileDate: Boolean = false) = {
-    val FIFTY_MB = 1024 * 1024 * 50
+    val FIFTY_MB = 1024l * 1024l * 50l
     val dest = destPath.toFile
     if (!isValid) fail("Source %s is not a valid file." format name)
     if (this.normalize == dest.normalize) fail("Source and destination are the same.")

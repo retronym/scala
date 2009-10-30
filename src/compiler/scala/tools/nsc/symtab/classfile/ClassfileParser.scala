@@ -28,6 +28,7 @@ abstract class ClassfileParser {
 
   import ClassfileConstants._
   import Flags._
+  import PrimitiveCoercions._
 
   protected var in: AbstractFileReader = _  // the class file reader
   protected var clazz: Symbol = _           // the class symbol containing dynamic members

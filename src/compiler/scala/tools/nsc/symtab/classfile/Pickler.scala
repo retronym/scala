@@ -586,7 +586,7 @@ abstract class Pickler extends SubComponent {
         case c @ Constant(_) =>
           if (c.tag == BooleanTag) writeLong(if (c.booleanValue) 1 else 0)
           else if (ByteTag <= c.tag && c.tag <= LongTag) writeLong(c.longValue)
-          else if (c.tag == FloatTag) writeLong(Float.floatToIntBits(c.floatValue))
+          else if (c.tag == FloatTag) writeLong(Float.floatToIntBits(c.floatValue).toLong)
           else if (c.tag == DoubleTag) writeLong(Double.doubleToLongBits(c.doubleValue))
           else if (c.tag == StringTag) writeRef(newTermName(c.stringValue))
           else if (c.tag == ClassTag) writeRef(c.typeValue)

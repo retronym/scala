@@ -26,7 +26,7 @@ abstract class TerminationService(terminate: Boolean)
 
   private var terminating = false
 
-  protected val CHECK_FREQ = 50
+  protected val CHECK_FREQ = 50l
 
   def onShutdown(): Unit
 

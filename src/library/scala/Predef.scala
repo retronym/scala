@@ -15,6 +15,33 @@ import collection.immutable.StringOps
 import collection.mutable.ArrayOps
 import collection.generic.CanBuildFrom
 
+object PrimitiveCoercions {
+  implicit def byte2short(x: Byte): Short = x.toShort
+  implicit def byte2int(x: Byte): Int = x.toInt
+  implicit def byte2long(x: Byte): Long = x.toLong
+  implicit def byte2float(x: Byte): Float = x.toFloat
+  implicit def byte2double(x: Byte): Double = x.toDouble
+
+  implicit def short2int(x: Short): Int = x.toInt
+  implicit def short2long(x: Short): Long = x.toLong
+  implicit def short2float(x: Short): Float = x.toFloat
+  implicit def short2double(x: Short): Double = x.toDouble
+
+  implicit def char2int(x: Char): Int = x.toInt
+  implicit def char2long(x: Char): Long = x.toLong
+  implicit def char2float(x: Char): Float = x.toFloat
+  implicit def char2double(x: Char): Double = x.toDouble
+
+  implicit def int2long(x: Int): Long = x.toLong
+  implicit def int2float(x: Int): Float = x.toFloat
+  implicit def int2double(x: Int): Double = x.toDouble
+
+  implicit def long2float(x: Long): Float = x.toFloat
+  implicit def long2double(x: Long): Double = x.toDouble
+
+  implicit def float2double(x: Float): Double = x.toDouble
+}
+
 /** The <code>Predef</code> object provides definitions that are
  *  accessible in all Scala compilation units without explicit
  *  qualification.
@@ -250,30 +277,30 @@ object Predef extends LowPriorityImplicits {
 
   implicit def exceptionWrapper(exc: Throwable) = new runtime.RichException(exc)
 
-  implicit def byte2short(x: Byte): Short = x.toShort
-  implicit def byte2int(x: Byte): Int = x.toInt
-  implicit def byte2long(x: Byte): Long = x.toLong
-  implicit def byte2float(x: Byte): Float = x.toFloat
-  implicit def byte2double(x: Byte): Double = x.toDouble
-
-  implicit def short2int(x: Short): Int = x.toInt
-  implicit def short2long(x: Short): Long = x.toLong
-  implicit def short2float(x: Short): Float = x.toFloat
-  implicit def short2double(x: Short): Double = x.toDouble
-
-  implicit def char2int(x: Char): Int = x.toInt
-  implicit def char2long(x: Char): Long = x.toLong
-  implicit def char2float(x: Char): Float = x.toFloat
-  implicit def char2double(x: Char): Double = x.toDouble
-
-  implicit def int2long(x: Int): Long = x.toLong
-  implicit def int2float(x: Int): Float = x.toFloat
-  implicit def int2double(x: Int): Double = x.toDouble
-
-  implicit def long2float(x: Long): Float = x.toFloat
-  implicit def long2double(x: Long): Double = x.toDouble
-
-  implicit def float2double(x: Float): Double = x.toDouble
+  // implicit def byte2short(x: Byte): Short = x.toShort
+  // implicit def byte2int(x: Byte): Int = x.toInt
+  // implicit def byte2long(x: Byte): Long = x.toLong
+  // implicit def byte2float(x: Byte): Float = x.toFloat
+  // implicit def byte2double(x: Byte): Double = x.toDouble
+  //
+  // implicit def short2int(x: Short): Int = x.toInt
+  // implicit def short2long(x: Short): Long = x.toLong
+  // implicit def short2float(x: Short): Float = x.toFloat
+  // implicit def short2double(x: Short): Double = x.toDouble
+  //
+  // implicit def char2int(x: Char): Int = x.toInt
+  // implicit def char2long(x: Char): Long = x.toLong
+  // implicit def char2float(x: Char): Float = x.toFloat
+  // implicit def char2double(x: Char): Double = x.toDouble
+  //
+  // implicit def int2long(x: Int): Long = x.toLong
+  // implicit def int2float(x: Int): Float = x.toFloat
+  // implicit def int2double(x: Int): Double = x.toDouble
+  //
+  // implicit def long2float(x: Long): Float = x.toFloat
+  // implicit def long2double(x: Long): Double = x.toDouble
+  //
+  // implicit def float2double(x: Float): Double = x.toDouble
 
   implicit def byte2Byte(x: Byte)           = java.lang.Byte.valueOf(x)
   implicit def short2Short(x: Short)        = java.lang.Short.valueOf(x)

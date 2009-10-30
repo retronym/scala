@@ -21,6 +21,7 @@ import scala.collection.immutable.Range
  *  @since 2.1
  */
 object BigInt {
+  import PrimitiveCoercions._
 
   private val minCached = -1024
   private val maxCached = 1024

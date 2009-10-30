@@ -111,7 +111,7 @@ with ContentHandler with LexicalHandler {
         // However, it is required if text contains ]]>
         // (The end CDATA section delimiter)
         else if (c == '>') out.write("&gt;");
-        else out.write(c);
+        else out.write(c.toInt);
         i = i+1;
       }
     }

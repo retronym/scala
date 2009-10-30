@@ -414,13 +414,13 @@ trait Types {
      *  an OverloadedSymbol if several exist, NoSymbol if none exist.
      *  Alternatives of overloaded symbol appear in the order they are declared.
      */
-    def decl(name: Name): Symbol = findDecl(name, 0)
+    def decl(name: Name): Symbol = findDecl(name, 0l)
 
     /** The non-private defined or declared members with name `name' in this type;
      *  an OverloadedSymbol if several exist, NoSymbol if none exist.
      *  Alternatives of overloaded symbol appear in the order they are declared.
      */
-    def nonPrivateDecl(name: Name): Symbol = findDecl(name, PRIVATE)
+    def nonPrivateDecl(name: Name): Symbol = findDecl(name, PRIVATE.toLong)
 
     /** A list of all members of this type (defined or inherited)
      *  Members appear in linearization order of their owners.
@@ -718,7 +718,7 @@ trait Types {
      */
     def load(sym: Symbol) {}
 
-    private def findDecl(name: Name, excludedFlags: Int): Symbol = {
+    private def findDecl(name: Name, excludedFlags: Long): Symbol = {
       var alts: List[Symbol] = List()
       var sym: Symbol = NoSymbol
       var e: ScopeEntry = decls.lookupEntry(name)

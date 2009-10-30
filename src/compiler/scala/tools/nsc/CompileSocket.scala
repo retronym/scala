@@ -75,7 +75,7 @@ class CompileSocket {
   private val MaxAttempts = 100
 
   /** Time (in ms) to sleep between two polls */
-  private val sleepTime = 20
+  private val sleepTime = 20l
 
   /** The command which starts the compile server, given vm arguments.
     *

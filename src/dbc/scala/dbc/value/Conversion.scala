@@ -130,7 +130,7 @@ object Conversion {
   implicit def view8 (value:Value): Double = {
     if (value.dataType.nativeTypeId == DataType.FLOAT) {
       val v = value.asInstanceOf[dbc.value.ApproximateNumeric[Float]];
-      v.nativeValue.toFloat
+      v.nativeValue.toDouble
     } else if (value.dataType.nativeTypeId == DataType.DOUBLE) {
       val v = value.asInstanceOf[dbc.value.ApproximateNumeric[Double]];
       v.nativeValue

@@ -15,6 +15,8 @@ package scala
  * @since 2.8
  */
 object Numeric {
+  import PrimitiveCoercions._
+
   trait BigIntIsIntegral extends Integral[BigInt] {
     def plus(x: BigInt, y: BigInt): BigInt = x + y
     def minus(x: BigInt, y: BigInt): BigInt = x - y

@@ -1020,7 +1020,7 @@ trait Namers { self: Analyzer =>
 
             val defaultTree = atPos(vparam.pos.focus) {
               DefDef(
-                Modifiers(meth.flags & (PRIVATE | PROTECTED | FINAL)) | SYNTHETIC | DEFAULTPARAM | oflag,
+                Modifiers(meth.flags & (PRIVATE | PROTECTED | FINAL).toLong) | SYNTHETIC | DEFAULTPARAM | oflag.toLong,
                 name, deftParams, defvParamss, defTpt, defRhs)
             }
             meth.owner.resetFlag(INTERFACE) // there's a concrete member now
@@ -1239,13 +1239,13 @@ trait Namers { self: Analyzer =>
      */
     def validate(sym: Symbol) {
       def checkNoConflict(flag1: Int, flag2: Int) {
-        if (sym.hasFlag(flag1) && sym.hasFlag(flag2))
+        if (sym.hasFlag(flag1.toLong) && sym.hasFlag(flag2.toLong))
           context.error(sym.pos,
             if (flag1 == DEFERRED)
-              "abstract member may not have " + Flags.flagsToString(flag2) + " modifier";
+              "abstract member may not have " + Flags.flagsToString(flag2.toLong) + " modifier";
             else
               "illegal combination of modifiers: " +
-              Flags.flagsToString(flag1) + " and " + Flags.flagsToString(flag2) +
+              Flags.flagsToString(flag1.toLong) + " and " + Flags.flagsToString(flag2.toLong) +
               " for: " + sym);
       }
 
