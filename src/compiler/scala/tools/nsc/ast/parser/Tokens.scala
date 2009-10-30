@@ -24,7 +24,7 @@ object Tokens {
   final val STRINGLIT = 6
   final val SYMBOLLIT = 7
   def isLiteral(code : Int) =
-    code >= CHARLIT && code <= SYMBOLLIT
+    (code >= CHARLIT && code <= SYMBOLLIT) || (code == BYTELIT) || (code == SHORTLIT)
 
   /** identifiers */
   final val IDENTIFIER = 10
@@ -141,6 +141,10 @@ object Tokens {
   final val WHITESPACE = 105
   final val IGNORE = 106
   final val ESCAPE = 109
+
+  /** hello, retrofit */
+  final val SHORTLIT = 110
+  final val BYTELIT = 111
 
   def isSpace(at : Char) = at match {
   case ' ' | '\t' => true

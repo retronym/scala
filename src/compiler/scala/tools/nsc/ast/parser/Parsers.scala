@@ -391,7 +391,7 @@ self =>
     def isIdent = in.token == IDENTIFIER || in.token == BACKQUOTED_IDENT
 
     def isExprIntroToken(token: Int): Boolean = token match {
-      case CHARLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT |
+      case CHARLIT | BYTELIT | SHORTLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT |
            STRINGLIT | SYMBOLLIT | TRUE | FALSE | NULL | IDENTIFIER | BACKQUOTED_IDENT |
            THIS | SUPER | IF | FOR | NEW | USCORE | TRY | WHILE |
            DO | RETURN | THROW | LPAREN | LBRACE | XMLSTART => true
@@ -674,6 +674,8 @@ self =>
       val t = Literal {
         in.token match {
           case CHARLIT   => Constant(in.charVal)
+          case BYTELIT   => Constant(in.intVal(isNegated).toByte)
+          case SHORTLIT  => Constant(in.intVal(isNegated).toShort)
           case INTLIT    => Constant(in.intVal(isNegated).toInt)
           case LONGLIT   => Constant(in.intVal(isNegated))
           case FLOATLIT  => Constant(in.floatVal(isNegated).toFloat)
@@ -1159,7 +1161,7 @@ self =>
         atPos(in.offset) {
           val name = unaryOp()
           in.token match {
-            case INTLIT | LONGLIT | FLOATLIT | DOUBLELIT => literal(true)
+            case BYTELIT | SHORTLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT => literal(true)
             case _ => Select(stripParens(simpleExpr()), name)
           }
         }
@@ -1188,7 +1190,7 @@ self =>
     def simpleExpr(): Tree = {
       var canApply = true
       val t = in.token match {
-        case CHARLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT | STRINGLIT |
+        case CHARLIT | BYTELIT | SHORTLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT | STRINGLIT |
              SYMBOLLIT | TRUE | FALSE | NULL =>
           atPos(in.offset) { literal(false) }
         case XMLSTART =>
@@ -1499,7 +1501,7 @@ self =>
         case IDENTIFIER | BACKQUOTED_IDENT | THIS =>
           var t = stableId()
           in.token match {
-            case INTLIT | LONGLIT | FLOATLIT | DOUBLELIT =>
+            case BYTELIT | SHORTLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT =>
               t match {
                 case Ident(name) if name == nme.MINUS =>
                   return atPos(start) { literal(true) }
@@ -1523,7 +1525,7 @@ self =>
         case USCORE =>
           in.nextToken()
           atPos(start, start) { Ident(nme.WILDCARD) }
-        case CHARLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT |
+        case CHARLIT | BYTELIT | SHORTLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT |
              STRINGLIT | SYMBOLLIT | TRUE | FALSE | NULL =>
           atPos(start) { literal(false) }
         case LPAREN =>

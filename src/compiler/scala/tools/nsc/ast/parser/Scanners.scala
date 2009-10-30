@@ -460,7 +460,7 @@ trait Scanners {
 
     /** Can token end a statement? */
     def inLastOfStat(token: Int) = token match {
-      case CHARLIT | INTLIT | LONGLIT | FLOATLIT | DOUBLELIT | STRINGLIT | SYMBOLLIT |
+      case CHARLIT | INTLIT | LONGLIT | SHORTLIT | BYTELIT | FLOATLIT | DOUBLELIT | STRINGLIT | SYMBOLLIT |
            IDENTIFIER | BACKQUOTED_IDENT | THIS | NULL | TRUE | FALSE | RETURN | USCORE |
            TYPE | XMLSTART | RPAREN | RBRACKET | RBRACE =>
         true
@@ -749,17 +749,25 @@ trait Scanners {
       }
       def restOfUncertainToken() = {
         def isEfd = ch match { case 'e' | 'E' | 'f' | 'F' | 'd' | 'D' => true ; case _ => false }
-        def isL   = ch match { case 'l' | 'L' => true ; case _ => false }
+
+        def numType = ch match {
+          case 'b' | 'B'  => BYTELIT
+          case 's' | 'S'  => SHORTLIT
+          case 'l' | 'L'  => LONGLIT
+          case _          => -1
+        }
 
         if (base <= 10 && isEfd)
           getFraction()
         else {
           setStrVal()
-          if (isL) {
-            nextChar()
-            token = LONGLIT
+          numType match {
+            case -1 =>
+              checkNoLetter()
+            case x  =>
+              nextChar()
+              token = x
           }
-          else checkNoLetter()
         }
       }
 
@@ -838,6 +846,10 @@ trait Scanners {
         "id(" + name + ")"
       case CHARLIT =>
         "char(" + intVal + ")"
+      case BYTELIT =>
+        "byte(" + intVal + ")"
+      case SHORTLIT =>
+        "short(" + intVal + ")"
       case INTLIT =>
         "int(" + intVal + ")"
       case LONGLIT =>
