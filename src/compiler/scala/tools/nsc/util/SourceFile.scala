@@ -39,10 +39,16 @@ abstract class SourceFile {
   def path = file.path
 
   def beginsWith(offset: Int, text: String): Boolean =
-    (content drop offset) startsWith text
+    new String(content, offset, content.length) startsWith text
 
-  def lineToString(index: Int): String =
-    content drop lineToOffset(index) takeWhile (c => !isLineBreakChar(c.toChar)) mkString
+  def lineToString(index: Int): String = {
+    val start = lineToOffset(index)
+    var end = start
+    while (end < content.length && !isLineBreakChar(content(end)))
+      end += 1
+
+    new String(content, start, end - start)
+  }
 
   @tailrec
   final def skipWhitespace(offset: Int): Int =
@@ -86,8 +92,8 @@ object ScriptSourceFile {
 
   def apply(file: AbstractFile, content: Array[Char]) = {
     val underlying = new BatchSourceFile(file, content)
-    val headerLen = headerLength(content)
-    val stripped = new ScriptSourceFile(underlying, content drop headerLen, headerLen)
+    val headerLen  = headerLength(content)
+    val stripped   = new ScriptSourceFile(underlying, content drop headerLen, headerLen)
 
     stripped
   }
