@@ -103,6 +103,12 @@ abstract class TreeGen {
         abort("bad qualifier received: " + failMessage)
     }
   }
+
+  def mkAnnotation(annot: Symbol)(args: (String, Tree)*): Tree = {
+    val args1 = args.toList map { case (name, t) => AssignOrNamedArg(Ident(newTermName(name)), t) }
+    New(TypeTree(annot.tpe), List(args1))
+  }
+
   /** If this is a reference to a method with an empty
    *  parameter list, wrap it in an apply.
    */

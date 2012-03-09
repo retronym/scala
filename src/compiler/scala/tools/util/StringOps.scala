@@ -26,6 +26,10 @@ trait StringOps {
     if (ys.isEmpty) orElse else ys mkString sep
   }
 
+  def truncateString(max: Int)(s: String): String =
+    if (s.length <= max) s
+    else s.substring(0, max - 3) + "..."
+
   def decompose(str: String, sep: Char): List[String] = {
     def ws(start: Int): List[String] =
       if (start == str.length) List()

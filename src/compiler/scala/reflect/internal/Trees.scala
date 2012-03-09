@@ -8,6 +8,7 @@ package internal
 
 import Flags._
 import api.Modifier
+import scala.tools.util.StringOps.{ ojoin }
 
 trait Trees extends api.Trees { self: SymbolTable =>
 
@@ -150,18 +151,26 @@ trait Trees extends api.Trees { self: SymbolTable =>
     /** When you want to know a little more than the class, but a lot
      *  less than the whole tree.
      */
-    def summaryString: String = tree match {
-      case Select(qual, name) => qual.summaryString + "." + name.decode
-      case Ident(name)        => name.longString
-      case Literal(const)     => "Literal(" + const + ")"
-      case t: DefTree         => t.shortClass + " `" + t.name.decode + "`"
-      case t: RefTree         => t.shortClass + " `" + t.name.longString + "`"
-      case t                  =>
-        t.shortClass + (
-          if (t.symbol != null && t.symbol != NoSymbol) " " + t.symbol
-          else ""
-        )
+    def summaryString: String = {
+      val sym = tree.symbol
+      val treeClass = tree match {
+        case Select(_, _) | Ident(_)  => ""
+        case t                        => t.shortClass
+      }
+      val treeName = tree match {
+        case Select(qual, name) => qual.summaryString + "." + name.decode
+        case Ident(name)        => name.longString
+        case Literal(const)     => const.escapedStringValue
+        case t: DefTree         => t.name.decode
+        case t: RefTree         => t.name.longString
+        case t                  => ""
+      }
+      val treeSym = if (sym != null && sym != NoSymbol) "" + sym else ""
+      val treePos = posString
+
+      ojoin(treeClass, treeName, treeSym, treePos)
     }
+    def posString = if (tree.pos == null || tree.pos == NoPosition) "" else "" + tree.pos
   }
 
   // ---- values and creators ---------------------------------------
