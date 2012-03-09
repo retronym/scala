@@ -259,7 +259,7 @@ trait Definitions extends reflect.api.StandardDefinitions {
     }
 
     // exceptions and other throwables
-    lazy val ClassCastExceptionClass        = getRequiredClass("java.lang.ClassCastException")
+    lazy val ClassCastExceptionClass        = getRequiredClass[ClassCastException]
     lazy val IndexOutOfBoundsExceptionClass = getClass(sn.IOOBException)
     lazy val InvocationTargetExceptionClass = getClass(sn.InvTargetException)
     lazy val MatchErrorClass                = getRequiredClass("scala.MatchError")
@@ -417,9 +417,9 @@ trait Definitions extends reflect.api.StandardDefinitions {
       def methodCache_add   = getMember(MethodCacheClass, nme.add_)
 
     // scala.reflect
-    lazy val ReflectApiUniverse = getRequiredClass("scala.reflect.api.Universe")
-    lazy val ReflectMacroContext = getRequiredClass("scala.reflect.macro.Context")
-    lazy val ReflectRuntimeMirror = getRequiredModule("scala.reflect.runtime.Mirror")
+    lazy val ReflectApiUniverse   = getRequiredClass[scala.reflect.api.Universe]
+    lazy val ReflectMacroContext  = getRequiredClass[scala.reflect.macro.Context]
+    lazy val ReflectRuntimeMirror = getRequiredModule[scala.reflect.runtime.Mirror]
       def freeValueMethod = getMember(ReflectRuntimeMirror, nme.freeValue)
     lazy val ReflectPackage = getPackageObject("scala.reflect")
       def Reflect_mirror = getMember(ReflectPackage, nme.mirror)
@@ -886,6 +886,13 @@ trait Definitions extends reflect.api.StandardDefinitions {
 
     def getRequiredModule(fullname: String): Symbol =
       getModule(newTermNameCached(fullname))
+
+    def getRequiredClass[T](implicit m: ClassManifest[T]): Symbol =
+      getRequiredClass(m.erasure.getName)
+
+    def getRequiredModule[T](implicit m: ClassManifest[T]): Symbol =
+      getRequiredModule(m.erasure.getName stripSuffix nme.MODULE_SUFFIX_STRING)
+
     def getRequiredClass(fullname: String): Symbol =
       getClass(newTypeNameCached(fullname))
 
