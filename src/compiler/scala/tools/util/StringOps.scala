@@ -26,6 +26,17 @@ trait StringOps {
     if (ys.isEmpty) orElse else ys mkString sep
   }
 
+  // justify my string
+  def just(width: Int, isLeft: Boolean) = {
+    val c   = if (isLeft) "-" else ""
+    val fmt = "%" + c + width + "s"
+    (x: Any) => fmt format truncateString(width)("" + x)
+  }
+  def ljust(width: Int)    = just(width, true)
+  def rjust(width: Int)    = just(width, false)
+
+  def indentNextLine(width: Int) = "\n" + " " * width
+
   def truncateString(max: Int)(s: String): String =
     if (s.length <= max) s
     else s.substring(0, max - 3) + "..."
