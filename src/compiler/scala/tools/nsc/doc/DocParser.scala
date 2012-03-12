@@ -9,7 +9,7 @@ package doc
 
 import reporters._
 import util._
-import interactive.RangePositions
+import interactive.ValidatedRangePositions
 import DocParser.Parsed
 
 /** A very minimal global customized for extracting `DocDefs`.  It stops
@@ -18,7 +18,7 @@ import DocParser.Parsed
  */
 class DocParser(settings: nsc.Settings, reporter: Reporter)
         extends Global(settings, reporter)
-           with RangePositions {
+           with ValidatedRangePositions {
 
   def this(settings: Settings) = this(settings, new ConsoleReporter(settings))
   def this() = this(new Settings(Console println _))

@@ -299,14 +299,16 @@ trait Trees extends reflect.internal.Trees { self: Global =>
       if (tree.pos.isDefined) "(at %s:%s)".format(tree.pos.sourceName, tree.pos.safeLine)
       else ""
     }
+    private def echo(s: String) = Console.err.println(s)
+
     def inBraces(label: String)(body: => Unit) {
-      println(label + " \u007b\n")
+      echo(label + " \u007b\n")
       body
-      println("\u007d")
+      echo("\u007d")
     }
     def dump() {
       def show(name: String, thing: Any) {
-        println("  %-12s %s".format(name, thing))
+        echo("  %-12s %s".format(name, thing))
       }
       inBraces(tree.summaryString) {
         show("symbol", tree.symbol)

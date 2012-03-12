@@ -38,7 +38,7 @@ abstract class DirectTest extends App {
   // new compiler
   def newCompiler(args: String*): Global = {
     val settings = newSettings((CommandLineParser tokenize extraSettings) ++ args.toList)
-    new Global(settings)
+    new Global(settings) with interactive.UnvalidatedRangePositions
   }
   def newSources(sourceCodes: String*) = sourceCodes.toList.zipWithIndex map {
     case (src, idx) => new BatchSourceFile("newSource" + (idx + 1), src)

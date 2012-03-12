@@ -25,7 +25,7 @@ import symtab.Flags.{ACCESSOR, PARAMACCESSOR}
 class Global(settings: Settings, _reporter: Reporter, projectName: String = "")
   extends scala.tools.nsc.Global(settings, _reporter)
      with CompilerControl
-     with RangePositions
+     with ValidatedRangePositions
      with ContextTrees
      with RichCompilationUnits
      with ScratchPadMaker

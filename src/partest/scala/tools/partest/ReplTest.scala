@@ -19,6 +19,7 @@ abstract class ReplTest extends DirectTest {
   final override def settings: Settings = {
     val s = super.settings
     // s.Yreplsync.value = true
+    s.Yrangepos.value = true
     s.Xnojline.value = true
     transformSettings(s)
   }

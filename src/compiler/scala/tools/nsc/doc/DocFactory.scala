@@ -33,7 +33,7 @@ import DocParser.Parsed
   * @author Gilles Dubochet */
 class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor =>
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
-  object compiler extends Global(settings, reporter) with interactive.RangePositions {
+  object compiler extends Global(settings, reporter) with interactive.ValidatedRangePositions {
     override protected def computeInternalPhases() {
       phasesSet += syntaxAnalyzer
       phasesSet += analyzer.namerFactory

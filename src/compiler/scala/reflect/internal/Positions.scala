@@ -27,4 +27,11 @@ trait Positions extends api.Positions { self: SymbolTable =>
    *  to some of the nodes in `tree`.
    */
   def ensureNonOverlapping(tree: Tree, others: List[Tree]) {}
+
+  /** What to do when position validation is requested.  Mix in
+   *  ValidatedRangePositions to throw an exception when inconsistent positions
+   *  are encountered.  Or mix in UnvalidatedRangePositions to ignore
+   *  inconsistent positions.
+   */
+  def validatePositions(tree: Tree) {}
 }

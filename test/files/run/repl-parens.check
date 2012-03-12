@@ -21,11 +21,11 @@ res5: Int = 4
 
 scala> 5 ;   (  (2 + 2 )  ) ; ((5))
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              5 ;   (  (2 + 2 )  ) ;;
-              ^
+       5 ; 2 + 2 ; val res6 =
+       ^
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              5 ;   (  (2 + 2 )  ) ;;
-                          ^
+       5 ; 2 + 2 ; val res6 =
+             ^
 res6: Int = 5
 
 scala> (((2 + 2)), ((2 + 2)))
@@ -41,17 +41,17 @@ scala>
 
 scala> 55 ; ((2 + 2)) ; (1, 2, 3)
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              55 ; ((2 + 2)) ;;
-              ^
+       55 ; 2 + 2 ; val res10 =
+       ^
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              55 ; ((2 + 2)) ;;
-                       ^
+       55 ; 2 + 2 ; val res10 =
+              ^
 res10: (Int, Int, Int) = (1,2,3)
 
 scala> 55 ; (x: Int) => x + 1 ; () => ((5))
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              55 ; (x: Int) => x + 1 ;;
-              ^
+       55 ; (x: Int) => x + 1 ; val res11 =
+       ^
 res11: () => Int = <function0>
 
 scala> 
@@ -61,8 +61,8 @@ res12: () => Int = <function0>
 
 scala> 55 ; () => 5
 <console>:7: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
-              55 ;;
-              ^
+       55 ; val res13 =
+       ^
 res13: () => Int = <function0>
 
 scala> () => { class X ; new X }

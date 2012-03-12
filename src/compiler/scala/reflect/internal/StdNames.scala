@@ -454,6 +454,7 @@ trait StdNames extends NameManglers { self: SymbolTable =>
     val RuntimeNothing: NameType = "scala.runtime.Nothing$"
     val RuntimeNull: NameType    = "scala.runtime.Null$"
     val JavaLangEnum: NameType   = "java.lang.Enum"
+    val ScalaXmlElem: NameType   = "_root_.scala.xml.Elem"
   }
 
   /** Java binary names, like scala/runtime/Nothing$.
@@ -512,6 +513,18 @@ trait StdNames extends NameManglers { self: SymbolTable =>
           val (simple, div, rest) = (name take idx, name charAt idx, newTermName(name) drop (idx + 1))
           mkName(simple, div == '.') :: segments(rest, assumeTerm)
       }
+    }
+    def segments(name: Name): List[Name] = segments("" + name, assumeTerm = name.isTermName)
+
+    /** Create a Select(Select(... etc)) node from a dotted name.
+     */
+    def newTermSelection(name: String): Tree = newSelection(name, assumeTerm = true)
+    def newTypeSelection(name: String): Tree = newSelection(name, assumeTerm = false)
+    def newPathSelection(name: Name): Tree   = newSelection("" + name, assumeTerm = name.isTermName)
+
+    private def newSelection(name: String, assumeTerm: Boolean): Tree = {
+      val hd :: tl = segments(name, assumeTerm)
+      tl.foldLeft(StdNames.this.Ident(hd): Tree)((res, name) => Select(res, name))
     }
 
     def newBitmapName(bitmapPrefix: Name, n: Int) = bitmapPrefix append ("" + n)

@@ -1495,13 +1495,13 @@ class Global(var currentSettings: Settings, var reporter: Reporter) extends Symb
   }
 
   private def findMemberFromRoot(fullName: Name): Symbol = {
-    val segs = nme.segments(fullName.toString, fullName.isTermName)
+    val segs = nme.segments(fullName)
     if (segs.isEmpty) NoSymbol
     else findNamedMember(segs.tail, definitions.RootClass.info member segs.head)
   }
 
   private def findNamedMember(fullName: Name, root: Symbol): Symbol = {
-    val segs = nme.segments(fullName.toString, fullName.isTermName)
+    val segs = nme.segments(fullName)
     if (segs.isEmpty || segs.head != root.simpleName) NoSymbol
     else findNamedMember(segs.tail, root)
   }

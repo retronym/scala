@@ -9,7 +9,7 @@ package scala.tools.partest
 package nest
 
 import scala.tools.nsc.{ Global, Settings, CompilerCommand, FatalError, io }
-import scala.tools.nsc.interactive.RangePositions
+import scala.tools.nsc.interactive.ValidatedRangePositions
 import scala.tools.nsc.reporters.{ Reporter, ConsoleReporter }
 import scala.tools.nsc.util.{ ClassPath, FakePos }
 import scala.tools.nsc.Properties.{ setProp, propOrEmpty }
@@ -38,7 +38,7 @@ abstract class SimpleCompiler {
 class DirectCompiler(val fileManager: FileManager) extends SimpleCompiler {
   def newGlobal(settings: Settings, reporter: Reporter): Global =
     if (settings.Yrangepos.value)
-      new Global(settings, reporter) with RangePositions
+      new Global(settings, reporter) with ValidatedRangePositions
     else
       new Global(settings, reporter)
 

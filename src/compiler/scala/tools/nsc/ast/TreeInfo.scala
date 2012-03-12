@@ -19,7 +19,22 @@ abstract class TreeInfo extends reflect.internal.TreeInfo {
   val global: Global
   import global._
 
-  import definitions.ThrowableClass
+  /** The source code corresponding to the given tree, as
+   *  derived from the range position's mapping into the source
+   *  file, and adjusting for the fact that xml positions are
+   *  broken but when I fixed them it broke the IDE.
+   */
+  def sourceCode(tree: Tree) = {
+    if (isXmlLiteral(expressionWithoutBlocks(tree)))
+      "<" + tree.pos.sourceCode
+    else
+      tree.pos.sourceCode
+  }
+
+  def expressionWithoutBlocks(tree: Tree): Tree = tree match {
+    case Block(Nil, expr) => expressionWithoutBlocks(expr)
+    case _                => tree
+  }
 
   /** Is tree legal as a member definition of an interface?
    */

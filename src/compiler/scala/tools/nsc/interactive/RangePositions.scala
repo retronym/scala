@@ -9,6 +9,82 @@ import ast.Trees
 import symtab.Positions
 import scala.tools.nsc.util.{SourceFile, Position, RangePosition, NoPosition, WorkScheduler}
 import scala.collection.mutable.ListBuffer
+import scala.tools.nsc.{ Global => nscGlobal }
+
+/** Retained for backward compatibility with unknown clients.
+ */
+trait RangePositions extends ValidatedRangePositions { self: nscGlobal => }
+
+trait ValidatedRangePositions extends AbstractRangePositions {
+  self: nscGlobal =>
+
+  override def validatePositions(tree: Tree) {
+    if (phase.id <= currentRun.typerPhase.id)
+      validate(tree, tree)
+  }
+
+  private def reportTree(prefix : String, tree : Tree) {
+    val source = if (tree.pos.isDefined) tree.pos.source else ""
+    inform("== "+prefix+" tree ["+tree.id+"] of type "+tree.productPrefix+" at "+tree.pos.show+source)
+    inform("")
+    inform(tree.toString)
+    inform("")
+  }
+
+  private def validate(tree: Tree, encltree: Tree): Unit = {
+    def positionError(msg: String)(body : => Unit) {
+      inform("======= Bad positions: "+msg)
+      inform("")
+      body
+      inform("=== While validating")
+      inform("")
+      inform(tree.toString)
+      inform("")
+      inform("=======")
+      throw new ValidateException(msg)
+    }
+
+    if (!tree.isEmpty) {
+      if (!tree.pos.isDefined)
+        positionError("Unpositioned tree ["+tree.id+"]") { reportTree("Unpositioned", tree) }
+      if (tree.pos.isRange) {
+        if (!encltree.pos.isRange)
+          positionError("Synthetic tree ["+encltree.id+"] contains nonsynthetic tree ["+tree.id+"]") {
+          reportTree("Enclosing", encltree)
+          reportTree("Enclosed", tree)
+          }
+        if (!(encltree.pos includes tree.pos))
+          positionError("Enclosing tree ["+encltree.id+"] does not include tree ["+tree.id+"]") {
+            reportTree("Enclosing", encltree)
+            reportTree("Enclosed", tree)
+          }
+
+        findOverlapping(tree.children flatMap solidDescendants) match {
+          case List() => ;
+          case xs => {
+            positionError("Overlapping trees "+xs.map { case (x, y) => (x.id, y.id) }.mkString("", ", ", "")) {
+              reportTree("Ancestor", tree)
+              for((x, y) <- xs) {
+                reportTree("First overlapping", x)
+                reportTree("Second overlapping", y)
+              }
+            }
+          }
+        }
+      }
+      for (ct <- tree.children flatMap solidDescendants) validate(ct, tree)
+    }
+  }
+}
+
+trait UnvalidatedRangePositions extends AbstractRangePositions {
+  self: nscGlobal =>
+
+  /** Since doing nothing is the default, not much point
+   *  in overriding unless we insist.
+   */
+  final override def validatePositions(tree: Tree) = ()
+}
 
 /** Handling range positions
  *  atPos, the main method in this trait, will add positions to a tree,
@@ -27,8 +103,10 @@ import scala.collection.mutable.ListBuffer
  *   If the node has a TransparentPosition, the solid descendants of all its children
  *   Otherwise, the singleton consisting of the node itself.
  */
-trait RangePositions extends Trees with Positions {
-self: scala.tools.nsc.Global =>
+trait AbstractRangePositions extends Trees with Positions {
+  self: nscGlobal =>
+
+  class ValidateException(msg : String) extends Exception(msg)
 
   case class Range(pos: Position, tree: Tree) {
     def isFree = tree == EmptyTree
@@ -183,75 +261,6 @@ self: scala.tools.nsc.Global =>
       super.atPos(pos)(tree)
     }
   }
-
-  // ---------------- Validating positions ----------------------------------
-
-  override def validatePositions(tree: Tree) {
-    def reportTree(prefix : String, tree : Tree) {
-      val source = if (tree.pos.isDefined) tree.pos.source else ""
-      inform("== "+prefix+" tree ["+tree.id+"] of type "+tree.productPrefix+" at "+tree.pos.show+source)
-      inform("")
-      inform(treeStatus(tree))
-      inform("")
-    }
-
-    def positionError(msg: String)(body : => Unit) {
-      inform("======= Position error\n" + msg)
-      body
-      inform("\nWhile validating #" + tree.id)
-      inform(treeStatus(tree))
-      inform("\nChildren:")
-      tree.children map (t => "  " + treeStatus(t, tree)) foreach inform
-      inform("=======")
-      throw new ValidateException(msg)
-    }
-
-    def validate(tree: Tree, encltree: Tree): Unit = {
-
-      if (!tree.isEmpty) {
-        if (settings.Yposdebug.value && (settings.verbose.value || settings.Yrangepos.value))
-          println("[%10s] %s".format("validate", treeStatus(tree, encltree)))
-
-        if (!tree.pos.isDefined)
-          positionError("Unpositioned tree #"+tree.id) {
-            inform("%15s %s".format("unpositioned", treeStatus(tree, encltree)))
-            inform("%15s %s".format("enclosing", treeStatus(encltree)))
-            encltree.children foreach (t => inform("%15s %s".format("sibling", treeStatus(t, encltree))))
-          }
-        if (tree.pos.isRange) {
-          if (!encltree.pos.isRange)
-            positionError("Synthetic tree ["+encltree.id+"] contains nonsynthetic tree ["+tree.id+"]") {
-            reportTree("Enclosing", encltree)
-            reportTree("Enclosed", tree)
-            }
-          if (!(encltree.pos includes tree.pos))
-            positionError("Enclosing tree ["+encltree.id+"] does not include tree ["+tree.id+"]") {
-              reportTree("Enclosing", encltree)
-              reportTree("Enclosed", tree)
-            }
-
-          findOverlapping(tree.children flatMap solidDescendants) match {
-            case List() => ;
-            case xs => {
-              positionError("Overlapping trees "+xs.map { case (x, y) => (x.id, y.id) }.mkString("", ", ", "")) {
-                reportTree("Ancestor", tree)
-                for((x, y) <- xs) {
-                  reportTree("First overlapping", x)
-                  reportTree("Second overlapping", y)
-                }
-              }
-            }
-          }
-        }
-        for (ct <- tree.children flatMap solidDescendants) validate(ct, tree)
-      }
-    }
-
-    if (phase.id <= currentRun.typerPhase.id)
-      validate(tree, tree)
-  }
-
-  class ValidateException(msg : String) extends Exception(msg)
 
   // ---------------- Locating trees ----------------------------------
 

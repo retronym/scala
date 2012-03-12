@@ -868,6 +868,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
     }
   }
   def process(settings: Settings): Boolean = savingContextLoader {
+    settings.Yrangepos.value = true
     this.settings = settings
     createInterpreter()
 

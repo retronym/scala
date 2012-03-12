@@ -12,6 +12,7 @@ import java.net.URL
 import scala.sys.BooleanProp
 import io.VirtualDirectory
 import scala.tools.nsc.io.AbstractFile
+import interactive.UnvalidatedRangePositions
 import reporters._
 import symtab.Flags
 import scala.reflect.internal.Names
@@ -272,8 +273,12 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   protected def newCompiler(settings: Settings, reporter: Reporter) = {
     settings.outputDirs setSingleOutput virtualDirectory
     settings.exposeEmptyPackage.value = true
+    settings.Yrangepos.value = true
 
-    Global(settings, reporter)
+    if (settings.globalClass.isSetByUser)
+      Global(settings, reporter)
+    else
+      new Global(settings, reporter) with UnvalidatedRangePositions
   }
 
   /** Parent classloader.  Overridable. */
@@ -471,20 +476,6 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     }) mkString "\n"
   }
 
-  private def safePos(t: Tree, alt: Int): Int =
-    try t.pos.startOrPoint
-    catch { case _: UnsupportedOperationException => alt }
-
-  // Given an expression like 10 * 10 * 10 we receive the parent tree positioned
-  // at a '*'.  So look at each subtree and find the earliest of all positions.
-  private def earliestPosition(tree: Tree): Int = {
-    var pos = Int.MaxValue
-    tree foreach { t =>
-      pos = math.min(pos, safePos(t, Int.MaxValue))
-    }
-    pos
-  }
-
   private def requestFromLine(line: String, synthetic: Boolean): Either[IR.Result, Request] = {
     val content = indentCode(line)
     val trees = parse(content) match {
@@ -492,68 +483,25 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       case Some(Nil)    => return Left(IR.Error) // parse error or empty input
       case Some(trees)  => trees
     }
-    repltrace(
-      trees map (t =>
-        t map (t0 =>
-          "  " + safePos(t0, -1) + ": " + t0.shortClass + "\n"
-        ) mkString ""
-      ) mkString "\n"
-    )
-    // If the last tree is a bare expression, pinpoint where it begins using the
-    // AST node position and snap the line off there.  Rewrite the code embodied
-    // by the last tree as a ValDef instead, so we can access the value.
-    trees.last match {
-      case _:Assign                        => // we don't want to include assignments
-      case _:TermTree | _:Ident | _:Select => // ... but do want other unnamed terms.
-        val varName  = if (synthetic) freshInternalVarName() else ("" + freshUserTermName())
-        val rewrittenLine = (
-          // In theory this would come out the same without the 1-specific test, but
-          // it's a cushion against any more sneaky parse-tree position vs. code mismatches:
-          // this way such issues will only arise on multiple-statement repl input lines,
-          // which most people don't use.
-          if (trees.size == 1) "val " + varName + " =\n" + content
-          else {
-            // The position of the last tree
-            val lastpos0 = earliestPosition(trees.last)
-            // Oh boy, the parser throws away parens so "(2+2)" is mispositioned,
-            // with increasingly hard to decipher positions as we move on to "() => 5",
-            // (x: Int) => x + 1, and more.  So I abandon attempts to finesse and just
-            // look for semicolons and newlines, which I'm sure is also buggy.
-            val (raw1, raw2) = content splitAt lastpos0
-            repldbg("[raw] " + raw1 + "   <--->   " + raw2)
 
-            val adjustment = (raw1.reverse takeWhile (ch => (ch != ';') && (ch != '\n'))).size
-            val lastpos = lastpos0 - adjustment
+    // If the last tree is a bare expression, rewrite the whole line so it is
+    // a ValDef instead, so we can access the value.
+    if (treeInfo.isBareExpression(trees.last)) {
+      val varName = if (synthetic) freshInternalVarName() else "" + freshUserTermName()
+      val codes   = trees map (treeInfo sourceCode _)
+      // Note to self: figure out a robust way to keep the "val res0 = " part
+      // from showing up in error messages.
+      val newLine = codes.init :+ ("val " + varName + " =\n" + codes.last) mkString " ; "
+      repltrace("[rewritten] " + newLine)
 
-            // the source code split at the laboriously determined position.
-            val (l1, l2) = content splitAt lastpos
-            repldbg("[adj] " + l1 + "   <--->   " + l2)
-
-            val prefix   = if (l1.trim == "") "" else l1 + ";\n"
-            // Note to self: val source needs to have this precise structure so that
-            // error messages print the user-submitted part without the "val res0 = " part.
-            val combined   = prefix + "val " + varName + " =\n" + l2
-
-            repldbg(List(
-              "    line" -> line,
-              " content" -> content,
-              "     was" -> l2,
-              "combined" -> combined) map {
-                case (label, s) => label + ": '" + s + "'"
-              } mkString "\n"
-            )
-            combined
-          }
-        )
-        // Rewriting    "foo ; bar ; 123"
-        // to           "foo ; bar ; val resXX = 123"
-        requestFromLine(rewrittenLine, synthetic) match {
-          case Right(req) => return Right(req withOriginalLine line)
-          case x          => return x
-        }
-      case _ =>
+      // Rewriting    "foo ; bar ; 123"
+      // to           "foo ; bar ; val resXX = 123"
+      requestFromLine(newLine, synthetic) match {
+        case Right(req) => Right(req withOriginalLine line)
+        case x          => x
+      }
     }
-    Right(buildRequest(line, trees))
+    else Right(buildRequest(line, trees))
   }
 
   def typeCleanser(sym: Symbol, memberName: Name): Type = {
