@@ -197,10 +197,10 @@ trait StdNames extends NameManglers { self: SymbolTable =>
 
     val ANYNAME: NameType                   = "<anyname>"
     val CONSTRUCTOR: NameType               = "<init>"
-    val FAKE_LOCAL_THIS: NameType           = "this$"
+    val FAKE_LOCAL_THIS: NameType           = "#this"
     val INITIALIZER: NameType               = CONSTRUCTOR // Is this buying us something?
     val LAZY_LOCAL: NameType                = "#lzy"
-    val LOCAL_SUFFIX_STRING                 = " "
+    val LOCAL_SUFFIX_STRING                 = "?"
     val MIRROR_PREFIX: NameType             = "$mr."
     val MIRROR_SHORT: NameType              = "$mr"
     val MIRROR_FREE_PREFIX: NameType        = "free$"
