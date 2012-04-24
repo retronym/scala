@@ -646,32 +646,38 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
           nameBuffer append '('
           appendTypes0(args, ", ")
           nameBuffer append ')'
-        case TypeRef(pre, aSym, targs) =>
-          val preSym = pre.widen.typeSymbol
-          // There's a work in progress here trying to deal with the
-          // places where undesirable prefixes are printed.
-          // ...
-          // If the prefix is something worthy of printing, see if the prefix type
-          // is in the same package as the enclosing template.  If so, print it
-          // unqualified and they'll figure it out.
-          //
-          // val stripPrefixes = List(templatePackage.fullName + ".", "package.", "java.lang.")
-          // if (!preSym.printWithoutPrefix) {
-          //   nameBuffer append stripPrefixes.foldLeft(pre.prefixString)(_ stripPrefix _)
-          // }
-          val bSym = normalizeTemplate(aSym)
-          if (bSym.isNonClassType) {
-            nameBuffer append bSym.decodedName
+        case tp @ TypeRef(pre, aSym, targs) =>
+          val dealisedType = tp.dealias
+          if (targs.headOption.exists(_.dealias == dealisedType)) {
+            // Expand application of an identity type function.
+            appendType0(dealisedType)
           } else {
-            val tpl = makeTemplate(bSym)
-            val pos0 = nameBuffer.length
-            refBuffer += pos0 -> (tpl, tpl.name.length)
-            nameBuffer append tpl.name
-          }
-          if (!targs.isEmpty) {
-            nameBuffer append '['
-            appendTypes0(targs, ", ")
-            nameBuffer append ']'
+            val preSym = pre.widen.typeSymbol
+            // There's a work in progress here trying to deal with the
+            // places where undesirable prefixes are printed.
+            // ...
+            // If the prefix is something worthy of printing, see if the prefix type
+            // is in the same package as the enclosing template.  If so, print it
+            // unqualified and they'll figure it out.
+            //
+            // val stripPrefixes = List(templatePackage.fullName + ".", "package.", "java.lang.")
+            // if (!preSym.printWithoutPrefix) {
+            //   nameBuffer append stripPrefixes.foldLeft(pre.prefixString)(_ stripPrefix _)
+            // }
+            val bSym = normalizeTemplate(aSym)
+            if (bSym.isNonClassType) {
+              nameBuffer append bSym.decodedName
+            } else {
+              val tpl = makeTemplate(bSym)
+              val pos0 = nameBuffer.length
+              refBuffer += pos0 ->(tpl, tpl.name.length)
+              nameBuffer append tpl.name
+            }
+            if (!targs.isEmpty) {
+              nameBuffer append '['
+              appendTypes0(targs, ", ")
+              nameBuffer append ']'
+            }
           }
         /* Refined types */
         case RefinedType(parents, defs) =>
