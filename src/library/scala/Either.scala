@@ -435,7 +435,7 @@ object Either {
      * }}}
      * @param f The side-effecting function to execute.
      */
-    def foreach[U](f: A => U): Unit = e match {
+    @inline def foreach[U](f: A => U): Unit = e match {
       case Left(a) => f(a)
       case Right(_) => {}
     }
@@ -450,7 +450,7 @@ object Either {
      * }}}
      *
      */
-    def getOrElse[AA >: A](or: => AA): AA = e match {
+    @inline def getOrElse[AA >: A](or: => AA): AA = e match {
       case Left(a) => a
       case Right(_) => or
     }
@@ -466,7 +466,7 @@ object Either {
      * }}}
      *
      */
-    def forall(f: A => Boolean): Boolean = e match {
+    @inline def forall(f: A => Boolean): Boolean = e match {
       case Left(a) => f(a)
       case Right(_) => true
     }
@@ -482,7 +482,7 @@ object Either {
      * }}}
      *
      */
-    def exists(f: A => Boolean): Boolean = e match {
+    @inline def exists(f: A => Boolean): Boolean = e match {
       case Left(a) => f(a)
       case Right(_) => false
     }
@@ -496,7 +496,7 @@ object Either {
      * }}}
      * @param f The function to bind across `Left`.
      */
-    def flatMap[BB >: B, X](f: A => Either[X, BB]): Either[X, BB] = e match {
+    @inline def flatMap[BB >: B, X](f: A => Either[X, BB]): Either[X, BB] = e match {
       case Left(a) => f(a)
       case Right(b) => Right(b)
     }
@@ -509,7 +509,7 @@ object Either {
      * Right[Int, Int](12).left.map(_ + 2) // Right(12)
      * }}}
      */
-    def map[X](f: A => X): Either[X, B] = e match {
+    @inline def map[X](f: A => X): Either[X, B] = e match {
       case Left(a) => Left(f(a))
       case Right(b) => Right(b)
     }
@@ -524,7 +524,7 @@ object Either {
      * Right(12).left.filter(_ > 10) // None
      * }}}
      */
-    def filter[Y](p: A => Boolean): Option[Either[A, Y]] = e match {
+    @inline def filter[Y](p: A => Boolean): Option[Either[A, Y]] = e match {
       case Left(a) => if(p(a)) Some(Left(a)) else None
       case Right(b) => None
     }
