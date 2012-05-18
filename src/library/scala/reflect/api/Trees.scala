@@ -18,6 +18,12 @@ trait Trees { self: Universe =>
 
   // TODO - Where do I put this?
   object BackquotedIdentifier
+  sealed abstract class ApplyVariant
+  object ApplyVariant {
+    case object ImplicitArgs extends ApplyVariant
+    case object ImplicitView extends ApplyVariant
+    case object Constructor extends ApplyVariant
+  }
 
   abstract class AbsModifiers {
     def modifiers: Set[Modifier]
@@ -659,24 +665,25 @@ trait Trees { self: Universe =>
        extends GenericApply {
     override def symbol: Symbol = fun.symbol
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
+
+    override def printingPrefix: String = 
+      if (isConstructor) "ApplyConstructor" else super.printingPrefix
+    
+    def isConstructor: Boolean = hasAttachment(ApplyVariant.Constructor)
+    def isImplicitView: Boolean = hasAttachment(ApplyVariant.ImplicitView)
+    def isAppliedToImplicitArgs: Boolean = hasAttachment(ApplyVariant.ImplicitArgs)
   }
 
   def Apply(sym: Symbol, args: Tree*): Tree
 
-  // TODO remove this class, add a tree attachment to Apply to track whether implicits were involved
-  // copying trees will all too easily forget to distinguish subclasses
-  class ApplyToImplicitArgs(fun: Tree, args: List[Tree]) extends Apply(fun, args)
+  def ApplyToImplicitArgs(fun: Tree, args: List[Tree]): Apply = 
+    new Apply(fun, args) withAttachment ApplyVariant.ImplicitArgs
+  
+  def ApplyImplicitView(fun: Tree, args: List[Tree]): Apply = 
+    new Apply(fun, args) withAttachment ApplyVariant.ImplicitView
 
-  // TODO remove this class, add a tree attachment to Apply to track whether implicits were involved
-  // copying trees will all too easily forget to distinguish subclasses
-  class ApplyImplicitView(fun: Tree, args: List[Tree]) extends Apply(fun, args)
-
-  // TODO: use a factory method, not a class (???)
-  // as a case in point of the comment that should go here by similarity to ApplyToImplicitArgs,
-  // this tree is considered in importers, but not in treecopier
-  class ApplyConstructor(tpt: Tree, args: List[Tree]) extends Apply(Select(New(tpt), nme.CONSTRUCTOR), args) {
-    override def printingPrefix = "ApplyConstructor"
-  }
+  def ApplyConstructor(tpt: Tree, args: List[Tree]): Apply = 
+    new Apply(Select(New(tpt), nme.CONSTRUCTOR), args) withAttachment ApplyVariant.Constructor  
 
   /** Dynamic value application.
    *  In a dynamic application   q.f(as)
@@ -1163,12 +1170,7 @@ trait Trees { self: Universe =>
     def TypeApply(tree: Tree, fun: Tree, args: List[Tree]) =
       new TypeApply(fun, args).copyAttrs(tree)
     def Apply(tree: Tree, fun: Tree, args: List[Tree]) =
-      (tree match { // TODO: use a tree attachment to track whether this is an apply to implicit args or a view
-        case _: ApplyToImplicitArgs => new ApplyToImplicitArgs(fun, args)
-        case _: ApplyImplicitView => new ApplyImplicitView(fun, args)
-        // TODO: ApplyConstructor ???
-        case _ => new Apply(fun, args)
-      }).copyAttrs(tree)
+      new Apply(fun, args).copyAttrs(tree)
     def ApplyDynamic(tree: Tree, qual: Tree, args: List[Tree]) =
       new ApplyDynamic(qual, args).copyAttrs(tree)
     def Super(tree: Tree, qual: Tree, mix: TypeName) =
@@ -1177,11 +1179,8 @@ trait Trees { self: Universe =>
       new This(qual.toTypeName).copyAttrs(tree)
     def Select(tree: Tree, qualifier: Tree, selector: Name) =
       new Select(qualifier, selector).copyAttrs(tree)
-    def Ident(tree: Tree, name: Name) = {
-      val t = new Ident(name) copyAttrs tree
-      if (tree hasAttachment BackquotedIdentifier) t withAttachment BackquotedIdentifier
-      else t
-    }
+    def Ident(tree: Tree, name: Name) =
+      new Ident(name).copyAttrs(tree)
     def ReferenceToBoxed(tree: Tree, idt: Ident) =
       new ReferenceToBoxed(idt).copyAttrs(tree)
     def Literal(tree: Tree, value: Constant) =

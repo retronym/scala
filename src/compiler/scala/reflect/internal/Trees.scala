@@ -251,14 +251,14 @@ trait Trees extends api.Trees { self: SymbolTable =>
    *  A `New(t, as)` is expanded to: `(new t).<init>(as)`
    */
   def New(tpt: Tree, argss: List[List[Tree]]): Tree = argss match {
-    case Nil        => new ApplyConstructor(tpt, Nil)
-    case xs :: rest => rest.foldLeft(new ApplyConstructor(tpt, xs): Tree)(Apply)
+    case Nil        => ApplyConstructor(tpt, Nil)
+    case xs :: rest => rest.foldLeft(ApplyConstructor(tpt, xs): Tree)(Apply)
   }
 
   /** 0-1 argument list new, based on a type.
    */
   def New(tpe: Type, args: Tree*): Tree =
-    new ApplyConstructor(TypeTree(tpe), args.toList)
+    ApplyConstructor(TypeTree(tpe), args.toList)
 
   def New(sym: Symbol, args: Tree*): Tree =
     New(sym.tpe, args: _*)

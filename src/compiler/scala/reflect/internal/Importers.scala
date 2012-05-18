@@ -371,16 +371,9 @@ trait Importers { self: SymbolTable =>
           new Typed(importTree(expr), importTree(tpt))
         case from.TypeApply(fun, args) =>
           new TypeApply(importTree(fun), args map importTree)
-        case from.Apply(fun, args) => tree match {
-          case _: from.ApplyToImplicitArgs =>
-            new ApplyToImplicitArgs(importTree(fun), args map importTree)
-          case _: from.ApplyImplicitView =>
-            new ApplyImplicitView(importTree(fun), args map importTree)
-          case _: from.ApplyConstructor =>
-            new ApplyConstructor(importTree(fun), args map importTree)
-          case _ =>
-            new Apply(importTree(fun), args map importTree)
-        }
+        case from.Apply(fun, args) =>
+          // TODO what about tree attachments?
+          new Apply(importTree(fun), args map importTree)
         case from.ApplyDynamic(qual, args) =>
           new ApplyDynamic(importTree(qual), args map importTree)
         case from.Super(qual, mix) =>

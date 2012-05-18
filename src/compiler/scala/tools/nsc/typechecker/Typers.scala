@@ -166,7 +166,7 @@ trait Typers extends Modes with Adaptations with Taggings {
           for (arg <- args) ar.subst traverse arg
         }
 
-        new ApplyToImplicitArgs(fun, args) setPos fun.pos
+        ApplyToImplicitArgs(fun, args) setPos fun.pos
       case ErrorType =>
         fun
     }
@@ -1162,7 +1162,7 @@ trait Typers extends Modes with Adaptations with Taggings {
                     debuglog(msg)
                     val silentContext = context.makeImplicit(context.ambiguousErrors)
                     val res = newTyper(silentContext).typed(
-                      new ApplyImplicitView(coercion, List(tree)) setPos tree.pos, mode, pt)
+                      ApplyImplicitView(coercion, List(tree)) setPos tree.pos, mode, pt)
                     if (silentContext.hasErrors) context.issue(silentContext.errBuffer.head) else return res
                   }
                 }
@@ -1225,6 +1225,11 @@ trait Typers extends Modes with Adaptations with Taggings {
 
     private def isAdaptableWithView(qual: Tree) = {
       val qtpe = qual.tpe.widen
+      def isImplicitView = qual match { 
+        case ap: Apply => ap.isImplicitView 
+        case _         => false 
+      }
+      
       (    !isPastTyper
         && qual.isTerm
         && !qual.isInstanceOf[Super]
@@ -1232,7 +1237,7 @@ trait Typers extends Modes with Adaptations with Taggings {
         && !qtpe.isError
         && !qtpe.typeSymbol.isBottomClass
         && qtpe != WildcardType
-        && !qual.isInstanceOf[ApplyImplicitView] // don't chain views
+        && !isImplicitView // don't chain views
         && (context.implicitsEnabled || context.enrichmentEnabled)
         // Elaborating `context.implicitsEnabled`:
         // don't try to adapt a top-level type that's the subject of an implicit search
@@ -1258,7 +1263,7 @@ trait Typers extends Modes with Adaptations with Taggings {
                 "applied implicit conversion from %s to %s = %s".format(
                   qual.tpe, searchTemplate, coercion.symbol.defString))
 
-            typedQualifier(atPos(qual.pos)(new ApplyImplicitView(coercion, List(qual))))
+            typedQualifier(atPos(qual.pos)(ApplyImplicitView(coercion, List(qual))))
         }
       }
       else qual
@@ -4853,7 +4858,7 @@ trait Typers extends Modes with Adaptations with Taggings {
               val newArrayApp = atPos(tree.pos) {
                 val tag = resolveArrayTag(tagType, tree.pos)
                 if (tag.isEmpty) MissingArrayTagError(tree, tagType)
-                else new ApplyToImplicitArgs(Select(tag, nme.newArray), args)
+                else ApplyToImplicitArgs(Select(tag, nme.newArray), args)
               }
               typed(newArrayApp, mode, pt)
             case tree1 =>
