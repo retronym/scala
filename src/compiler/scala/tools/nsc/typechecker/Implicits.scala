@@ -691,6 +691,7 @@ trait Implicits {
      *   - the symbol comes from a classfile
      *   - the symbol comes from a different sourcefile than the current one
      *   - the symbol and the accessed symbol's definitions come before, and do not contain the closest enclosing definition, // see #3373
+     *   - the symbol's definition is an object
      *   - the symbol's definition is a val, var, or def with an explicit result type
      *  The aim of this method is to prevent premature cyclic reference errors
      *  by computing the types of only those implicits for which one of these
@@ -700,6 +701,8 @@ trait Implicits {
       def hasExplicitResultType(sym: Symbol) = {
         def hasExplicitRT(tree: Tree) = tree match {
           case x: ValOrDefDef => !x.tpt.isEmpty
+          // safe, as typing the object can't trigger another implicit view. SI-5197
+          case x: ModuleDef   => true
           case _              => false
         }
         sym.rawInfo match {
