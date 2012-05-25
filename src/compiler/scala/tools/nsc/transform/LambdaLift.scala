@@ -215,10 +215,25 @@ abstract class LambdaLift extends InfoTransform {
       def renameSym(sym: Symbol) {
         val originalName = sym.name
         val base = sym.name + nme.NAME_JOIN_STRING + (
-          if (sym.isAnonymousFunction && sym.owner.isMethod)
+          if (sym.isAnonymousFunction && sym.owner.isMethod) {
             sym.owner.name + nme.NAME_JOIN_STRING
-          else ""
-        )
+          } else {
+            // TODO SI-5652 O(n^2) complexity; do better by collecting this information above
+            val calledFromDifferentClass = called.exists {
+              case (caller, symset) => symset(sym) && caller.enclClass != sym.enclClass
+            }
+            // TODO SI-5652 This is not the expanded name I was after, it gives 'g$A2$$g1()'
+            // TODO SI-5652 Consider alterantive approach: continue to generated the unmangled, private
+            //              method here, and change the code that currently makes it public to instead
+            //              generated a mangled, public forwarder.
+            
+            // SI-5652 If the lifted symbol is accessed from an inner class, it will be made public. (where?)
+            //         Generating a a unique name, mangled with the enclosing class name, avoids a VerifyError
+            //         in the case that a sub-class lifts out a method with the *same* name.
+            if (calledFromDifferentClass) nme.expandedName(sym.name, sym.enclClass).decoded
+            else ""
+          }
+        )      
         sym setName (
           if (sym.name.isTypeName) unit.freshTypeName(base)
           else unit.freshTermName(base)
