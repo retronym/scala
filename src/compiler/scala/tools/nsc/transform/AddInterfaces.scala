@@ -257,11 +257,22 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
   /** Transforms the member tree containing the implementation
    *  into a member of the impl class.
    */
-  private def implMethodDef(tree: Tree): Tree = (
-    implMethodMap get tree.symbol
-            map (impl => new ChangeOwnerAndReturnTraverser(tree.symbol, impl)(tree setSymbol impl))
-      getOrElse abort("implMethod missing for " + tree.symbol)
-  )
+  private def implMethodDef(tree: Tree): Tree = {
+    val impl = implMethodMap.getOrElse(tree.symbol, abort("implMethod missing for " + tree.symbol))
+    tree match {
+      case DefDef(mods, name, tparams, vparamss, tpt, body) =>
+        // SI-5167: Create new symbols for the parameters, otherwise they are shared
+        // by the declaration in the trait and the implementation in implementation
+        // class. This causes problems if the implementation class parameter is
+        // renamed -- a subsequent run of the resident compiler will see the renamed
+        // parameter in the original method.
+        val oldSyms = vparamss.flatten.map(_.symbol) // ++ tparams ++ ... ? TODO SI-5167?
+        val newSyms = oldSyms.map(_.cloneSymbol)
+        val newTree = tree.duplicate.substTreeSyms(oldSyms, newSyms)
+        new ChangeOwnerAndReturnTraverser(newTree.symbol, impl)(newTree setSymbol impl)
+      case _ => abort("unexpected tree: " + tree)
+    }
+  }
 
   /** Add mixin constructor definition
    *    def $init$(): Unit = ()
