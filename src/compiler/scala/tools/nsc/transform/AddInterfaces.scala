@@ -259,19 +259,17 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
    */
   private def implMethodDef(tree: Tree): Tree = {
     val impl = implMethodMap.getOrElse(tree.symbol, abort("implMethod missing for " + tree.symbol))
-    tree match {
-      case DefDef(mods, name, tparams, vparamss, tpt, body) =>
-        // SI-5167: Create new symbols for the parameters, otherwise they are shared
-        // by the declaration in the trait and the implementation in implementation
-        // class. This causes problems if the implementation class parameter is
-        // renamed -- a subsequent run of the resident compiler will see the renamed
-        // parameter in the original method.
-        val oldSyms = vparamss.flatten.map(_.symbol) // ++ tparams ++ ... ? TODO SI-5167?
-        val newSyms = oldSyms.map(_.cloneSymbol)
-        val newTree = tree.duplicate.substTreeSyms(oldSyms, newSyms)
-        new ChangeOwnerAndReturnTraverser(newTree.symbol, impl)(newTree setSymbol impl)
-      case _ => abort("unexpected tree: " + tree)
-    }
+
+    // SI-5167: Ensure that the tree that we are grafting refers the parameter symbols from the
+    // new method symbol `impl`, rather than the symbols of the original method signature in
+    // the trait. `tree setSymbol impl` does *not* suffice!
+    val DefDef(_, _, _, vparamss, _, _) = tree
+    val oldSyms = vparamss.flatten.map(_.symbol)
+    val newSyms = impl.info.paramss.flatten
+    require(oldSyms.length == newSyms.length, (oldSyms, newSyms))
+
+    val newTree = tree.substTreeSyms(oldSyms, newSyms)
+    new ChangeOwnerAndReturnTraverser(newTree.symbol, impl)(newTree setSymbol impl)
   }
 
   /** Add mixin constructor definition
