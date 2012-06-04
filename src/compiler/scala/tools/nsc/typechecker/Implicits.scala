@@ -389,9 +389,10 @@ trait Implicits {
      *  Detect infinite search trees for implicits.
      *
      *  @param info    The given implicit info describing the implicit definition
+     *  @param local   Is the implicit in the local scope of the call site?
      *  @pre           `info.tpe` does not contain an error
      */
-    private def typedImplicit(info: ImplicitInfo, ptChecked: Boolean): SearchResult = {
+    private def typedImplicit(info: ImplicitInfo, ptChecked: Boolean, local: Boolean): SearchResult = {
       (context.openImplicits find { case (tp, tree1) => tree1.symbol == tree.symbol && dominates(pt, tp)}) match {
          case Some(pending) =>
            //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
@@ -400,7 +401,7 @@ trait Implicits {
            try {
              context.openImplicits = (pt, tree) :: context.openImplicits
              // println("  "*context.openImplicits.length+"typed implicit "+info+" for "+pt) //@MDEBUG
-             typedImplicit0(info, ptChecked)
+             typedImplicit0(info, ptChecked, local)
            } catch {
              case ex: DivergentImplicit =>
                //println("DivergentImplicit for pt:"+ pt +", open implicits:"+context.openImplicits) //@MDEBUG
@@ -533,7 +534,7 @@ trait Implicits {
       case _ => false
     }
 
-    private def typedImplicit0(info: ImplicitInfo, ptChecked: Boolean): SearchResult = {
+    private def typedImplicit0(info: ImplicitInfo, ptChecked: Boolean, local: Boolean): SearchResult = {
       incCounter(plausiblyCompatibleImplicits)
       printTyping (
         ptBlock("typedImplicit0",
@@ -548,17 +549,20 @@ trait Implicits {
       )
 
       if (ptChecked || matchesPt(info))
-        typedImplicit1(info)
+        typedImplicit1(info, local)
       else
         SearchFailure
     }
 
-    private def typedImplicit1(info: ImplicitInfo): SearchResult = {
+    private def typedImplicit1(info: ImplicitInfo, local: Boolean): SearchResult = {
       incCounter(matchingImplicits)
 
       val itree = atPos(pos.focus) {
-        if (info.pre == NoPrefix) Ident(info.name)
-        else {
+        if (info.pre == NoPrefix || local) {
+          // SI-4270 SI-5376 Alwasys use an unattributed Ident for implicits in the local scope,
+          // rather than an attributed Select, to detect shadowing.
+          Ident(info.name)
+        } else {
           // SI-2405 Not info.name, which might be an aliased import
           val implicitMemberName = info.sym.name
           Select(gen.mkAttributedQualifier(info.pre), implicitMemberName)
@@ -584,6 +588,20 @@ trait Implicits {
 
         if (context.hasErrors)
           return fail("typed implicit %s has errors".format(info.sym.fullLocationString))
+
+        if (local) {
+          // check that we bound to the expected symbol.
+          def failedBind = fail(s"unable to bind to implicit ${info.name} with an unqualified reference, due to shadowing or overloading. Instead, it binds to: ${itree.symbol}")
+          itree1 match {
+            case Apply(qual, _) if isView && info.sym.isMethod =>
+              if (qual.symbol != info.sym) return failedBind
+            case Apply(Select(qual, nme.apply), _) if isView =>
+              if (qual.symbol != info.sym) return failedBind
+            case tree if !isView =>
+              if (tree.symbol != info.sym) return failedBind
+            case t => abort(s"unexpected tree: ${t}")
+          }
+        }
 
         incCounter(typedImplicits)
 
@@ -741,6 +759,7 @@ trait Implicits {
      */
     class ImplicitComputation(iss: Infoss, shadowed: util.HashSet[Name]) {
       private var best: SearchResult = SearchFailure
+      private def local = shadowed != null
       private def isShadowed(name: Name) = (
            (shadowed != null)
         && (shadowed(name) || nonImplicitSynonymInScope(name))
@@ -811,7 +830,7 @@ trait Implicits {
         case Nil      => acc
         case i :: is  =>
           def tryImplicitInfo(i: ImplicitInfo) =
-            try typedImplicit(i, true)
+            try typedImplicit(i, ptChecked = true, local = local)
             catch divergenceHandler
 
           tryImplicitInfo(i) match {
@@ -841,7 +860,7 @@ trait Implicits {
 
       /** Returns all eligible ImplicitInfos and their SearchResults in a map.
        */
-      def findAll() = mapFrom(eligible)(typedImplicit(_, false))
+      def findAll() = mapFrom(eligible)(typedImplicit(_, ptChecked = false, local = local))
 
       /** Returns the SearchResult of the best match.
        */
@@ -1371,19 +1390,21 @@ trait Implicits {
     def allImplicitsPoly(tvars: List[TypeVar]): List[(SearchResult, List[TypeConstraint])] = {
       def resetTVars() = tvars foreach { _.constr = new TypeConstraint }
 
-      def eligibleInfos(iss: Infoss, isLocal: Boolean) = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null).eligible
-      val allEligibleInfos = (eligibleInfos(context.implicitss, true) ++ eligibleInfos(implicitsOfExpectedType, false)).toList
-
-      allEligibleInfos flatMap { ii =>
-        // each ImplicitInfo contributes a distinct set of constraints (generated indirectly by typedImplicit)
-        // thus, start each type var off with a fresh for every typedImplicit
-        resetTVars()
-        // any previous errors should not affect us now
-        context.flushBuffer()
-        val res = typedImplicit(ii, false)
-        if (res.tree ne EmptyTree) List((res, tvars map (_.constr)))
-        else Nil
+      def eligibleInfos(iss: Infoss, isLocal: Boolean) = {
+        val eligible = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null).eligible
+        eligible.toList.flatMap {
+          (ii: ImplicitInfo) =>
+            // each ImplicitInfo contributes a distinct set of constraints (generated indirectly by typedImplicit)
+            // thus, start each type var off with a fresh for every typedImplicit
+            resetTVars()
+            // any previous errors should not affect us now
+            context.flushBuffer()
+            val res = typedImplicit(ii, ptChecked = false, local = isLocal)
+            if (res.tree ne EmptyTree) List((res, tvars map (_.constr)))
+            else Nil
+        }
       }
+      eligibleInfos(context.implicitss, true) ++ eligibleInfos(implicitsOfExpectedType, false)
     }
   }
 
