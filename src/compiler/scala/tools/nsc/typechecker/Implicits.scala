@@ -591,7 +591,7 @@ trait Implicits {
 
         if (local) {
           // check that we bound to the expected symbol.
-          def failedBind = fail(s"unable to bind to implicit ${info.name} with an unqualified reference, due to shadowing or overloading. Instead, it binds to: ${itree.symbol}")
+          def failedBind = fail(s"unable to bind to implicit ${info.sym.fullLocationString} with an unqualified reference ${info.name}. Instead, it binds to: ${itree.symbol.fullLocationString}")
           itree1 match {
             case Apply(qual, _) if isView && info.sym.isMethod =>
               if (qual.symbol != info.sym) return failedBind
@@ -613,20 +613,8 @@ trait Implicits {
           itree1.symbol, itree2.tpe, wildPt)
         )
 
-        def hasMatchingSymbol(tree: Tree): Boolean = (tree.symbol == info.sym) || {
-          tree match {
-            case Apply(fun, _)          => hasMatchingSymbol(fun)
-            case TypeApply(fun, _)      => hasMatchingSymbol(fun)
-            case Select(pre, nme.apply) => pre.symbol == info.sym
-            case _                      => false
-          }
-        }
-
         if (context.hasErrors)
           fail("hasMatchingSymbol reported threw error(s)")
-        else if (!hasMatchingSymbol(itree1))
-          fail("candidate implicit %s is shadowed by other implicit %s".format(
-            info.sym.fullLocationString, itree1.symbol.fullLocationString))
         else {
           val tvars = undetParams map freshVar
           def ptInstantiated = pt.instantiateTypeParams(undetParams, tvars)
@@ -700,17 +688,6 @@ trait Implicits {
       }
     }
 
-    // #3453: in addition to the implicit symbols that may shadow the implicit with
-    // name `name`, this method tests whether there's a non-implicit symbol with name
-    // `name` in scope.  Inspired by logic in typedIdent.
-    private def nonImplicitSynonymInScope(name: Name) = {
-      // the implicit ones are handled by the `shadowed` set above
-      context.scope.lookupEntry(name) match {
-        case x: ScopeEntry  => reallyExists(x.sym) && !x.sym.isImplicit
-        case _              => false
-      }
-    }
-
     /** Should implicit definition symbol `sym` be considered for applicability testing?
      *  This is the case if one of the following holds:
      *   - the symbol's type is initialized
@@ -754,15 +731,16 @@ trait Implicits {
     /** Prune ImplicitInfos down to either all the eligible ones or the best one.
      *
      *  @param  iss       list of list of infos
-     *  @param  shadowed  set in which to record names that are shadowed by implicit infos
-     *                    If it is null, no shadowing.
+     *  @param  local     if true, `iss` represents in-scope implicits, which must respect the normal rules of
+     *                    shadowing. The head of the list `iss` must represent implicits from the closing
+     *                    enclosing scope, and so on.
      */
-    class ImplicitComputation(iss: Infoss, shadowed: util.HashSet[Name]) {
+    class ImplicitComputation(iss: Infoss, local: Boolean) {
+      /** Discard local implicits shadowed by other implicits. */
+      private val shadowed = util.HashSet[Name](512)
       private var best: SearchResult = SearchFailure
-      private def local = shadowed != null
       private def isShadowed(name: Name) = (
-           (shadowed != null)
-        && (shadowed(name) || nonImplicitSynonymInScope(name))
+        local && shadowed(name)
       )
       private def isIneligible(info: ImplicitInfo) = (
            info.isCyclicOrErroneous
@@ -806,9 +784,7 @@ trait Implicits {
       val eligible = {
         val matches = iss flatMap { is =>
           val result = is filter (info => checkValid(info.sym) && survives(info))
-          if (shadowed ne null)
-            shadowed addEntries (is map (_.name))
-
+          if (local) shadowed addEntries (is map (_.name))
           result
         }
 
@@ -909,7 +885,7 @@ trait Implicits {
      */
     def applicableInfos(iss: Infoss, isLocal: Boolean): Map[ImplicitInfo, SearchResult] = {
       val start       = startCounter(subtypeAppInfos)
-      val computation = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null) { }
+      val computation = new ImplicitComputation(iss, isLocal) { }
       val applicable  = computation.findAll()
 
       stopCounter(subtypeAppInfos, start)
@@ -927,7 +903,7 @@ trait Implicits {
      */
     def searchImplicit(implicitInfoss: Infoss, isLocal: Boolean): SearchResult =
       if (implicitInfoss.forall(_.isEmpty)) SearchFailure
-      else new ImplicitComputation(implicitInfoss, if (isLocal) util.HashSet[Name](128) else null) findBest()
+      else new ImplicitComputation(implicitInfoss, isLocal) findBest()
 
     /** Produce an implicict info map, i.e. a map from the class symbols C of all parts of this type to
      *  the implicit infos in the companion objects of these class symbols C.
@@ -1391,7 +1367,7 @@ trait Implicits {
       def resetTVars() = tvars foreach { _.constr = new TypeConstraint }
 
       def eligibleInfos(iss: Infoss, isLocal: Boolean) = {
-        val eligible = new ImplicitComputation(iss, if (isLocal) util.HashSet[Name](512) else null).eligible
+        val eligible = new ImplicitComputation(iss, isLocal).eligible
         eligible.toList.flatMap {
           (ii: ImplicitInfo) =>
             // each ImplicitInfo contributes a distinct set of constraints (generated indirectly by typedImplicit)
