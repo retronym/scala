@@ -1058,7 +1058,7 @@ trait Types extends api.Types { self: SymbolTable =>
                       !(member == sym ||
                         member.owner != sym.owner &&
                         !sym.isPrivate && {
-                          if (self eq null) self = this.narrow
+                          if (self eq null) self = this.widen.narrow // See t5330.
                           if (membertpe eq null) membertpe = self.memberType(member)
                           (membertpe matches self.memberType(sym))
                         })) {
@@ -1073,7 +1073,7 @@ trait Types extends api.Types { self: SymbolTable =>
                          !(prevEntry.sym == sym ||
                            prevEntry.sym.owner != sym.owner &&
                            !sym.hasFlag(PRIVATE) && {
-                             if (self eq null) self = this.narrow
+                             if (self eq null) self = this.widen.narrow
                              if (symtpe eq null) symtpe = self.memberType(sym)
                              self.memberType(prevEntry.sym) matches symtpe
                            })) {
