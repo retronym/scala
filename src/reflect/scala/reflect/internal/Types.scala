@@ -1028,7 +1028,12 @@ trait Types extends api.Types { self: SymbolTable =>
       var member: Symbol = NoSymbol
       var excluded = excludedFlags | DEFERRED
       var continue = true
+
+      // SI-5330. Without this, subsequent calls to asSeenFrom have different symbols for existentials, e.g. pos/t5330.scala.
+      //          If we don't re-narrow the result, pos/t5330b.scala fails.
+      def selfTypeSkolemized = widen.skolemizeExistential.narrow
       var self: Type = null
+
       var membertpe: Type = null
       while (continue) {
         continue = false
@@ -1058,7 +1063,7 @@ trait Types extends api.Types { self: SymbolTable =>
                       !(member == sym ||
                         member.owner != sym.owner &&
                         !sym.isPrivate && {
-                          if (self eq null) self = this.narrow
+                          if (self eq null) self = selfTypeSkolemized
                           if (membertpe eq null) membertpe = self.memberType(member)
                           (membertpe matches self.memberType(sym))
                         })) {
@@ -1073,7 +1078,7 @@ trait Types extends api.Types { self: SymbolTable =>
                          !(prevEntry.sym == sym ||
                            prevEntry.sym.owner != sym.owner &&
                            !sym.hasFlag(PRIVATE) && {
-                             if (self eq null) self = this.narrow
+                             if (self eq null) self = selfTypeSkolemized
                              if (symtpe eq null) symtpe = self.memberType(sym)
                              self.memberType(prevEntry.sym) matches symtpe
                            })) {
