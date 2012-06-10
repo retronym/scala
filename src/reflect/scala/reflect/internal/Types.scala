@@ -678,6 +678,10 @@ trait Types extends api.Types { self: SymbolTable =>
      *      = Int
      */
     def asSeenFrom(pre: Type, clazz: Symbol): Type = {
+      asSeenFrom(pre, clazz, enableExistentialHandling = true)
+    }
+
+    def asSeenFrom(pre: Type, clazz: Symbol, enableExistentialHandling: Boolean): Type = {
       if (isTrivial || phase.erasedTypes && pre.typeSymbol != ArrayClass) this
       else {
 //        scala.tools.nsc.util.trace.when(pre.isInstanceOf[ExistentialType])("X "+this+".asSeenfrom("+pre+","+clazz+" = ") {
@@ -686,9 +690,10 @@ trait Types extends api.Types { self: SymbolTable =>
         val m = new AsSeenFromMap(pre.normalize, clazz)
         val tp = m apply this
         val tp1 = existentialAbstraction(m.capturedParams, tp)
-        val result: Type =
+        val result: Type = if (enableExistentialHandling) {
           if (m.capturedSkolems.isEmpty) tp1
           else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
+        } else tp1
 
         stopTimer(asSeenFromNanos, start)
         result
@@ -1029,6 +1034,18 @@ trait Types extends api.Types { self: SymbolTable =>
       var excluded = excludedFlags | DEFERRED
       var continue = true
       var self: Type = null
+
+      /**The type of `sym`, seen as a member of this type. */
+      def memberTypeNoExistentialClone(sym: Symbol): Type = {
+        //@M don't prematurely instantiate higher-kinded types, they will be instantiated by transform, typedTypeApply, etc. when really necessary
+        sym.tpeHK match {
+          case OverloadedType(_, alts) =>
+            OverloadedType(this, alts)
+          case tp =>
+            tp.asSeenFrom(this, sym.owner, enableExistentialHandling = false)
+        }
+      }
+
       var membertpe: Type = null
       while (continue) {
         continue = false
@@ -1059,8 +1076,8 @@ trait Types extends api.Types { self: SymbolTable =>
                         member.owner != sym.owner &&
                         !sym.isPrivate && {
                           if (self eq null) self = this.narrow
-                          if (membertpe eq null) membertpe = self.memberType(member)
-                          (membertpe matches self.memberType(sym))
+                          if (membertpe eq null) membertpe = memberTypeNoExistentialClone(member)
+                          (membertpe matches memberTypeNoExistentialClone(sym))
                         })) {
                     members = newScope
                     members enter member
@@ -1074,8 +1091,8 @@ trait Types extends api.Types { self: SymbolTable =>
                            prevEntry.sym.owner != sym.owner &&
                            !sym.hasFlag(PRIVATE) && {
                              if (self eq null) self = this.narrow
-                             if (symtpe eq null) symtpe = self.memberType(sym)
-                             self.memberType(prevEntry.sym) matches symtpe
+                             if (symtpe eq null) symtpe = memberTypeNoExistentialClone(sym)
+                             memberTypeNoExistentialClone(prevEntry.sym) matches symtpe
                            })) {
                     prevEntry = members lookupNextEntry prevEntry
                   }
