@@ -1029,6 +1029,17 @@ trait Types extends api.Types { self: SymbolTable =>
       var excluded = excludedFlags | DEFERRED
       var continue = true
       var self: Type = null
+      def deriveSelf = {
+        // SI-5330 Replace existentials with wildcards, otherwise the asSeenFrom(z.type, D#x) will
+        //         *not* match asSeenFrom(z.type, B#x)
+        //
+        // trait B[A] { def x(f: A) }
+        // trait D[A] extends B[A] { def x(f: A) }
+        // object z extends D[_]
+        // z.x
+        val wide = this.widen
+        deriveTypeWithWildcards(wide.skolemsExceptMethodTypeParams)(wide).narrow
+      }
       var membertpe: Type = null
       while (continue) {
         continue = false
@@ -1058,7 +1069,7 @@ trait Types extends api.Types { self: SymbolTable =>
                       !(member == sym ||
                         member.owner != sym.owner &&
                         !sym.isPrivate && {
-                          if (self eq null) self = this.narrow
+                          if (self eq null) self = deriveSelf
                           if (membertpe eq null) membertpe = self.memberType(member)
                           (membertpe matches self.memberType(sym))
                         })) {
@@ -1073,7 +1084,7 @@ trait Types extends api.Types { self: SymbolTable =>
                          !(prevEntry.sym == sym ||
                            prevEntry.sym.owner != sym.owner &&
                            !sym.hasFlag(PRIVATE) && {
-                             if (self eq null) self = this.narrow
+                             if (self eq null) self = deriveSelf
                              if (symtpe eq null) symtpe = self.memberType(sym)
                              self.memberType(prevEntry.sym) matches symtpe
                            })) {
