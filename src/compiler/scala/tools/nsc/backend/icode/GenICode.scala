@@ -1040,18 +1040,23 @@ abstract class GenICode extends SubComponent  {
           val elmKind = toTypeKind(tpt.tpe)
           generatedType = ARRAY(elmKind)
           val elems = _elems.toIndexedSeq
+          val numElems = elems match {
+            case Seq(EmptyTree) => 0
+            case _ => elems.length
+          }
 
-          ctx1.bb.emit(CONSTANT(new Constant(elems.length)), tree.pos)
+          ctx1.bb.emit(CONSTANT(new Constant(numElems)), tree.pos)
           ctx1.bb.emit(CREATE_ARRAY(elmKind, 1))
           // inline array literals
           var i = 0
-          while (i < elems.length) {
+          while (i < numElems) {
             ctx1.bb.emit(DUP(generatedType), tree.pos)
             ctx1.bb.emit(CONSTANT(new Constant(i)))
             ctx1 = genLoad(elems(i), ctx1, elmKind)
             ctx1.bb.emit(STORE_ARRAY_ITEM(elmKind))
             i = i + 1
           }
+
           ctx1
 
         case Match(selector, cases) =>
