@@ -107,11 +107,19 @@ trait EtaExpansion { self: Analyzer =>
      */
     def expand(tree: Tree, tpe: Type): Tree = tpe match {
       case mt @ MethodType(paramSyms, restpe) if !mt.isImplicit =>
-        val params = paramSyms map (sym =>
-          ValDef(Modifiers(SYNTHETIC | PARAM),
-                 sym.name.toTermName, TypeTree(sym.tpe) , EmptyTree))
+        val params: List[(ValDef, Boolean)] = paramSyms.map {
+          sym =>
+            val origTpe = sym.tpe
+            val isRepeated = definitions.isRepeatedParamType(origTpe)
+            val droppedStarTpe = dropRepeatedParamType(origTpe)
+            val valDef = ValDef(Modifiers(SYNTHETIC | PARAM), sym.name.toTermName, TypeTree(droppedStarTpe), EmptyTree)
+            (valDef, isRepeated)
+        }
         atPos(tree.pos.makeTransparent) {
-          Function(params, expand(Apply(tree, params map gen.paramToArg), restpe))
+          val args = params.map {
+            case (valDef, isRepeated) => gen.paramToArg(Ident(valDef.name), isRepeated)
+          }
+          Function(params.map(_._1), expand(Apply(tree, args), restpe))
         }
       case _ =>
         tree
