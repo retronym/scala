@@ -2290,7 +2290,14 @@ trait Typers extends Modes with Adaptations with Tags {
     // takes untyped sub-trees of a match and type checks them
     def typedMatch(selector: Tree, cases: List[CaseDef], mode: Int, pt: Type, tree: Tree = EmptyTree): Match = {
       val selector1  = checkDead(typed(selector, EXPRmode | BYVALmode, WildcardType))
-      val selectorTp = packCaptured(selector1.tpe.widen).skolemizeExistential(context.owner, selector)
+      val selectorTp = {
+        val tp = packCaptured(selector1.tpe.widen).skolemizeExistential(context.owner, selector)
+        // See SI-5667. Convert A* to Seq[A].
+        // [JZ] We really want to say that the a ValDef for a repeated parameter has the type A* when seen
+        //      from the caller, and Seq[A] when seen from within the scope of the method.
+        //      See also the use of `dropRepeatedParamType` in EtaExpansion and Namers.
+        dropRepeatedParamType(tp)
+      }
       val casesTyped = typedCases(cases, selectorTp, pt)
 
       val (resTp, needAdapt) =
