@@ -356,7 +356,7 @@ abstract class RefChecks extends InfoTransform with reflect.internal.transform.R
           }
         }
 
-        /** Is the intersection between given two lists of overridden symbols empty?
+        /** Is the intersection between given two lists of overridden symbols empty? !!!!!!!!
          */
         def intersectionIsEmpty(syms1: List[Symbol], syms2: List[Symbol]) =
           !(syms1 exists (syms2 contains _))
@@ -554,6 +554,9 @@ abstract class RefChecks extends InfoTransform with reflect.internal.transform.R
             (currentRun.erasurePhase == NoPhase || javaErasedOverridingSym(member) != NoSymbol)
           )
         )
+
+
+
 
         // 2. Check that only abstract classes have deferred members
         def checkNoAbstractMembers(): Unit = {
