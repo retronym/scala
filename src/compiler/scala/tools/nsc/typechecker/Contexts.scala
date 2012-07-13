@@ -658,7 +658,7 @@ trait Contexts { self: Analyzer =>
             collectImplicitImports(imports.head)
           } else if (owner.isPackageClass) {
             // the corresponding package object may contain implicit members.
-            collectImplicits(owner.tpe.implicitMembers, owner.tpe)
+            collectImplicits(owner.tpe.implicitMembers, owner.tpe) ++ collectImplicits(scope.toList, NoPrefix)
           } else List()
         implicitsCache = if (newImplicits.isEmpty) nextOuter.implicitss
                          else newImplicits :: nextOuter.implicitss

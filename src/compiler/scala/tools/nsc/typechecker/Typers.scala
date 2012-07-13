@@ -1441,11 +1441,10 @@ trait Typers extends Modes with Adaptations with Tags {
               case Apply(_, _) if supertparams.nonEmpty => transformSuperCall(superCall)
               case _                                    => cunit.duplicate
             })
-            val outercontext = context.outer
 
             assert(clazz != NoSymbol, templ)
-            val cscope = outercontext.makeNewScope(constr, outercontext.owner)
-            val cbody2 = newTyper(cscope) // called both during completion AND typing.
+
+            val cbody2 = newTyper(context.make(context.tree, context.owner.newLocalDummy(clazz.pos))) // called both during completion AND typing.
                 .typePrimaryConstrBody(clazz,
                   cbody1, supertparams, clazz.unsafeTypeParams, vparamss map (_.map(_.duplicate)))
 

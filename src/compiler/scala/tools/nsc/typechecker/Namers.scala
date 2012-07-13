@@ -275,7 +275,7 @@ trait Namers extends MethodSynthesis {
       sym.name.toTermName match {
         case nme.IMPORT | nme.OUTER | nme.ANON_CLASS_NAME | nme.ANON_FUN_NAME | nme.CONSTRUCTOR => ()
         case _                                                                                  =>
-          log("[+symbol] " + sym.debugLocationString)
+          log("[+symbol] " + sym.debugLocationString + ", owner: " + sym.owner)
       }
       tree.symbol = sym
       sym

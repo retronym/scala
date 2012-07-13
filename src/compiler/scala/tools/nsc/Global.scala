@@ -281,8 +281,13 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   )
   // Over 200 closure objects are eliminated by inlining this.
   @inline final def log(msg: => AnyRef) {
-    if (shouldLogAtThisPhase)
-      inform("[log %s%s] %s".format(globalPhase, atPhaseStackMessage, msg))
+    if (shouldLogAtThisPhase) {
+      val formatted = "[log %s%s] %s".format(globalPhase, atPhaseStackMessage, msg)
+      if (formatted.contains("value i in package foo (flags: implicit <param>), owner: package foo")) {
+        println("here")
+      }
+      inform(formatted)
+    }
   }
 
   @inline final override def debuglog(msg: => String) {
