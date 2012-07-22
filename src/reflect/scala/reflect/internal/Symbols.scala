@@ -367,6 +367,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
              with Annotatable[Symbol]
              with Attachable {
 
+    override def equals(that: Any): Boolean = {
+      that match {
+        case s: Symbol if isOverloaded && s.isOverloaded =>
+         abort(s"Symbol#== called on an overloaded symbols. ${this.tpe} == ${s.tpe}")
+        case _ =>
+      }
+      super.equals(that)
+    }
+
     type AccessBoundaryType = Symbol
     type AnnotationType     = AnnotationInfo
 
