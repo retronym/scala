@@ -479,6 +479,7 @@ trait StdNames {
     final val Predef: NameType              = "Predef"
     final val ScalaRunTime: NameType        = "ScalaRunTime"
     final val Some: NameType                = "Some"
+    final val Function: NameType            = "Function"
 
     val _1 : NameType  = "_1"
     val _2 : NameType  = "_2"

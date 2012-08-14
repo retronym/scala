@@ -16,10 +16,12 @@ import language.postfixOps
  *  - for every curried application: f(args_1)...(args_n) ==> f(args_1, ..., args_n)
  *  - for every type application: f[Ts] ==> f[Ts]() unless followed by parameters
  *  - for every use of a parameterless function: f ==> f()  and  q.f ==> q.f()
- *  - for every def-parameter:  x: => T ==> x: () => T
- *  - for every use of a def-parameter: x ==> x.apply()
- *  - for every argument to a def parameter `x: => T':
- *      if argument is not a reference to a def parameter:
+ *  - for every by-name parameter: x: => T ==>
+ *       - new Function.Const(x): () => T  if `x` is inlinable
+ *       - () => x: () => T                otherwise
+ *  - for every use of a by-name parameter: x ==> x.apply()
+ *  - for every argument to a by-name parameter `x: => T':
+ *      if argument is not a reference to a by-name parameter:
  *        convert argument `e` to (expansion of) `() => e'
  *  - for every repeated Scala parameter `x: T*' --> x: Seq[T].
  *  - for every repeated Java parameter `x: T...' --> x: Array[T], except:
@@ -104,9 +106,13 @@ abstract class UnCurry extends InfoTransform
 
     private def newFunction0(body: Tree): Tree = {
       val result = localTyper.typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
-      log("Change owner from %s to %s in %s".format(currentOwner, result.symbol, result.body))
-      result.body changeOwner (currentOwner -> result.symbol)
+      changeOwner(result.body, result)
       transformFunction(result)
+    }
+
+    private def changeOwner(tree: Tree, result: Tree) {
+      log("Change owner from %s to %s in %s".format(currentOwner, result.symbol, tree))
+      tree changeOwner (currentOwner -> result.symbol)
     }
 
     private lazy val serialVersionUIDAnnotation =
@@ -242,6 +248,12 @@ abstract class UnCurry extends InfoTransform
         case _ if fun.tpe.typeSymbol == PartialFunctionClass =>
           // only get here when running under -Xoldpatmat
           synthPartialFunction(fun)
+        case _ if treeInfo.isSafeToUseConstantFunction(fun) =>
+          import fun.body
+          val result = localTyper.typedPos(body.pos)(gen.newScalaRuntimeConst(body, fun.vparams.length))
+          log(s"Avoided a new anonymous function for inlinable expr: ${body}")
+          changeOwner(body, result)
+          result
         case _ =>
           val parents = (
             if (isFunctionType(fun.tpe)) addSerializable(abstractFunctionForFunctionType(fun.tpe))
@@ -250,17 +262,17 @@ abstract class UnCurry extends InfoTransform
           val anonClass = fun.symbol.owner newAnonymousFunctionClass(fun.pos, inConstructorFlag) addAnnotation serialVersionUIDAnnotation
           anonClass setInfo ClassInfoType(parents, newScope, anonClass)
 
-          val targs     = fun.tpe.typeArgs
+          val targs = fun.tpe.typeArgs
           val (formals, restpe) = (targs.init, targs.last)
 
           val applyMethodDef = {
             val methSym = anonClass.newMethod(nme.apply, fun.pos, FINAL)
             methSym setInfoAndEnter MethodType(methSym newSyntheticValueParams formals, restpe)
 
-            fun.vparams foreach  (_.symbol.owner =  methSym)
-            fun.body changeOwner (fun.symbol     -> methSym)
+            fun.vparams foreach (_.symbol.owner = methSym)
+            fun.body changeOwner (fun.symbol -> methSym)
 
-            val body    = localTyper.typedPos(fun.pos)(fun.body)
+            val body = localTyper.typedPos(fun.pos)(fun.body)
             val methDef = DefDef(methSym, List(fun.vparams), body)
 
             // Have to repack the type to avoid mismatches when existentials
@@ -274,7 +286,6 @@ abstract class UnCurry extends InfoTransform
               List(ClassDef(anonClass, NoMods, List(List()), List(List()), List(applyMethodDef), fun.pos)),
               Typed(New(anonClass.tpe), TypeTree(fun.tpe)))
           }
-
       }
 
     /** Transform a function node (x => body) of type PartialFunction[T, R] where
