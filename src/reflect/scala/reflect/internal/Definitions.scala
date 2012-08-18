@@ -899,6 +899,7 @@ trait Definitions extends api.StandardDefinitions {
     lazy val BridgeClass                = requiredClass[scala.annotation.bridge]
     lazy val ElidableMethodClass        = requiredClass[scala.annotation.elidable]
     lazy val ImplicitNotFoundClass      = requiredClass[scala.annotation.implicitNotFound]
+    lazy val MethodPerCaseClass         = requiredClass[scala.annotation.methodPerCase]
     lazy val MigrationAnnotationClass   = requiredClass[scala.annotation.migration]
     lazy val ScalaStrictFPAttr          = requiredClass[scala.annotation.strictfp]
     lazy val SerializableAttr           = requiredClass[scala.annotation.serializable] // @serializable is deprecated

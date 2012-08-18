@@ -962,8 +962,12 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
     case class BodyTreeMaker(body: Tree, matchPt: Type) extends TreeMaker with NoNewBinders {
       def pos = body.pos
 
-      def chainBefore(next: Tree)(casegen: Casegen): Tree = // assert(next eq EmptyTree)
-        atPos(body.pos)(casegen.one(substitution(body))) // since SubstOnly treemakers are dropped, need to do it here
+      def chainBefore(next: Tree)(casegen: Casegen): Tree = { // assert(next eq EmptyTree)
+        val substitutedBody = substitution(body)
+        atPos(body.pos)(casegen.one(substitutedBody))
+      }
+
+      // since SubstOnly treemakers are dropped, need to do it here
       override def toString = "B"+(body, matchPt)
     }
 
@@ -1318,35 +1322,48 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
         def matchFailGen = (matchFailGenOverride orElse Some(CODE.MATCHERROR(_: Tree)))
         patmatDebug("combining cases: "+ (casesNoSubstOnly.map(_.mkString(" >> ")).mkString("{", "\n", "}")))
 
-        val (unchecked, requireSwitch) =
-          if (settings.XnoPatmatAnalysis.value) (true, false)
+        val (unchecked, requireSwitch, methodPerCase) =
+          if (settings.XnoPatmatAnalysis.value) (true, false, false)
           else scrut match {
             case Typed(_, tpt) =>
               (tpt.tpe hasAnnotation UncheckedClass,
                // matches with two or fewer cases need not apply for switchiness (if-then-else will do)
-               treeInfo.isSwitchAnnotation(tpt.tpe) && casesNoSubstOnly.lengthCompare(2) > 0)
+               treeInfo.isSwitchAnnotation(tpt.tpe) && casesNoSubstOnly.lengthCompare(2) > 0,
+               tpt.tpe hasAnnotation MethodPerCaseClass)
             case _ =>
-              (false, false)
+              (false, false, false)
           }
 
-        emitSwitch(scrut, scrutSym, casesNoSubstOnly, pt, matchFailGenOverride, unchecked).getOrElse{
+        val casesNoSubst0 = if (methodPerCase)
+          mmap(casesNoSubstOnly){
+            case BodyTreeMaker(body, matchPt) =>
+              import CODE._
+              val methName: TermName = "caseBody"
+              val newBody = typer.typed(atPos(body.pos)(Block(DEF(methName) === body, Ident(methName) APPLY Nil)))
+              body changeOwner (owner -> newBody.symbol)
+              BodyTreeMaker(newBody, matchPt)
+            case tm => tm
+          }
+        else casesNoSubstOnly
+
+        emitSwitch(scrut, scrutSym, casesNoSubst0, pt, matchFailGenOverride, unchecked).getOrElse{
           if (requireSwitch) typer.context.unit.warning(scrut.pos, "could not emit switch for @switch annotated match")
 
-          if (casesNoSubstOnly nonEmpty) {
-            // before optimizing, check casesNoSubstOnly for presence of a default case,
+          if (casesNoSubst0 nonEmpty) {
+            // before optimizing, check casesNoSubst0 for presence of a default case,
             // since DCE will eliminate trivial cases like `case _ =>`, even if they're the last one
             // exhaustivity and reachability must be checked before optimization as well
             // TODO: improve notion of trivial/irrefutable -- a trivial type test before the body still makes for a default case
             //   ("trivial" depends on whether we're emitting a straight match or an exception, or more generally, any supertype of scrutSym.tpe is a no-op)
             //   irrefutability checking should use the approximation framework also used for CSE, unreachability and exhaustivity checking
             val synthCatchAll =
-              if (casesNoSubstOnly.nonEmpty && {
-                    val nonTrivLast = casesNoSubstOnly.last
+              if (casesNoSubst0.nonEmpty && {
+                    val nonTrivLast = casesNoSubst0.last
                     nonTrivLast.nonEmpty && nonTrivLast.head.isInstanceOf[BodyTreeMaker]
                   }) None
               else matchFailGen
 
-            val (cases, toHoist) = optimizeCases(scrutSym, casesNoSubstOnly, pt, unchecked)
+            val (cases, toHoist) = optimizeCases(scrutSym, casesNoSubst0, pt, unchecked)
 
             val matchRes = codegen.matcher(scrut, scrutSym, pt)(cases map combineExtractors, synthCatchAll)
 
