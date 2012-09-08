@@ -1,0 +1,4 @@
+t6340.scala:8: error: value c is not a member of object X
+	import X.{a, b, c}
+               ^
+one error found
