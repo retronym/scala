@@ -112,7 +112,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
 
     def extensionMethInfo(extensionMeth: Symbol, origInfo: Type, clazz: Symbol): Type = {
       // No variance for method type parameters
-      var newTypeParams = cloneSymbolsAtOwner(clazz.typeParams, extensionMeth) map (_ resetFlag COVARIANT | CONTRAVARIANT)
+      val newTypeParams = cloneSymbolsAtOwner(clazz.typeParams, extensionMeth) map (_ resetFlag COVARIANT | CONTRAVARIANT)
       val thisParamType = appliedType(clazz.typeConstructor, newTypeParams map (_.tpeHK))
       val thisParam     = extensionMeth.newValueParameter(nme.SELF, extensionMeth.pos) setInfo thisParamType
       def transform(clonedType: Type): Type = clonedType match {
@@ -159,7 +159,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           def thisParamRef = gen.mkAttributedIdent(extensionMeth.info.params.head setPos extensionMeth.pos)
           val GenPolyType(extensionTpeParams, extensionMono) = extensionMeth.info
           val origTpeParams = (tparams map (_.symbol)) ::: currentOwner.typeParams
-          val extensionBody = rhs
+          val extensionBody = rhs.duplicate
               .substituteSymbols(origTpeParams, extensionTpeParams)
               .substituteSymbols(vparamss.flatten map (_.symbol), allParams(extensionMono).tail)
               .substituteThis(currentOwner, thisParamRef)

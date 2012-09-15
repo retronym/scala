@@ -1298,6 +1298,11 @@ trait Trees extends api.Trees { self: SymbolTable =>
         if (tree.symbol != NoSymbol && tree.symbol.owner == oldowner) {
           tree.symbol.owner = newowner
         }
+        tree.symbol match {
+          case termSym: TermSymbol if termSym.referenced.filter(_.owner == oldowner) != NoSymbol =>
+            termSym.referenced.owner = newowner
+          case _ =>
+        }
       case _ =>
     }
     override def traverse(tree: Tree) {
