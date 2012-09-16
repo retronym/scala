@@ -1297,11 +1297,34 @@ trait Trees extends api.Trees { self: SymbolTable =>
       case _: DefTree | _: Function =>
         if (tree.symbol != NoSymbol && tree.symbol.owner == oldowner) {
           tree.symbol.owner = newowner
-        }
-        tree.symbol match {
-          case termSym: TermSymbol if termSym.referenced.filter(_.owner == oldowner) != NoSymbol =>
-            termSym.referenced.owner = newowner
-          case _ =>
+          tree.symbol match {
+            case termSym: TermSymbol if tree.symbol.isLazyAccessor =>
+              // SI-6358 Consider:
+              //
+              // class V(x: Any) extends AnyVal { def foo { lazy val x = expr; () => x } }
+              //
+              // 1. `MethodSynthesis#enterGetterSetter` enters the symbol for the lazy `x$lzy`, and sets its
+              //    referenced field to `x`.
+              // 2. `ExtensionMethods` grafts the body of the method onto `V.extension$foo`, after traversing the
+              //    tree to changing the owner from `foo` to `V.extension$foo`. It only finds `x$lzy` in the tree
+              //    at this juncture.
+              // 3. `RefChecks` retrieves the the lazy accessor `x` from `x$lzy.lazyAccessor`, and creates a tree
+              //    `lazy def x: String = { x$lzy = expr; x$lzy}`
+              //    Sadly, it's method symbol, `x`, has the wrong owner `foo`.
+              // 4. `LazyVals` fails silently, and calamity finally arrives in `LambdaLift`.
+              //
+              // So knowing that the accessor might be in absentia in the tree we're traversing, only to appear
+              // again later, we seek it out and change its owner here.
+              //
+              // NOTE: doing the same for any `Symbol.referenced` seems to go too far; witness the failure
+              //       in run/SymbolsTest.scala for instance.
+              //
+              // TODO: Could we keep both symbols in the tree at all times, perhaps by keeping `x` around in a dummy
+              //       node of some sort?
+              val accessor = tree.symbol.lazyAccessor
+              if (accessor.owner == oldowner) accessor.owner = newowner
+            case _ =>
+          }
         }
       case _ =>
     }

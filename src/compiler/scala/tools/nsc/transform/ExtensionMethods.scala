@@ -159,7 +159,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           def thisParamRef = gen.mkAttributedIdent(extensionMeth.info.params.head setPos extensionMeth.pos)
           val GenPolyType(extensionTpeParams, extensionMono) = extensionMeth.info
           val origTpeParams = (tparams map (_.symbol)) ::: currentOwner.typeParams
-          val extensionBody = rhs.duplicate
+          val extensionBody = rhs
               .substituteSymbols(origTpeParams, extensionTpeParams)
               .substituteSymbols(vparamss.flatten map (_.symbol), allParams(extensionMono).tail)
               .substituteThis(currentOwner, thisParamRef)
