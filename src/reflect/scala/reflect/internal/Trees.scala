@@ -1314,6 +1314,8 @@ trait Trees extends api.Trees { self: SymbolTable =>
       case _: DefTree | _: Function =>
         if (tree.symbol != NoSymbol && tree.symbol.owner == oldowner) {
           tree.symbol.owner = newowner
+          val moduleClass = tree.symbol.moduleClass
+          if (moduleClass != NoSymbol && moduleClass.owner == oldowner) moduleClass.owner = newowner
         }
       case _ =>
     }

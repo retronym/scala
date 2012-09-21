@@ -1422,11 +1422,9 @@ trait Typers extends Modes with Adaptations with Tags {
       def valueClassMayNotHave(at: Tree, what: String) = unit.error(at.pos, s"value class may not have $what")
       body.foreach {
         case dd: DefDef if dd.symbol.isAuxiliaryConstructor => valueClassMayNotHave(dd, "secondary constructors")
-        case t => t.foreach {
-          case md: ModuleDef => valueClassMayNotHave(md, "nested module definitions")
-          case cd: ClassDef  => valueClassMayNotHave(cd, "nested class definitions")
-          case _             =>
-        }
+        case md: ModuleDef => valueClassMayNotHave(md, "nested module definitions")
+        case cd: ClassDef => valueClassMayNotHave(cd, "nested class definitions")
+        case _ =>
       }
       for (tparam <- clazz.typeParams)
         if (tparam hasAnnotation definitions.SpecializedClass)
