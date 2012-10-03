@@ -699,12 +699,14 @@ trait Infer extends Checkable {
         else OverloadedType(tp, appmeth.alternatives)
     }
 
-    def hasExactlyNumParams(tp: Type, n: Int): Boolean = tp match {
+    def hasExactlyNumParams(tp: Type, n: Int, varArgsOnly: Boolean): Boolean = tp match {
       case OverloadedType(pre, alts) =>
-        alts exists (alt => hasExactlyNumParams(pre.memberType(alt), n))
+        alts exists (alt => hasExactlyNumParams(pre.memberType(alt), n, varArgsOnly))
       case _ =>
         val len = tp.params.length
-        len == n || isVarArgsList(tp.params) && len <= n + 1
+        val isVarArgs = isVarArgsList(tp.params)
+        if (varArgsOnly) isVarArgs && len == n
+        else len == n || isVarArgs && len <= n + 1
     }
 
     /**
@@ -1570,7 +1572,7 @@ trait Infer extends Checkable {
       case _        => false
     }
 
-    private def resolveOverloadedMethod(argtpes: List[Type], eligible: List[Symbol]) = {
+    private def resolveOverloadedMethod(argtpes: List[Type], eligible: List[Symbol], varArgsOnly: Boolean) = {
       // If there are any foo=bar style arguments, and any of the overloaded
       // methods has a parameter named `foo`, then only those methods are considered.
       val namesOfArgs = argtpes collect { case NamedType(name, _) => name }
@@ -1594,8 +1596,8 @@ trait Infer extends Checkable {
         // Drop those that use a default; keep those that use vararg/tupling conversion.
         mtypes exists (t =>
           !t.typeSymbol.hasDefaultFlag && {
-            compareLengths(t.params, argtpes) < 0 ||  // tupling (*)
-            hasExactlyNumParams(t, argtpes.length)    // same nb or vararg
+            compareLengths(t.params, argtpes) < 0 ||            // tupling (*)
+            hasExactlyNumParams(t, argtpes.length, varArgsOnly) // same nb or vararg
           }
         )
         // (*) more arguments than parameters, but still applicable: tupling conversion works.
@@ -1627,11 +1629,8 @@ trait Infer extends Checkable {
                 (alts map pre.memberType) +", argtpes = "+ argtpes +", pt = "+ pt)
 
           val applicable = resolveOverloadedMethod(argtpes, {
-            alts filter { alt =>
-              inSilentMode(context)(isApplicable(undetparams, followApply(pre.memberType(alt)), argtpes, pt)) &&
-              (!varArgsOnly || isVarArgsList(alt.tpe.params))
-            }
-          })
+            alts filter (alt => inSilentMode(context)(isApplicable(undetparams, followApply(pre.memberType(alt)), argtpes, pt)))
+          }, varArgsOnly)
 
           def improves(sym1: Symbol, sym2: Symbol) = {
             // util.trace("improve "+sym1+sym1.locationString+" on "+sym2+sym2.locationString)
@@ -1645,7 +1644,7 @@ trait Infer extends Checkable {
           val competing = applicable.dropWhile(alt => best == alt || improves(best, alt))
           if (best == NoSymbol) {
             if (pt == WildcardType) NoBestMethodAlternativeError(tree, argtpes, pt, isSecondTry && lastInferAttempt)
-            else inferMethodAlternative(tree, undetparams, argtpes, WildcardType, lastInferAttempt = isSecondTry)
+            else inferMethodAlternative(tree, undetparams, argtpes, WildcardType, lastInferAttempt = isSecondTry, varArgsOnly = false)
           } else if (!competing.isEmpty) {
             AmbiguousMethodAlternativeError(tree, pre, best, competing.head, argtpes, pt, isSecondTry && lastInferAttempt)
           } else {

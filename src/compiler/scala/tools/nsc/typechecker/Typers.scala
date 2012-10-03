@@ -2894,6 +2894,7 @@ trait Typers extends Modes with Adaptations with Tags {
       // TODO_NMT: check the assumption that args nonEmpty
       def duplErrTree = setError(treeCopy.Apply(tree, fun0, args))
       def duplErrorTree(err: AbsTypeError) = { issue(err); duplErrTree }
+      val varArgsOnly = treeInfo.isWildcardStarArgList(args)
 
       def preSelectOverloaded(fun: Tree): Tree = {
         if (fun.hasSymbol && fun.symbol.isOverloaded) {
@@ -2927,7 +2928,7 @@ trait Typers extends Modes with Adaptations with Tags {
             val sym1 = sym filter (alt => {
               // eliminate functions that would result from tupling transforms
               // keeps alternatives with repeated params
-              hasExactlyNumParams(followApply(alt.tpe), argtypes.length) ||
+              hasExactlyNumParams(followApply(alt.tpe), argtypes.length, varArgsOnly = false) ||
                 // also keep alts which define at least one default
                 alt.tpe.paramss.exists(_.exists(_.hasDefault))
             })
@@ -2963,7 +2964,7 @@ trait Typers extends Modes with Adaptations with Tags {
             if (context.hasErrors)
               setError(tree)
             else {
-              inferMethodAlternative(fun, undetparams, argtpes.toList, pt, varArgsOnly = treeInfo.isWildcardStarArgList(args))
+              inferMethodAlternative(fun, undetparams, argtpes.toList, pt, varArgsOnly = varArgsOnly)
               doTypedApply(tree, adapt(fun, forFunMode(mode), WildcardType), args1, mode, pt)
             }
           }
