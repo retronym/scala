@@ -2928,7 +2928,7 @@ trait Typers extends Modes with Adaptations with Tags {
             val sym1 = sym filter (alt => {
               // eliminate functions that would result from tupling transforms
               // keeps alternatives with repeated params
-              hasExactlyNumParams(followApply(alt.tpe), argtypes.length, varArgsOnly = false) ||
+              hasExactlyNumParams(followApply(alt.tpe), argtypes.length, varArgsOnly = varArgsOnly) ||
                 // also keep alts which define at least one default
                 alt.tpe.paramss.exists(_.exists(_.hasDefault))
             })
