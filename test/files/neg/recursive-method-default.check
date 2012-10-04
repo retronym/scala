@@ -1,0 +1,27 @@
+recursive-method-default.scala:4: warning: recursive call relies on defaults for some parameters
+    rec1(0)     // warn
+        ^
+recursive-method-default.scala:9: warning: recursive call relies on defaults for some parameters
+      rec2(0)   // warn
+          ^
+recursive-method-default.scala:12: warning: recursive call relies on defaults for some parameters
+      rec2(0)   // warn
+          ^
+recursive-method-default.scala:15: warning: recursive call relies on defaults for some parameters
+      rec2(0)   // warn
+          ^
+recursive-method-default.scala:26: warning: recursive call relies on defaults for some parameters
+    rec4(0)()   // warn
+           ^
+recursive-method-default.scala:30: warning: recursive call relies on defaults for some parameters
+    rec5(0)()   // warn
+           ^
+recursive-method-default.scala:34: warning: recursive call relies on defaults for some parameters
+    rec6()(0)   // warn
+        ^
+recursive-method-default.scala:38: warning: recursive call relies on defaults for some parameters
+    rec7()(0)   // one warning only
+        ^
+error: No warnings can be incurred under -Xfatal-warnings.
+8 warnings found
+one error found

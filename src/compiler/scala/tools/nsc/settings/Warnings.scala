@@ -55,6 +55,7 @@ trait Warnings {
   val warnNullaryOverride  = BooleanSetting   ("-Ywarn-nullary-override",
     "Warn when non-nullary overrides nullary, e.g. `def foo()` over `def foo`.")
   val warnInferAny         = BooleanSetting   ("-Ywarn-infer-any", "Warn when a type argument is inferred to be `Any`.")
+  val warnDefaultedRecurse = BooleanSetting   ("-Ywarn-default-recursion", "Warn when a recursive method call relies on a default argument")
 
   // Backward compatibility.
   def Xwarnfatal    = fatalWarnings

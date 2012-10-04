@@ -3071,7 +3071,13 @@ trait Typers extends Modes with Adaptations with Tags {
                   // useful when a default doesn't match parameter type, e.g. def f[T](x:T="a"); f[Int]()
                   val note = "Error occurred in an application involving default arguments."
                   if (!(context.diagnostic contains note)) context.diagnostic = note :: context.diagnostic
-                  doTypedApply(tree, if (blockIsEmpty) fun else fun1, allArgs, mode, pt)
+                  val resultTree = doTypedApply(tree, if (blockIsEmpty) fun else fun1, allArgs, mode, pt)
+
+                  if (settings.warnDefaultedRecurse.value && !resultTree.isErroneous && (context.owner.ownerChain contains fun.symbol))
+
+                    unit.warning(tree.pos, s"recursive call relies on defaults for some parameters")
+
+                  resultTree
                 } else {
                   tryTupleApply getOrElse duplErrorTree(NotEnoughArgsError(tree, fun, missing))
                 }
