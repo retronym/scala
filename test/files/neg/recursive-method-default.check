@@ -20,8 +20,11 @@ recursive-method-default.scala:34: warning: recursive call relies on defaults fo
     rec6()(0)   // warn
         ^
 recursive-method-default.scala:38: warning: recursive call relies on defaults for some parameters
-    rec7()(0)   // one warning only
+    rec7()()   // one warning only
         ^
+recursive-method-default.scala:38: warning: recursive call relies on defaults for some parameters
+    rec7()()   // one warning only
+          ^
 error: No warnings can be incurred under -Xfatal-warnings.
-8 warnings found
+9 warnings found
 one error found

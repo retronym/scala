@@ -35,6 +35,6 @@ object Test {
   }
 
   def rec7(a: Any = 0)(b: Any = 0): Any = {
-    rec7()(0)   // one warning only
+    rec7()()   // one warning only
   }
 }
