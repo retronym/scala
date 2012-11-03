@@ -544,9 +544,7 @@ abstract class ExplicitOuter extends InfoTransform
           }
 
         case _ =>
-          val x = super.transform(tree)
-          if (x.tpe eq null) x
-          else x setType transformInfo(currentOwner, x.tpe)
+          super.transform(tree).modifyType(transformInfo(currentOwner, _))
       }
     }
 
