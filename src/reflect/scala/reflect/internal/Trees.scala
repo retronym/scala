@@ -168,7 +168,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
     /** Sets the tree's type to the result of the given function.
      *  If the type is null, it remains null - the function is not called.
      */
-    def modifyType(f: Type => Type): Tree =
+    @inline final def modifyType(f: Type => Type): Tree =
       if (tpe eq null) this
       else this setType f(tpe)
 
@@ -1369,7 +1369,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
   class ThisSubstituter(clazz: Symbol, to: => Tree) extends Transformer {
     val newtpe = to.tpe
     override def transform(tree: Tree) = {
-      if (tree.tpe ne null) tree.tpe = tree.tpe.substThis(clazz, newtpe)
+      tree.modifyType(_.substThis(clazz, newtpe))
       tree match {
         case This(_) if tree.symbol == clazz => to
         case _ => super.transform(tree)
@@ -1379,8 +1379,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
 
   class TypeMapTreeSubstituter(val typeMap: TypeMap) extends Traverser {
     override def traverse(tree: Tree) {
-      if (tree.tpe ne null)
-        tree.tpe = typeMap(tree.tpe)
+      tree.modifyType(typeMap)
       if (tree.isDef)
         tree.symbol modifyInfo typeMap
 
@@ -1413,7 +1412,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
           else subst(from.tail, to.tail)
       }
 
-      if (tree.tpe ne null) tree.tpe = symSubst(tree.tpe)
+      tree.modifyType(symSubst)
       if (tree.hasSymbolField) {
         subst(from, to)
         tree match {
