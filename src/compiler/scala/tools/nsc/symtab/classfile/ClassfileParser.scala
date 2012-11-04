@@ -663,7 +663,7 @@ abstract class ClassfileParser {
         setPrivateWithin(sym, jflags)
         parseAttributes(sym, info)
         if ((jflags & JAVA_ACC_VARARGS) != 0) {
-          sym.setInfo(arrayToRepeated(sym.info))
+          sym modifyInfo arrayToRepeated
         }
         getScope(jflags).enter(sym)
       }
