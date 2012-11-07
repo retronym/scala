@@ -735,12 +735,14 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
 
       // reference the (i-1)th case accessor if it exists, otherwise the (i-1)th tuple component
       override protected def tupleSel(binder: Symbol)(i: Int): Tree = { import CODE._
+        // Use the symbol of the pattern, not the scrutinee. See SI-6624
+        val constructorPatternSymbol = paramType.typeSymbol
         // caseFieldAccessors is messed up after typers (reversed, names mangled for non-public fields)
         // TODO: figure out why...
-        val accessors = binder.caseFieldAccessors
+        val accessors = constructorPatternSymbol.caseFieldAccessors
         // luckily, the constrParamAccessors are still sorted properly, so sort the field-accessors using them
         // (need to undo name-mangling, including the sneaky trailing whitespace)
-        val constrParamAccessors = binder.constrParamAccessors
+        val constrParamAccessors = constructorPatternSymbol.constrParamAccessors
 
         def indexInCPA(acc: Symbol) =
           constrParamAccessors indexWhere { orig =>
