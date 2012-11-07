@@ -1317,8 +1317,15 @@ trait Infer extends Checkable {
 
       inferred match {
         case Some(targs) =>
-          new TreeTypeSubstituter(undetparams, targs).traverse(tree)
-          notifyUndetparamsInferred(undetparams, targs)
+          // Workaround for SI-6624.
+          // TODO figure out why the the glb taken during inference involving
+          //      a type constructor and HK type var doesn't unify.
+          val cleanedTargs = targs map {
+            case RefinedType(parents, scope) if scope.isEmpty => glb(parents)
+            case x => x
+          }
+          new TreeTypeSubstituter(undetparams, cleanedTargs).traverse(tree)
+          notifyUndetparamsInferred(undetparams, cleanedTargs)
         case _ =>
           debugwarn("failed inferConstructorInstance for "+ tree  +" : "+ tree.tpe +" under "+ undetparams +" pt = "+ pt +(if(isFullyDefined(pt)) " (fully defined)" else " (not fully defined)"))
           // if (settings.explaintypes.value) explainTypes(resTp.instantiateTypeParams(undetparams, tvars), pt)
