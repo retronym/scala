@@ -291,9 +291,21 @@ abstract class SymbolTable extends macros.Universe
     }
     if (pkgModule.isModule && !fromSource) {
       // println("open "+pkgModule)//DEBUG
-      openPackageModule(pkgModule, pkgClass)
+      val stubParent = pkgModule.info.parents.map(_.typeSymbol).collectFirst {
+        case ss: StubSymbol => ss
+      }
+      stubParent match {
+        case Some(x) =>
+          debugwarn("Discarding package object class file as its list of parents includes a stub.")
+          pkgClass.info.decls unlink pkgModule
+          pkgClass.updateAttachment(PackageObjectClassFileDiscarded)
+        case None =>
+          openPackageModule(pkgModule, pkgClass)
+      }
     }
   }
+
+  case object PackageObjectClassFileDiscarded
 
   object perRunCaches {
     import java.lang.ref.WeakReference

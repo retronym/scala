@@ -1636,6 +1636,16 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
           resetProjectClasses(RootClass)
         }
       }
+      def walkPackages(sym: Symbol) : Stream[Symbol] = sym #:: sym.info.decls.toStream.filter(_.isPackage).flatMap(walkPackages)
+      val packages = walkPackages(RootClass).toList
+      val packagesWithDiscardedPackageObjectClassFiles = packages.filter(_.attachments.get[PackageObjectClassFileDiscarded.type].isDefined)
+      packagesWithDiscardedPackageObjectClassFiles.foreach {
+        sym =>
+          val packageObject = sym.info.decl(nme.PACKAGE)
+          if (packageObject == NoSymbol)
+                      globalError("A package object was provided as a class file, but the compiler had to discard it as it referred to missing classes. A replacement was not found after compiling all sources.")
+      }
+      RootClass.info.decls
     }
 
     /** Compile list of abstract files. */

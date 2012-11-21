@@ -233,11 +233,15 @@ abstract class UnPickler {
               // (4) Call the mirror's "missing" hook.
               adjust(mirrorThatLoaded(owner).missingHook(owner, name)) orElse {
                 // (5) Create a stub symbol to defer hard failure a little longer.
+                val isCurrentPackageObject = moduleRoot.isPackageObject && moduleRoot.owner == owner
+                val addendum =
+                  if (isCurrentPackageObject) "\nIf a package object exists as a classfile, it's dependencies must also be provided as class files.\nDelete the package class file before compilation."
+                  else ""
                 val missingMessage =
                   s"""|bad symbolic reference. A signature in $filename refers to ${name.longString}
                       |in ${owner.kindString} ${owner.fullName} which is not available.
                       |It may be completely missing from the current classpath, or the version on
-                      |the classpath might be incompatible with the version used when compiling $filename.""".stripMargin
+                      |the classpath might be incompatible with the version used when compiling $filename.$addendum""".stripMargin
                 owner.newStubSymbol(name, missingMessage)
               }
             }
