@@ -392,8 +392,8 @@ trait Printers extends api.Printers { self: SymbolTable =>
           if ((tree.tpe eq null) || (doPrintPositions && tt.original != null)) {
             if (tt.original != null) print("<type: ", tt.original, ">")
             else print("<type ?>")
-          } else if ((tree.tpe.typeSymbol ne null) && tree.tpe.typeSymbol.isAnonymousClass) {
-            print(tree.tpe.typeSymbol.toString)
+          } else if ((tree.typeSymbol ne null) && tree.typeSymbol.isAnonymousClass) {
+            print(tree.typeSymbol.toString)
           } else {
             print(tree.tpe.toString)
           }

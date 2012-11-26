@@ -220,7 +220,7 @@ abstract class ExplicitOuter extends InfoTransform
      *  take outer field instead of accessor
      */
     private def outerSelect(base: Tree): Tree = {
-      val outerAcc = outerAccessor(base.tpe.typeSymbol.toInterface)
+      val outerAcc = outerAccessor(base.typeSymbol.toInterface)
       val currentClass = this.currentClass //todo: !!! if this line is removed, we get a build failure that protected$currentClass need an override modifier
       // outerFld is the $outer field of the current class, if the reference can
       // use it (i.e. reference is allowed to be of the form this.$outer),
@@ -547,7 +547,7 @@ abstract class ExplicitOuter extends InfoTransform
             // println("(base, acc)= "+(base, acc))
             val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
             // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
-            // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
+            // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
             // println("outerSelect = "+ outerSelect)
             return transform(treeCopy.Apply(tree, treeCopy.Select(eqsel, outerSelect, eq), args))
           }

@@ -173,7 +173,7 @@ abstract class TreeGen extends macros.TreeBuilder {
       mkAttributedIdent(sym)
     else {
       val pkgQualifier =
-        if (sym != null && sym.owner.isPackageObjectClass && sym.effectiveOwner == qual.tpe.typeSymbol) {
+        if (sym != null && sym.owner.isPackageObjectClass && sym.effectiveOwner == qual.typeSymbol) {
           val obj = sym.owner.sourceModule
           Select(qual, nme.PACKAGE) setSymbol obj setType singleType(qual.tpe, obj)
         }

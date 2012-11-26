@@ -192,7 +192,7 @@ abstract class GenICode extends SubComponent  {
 
       val thrownKind = toTypeKind(expr.tpe)
       val ctx1       = genLoad(expr, ctx, thrownKind)
-      ctx1.bb.emit(THROW(expr.tpe.typeSymbol), expr.pos)
+      ctx1.bb.emit(THROW(expr.typeSymbol), expr.pos)
       ctx1.bb.enterIgnoreMode
 
       (ctx1, NothingReference)
@@ -407,7 +407,7 @@ abstract class GenICode extends SubComponent  {
             })
 
           pat match {
-            case Typed(Ident(nme.WILDCARD), tpt)  => genWildcardHandler(tpt.tpe.typeSymbol)
+            case Typed(Ident(nme.WILDCARD), tpt)  => genWildcardHandler(tpt.typeSymbol)
             case Ident(nme.WILDCARD)              => genWildcardHandler(ThrowableClass)
             case Bind(_, _)                       =>
               val exception = ctx.method addLocal new Local(pat.symbol, toTypeKind(pat.symbol.tpe), false) // the exception will be loaded and stored into this local
@@ -947,8 +947,8 @@ abstract class GenICode extends SubComponent  {
                   }
                   else {
                     cm setHostClass qualSym
-                    if (qual.tpe.typeSymbol != qualSym)
-                      log(s"Precisified host class for $sym from ${qual.tpe.typeSymbol.fullName} to ${qualSym.fullName}")
+                    if (qual.typeSymbol != qualSym)
+                      log(s"Precisified host class for $sym from ${qual.typeSymbol.fullName} to ${qualSym.fullName}")
                   }
                 case _ =>
               }
@@ -1590,7 +1590,7 @@ abstract class GenICode extends SubComponent  {
         * not using the rich equality is possible (their own equals method will do ok.)*/
       def mustUseAnyComparator: Boolean = {
         def areSameFinals = l.tpe.isFinalType && r.tpe.isFinalType && (l.tpe =:= r.tpe)
-        !areSameFinals && isMaybeBoxed(l.tpe.typeSymbol) && isMaybeBoxed(r.tpe.typeSymbol)
+        !areSameFinals && isMaybeBoxed(l.typeSymbol) && isMaybeBoxed(r.typeSymbol)
       }
 
       if (mustUseAnyComparator) {

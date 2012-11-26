@@ -40,8 +40,8 @@ trait PostErasure extends InfoTransform with TypingTransformers {
             Apply(Select(New(tpt), nme.CONSTRUCTOR), List(arg)),
             acc), List())
         if atPhase(currentRun.erasurePhase) {
-          tpt.tpe.typeSymbol.isDerivedValueClass &&
-          sel.symbol == tpt.tpe.typeSymbol.derivedValueClassUnbox
+          tpt.typeSymbol.isDerivedValueClass &&
+          sel.symbol == tpt.typeSymbol.derivedValueClassUnbox
         } =>
           if (settings.debug.value) log("Removing "+tree+" -> "+arg)
           arg
@@ -51,9 +51,9 @@ trait PostErasure extends InfoTransform with TypingTransformers {
             cmp),
             List(Apply(Select(New(tpt2), nme.CONSTRUCTOR), List(arg2))))
         if atPhase(currentRun.erasurePhase) {
-          tpt1.tpe.typeSymbol.isDerivedValueClass &&
+          tpt1.typeSymbol.isDerivedValueClass &&
           (sel.symbol == Object_== || sel.symbol == Object_!=) &&
-          tpt2.tpe.typeSymbol == tpt1.tpe.typeSymbol
+          tpt2.typeSymbol == tpt1.typeSymbol
         } =>
           val result = Apply(Select(arg1, cmp) setPos sel.pos, List(arg2)) setPos tree.pos
           log("shortcircuiting equality "+tree+" -> "+result)

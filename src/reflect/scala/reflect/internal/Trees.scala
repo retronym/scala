@@ -27,6 +27,8 @@ trait Trees extends api.Trees { self: SymbolTable =>
     def tpe_=(t: Type) = rawtpe = t
     def setType(tp: Type): this.type = { rawtpe = tp; this }
     def defineType(tp: Type): this.type = setType(tp)
+    /** @return the type symbol of this `Tree`'s tpe, or `NoSymbol` if this tree is untyped. */
+    final def typeSymbol: Symbol = if (tpe == null) NoSymbol else tpe.typeSymbol
 
     def symbol: Symbol = null //!!!OPT!!! symbol is about 3% of hot compile times -- megamorphic dispatch?
     def symbol_=(sym: Symbol) { throw new UnsupportedOperationException("symbol_= inapplicable for " + this) }

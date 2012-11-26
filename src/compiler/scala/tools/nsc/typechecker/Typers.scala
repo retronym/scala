@@ -920,8 +920,8 @@ trait Typers extends Modes with Adaptations with Tags {
           // @M: don't check tree.tpe.symbol.typeParams. check tree.tpe.typeParams!!!
           // (e.g., m[Int] --> tree.tpe.symbol.typeParams.length == 1, tree.tpe.typeParams.length == 0!)
           !sameLength(tree.tpe.typeParams, pt.typeParams) &&
-          !(tree.tpe.typeSymbol == AnyClass ||
-            tree.tpe.typeSymbol == NothingClass ||
+          !(tree.typeSymbol == AnyClass ||
+            tree.typeSymbol == NothingClass ||
             pt == WildcardType)) {
           // Check that the actual kind arity (tree.symbol.typeParams.length) conforms to the expected
           // kind-arity (pt.typeParams.length). Full checks are done in checkKindBounds in Infer.
@@ -1492,17 +1492,17 @@ trait Typers extends Modes with Adaptations with Tags {
         val clazz = context.owner
         // Normalize supertype and mixins so that supertype is always a class, not a trait.
         var supertpt = typedTypeConstructor(templ.parents.head)
-        val firstParent = supertpt.tpe.typeSymbol
+        val firstParent = supertpt.typeSymbol
         var mixins = templ.parents.tail map typedType
         // If first parent is a trait, make it first mixin and add its superclass as first parent
-        while ((supertpt.tpe.typeSymbol ne null) && supertpt.tpe.typeSymbol.initialize.isTrait) {
+        while ((supertpt.typeSymbol ne null) && supertpt.typeSymbol.initialize.isTrait) {
           val supertpt1 = typedType(supertpt)
           if (!supertpt1.isErrorTyped) {
             mixins = supertpt1 :: mixins
             supertpt = TypeTree(supertpt1.tpe.firstParent) setPos supertpt.pos.focus
           }
         }
-        if (supertpt.tpe.typeSymbol == AnyClass && firstParent.isTrait)
+        if (supertpt.typeSymbol == AnyClass && firstParent.isTrait)
           supertpt.tpe = AnyRefClass.tpe
 
         // Determine
@@ -1627,7 +1627,7 @@ trait Typers extends Modes with Adaptations with Tags {
 
       def validateParentClass(parent: Tree, superclazz: Symbol) =
         if (!parent.isErrorTyped) {
-          val psym = parent.tpe.typeSymbol.initialize
+          val psym = parent.typeSymbol.initialize
 
           checkStablePrefixClassType(parent)
 
@@ -1670,14 +1670,14 @@ trait Typers extends Modes with Adaptations with Tags {
             if (settings.explaintypes.value) explainTypes(selfType, parent.tpe.typeOfThis)
           }
 
-          if (parents exists (p => p != parent && p.tpe.typeSymbol == psym && !psym.isError))
+          if (parents exists (p => p != parent && p.typeSymbol == psym && !psym.isError))
             pending += ParentInheritedTwiceError(parent, psym)
 
           validateDynamicParent(psym)
         }
 
       if (!parents.isEmpty && parents.forall(!_.isErrorTyped)) {
-        val superclazz = parents.head.tpe.typeSymbol
+        val superclazz = parents.head.typeSymbol
         for (p <- parents) validateParentClass(p, superclazz)
       }
 
@@ -2097,7 +2097,7 @@ trait Typers extends Modes with Adaptations with Tags {
               silent(_.typedTypeConstructor(stringParser(repl).typ())) match {
                 case SilentResultValue(tpt) =>
                   val alias = enclClass.newAliasType(name.toTypeName, useCase.pos)
-                  val tparams = cloneSymbolsAtOwner(tpt.tpe.typeSymbol.typeParams, alias)
+                  val tparams = cloneSymbolsAtOwner(tpt.typeSymbol.typeParams, alias)
                   val newInfo = genPolyType(tparams, appliedType(tpt.tpe, tparams map (_.tpe)))
                   alias setInfo newInfo
                   context.scope.enter(alias)
@@ -2177,7 +2177,7 @@ trait Typers extends Modes with Adaptations with Tags {
           checkSelfConstructorArgs(ddef, meth.owner)
       }
 
-      if (tpt1.tpe.typeSymbol != NothingClass && !context.returnsSeen && rhs1.tpe.typeSymbol != NothingClass)
+      if (tpt1.typeSymbol != NothingClass && !context.returnsSeen && rhs1.typeSymbol != NothingClass)
         rhs1 = checkDead(rhs1)
 
       if (!isPastTyper && meth.owner.isClass &&
@@ -3771,7 +3771,7 @@ trait Typers extends Modes with Adaptations with Tags {
                     // Ident's type is already over an existential.
                     // (If the type is already over an existential,
                     // then remap the type, not the core symbol.)
-                    if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
+                    if (!arg.typeSymbol.hasFlag(EXISTENTIAL))
                       addIfLocal(arg.symbol, arg.tpe)
                   case _ => ()
                 }
@@ -4256,11 +4256,11 @@ trait Typers extends Modes with Adaptations with Tags {
             context.enclMethod.returnsSeen = true
             val expr1: Tree = typed(expr, EXPRmode | BYVALmode | RETmode, restpt.tpe)
             // Warn about returning a value if no value can be returned.
-            if (restpt.tpe.typeSymbol == UnitClass) {
+            if (restpt.typeSymbol == UnitClass) {
               // The typing in expr1 says expr is Unit (it has already been coerced if
               // it is non-Unit) so we have to retype it.  Fortunately it won't come up much
               // unless the warning is legitimate.
-              if (typed(expr).tpe.typeSymbol != UnitClass)
+              if (typed(expr).typeSymbol != UnitClass)
                 unit.warning(tree.pos, "enclosing method " + name + " has result type Unit: return value discarded")
             }
             treeCopy.Return(tree, checkDead(expr1)).setSymbol(enclMethod.owner)
@@ -4517,8 +4517,7 @@ trait Typers extends Modes with Adaptations with Tags {
           case _ =>
             normalTypedApply(tree, fun, args) match {
               case Apply(Select(New(tpt), name), args)
-              if (tpt.tpe != null &&
-                tpt.tpe.typeSymbol == ArrayClass &&
+              if (tpt.typeSymbol == ArrayClass &&
                 args.length == 1 &&
                 erasure.GenericArray.unapply(tpt.tpe).isDefined) => // !!! todo simplify by using extractor
                 // convert new Array[T](len) to evidence[ClassTag[T]].newArray(len)
@@ -4591,9 +4590,9 @@ trait Typers extends Modes with Adaptations with Tags {
 
         val clazz = qual1 match {
           case This(_) => qual1.symbol
-          case _ => qual1.tpe.typeSymbol
+          case _ => qual1.typeSymbol
         }
-        //println(clazz+"/"+qual1.tpe.typeSymbol+"/"+qual1)
+        //println(clazz+"/"+qual1.typeSymbol+"/"+qual1)
 
         def findMixinSuper(site: Type): Type = {
           var ps = site.parents filter (_.typeSymbol.name == mix)
@@ -4693,7 +4692,7 @@ trait Typers extends Modes with Adaptations with Tags {
 
             if (!qual.tpe.widen.isErroneous) {
               if ((mode & QUALmode) != 0) {
-                val lastTry = rootMirror.missingHook(qual.tpe.typeSymbol, name)
+                val lastTry = rootMirror.missingHook(qual.typeSymbol, name)
                 if (lastTry != NoSymbol) return typed1(tree setSymbol lastTry, mode, pt)
               }
               NotAMemberError(tree, qual, name)
@@ -5241,7 +5240,7 @@ trait Typers extends Modes with Adaptations with Tags {
                 newExistentialType(List(tparam), arrayType(tparam.tpe))
               }
 
-            val (exprAdapted, baseClass) = exprTyped.tpe.typeSymbol match {
+            val (exprAdapted, baseClass) = exprTyped.typeSymbol match {
               case ArrayClass => (adapt(exprTyped, onlyStickyModes(mode), subArrayType(pt)), ArrayClass)
               case _ => (adapt(exprTyped, onlyStickyModes(mode), seqType(pt)), SeqClass)
             }

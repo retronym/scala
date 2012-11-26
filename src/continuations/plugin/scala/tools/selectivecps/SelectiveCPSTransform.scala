@@ -320,7 +320,7 @@ abstract class SelectiveCPSTransform extends PluginComponent with
                 var methodName = nme.map
 
                 if (body1.tpe != null) {
-                  if (body1.tpe.typeSymbol == Context)
+                  if (body1.typeSymbol == Context)
                     methodName = nme.flatMap
                 }
                 else

@@ -199,7 +199,7 @@ abstract class TailCalls extends Transform {
         def receiverIsSuper   = ctx.enclosingType.widen <:< receiver.tpe.widen
         def isRecursiveCall   = (ctx.method eq fun.symbol) && ctx.tailPos
         def transformArgs     = noTailTransforms(args)
-        def matchesTypeArgs   = ctx.tparams sameElements (targs map (_.tpe.typeSymbol))
+        def matchesTypeArgs   = ctx.tparams sameElements (targs map (_.typeSymbol))
 
         /** Records failure reason in Context for reporting.
          *  Position is unchanged (by default, the method definition.)

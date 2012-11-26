@@ -1407,7 +1407,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           def transformNew = {
           debuglog("Attempting to specialize new %s(%s)".format(tpt, args.mkString(", ")))
           val found = findSpec(tpt.tpe)
-          if (found.typeSymbol ne tpt.tpe.typeSymbol) {
+          if (found.typeSymbol ne tpt.typeSymbol) {
             // the ctor can be specialized
             debuglog("** instantiated specialized type: " + found)
             reportError {

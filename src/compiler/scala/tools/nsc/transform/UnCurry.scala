@@ -235,7 +235,7 @@ abstract class UnCurry extends InfoTransform
       deEta(fun) match {
         // nullary or parameterless
         case fun1 if fun1 ne fun => fun1
-        case _ if fun.tpe.typeSymbol == PartialFunctionClass =>
+        case _ if fun.typeSymbol == PartialFunctionClass =>
           // only get here when running under -Xoldpatmat
           synthPartialFunction(fun)
         case _ =>
@@ -446,10 +446,10 @@ abstract class UnCurry extends InfoTransform
           if (treeInfo isWildcardStarArgList args) {
             val Typed(tree, _) = args.last
             if (isJava)
-              if (tree.tpe.typeSymbol == ArrayClass) tree
+              if (tree.typeSymbol == ArrayClass) tree
               else sequenceToArray(tree)
             else
-              if (tree.tpe.typeSymbol isSubClass SeqClass) tree
+              if (tree.typeSymbol isSubClass SeqClass) tree
               else arrayToSequence(tree, varargsElemType)
           }
           else {
@@ -484,7 +484,7 @@ abstract class UnCurry extends InfoTransform
           arg match {
             // don't add a thunk for by-name argument if argument already is an application of
             // a Function0. We can then remove the application and use the existing Function0.
-            case Apply(Select(recv, nme.apply), Nil) if recv.tpe.typeSymbol isSubClass FunctionClass(0) =>
+            case Apply(Select(recv, nme.apply), Nil) if recv.typeSymbol isSubClass FunctionClass(0) =>
               recv
             case _ =>
               newFunction0(arg)
