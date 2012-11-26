@@ -70,7 +70,7 @@ abstract class CleanUp extends Transform with ast.TreeDSL {
     }
 
     def shouldRewriteTry(tree: Try) = {
-      val sym = tree.tpe.typeSymbol
+      val sym = tree.typeSymbol
       forMSIL && (sym != UnitClass) && (sym != NothingClass)
     }
 
@@ -324,7 +324,7 @@ abstract class CleanUp extends Transform with ast.TreeDSL {
             }
 
             /* Some info about the argument at the call site. */
-            val qualSym           = qual.tpe.typeSymbol
+            val qualSym           = qual.typeSymbol
             val args              = qual1() :: params
             def isDefinitelyArray = (qualSym == ArrayClass)
             def isMaybeArray      = (qualSym == ObjectClass) || isDefinitelyArray

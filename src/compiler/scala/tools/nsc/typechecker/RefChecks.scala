@@ -1341,7 +1341,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       }
     private def isIrrefutable(pat: Tree, seltpe: Type): Boolean = pat match {
       case Apply(_, args) =>
-        val clazz = pat.tpe.typeSymbol
+        val clazz = pat.typeSymbol
         clazz == seltpe.typeSymbol &&
         clazz.isCaseClass &&
         (args corresponds clazz.primaryConstructor.tpe.asSeenFrom(seltpe, clazz).paramTypes)(isIrrefutable)
@@ -1703,7 +1703,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             transformIf(x)
 
           case New(tpt) =>
-            enterReference(tree.pos, tpt.tpe.typeSymbol)
+            enterReference(tree.pos, tpt.typeSymbol)
             tree
 
           case Typed(_, Ident(tpnme.WILDCARD_STAR)) if !isRepeatedParamArg(tree) =>

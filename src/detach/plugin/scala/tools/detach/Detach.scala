@@ -388,7 +388,7 @@ abstract class Detach extends PluginComponent
             println("\nTreeAccessorSubstituter: Assign1\n\tqual1="+qual1+", sel.tpe="+lhs.tpe+
                     "\n\tqual1.tpe="+qual1.tpe+", name1="+name1+
                     "\n\tqual.tpe="+qual.tpe+", tree.tpe="+tree.tpe)//debug
-          val iface = toInterface(qual.tpe.typeSymbol)
+          val iface = toInterface(qual.typeSymbol)
           val sym = iface.tpe.decls lookup nme.getterToSetter(name)
           atPos(tree.pos)(Apply(
             Select(super.transform(qual), sym) setType lhs.tpe,
@@ -468,7 +468,7 @@ abstract class Detach extends PluginComponent
                     ", qual.tpe="+qual.tpe+", name="+name)//debug
           val sym = qual.symbol
           val qual1 = gen.mkAttributedSelect(gen.mkAttributedThis(sym.owner), sym)
-          val iface = toInterface(qual.tpe.typeSymbol)
+          val iface = toInterface(qual.typeSymbol)
           val sym1 = iface.tpe.decls lookup name
           val fun = gen.mkAttributedSelect(qual1, sym1)
           Apply(fun, List()) setType tree.tpe
@@ -488,9 +488,9 @@ abstract class Detach extends PluginComponent
                 if (currentOwner.enclClass isNestedIn clazz) apply
                 else removeAccessors(qual)
               val name1 =
-                (if (tsym isSubClass qual1.tpe.typeSymbol) ""
+                (if (tsym isSubClass qual1.typeSymbol) ""
                  else tsym.fullName('$')+"$")+sym.name
-              val iface = toInterface(qual1.tpe.typeSymbol)
+              val iface = toInterface(qual1.typeSymbol)
               val sym1 = iface.tpe.decls lookup name1
               gen.mkAttributedSelect(qual1, sym1)
             case None =>
@@ -955,7 +955,7 @@ abstract class Detach extends PluginComponent
     private def mkClosureApply(tree: Tree): Tree = {
       val apply @ Apply(fun, args) = detachedClosureApply(tree)
       assert(fun.symbol.isConstructor, fun.symbol+" is not a constructor")//debug
-      val clazz = apply.tpe.typeSymbol
+      val clazz = apply.typeSymbol
       val thiz = capturedThisClass(clazz)
       val cdef = mkClosureDef(clazz)
       val uid = localTyper typed {

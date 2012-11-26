@@ -99,7 +99,7 @@ trait ScratchPadMaker { self: Global =>
           case _ =>
             if (stat.isTerm) {
               addSkip(stat)
-              if (stat.tpe.typeSymbol == UnitClass) {
+              if (stat.typeSymbol == UnitClass) {
                 addSandbox(stat)
               } else {
                 val resName = nextRes()

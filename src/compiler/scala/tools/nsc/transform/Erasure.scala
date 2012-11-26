@@ -357,7 +357,7 @@ abstract class Erasure extends AddInterfaces
   /** An extractor object for unboxed expressions (maybe subsumed by posterasure?) */
   object Unboxed {
     def unapply(tree: Tree): Option[Tree] = tree match {
-      case Apply(fn, List(arg)) if isUnbox(fn.symbol) && safeToRemoveUnbox(arg.tpe.typeSymbol) =>
+      case Apply(fn, List(arg)) if isUnbox(fn.symbol) && safeToRemoveUnbox(arg.typeSymbol) =>
         Some(arg)
       case Apply(
         TypeApply(
@@ -369,8 +369,8 @@ abstract class Erasure extends AddInterfaces
           List(tpt)),
         List())
       if cast.symbol == Object_asInstanceOf &&
-        tpt.tpe.typeSymbol.isDerivedValueClass &&
-        sel.symbol == tpt.tpe.typeSymbol.derivedValueClassUnbox =>
+        tpt.typeSymbol.isDerivedValueClass &&
+        sel.symbol == tpt.typeSymbol.derivedValueClassUnbox =>
         Some(arg)
       case _ =>
         None
@@ -380,7 +380,7 @@ abstract class Erasure extends AddInterfaces
   /** An extractor object for boxed expressions (maybe subsumed by posterasure?) */
   object Boxed {
     def unapply(tree: Tree): Option[Tree] = tree match {
-      case Apply(Select(New(tpt), nme.CONSTRUCTOR), List(arg)) if (tpt.tpe.typeSymbol.isDerivedValueClass) =>
+      case Apply(Select(New(tpt), nme.CONSTRUCTOR), List(arg)) if (tpt.typeSymbol.isDerivedValueClass) =>
         Some(arg)
       case LabelDef(name, params, Boxed(rhs)) =>
         Some(treeCopy.LabelDef(tree, name, params, rhs) setType rhs.tpe)
@@ -573,13 +573,13 @@ abstract class Erasure extends AddInterfaces
           case ErasedValueType(tref) =>
             val clazz = tref.sym
             tree match {
-              case Unboxed(arg) if arg.tpe.typeSymbol == clazz =>
+              case Unboxed(arg) if arg.typeSymbol == clazz =>
                 log("shortcircuiting unbox -> box "+arg); arg
               case _ =>
                 New(clazz, cast(tree, underlyingOfValueClass(clazz)))
             }
           case _ =>
-            tree.tpe.typeSymbol match {
+            tree.typeSymbol match {
           case UnitClass  =>
             if (treeInfo isExprSafeToInline tree) REF(BoxedUnit_UNIT)
             else BLOCK(tree, REF(BoxedUnit_UNIT))
@@ -593,7 +593,7 @@ abstract class Erasure extends AddInterfaces
                *  This is important for specialization: calls to the super constructor should not box/unbox specialized
                *  fields (see TupleX). (ID)
                */
-              case Apply(boxFun, List(arg)) if isUnbox(tree.symbol) && safeToRemoveUnbox(arg.tpe.typeSymbol) =>
+              case Apply(boxFun, List(arg)) if isUnbox(tree.symbol) && safeToRemoveUnbox(arg.typeSymbol) =>
                 log(s"boxing an unbox: ${tree.symbol} -> ${arg.tpe}")
                 arg
               case _ =>
@@ -637,7 +637,7 @@ abstract class Erasure extends AddInterfaces
                 log("not boxed: "+tree)
                 lazy val underlying = underlyingOfValueClass(clazz)
                 val tree0 =
-                  if (tree.tpe.typeSymbol == NullClass &&
+                  if (tree.typeSymbol == NullClass &&
                       isPrimitiveValueClass(underlying.typeSymbol)) {
                     // convert `null` directly to underlying type, as going
                     // via the unboxed type would yield a NPE (see SI-5866)
@@ -668,7 +668,7 @@ abstract class Erasure extends AddInterfaces
         // See SI-4731 for one example of how this occurs.
         log("Attempted to cast to Unit: " + tree)
         tree.duplicate setType pt
-      } else if (tree.tpe != null && tree.tpe.typeSymbol == ArrayClass && pt.typeSymbol == ArrayClass) {
+      } else if (tree.typeSymbol == ArrayClass && pt.typeSymbol == ArrayClass) {
         // See SI-2386 for one example of when this might be necessary.
         val needsExtraCast = isPrimitiveValueType(tree.tpe.typeArgs.head) && !isPrimitiveValueType(pt.typeArgs.head)
         val tree1 = if (needsExtraCast) gen.mkRuntimeCall(nme.toObjectArray, List(tree)) else tree
@@ -724,9 +724,9 @@ abstract class Erasure extends AddInterfaces
         case Apply(TypeApply(sel @ Select(qual, name), List(targ)), List())
         if tree.symbol == Any_asInstanceOf =>
           val qual1 = typedQualifier(qual, NOmode, ObjectClass.tpe) // need to have an expected type, see #3037
-          val qualClass = qual1.tpe.typeSymbol
+          val qualClass = qual1.typeSymbol
 /*
-          val targClass = targ.tpe.typeSymbol
+          val targClass = targ.typeSymbol
 
           if (isNumericValueClass(qualClass) && isNumericValueClass(targClass))
             // convert numeric type casts
@@ -792,7 +792,7 @@ abstract class Erasure extends AddInterfaces
               assert(qual1.symbol.isStable, qual1.symbol);
               val applied = Apply(qual1, List()) setPos qual1.pos setType qual1.tpe.resultType
               adaptMember(selectFrom(applied))
-            } else if (!(qual1.isInstanceOf[Super] || (qual1.tpe.typeSymbol isSubClass tree.symbol.owner))) {
+            } else if (!(qual1.isInstanceOf[Super] || (qual1.typeSymbol isSubClass tree.symbol.owner))) {
               assert(tree.symbol.owner != ArrayClass)
               selectFrom(cast(qual1, tree.symbol.owner.tpe))
             } else {
@@ -1024,8 +1024,8 @@ abstract class Erasure extends AddInterfaces
             case TypeApply(Select(qual, _), List(targ)) =>
               if (qual.tpe <:< targ.tpe)
                 atPos(tree.pos) { Typed(qual, TypeTree(targ.tpe)) }
-              else if (isNumericValueClass(qual.tpe.typeSymbol) && isNumericValueClass(targ.tpe.typeSymbol))
-                atPos(tree.pos)(numericConversion(qual, targ.tpe.typeSymbol))
+              else if (isNumericValueClass(qual.typeSymbol) && isNumericValueClass(targ.typeSymbol))
+                atPos(tree.pos)(numericConversion(qual, targ.typeSymbol))
               else
                 tree
           }
@@ -1035,7 +1035,7 @@ abstract class Erasure extends AddInterfaces
         def preEraseIsInstanceOf = {
           fn match {
             case TypeApply(sel @ Select(qual, name), List(targ)) =>
-              if (qual.tpe != null && isPrimitiveValueClass(qual.tpe.typeSymbol) && targ.tpe != null && targ.tpe <:< AnyRefClass.tpe)
+              if (isPrimitiveValueClass(qual.typeSymbol) && targ.tpe != null && targ.tpe <:< AnyRefClass.tpe)
                 unit.error(sel.pos, "isInstanceOf cannot test if value types are references.")
 
               def mkIsInstanceOf(q: () => Tree)(tp: Type): Tree =
@@ -1112,7 +1112,7 @@ abstract class Erasure extends AddInterfaces
             val args = tree.args
             if (fn.symbol.owner == ArrayClass) {
               // Have to also catch calls to abstract types which are bounded by Array.
-              if (unboundedGenericArrayLevel(qual.tpe.widen) == 1 || qual.tpe.typeSymbol.isAbstractType) {
+              if (unboundedGenericArrayLevel(qual.tpe.widen) == 1 || qual.typeSymbol.isAbstractType) {
                 // convert calls to apply/update/length on generic arrays to
                 // calls of ScalaRunTime.array_xxx method calls
                 global.typer.typedPos(tree.pos) {
@@ -1141,7 +1141,7 @@ abstract class Erasure extends AddInterfaces
                 // erasure the ScalaRunTime.hash overload goes from Unit => Int to BoxedUnit => Int.
                 // This must be because some earlier transformation is being skipped on ##, but so
                 // far I don't know what.  For null we now define null.## == 0.
-                qual.tpe.typeSymbol match {
+                qual.typeSymbol match {
                   case UnitClass | NullClass                    => LIT(0)
                   case IntClass                                 => qual
                   case s @ (ShortClass | ByteClass | CharClass) => numericConversion(qual, s)
@@ -1149,7 +1149,7 @@ abstract class Erasure extends AddInterfaces
                   case _                                        =>
                     global.typer.typed(gen.mkRuntimeCall(nme.hash_, List(qual)))
                 }
-              } else if (isPrimitiveValueClass(qual.tpe.typeSymbol)) {
+              } else if (isPrimitiveValueClass(qual.typeSymbol)) {
                 // Rewrite 5.getClass to ScalaRunTime.anyValClass(5)
                 global.typer.typed(gen.mkRuntimeCall(nme.anyValClass, List(qual, typer.resolveClassTag(tree.pos, qual.tpe.widen))))
               } else if (fn.symbol == AnyVal_getClass) {
@@ -1158,7 +1158,7 @@ abstract class Erasure extends AddInterfaces
                 tree
               }
             } else qual match {
-              case New(tpt) if name == nme.CONSTRUCTOR && tpt.tpe.typeSymbol.isDerivedValueClass =>
+              case New(tpt) if name == nme.CONSTRUCTOR && tpt.typeSymbol.isDerivedValueClass =>
                 // println("inject derived: "+arg+" "+tpt.tpe)
                 val List(arg) = args
                 val attachment = new TypeRefAttachment(tree.tpe.asInstanceOf[TypeRef])

@@ -613,7 +613,7 @@ trait Macros extends scala.tools.reflect.FastTrack with Traces {
         val binding = loadMacroImplBinding(macroDef)
         macroTraceVerbose("binding: ")(binding)
         val tags = binding.signature filter (_ != -1) map (paramPos => {
-          val targ = binding.targs(paramPos).tpe.typeSymbol
+          val targ = binding.targs(paramPos).typeSymbol
           val tpe = if (targ.isTypeParameterOrSkolem) {
             if (targ.owner == macroDef) {
               // doesn't work when macro def is compiled separately from its usages

@@ -478,7 +478,7 @@ abstract class LambdaLift extends InfoTransform {
             atPos(tree.pos) {
               val tp = tree.tpe
               val elemTree = typer typed Select(tree1 setType sym.tpe, nme.elem)
-              if (elemTree.tpe.typeSymbol != tp.typeSymbol) gen.mkAttributedCast(elemTree, tp) else elemTree
+              if (elemTree.typeSymbol != tp.typeSymbol) gen.mkAttributedCast(elemTree, tp) else elemTree
             }
           else tree1
         case Block(stats, expr0) =>

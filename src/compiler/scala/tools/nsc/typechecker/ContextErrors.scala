@@ -298,7 +298,7 @@ trait ContextErrors {
       //typedSelect
       def NotAMemberError(sel: Tree, qual: Tree, name: Name) = {
         def errMsg = {
-          val owner            = qual.tpe.typeSymbol
+          val owner            = qual.typeSymbol
           val target           = qual.tpe.widen
           def targetKindString = if (owner.isTypeParameterOrSkolem) "type parameter " else ""
           def nameString       = decodeWithKind(name, owner)
@@ -921,7 +921,7 @@ trait ContextErrors {
 
       def PatternTypeIncompatibleWithPtError2(pat: Tree, pt1: Type, pt: Type) = {
         def errMsg = {
-          val sym   = pat.tpe.typeSymbol
+          val sym   = pat.typeSymbol
           val clazz = sym.companionClass
           val addendum = (
             if (sym.isModuleClass && clazz.isCaseClass && (clazz isSubClass pt1.typeSymbol)) {
@@ -1044,7 +1044,7 @@ trait ContextErrors {
         issueNormalTypeError(tree, "Implementation restriction: case classes cannot have more than " + definitions.MaxFunctionArity + " parameters.")
 
       def InheritsItselfError(tree: Tree) =
-        issueNormalTypeError(tree, tree.tpe.typeSymbol+" inherits itself")
+        issueNormalTypeError(tree, tree.typeSymbol+" inherits itself")
 
       def MissingParameterOrValTypeError(vparam: Tree) =
         issueNormalTypeError(vparam, "missing parameter type")

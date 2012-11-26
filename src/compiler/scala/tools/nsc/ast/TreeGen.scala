@@ -111,7 +111,7 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
     def dropSyntheticCatchAll(cases: List[CaseDef]): List[CaseDef] =
       if (!opt.virtPatmat) cases
       else cases filter {
-             case CaseDef(pat, EmptyTree, Throw(Apply(Select(New(exTpt), nme.CONSTRUCTOR), _))) if (treeInfo.isWildcardArg(pat) && (exTpt.tpe.typeSymbol eq MatchErrorClass)) => false
+             case CaseDef(pat, EmptyTree, Throw(Apply(Select(New(exTpt), nme.CONSTRUCTOR), _))) if (treeInfo.isWildcardArg(pat) && (exTpt.typeSymbol eq MatchErrorClass)) => false
              case CaseDef(pat, guard, body) => true
            }
   }

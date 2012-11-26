@@ -433,7 +433,7 @@ trait TypeDiagnostics {
         (expr != Object_synchronized) &&
         !(expr.isLabel && treeInfo.isSynthCaseSymbol(expr)) // it's okay to jump to matchEnd (or another case) with an argument of type nothing
 
-      private def treeOK(tree: Tree) = tree.tpe != null && tree.tpe.typeSymbol == NothingClass
+      private def treeOK(tree: Tree) = tree.typeSymbol == NothingClass
 
       def updateExpr(fn: Tree) = {
         if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor)
