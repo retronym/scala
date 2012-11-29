@@ -1436,6 +1436,7 @@ trait Typers extends Modes with Adaptations with Tags {
       for (stat <- body) {
         def notAllowed(what: String) = unit.error(stat.pos, s"$what is not allowed in $where")
         stat match {
+          case dt: DefTree if dt.symbol.isSynthetic => // Allow for retypechecking under -Ycheck
           // see https://issues.scala-lang.org/browse/SI-6444
           // see https://issues.scala-lang.org/browse/SI-6463
           case ClassDef(mods, _, _, _) if isValueClass =>

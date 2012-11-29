@@ -1,0 +1,1 @@
+-Ycheck:typer,patmat,superaccessors,extmethods,pickler,refchecks,uncurry,tailcalls,specialize,explicitouter,posterasure,lazyvals,lambdalift

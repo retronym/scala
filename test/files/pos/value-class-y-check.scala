@@ -1,0 +1,1 @@
+class V(val a: Any) extends AnyVal
