@@ -26,6 +26,13 @@ object Function {
   /** The constant function */
   def const[T, U](x: T)(y: U): T = x
 
+  // Reusable instances of constant predicates
+  final val PredicateTrueAny  = (x: Any) => true
+  final val PredicateFalseAny = (x: Any) => false
+
+  @inline final def PredicateTrue[T] : T => Boolean  = PredicateTrueAny.asInstanceOf[T => Boolean]
+  @inline final def PredicateFalse[T] : T => Boolean = PredicateFalseAny.asInstanceOf[T => Boolean]
+
   /** Turns a function `A => Option[B]` into a `PartialFunction[A, B]`.
    *
    *  '''Important note''': this transformation implies the original function

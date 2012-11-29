@@ -395,6 +395,8 @@ object Predef extends LowPriorityImplicits {
   implicit def Double2double(x: java.lang.Double): Double     = x.doubleValue
   implicit def Boolean2boolean(x: java.lang.Boolean): Boolean = x.booleanValue
 
+  implicit def predicateOps[@specialized T](f: T => Boolean) = new Function.ForwardPredicate[T](f)
+
   // Strings and CharSequences --------------------------------------------------------------
 
   @inline implicit def any2stringfmt(x: Any) = new runtime.StringFormat(x)

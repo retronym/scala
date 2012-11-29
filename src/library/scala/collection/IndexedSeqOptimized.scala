@@ -34,10 +34,10 @@ trait IndexedSeqOptimized[+A, +Repr] extends Any with IndexedSeqLike[A, Repr] { 
   }
 
   override /*IterableLike*/
-  def forall(p: A => Boolean): Boolean = prefixLength(p(_)) == length
+  def forall(p: A => Boolean): Boolean = prefixLength(p) == length
 
   override /*IterableLike*/
-  def exists(p: A => Boolean): Boolean = prefixLength(!p(_)) != length
+  def exists(p: A => Boolean): Boolean = prefixLength(!p) != length
 
   override /*IterableLike*/
   def find(p: A => Boolean): Option[A] = {

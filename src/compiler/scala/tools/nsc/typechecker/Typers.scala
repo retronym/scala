@@ -2678,10 +2678,20 @@ trait Typers extends Modes with Adaptations with Tags {
           }
         }
 
-        fun.body match {
+        fun match {
+          // Rewrite _ => true and _ => false to reuse preallocated constant predicates
+          case Function(vparam :: Nil, Literal(Constant(v: Boolean))) =>
+            enterSym(context, vparam)
+            if (context.retyping) context.scope enter vparam.symbol
+            val formal    = typedValDef(vparam).symbol.tpe
+            val funtpe    = appliedType(clazz, formal, BooleanClass.tpe)
+            val predicate = termMember(FunctionModule, "Predicate" + v.toString.capitalize)
+
+            typed(gen.mkNullaryCall(predicate, formal :: Nil), funtpe)
+
           // later phase indicates scaladoc is calling (where shit is messed up, I tell you)
           //  -- so fall back to old patmat, which is more forgiving
-          case Match(sel, cases) if (sel ne EmptyTree) && newPatternMatching && (pt.typeSymbol == PartialFunctionClass) =>
+          case Function(_, Match(sel, cases)) if (sel ne EmptyTree) && newPatternMatching && (pt.typeSymbol == PartialFunctionClass) =>
             // go to outer context -- must discard the context that was created for the Function since we're discarding the function
             // thus, its symbol, which serves as the current context.owner, is not the right owner
             // you won't know you're using the wrong owner until lambda lift crashes (unless you know better than to use the wrong owner)

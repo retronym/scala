@@ -24,7 +24,7 @@ trait Picklers { self: Global =>
 
       lazy val shutdownReq = singletonPickler(ShutdownReq)
 
-  def defaultThrowable[T <: Throwable]: CondPickler[T] = javaInstancePickler[T] cond { _ => true }
+  def defaultThrowable[T <: Throwable]: CondPickler[T] = javaInstancePickler[T] cond scala.Function.PredicateTrue
 
   implicit lazy val throwable: Pickler[Throwable] =
     freshRunReq | shutdownReq | defaultThrowable

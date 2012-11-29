@@ -326,6 +326,7 @@ trait Definitions extends api.StandardDefinitions {
     lazy val UninitializedFieldConstructor = UninitializedErrorClass.primaryConstructor
 
     // fundamental reference classes
+    lazy val FunctionModule             = requiredModule[scala.Function.type]
     lazy val PartialFunctionClass       = requiredClass[PartialFunction[_,_]]
     lazy val AbstractPartialFunctionClass = requiredClass[scala.runtime.AbstractPartialFunction[_,_]]
     lazy val SymbolClass                = requiredClass[scala.Symbol]

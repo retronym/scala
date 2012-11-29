@@ -433,7 +433,7 @@ trait Iterator[+A] extends TraversableOnce[A] {
    *  @return  an iterator which produces those values of this iterator which do not satisfy the predicate `p`.
    *  @note    Reuse: $consumesAndProducesIterator
    */
-  def filterNot(p: A => Boolean): Iterator[A] = filter(!p(_))
+  def filterNot(p: A => Boolean): Iterator[A] = filter(!p)
 
  /** Creates an iterator by transforming values
   *  produced by this iterator with a partial function, dropping those

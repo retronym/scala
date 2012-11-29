@@ -241,15 +241,13 @@ object PartialFunction {
    */
   def apply[A, B](f: A => B): PartialFunction[A, B] = { case x => f(x) }
 
-  private[this] val constFalse: Any => Boolean = { _ => false}
-
   private[this] val empty_pf: PartialFunction[Any, Nothing] = new PartialFunction[Any, Nothing] {
     def isDefinedAt(x: Any) = false
     def apply(x: Any) = throw new MatchError(x)
     override def orElse[A1, B1](that: PartialFunction[A1, B1]) = that
     override def andThen[C](k: Nothing => C) = this
     override val lift = (x: Any) => None
-    override def runWith[U](action: Nothing => U) = constFalse
+    override def runWith[U](action: Nothing => U) = Function.PredicateFalse
   }
 
   /** The partial function with empty domain.
@@ -266,7 +264,7 @@ object PartialFunction {
    *  @param  pf  the partial function
    *  @return true, iff `x` is in the domain of `pf` and `pf(x) == true`.
    */
-  def cond[T](x: T)(pf: PartialFunction[T, Boolean]): Boolean = pf.applyOrElse(x, constFalse)
+  def cond[T](x: T)(pf: PartialFunction[T, Boolean]): Boolean = pf.applyOrElse(x, Function.PredicateFalse)
 
   /** Transforms a PartialFunction[T, U] `pf` into Function1[T, Option[U]] `f`
    *  whose result is `Some(x)` if the argument is in `pf`'s domain and `None`

@@ -28,7 +28,7 @@ object ClassPath {
     val wildSuffix = File.separator + "*"
 
     /** Get all subdirectories, jars, zips out of a directory. */
-    def lsDir(dir: Directory, filt: String => Boolean = _ => true) =
+    def lsDir(dir: Directory, filt: String => Boolean = Function.PredicateTrue) =
       dir.list filter (x => filt(x.name) && (x.isDirectory || isJarOrZip(x))) map (_.path) toList
 
     if (pattern == "*") lsDir(Directory("."))
