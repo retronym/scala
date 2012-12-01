@@ -2681,7 +2681,7 @@ trait Typers extends Modes with Adaptations with Tags {
         fun.body match {
           // later phase indicates scaladoc is calling (where shit is messed up, I tell you)
           //  -- so fall back to old patmat, which is more forgiving
-          case Match(sel, cases) if (sel ne EmptyTree) && newPatternMatching && (pt.typeSymbol == PartialFunctionClass) =>
+          case Match(sel, cases) if false && (sel ne EmptyTree) && newPatternMatching && (pt.typeSymbol == PartialFunctionClass) =>
             // go to outer context -- must discard the context that was created for the Function since we're discarding the function
             // thus, its symbol, which serves as the current context.owner, is not the right owner
             // you won't know you're using the wrong owner until lambda lift crashes (unless you know better than to use the wrong owner)
@@ -4223,7 +4223,8 @@ trait Typers extends Modes with Adaptations with Tags {
         val selector = tree.selector
         val cases = tree.cases
         if (selector == EmptyTree) {
-          if (newPatternMatching && (pt.typeSymbol == PartialFunctionClass)) (new MatchFunTyper(tree, cases, mode, pt)).translated
+          val newPartialFunction = newPatternMatching && pt.typeSymbol == PartialFunctionClass
+          if (false && newPartialFunction) (new MatchFunTyper(tree, cases, mode, pt)).translated
           else {
             val arity = if (isFunctionType(pt)) pt.normalize.typeArgs.length - 1 else 1
             val params = for (i <- List.range(0, arity)) yield
@@ -4234,7 +4235,11 @@ trait Typers extends Modes with Adaptations with Tags {
             val ids = for (p <- params) yield Ident(p.name)
             val selector1 = atPos(tree.pos.focusStart) { if (arity == 1) ids.head else gen.mkTuple(ids) }
             val body = treeCopy.Match(tree, selector1, cases)
-            typed1(atPos(tree.pos) { Function(params, body) }, mode, pt)
+            val fun = Function(params, body)
+            if (newPartialFunction) {
+              fun.updateAttachment(FunctionIsPartialFunction(pt))
+            }
+            typed1(atPos(tree.pos) { fun }, mode, pt)
           }
         } else
           virtualizedMatch(typedMatch(selector, cases, mode, pt, tree), mode, pt)

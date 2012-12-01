@@ -84,6 +84,13 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
 
   class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     override def transform(tree: Tree): Tree = tree match {
+      case Function(vparamms, m @ Match(_, cases)) =>
+        super.transform(tree.attachments.get[FunctionIsPartialFunction] match {
+          case Some(FunctionIsPartialFunction(pt)) =>
+            val t = localTyper
+            (new t.MatchFunTyper(treeCopy.Match(m, EmptyTree, cases), cases, analyzer.EXPRmode, pt)).translated
+          case None => tree
+        })
       case Match(sel, cases) =>
         val origTp = tree.tpe
         // setType origTp intended for CPS -- TODO: is it necessary?
@@ -111,6 +118,7 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
 
 
   case class DefaultOverrideMatchAttachment(default: Tree)
+  case object NewPatternMatch
 
   object vpmName {
     val one       = newTermName("one")
