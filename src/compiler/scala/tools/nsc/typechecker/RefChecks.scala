@@ -894,7 +894,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
               // However, if `sym` does override a type in a base class
               // we have to assume NoVariance, as there might then be
               // references to the type parameter that are not variance checked.
-              state = if (sym.isOverridingSymbol) NoVariance else AnyVariance
+              state = NoVariance
             }
             sym = sym.owner
           }
@@ -915,10 +915,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
           case SingleType(pre, sym) =>
             validateVariance(pre, variance)
           case TypeRef(pre, sym, args) =>
-//            println("validate "+sym+" at "+relativeVariance(sym))
-            if (sym.isAliasType/* && relativeVariance(sym) == AnyVariance*/)
-              validateVariance(tp.normalize, variance)
-            else if (sym.variance != NoVariance) {
+            if (sym.variance != NoVariance) {
               val v = relativeVariance(sym)
               if (v != AnyVariance && sym.variance != v * variance) {
                 //Console.println("relativeVariance(" + base + "," + sym + ") = " + v);//DEBUG
