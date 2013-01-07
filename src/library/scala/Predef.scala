@@ -89,6 +89,10 @@ object Predef extends LowPriorityImplicits {
   // miscelleaneous -----------------------------------------------------
   scala.`package`                         // to force scala package object to be seen.
   scala.collection.immutable.List         // to force Nil, :: to be seen.
+  scala.util.control.NonFatal             // don't defer classloading until we're catching an StackOverflowError,
+                                          // a followup SOE will lead to:
+                                          // `java.lang.NoClassDefFoundError: Could not initialize class scala.util.control.NonFatal$`
+                                          // See SI-6685, SI-6932.
 
   type Function[-A, +B] = Function1[A, B]
 
