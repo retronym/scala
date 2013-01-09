@@ -534,6 +534,39 @@ trait Namers extends MethodSynthesis {
       noDuplicates(selectors map (_.rename), AppearsTwice)
     }
 
+    private def enterUnapply(tree: Tree, tparams: List[TypeDef]) {
+      val standardCompleter: TypeCompleter = completerOf(tree, tparams)
+      val sym = tree.symbol
+      sym setInfo mkTypeCompleter(tree) {
+        sym =>
+          standardCompleter.complete(sym)
+          val caseAccessors = sym.owner.companionClass.caseFieldAccessors
+          caseAccessors match {
+            case Nil | _ :: Nil =>
+            case as =>
+              def mapMethType(tp: Type)(f: Type => Type): Type = tp match {
+                case PolyType(tparams, mt) =>
+                  PolyType(tparams, mapMethType(mt)(f))
+                case MethodType(params, result) =>
+                  MethodType(params, f(result))
+                case AnnotatedType(anss, underlying, self) =>
+                  AnnotatedType(anss, mapMethType(underlying)(f), self)
+                case tp => tp
+              }
+              val List(List(scrut)) = sym.info.paramss
+              val scrutTpe: Type = scrut.tpe
+              val newMethodResultType = mapMethType(sym.info) {
+                resultTpe =>
+                  def elemType(accessor: Symbol): Type = {
+                    dropIllegalStarTypes((scrutTpe memberType accessor).resultType)
+                  }
+                  appliedType(OptionClass, appliedType(TupleClass(as.length), as map elemType: _*))
+              }
+              sym setInfo newMethodResultType
+          }
+      }
+    }
+
     def enterCopyMethod(copyDefDef: Tree, tparams: List[TypeDef]): Symbol = {
       val sym      = copyDefDef.symbol
       val lazyType = completerOf(copyDefDef, tparams)
@@ -635,6 +668,8 @@ trait Namers extends MethodSynthesis {
 
         if (name == nme.copy && sym.isSynthetic)
           enterCopyMethod(tree, tparams)
+        else if (Set[Name](nme.unapply, nme.unapplySeq)(name) && sym.isSynthetic)
+          enterUnapply(tree, tparams)
         else
           sym setInfo completerOf(tree, tparams)
     }

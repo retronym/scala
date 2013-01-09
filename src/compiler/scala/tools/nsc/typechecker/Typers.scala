@@ -745,7 +745,8 @@ trait Typers extends Modes with Adaptations with Tags {
 
     def checkExistentialsFeature(pos: Position, tpe: Type, prefix: String) = tpe match {
       case extp: ExistentialType if !extp.isRepresentableWithWildcards =>
-        checkFeature(pos, ExistentialsFeature, prefix+" "+tpe)
+        if (!context.enclMethod.owner.isSynthetic) // SI-6541 Disable in, e.g., case class unapply method body
+          checkFeature(pos, ExistentialsFeature, prefix+" "+tpe)
       case _ =>
     }
 
