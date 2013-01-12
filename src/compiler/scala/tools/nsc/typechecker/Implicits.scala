@@ -668,20 +668,16 @@ trait Implicits {
             // duplicating the code here, but this is probably a
             // hotspot (and you can't just call typed, need to force
             // re-typecheck)
-            //
-            // This is just called for the side effect of error detection,
-            // see SI-6966 to see what goes wrong if we use the result of this
-            // as the SearchResult.
-            itree2 match {
-              case TypeApply(fun, args)           => typedTypeApply(itree2, EXPRmode, fun, args)
-              case Apply(TypeApply(fun, args), _) => typedTypeApply(itree2, EXPRmode, fun, args) // t2421c
-              case t                              => t
+            val checked = itree2 match {
+              case TypeApply(fun, args)                   => typedTypeApply(itree2, EXPRmode, fun, args)
+              case Apply(t @ TypeApply(fun, args), args1) => treeCopy.Apply(itree2, typedTypeApply(t, EXPRmode, fun, args), args1) // t2421c
+              case t                                      => t
             }
 
             if (context.hasErrors)
               fail("typing TypeApply reported errors for the implicit tree: " + context.errBuffer.head.errMsg)
             else {
-              val result = new SearchResult(itree2, subst)
+              val result = new SearchResult(checked, subst)
               if (Statistics.canEnable) Statistics.incCounter(foundImplicits)
               printInference("[success] found %s for pt %s".format(result, ptInstantiated))
               result
