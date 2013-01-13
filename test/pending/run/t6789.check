@@ -1,0 +1,27 @@
+55c55
+<   locals: value name
+---
+>   locals: value name, variable name1, variable $inlThis1, variable $retVal1
+62c62,69
+<     13	CALL_METHOD A.f1 (dynamic)
+---
+>     13	STORE_LOCAL(variable name1)
+>     13	STORE_LOCAL(variable $inlThis1)
+>     13	LOAD_LOCAL(variable name1)
+>     13	CONSTANT(true)
+>     13	LOAD_LOCAL(variable $inlThis1)
+>     13	CALL_METHOD java.lang.Object.getClass (dynamic)
+>     13	CALL_METHOD java.lang.Class.getClassLoader (dynamic)
+>     13	CALL_METHOD java.lang.Class.forName (static-class)
+69c76
+<   locals: value name
+---
+>   locals: value name, variable name1, variable $inlThis1, variable $retVal1
+76c83,86
+<     14	CALL_METHOD A.f2 (dynamic)
+---
+>     14	STORE_LOCAL(variable name1)
+>     14	STORE_LOCAL(variable $inlThis1)
+>     14	LOAD_LOCAL(variable name1)
+>     14	CALL_METHOD java.lang.Class.forName (static-class)
+
