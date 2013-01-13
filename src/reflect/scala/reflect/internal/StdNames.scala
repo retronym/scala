@@ -1027,6 +1027,7 @@ trait StdNames {
     def getComponentType = sn.GetComponentType
     def getMethod_       = sn.GetMethod
     def invoke_          = sn.Invoke
+    def forName_         = sn.ForName
 
     val isBoxedNumberOrBoolean: NameType = "isBoxedNumberOrBoolean"
     val isBoxedNumber: NameType = "isBoxedNumber"

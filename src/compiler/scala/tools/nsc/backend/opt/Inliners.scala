@@ -37,7 +37,7 @@ import scala.reflect.internal.util.NoSourceFile
  *
  *  @author Iulian Dragos
  */
-abstract class Inliners extends SubComponent {
+abstract class Inliners extends SubComponent { self =>
   import global._
   import icodes._
   import icodes.opcodes._
@@ -101,6 +101,38 @@ abstract class Inliners extends SubComponent {
 
   /** Small method size (in blocks) */
   val SMALL_METHOD_SIZE = 1
+
+  // SI-6789 Don't inline methods from classes known to contains methods like `Class.forName`
+  //         as these call `getCallerClassLoader` / `getCallerClass`. The results of those calls
+  //         may differ after inlining into a call site in a different classloader. This doesn't address the
+  //         broader (and seemingly intractable) problem of changing the results of calls to
+  //         `SecurityManager#checkPermission`.
+  //
+  //         This list was prepared by grepping the OpenJDK sources for `(getCaller|getCallerClass|getCallerClass)`
+  object unsafeToInline {
+    private val unsafeToInlineOwners = {
+      import rootMirror.requiredClass
+      Set(
+        definitions.ClassClass,
+        requiredClass[java.lang.ClassLoader],
+        requiredClass[java.lang.Package],
+        requiredClass[java.sql.DriverManager],
+        requiredClass[java.lang.Thread],
+        requiredClass[java.lang.Runtime],
+        requiredClass[java.lang.System],
+        requiredClass[java.security.AccessController]
+      ).flatMap(x => Seq(x, x.linkedClassOfClass)) // to find static and instance methods.
+    }
+
+    private val unsafeToInlinePackages =
+      Seq("java.lang.invoke", "java.lang.reflect", "java.util.concurrent.atomic")
+        .map(name => rootMirror.getPackageIfDefined(newTermName(name)))
+        .filter(_.exists)
+
+    def apply(sym: Symbol): Boolean = {
+      unsafeToInlineOwners(sym.owner) || unsafeToInlinePackages.exists(sym hasTransOwner _)
+    }
+  }
 
   /** Create a new phase */
   override def newPhase(p: Phase) = new InliningPhase(p)
@@ -611,6 +643,11 @@ abstract class Inliners extends SubComponent {
       val isHigherOrder = isHigherOrderMethod(sym)
       def isMonadic     = isMonadicMethod(sym)
 
+      lazy val unsafeToInline = m.code.instructions.exists {
+        case CALL_METHOD(sym, _) => self.unsafeToInline(sym)
+        case _                   => false
+      }
+
       def handlers      = m.exh
       def blocks        = m.blocks
       def locals        = m.locals
@@ -762,6 +799,7 @@ abstract class Inliners extends SubComponent {
 
       val isInlineForced    = hasInline(inc.sym)
       val isInlineForbidden = hasNoInline(inc.sym)
+      val isUnsafeToInline  = inc.unsafeToInline
       assert(!(isInlineForced && isInlineForbidden), "method ("+inc.m+") marked both @inline and @noinline.")
 
       /** Inline 'inc' into 'caller' at the given block and instruction.
@@ -959,6 +997,7 @@ abstract class Inliners extends SubComponent {
             var rs: List[String] = Nil
             if(inc.isRecursive)    { rs ::= "is recursive"           }
             if(isInlineForbidden)  { rs ::= "is annotated @noinline" }
+            if(isUnsafeToInline)   { rs ::= "contains code that is not safe to inlined (e.g. Class.forName)" }
             if(inc.isSynchronized) { rs ::= "is synchronized method" }
             if(inc.m.bytecodeHasEHs) { rs ::= "bytecode contains exception handlers / finally clause" } // SI-6188
             if(rs.isEmpty) null else rs.mkString("", ", and ", "")
