@@ -128,6 +128,7 @@ class ModifierFlags {
    *  - default argument getters
    *  - evaluation-order preserving locals for right-associative and out-of-order named arguments
    *  - catch-expression storing vals
+   *  - extension methods (in the companion object of derived value class)
    *  - anything else which feels a setFlag(ARTIFACT)
    */
 
