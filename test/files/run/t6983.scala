@@ -3,7 +3,8 @@ class V(val a: String) extends AnyVal {
 }
 
 trait A {
-  val x: Any = 0
+  val x: Any = 0 // let's not create a static forwarder in `V` for the trait setter.
+  var y: Any = 0
 }
 
 object V extends A

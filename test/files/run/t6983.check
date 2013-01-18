@@ -1,2 +1,3 @@
 public static java.lang.Object V.x()
-public static void V.A$_setter_$x_$eq(java.lang.Object)
+public static java.lang.Object V.y()
+public static void V.y_$eq(java.lang.Object)
