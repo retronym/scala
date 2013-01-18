@@ -654,9 +654,6 @@ trait Namers extends MethodSynthesis {
       tree.symbol setInfo completerOf(tree)
 
       if (mods.isCase) {
-        if (primaryConstructorArity > MaxFunctionArity)
-          MaxParametersCaseClassError(tree)
-
         val m = ensureCompanionObject(tree, caseModuleDef)
         m.moduleClass.updateAttachment(new ClassForCaseCompanionAttachment(tree))
       }
@@ -1373,7 +1370,9 @@ trait Namers extends MethodSynthesis {
       if (!cdef.symbol.hasAbstractFlag)
         namer.enterSyntheticSym(caseModuleApplyMeth(cdef))
 
-      namer.enterSyntheticSym(caseModuleUnapplyMeth(cdef))
+      val DefDef(_, _, _, vparamss, _, _) = treeInfo firstConstructor cdef.impl.body
+      if (vparamss.headOption.map(_.length).getOrElse(0) <= MaxTupleArity)
+        namer.enterSyntheticSym(caseModuleUnapplyMeth(cdef))
     }
 
     def addCopyMethod(cdef: ClassDef, namer: Namer) {
