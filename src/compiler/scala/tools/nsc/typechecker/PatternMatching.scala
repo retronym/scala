@@ -2682,7 +2682,7 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
         case modSym: ModuleClassSymbol =>
           Some(List(tp))
         // make sure it's not a primitive, else (5: Byte) match { case 5 => ... } sees no Byte
-        case sym if !sym.isSealed || isPrimitiveValueClass(sym) =>
+        case sym if !sym.isEffectivelySealed || !sym.isPrivate || isPrimitiveValueClass(sym) =>
           patmatDebug("enum unsealed "+ (tp, sym, sym.isSealed, isPrimitiveValueClass(sym)))
           None
         case sym =>

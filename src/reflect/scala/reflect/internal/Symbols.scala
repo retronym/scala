@@ -822,6 +822,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       )
     )
 
+    /** Is thie symbole effctively sealed? I.e., it's direct subclasses can be enumerated. */
+    final def isEffectivelySealed: Boolean = isSealed || isPrivate
+
     /** Is this symbol locally defined? I.e. not accessed from outside `this` instance */
     final def isLocal: Boolean = owner.isTerm
 
@@ -2166,7 +2169,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     @deprecated("Use associatedFile_= instead", "2.10.0")
     def sourceFile_=(f: AbstractFile): Unit = associatedFile_=(f)
 
-    /** If this is a sealed class, its known direct subclasses.
+    /** If this is an effectively sealed class (sealed or private), its known direct subclasses.
      *  Otherwise, the empty set.
      */
     def children: Set[Symbol] = Set()

@@ -1776,11 +1776,15 @@ trait Typers extends Modes with Adaptations with Tags {
             unit.deprecationWarning(parent.pos, msg)
           }
 
+          def sameFile = context.unit.source.file == psym.sourceFile
           if (psym.isSealed && !phase.erasedTypes)
-            if (context.unit.source.file == psym.sourceFile)
+            if (sameFile)
               psym addChild context.owner
             else
               pending += ParentSealedInheritanceError(parent, psym)
+
+          if (psym.isPrivate && sameFile)
+            psym addChild context.owner
 
           if (!(selfType <:< parent.tpe.typeOfThis) &&
               !phase.erasedTypes &&
