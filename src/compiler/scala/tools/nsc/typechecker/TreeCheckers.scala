@@ -219,6 +219,14 @@ abstract class TreeCheckers extends Analyzer {
 
     object precheck extends Traverser {
       override def traverse(tree: Tree) {
+        val info = Option(tree.symbol).getOrElse(NoSymbol).info
+        if (info != null) info.foreach {
+          case TypeRef(_, sym, _) =>
+            if (sym.isTypeParameter && !tree.symbol.hasTransOwner(sym.owner))
+              errorFn(s"The info of tree ${tree} refers to a out-of-scope type parameter ${sym}")
+          case _ =>
+        }
+
         val sym = tree.symbol
         def accessed = sym.accessed
         def fail(msg: String) = errorFn(tree.pos, msg + classstr(tree) + " / " + tree)
