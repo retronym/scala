@@ -589,6 +589,7 @@ trait StdNames {
     val currentMirror: NameType        = "currentMirror"
     val delayedInit: NameType          = "delayedInit"
     val delayedInitArg: NameType       = "delayedInit$body"
+    val dollarScope: NameType          = "$scope"
     val drop: NameType                 = "drop"
     val elem: NameType                 = "elem"
     val emptyValDef: NameType          = "emptyValDef"

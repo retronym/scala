@@ -34,6 +34,8 @@ trait CompilationUnits { self: Global =>
     /** the content of the compilation unit in tree form */
     var body: Tree = EmptyTree
 
+    var hasXml: Boolean = false
+
     def exists = source != NoSourceFile && source != null
 
     /** Note: depends now contains toplevel classes.

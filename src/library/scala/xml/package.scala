@@ -16,4 +16,5 @@ package object xml {
   type EntityResolver     = org.xml.sax.EntityResolver
   type InputSource        = org.xml.sax.InputSource
   type SAXParser          = javax.xml.parsers.SAXParser
+  val $scope              = TopScope
 }

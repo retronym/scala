@@ -15,7 +15,7 @@ import scala.annotation.tailrec
  */
 trait Contexts { self: Analyzer =>
   import global._
-  import definitions.{ JavaLangPackage, ScalaPackage, PredefModule }
+  import definitions.{ JavaLangPackage, ScalaPackage, PredefModule, ScalaXmlPackage, ScalaXmlScope }
 
   object NoContext extends Context {
     outer      = this
@@ -94,6 +94,14 @@ trait Contexts { self: Analyzer =>
     for (sym <- rootImports(unit)) {
       sc = sc.makeNewImport(sym)
       sc.depth += 1
+    }
+    if (unit.hasXml) {
+      if (ScalaXmlScope == NoSymbol)
+        unit.error(NoPosition, "XML literals may only be used if the package scala.xml is present in the compilation classpath.")
+      else {
+        sc = sc.makeNewSingleImport(ScalaXmlPackage, ScalaXmlScope)
+        sc.depth += 1
+      }
     }
     val c = sc.make(unit, tree, sc.owner, sc.scope, sc.imports)
     if (erasedTypes) c.setThrowErrors() else c.setReportErrors()
@@ -312,6 +320,9 @@ trait Contexts { self: Analyzer =>
 
     def makeNewImport(sym: Symbol): Context =
       makeNewImport(gen.mkWildcardImport(sym))
+
+    def makeNewSingleImport(qual: Symbol, sym: Symbol): Context =
+      makeNewImport(gen.mkImport(qual, sym))
 
     def makeNewImport(imp: Import): Context = {
       val impInfo = new ImportInfo(imp, depth)

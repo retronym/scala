@@ -14,7 +14,7 @@ import scala.reflect.api.{Universe => ApiUniverse}
 trait Definitions extends api.StandardDefinitions {
   self: SymbolTable =>
 
-  import rootMirror.{getModule, getPackage, getClassByName, getRequiredClass, getRequiredModule, getClassIfDefined, getModuleIfDefined, getPackageObject, getPackageObjectIfDefined, requiredClass, requiredModule}
+  import rootMirror.{getModule, getPackage, getClassByName, getRequiredClass, getRequiredModule, getClassIfDefined, getModuleIfDefined, getPackageObject, getPackageIfDefined, getPackageObjectIfDefined, requiredClass, requiredModule}
 
   object definitions extends DefinitionsClass
 
@@ -474,6 +474,11 @@ trait Definitions extends api.StandardDefinitions {
     lazy val MethodCacheClass       = requiredClass[scala.runtime.MethodCache]
       def methodCache_find          = getMemberMethod(MethodCacheClass, nme.find_)
       def methodCache_add           = getMemberMethod(MethodCacheClass, nme.add_)
+
+    // XML
+    lazy val ScalaXmlPackage    = getPackageIfDefined("scala.xml")
+    lazy val ScalaXmlPackageObj = getPackageObjectIfDefined("scala.xml")
+         def ScalaXmlScope      = if (ScalaXmlPackage != NoSymbol) getMemberValue(ScalaXmlPackageObj, nme.dollarScope) else NoSymbol
 
     // scala.reflect
     lazy val ReflectPackage              = requiredModule[scala.reflect.`package`.type]

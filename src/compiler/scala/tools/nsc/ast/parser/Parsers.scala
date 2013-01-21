@@ -164,7 +164,10 @@ self =>
     def incompleteInputError(msg: String): Unit = throw new MalformedInput(source.content.length - 1, msg)
 
     /** the markup parser */
-    lazy val xmlp = new MarkupParser(this, preserveWS = true)
+    lazy val xmlp = {
+      currentUnit.hasXml = true
+      new MarkupParser(this, preserveWS = true)
+    }
 
     object symbXMLBuilder extends SymbolicXMLBuilder(this, preserveWS = true) { // DEBUG choices
       val global: self.global.type = self.global
