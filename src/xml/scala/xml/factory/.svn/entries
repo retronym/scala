@@ -1,0 +1,63 @@
+10
+
+dir
+0
+https://dev.quantalea.net/svn/efg/scala/src/xml/scala/xml/factory
+https://dev.quantalea.net/svn/efg
+add
+
+
+
+
+
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+267f21fe-97cb-4c21-a9bc-016d713417d7
+
+Binder.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+LoggedNodeFactory.scala
+file
+
+
+
+add
+
+NodeFactory.scala
+file
+
+
+
+add
+
+XMLLoader.scala
+file
+
+
+
+add
+

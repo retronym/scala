@@ -207,6 +207,7 @@
       <module fileurl="file://$PROJECT_DIR$/scalap.iml" filepath="$PROJECT_DIR$/scalap.iml" />
       <module fileurl="file://$PROJECT_DIR$/swing.iml" filepath="$PROJECT_DIR$/swing.iml" />
       <module fileurl="file://$PROJECT_DIR$/test.iml" filepath="$PROJECT_DIR$/test.iml" />
+      <module fileurl="file://$PROJECT_DIR$/xml.iml" filepath="$PROJECT_DIR$/xml.iml" />
     </modules>
   </component>
   <component name="ProjectResources">

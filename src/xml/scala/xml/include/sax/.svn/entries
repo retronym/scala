@@ -1,0 +1,56 @@
+10
+
+dir
+0
+https://dev.quantalea.net/svn/efg/scala/src/xml/scala/xml/include/sax
+https://dev.quantalea.net/svn/efg
+add
+
+
+
+
+
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+267f21fe-97cb-4c21-a9bc-016d713417d7
+
+EncodingHeuristics.scala
+file
+
+
+
+add
+
+Main.scala
+file
+
+
+
+add
+
+XIncludeFilter.scala
+file
+
+
+
+add
+
+XIncluder.scala
+file
+
+
+
+add
+

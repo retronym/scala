@@ -1,0 +1,154 @@
+10
+
+dir
+0
+https://dev.quantalea.net/svn/efg/scala/src/xml/scala/xml/parsing
+https://dev.quantalea.net/svn/efg
+add
+
+
+
+
+
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+267f21fe-97cb-4c21-a9bc-016d713417d7
+
+ConstructingHandler.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+ConstructingParser.scala
+file
+
+
+
+add
+
+DefaultMarkupHandler.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+ExternalSources.scala
+file
+
+
+
+add
+
+FactoryAdapter.scala
+file
+
+
+
+add
+
+FatalError.scala
+file
+
+
+
+add
+
+MarkupHandler.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+MarkupParser.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+MarkupParserCommon.scala
+file
+
+
+
+add
+
+NoBindingFactoryAdapter.scala
+file
+
+
+
+add
+
+TokenTests.scala
+file
+
+
+
+add
+
+ValidatingMarkupHandler.scala
+file
+
+
+
+add
+
+XhtmlEntities.scala
+file
+
+
+
+add
+
+XhtmlParser.scala
+file
+
+
+
+add
+

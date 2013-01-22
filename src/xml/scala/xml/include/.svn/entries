@@ -1,0 +1,56 @@
+10
+
+dir
+0
+https://dev.quantalea.net/svn/efg/scala/src/xml/scala/xml/include
+https://dev.quantalea.net/svn/efg
+add
+
+
+
+
+
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+267f21fe-97cb-4c21-a9bc-016d713417d7
+
+CircularIncludeException.scala
+file
+
+
+
+add
+
+UnavailableResourceException.scala
+file
+
+
+
+add
+
+XIncludeException.scala
+file
+
+
+
+add
+
+sax
+dir
+
+
+
+add
+

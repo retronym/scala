@@ -1,0 +1,329 @@
+10
+
+dir
+0
+https://dev.quantalea.net/svn/efg/scala/src/xml/scala/xml
+https://dev.quantalea.net/svn/efg
+add
+
+
+
+
+
+
+
+svn:special svn:externals svn:needs-lock
+
+
+
+
+
+
+
+
+
+
+
+267f21fe-97cb-4c21-a9bc-016d713417d7
+
+Atom.scala
+file
+
+
+
+add
+
+Attribute.scala
+file
+
+
+
+add
+
+Comment.scala
+file
+
+
+
+add
+
+Document.scala
+file
+
+
+
+add
+
+Elem.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+EntityRef.scala
+file
+
+
+
+add
+
+Equality.scala
+file
+
+
+
+add
+
+Group.scala
+file
+
+
+
+add
+
+MalformedAttributeException.scala
+file
+
+
+
+add
+
+MetaData.scala
+file
+
+
+
+add
+
+NamespaceBinding.scala
+file
+
+
+
+add
+
+Node.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+NodeBuffer.scala
+file
+
+
+
+add
+
+NodeSeq.scala
+file
+
+
+
+add
+
+Null.scala
+file
+
+
+
+add
+
+PCData.scala
+file
+
+
+
+add
+
+PrefixedAttribute.scala
+file
+
+
+
+add
+
+PrettyPrinter.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+ProcInstr.scala
+file
+
+
+
+add
+
+QNode.scala
+file
+
+
+
+add
+
+SpecialNode.scala
+file
+
+
+
+add
+
+Text.scala
+file
+
+
+
+add
+
+TextBuffer.scala
+file
+
+
+
+add
+
+TopScope.scala
+file
+
+
+
+add
+
+TypeSymbol.scala
+file
+
+
+
+add
+
+Unparsed.scala
+file
+
+
+
+add
+
+UnprefixedAttribute.scala
+file
+
+
+
+add
+
+Utility.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+XML.scala
+file
+
+
+
+add
+
+
+
+
+
+has-props
+has-prop-mods
+
+Xhtml.scala
+file
+
+
+
+add
+
+dtd
+dir
+
+
+
+add
+
+factory
+dir
+
+
+
+add
+
+include
+dir
+
+
+
+add
+
+package.scala
+file
+
+
+
+add
+
+parsing
+dir
+
+
+
+add
+
+persistent
+dir
+
+
+
+add
+
+pull
+dir
+
+
+
+add
+
+transform
+dir
+
+
+
+add
+

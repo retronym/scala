@@ -12,17 +12,12 @@
   </component>
   <component name="NewModuleRootManager" inherit-compiler-output="true">
     <exclude-output />
-    <content url="file://$MODULE_DIR$/../compiler">
-      <sourceFolder url="file://$MODULE_DIR$/../compiler" isTestSource="false" />
+    <content url="file://$MODULE_DIR$/../xml">
+      <sourceFolder url="file://$MODULE_DIR$/../xml" isTestSource="false" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="library" />
-    <orderEntry type="module" module-name="reflect" />
-    <orderEntry type="module" module-name="asm" />
-    <orderEntry type="module" module-name="xml" />
-    <orderEntry type="library" name="ant" level="application" />
-    <orderEntry type="library" name="jline" level="project" />
   </component>
 </module>
 
