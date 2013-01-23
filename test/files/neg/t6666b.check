@@ -1,0 +1,10 @@
+t6666b.scala:12: error: Implementation restriction: object Nested requires premature access to class C5.
+    Nested.xx
+^
+t6666b.scala:23: error: Implementation restriction: object Nested requires premature access to class C15.
+        Nested.xx
+^
+t6666b.scala:31: error: Implementation restriction: anonymous class $anonfun requires premature access to class Crash.
+   this(Nil.collect{case x =>})
+                   ^
+three errors found

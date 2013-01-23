@@ -1,0 +1,4 @@
+t6666c.scala:8: error: Implementation restriction: access of method x$1 from object X$2, would require illegal premature access to the unconstructed `this` of anonymous class 1
+class D2 extends C2({def x = 0; object X { x }})
+                                           ^
+one error found
