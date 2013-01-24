@@ -11,6 +11,7 @@ import scala.reflect.internal.pickling.{ PickleFormat, PickleBuffer }
 import scala.tools.nsc.symtab._
 import scala.tools.asm
 import asm.Label
+import asm.util.CheckClassAdapter
 
 /**
  *  @author  Iulian Dragos (version 1.0, FJBG-based implementation)
@@ -141,6 +142,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       }
 
       bytecodeWriter.close()
+      bytecodeWriter.verify()
       classes.clear()
       reverseJavaName.clear()
 
@@ -845,7 +847,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         // Run the signature parser to catch bogus signatures.
         val isValidSignature = wrap {
           // Alternative: scala.tools.reflect.SigParser (frontend to sun.reflect.generics.parser.SignatureParser)
-          import scala.tools.asm.util.CheckClassAdapter
           if (sym.isMethod)    { CheckClassAdapter checkMethodSignature sig } // requires asm-util.jar
           else if (sym.isTerm) { CheckClassAdapter checkFieldSignature  sig }
           else                 { CheckClassAdapter checkClassSignature  sig }
@@ -1405,7 +1406,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       addInnerClasses(clasz.symbol, jclass)
       jclass.visitEnd()
       writeIfNotTooBig("" + c.symbol.name, thisName, jclass, c.symbol)
-
     }
 
     /**
