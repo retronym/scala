@@ -93,12 +93,12 @@ trait Unapplies extends ast.TreeDSL
    *  @param param  The name of the parameter of the unapply method, assumed to be of type C[Ts]
    *  @param caseclazz  The case class C[Ts]
    */
-  private def caseClassUnapplyReturnValue(param: Name, caseclazz: Symbol) = {
-    def caseFieldAccessorValue(selector: Symbol): Tree = Ident(param) DOT selector
-
-    caseclazz.caseFieldAccessors match {
-      case Nil      => TRUE
-      case xs       => SOME(xs map caseFieldAccessorValue: _*)
+  private def caseClassUnapplyReturnValue(param: Name, caseclazz: ClassDef) = {
+    def caseFieldAccessorValue(selector: ValDef): Tree = Ident(param) DOT selector.name
+    // Working with trees, rather than symbols, to avoid cycles like SI-5082
+    constrParamss(caseclazz).take(1).flatten match {
+      case Nil => TRUE
+      case xs  => SOME(xs map caseFieldAccessorValue: _*)
     }
   }
 
@@ -157,7 +157,7 @@ trait Unapplies extends ast.TreeDSL
     }
     val cparams   = List(ValDef(Modifiers(PARAM | SYNTHETIC), unapplyParamName, classType(cdef, tparams), EmptyTree))
     val ifNull    = if (constrParamss(cdef).head.isEmpty) FALSE else REF(NoneModule)
-    val body      = nullSafe({ case Ident(x) => caseClassUnapplyReturnValue(x, cdef.symbol) }, ifNull)(Ident(unapplyParamName))
+    val body      = nullSafe({ case Ident(x) => caseClassUnapplyReturnValue(x, cdef) }, ifNull)(Ident(unapplyParamName))
 
     atPos(cdef.pos.focus)(
       DefDef(caseMods, method, tparams, List(cparams), TypeTree(), body)
