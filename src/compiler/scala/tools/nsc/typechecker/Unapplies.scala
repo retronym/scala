@@ -21,7 +21,7 @@ trait Unapplies extends ast.TreeDSL
   import CODE.{ CASE => _, _ }
   import treeInfo.{ isRepeatedParamType, isByNameParamType }
 
-  private val unapplyParamName = nme.x_0
+  val unapplyParamName = nme.x_0
 
 
   // In the typeCompleter (templateSig) of a case class (resp it's module),
@@ -95,11 +95,27 @@ trait Unapplies extends ast.TreeDSL
    */
   private def caseClassUnapplyReturnValue(param: Name, caseclazz: ClassDef) = {
     def caseFieldAccessorValue(selector: ValDef): Tree = Ident(param) DOT selector.name
-    // Working with trees, rather than symbols, to avoid cycles like SI-5082
-    constrParamss(caseclazz).take(1).flatten match {
+    def accessorRefs = constrParamss(caseclazz).take(1).flatten match {
       case Nil => TRUE
       case xs  => SOME(xs map caseFieldAccessorValue: _*)
     }
+
+    // Working with trees, rather than symbols, to avoid cycles.
+    // Actually, we want to write the following, and used to, but that is
+    // the primary cause of cycles between case companions, which in turn
+    // prevents ProductN parentage. See SI-5082.
+    //
+    // But the code above is not equivalent to the this; in particular
+    // it differs for non-public case class parmameters. We account for
+    // this in `Namers.enterUnapply`, by patching these accessor references.
+    //
+    // def caseFieldAccessorValue1(selector: Symbol): Tree = Ident(param) DOT selector
+    //
+    // val accessorRefs = caseclazz.symbol.caseFieldAccessors match {
+    //   case Nil      => TRUE
+    //   case xs       => SOME(xs map caseFieldAccessorValue1: _*)
+    // }
+    accessorRefs
   }
 
   /** The module corresponding to a case class; overrides toString to show the module's name

@@ -548,6 +548,39 @@ trait Namers extends MethodSynthesis {
         }
       }
     }
+
+    def enterUnapplyMethod(unapplyDefDef: Tree, tparams: List[TypeDef]): Symbol = {
+      val sym      = unapplyDefDef.symbol
+      val lazyType = completerOf(unapplyDefDef, tparams)
+      val caseClass = sym.owner.companionClass
+
+      // In Unapplys#caseClassUnapplyReturnValue, we cheated and generated trees that
+      // assumed that the case accessors were public, and named accordingly with the
+      // constructor paramters. We did so to avoid forcing the info of the case class
+      // at that point, which can trigger a cycle.
+      //
+      // Here, we revisit the RHS of the unapply method and patch references to the
+      // correct case accessor symbols.
+      def patchCaseAccesors() {
+        val DefDef(_, _, _, _, _, rhs) = unapplyDefDef
+        val caseAccessors = caseClass.caseFieldAccessors
+        for (sel @ Select(recv: Ident, name) <- rhs) {
+          val recvName = recv.name
+          if (recvName == unapplyParamName && !Set(nme.EQ).contains(name)) {
+            val caseAcc = caseAccessors.find(acc => acc.name == name || acc.name.startsWith(name append "$"))
+            sel.setSymbol(caseAcc.getOrElse(abort("unable to find case acccessor for " + name)))
+          }
+        }
+      }
+
+      sym setInfo {
+        mkTypeCompleter(unapplyDefDef) { sym =>
+          patchCaseAccesors()
+          lazyType complete sym
+        }
+      }
+    }
+
     def completerOf(tree: Tree): TypeCompleter = completerOf(tree, treeInfo.typeParameters(tree))
     def completerOf(tree: Tree, tparams: List[TypeDef]): TypeCompleter = {
       val mono = namerOf(tree.symbol) monoTypeCompleter tree
@@ -622,6 +655,8 @@ trait Namers extends MethodSynthesis {
 
         if (name == nme.copy && sym.isSynthetic)
           enterCopyMethod(tree, tparams)
+        else if (Set(nme.unapply, nme.unapplySeq)(name) && sym.isSynthetic)
+          enterUnapplyMethod(tree, tparams)
         else
           sym setInfo completerOf(tree, tparams)
     }
