@@ -1,0 +1,25 @@
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> def foo[S] = { type X = List[S]; List():X }
+foo: [S]=> List[S]
+
+scala> val li = foo[Int]
+li: List[Int] = List()
+
+scala> li: List[Int]
+res0: List[Int] = List()
+
+scala> type TL = List[Int]
+defined type alias TL
+
+scala> def foo = null: TL
+foo: TL
+
+scala> def foo = {type TL=List[Int]; null: TL}
+foo: TL
+
+scala> foo: List[Int]
+res1: List[Int] = null
+
+scala> 
