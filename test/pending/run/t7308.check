@@ -1,0 +1,30 @@
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> def foo[S] = { type X = List[S]; List():X }
+foo: [S]=> X
+
+scala> val li = foo[Int]
+li: X = List()
+
+scala> li: List[Int]
+<console>:10: error: type mismatch;
+ found   : X
+    (which expands to)  List[S]
+ required: List[Int]
+              li: List[Int]
+              ^
+
+scala> type TL = List[Int]
+defined type alias TL
+
+scala> def foo = null: TL
+foo: TL
+
+scala> def foo = {type TL=List[Int]; null: TL}
+foo: TL
+
+scala> foo: List[Int]
+res1: List[Int] = null
+
+scala> 
