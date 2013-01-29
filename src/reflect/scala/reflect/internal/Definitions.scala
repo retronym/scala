@@ -1179,10 +1179,13 @@ trait Definitions extends api.StandardDefinitions {
       else flatNameString(etp.typeSymbol, '.')
     }
 
+    // documented in JavaUniverse.init
     def init() {
       if (isInitialized) return
-      // force initialization of every symbol that is synthesized or hijacked by the compiler
-      val _ = symbolsNotPresentInBytecode
+      ObjectClass.initialize
+      ScalaPackageClass.initialize
+      val forced1 = symbolsNotPresentInBytecode
+      val forced2 = NoSymbol
       isInitialized = true
     } //init
 
