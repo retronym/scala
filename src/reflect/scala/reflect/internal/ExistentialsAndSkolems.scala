@@ -41,6 +41,8 @@ trait ExistentialsAndSkolems {
       def apply(tp: Type): Type = tp match {
         case TypeRef(pre, sym, args) if sym.isTypeSkolem && (tparams contains sym.deSkolemize) =>
           mapOver(typeRef(NoPrefix, sym.deSkolemize, args))
+        case TypeRef(pre, sym, args) if sym.isAliasType =>
+          mapOver(tp.normalize)
         case _ =>
           mapOver(tp)
       }
