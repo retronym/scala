@@ -27,4 +27,8 @@ class JavaUniverse extends internal.SymbolTable with ReflectSetup with runtime.S
   } with internal.TreeInfo
 
   init()
+
+  def init() {
+    definitions.init()
+  }
 }
