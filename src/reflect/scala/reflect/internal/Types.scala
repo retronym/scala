@@ -740,8 +740,17 @@ trait Types extends api.Types { self: SymbolTable =>
      *    T.asSeenFrom(ThisType(C), D)  (where D is owner of m)
      *      = Int
      */
-    def asSeenFrom(pre: Type, clazz: Symbol): Type = {
-      val start = if (Statistics.canEnable) Statistics.pushTimer(typeOpsStack, asSeenFromNanos)  else null
+    @inline def asSeenFromLog[A](pre: Type, clazz: Symbol)(a: =>A) = {
+      import asfIndent.indentString
+      indent
+      debuglog(s"$indentString `$this`.asSeenFrom($pre, $clazz)")
+      val result = asfIndent { a }
+      debuglog(s"$indentString `$this`.asSeenFrom($pre, $clazz) = $result")
+      a
+    }
+
+    def asSeenFrom(pre: Type, clazz: Symbol): Type = asSeenFromLog(pre, clazz) {
+      val start = if (Statistics.canEnable) Statistics.pushTimer(typeOpsStack, asSeenFromNanos) else null
       try {
         val trivial = (
              this.isTrivial
@@ -7348,4 +7357,15 @@ object TypesStats {
     finally
   }
   */
+  val asfIndent = new Indent
+
+  final class Indent {
+    private var _level = 0
+    def level = _level
+    def indentString = " " * level * 4
+    @inline def apply[A](a: => A): A = {
+      _level += 1
+      try a finally _level -= 1
+    }
+  }
 }
