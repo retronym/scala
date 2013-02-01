@@ -1,0 +1,7 @@
+t7052.scala:9: error: name clash between inherited members:
+method apply:(xs: Int*)String in trait C and
+method apply:(xs: Seq[Int])Any in trait A
+have same type after erasure: (xs: Seq)String
+object O extends A with C
+       ^
+one error found

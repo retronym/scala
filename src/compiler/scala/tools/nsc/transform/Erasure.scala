@@ -938,7 +938,7 @@ abstract class Erasure extends AddInterfaces
            || !sym.hasTypeAt(currentRun.refchecksPhase.id))
 
         override def matches(sym1: Symbol, sym2: Symbol): Boolean =
-          afterPostErasure(sym1.tpe =:= sym2.tpe)
+          logResult(s"${sym1.tpe} matches ${sym2.tpe}")(afterPostErasure(matchesType(sym1.tpe, sym2.tpe, alwaysMatchSimple = true)))
       }
       while (opc.hasNext) {
         if (!afterRefchecks(
