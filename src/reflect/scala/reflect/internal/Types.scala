@@ -4994,12 +4994,67 @@ trait Types extends api.Types { self: SymbolTable =>
    * }}}
    */
   def deepMemberType(pre: Type, sym: Symbol) = {
-    def unifyPrefix(tp: Type): Type = tp match {
-      case TypeRef(NoPrefix, _, _)      => tp
-      case TypeRef(otherPre, sym, args) => copyTypeRef(tp, unifyPrefix(pre memberType otherPre.typeSymbol), sym, args)
-      case _                            => tp
+    class DeepMap extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        case _ : ModuleTypeRef => mapOver(tp.widen.narrow)
+        case ThisType(sym) => sym.
+      }
     }
-    unifyPrefix(pre memberType sym)
+    def pres(t: Type) = Iterator.iterate(t)(_.prefix).takeWhile(_ != NoPrefix)
+    val ownersPres = (for (p <- pres(pre); o <- sym.ownerChain) yield (o, p)).toList
+    fullyPrefix(sym.tpeHK) map (t =>
+      ownersPres.foldLeft(t) {
+        case (tp, (o, p)) => (tp asSeenFrom (p, o))
+      }
+    )
+  }
+
+  /**
+   * Expands:
+   *  - `ThisType(sym)` to `TypeRef(sym.typeOfThis, sym)``
+   *  - `ModuleTypeRef(obj)` to `ThisType(obj.owner)`
+   *
+   * For all types, `tp =:= fullPrefix(tp)`
+   *
+   * For example
+   *  {{{
+   *  class A[X] { object O { class C1; object O1 } }
+   *
+   * tp = A.O.O1.type
+   * TypeRef(
+   *   pre = ThisType(object O)
+   *   TypeSymbol(class O1 extends AnyRef)
+   * )
+   *
+   * // fullyPrefix(tp)
+   * A.this.O.O1.type
+   * SingleType(
+   *   pre = SingleType(pre = ThisType(class A), object O)
+   *   object O1
+   * )
+   *
+   * tp = A.O.C1
+   * TypeRef(
+   *   pre = ThisType(object O)
+   *   TypeSymbol(class C1 extends AnyRef)
+   * )
+   *
+   * // fullyPrefix(tp)
+   * A.this.O.C1
+   * TypeRef(
+   *   pre = SingleType(pre = ThisType(class A), object O)
+   *   TypeSymbol(class C1 extends AnyRef)
+   * )
+   * }}}
+   */
+  final def fullyPrefix(tp: Type): Type = tp.map {
+    case t: ModuleTypeRef =>
+      println(t, t.pre, t.typeSymbol, t.widen.narrow)
+      t.widen.narrow
+    case t: ThisType      =>
+      println(t, t.typeSymbol, t.underlying)
+      ThisType()
+    case t                => t
   }
 
   /** The most deeply nested owner that contains all the symbols

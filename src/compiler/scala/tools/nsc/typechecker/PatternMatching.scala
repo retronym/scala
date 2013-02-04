@@ -2725,12 +2725,14 @@ trait PatternMatching extends Transform with TypingTransformers with ast.TreeDSL
             // compare to the fully known type `tp` (modulo abstract types),
             // so that we can rule out stuff like: sealed trait X[T]; class XInt extends X[Int] --> XInt not valid when enumerating X[String]
             // however, must approximate abstract types in
-
-            val subTp = appliedType(deepMemberType(pre, sym), sym.typeParams.map(_ => WildcardType))
-            val subTpApprox = typer.infer.approximateAbstracts(subTp) // TODO: needed?
-            // patmatDebug("subtp"+(subTpApprox <:< tpApprox, subTpApprox, tpApprox))
-            if (subTpApprox <:< tpApprox) Some(checkableType(subTp))
-            else None
+            def sealedSubType(memType: (Type, Symbol) => Type): Option[Type] = {
+              val subTp = appliedType(memType(pre, sym), sym.typeParams.map(_ => WildcardType))
+              val subTpApprox = typer.infer.approximateAbstracts(subTp) // TODO: needed?
+              // patmatDebug("subtp"+(subTpApprox <:< tpApprox, subTpApprox, tpApprox))
+              if (subTpApprox <:< tpApprox) Some(checkableType(subTp)) else None
+            }
+            sealedSubType(_ memberType _)            // fast, common, path
+              .orElse(sealedSubType(deepMemberType)) // slower path, see SI-6146
           })
           patmatDebug("enum sealed "+ (tp, tpApprox) + " as "+ validSubTypes)
           Some(validSubTypes)
