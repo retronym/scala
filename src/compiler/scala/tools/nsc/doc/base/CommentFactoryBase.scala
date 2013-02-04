@@ -1,5 +1,5 @@
 /* NSC -- new Scala compiler
- * Copyright 2007-2012 LAMP/EPFL
+ * Copyright 2007-2013 LAMP/EPFL
  * @author  Manohar Jonnalagedda
  */
 
@@ -8,11 +8,9 @@ package doc
 package base
 
 import base.comment._
-import reporters.Reporter
 import scala.collection._
 import scala.util.matching.Regex
-import scala.annotation.switch
-import scala.reflect.internal.util.{NoPosition, Position}
+import scala.reflect.internal.util.Position
 import scala.language.postfixOps
 
 /** The comment parser transforms raw comment strings into `Comment` objects.
@@ -26,7 +24,7 @@ import scala.language.postfixOps
 trait CommentFactoryBase { this: MemberLookupBase =>
 
   val global: Global
-  import global.{ reporter, definitions, Symbol }
+  import global.{ reporter, Symbol }
 
   /* Creates comments with necessary arguments */
   def createComment (
@@ -66,7 +64,6 @@ trait CommentFactoryBase { this: MemberLookupBase =>
     val note           = note0
     val example        = example0
     val constructor    = constructor0
-    val source         = source0
     val inheritDiagram = inheritDiagram0
     val contentDiagram = contentDiagram0
     val groupDesc      = groupDesc0
@@ -683,7 +680,7 @@ trait CommentFactoryBase { this: MemberLookupBase =>
     def link(): Inline = {
       val SchemeUri = """([a-z]+:.*)""".r
       jump("[[")
-      var parens = 2 + repeatJump('[')
+      val parens = 2 + repeatJump('[')
       val start = "[" * parens
       val stop  = "]" * parens
       //println("link with " + parens + " matching parens")
@@ -729,7 +726,7 @@ trait CommentFactoryBase { this: MemberLookupBase =>
      */
     def normalizeIndentation(_code: String): String = {
 
-      var code = _code.trim
+      val code = _code.trim
       var maxSkip = Integer.MAX_VALUE
       var crtSkip = 0
       var wsArea = true
@@ -880,20 +877,6 @@ trait CommentFactoryBase { this: MemberLookupBase =>
       while (char != ch && char != endOfText) {
         nextChar()
         count += 1
-      }
-      count
-    }
-
-    final def jumpUntil(chars: String): Int = {
-      assert(chars.length > 0)
-      var count = 0
-      val c = chars.charAt(0)
-      while (!check(chars) && char != endOfText) {
-        nextChar()
-        while (char != c && char != endOfText) {
-          nextChar()
-          count += 1
-        }
       }
       count
     }

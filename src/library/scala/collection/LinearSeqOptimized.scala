@@ -8,7 +8,6 @@
 
 package scala.collection
 
-import generic._
 import mutable.ListBuffer
 import immutable.List
 import scala.util.control.Breaks._
@@ -84,7 +83,7 @@ trait LinearSeqOptimized[+A, +Repr <: LinearSeqOptimized[A, Repr]] extends Linea
   }
 
   override /*SeqLike*/
-  def contains(elem: Any): Boolean = {
+  def contains[A1 >: A](elem: A1): Boolean = {
     var these = this
     while (!these.isEmpty) {
       if (these.head == elem) return true

@@ -24,18 +24,23 @@ trait Trees extends api.Trees { self: SymbolTable =>
 
     private[this] var rawtpe: Type = _
     final def tpe = rawtpe
-    def tpe_=(t: Type) = rawtpe = t
+    @deprecated("Use setType", "2.11.0") def tpe_=(t: Type): Unit = setType(t)
+
+    def clearType(): this.type = this setType null
     def setType(tp: Type): this.type = { rawtpe = tp; this }
     def defineType(tp: Type): this.type = setType(tp)
 
     def symbol: Symbol = null //!!!OPT!!! symbol is about 3% of hot compile times -- megamorphic dispatch?
     def symbol_=(sym: Symbol) { throw new UnsupportedOperationException("symbol_= inapplicable for " + this) }
     def setSymbol(sym: Symbol): this.type = { symbol = sym; this }
-    def hasSymbol = false
+    def hasSymbolField = false
+    @deprecated("Use hasSymbolField", "2.11.0") def hasSymbol = hasSymbolField
 
     def isDef = false
 
     def isEmpty = false
+    def nonEmpty = !isEmpty
+
     def canHaveAttrs = true
 
     /** The canonical way to test if a Tree represents a term.
@@ -63,7 +68,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
     private[scala] def copyAttrs(tree: Tree): this.type = {
       rawatt = tree.rawatt
       tpe = tree.tpe
-      if (hasSymbol) symbol = tree.symbol
+      if (hasSymbolField) symbol = tree.symbol
       this
     }
 
@@ -159,6 +164,9 @@ trait Trees extends api.Trees { self: SymbolTable =>
     override def substituteThis(clazz: Symbol, to: Tree): Tree =
       new ThisSubstituter(clazz, to) transform this
 
+    def replace(from: Tree, to: Tree): Tree =
+      new TreeReplacer(from, to, positionAware = false) transform this
+
     def hasSymbolWhich(f: Symbol => Boolean) =
       (symbol ne null) && (symbol ne NoSymbol) && f(symbol)
 
@@ -211,7 +219,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
   trait TypTree extends Tree with TypTreeApi
 
   abstract class SymTree extends Tree with SymTreeContextApi {
-    override def hasSymbol = true
+    override def hasSymbolField = true
     override var symbol: Symbol = NoSymbol
   }
 
@@ -408,6 +416,16 @@ trait Trees extends api.Trees { self: SymbolTable =>
   class ApplyImplicitView(fun: Tree, args: List[Tree]) extends Apply(fun, args)
 
   def ApplyConstructor(tpt: Tree, args: List[Tree]) = Apply(Select(New(tpt), nme.CONSTRUCTOR), args)
+
+  // Creates a constructor call from the constructor symbol.  This is
+  // to avoid winding up with an OverloadedType for the constructor call.
+  def NewFromConstructor(constructor: Symbol, args: Tree*) = {
+    assert(constructor.isConstructor, constructor)
+    val instance = New(TypeTree(constructor.owner.tpe))
+    val init     = Select(instance, nme.CONSTRUCTOR) setSymbol constructor
+
+    Apply(init, args.toList)
+  }
 
   case class ApplyDynamic(qual: Tree, args: List[Tree]) extends SymTree with TermTree
 
@@ -856,7 +874,6 @@ trait Trees extends api.Trees { self: SymbolTable =>
   /** Is the tree Predef, scala.Predef, or _root_.scala.Predef?
    */
   def isReferenceToPredef(t: Tree) = isReferenceToScalaMember(t, nme.Predef)
-  def isReferenceToAnyVal(t: Tree) = isReferenceToScalaMember(t, tpnme.AnyVal)
 
   // --- modifiers implementation ---------------------------------------
 
@@ -914,13 +931,16 @@ trait Trees extends api.Trees { self: SymbolTable =>
     def withPosition(flag: Long, position: Position) =
       copy() setPositions positions + (flag -> position)
 
-    override def mapAnnotations(f: List[Tree] => List[Tree]): Modifiers =
-      Modifiers(flags, privateWithin, f(annotations)) setPositions positions
+    override def mapAnnotations(f: List[Tree] => List[Tree]): Modifiers = {
+      val newAnns = f(annotations)
+      if (annotations == newAnns) this
+      else Modifiers(flags, privateWithin, newAnns) setPositions positions
+    }
 
     override def toString = "Modifiers(%s, %s, %s)".format(flagString, annotations mkString ", ", positions)
   }
 
-  object Modifiers extends ModifiersCreator
+  object Modifiers extends ModifiersExtractor
 
   implicit val ModifiersTag = ClassTag[Modifiers](classOf[Modifiers])
 
@@ -1364,6 +1384,16 @@ trait Trees extends api.Trees { self: SymbolTable =>
       if (tree eq orig) super.transform(tree)
       else tree
   }
+
+  /** A transformer that replaces tree `from` with tree `to` in a given tree */
+  class TreeReplacer(from: Tree, to: Tree, positionAware: Boolean) extends Transformer {
+    override def transform(t: Tree): Tree = {
+      if (t == from) to
+      else if (!positionAware || (t.pos includes from.pos) || t.pos.isTransparent) super.transform(t)
+      else t
+    }
+  }
+
   // Create a readable string describing a substitution.
   private def substituterString(fromStr: String, toStr: String, from: List[Any], to: List[Any]): String = {
     "subst[%s, %s](%s)".format(fromStr, toStr, (from, to).zipped map (_ + " -> " + _) mkString ", ")
@@ -1392,7 +1422,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
   class ThisSubstituter(clazz: Symbol, to: => Tree) extends Transformer {
     val newtpe = to.tpe
     override def transform(tree: Tree) = {
-      if (tree.tpe ne null) tree.tpe = tree.tpe.substThis(clazz, newtpe)
+      tree modifyType (_.substThis(clazz, newtpe))
       tree match {
         case This(_) if tree.symbol == clazz => to
         case _ => super.transform(tree)
@@ -1402,8 +1432,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
 
   class TypeMapTreeSubstituter(val typeMap: TypeMap) extends Traverser {
     override def traverse(tree: Tree) {
-      if (tree.tpe ne null)
-        tree.tpe = typeMap(tree.tpe)
+      tree modifyType typeMap
       if (tree.isDef)
         tree.symbol modifyInfo typeMap
 
@@ -1435,9 +1464,9 @@ trait Trees extends api.Trees { self: SymbolTable =>
           if (tree.symbol == from.head) tree setSymbol to.head
           else subst(from.tail, to.tail)
       }
+      tree modifyType symSubst
 
-      if (tree.tpe ne null) tree.tpe = symSubst(tree.tpe)
-      if (tree.hasSymbol) {
+      if (tree.hasSymbolField) {
         subst(from, to)
         tree match {
           case _: DefTree =>
@@ -1504,6 +1533,15 @@ trait Trees extends api.Trees { self: SymbolTable =>
     }
   }
 
+  private lazy val duplicator = new Duplicator(focusPositions = true)
+  private class Duplicator(focusPositions: Boolean) extends Transformer {
+    override val treeCopy = newStrictTreeCopier
+    override def transform(t: Tree) = {
+      val t1 = super.transform(t)
+      if ((t1 ne t) && t1.pos.isRange && focusPositions) t1 setPos t.pos.focus
+      t1
+    }
+  }
   trait TreeStackTraverser extends Traverser {
     import collection.mutable
     val path: mutable.Stack[Tree] = mutable.Stack()
@@ -1513,14 +1551,7 @@ trait Trees extends api.Trees { self: SymbolTable =>
     }
   }
 
-  private lazy val duplicator = new Transformer {
-    override val treeCopy = newStrictTreeCopier
-    override def transform(t: Tree) = {
-      val t1 = super.transform(t)
-      if ((t1 ne t) && t1.pos.isRange) t1 setPos t.pos.focus
-      t1
-    }
-  }
+  def duplicateAndKeepPositions(tree: Tree) = new Duplicator(focusPositions = false) transform tree
 
   // ------ copiers -------------------------------------------
 

@@ -17,7 +17,7 @@ import Flags.SYNTHETIC
 abstract class TailCalls extends Transform {
   import global._                     // the global environment
   import definitions._                // standard classes and methods
-  import typer.{ typed, typedPos }    // methods to type trees
+  import typer.typedPos               // methods to type trees
 
   val phaseName: String = "tailcalls"
 
@@ -82,7 +82,7 @@ abstract class TailCalls extends Transform {
    *   that label.
    * </p>
    * <p>
-   *   Assumes: <code>Uncurry</code> has been run already, and no multiple
+   *   Assumes: `Uncurry` has been run already, and no multiple
    *            parameter lists exit.
    * </p>
    */
@@ -147,10 +147,9 @@ abstract class TailCalls extends Transform {
       }
 
       def enclosingType    = method.enclClass.typeOfThis
-      def methodTypeParams = method.tpe.typeParams
       def isEligible       = method.isEffectivelyFinal
       // @tailrec annotation indicates mandatory transformation
-      def isMandatory      = method.hasAnnotation(TailrecClass) && !forMSIL
+      def isMandatory      = method.hasAnnotation(TailrecClass)
       def isTransformed    = isEligible && accessed(label)
       def tailrecFailure() = unit.error(failPos, "could not optimize @tailrec annotated " + method + ": " + failReason)
 
@@ -230,7 +229,6 @@ abstract class TailCalls extends Transform {
         }
         else if (!matchesTypeArgs)      failHere("it is called recursively with different type arguments")
         else if (receiver == EmptyTree) rewriteTailCall(This(currentClass))
-        else if (forMSIL)               fail("it cannot be optimized on MSIL")
         else if (!receiverIsSame)       failHere("it changes type of 'this' on a polymorphic recursive call")
         else                            rewriteTailCall(receiver)
       }

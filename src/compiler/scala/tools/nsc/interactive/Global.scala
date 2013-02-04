@@ -8,17 +8,13 @@ package interactive
 import java.io.{ PrintWriter, StringWriter, FileReader, FileWriter }
 import scala.collection.mutable
 import mutable.{LinkedHashMap, SynchronizedMap, HashSet, SynchronizedSet}
-import scala.concurrent.SyncVar
 import scala.util.control.ControlThrowable
 import scala.tools.nsc.io.{ AbstractFile, LogReplay, Logger, NullLogger, Replayer }
-import scala.tools.nsc.util.{ WorkScheduler, MultiHashMap }
+import scala.tools.nsc.util.MultiHashMap
 import scala.reflect.internal.util.{ SourceFile, BatchSourceFile, Position, RangePosition, NoPosition }
 import scala.tools.nsc.reporters._
 import scala.tools.nsc.symtab._
-import scala.tools.nsc.ast._
-import scala.tools.nsc.io.Pickler._
 import scala.tools.nsc.typechecker.DivergentImplicit
-import scala.annotation.tailrec
 import symtab.Flags.{ACCESSOR, PARAMACCESSOR}
 import scala.annotation.elidable
 import scala.language.implicitConversions
@@ -361,7 +357,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
             }
 
             // don't forget to service interrupt requests
-            val iqs = scheduler.dequeueAllInterrupts(_.execute())
+            scheduler.dequeueAllInterrupts(_.execute())
 
             debugLog("ShutdownReq: cleaning work queue (%d items)".format(units.size))
             debugLog("Cleanup up responses (%d loadedType pending, %d parsedEntered pending)"
@@ -397,41 +393,6 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     val typerRun = currentTyperRun
     pollForWork(pos)
     if (typerRun != currentTyperRun) demandNewCompilerRun()
-  }
-
-  def debugInfo(source : SourceFile, start : Int, length : Int): String = {
-    println("DEBUG INFO "+source+"/"+start+"/"+length)
-    val end = start+length
-    val pos = rangePos(source, start, start, end)
-
-    val tree = locateTree(pos)
-    val sw = new StringWriter
-    val pw = new PrintWriter(sw)
-    newTreePrinter(pw).print(tree)
-    pw.flush
-
-    val typed = new Response[Tree]
-    askTypeAt(pos, typed)
-    val typ = typed.get.left.toOption match {
-      case Some(tree) =>
-        val sw = new StringWriter
-        val pw = new PrintWriter(sw)
-        newTreePrinter(pw).print(tree)
-        pw.flush
-        sw.toString
-      case None => "<None>"
-    }
-
-    val completionResponse = new Response[List[Member]]
-    askTypeCompletion(pos, completionResponse)
-    val completion = completionResponse.get.left.toOption match {
-      case Some(members) =>
-        members mkString "\n"
-      case None => "<None>"
-    }
-
-    source.content.view.drop(start).take(length).mkString+" : "+source.path+" ("+start+", "+end+
-    ")\n\nlocateTree:\n"+sw.toString+"\n\naskTypeAt:\n"+typ+"\n\ncompletion:\n"+completion
   }
 
   // ----------------- The Background Runner Thread -----------------------
@@ -849,8 +810,6 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     respond(response) { scopeMembers(pos) }
   }
 
-  private val Dollar = newTermName("$")
-
   private class Members[M <: Member] extends LinkedHashMap[Name, Set[M]] {
     override def default(key: Name) = Set()
 
@@ -866,7 +825,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     def add(sym: Symbol, pre: Type, implicitlyAdded: Boolean)(toMember: (Symbol, Type) => M) {
       if ((sym.isGetter || sym.isSetter) && sym.accessed != NoSymbol) {
         add(sym.accessed, pre, implicitlyAdded)(toMember)
-      } else if (!sym.name.decodedName.containsName(Dollar) && !sym.isSynthetic && sym.hasRawInfo) {
+      } else if (!sym.name.decodedName.containsName("$") && !sym.isSynthetic && sym.hasRawInfo) {
         val symtpe = pre.memberType(sym) onTypeError ErrorType
         matching(sym, symtpe, this(sym.name)) match {
           case Some(m) =>
@@ -989,7 +948,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     for (sym <- ownerTpe.members)
       addTypeMember(sym, pre, sym.owner != ownerTpe.typeSymbol, NoSymbol)
     members.allMembers #:: {
-      //print("\nadd pimped")
+      //print("\nadd enrichment")
       val applicableViews: List[SearchResult] =
         if (ownerTpe.isErroneous) List()
         else new ImplicitSearch(
@@ -1059,7 +1018,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   }
 
   @deprecated("SI-6458: Instrumentation logic will be moved out of the compiler.","2.10.0")
-  def getInstrumented(source: SourceFile, line: Int, response: Response[(String, Array[Char])]) =
+  def getInstrumented(source: SourceFile, line: Int, response: Response[(String, Array[Char])]) {
     try {
       interruptsEnabled = false
       respond(response) {
@@ -1068,17 +1027,9 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     } finally {
       interruptsEnabled = true
     }
+  }
 
   // ---------------- Helper classes ---------------------------
-
-  /** A transformer that replaces tree `from` with tree `to` in a given tree */
-  class TreeReplacer(from: Tree, to: Tree) extends Transformer {
-    override def transform(t: Tree): Tree = {
-      if (t == from) to
-      else if ((t.pos includes from.pos) || t.pos.isTransparent) super.transform(t)
-      else t
-    }
-  }
 
   /** The typer run */
   class TyperRun extends Run {
@@ -1099,7 +1050,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
      *  @return true iff typechecked correctly
      */
     private def applyPhase(phase: Phase, unit: CompilationUnit) {
-      atPhase(phase) { phase.asInstanceOf[GlobalPhase] applyPhase unit }
+      enteringPhase(phase) { phase.asInstanceOf[GlobalPhase] applyPhase unit }
     }
   }
 

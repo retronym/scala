@@ -6,9 +6,7 @@
 package scala.tools.nsc
 package typechecker
 
-import symtab.Flags
 import symtab.Flags._
-import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 /** Synthetic method implementations for case classes and case objects.
@@ -90,7 +88,7 @@ trait SyntheticMethods extends ast.TreeDSL {
     // like Tags and Arrays which are not robust and infer things
     // which they shouldn't.
     val accessorLub  = (
-      if (opt.experimental) {
+      if (settings.Xexperimental.value) {
         global.weakLub(accessors map (_.tpe.finalResultType))._1 match {
           case RefinedType(parents, decls) if !decls.isEmpty => intersectionType(parents)
           case tp                                            => tp
@@ -117,19 +115,10 @@ trait SyntheticMethods extends ast.TreeDSL {
         (m0 ne meth) && !m0.isDeferred && !m0.isSynthetic && (m0.owner != AnyValClass) && (typeInClazz(m0) matches typeInClazz(meth))
       }
     }
-    def readConstantValue[T](name: String, default: T = null.asInstanceOf[T]): T = {
-      clazzMember(newTermName(name)).info match {
-        case NullaryMethodType(ConstantType(Constant(value))) => value.asInstanceOf[T]
-        case _                                                => default
-      }
-    }
     def productIteratorMethod = {
       createMethod(nme.productIterator, iteratorOfType(accessorLub))(_ =>
         gen.mkMethodCall(ScalaRunTimeModule, nme.typedProductIterator, List(accessorLub), List(mkThis))
       )
-    }
-    def projectionMethod(accessor: Symbol, num: Int) = {
-      createMethod(nme.productAccessorName(num), accessor.tpe.resultType)(_ => REF(accessor))
     }
 
     /** Common code for productElement and (currently disabled) productElementName
@@ -234,10 +223,15 @@ trait SyntheticMethods extends ast.TreeDSL {
     /** The _1, _2, etc. methods to implement ProductN, disabled
      *  until we figure out how to introduce ProductN without cycles.
      */
-     def productNMethods = {
+    /****
+    def productNMethods = {
       val accs = accessors.toIndexedSeq
       1 to arity map (num => productProj(arity, num) -> (() => projectionMethod(accs(num - 1), num)))
     }
+    def projectionMethod(accessor: Symbol, num: Int) = {
+      createMethod(nme.productAccessorName(num), accessor.tpe.resultType)(_ => REF(accessor))
+    }
+    ****/
 
     // methods for both classes and objects
     def productMethods = {
@@ -375,7 +369,6 @@ trait SyntheticMethods extends ast.TreeDSL {
       def isRewrite(sym: Symbol) = sym.isCaseAccessorMethod && !sym.isPublic
 
       for (ddef @ DefDef(_, _, _, _, _, _) <- templ.body ; if isRewrite(ddef.symbol)) {
-        val original = ddef.symbol
         val newAcc = deriveMethod(ddef.symbol, name => context.unit.freshTermName(name + "$")) { newAcc =>
           newAcc.makePublic
           newAcc resetFlag (ACCESSOR | PARAMACCESSOR)

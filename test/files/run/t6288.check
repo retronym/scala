@@ -66,7 +66,7 @@
       [273]case5()[293]{
         [293]<synthetic> val o7: [293]Option[List[Int]] = [293][293]Case4.unapplySeq([293]x1);
         [293]if ([293]o7.isEmpty.unary_!)
-          [293]if ([293][293][293][293]o7.get.!=([293]null).&&([293][293][293][293]o7.get.lengthCompare([293]0).==([195]0)))
+          [293]if ([293][293][293][293]o7.get.!=([293]null).&&([293][293][293][293]o7.get.lengthCompare([293]0).==([293]0)))
             [304][304]matchEnd4([304]())
           else
             [293][293]case6()

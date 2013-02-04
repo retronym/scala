@@ -61,12 +61,7 @@ abstract class Changes {
     annotationsChecked.forall(a =>
       (sym1.hasAnnotation(a) == sym2.hasAnnotation(a)))
 
-  private def sameType(tp1: Type, tp2: Type)(implicit strict: Boolean) = {
-    def typeOf(tp: Type): String = tp.toString + "[" + tp.getClass + "]"
-    val res = sameType0(tp1, tp2)
-    //if (!res) println("\t different types: " + typeOf(tp1) + " : " + typeOf(tp2))
-    res
-  }
+  private def sameType(tp1: Type, tp2: Type)(implicit strict: Boolean) = sameType0(tp1, tp2)
 
   private def sameType0(tp1: Type, tp2: Type)(implicit strict: Boolean): Boolean = ((tp1, tp2) match {
     /*case (ErrorType, _) => false
@@ -95,11 +90,11 @@ abstract class Changes {
         } else
           !sym1.isTypeParameter || !changedTypeParams.contains(sym1.fullName)
 
+      // @M! normalize reduces higher-kinded case to PolyType's
       testSymbols && sameType(pre1, pre2) &&
         (sym1.variance == sym2.variance) &&
         ((tp1.isHigherKinded && tp2.isHigherKinded && tp1.normalize =:= tp2.normalize) ||
            sameTypes(args1, args2))
-         // @M! normalize reduces higher-kinded case to PolyType's
 
     case (RefinedType(parents1, ref1), RefinedType(parents2, ref2)) =>
       def isSubScope(s1: Scope, s2: Scope): Boolean = s2.toList.forall {
@@ -170,7 +165,6 @@ abstract class Changes {
   /** Return the list of changes between 'from' and 'toSym.info'.
    */
   def changeSet(from: Type, toSym: Symbol): List[Change] = {
-    implicit val defaultReason = "types"
     implicit val defaultStrictTypeRefTest = true
 
     val to = toSym.info

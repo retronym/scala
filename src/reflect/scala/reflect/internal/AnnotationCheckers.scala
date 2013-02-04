@@ -47,6 +47,7 @@ trait AnnotationCheckers {
     @deprecated("Create an AnalyzerPlugin and use pluginsTyped", "2.10.1")
     def addAnnotations(tree: Tree, tpe: Type): Type = tpe
 
+<<<<<<< HEAD
     /**
      * Decide whether this analyzer plugin can adapt a tree that has an annotated type to the
      * given type tp, taking into account the given mode (see method adapt in trait Typers).
@@ -63,6 +64,19 @@ trait AnnotationCheckers {
      */
     @deprecated("Create an AnalyzerPlugin and use adaptAnnotations", "2.10.1")
     def adaptAnnotations(tree: Tree, mode: Int, pt: Type): Tree = tree
+=======
+    /** Decide whether this annotation checker can adapt a tree
+     *  that has an annotated type to the given type tp, taking
+     *  into account the given mode (see method adapt in trait Typers).*/
+    def canAdaptAnnotations(tree: Tree, mode: Mode, pt: Type): Boolean = false
+
+    /** Adapt a tree that has an annotated type to the given type tp,
+     *  taking into account the given mode (see method adapt in trait Typers).
+     *  An implementation cannot rely on canAdaptAnnotations being called
+     *  before. If the implementing class cannot do the adaptiong, it
+     *  should return the tree unchanged.*/
+    def adaptAnnotations(tree: Tree, mode: Mode, pt: Type): Tree = tree
+>>>>>>> e67a039
 
     /**
      * Adapt the type of a return expression. The decision of a typer plugin whether the type
@@ -92,6 +106,7 @@ trait AnnotationCheckers {
     annotationCheckers = Nil
   }
 
+<<<<<<< HEAD
   /** @see AnnotationChecker.annotationsConform */
   def annotationsConform(tp1: Type, tp2: Type): Boolean =
     if (annotationCheckers.isEmpty || (tp1.annotations.isEmpty && tp2.annotations.isEmpty)) true
@@ -141,4 +156,78 @@ trait AnnotationCheckers {
     if (annotationCheckers.isEmpty) default
     else annotationCheckers.foldLeft(default)((tpe, checker) =>
       if (!checker.isActive()) tpe else checker.adaptTypeOfReturn(tree, pt, tpe))
+=======
+  /** Check that the annotations on two types conform.  To do
+   *  so, consult all registered annotation checkers. */
+  def annotationsConform(tp1: Type, tp2: Type): Boolean = {
+    /* Finish quickly if there are no annotations */
+    if (tp1.annotations.isEmpty && tp2.annotations.isEmpty)
+      true
+    else
+     annotationCheckers.forall(
+       _.annotationsConform(tp1,tp2))
+  }
+
+  /** Refine the computed least upper bound of a list of types.
+   *  All this should do is add annotations. */
+  def annotationsLub(tpe: Type, ts: List[Type]): Type = {
+    annotationCheckers.foldLeft(tpe)((tpe, checker) =>
+      checker.annotationsLub(tpe, ts))
+  }
+
+  /** Refine the computed greatest lower bound of a list of types.
+   *  All this should do is add annotations. */
+  def annotationsGlb(tpe: Type, ts: List[Type]): Type = {
+    annotationCheckers.foldLeft(tpe)((tpe, checker) =>
+      checker.annotationsGlb(tpe, ts))
+  }
+
+  /** Refine the bounds on type parameters to the given type arguments. */
+  def adaptBoundsToAnnotations(bounds: List[TypeBounds],
+    tparams: List[Symbol], targs: List[Type]): List[TypeBounds] = {
+      annotationCheckers.foldLeft(bounds)((bounds, checker) =>
+        checker.adaptBoundsToAnnotations(bounds, tparams, targs))
+  }
+
+  /** Let all annotations checkers add extra annotations
+   *  to this tree's type. */
+  def addAnnotations(tree: Tree, tpe: Type): Type = {
+    annotationCheckers.foldLeft(tpe)((tpe, checker) =>
+      checker.addAnnotations(tree, tpe))
+  }
+
+  /** Find out whether any annotation checker can adapt a tree
+   *  to a given type. Called by Typers.adapt. */
+  def canAdaptAnnotations(tree: Tree, mode: Mode, pt: Type): Boolean = {
+    annotationCheckers.exists(_.canAdaptAnnotations(tree, mode, pt))
+  }
+
+  /** Let registered annotation checkers adapt a tree
+   *  to a given type (called by Typers.adapt). Annotation checkers
+   *  that cannot do the adaption should pass the tree through
+   *  unchanged. */
+  def adaptAnnotations(tree: Tree, mode: Mode, pt: Type): Tree = {
+    annotationCheckers.foldLeft(tree)((tree, checker) =>
+      checker.adaptAnnotations(tree, mode, pt))
+  }
+
+  /** Let a registered annotation checker adapt the type of a return expression.
+   *  Annotation checkers that cannot do the adaptation should simply return
+   *  the `default` argument.
+   *
+   *  Note that the result is undefined if more than one annotation checker
+   *  returns an adapted type which is not a subtype of `default`.
+   */
+  def adaptTypeOfReturn(tree: Tree, pt: Type, default: => Type): Type = {
+    val adaptedTypes = annotationCheckers flatMap { checker =>
+      val adapted = checker.adaptTypeOfReturn(tree, pt, default)
+      if (!(adapted <:< default)) List(adapted)
+      else List()
+    }
+    adaptedTypes match {
+      case fst :: _ => fst
+      case List() => default
+    }
+  }
+>>>>>>> e67a039
 }

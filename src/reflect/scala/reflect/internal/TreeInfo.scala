@@ -65,6 +65,9 @@ abstract class TreeInfo {
       false
   }
 
+  // TODO SI-5304 tighten this up so we don't elide side effect in module loads
+  def isQualifierSafeToElide(tree: Tree): Boolean = isExprSafeToInline(tree)
+
   /** Is tree an expression which can be inlined without affecting program semantics?
    *
    *  Note that this is not called "isExprPure" since purity (lack of side-effects)
@@ -104,11 +107,32 @@ abstract class TreeInfo {
       false
   }
 
-  @deprecated("Use isExprSafeToInline instead", "2.10.0")
-  def isPureExpr(tree: Tree) = isExprSafeToInline(tree)
+  /** As if the name of the method didn't give it away,
+   *  this logic is designed around issuing helpful
+   *  warnings and minimizing spurious ones.  That means
+   *  don't reuse it for important matters like inlining
+   *  decisions.
+   */
+  def isPureExprForWarningPurposes(tree: Tree) = tree match {
+    case EmptyTree | Literal(Constant(())) => false
+    case _                                 =>
+      def isWarnableRefTree = tree match {
+        case t: RefTree => isExprSafeToInline(t.qualifier) && t.symbol != null && t.symbol.isAccessor
+        case _          => false
+      }
+      def isWarnableSymbol = {
+        val sym = tree.symbol
+        (sym == null) || !(sym.isModule || sym.isLazy) || {
+          debuglog("'Pure' but side-effecting expression in statement position: " + tree)
+          false
+        }
+      }
 
-  def zipMethodParamsAndArgs(params: List[Symbol], args: List[Tree]): List[(Symbol, Tree)] =
-    mapMethodParamsAndArgs(params, args)((param, arg) => ((param, arg)))
+      (    !tree.isErrorTyped
+        && (isExprSafeToInline(tree) || isWarnableRefTree)
+        && isWarnableSymbol
+      )
+  }
 
   def mapMethodParamsAndArgs[R](params: List[Symbol], args: List[Tree])(f: (Symbol, Tree) => R): List[R] = {
     val b = List.newBuilder[R]
@@ -119,11 +143,10 @@ abstract class TreeInfo {
     val plen   = params.length
     val alen   = args.length
     def fail() = {
-      global.debugwarn(
-        "Mismatch trying to zip method parameters and argument list:\n" +
-        "  params = " + params + "\n" +
-        "    args = " + args + "\n"
-      )
+      global.devWarning(
+        s"""|Mismatch trying to zip method parameters and argument list:
+            |  params = $params
+            |    args = $args""".stripMargin)
       false
     }
 
@@ -145,37 +168,6 @@ abstract class TreeInfo {
     else return fail
 
     true
-  }
-
-  /**
-   * Selects the correct parameter list when there are nested applications.
-   * Given Apply(fn, args), args might correspond to any of fn.symbol's parameter
-   * lists.  To choose the correct one before uncurry, we have to unwrap any
-   * applies: for instance Apply(fn @ Apply(Apply(_, _), _), args) implies args
-   * correspond to the third parameter list.
-   *
-   * The argument fn is the function part of the apply node being considered.
-   *
-   * Also accounts for varargs.
-   */
-  private def applyMethodParameters(fn: Tree): List[Symbol] = {
-    val depth  = dissectApplied(fn).applyDepth
-    // There could be applies which go beyond the parameter list(s),
-    // being applied to the result of the method call.
-    // !!! Note that this still doesn't seem correct, although it should
-    // be closer than what it replaced.
-    if (depth < fn.symbol.paramss.size) fn.symbol.paramss(depth)
-    else if (fn.symbol.paramss.isEmpty) Nil
-    else fn.symbol.paramss.last
-  }
-
-  def zipMethodParamsAndArgs(t: Tree): List[(Symbol, Tree)] = t match {
-    case Apply(fn, args) => zipMethodParamsAndArgs(applyMethodParameters(fn), args)
-    case _               => Nil
-  }
-  def foreachMethodParamAndArg(t: Tree)(f: (Symbol, Tree) => Unit): Unit = t match {
-    case Apply(fn, args) => foreachMethodParamAndArg(applyMethodParameters(fn), args)(f)
-    case _               =>
   }
 
   /** Is symbol potentially a getter of a variable?
@@ -321,10 +313,6 @@ abstract class TreeInfo {
     case x: Ident           => !x.isBackquoted && nme.isVariableName(x.name)
     case _                  => false
   }
-  def isDeprecatedIdentifier(tree: Tree): Boolean = tree match {
-    case x: Ident           => !x.isBackquoted && nme.isDeprecatedIdentifierName(x.name)
-    case _                  => false
-  }
 
   /** The first constructor definitions in `stats` */
   def firstConstructor(stats: List[Tree]): Tree = stats find {
@@ -383,14 +371,16 @@ abstract class TreeInfo {
     case _                                                          => false
   }
 
+  /** Translates an Assign(_, _) node to AssignOrNamedArg(_, _) if
+   *  the lhs is a simple ident. Otherwise returns unchanged.
+   */
+  def assignmentToMaybeNamedArg(tree: Tree) = tree match {
+    case t @ Assign(id: Ident, rhs) => atPos(t.pos)(AssignOrNamedArg(id, rhs))
+    case t                          => t
+  }
+
   /** Is name a left-associative operator? */
   def isLeftAssoc(operator: Name) = operator.nonEmpty && (operator.endChar != ':')
-
-  /** Is tree a `this` node which belongs to `enclClass`? */
-  def isSelf(tree: Tree, enclClass: Symbol): Boolean = tree match {
-    case This(_) => tree.symbol == enclClass
-    case _ => false
-  }
 
   /** a Match(Typed(_, tpt), _) must be translated into a switch if isSwitchAnnotation(tpt.tpe) */
   def isSwitchAnnotation(tpe: Type) = tpe hasAnnotation definitions.SwitchClass
@@ -437,15 +427,31 @@ abstract class TreeInfo {
     case _                          => false
   }
 
-  /** Does this CaseDef catch Throwable? */
-  def catchesThrowable(cdef: CaseDef) = catchesAllOf(cdef, ThrowableClass.tpe)
+  private def hasNoSymbol(t: Tree) = t.symbol == null || t.symbol == NoSymbol
 
-  /** Does this CaseDef catch everything of a certain Type? */
-  def catchesAllOf(cdef: CaseDef, threshold: Type) =
-    isDefaultCase(cdef) || (cdef.guard.isEmpty && (unbind(cdef.pat) match {
-      case Typed(Ident(nme.WILDCARD), tpt)  => (tpt.tpe != null) && (threshold <:< tpt.tpe)
-      case _                                => false
-    }))
+  /** If this CaseDef assigns a name to its top-level pattern,
+   *  in the form 'expr @ pattern' or 'expr: pattern', returns
+   *  the name. Otherwise, nme.NO_NAME.
+   *
+   *  Note: in the case of Constant patterns such as 'case x @ "" =>',
+   *  the pattern matcher eliminates the binding and inlines the constant,
+   *  so as far as this method is likely to be able to determine,
+   *  the name is NO_NAME.
+   */
+  def assignedNameOfPattern(cdef: CaseDef): Name = cdef.pat match {
+    case Bind(name, _)  => name
+    case Ident(name)    => name
+    case _              => nme.NO_NAME
+  }
+
+  /** Does this CaseDef catch Throwable? */
+  def catchesThrowable(cdef: CaseDef) = (
+    cdef.guard.isEmpty && (unbind(cdef.pat) match {
+      case Ident(nme.WILDCARD)       => true
+      case i@Ident(name)             => hasNoSymbol(i)
+      case _                         => false
+    })
+  )
 
   /** Is this pattern node a catch-all or type-test pattern? */
   def isCatchCase(cdef: CaseDef) = cdef match {
@@ -470,7 +476,7 @@ abstract class TreeInfo {
 
       tp match {
         case TypeRef(pre, sym, args) =>
-          args.isEmpty && (sym.owner.isPackageClass || isSimple(pre))
+          args.isEmpty && (sym.isTopLevel || isSimple(pre))
         case NoPrefix =>
           true
         case _ =>
@@ -608,6 +614,12 @@ abstract class TreeInfo {
       }
       loop(tree)
     }
+
+    override def toString = {
+      val tstr = if (targs.isEmpty) "" else targs.mkString("[", ", ", "]")
+      val astr = argss map (args => args.mkString("(", ", ", ")")) mkString ""
+      s"$core$tstr$astr"
+    }
   }
 
   /** Returns a wrapper that knows how to destructure and analyze applications.
@@ -624,6 +636,8 @@ abstract class TreeInfo {
    *  For advanced use, call `dissectApplied` explicitly and use its methods instead of pattern matching.
    */
   object Applied {
+    def apply(tree: Tree): Applied = new Applied(tree)
+
     def unapply(applied: Applied): Option[(Tree, List[Tree], List[List[Tree]])] =
       Some((applied.core, applied.targs, applied.argss))
 
@@ -736,4 +750,15 @@ abstract class TreeInfo {
       case tree: RefTree => true
       case _ => false
     })
+
+  def isMacroApplication(tree: Tree): Boolean =
+    !tree.isDef && tree.symbol != null && tree.symbol.isMacro && !tree.symbol.isErroneous
+
+  def isMacroApplicationOrBlock(tree: Tree): Boolean = tree match {
+    case Block(_, expr) => isMacroApplicationOrBlock(expr)
+    case tree => isMacroApplication(tree)
+  }
+
+  def isNonTrivialMacroApplication(tree: Tree): Boolean =
+    isMacroApplication(tree) && dissectApplied(tree).core != tree
 }

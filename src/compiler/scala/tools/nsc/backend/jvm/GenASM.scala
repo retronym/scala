@@ -6,12 +6,9 @@
 package scala.tools.nsc
 package backend.jvm
 
-import java.nio.ByteBuffer
 import scala.collection.{ mutable, immutable }
 import scala.reflect.internal.pickling.{ PickleFormat, PickleBuffer }
 import scala.tools.nsc.symtab._
-import scala.tools.nsc.io.AbstractFile
-
 import scala.tools.asm
 import asm.Label
 
@@ -32,6 +29,16 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
   /** Create a new phase */
   override def newPhase(p: Phase): Phase = new AsmPhase(p)
 
+  /** From the reference documentation of the Android SDK:
+   *  The `Parcelable` interface identifies classes whose instances can be written to and restored from a `Parcel`.
+   *  Classes implementing the `Parcelable` interface must also have a static field called `CREATOR`,
+   *  which is an object implementing the `Parcelable.Creator` interface.
+   */
+  private val androidFieldName = newTermName("CREATOR")
+
+  private lazy val AndroidParcelableInterface = rootMirror.getClassIfDefined("android.os.Parcelable")
+  private lazy val AndroidCreatorClass        = rootMirror.getClassIfDefined("android.os.Parcelable$Creator")
+
   /** JVM code generation phase
    */
   class AsmPhase(prev: Phase) extends ICodePhase(prev) {
@@ -39,7 +46,9 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
     override def erasedTypes = true
     def apply(cls: IClass) = sys.error("no implementation")
 
-    val BeanInfoAttr = rootMirror.getRequiredClass("scala.beans.BeanInfo")
+    // Lazy val; can't have eager vals in Phase constructors which may
+    // cause cycles before Global has finished initialization.
+    lazy val BeanInfoAttr = rootMirror.getRequiredClass("scala.beans.BeanInfo")
 
     private def initBytecodeWriter(entryPoints: List[IClass]): BytecodeWriter = {
       settings.outputDirs.getSingleOutput match {
@@ -62,13 +71,18 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
           new DirectToJarfileWriter(f.file)
 
         case _                               =>
+          import scala.tools.util.Javap
           if (settings.Ygenjavap.isDefault) {
             if(settings.Ydumpclasses.isDefault)
               new ClassBytecodeWriter { }
             else
               new ClassBytecodeWriter with DumpBytecodeWriter { }
           }
-          else new ClassBytecodeWriter with JavapBytecodeWriter { }
+          else if (Javap.isAvailable()) new ClassBytecodeWriter with JavapBytecodeWriter { }
+          else {
+            warning("No javap on classpath, skipping javap output.")
+            new ClassBytecodeWriter { }
+          }
 
           // TODO A ScalapBytecodeWriter could take asm.util.Textifier as starting point.
           //      Three areas where javap ouput is less than ideal (e.g. when comparing versions of the same classfile) are:
@@ -133,7 +147,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       /* don't javaNameCache.clear() because that causes the following tests to fail:
        *   test/files/run/macro-repl-dontexpand.scala
        *   test/files/jvm/interpreter.scala
-       * TODO but why? what use could javaNameCache possibly see once GenJVM is over?
+       * TODO but why? what use could javaNameCache possibly see once GenASM is over?
        */
 
       /* TODO After emitting all class files (e.g., in a separate compiler phase) ASM can perform bytecode verification:
@@ -248,7 +262,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
   }
 
   def isTopLevelModule(sym: Symbol): Boolean =
-    afterPickler { sym.isModuleClass && !sym.isImplClass && !sym.isNestedClass }
+    exitingPickler { sym.isModuleClass && !sym.isImplClass && !sym.isNestedClass }
 
   def isStaticModule(sym: Symbol): Boolean = {
     sym.isModuleClass && !sym.isImplClass && !sym.isLifted
@@ -398,7 +412,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
   /** basic functionality for class file building */
   abstract class JBuilder(bytecodeWriter: BytecodeWriter) {
 
-    val EMPTY_JTYPE_ARRAY  = Array.empty[asm.Type]
     val EMPTY_STRING_ARRAY = Array.empty[String]
 
     val mdesc_arglessvoid = "()V"
@@ -466,7 +479,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
     /** Specialized array conversion to prevent calling
      *  java.lang.reflect.Array.newInstance via TraversableOnce.toArray
      */
-    def mkArray(xs: Traversable[asm.Type]):  Array[asm.Type]  = { val a = new Array[asm.Type](xs.size); xs.copyToArray(a); a }
     def mkArray(xs: Traversable[String]):    Array[String]    = { val a = new Array[String](xs.size);   xs.copyToArray(a); a }
 
     // -----------------------------------------------------------------------------------------
@@ -516,7 +528,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
          * of inner class all until root class.
          */
         def collectInnerClass(s: Symbol): Unit = {
-          // TODO: some beforeFlatten { ... } which accounts for
+          // TODO: some enteringFlatten { ... } which accounts for
           // being nested in parameterized classes (if we're going to selectively flatten.)
           val x = innerClassSymbolFor(s)
           if(x ne NoSymbol) {
@@ -531,7 +543,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
       collectInnerClass(sym)
 
-      var hasInternalName = (sym.isClass || (sym.isModule && !sym.isMethod))
+      val hasInternalName = (sym.isClass || (sym.isModule && !sym.isMethod))
       val cachedJN = javaNameCache.getOrElseUpdate(sym, {
         if (hasInternalName) { sym.javaBinaryName }
         else                 { sym.javaSimpleName }
@@ -541,12 +553,18 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         val internalName = cachedJN.toString()
         val trackedSym = jsymbol(sym)
         reverseJavaName.get(internalName) match {
-          case None         =>
+          case Some(oldsym) if oldsym.exists && trackedSym.exists =>
+            assert(
+              // In contrast, neither NothingClass nor NullClass show up bytecode-level.
+              (oldsym == trackedSym) || (oldsym == RuntimeNothingClass) || (oldsym == RuntimeNullClass) || (oldsym.isModuleClass && (oldsym.sourceModule == trackedSym.sourceModule)),
+              s"""|Different class symbols have the same bytecode-level internal name:
+                  |     name: $internalName
+                  |   oldsym: ${oldsym.fullNameString}
+                  |  tracked: ${trackedSym.fullNameString}
+              """.stripMargin
+            )
+          case _ =>
             reverseJavaName.put(internalName, trackedSym)
-          case Some(oldsym) =>
-            assert((oldsym == trackedSym) || (oldsym == RuntimeNothingClass) || (oldsym == RuntimeNullClass) ||
-                    (oldsym.isModuleClass && (oldsym.sourceModule == trackedSym.sourceModule)), // In contrast, neither NothingClass nor NullClass show up bytecode-level.
-                   "how can getCommonSuperclass() do its job if different class symbols get the same bytecode-level internal name: " + internalName)
         }
       }
 
@@ -619,7 +637,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
           innerSym.rawname + innerSym.moduleSuffix
 
       // add inner classes which might not have been referenced yet
-      afterErasure {
+      exitingErasure {
         for (sym <- List(csym, csym.linkedClassOfClass); m <- sym.info.decls.map(innerClassSymbolFor) if m.isClass)
           innerClassBuffer += m
       }
@@ -810,7 +828,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
       if (!needsGenericSignature(sym)) { return null }
 
-      val memberTpe = beforeErasure(owner.thisType.memberInfo(sym))
+      val memberTpe = enteringErasure(owner.thisType.memberInfo(sym))
 
       val jsOpt: Option[String] = erasure.javaSig(sym, memberTpe)
       if (jsOpt.isEmpty) { return null }
@@ -827,10 +845,10 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         // Run the signature parser to catch bogus signatures.
         val isValidSignature = wrap {
           // Alternative: scala.tools.reflect.SigParser (frontend to sun.reflect.generics.parser.SignatureParser)
-          import scala.tools.asm.util.SignatureChecker
-          if (sym.isMethod)    { SignatureChecker checkMethodSignature sig } // requires asm-util.jar
-          else if (sym.isTerm) { SignatureChecker checkFieldSignature  sig }
-          else                 { SignatureChecker checkClassSignature  sig }
+          import scala.tools.asm.util.CheckClassAdapter
+          if (sym.isMethod)    { CheckClassAdapter checkMethodSignature sig } // requires asm-util.jar
+          else if (sym.isTerm) { CheckClassAdapter checkFieldSignature  sig }
+          else                 { CheckClassAdapter checkClassSignature  sig }
         }
 
         if(!isValidSignature) {
@@ -844,7 +862,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       }
 
       if ((settings.check containsName phaseName)) {
-        val normalizedTpe = beforeErasure(erasure.prepareSigMap(memberTpe))
+        val normalizedTpe = enteringErasure(erasure.prepareSigMap(memberTpe))
         val bytecodeTpe = owner.thisType.memberInfo(sym)
         if (!sym.isType && !sym.isConstructor && !(erasure.erasure(sym)(normalizedTpe) =:= bytecodeTpe)) {
           getCurrentCUnit().warning(sym.pos,
@@ -1099,7 +1117,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       debuglog("Dumping mirror class for object: " + moduleClass)
 
       val linkedClass  = moduleClass.companionClass
-      val linkedModule = linkedClass.companionSymbol
       lazy val conflictingNames: Set[Name] = {
         (linkedClass.info.members collect { case sym if sym.name.isTermName => sym.name }).toSet
       }
@@ -1125,16 +1142,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
   trait JAndroidBuilder {
     self: JPlainBuilder =>
 
-    /** From the reference documentation of the Android SDK:
-     *  The `Parcelable` interface identifies classes whose instances can be written to and restored from a `Parcel`.
-     *  Classes implementing the `Parcelable` interface must also have a static field called `CREATOR`,
-     *  which is an object implementing the `Parcelable.Creator` interface.
-     */
-    private val androidFieldName = newTermName("CREATOR")
-
-    private lazy val AndroidParcelableInterface = rootMirror.getClassIfDefined("android.os.Parcelable")
-    private lazy val AndroidCreatorClass        = rootMirror.getClassIfDefined("android.os.Parcelable$Creator")
-
     def isAndroidParcelableClass(sym: Symbol) =
       (AndroidParcelableInterface != NoSymbol) &&
       (sym.parentSymbols contains AndroidParcelableInterface)
@@ -1142,7 +1149,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
     /* Typestate: should be called before emitting fields (because it adds an IField to the current IClass). */
     def addCreatorCode(block: BasicBlock) {
       val fieldSymbol = (
-        clasz.symbol.newValue(newTermName(androidFieldName), NoPosition, Flags.STATIC | Flags.FINAL)
+        clasz.symbol.newValue(androidFieldName, NoPosition, Flags.STATIC | Flags.FINAL)
           setInfo AndroidCreatorClass.tpe
       )
       val methodSymbol = definitions.getMember(clasz.symbol.companionModule, androidFieldName)
@@ -1157,7 +1164,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
       jclass.visitField(
         PublicStaticFinal,
-        androidFieldName,
+        androidFieldName.toString,
         tdesc_creator,
         null, // no java-generic-signature
         null  // no initial value
@@ -1177,7 +1184,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       clinit.visitMethodInsn(
         asm.Opcodes.INVOKEVIRTUAL,
         moduleName,
-        androidFieldName,
+        androidFieldName.toString,
         asm.Type.getMethodDescriptor(creatorType, Array.empty[asm.Type]: _*)
       )
 
@@ -1185,7 +1192,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       clinit.visitFieldInsn(
         asm.Opcodes.PUTSTATIC,
         thisName,
-        androidFieldName,
+        androidFieldName.toString,
         tdesc_creator
       )
     }
@@ -1267,8 +1274,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
         // Additional interface parents based on annotations and other cues
         def newParentForAttr(attr: Symbol): Option[Symbol] = attr match {
-          case SerializableAttr => Some(SerializableClass)
-          case CloneableAttr    => Some(CloneableClass)
           case RemoteAttr       => Some(RemoteInterfaceClass)
           case _                => None
         }
@@ -1371,7 +1376,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
           if (lmoc != NoSymbol) {
             // it must be a top level class (name contains no $s)
             val isCandidateForForwarders = {
-              afterPickler { !(lmoc.name.toString contains '$') && lmoc.hasModuleFlag && !lmoc.isImplClass && !lmoc.isNestedClass }
+              exitingPickler { !(lmoc.name.toString contains '$') && lmoc.hasModuleFlag && !lmoc.isImplClass && !lmoc.isNestedClass }
             }
             if (isCandidateForForwarders) {
               log("Adding static forwarders from '%s' to implementations in '%s'".format(c.symbol, lmoc))
@@ -1699,11 +1704,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
     object jcode {
 
       import asm.Opcodes;
-
-      def aconst(cst: AnyRef) {
-        if (cst == null) { jmethod.visitInsn(Opcodes.ACONST_NULL) }
-        else             { jmethod.visitLdcInsn(cst) }
-      }
 
       final def boolconst(b: Boolean) { iconst(if(b) 1 else 0) }
 
@@ -2150,7 +2150,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
           def getMerged(): scala.collection.Map[Local, List[Interval]] = {
             // TODO should but isn't: unbalanced start(s) of scope(s)
-            val shouldBeEmpty = pending filter { p => val Pair(k, st) = p; st.nonEmpty };
+            val shouldBeEmpty = pending filter { p => val Pair(_, st) = p; st.nonEmpty };
             val merged = mutable.Map[Local, List[Interval]]()
             def addToMerged(lv: Local, start: Label, end: Label) {
               val intv   = Interval(start, end)
@@ -2213,7 +2213,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         }
         // quest for deterministic output that Map.toList doesn't provide (so that ant test.stability doesn't complain).
         val srtd = fltnd.sortBy { kr =>
-          val Triple(name: String, local: Local, intrvl: Interval) = kr
+          val Triple(name: String, _, intrvl: Interval) = kr
 
           Triple(intrvl.start, intrvl.end - intrvl.start, name)  // ie sort by (start, length, name)
         }
@@ -2333,6 +2333,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         import asm.Opcodes
         (instr.category: @scala.annotation.switch) match {
 
+
           case icodes.localsCat =>
           def genLocalInstr() = (instr: @unchecked) match {
             case THIS(_) => jmethod.visitVarInsn(Opcodes.ALOAD, 0)
@@ -2371,7 +2372,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
             case LOAD_MODULE(module) =>
               // assert(module.isModule, "Expected module: " + module)
-              debuglog("generating LOAD_MODULE for: " + module + " flags: " + Flags.flagsToString(module.flags));
+              debuglog("generating LOAD_MODULE for: " + module + " flags: " + module.flagString);
               if (clasz.symbol == module.moduleClass && jMethodName != nme.readResolve.toString) {
                 jmethod.visitVarInsn(Opcodes.ALOAD, 0)
               } else {
@@ -2426,7 +2427,6 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
           case icodes.objsCat =>
           def genObjsInstr() = (instr: @unchecked) match {
-
             case BOX(kind) =>
               val MethodNameAndType(mname, mdesc) = jBoxTo(kind)
               jcode.invokestatic(BoxesRunTime, mname, mdesc)
@@ -2448,8 +2448,8 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
           def genFldsInstr() = (instr: @unchecked) match {
 
             case lf @ LOAD_FIELD(field, isStatic) =>
-              var owner = javaName(lf.hostClass)
-              debuglog("LOAD_FIELD with owner: " + owner + " flags: " + Flags.flagsToString(field.owner.flags))
+              val owner = javaName(lf.hostClass)
+              debuglog("LOAD_FIELD with owner: " + owner + " flags: " + field.owner.flagString)
               val fieldJName = javaName(field)
               val fieldDescr = descriptor(field)
               val opc = if (isStatic) Opcodes.GETSTATIC else Opcodes.GETFIELD
@@ -2867,14 +2867,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
 
     ////////////////////// local vars ///////////////////////
 
-    // def sizeOf(sym: Symbol): Int = sizeOf(toTypeKind(sym.tpe))
-
     def sizeOf(k: TypeKind): Int = if(k.isWideType) 2 else 1
-
-    // def indexOf(m: IMethod, sym: Symbol): Int = {
-    //   val Some(local) = m lookupLocal sym
-    //   indexOf(local)
-    // }
 
     final def indexOf(local: Local): Int = {
       assert(local.index >= 0, "Invalid index for: " + local + "{" + local.## + "}: ")
@@ -3281,8 +3274,8 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       var wasReduced = false
       val entryPoints: List[BasicBlock] = m.startBlock :: (m.exh map (_.startBlock));
 
-      var elided     = mutable.Set.empty[BasicBlock] // debug
-      var newTargets = mutable.Set.empty[BasicBlock] // debug
+      val elided     = mutable.Set.empty[BasicBlock] // debug
+      val newTargets = mutable.Set.empty[BasicBlock] // debug
 
       for (ep <- entryPoints) {
         var reachable = directSuccStar(ep) // this list may contain blocks belonging to jump-chains that we'll skip over

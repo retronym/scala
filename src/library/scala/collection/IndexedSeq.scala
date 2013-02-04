@@ -6,8 +6,6 @@
 **                          |/                                          **
 \*                                                                      */
 
-
-
 package scala.collection
 
 import generic._
@@ -38,4 +36,3 @@ object IndexedSeq extends IndexedSeqFactory[IndexedSeq] {
   implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, IndexedSeq[A]] =
     ReusableCBF.asInstanceOf[GenericCanBuildFrom[A]]
 }
-

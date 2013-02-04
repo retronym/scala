@@ -26,11 +26,11 @@ trait Warnings {
   // These warnings should be pretty quiet unless you're doing
   // something inadvisable.
   protected def lintWarnings = List(
-    // warnDeadCode,
     warnInaccessible,
     warnNullaryOverride,
     warnNullaryUnit,
-    warnAdaptedArgs
+    warnAdaptedArgs,
+    warnInferAny
   )
 
   // Warning groups.
@@ -38,9 +38,13 @@ trait Warnings {
     BooleanSetting("-Xlint", "Enable recommended additional warnings.")
     withPostSetHook (_ => lintWarnings foreach (_.value = true))
   )
-  val warnEverything = (
+
+  /*val warnEverything = */ (
     BooleanSetting("-Ywarn-all", "Enable all -Y warnings.")
-    withPostSetHook (_ => lintWarnings foreach (_.value = true))
+    withPostSetHook { _ =>
+      lint.value = true
+      allWarnings foreach (_.value = true)
+    }
   )
 
   // Individual warnings.
@@ -53,9 +57,10 @@ trait Warnings {
   val warnInaccessible     = BooleanSetting   ("-Ywarn-inaccessible", "Warn about inaccessible types in method signatures.")
   val warnNullaryOverride  = BooleanSetting   ("-Ywarn-nullary-override",
     "Warn when non-nullary overrides nullary, e.g. `def foo()` over `def foo`.")
+  val warnInferAny         = BooleanSetting   ("-Ywarn-infer-any", "Warn when a type argument is inferred to be `Any`.")
 
   // Backward compatibility.
-  def Xwarnfatal    = fatalWarnings
-  def Xchecknull    = warnSelectNullable
-  def Ywarndeadcode = warnDeadCode
+  @deprecated("Use fatalWarnings", "2.11.0") def Xwarnfatal      = fatalWarnings         // used by sbt
+  @deprecated("Use warnSelectNullable", "2.11.0") def Xchecknull = warnSelectNullable    // used by ide
+  @deprecated("Use warnDeadCode", "2.11.0") def Ywarndeadcode    = warnDeadCode          // used by ide
 }

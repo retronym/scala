@@ -19,6 +19,7 @@ import org.apache.tools.ant.util.facade.{FacadeTaskHelper,
                                   ImplementationSpecificArgument}
 
 import scala.tools.nsc.{Global, Settings, CompilerCommand}
+import scala.tools.nsc.interactive.RangePositions
 import scala.tools.nsc.io.{Path => SPath}
 import scala.tools.nsc.reporters.{Reporter, ConsoleReporter}
 
@@ -55,8 +56,6 @@ import scala.tools.nsc.reporters.{Reporter, ConsoleReporter}
  *  - `usejavacp`,
  *  - `failonerror`,
  *  - `scalacdebugging`,
- *  - `assemname`,
- *  - `assemrefs`.
  *
  *  It also takes the following parameters as nested elements:
  *  - `src` (for `srcdir`),
@@ -99,7 +98,7 @@ class Scalac extends ScalaMatchingTask with ScalacShared {
 
   /** Defines valid values for the `target` property. */
   object Target extends PermissibleValue {
-    val values = List("jvm-1.5", "jvm-1.5-fjbg", "jvm-1.5-asm", "jvm-1.6", "jvm-1.7", "msil")
+    val values = List("jvm-1.5", "jvm-1.6", "jvm-1.7")
   }
 
   /** Defines valid values for the `deprecation` and `unchecked` properties. */
@@ -168,11 +167,6 @@ class Scalac extends ScalaMatchingTask with ScalacShared {
   protected var usejavacp: Option[Boolean] = None
   /** Indicates whether compilation errors will fail the build; defaults to true. */
   protected var failonerror: Boolean = true
-
-  // Name of the output assembly (only relevant with -target:msil)
-  protected var assemname: Option[String] = None
-  // List of assemblies referenced by the program (only relevant with -target:msil)
-  protected var assemrefs: Option[String] = None
 
   /** Prints out the files being compiled by the scalac ant task
    *  (not only the number of files). */
@@ -420,9 +414,6 @@ class Scalac extends ScalaMatchingTask with ScalacShared {
    *  @param input The specified flag */
   def setScalacdebugging(input: Boolean) { scalacDebugging = input }
 
-  def setAssemname(input: String) { assemname = Some(input) }
-  def setAssemrefs(input: String) { assemrefs = Some(input) }
-
   /** Sets the `compilerarg` as a nested compilerarg Ant parameter.
    *  @return A compiler argument to be configured. */
   def createCompilerArg(): ImplementationSpecificArgument = {
@@ -518,7 +509,10 @@ class Scalac extends ScalaMatchingTask with ScalacShared {
     new Settings(error)
 
   protected def newGlobal(settings: Settings, reporter: Reporter) =
-    new Global(settings, reporter)
+    if (settings.Yrangepos.value)
+      new Global(settings, reporter) with RangePositions
+    else
+      new Global(settings, reporter)
 
 /*============================================================================*\
 **                           The big execute method                           **
@@ -611,9 +605,6 @@ class Scalac extends ScalaMatchingTask with ScalacShared {
     if (!optimise.isEmpty) settings.optimise.value = optimise.get
     if (!unchecked.isEmpty) settings.unchecked.value = unchecked.get
     if (!usejavacp.isEmpty) settings.usejavacp.value = usejavacp.get
-
-    if (!assemname.isEmpty) settings.assemname.value = assemname.get
-    if (!assemrefs.isEmpty) settings.assemrefs.value = assemrefs.get
 
     val jvmargs = scalacCompilerArgs.getArgs filter (_ startsWith "-J")
     if (!jvmargs.isEmpty) settings.jvmargs.value = jvmargs.toList

@@ -6,14 +6,13 @@
 package scala.reflect
 package internal
 
-import util._
 import pickling.ByteCodecs
 import scala.annotation.tailrec
 import scala.collection.immutable.ListMap
 
 /** AnnotationInfo and its helpers */
 trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
-  import definitions.{ ThrowsClass, StaticAnnotationClass, isMetaAnnotation }
+  import definitions.{ ThrowsClass, ThrowableClass, StaticAnnotationClass, isMetaAnnotation }
 
   // Common annotation code between Symbol and Type.
   // For methods altering the annotation list, on Symbol it mutates
@@ -293,10 +292,6 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
     /** Check whether any of the arguments mention a symbol */
     def refsSymbol(sym: Symbol) = hasArgWhich(_.symbol == sym)
 
-    /** Change all ident's with Symbol "from" to instead use symbol "to" */
-    def substIdentSyms(from: Symbol, to: Symbol) =
-      AnnotationInfo(atp, args map (_ substituteSymbols (List(from), List(to))), assocs) setPos pos
-
     def stringArg(index: Int) = constantAtIndex(index) map (_.stringValue)
     def intArg(index: Int)    = constantAtIndex(index) map (_.intValue)
     def symbolArg(index: Int) = argAtIndex(index) collect {
@@ -330,14 +325,16 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
   implicit val AnnotationTag = ClassTag[AnnotationInfo](classOf[AnnotationInfo])
 
   object UnmappableAnnotation extends CompleteAnnotationInfo(NoType, Nil, Nil)
-  
+
+  object ErroneousAnnotation extends CompleteAnnotationInfo(ErrorType, Nil, Nil)
+
   /** Extracts symbol of thrown exception from AnnotationInfo.
-    * 
+    *
     * Supports both “old-style” `@throws(classOf[Exception])`
     * as well as “new-stye” `@throws[Exception]("cause")` annotations.
     */
   object ThrownException {
-    def unapply(ann: AnnotationInfo): Option[Symbol] = 
+    def unapply(ann: AnnotationInfo): Option[Symbol] = {
       ann match {
         case AnnotationInfo(tpe, _, _) if tpe.typeSymbol != ThrowsClass =>
           None
@@ -345,8 +342,11 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
         case AnnotationInfo(_, List(Literal(Constant(tpe: Type))), _) =>
           Some(tpe.typeSymbol)
         // new-style: @throws[Exception], @throws[Exception]("cause")
-        case AnnotationInfo(TypeRef(_, _, args), _, _) =>
-          Some(args.head.typeSymbol)
+        case AnnotationInfo(TypeRef(_, _, arg :: _), _, _) =>
+          Some(arg.typeSymbol)
+        case AnnotationInfo(TypeRef(_, _, Nil), _, _) =>
+          Some(ThrowableClass)
       }
+    }
   }
 }

@@ -7,10 +7,7 @@ package scala.tools.nsc
 package ast
 
 import symtab._
-import reporters._
-import scala.reflect.internal.util.{Position, NoPosition}
 import util.DocStrings._
-import scala.reflect.internal.Chars._
 import scala.collection.mutable
 
 /*
@@ -123,8 +120,6 @@ trait DocComments { self: Global =>
     }
     getDocComment(sym) map getUseCases getOrElse List()
   }
-
-  def useCases(sym: Symbol): List[(Symbol, String, Position)] = useCases(sym, sym.enclClass)
 
   /** Returns the javadoc format of doc comment string `s`, including wiki expansion
    */
@@ -325,7 +320,7 @@ trait DocComments { self: Global =>
   }
 
   /** Expand variable occurrences in string `str`, until a fix point is reached or
-   *  a expandLimit is exceeded.
+   *  an expandLimit is exceeded.
    *
    *  @param str   The string to be expanded
    *  @param sym   The symbol for which doc comments are generated
@@ -465,7 +460,7 @@ trait DocComments { self: Global =>
         //val (classes, pkgs) = site.ownerChain.span(!_.isPackageClass)
         //val sites = (classes ::: List(pkgs.head, rootMirror.RootClass)))
         //findIn(sites)
-        findIn(site.ownerChain ::: List(definitions.EmptyPackage))
+        findIn(site.ownerChain ::: List(rootMirror.EmptyPackage))
       }
 
       def getType(str: String, variable: String): Type = {

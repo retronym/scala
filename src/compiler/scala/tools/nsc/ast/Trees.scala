@@ -68,8 +68,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** Factory method for a primary constructor super call `super.<init>(args_1)...(args_n)`
    */
   def PrimarySuperCall(argss: List[List[Tree]]): Tree = argss match {
-    case Nil        => Apply(gen.mkSuperSelect, Nil)
-    case xs :: rest => rest.foldLeft(Apply(gen.mkSuperSelect, xs): Tree)(Apply.apply)
+    case Nil        => Apply(gen.mkSuperInitCall, Nil)
+    case xs :: rest => rest.foldLeft(Apply(gen.mkSuperInitCall, xs): Tree)(Apply.apply)
   }
 
     /** Generates a template with constructor corresponding to
@@ -123,7 +123,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
         // convert (implicit ... ) to ()(implicit ... ) if its the only parameter section
         if (vparamss1.isEmpty || !vparamss1.head.isEmpty && vparamss1.head.head.mods.isImplicit)
           vparamss1 = List() :: vparamss1;
-        val superRef: Tree = atPos(superPos)(gen.mkSuperSelect)
+        val superRef: Tree = atPos(superPos)(gen.mkSuperInitCall)
         val superCall = pendingSuperCall // we can't know in advance which of the parents will end up as a superclass
                                          // this requires knowing which of the parents is a type macro and which is not
                                          // and that's something that cannot be found out before typer
@@ -343,9 +343,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
                 if (tpt.original != null)
                   transform(tpt.original)
                 else if (tpt.tpe != null && (tpt.wasEmpty || (tpt.tpe exists (tp => locals contains tp.typeSymbol)))) {
-                  val dupl = tpt.duplicate
-                  dupl.tpe = null
-                  dupl
+                  tpt.duplicate.clearType()
                 }
                 else tree
               case TypeApply(fn, args) if args map transform exists (_.isEmpty) =>
@@ -354,10 +352,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
                 tree
               case _ =>
                 val dupl = tree.duplicate
-                if (tree.hasSymbol && (!localOnly || (locals contains tree.symbol)) && !(keepLabels && tree.symbol.isLabel))
+                if (tree.hasSymbolField && (!localOnly || (locals contains tree.symbol)) && !(keepLabels && tree.symbol.isLabel))
                   dupl.symbol = NoSymbol
-                dupl.tpe = null
-                dupl
+                dupl.clearType()
             }
           }
       }

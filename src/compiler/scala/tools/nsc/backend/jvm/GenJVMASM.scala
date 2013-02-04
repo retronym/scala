@@ -20,7 +20,7 @@ trait GenJVMASM {
   import definitions._
 
   protected def outputDirectory(sym: Symbol): AbstractFile =
-    settings.outputDirs outputDirFor beforeFlatten(sym.sourceFile)
+    settings.outputDirs outputDirFor enteringFlatten(sym.sourceFile)
 
   protected def getFile(base: AbstractFile, clsName: String, suffix: String): AbstractFile = {
     var dir = base
@@ -65,7 +65,7 @@ trait GenJVMASM {
     // At this point it's a module with a main-looking method, so either succeed or warn that it isn't.
     hasApproximate && {
       // Before erasure so we can identify generic mains.
-      beforeErasure {
+      enteringErasure {
         val companion     = sym.linkedClassOfClass
         val companionMain = companion.tpe.member(nme.main)
 

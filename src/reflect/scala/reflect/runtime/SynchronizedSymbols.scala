@@ -83,9 +83,6 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
     override protected def createPackageObjectClassSymbol(pos: Position, newFlags: Long): PackageObjectClassSymbol =
       new PackageObjectClassSymbol(this, pos) with SynchronizedClassSymbol initFlags newFlags
 
-    override protected def createTermSymbol(name: TermName, pos: Position, newFlags: Long): TermSymbol =
-      new TermSymbol(this, pos, name) with SynchronizedTermSymbol initFlags newFlags
-
     override protected def createMethodSymbol(name: TermName, pos: Position, newFlags: Long): MethodSymbol =
       new MethodSymbol(this, pos, name) with SynchronizedMethodSymbol initFlags newFlags
 
@@ -118,7 +115,8 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
     override def name_=(x: Name) = synchronized { super.name_=(x) }
     override def rawname = synchronized { super.rawname }
     override def typeConstructor: Type = synchronized { super.typeConstructor }
-    override def tpe: Type = synchronized { super.tpe }
+    override def tpe_* : Type = synchronized { super.tpe_* }
+    override def tpeHK : Type = synchronized { super.tpeHK }
   }
 
   trait SynchronizedClassSymbol extends ClassSymbol with SynchronizedTypeSymbol {

@@ -8,8 +8,7 @@ package doc
 package html
 package page
 
-import model._
-import scala.xml.{NodeSeq, Unparsed}
+import scala.xml.NodeSeq
 import java.io.File
 
 class Source(sourceFile: File) extends HtmlPage {

@@ -245,10 +245,10 @@ abstract class LambdaLift extends InfoTransform {
           freshen(sym.name + nme.NAME_JOIN_STRING + sym.owner.name + nme.NAME_JOIN_STRING)
         } else {
           // SI-5652 If the lifted symbol is accessed from an inner class, it will be made public. (where?)
-          //         Generating a a unique name, mangled with the enclosing class name, avoids a VerifyError
+          //         Generating a unique name, mangled with the enclosing class name, avoids a VerifyError
           //         in the case that a sub-class happens to lifts out a method with the *same* name.
-          val name = freshen(sym.name + nme.NAME_JOIN_STRING)
-          if (originalName.isTermName && !sym.enclClass.isImplClass && calledFromInner(sym)) nme.expandedName(name, sym.enclClass)
+          val name = freshen("" + sym.name + nme.NAME_JOIN_STRING)
+          if (originalName.isTermName && !sym.enclClass.isImplClass && calledFromInner(sym)) nme.expandedName(name.toTermName, sym.enclClass)
           else name
         }
       }
@@ -290,7 +290,7 @@ abstract class LambdaLift extends InfoTransform {
           proxies(owner) =
             for (fv <- freeValues.toList) yield {
               val proxyName = proxyNames.getOrElse(fv, fv.name)
-              val proxy = owner.newValue(proxyName, owner.pos, newFlags) setInfo fv.info
+              val proxy = owner.newValue(proxyName.toTermName, owner.pos, newFlags) setInfo fv.info
               if (owner.isClass) owner.info.decls enter proxy
               proxy
             }
@@ -451,7 +451,7 @@ abstract class LambdaLift extends InfoTransform {
                 }
               case arg => arg
             }
-            
+
             /** Wrap expr argument in new *Ref(..) constructor. But try/catch
              * is a problem because a throw will clear the stack and post catch
              * we would expect the partially-constructed object to be on the stack
@@ -459,11 +459,11 @@ abstract class LambdaLift extends InfoTransform {
              * search for "leaf" result expressions where we know its safe
              * to put the new *Ref(..) constructor or, if all else fails, transform
              * an expr to { val temp=expr; new *Ref(temp) }.
-             * The reason we narrowly look for try/catch in captured var definitions 
+             * The reason we narrowly look for try/catch in captured var definitions
              * is because other try/catch expression have already been lifted
              * see SI-6863
              */
-            def refConstr(expr: Tree): Tree = typer.typedPos(expr.pos) {expr match {
+            def refConstr(expr: Tree): Tree = typer.typedPos(expr.pos)(expr match {
               // very simple expressions can be wrapped in a new *Ref(expr) because they can't have
               // a try/catch in final expression position.
               case Ident(_) | Apply(_, _) | Literal(_) | New(_) | Select(_, _) | Throw(_) | Assign(_, _) | ValDef(_, _, _, _) | Return(_) | EmptyTree =>
@@ -483,9 +483,9 @@ abstract class LambdaLift extends InfoTransform {
                 debuglog("assigning expr to temp: " + (expr.pos))
                 val tempSym = currentOwner.newValue(unit.freshTermName("temp"), expr.pos) setInfo expr.tpe
                 val tempDef = ValDef(tempSym, expr) setPos expr.pos
-                val tempRef = Ident(tempSym) setPos expr.pos 
+                val tempRef = Ident(tempSym) setPos expr.pos
                 Block(tempDef, New(sym.tpe, tempRef))
-            }}
+            })
             def refConstrCase(cdef: CaseDef): CaseDef =
               CaseDef(cdef.pat, cdef.guard, refConstr(cdef.body))
 

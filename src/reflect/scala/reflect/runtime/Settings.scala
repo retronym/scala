@@ -32,7 +32,6 @@ private[reflect] class Settings extends MutableSettings {
   val Xexperimental     = new BooleanSetting(false)
   val XfullLubs         = new BooleanSetting(false)
   val XnoPatmatAnalysis = new BooleanSetting(false)
-  val XoldPatmat        = new BooleanSetting(false)
   val Xprintpos         = new BooleanSetting(false)
   val Ynotnull          = new BooleanSetting(false)
   val Yshowsymkinds     = new BooleanSetting(false)
@@ -43,6 +42,7 @@ private[reflect] class Settings extends MutableSettings {
   val printtypes        = new BooleanSetting(false)
   val uniqid            = new BooleanSetting(false)
   val verbose           = new BooleanSetting(false)
+  val breakCycles       = new BooleanSetting(false)
   val companionsInPkgObjs = new BooleanSetting(false)
 
   val Yrecursion        = new IntSetting(0)

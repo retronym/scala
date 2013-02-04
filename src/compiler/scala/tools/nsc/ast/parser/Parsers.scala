@@ -9,7 +9,8 @@
 package scala.tools.nsc
 package ast.parser
 
-import scala.collection.mutable.{ListBuffer, StringBuilder}
+import scala.collection.{ mutable, immutable }
+import mutable.{ ListBuffer, StringBuilder }
 import scala.reflect.internal.{ ModifierFlags => Flags }
 import scala.reflect.internal.Chars.{ isScalaLetter }
 import scala.reflect.internal.util.{ SourceFile, OffsetPosition }
@@ -94,7 +95,7 @@ trait ParsersCommon extends ScannersCommon {
  *  <ol>
  *    <li>
  *      Places all pattern variables in Bind nodes. In a pattern, for
- *      identifiers <code>x</code>:<pre>
+ *      identifiers `x`:<pre>
  *                 x  => x @ _
  *               x:T  => x @ (_ : T)</pre>
  *    </li>
@@ -167,7 +168,6 @@ self =>
 
     object symbXMLBuilder extends SymbolicXMLBuilder(this, preserveWS = true) { // DEBUG choices
       val global: self.global.type = self.global
-      def freshName(prefix: String): Name = SourceFileParser.this.freshName(prefix)
     }
 
     def xmlLiteral : Tree = xmlp.xLiteral
@@ -299,11 +299,7 @@ self =>
       inScalaPackage = false
       currentPackage = ""
     }
-    private lazy val primitiveNames: Set[Name] = tpnme.ScalaValueNames.toSet
-
-    private def inScalaRootPackage       = inScalaPackage && currentPackage == "scala"
-    private def isScalaArray(name: Name) = inScalaRootPackage && name == tpnme.Array
-    private def isPrimitiveType(name: Name) = inScalaRootPackage && primitiveNames(name)
+    private def inScalaRootPackage = inScalaPackage && currentPackage == "scala"
 
     def parseStartRule: () => Tree
 
@@ -380,7 +376,6 @@ self =>
        *  }
        *  }}}
        */
-      import definitions._
 
       def emptyPkg    = atPos(0, 0, 0) { Ident(nme.EMPTY_PACKAGE_NAME) }
       def emptyInit   = DefDef(
@@ -389,7 +384,7 @@ self =>
         Nil,
         ListOfNil,
         TypeTree(),
-        Block(List(Apply(gen.mkSuperSelect, Nil)), Literal(Constant(())))
+        Block(List(Apply(gen.mkSuperInitCall, Nil)), Literal(Constant(())))
       )
 
       // def main
@@ -468,7 +463,7 @@ self =>
 
 /* ------------- ERROR HANDLING ------------------------------------------- */
 
-    var assumedClosingParens = scala.collection.mutable.Map(RPAREN -> 0, RBRACKET -> 0, RBRACE -> 0)
+    val assumedClosingParens = mutable.Map(RPAREN -> 0, RBRACKET -> 0, RBRACE -> 0)
 
     private var inFunReturnType = false
     @inline private def fromWithinReturnType[T](body: => T): T = {
@@ -645,8 +640,6 @@ self =>
       case _ => false
     }
 
-    def isTypeIntro: Boolean = isTypeIntroToken(in.token)
-
     def isStatSeqEnd = in.token == RBRACE || in.token == EOF
 
     def isStatSep(token: Int): Boolean =
@@ -708,10 +701,10 @@ self =>
       tree match {
         case Ident(name) =>
           removeAsPlaceholder(name)
-          makeParam(name, TypeTree() setPos o2p(tree.pos.endOrPoint))
+          makeParam(name.toTermName, TypeTree() setPos o2p(tree.pos.endOrPoint))
         case Typed(Ident(name), tpe) if tpe.isType => // get the ident!
           removeAsPlaceholder(name)
-          makeParam(name, tpe)
+          makeParam(name.toTermName, tpe)
         case _ =>
           syntaxError(tree.pos, "not a legal formal parameter", false)
           makeParam(nme.ERROR, errorTypeTree setPos o2p(tree.pos.endOrPoint))
@@ -770,10 +763,6 @@ self =>
         }
       }
 
-    def checkSize(kind: String, size: Int, max: Int) {
-      if (size > max) syntaxError("too many "+kind+", maximum = "+max, false)
-    }
-
     def checkAssoc(offset: Int, op: Name, leftAssoc: Boolean) =
       if (treeInfo.isLeftAssoc(op) != leftAssoc)
         syntaxError(
@@ -794,7 +783,7 @@ self =>
         val rPos = top.pos
         val end = if (rPos.isDefined) rPos.endOrPoint else opPos.endOrPoint
         top = atPos(start, opinfo.offset, end) {
-          makeBinop(isExpr, opinfo.operand, opinfo.operator, top, opPos)
+          makeBinop(isExpr, opinfo.operand, opinfo.operator.toTermName, top, opPos)
         }
       }
       top
@@ -923,7 +912,7 @@ self =>
       )
 
       def compoundTypeRest(t: Tree): Tree = {
-        var ts = new ListBuffer[Tree] += t
+        val ts = new ListBuffer[Tree] += t
         while (in.token == WITH) {
           in.nextToken()
           ts += annotType()
@@ -1135,16 +1124,7 @@ self =>
       })
     }
 
-    private def stringOp(t: Tree, op: TermName) = {
-      val str = in.strVal
-      in.nextToken()
-      if (str.length == 0) t
-      else atPos(t.pos.startOrPoint) {
-        Apply(Select(t, op), List(Literal(Constant(str))))
-      }
-    }
-
-    private def interpolatedString(inPattern: Boolean = false): Tree = atPos(in.offset) {
+    private def interpolatedString(inPattern: Boolean): Tree = atPos(in.offset) {
       val start = in.offset
       val interpolator = in.name
 
@@ -1228,15 +1208,6 @@ self =>
 
 /* ----------- EXPRESSIONS ------------------------------------------------ */
 
-    /** {{{
-     *  EqualsExpr ::= `=' Expr
-     *  }}}
-     */
-    def equalsExpr(): Tree = {
-      accept(EQUALS)
-      expr()
-    }
-
     def condExpr(): Tree = {
       if (in.token == LPAREN) {
         in.nextToken()
@@ -1280,7 +1251,7 @@ self =>
     def expr(): Tree = expr(Local)
 
     def expr(location: Int): Tree = {
-      var savedPlaceholderParams = placeholderParams
+      val savedPlaceholderParams = placeholderParams
       placeholderParams = List()
       var res = expr0(location)
       if (!placeholderParams.isEmpty && !isWildcard(res)) {
@@ -1330,26 +1301,24 @@ self =>
         parseTry
       case WHILE =>
         def parseWhile = {
-          val start = in.offset
           atPos(in.skipToken()) {
             val lname: Name = freshTermName(nme.WHILE_PREFIX)
             val cond = condExpr()
             newLinesOpt()
             val body = expr()
-            makeWhile(lname, cond, body)
+            makeWhile(lname.toTermName, cond, body)
           }
         }
         parseWhile
       case DO =>
         def parseDo = {
-          val start = in.offset
           atPos(in.skipToken()) {
             val lname: Name = freshTermName(nme.DO_WHILE_PREFIX)
             val body = expr()
             if (isStatSep) in.nextToken()
             accept(WHILE)
             val cond = condExpr()
-            makeDoWhile(lname, body, cond)
+            makeDoWhile(lname.toTermName, body, cond)
           }
         }
         parseDo
@@ -1508,7 +1477,7 @@ self =>
     def prefixExpr(): Tree = {
       if (isUnaryOp) {
         atPos(in.offset) {
-          val name = nme.toUnaryName(rawIdent())
+          val name = nme.toUnaryName(rawIdent().toTermName)
           if (name == nme.UNARY_- && isNumericLit)
             simpleExprRest(atPos(in.offset)(literal(isNegated = true)), canApply = true)
           else
@@ -1546,7 +1515,7 @@ self =>
             val pname = freshName("x$")
             in.nextToken()
             val id = atPos(start) (Ident(pname))
-            val param = atPos(id.pos.focus){ makeSyntheticParam(pname) }
+            val param = atPos(id.pos.focus){ makeSyntheticParam(pname.toTermName) }
             placeholderParams = param :: placeholderParams
             id
           case LPAREN =>
@@ -1615,14 +1584,9 @@ self =>
      *  }}}
      */
     def argumentExprs(): List[Tree] = {
-      def args(): List[Tree] = commaSeparated {
-        val maybeNamed = isIdent
-        expr() match {
-          case a @ Assign(id, rhs) if maybeNamed =>
-            atPos(a.pos) { AssignOrNamedArg(id, rhs) }
-          case e => e
-        }
-      }
+      def args(): List[Tree] = commaSeparated(
+        if (isIdent) treeInfo.assignmentToMaybeNamedArg(expr()) else expr()
+      )
       in.token match {
         case LBRACE   => List(blockExpr())
         case LPAREN   => inParens(if (in.token == RPAREN) Nil else args())
@@ -1806,7 +1770,6 @@ self =>
        *  }}}
        */
       def pattern2(): Tree = {
-        val nameOffset = in.offset
         val p = pattern3()
 
         if (in.token != AT) p
@@ -1919,7 +1882,7 @@ self =>
         val start = in.offset
         in.token match {
           case IDENTIFIER | BACKQUOTED_IDENT | THIS =>
-            var t = stableId()
+            val t = stableId()
             in.token match {
               case INTLIT | LONGLIT | FLOATLIT | DOUBLELIT =>
                 t match {
@@ -1981,7 +1944,6 @@ self =>
 
     /** Default entry points into some pattern contexts. */
     def pattern(): Tree = noSeq.pattern()
-    def patterns(): List[Tree] = noSeq.patterns()
     def seqPatterns(): List[Tree] = seqOK.patterns()
     def xmlSeqPatterns(): List[Tree] = xmlSeqOK.patterns() // Called from xml parser
     def argumentPatterns(): List[Tree] = inParens {
@@ -1995,11 +1957,11 @@ self =>
     /** Drop `private` modifier when followed by a qualifier.
      *  Contract `abstract` and `override` to ABSOVERRIDE
      */
-    private def normalize(mods: Modifiers): Modifiers =
+    private def normalizeModifers(mods: Modifiers): Modifiers =
       if (mods.isPrivate && mods.hasAccessBoundary)
-        normalize(mods &~ Flags.PRIVATE)
+        normalizeModifers(mods &~ Flags.PRIVATE)
       else if (mods hasAllFlags (Flags.ABSTRACT | Flags.OVERRIDE))
-        normalize(mods &~ (Flags.ABSTRACT | Flags.OVERRIDE) | Flags.ABSOVERRIDE)
+        normalizeModifers(mods &~ (Flags.ABSTRACT | Flags.OVERRIDE) | Flags.ABSOVERRIDE)
       else
         mods
 
@@ -2044,7 +2006,7 @@ self =>
      *  AccessModifier ::= (private | protected) [AccessQualifier]
      *  }}}
      */
-    def accessModifierOpt(): Modifiers = normalize {
+    def accessModifierOpt(): Modifiers = normalizeModifers {
       in.token match {
         case m @ (PRIVATE | PROTECTED)  => in.nextToken() ; accessQualifierOpt(Modifiers(flagTokens(m)))
         case _                          => NoMods
@@ -2058,7 +2020,7 @@ self =>
      *              |  override
      *  }}}
      */
-    def modifiers(): Modifiers = normalize {
+    def modifiers(): Modifiers = normalizeModifers {
       def loop(mods: Modifiers): Modifiers = in.token match {
         case PRIVATE | PROTECTED =>
           loop(accessQualifierOpt(addMod(mods, flagTokens(in.token), tokenRange(in))))
@@ -2169,7 +2131,7 @@ self =>
             expr()
           } else EmptyTree
         atPos(start, if (name == nme.ERROR) start else nameOffset) {
-          ValDef((mods | implicitmod | bynamemod) withAnnotations annots, name, tpt, default)
+          ValDef((mods | implicitmod | bynamemod) withAnnotations annots, name.toTermName, tpt, default)
         }
       }
       def paramClause(): List[ValDef] = {
@@ -2186,8 +2148,8 @@ self =>
       val start = in.offset
       newLineOptWhenFollowedBy(LPAREN)
       if (ofCaseClass && in.token != LPAREN)
-        deprecationWarning(in.lastOffset, "case classes without a parameter list have been deprecated;\n"+
-                           "use either case objects or case classes with `()' as parameter list.")
+        syntaxError(in.lastOffset, "case classes without a parameter list are not allowed;\n"+
+                                   "use either case objects or case classes with an explicit `()' as a parameter list.")
       while (implicitmod == 0 && in.token == LPAREN) {
         in.nextToken()
         vds += paramClause()
@@ -2626,7 +2588,6 @@ self =>
       in.nextToken()
       newLinesOpt()
       atPos(start, in.offset) {
-        val nameOffset = in.offset
         val name = identForType()
         // @M! a type alias as well as an abstract type may declare type parameters
         val tparams = typeParamClauseOpt(name, null)
@@ -2730,7 +2691,7 @@ self =>
       atPos(start, if (name == nme.ERROR) start else nameOffset) {
         val mods1 = if (in.token == SUBTYPE) mods | Flags.DEFERRED else mods
         val template = templateOpt(mods1, name, NoMods, Nil, tstart)
-        ModuleDef(mods1, name, template)
+        ModuleDef(mods1, name.toTermName, template)
       }
     }
 
@@ -2901,7 +2862,6 @@ self =>
      *  }}}
      */
     def packaging(start: Int): Tree = {
-      val nameOffset = in.offset
       val pkg = pkgQualId()
       val stats = inBracesOrNil(topStatSeq())
       makePackaging(start, pkg, stats)
@@ -3111,7 +3071,6 @@ self =>
               ts ++= topStatSeq()
             }
           } else {
-            val nameOffset = in.offset
             in.flushDoc
             val pkg = pkgQualId()
 

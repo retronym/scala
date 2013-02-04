@@ -159,9 +159,9 @@ abstract class UnPickler {
       result
     }
 
-    /** If entry at <code>i</code> is undefined, define it by performing
-     *  operation <code>op</code> with <code>readIndex at start of i'th
-     *  entry. Restore <code>readIndex</code> afterwards.
+    /** If entry at `i` is undefined, define it by performing
+     *  operation `op` with `readIndex at start of i'th
+     *  entry. Restore `readIndex` afterwards.
      */
     protected def at[T <: AnyRef](i: Int, op: () => T): T = {
       var r = entries(i)
@@ -186,13 +186,12 @@ abstract class UnPickler {
         case _ => errorBadSignature("bad name tag: " + tag)
       }
     }
-    protected def readTermName(): TermName = readName().toTermName
-    protected def readTypeName(): TypeName = readName().toTypeName
+    private def readEnd() = readNat() + readIndex
 
     /** Read a symbol */
     protected def readSymbol(): Symbol = {
       val tag   = readByte()
-      val end   = readNat() + readIndex
+      val end   = readEnd()
       def atEnd = readIndex == end
 
       def readExtSymbol(): Symbol = {
@@ -325,7 +324,7 @@ abstract class UnPickler {
      */
     protected def readType(forceProperType: Boolean = false): Type = {
       val tag = readByte()
-      val end = readNat() + readIndex
+      val end = readEnd()
       (tag: @switch) match {
         case NOtpe =>
           NoType
@@ -344,7 +343,7 @@ abstract class UnPickler {
         case TYPEREFtpe =>
           val pre = readTypeRef()
           val sym = readSymbolRef()
-          var args = until(end, readTypeRef)
+          val args = until(end, readTypeRef)
           TypeRef(pre, sym, args)
         case TYPEBOUNDStpe =>
           TypeBounds(readTypeRef(), readTypeRef())
@@ -431,7 +430,7 @@ abstract class UnPickler {
     protected def readChildren() {
       val tag = readByte()
       assert(tag == CHILDREN)
-      val end = readNat() + readIndex
+      val end = readEnd()
       val target = readSymbolRef()
       while (readIndex != end) target addChild readSymbolRef()
     }
@@ -450,7 +449,7 @@ abstract class UnPickler {
      */
     private def readArrayAnnot() = {
       readByte() // skip the `annotargarray` tag
-      val end = readNat() + readIndex
+      val end = readEnd()
       until(end, () => readClassfileAnnotArg(readNat())).toArray(JavaArgumentTag)
     }
     protected def readClassfileAnnotArg(i: Int): ClassfileAnnotArg = bytes(index(i)) match {
@@ -486,7 +485,7 @@ abstract class UnPickler {
       val tag = readByte()
       if (tag != SYMANNOT)
         errorBadSignature("symbol annotation expected ("+ tag +")")
-      val end = readNat() + readIndex
+      val end = readEnd()
       val target = readSymbolRef()
       target.addAnnotation(readAnnotationInfo(end))
     }
@@ -497,7 +496,7 @@ abstract class UnPickler {
       val tag = readByte()
       if (tag != ANNOTINFO)
         errorBadSignature("annotation expected (" + tag + ")")
-      val end = readNat() + readIndex
+      val end = readEnd()
       readAnnotationInfo(end)
     }
 
@@ -506,7 +505,7 @@ abstract class UnPickler {
       val outerTag = readByte()
       if (outerTag != TREE)
         errorBadSignature("tree expected (" + outerTag + ")")
-      val end = readNat() + readIndex
+      val end = readEnd()
       val tag = readByte()
       val tpe = if (tag == EMPTYtree) NoType else readTypeRef()
 
@@ -764,7 +763,8 @@ abstract class UnPickler {
       val tag = readNat()
       if (tag != MODIFIERS)
         errorBadSignature("expected a modifiers tag (" + tag + ")")
-      val end = readNat() + readIndex
+
+      readEnd()
       val pflagsHi = readNat()
       val pflagsLo = readNat()
       val pflags = (pflagsHi.toLong << 32) + pflagsLo
@@ -796,7 +796,6 @@ abstract class UnPickler {
     protected def readTreeRef(): Tree                 = at(readNat(), readTree)
 
     protected def readTypeNameRef(): TypeName         = readNameRef().toTypeName
-    protected def readTermNameRef(): TermName         = readNameRef().toTermName
 
     protected def readTemplateRef(): Template =
       readTreeRef() match {
@@ -843,7 +842,6 @@ abstract class UnPickler {
      *  error reporting, so we rely on the typechecker to report the error).
      */
     def toTypeError(e: MissingRequirementError) = {
-      // e.printStackTrace()
       new TypeError(e.msg)
     }
 
@@ -853,7 +851,7 @@ abstract class UnPickler {
       private val p = phase
       override def complete(sym: Symbol) : Unit = try {
         val tp = at(i, () => readType(sym.isTerm)) // after NMT_TRANSITION, revert `() => readType(sym.isTerm)` to `readType`
-        atPhase(p) (sym setInfo tp)
+        enteringPhase(p) (sym setInfo tp)
         if (currentRunId != definedAtRunId)
           sym.setInfo(adaptToNewRunMap(tp))
       }
@@ -871,7 +869,7 @@ abstract class UnPickler {
         super.complete(sym)
         var alias = at(j, readSymbol)
         if (alias.isOverloaded)
-          alias = atPhase(picklerPhase)((alias suchThat (alt => sym.tpe =:= sym.owner.thisType.memberType(alt))))
+          alias = enteringPhase(picklerPhase)((alias suchThat (alt => sym.tpe =:= sym.owner.thisType.memberType(alt))))
 
         sym.asInstanceOf[TermSymbol].setAlias(alias)
       }

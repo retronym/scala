@@ -26,15 +26,11 @@ abstract class TreeBuilder {
   def o2p(offset: Int): Position
   def r2p(start: Int, point: Int, end: Int): Position
 
-  def rootId(name: Name)       = gen.rootId(name)
   def rootScalaDot(name: Name) = gen.rootScalaDot(name)
   def scalaDot(name: Name)     = gen.scalaDot(name)
   def scalaAnyRefConstr        = scalaDot(tpnme.AnyRef)
-  def scalaAnyValConstr        = scalaDot(tpnme.AnyVal)
-  def scalaAnyConstr           = scalaDot(tpnme.Any)
   def scalaUnitConstr          = scalaDot(tpnme.Unit)
   def productConstr            = scalaDot(tpnme.Product)
-  def productConstrN(n: Int)   = scalaDot(newTypeName("Product" + n))
   def serializableConstr       = scalaDot(tpnme.Serializable)
 
   def convertToTypeName(t: Tree) = gen.convertToTypeName(t)
@@ -175,15 +171,10 @@ abstract class TreeBuilder {
 
   /** Create tree representing (unencoded) binary operation expression or pattern. */
   def makeBinop(isExpr: Boolean, left: Tree, op: TermName, right: Tree, opPos: Position): Tree = {
-    def mkNamed(args: List[Tree]) =
-      if (isExpr) args map {
-        case a @ Assign(id @ Ident(name), rhs) =>
-          atPos(a.pos) { AssignOrNamedArg(id, rhs) }
-        case e => e
-      } else args
+    def mkNamed(args: List[Tree]) = if (isExpr) args map treeInfo.assignmentToMaybeNamedArg else args
     val arguments = right match {
       case Parens(args) => mkNamed(args)
-      case _ => List(right)
+      case _            => List(right)
     }
     if (isExpr) {
       if (treeInfo.isLeftAssoc(op)) {
@@ -191,7 +182,7 @@ abstract class TreeBuilder {
       } else {
         val x = freshTermName()
         Block(
-          List(ValDef(Modifiers(SYNTHETIC), x, TypeTree(), stripParens(left))),
+          List(ValDef(Modifiers(SYNTHETIC | ARTIFACT), x, TypeTree(), stripParens(left))),
           Apply(atPos(opPos union right.pos) { Select(stripParens(right), op.encode) }, List(Ident(x))))
       }
     } else {
@@ -385,13 +376,6 @@ abstract class TreeBuilder {
     def makeCombination(pos: Position, meth: TermName, qual: Tree, pat: Tree, body: Tree): Tree =
       Apply(Select(qual, meth) setPos qual.pos, List(makeClosure(pos, pat, body))) setPos pos
 
-    /** Optionally, if pattern is a `Bind`, the bound name, otherwise None.
-     */
-    def patternVar(pat: Tree): Option[Name] = pat match {
-      case Bind(name, _) => Some(name)
-      case _ => None
-    }
-
     /** If `pat` is not yet a `Bind` wrap it in one with a fresh name
      */
     def makeBind(pat: Tree): Tree = pat match {
@@ -457,18 +441,6 @@ abstract class TreeBuilder {
   def makeForYield(enums: List[Enumerator], body: Tree): Tree =
     makeFor(nme.map, nme.flatMap, enums, body)
 
-  /** Create tree for a lifted expression XX-LIFTING
-   */
-  def makeLifted(gs: List[ValFrom], body: Tree): Tree = {
-    def combine(gs: List[ValFrom]): ValFrom = (gs: @unchecked) match {
-      case g :: Nil => g
-      case ValFrom(pos1, pat1, rhs1) :: gs2 =>
-        val ValFrom(pos2, pat2, rhs2) = combine(gs2)
-        ValFrom(pos1, makeTuple(List(pat1, pat2), false), Apply(Select(rhs1, nme.zip), List(rhs2)))
-    }
-    makeForYield(List(combine(gs)), body)
-  }
-
   /** Create tree for a pattern alternative */
   def makeAlternative(ts: List[Tree]): Tree = {
     def alternatives(t: Tree): List[Tree] = t match {
@@ -503,7 +475,7 @@ abstract class TreeBuilder {
   def makeCatchFromExpr(catchExpr: Tree): CaseDef = {
     val binder   = freshTermName("x")
     val pat      = Bind(binder, Typed(Ident(nme.WILDCARD), Ident(tpnme.Throwable)))
-    val catchDef = ValDef(NoMods, freshTermName("catchExpr"), TypeTree(), catchExpr)
+    val catchDef = ValDef(Modifiers(ARTIFACT), freshTermName("catchExpr"), TypeTree(), catchExpr)
     val catchFn  = Ident(catchDef.name)
     val body     = atPos(catchExpr.pos.makeTransparent)(Block(
       List(catchDef),
@@ -574,7 +546,7 @@ abstract class TreeBuilder {
           val tmp = freshTermName()
           val firstDef =
             atPos(matchExpr.pos) {
-              ValDef(Modifiers(PrivateLocal | SYNTHETIC | (mods.flags & LAZY)),
+              ValDef(Modifiers(PrivateLocal | SYNTHETIC | ARTIFACT | (mods.flags & LAZY)),
                      tmp, TypeTree(), matchExpr)
             }
           var cnt = 0

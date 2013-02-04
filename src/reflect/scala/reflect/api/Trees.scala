@@ -89,6 +89,12 @@ trait Trees { self: Universe =>
      */
     def isEmpty: Boolean
 
+    /** Is this tree one of the empty trees?
+     *
+     *  @see `isEmpty`
+     */
+    def nonEmpty: Boolean
+
     /** Can this tree carry attributes (i.e. symbols, types or positions)?
      *  Typically the answer is yes, except for the `EmptyTree` null object and
      *  two special singletons: `emptyValDef` and `pendingSuperCall`.
@@ -2921,7 +2927,8 @@ trait Trees { self: Universe =>
     def transform(tree: Tree): Tree = itransform(this, tree)
 
     /** Transforms a list of trees. */
-    def transformTrees(trees: List[Tree]): List[Tree] = trees mapConserve (transform(_))
+    def transformTrees(trees: List[Tree]): List[Tree] =
+      if (trees.isEmpty) Nil else trees mapConserve transform
 
     /** Transforms a `Template`. */
     def transformTemplate(tree: Template): Template =
@@ -2951,8 +2958,10 @@ trait Trees { self: Universe =>
         if (exprOwner != currentOwner && stat.isTerm) atOwner(exprOwner)(transform(stat))
         else transform(stat)) filter (EmptyTree != _)
     /** Transforms `Modifiers`. */
-    def transformModifiers(mods: Modifiers): Modifiers =
-      mods.mapAnnotations(transformTrees)
+    def transformModifiers(mods: Modifiers): Modifiers = {
+      if (mods.annotations.isEmpty) mods
+      else mods mapAnnotations transformTrees
+    }
 
     /** Transforms a tree with a given owner symbol. */
     def atOwner[A](owner: Symbol)(trans: => A): A = {
@@ -3018,15 +3027,19 @@ trait Trees { self: Universe =>
   /** The constructor/extractor for `Modifiers` instances.
    *  @group Traversal
    */
-  val Modifiers: ModifiersCreator
+  val Modifiers: ModifiersExtractor
+
+  @deprecated("Use ModifiersExtractor instead", "2.11.0")
+  type ModifiersCreator = ModifiersExtractor
 
   /** An extractor class to create and pattern match with syntax `Modifiers(flags, privateWithin, annotations)`.
    *  Modifiers encapsulate flags, visibility annotations and Scala annotations for member definitions.
    *  @group Traversal
    */
-  abstract class ModifiersCreator {
+  abstract class ModifiersExtractor {
     def apply(): Modifiers = Modifiers(NoFlags, tpnme.EMPTY, List())
     def apply(flags: FlagSet, privateWithin: Name, annotations: List[Tree]): Modifiers
+    def unapply(mods: Modifiers): Option[(FlagSet, Name, List[Tree])]
   }
 
   /** The factory for `Modifiers` instances.

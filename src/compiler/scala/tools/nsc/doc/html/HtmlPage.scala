@@ -11,7 +11,7 @@ import base._
 import base.comment._
 import model._
 
-import scala.xml.{XML, NodeSeq}
+import scala.xml.NodeSeq
 import scala.xml.dtd.{DocType, PublicID}
 import scala.collection._
 import java.io.Writer

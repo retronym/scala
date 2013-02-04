@@ -50,6 +50,7 @@ abstract class Inliners extends SubComponent {
   val phaseName = "inliner"
 
   /** Debug - for timing the inliner. */
+  /****
   private def timed[T](s: String, body: => T): T = {
     val t1 = System.currentTimeMillis()
     val res = body
@@ -60,6 +61,7 @@ abstract class Inliners extends SubComponent {
 
     res
   }
+  ****/
 
   /** Look up implementation of method 'sym in 'clazz'.
    */
@@ -193,7 +195,7 @@ abstract class Inliners extends SubComponent {
     private var currentIClazz: IClass = _
     private def warn(pos: Position, msg: String) = currentIClazz.cunit.inlinerWarning(pos, msg)
 
-    private def ownedName(sym: Symbol): String = afterUncurry {
+    private def ownedName(sym: Symbol): String = exitingUncurry {
       val count = (
         if (!sym.isMethod) 1
         else if (sym.owner.isAnonymousFunction) 3
@@ -279,7 +281,7 @@ abstract class Inliners extends SubComponent {
       }
 
     val tfa   = new analysis.MTFAGrowable()
-    tfa.stat  = global.opt.printStats
+    tfa.stat  = global.settings.Ystatistics.value
     val staleOut      = new mutable.ListBuffer[BasicBlock]
     val splicedBlocks = mutable.Set.empty[BasicBlock]
     val staleIn       = mutable.Set.empty[BasicBlock]
@@ -320,8 +322,8 @@ abstract class Inliners extends SubComponent {
       if (settings.debug.value)
         inlineLog("caller", ownedName(m.symbol), "in " + m.symbol.owner.fullName)
 
-      var sizeBeforeInlining  = m.code.blockCount
-      var instrBeforeInlining = m.code.instructionCount
+      val sizeBeforeInlining  = m.code.blockCount
+      val instrBeforeInlining = m.code.instructionCount
       var retry = false
       var count = 0
 
@@ -477,7 +479,7 @@ abstract class Inliners extends SubComponent {
        * As a whole, both `preInline()` invocations amount to priming the inlining process,
        * so that the first TFA that is run afterwards is able to gain more information as compared to a cold-start.
        */
-      val totalPreInlines = {
+      /*val totalPreInlines = */ { // Val name commented out to emphasize it is never used
         val firstRound = preInline(true)
         if(firstRound == 0) 0 else (firstRound + preInline(false))
       }
@@ -569,7 +571,6 @@ abstract class Inliners extends SubComponent {
       m.normalize
       if (sizeBeforeInlining > 0) {
         val instrAfterInlining = m.code.instructionCount
-        val prefix = if ((instrAfterInlining > 2 * instrBeforeInlining) && (instrAfterInlining > 200)) "!!" else ""
         val inlinings = caller.inlinedCalls
         if (inlinings > 0) {
           val s1      = s"instructions $instrBeforeInlining -> $instrAfterInlining"
@@ -584,7 +585,7 @@ abstract class Inliners extends SubComponent {
 
     private def isHigherOrderMethod(sym: Symbol) = (
          sym.isMethod
-      && beforeExplicitOuter(sym.info.paramTypes exists isFunctionType) // was "at erasurePhase.prev"
+      && enteringExplicitOuter(sym.info.paramTypes exists isFunctionType) // was "at erasurePhase.prev"
     )
 
     /** Should method 'sym' being called in 'receiver' be loaded from disk? */
@@ -601,7 +602,6 @@ abstract class Inliners extends SubComponent {
       override def toString = m.toString
 
       val sym           = m.symbol
-      val name          = sym.name
       def owner         = sym.owner
       def paramTypes    = sym.info.paramTypes
       def minimumStack  = paramTypes.length + 1
@@ -617,13 +617,11 @@ abstract class Inliners extends SubComponent {
       def length        = blocks.length
       def openBlocks    = blocks filterNot (_.closed)
       def instructions  = m.code.instructions
-      // def linearized    = linearizer linearize m
 
       def isSmall         = (length <= SMALL_METHOD_SIZE) && blocks(0).length < 10
       def isLarge         = length > MAX_INLINE_SIZE
       def isRecursive     = m.recursive
       def hasHandlers     = handlers.nonEmpty || m.bytecodeHasEHs
-      def hasClosureParam = paramTypes exists (tp => isByNameParamType(tp) || isFunctionType(tp))
 
       def isSynchronized         = sym.hasFlag(Flags.SYNCHRONIZED)
       def hasNonFinalizerHandler = handlers exists {
@@ -731,7 +729,6 @@ abstract class Inliners extends SubComponent {
      */
     sealed abstract class InlineSafetyInfo {
       def isSafe   = false
-      def isUnsafe = !isSafe
     }
     case object NeverSafeToInline           extends InlineSafetyInfo
     case object InlineableAtThisCaller      extends InlineSafetyInfo { override def isSafe = true }
@@ -1031,7 +1028,6 @@ abstract class Inliners extends SubComponent {
         case Public     => true
       }
       private def sameSymbols = caller.sym == inc.sym
-      private def sameOwner   = caller.owner == inc.owner
 
       /** Gives green light for inlining (which may still be vetoed later). Heuristics:
        *   - it's bad to make the caller larger (> SMALL_METHOD_SIZE) if it was small
@@ -1058,8 +1054,8 @@ abstract class Inliners extends SubComponent {
         if (inc.isMonadic)          score += 3
         else if (inc.isHigherOrder) score += 1
 
-        if (inc.isInClosure)                 score += 2
-        if (inlinedMethodCount(inc.sym) > 2) score -= 2
+        if (inc.isInClosure)                 score += 2;
+        if (inlinedMethodCount(inc.sym) > 2) score -= 2;
         score
       }
     }

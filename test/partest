@@ -3,7 +3,7 @@
 ##############################################################################
 # Scala test runner 2.8.0
 ##############################################################################
-# (c) 2002-2011 LAMP/EPFL
+# (c) 2002-2013 LAMP/EPFL
 #
 # This is free software; see the distribution for copying conditions.
 # There is NO warranty; not even for MERCHANTABILITY or FITNESS FOR A
@@ -70,21 +70,32 @@ if $cygwin; then
     else
         format=windows
     fi
+    if [ -n "${JAVA_HOME}" ] ; then
+        JAVA_HOME=`cygpath --$format "$JAVA_HOME"`
+    fi
+    if [ -n "${JAVACMD}" ] ; then
+        JAVACMD=`cygpath --$format "$JAVACMD"`
+    fi
     SCALA_HOME=`cygpath --$format "$SCALA_HOME"`
     EXT_CLASSPATH=`cygpath --path --$format "$EXT_CLASSPATH"`
 fi
 
-# last arg wins, so if JAVA_OPTS already contains one of these options
-# the supplied argument will be used.
+# last arg wins, so if JAVA_OPTS already contains -Xmx or -Xms the
+# supplied argument will be used.
 # At this writing it is reported test/partest --all requires 108m permgen.
 JAVA_OPTS="-Xmx1024M -Xms64M -XX:MaxPermSize=128M $JAVA_OPTS"
+
+# the ant task doesn't supply any options by default,
+# so don't to that here either -- note that you may want to pass -optimise
+# to mimic what happens during nightlies
+# [ -n "$SCALAC_OPTS" ] || SCALAC_OPTS="-deprecation"
 
 partestDebugStr=""
 if [ ! -z "${PARTEST_DEBUG}" ] ; then
   partestDebugStr="-Dpartest.debug=${PARTEST_DEBUG}"
 fi
 
-${JAVACMD:=java} \
+"${JAVACMD:=java}" \
   $JAVA_OPTS -cp "$EXT_CLASSPATH" \
   ${partestDebugStr} \
   -Dscala.home="${SCALA_HOME}" \

@@ -342,7 +342,7 @@ object ClassfileConstants {
       case JAVA_ACC_PRIVATE    => PRIVATE
       case JAVA_ACC_PROTECTED  => PROTECTED
       case JAVA_ACC_FINAL      => FINAL
-      case JAVA_ACC_SYNTHETIC  => SYNTHETIC
+      case JAVA_ACC_SYNTHETIC  => SYNTHETIC | ARTIFACT  // maybe should be just artifact?
       case JAVA_ACC_STATIC     => STATIC
       case JAVA_ACC_ABSTRACT   => if (isAnnotation) 0L else if (isClass) ABSTRACT else DEFERRED
       case JAVA_ACC_INTERFACE  => if (isAnnotation) 0L else TRAIT | INTERFACE | ABSTRACT
@@ -372,7 +372,7 @@ object ClassfileConstants {
     }
     def methodFlags(jflags: Int): Long = {
       initFields(jflags)
-      translateFlags(jflags, if ((jflags & JAVA_ACC_BRIDGE) != 0) BRIDGE else 0)
+      translateFlags(jflags, if ((jflags & JAVA_ACC_BRIDGE) != 0) BRIDGE | ARTIFACT else 0)
     }
   }
   object FlagTranslation extends FlagTranslation { }
@@ -380,11 +380,4 @@ object ClassfileConstants {
   def toScalaMethodFlags(flags: Int): Long = FlagTranslation methodFlags flags
   def toScalaClassFlags(flags: Int): Long  = FlagTranslation classFlags flags
   def toScalaFieldFlags(flags: Int): Long  = FlagTranslation fieldFlags flags
-
-  @deprecated("Use another method in this object", "2.10.0")
-  def toScalaFlags(flags: Int, isClass: Boolean = false, isField: Boolean = false): Long = (
-    if (isClass) toScalaClassFlags(flags)
-    else if (isField) toScalaFieldFlags(flags)
-    else toScalaMethodFlags(flags)
-  )
 }

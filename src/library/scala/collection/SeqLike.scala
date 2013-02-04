@@ -107,7 +107,7 @@ trait SeqLike[+A, +Repr] extends Any with IterableLike[A, Repr] with GenSeqLike[
 
   def segmentLength(p: A => Boolean, from: Int): Int = {
     var i = 0
-    var it = iterator.drop(from)
+    val it = iterator.drop(from)
     while (it.hasNext && p(it.next()))
       i += 1
     i
@@ -115,7 +115,7 @@ trait SeqLike[+A, +Repr] extends Any with IterableLike[A, Repr] with GenSeqLike[
 
   def indexWhere(p: A => Boolean, from: Int): Int = {
     var i = from
-    var it = iterator.drop(from)
+    val it = iterator.drop(from)
     while (it.hasNext) {
       if (p(it.next())) return i
       else i += 1
@@ -181,10 +181,10 @@ trait SeqLike[+A, +Repr] extends Any with IterableLike[A, Repr] with GenSeqLike[
       result
     }
     private def swap(i: Int, j: Int) {
-      var tmpI = idxs(i)
+      val tmpI = idxs(i)
       idxs(i) = idxs(j)
       idxs(j) = tmpI
-      var tmpE = elms(i)
+      val tmpE = elms(i)
       elms(i) = elms(j)
       elms(j) = tmpE
     }
@@ -390,7 +390,7 @@ trait SeqLike[+A, +Repr] extends Any with IterableLike[A, Repr] with GenSeqLike[
    *  @return     `true` if this $coll has an element that is equal (as
    *              determined by `==`) to `elem`, `false` otherwise.
    */
-  def contains(elem: Any): Boolean = exists (_ == elem)
+  def contains[A1 >: A](elem: A1): Boolean = exists (_ == elem)
 
   /** Produces a new sequence which contains all elements of this $coll and also all elements of
    *  a given sequence. `xs union ys`  is equivalent to `xs ++ ys`.
@@ -780,7 +780,7 @@ object SeqLike {
         val iter = S.iterator.drop(m0)
         val Wopt = kmpOptimizeWord(W, n0, n1, true)
         val T = kmpJumpTable(Wopt, n1-n0)
-        var cache = new Array[AnyRef](n1-n0)  // Ring buffer--need a quick way to do a look-behind
+        val cache = new Array[AnyRef](n1-n0)  // Ring buffer--need a quick way to do a look-behind
         var largest = 0
         var i, m = 0
         var answer = -1

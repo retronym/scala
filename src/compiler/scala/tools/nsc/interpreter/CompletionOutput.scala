@@ -38,7 +38,6 @@ trait CompletionOutput {
 
     def relativize(str: String): String = quietString(str stripPrefix (pkg + "."))
     def relativize(tp: Type): String    = relativize(tp.dealiasWiden.toString)
-    def relativize(sym: Symbol): String = relativize(sym.info)    
 
     def braceList(tparams: List[String]) = if (tparams.isEmpty) "" else (tparams map relativize).mkString("[", ", ", "]")
     def parenList(params: List[Any])  = params.mkString("(", ", ", ")")
@@ -76,7 +75,7 @@ trait CompletionOutput {
     }
 
     def methodString() =
-      method.keyString + " " + method.nameString + (method.info.normalize match {
+      method.keyString + " " + method.nameString + (method.info.dealiasWiden match {
         case NullaryMethodType(resType)         => ": " + typeToString(resType)
         case PolyType(tparams, resType)         => tparamsString(tparams) + typeToString(resType)
         case mt @ MethodType(_, _)              => methodTypeToString(mt)

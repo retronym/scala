@@ -249,4 +249,3 @@ extends GenericCompanion[CC] {
     b.result
   }
 }
-

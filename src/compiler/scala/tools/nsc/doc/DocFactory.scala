@@ -8,9 +8,7 @@ package doc
 
 import scala.util.control.ControlThrowable
 import reporters.Reporter
-import scala.reflect.internal.util.{ NoPosition, BatchSourceFile}
-import io.{ File, Directory }
-import DocParser.Parsed
+import scala.reflect.internal.util.BatchSourceFile
 
 /** A documentation processor controls the process of generating Scala
   * documentation, which is as follows.
@@ -33,15 +31,7 @@ import DocParser.Parsed
   * @author Gilles Dubochet */
 class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor =>
   /** The unique compiler instance used by this processor and constructed from its `settings`. */
-  object compiler extends Global(settings, reporter) with interactive.RangePositions {
-    override protected def computeInternalPhases() {
-      phasesSet += syntaxAnalyzer
-      phasesSet += analyzer.namerFactory
-      phasesSet += analyzer.packageObjects
-      phasesSet += analyzer.typerFactory
-    }
-    override def forScaladoc = true
-  }
+  object compiler extends ScaladocGlobal(settings, reporter)
 
   /** Creates a scaladoc site for all symbols defined in this call's `source`,
     * as well as those defined in `sources` of previous calls to the same processor.

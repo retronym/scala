@@ -58,7 +58,7 @@ trait Names {
    *  Can be used for pattern matching, instance tests, serialization and likes.
    *  @group Tags
    */
-implicit val TypeNameTag: ClassTag[TypeName]
+  implicit val TypeNameTag: ClassTag[TypeName]
 
   /** The abstract type of names representing types.
    *  @group Names
@@ -75,10 +75,10 @@ implicit val TypeNameTag: ClassTag[TypeName]
    *  @group API
    */
   abstract class NameApi {
-    /** Checks wether the name is a a term name */
+    /** Checks wether the name is a term name */
     def isTermName: Boolean
 
-    /** Checks wether the name is a a type name */
+    /** Checks wether the name is a type name */
     def isTypeName: Boolean
 
     /** Returns a term name that wraps the same string as `this` */
@@ -109,10 +109,38 @@ implicit val TypeNameTag: ClassTag[TypeName]
   /** Create a new term name.
    *  @group Names
    */
+  @deprecated("Use TermName instead", "2.11.0")
   def newTermName(s: String): TermName
 
   /** Creates a new type name.
    *  @group Names
    */
+  @deprecated("Use TypeName instead", "2.11.0")
   def newTypeName(s: String): TypeName
+
+  /** The constructor/extractor for `TermName` instances.
+   *  @group Extractors
+   */
+  val TermName: TermNameExtractor
+
+  /** An extractor class to create and pattern match with syntax `TermName(s)`.
+   *  @group Extractors
+   */
+  abstract class TermNameExtractor {
+    def apply(s: String): TermName
+    def unapply(name: TermName): Option[String]
+  }
+
+  /** The constructor/extractor for `TypeName` instances.
+   *  @group Extractors
+   */
+  val TypeName: TypeNameExtractor
+
+  /** An extractor class to create and pattern match with syntax `TypeName(s)`.
+   *  @group Extractors
+   */
+  abstract class TypeNameExtractor {
+    def apply(s: String): TypeName
+    def unapply(name: TypeName): Option[String]
+  }
 }

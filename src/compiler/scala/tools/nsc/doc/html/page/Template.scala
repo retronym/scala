@@ -13,8 +13,6 @@ import base.comment._
 
 import model._
 import model.diagram._
-import diagram._
-
 import scala.xml.{ NodeSeq, Text, UnprefixedAttribute }
 import scala.language.postfixOps
 
@@ -525,7 +523,7 @@ class Template(universe: doc.Universe, generator: DiagramGenerator, tpl: DocTemp
 
     val sourceLink: NodeSeq = mbr match {
       case dtpl: DocTemplateEntity if (isSelf && dtpl.sourceUrl.isDefined && dtpl.inSource.isDefined && !isReduced) =>
-        val (absFile, line) = dtpl.inSource.get
+        val (absFile, _) = dtpl.inSource.get
         <dt>Source</dt>
         <dd>{ <a href={ dtpl.sourceUrl.get.toString } target="_blank">{ Text(absFile.file.getName) }</a> }</dd>
       case _ => NodeSeq.Empty
@@ -653,7 +651,6 @@ class Template(universe: doc.Universe, generator: DiagramGenerator, tpl: DocTemp
         case dtpl: DocTemplateEntity if isSelf && !isReduced =>
           val diagram = f(dtpl)
           if (diagram.isDefined) {
-            val s = universe.settings
             val diagramSvg = generator.generate(diagram.get, tpl, this)
             if (diagramSvg != NodeSeq.Empty) {
               <div class="toggleContainer block diagram-container" id={ id + "-container"}>
@@ -763,7 +760,7 @@ class Template(universe: doc.Universe, generator: DiagramGenerator, tpl: DocTemp
           if (isReduced) NodeSeq.Empty else {
             def paramsToHtml(vlsss: List[List[ValueParam]]): NodeSeq = {
               def param0(vl: ValueParam): NodeSeq =
-                // notice the }{ in the next lines, they are necessary to avoid a undesired withspace in output
+                // notice the }{ in the next lines, they are necessary to avoid an undesired withspace in output
                 <span name={ vl.name }>{
                   Text(vl.name)
                 }{ Text(": ") ++ typeToHtml(vl.resultType, hasLinks) }{

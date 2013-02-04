@@ -6,10 +6,9 @@
 package scala.tools.nsc
 package interpreter
 
-import scala.tools.jline._
-import scala.tools.jline.console.completer._
 import Completion._
 import scala.collection.mutable.ListBuffer
+import scala.reflect.internal.util.StringOps.longestCommonPrefix
 
 // REPL completor - queries supplied interpreter for valid
 // completions based on current contents of buffer.
@@ -29,9 +28,6 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     if (isModule) getModuleIfDefined(name)
     else getModuleIfDefined(name)
   )
-  def getType(name: String, isModule: Boolean) = getSymbol(name, isModule).tpe
-  def typeOf(name: String)                     = getType(name, false)
-  def moduleOf(name: String)                   = getType(name, true)
 
   trait CompilerCompletion {
     def tp: Type
@@ -47,12 +43,11 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     def anyRefMethodsToShow = Set("isInstanceOf", "asInstanceOf", "toString")
 
     def tos(sym: Symbol): String = sym.decodedName
-    def memberNamed(s: String) = afterTyper(effectiveTp member newTermName(s))
-    def hasMethod(s: String) = memberNamed(s).isMethod
+    def memberNamed(s: String) = exitingTyper(effectiveTp member newTermName(s))
 
     // XXX we'd like to say "filterNot (_.isDeprecated)" but this causes the
     // compiler to crash for reasons not yet known.
-    def members     = afterTyper((effectiveTp.nonPrivateMembers.toList ++ anyMembers) filter (_.isPublic))
+    def members     = exitingTyper((effectiveTp.nonPrivateMembers.toList ++ anyMembers) filter (_.isPublic))
     def methods     = members.toList filter (_.isMethod)
     def packages    = members.toList filter (_.isPackage)
     def aliases     = members.toList filter (_.isAliasType)
@@ -111,7 +106,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     def excludeNames: List[String] = (anyref.methodNames filterNot anyRefMethodsToShow) :+ "_root_"
 
     def methodSignatureString(sym: Symbol) = {
-      IMain stripString afterTyper(new MethodSymbolOutput(sym).methodString())
+      IMain stripString exitingTyper(new MethodSymbolOutput(sym).methodString())
     }
 
     def exclude(name: String): Boolean = (
@@ -280,10 +275,6 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     if (parsed.isEmpty) xs map ("." + _) else xs
   }
 
-  // generic interface for querying (e.g. interpreter loop, testing)
-  def completions(buf: String): List[String] =
-    topLevelFor(Parsed.dotted(buf + ".", buf.length + 1))
-
   def completer(): ScalaCompleter = new JLineTabCompletion
 
   /** This gets a little bit hairy.  It's no small feat delegating everything
@@ -301,16 +292,6 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     def isConsecutiveTabs(buf: String, cursor: Int) =
       cursor == lastCursor && buf == lastBuf
 
-    // Longest common prefix
-    def commonPrefix(xs: List[String]): String = {
-      if (xs.isEmpty || xs.contains("")) ""
-      else xs.head.head match {
-        case ch =>
-          if (xs.tail forall (_.head == ch)) "" + ch + commonPrefix(xs map (_.tail))
-          else ""
-      }
-    }
-
     // This is jline's entry point for completion.
     override def complete(buf: String, cursor: Int): Candidates = {
       verbosity = if (isConsecutiveTabs(buf, cursor)) verbosity + 1 else 0
@@ -324,7 +305,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
         val newCursor =
           if (winners contains "") p.cursor
           else {
-            val advance = commonPrefix(winners)
+            val advance = longestCommonPrefix(winners)
             lastCursor = p.position + advance.length
             lastBuf = (buf take p.position) + advance
             repldbg("tryCompletion(%s, _) lastBuf = %s, lastCursor = %s, p.position = %s".format(
@@ -335,8 +316,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
         Some(Candidates(newCursor, winners))
       }
 
-      def mkDotted      = Parsed.dotted(buf, cursor) withVerbosity verbosity
-      def mkUndelimited = Parsed.undelimited(buf, cursor) withVerbosity verbosity
+      def mkDotted = Parsed.dotted(buf, cursor) withVerbosity verbosity
 
       // a single dot is special cased to completion on the previous result
       def lastResultCompletion =

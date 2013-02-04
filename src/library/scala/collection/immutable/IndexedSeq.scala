@@ -37,6 +37,7 @@ object IndexedSeq extends IndexedSeqFactory[IndexedSeq] {
     def apply(idx: Int) = buf.apply(idx)
   }
   def newBuilder[A]: Builder[A, IndexedSeq[A]] = Vector.newBuilder[A]
+
   implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, IndexedSeq[A]] =
     ReusableCBF.asInstanceOf[GenericCanBuildFrom[A]]
 }

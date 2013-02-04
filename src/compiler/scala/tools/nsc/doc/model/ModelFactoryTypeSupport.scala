@@ -8,13 +8,6 @@ import base._
 import diagram._
 
 import scala.collection._
-import scala.util.matching.Regex
-
-import symtab.Flags
-
-import io._
-
-import model.{ RootPackage => RootPackageEntity }
 
 /** This trait extracts all required information for documentation from compilation units */
 trait ModelFactoryTypeSupport {
@@ -28,14 +21,11 @@ trait ModelFactoryTypeSupport {
 
   import global._
   import definitions.{ ObjectClass, NothingClass, AnyClass, AnyValClass, AnyRefClass }
-  import rootMirror.{ RootPackage, RootClass, EmptyPackage }
 
   protected val typeCache = new mutable.LinkedHashMap[Type, TypeEntity]
 
   /** */
   def makeType(aType: Type, inTpl: TemplateImpl): TypeEntity = {
-    def templatePackage = closestPackage(inTpl.sym)
-
     def createTypeEntity = new TypeEntity {
       private var nameBuffer = new StringBuilder
       private var refBuffer = new immutable.TreeMap[Int, (LinkTo, Int)]
@@ -234,7 +224,6 @@ trait ModelFactoryTypeSupport {
           def appendClauses = {
             nameBuffer append " forSome {"
             var first = true
-            val qset = quantified.toSet
             for (sym <- quantified) {
               if (!first) { nameBuffer append ", " } else first = false
               if (sym.isSingletonExistential) {

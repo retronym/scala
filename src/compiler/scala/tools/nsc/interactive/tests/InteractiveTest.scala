@@ -7,14 +7,6 @@ package interactive
 package tests
 
 import core._
-
-import java.io.File.pathSeparatorChar
-import java.io.File.separatorChar
-
-import scala.annotation.migration
-import scala.reflect.internal.util.Position
-import scala.reflect.internal.util.SourceFile
-
 import scala.collection.mutable.ListBuffer
 
 /** A base class for writing interactive compiler tests.
@@ -110,6 +102,7 @@ abstract class InteractiveTest
   }
 
   /** Perform n random tests with random changes. */
+  /****
   private def randomTests(n: Int, files: Array[SourceFile]) {
     val tester = new Tester(n, files, settings) {
       override val compiler = self.compiler
@@ -117,6 +110,7 @@ abstract class InteractiveTest
     }
     tester.run()
   }
+  ****/
 
   /** shutdown the presentation compiler. */
   protected def shutdown() {

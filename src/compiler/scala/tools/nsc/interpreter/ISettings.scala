@@ -12,13 +12,6 @@ package interpreter
  * @author Lex Spoon, 2007/3/24
  **/
 class ISettings(intp: IMain) {
-  /** A list of paths where :load should look */
-  var loadPath = List(".")
-
-  /** Set this to true to see repl machinery under -Yrich-exceptions.
-   */
-  var showInternalStackTraces = false
-
   /** The maximum length of toString to use when printing the result
    *  of an evaluation.  0 means no maximum.  If a printout requires
    *  more than this number of characters, then the printout is
@@ -32,7 +25,7 @@ class ISettings(intp: IMain) {
   var maxAutoprintCompletion = 250
 
   /** String unwrapping can be disabled if it is causing issues.
-   *  Settings this to false means you will see Strings like "$iw.$iw.".
+   *  Setting this to false means you will see Strings like "$iw.$iw.".
    */
   var unwrapStrings = true
 
@@ -44,7 +37,7 @@ class ISettings(intp: IMain) {
   }
   def deprecation: Boolean = intp.settings.deprecation.value
 
-  def allSettings = Map(
+  def allSettings = Map[String, Any](
     "maxPrintString" -> maxPrintString,
     "maxAutoprintCompletion" -> maxAutoprintCompletion,
     "unwrapStrings" -> unwrapStrings,
