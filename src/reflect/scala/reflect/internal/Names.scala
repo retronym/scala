@@ -11,7 +11,7 @@ import scala.io.Codec
 import java.security.MessageDigest
 import scala.language.implicitConversions
 
-trait Names extends api.Names {
+trait Names extends api.Names { self =>
   private final val HASH_SIZE  = 0x8000
   private final val HASH_MASK  = 0x7FFF
   private final val NAME_SIZE  = 0x20000
@@ -95,6 +95,26 @@ trait Names extends api.Names {
   protected def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
 
+  protected def toTypeName(termName: TermName): TypeName = {
+    val h = hashValue(chrs, termName.index, termName.len) & HASH_MASK
+    var n = typeHashtable(h)
+    while ((n ne null) && n.start != termName.index)
+      n = n.next
+
+    if (n ne null) n
+    else termName.createCompanionName(h)
+  }
+
+  protected def toTermName(typeName: TypeName): TermName = {
+    val h = hashValue(chrs, typeName.index, typeName.len) & HASH_MASK
+    var n = termHashtable(h)
+    while ((n ne null) && n.start != typeName.index)
+      n = n.next
+
+    if (n ne null) n
+    else typeName.createCompanionName(h)
+  }
+
   /** Create a term name from string. */
   def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
 
@@ -163,7 +183,7 @@ trait Names extends api.Names {
    *  or Strings as Names.  Give names the key functions the absence of which
    *  make people want Strings all the time.
    */
-  sealed abstract class Name(protected val index: Int, protected val len: Int) extends NameApi {
+  sealed abstract class Name(protected[Names] val index: Int, protected[Names] val len: Int) extends NameApi {
     type ThisNameType >: Null <: Name
     protected[this] def thisName: ThisNameType
 
@@ -476,21 +496,21 @@ trait Names extends api.Names {
    *  TermName_R and TypeName_R recreate it each time toString is called.
    */
   private class TermName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TermName(index0, len0, hash) {
-    protected def createCompanionName(h: Int): TypeName = new TypeName_S(index, len, h, toString)
+    @inline final def createCompanionName(h: Int): TypeName = new TypeName_S(index, len, h, toString)
     override def newName(str: String): TermName = newTermNameCached(str)
   }
   private class TypeName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TypeName(index0, len0, hash) {
-    protected def createCompanionName(h: Int): TermName = new TermName_S(index, len, h, toString)
+    @inline final def createCompanionName(h: Int): TermName = new TermName_S(index, len, h, toString)
     override def newName(str: String): TypeName = newTypeNameCached(str)
   }
 
   private class TermName_R(index0: Int, len0: Int, hash: Int) extends TermName(index0, len0, hash) {
-    protected def createCompanionName(h: Int): TypeName = new TypeName_R(index, len, h)
+    @inline final def createCompanionName(h: Int): TypeName = new TypeName_R(index, len, h)
     override def toString = new String(chrs, index, len)
   }
 
   private class TypeName_R(index0: Int, len0: Int, hash: Int) extends TypeName(index0, len0, hash) {
-    protected def createCompanionName(h: Int): TermName = new TermName_R(index, len, h)
+    @inline final def createCompanionName(h: Int): TermName = new TermName_R(index, len, h)
     override def toString = new String(chrs, index, len)
   }
 
@@ -503,22 +523,14 @@ trait Names extends api.Names {
     def isTermName: Boolean = true
     def isTypeName: Boolean = false
     def toTermName: TermName = this
-    def toTypeName: TypeName = {
-      val h = hashValue(chrs, index, len) & HASH_MASK
-      var n = typeHashtable(h)
-      while ((n ne null) && n.start != index)
-        n = n.next
-
-      if (n ne null) n
-      else createCompanionName(h)
-    }
+    def toTypeName: TypeName = self.toTypeName(this)
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
     def subName(from: Int, to: Int): TermName =
       newTermName(chrs, start + from, to - from)
 
     def nameKind = "term"
-    protected def createCompanionName(h: Int): TypeName
+    def createCompanionName(h: Int): TypeName
   }
 
   implicit val TermNameTag = ClassTag[TermName](classOf[TermName])
@@ -536,15 +548,7 @@ trait Names extends api.Names {
     typeHashtable(hash) = this
     def isTermName: Boolean = false
     def isTypeName: Boolean = true
-    def toTermName: TermName = {
-      val h = hashValue(chrs, index, len) & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && n.start != index)
-        n = n.next
-
-      if (n ne null) n
-      else createCompanionName(h)
-    }
+    def toTermName: TermName = self.toTermName(this)
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
     def companionName: TermName = toTermName
@@ -553,7 +557,7 @@ trait Names extends api.Names {
 
     def nameKind = "type"
     override def decode = if (nameDebug) super.decode + "!" else super.decode
-    protected def createCompanionName(h: Int): TermName
+    def createCompanionName(h: Int): TermName
   }
 
   implicit val TypeNameTag = ClassTag[TypeName](classOf[TypeName])
