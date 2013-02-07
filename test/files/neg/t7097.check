@@ -1,0 +1,9 @@
+t7097.scala:2: error: overloaded method value tupled with alternatives:
+  [(some other)(some other)a1, (some other)(some other)a2, (some other)(some other)a3, (some other)a4, a5, (some other)(some other)b](f: ((some other)(some other)a1, (some other)(some other)a2, (some other)(some other)a3, (some other)a4, a5) => (some other)(some other)b)(((some other)(some other)a1, (some other)(some other)a2, (some other)(some other)a3, (some other)a4, a5)) => (some other)(some other)b <and>
+  [(some other)(some other)a1, (some other)(some other)a2, (some other)a3, a4, (some other)(some other)b](f: ((some other)(some other)a1, (some other)(some other)a2, (some other)a3, a4) => (some other)(some other)b)(((some other)(some other)a1, (some other)(some other)a2, (some other)a3, a4)) => (some other)(some other)b <and>
+  [(some other)a1, (some other)a2, a3, (some other)b](f: ((some other)a1, (some other)a2, a3) => (some other)b)(((some other)a1, (some other)a2, a3)) => (some other)b <and>
+  [a1, a2, b](f: (a1, a2) => b)((a1, a2)) => b
+ cannot be applied to (Int => (Int => Int))
+  Function.tupled((n:Int) => (m:Int) => n + m)
+           ^
+one error found

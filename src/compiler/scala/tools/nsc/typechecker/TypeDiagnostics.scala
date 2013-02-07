@@ -316,10 +316,11 @@ trait TypeDiagnostics {
     def trueOwner  = tp.typeSymbol.effectiveOwner
     def aliasOwner = tp.typeSymbolDirect.effectiveOwner
 
-    def sym_==(other: TypeDiag)     = tp.typeSymbol == other.tp.typeSymbol
-    def owner_==(other: TypeDiag)   = trueOwner == other.trueOwner
-    def string_==(other: TypeDiag)  = tp.toString == other.tp.toString
-    def name_==(other: TypeDiag)    = sym.name == other.sym.name
+    def sym_==(other: TypeDiag)       = tp.typeSymbol == other.tp.typeSymbol
+    def owner_==(other: TypeDiag)     = trueOwner == other.trueOwner
+    def ownerName_==(other: TypeDiag) = trueOwner.name == other.trueOwner.name
+    def string_==(other: TypeDiag)    = tp.toString == other.tp.toString
+    def name_==(other: TypeDiag)      = sym.name == other.sym.name
 
     def compare(other: TypeDiag) =
       if (this == other) 0
@@ -388,11 +389,15 @@ trait TypeDiagnostics {
     ultimately(typeRefs foreach (_.restoreName())) {
       for ((td1, td2) <- toCheck) {
         val tds = List(td1, td2)
+        def helps(f: TypeDiag => Unit) = {
+          def mod(t: TypeDiag) = {val copy = t.copy(sym = t.sym.cloneSymbol); f(copy); copy}
+          !(mod(td1) string_== mod(td2))
+        }
 
         // If the types print identically, qualify them:
         //   a) If the dealiased owner is a package, the full path
         //   b) Otherwise, append (in <owner>)
-        if (td1 string_== td2)
+        if ((td1 string_== td2) && helps(_.nameQualify()))
           tds foreach (_.nameQualify())
 
         // If they have the same simple name, and either of them is in the
@@ -405,10 +410,8 @@ trait TypeDiagnostics {
         //   a) If they are type parameters with different owners, append (in <owner>)
         //   b) Failing that, the best we can do is append "(some other)" to the latter.
         if (td1 string_== td2) {
-          if (td1 owner_== td2)
-            td2.modifyName("(some other)" + _)
-          else
-            tds foreach (_.typeQualify())
+          if (helps(_.typeQualify())) tds foreach (_.typeQualify())
+          else td2.modifyName("(some other)" + _)
         }
       }
       // performing the actual operation
