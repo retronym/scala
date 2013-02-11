@@ -118,7 +118,7 @@ abstract class TreeCheckers extends Analyzer {
     catch { case _: UnsupportedOperationException => p.toString }
 
   private var hasError: Boolean = false
-  def errorFn(msg: Any): Unit                = {hasError = true; println("[check: %s] %s".format(phase.prev, msg))}
+  def errorFn(msg: Any): Unit                = {hasError = true; reporter.echo("[check: %s] %s".format(phase.prev, msg))}
   def errorFn(pos: Position, msg: Any): Unit = errorFn(posstr(pos) + ": " + msg)
   def informFn(msg: Any) {
     if (settings.verbose.value || settings.debug.value)
@@ -223,6 +223,7 @@ abstract class TreeCheckers extends Analyzer {
     object precheck extends TreeStackTraverser {
       override def traverse(tree: Tree) {
         checkSymbolRefsRespectScope(tree)
+        checkSymbolOwnerRespectScope(tree)
         checkReturnReferencesDirectlyEnclosingDef(tree)
 
         val sym = tree.symbol
@@ -318,6 +319,28 @@ abstract class TreeCheckers extends Analyzer {
           if !tree.symbol.isAccessor
           if (sym.isTypeParameter || sym.isLocal) && !(tree.symbol hasTransOwner sym.owner)
         } errorFn(s"The symbol, tpe or info of tree `(${tree}) : ${info}` refers to a out-of-scope symbol, ${sym.fullLocationString}. tree.symbol.ownerChain: ${tree.symbol.ownerChain.mkString(", ")}")
+      }
+
+      private def checkSymbolOwnerRespectScope(tree: Tree) {
+        val sym = tree.symbol
+        tree match {
+          case _: DefTree | _: Function if sym != null && sym != NoType =>
+            val owner = sym.owner
+            val expectedOwnerTree = path collectFirst {
+              case  t@(_ : DefTree | _: Function) => t
+            }
+            expectedOwnerTree foreach {
+              dt =>
+                val expectedOwners = Set(dt.symbol, dt.symbol.moduleClass).filterNot(_ == NoSymbol)
+                val directlyOwned = expectedOwners(owner)
+                def ownerNoLocalDummy(o: Symbol): Symbol = {
+                  if (o.isLocalDummy) ownerNoLocalDummy(o.owner) else o
+                }
+                if (!(expectedOwners(ownerNoLocalDummy(owner))))
+                  errorFn(s"${sym.fullLocationString} is not owned by the closest enclosing defined symbol ${expectedOwners.map(_.fullLocationString).mkString(", ")}, but instead by ${sym.owner.fullLocationString}")
+            }
+          case _ =>
+        }
       }
 
       private def checkReturnReferencesDirectlyEnclosingDef(tree: Tree) {
