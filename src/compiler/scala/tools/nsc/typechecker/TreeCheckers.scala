@@ -312,10 +312,12 @@ abstract class TreeCheckers extends Analyzer {
           val indirectRefs = referencedSyms(info)
           (indirectRefs ++ directRef).distinct
         }
+        def abbreviate(s: String, n: Int) = if (s.length > n) s.take(n - 3) + "..." else s
+        def abbreviateOneLine(s: String) = abbreviate(s.replace("""\n""", "\\n"), 30)
         for {
           sym <- referencedSymbols
           if (sym.isTypeParameter || sym.isLocal) && !(tree.symbol hasTransOwner sym.owner)
-        } errorFn(s"The symbol, tpe or info of tree `(${tree}) : ${info}` refers to a out-of-scope symbol, ${sym.fullLocationString}. tree.symbol.ownerChain: ${tree.symbol.ownerChain.mkString(", ")}")
+        } errorFn(s"The symbol, tpe or info of tree `(${abbreviateOneLine(tree.toString)}) : ${info}` refers to a out-of-scope symbol, ${sym.fullLocationString}. tree.symbol.ownerChain: ${tree.symbol.ownerChain.mkString(", ")}")
       }
 
       private def checkSymbolOwnerRespectScope(tree: Tree) {
