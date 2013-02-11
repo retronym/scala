@@ -1,0 +1,4 @@
+[Now checking: typer]
+[check: typer] value x is not owned by the closest enclosing defined symbol value $anonfun, but instead by value <local Client> in object Client
+error: TreeCheckers detected non-compliant trees in Client_2.scala
+one error found
