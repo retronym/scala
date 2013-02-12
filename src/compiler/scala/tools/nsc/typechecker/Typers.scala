@@ -3411,14 +3411,14 @@ trait Typers extends Modes with Adaptations with Tags {
           // @H change to setError(treeCopy.Apply(tree, fun, args))
 
         case otpe if inPatternMode(mode) && unapplyMember(otpe).exists =>
-          doTypedUnapply(tree, fun0, fun, args, mode, pt)
+          doTypedUnapply(tree, fun0, fun, Nil, args, mode, pt)
 
         case _ =>
           duplErrorTree(ApplyWithoutArgsError(tree, fun))
       }
     }
 
-    def doTypedUnapply(tree: Tree, fun0: Tree, fun: Tree, args: List[Tree], mode: Int, pt: Type): Tree = {
+    def doTypedUnapply(tree: Tree, fun0: Tree, fun: Tree, targs: List[Tree], args: List[Tree], mode: Int, pt: Type): Tree = {
       def duplErrTree = setError(treeCopy.Apply(tree, fun0, args))
       def duplErrorTree(err: AbsTypeError) = { issue(err); duplErrTree }
 
@@ -3443,7 +3443,7 @@ trait Typers extends Modes with Adaptations with Tags {
       }
 
       val unapp     = unapplyMember(otpe)
-      val unappType = otpe.memberType(unapp)
+      val unappType = appliedType(otpe.memberType(unapp), targs.map(_.tpe))
       val argDummy  = context.owner.newValue(nme.SELECTOR_DUMMY, fun.pos, SYNTHETIC) setInfo pt
       val arg       = Ident(argDummy) setType pt
 
@@ -3468,7 +3468,7 @@ trait Typers extends Modes with Adaptations with Tags {
       }
 
       // setType null is necessary so that ref will be stabilized; see bug 881
-      val fun1 = typedPos(fun.pos)(Apply(Select(fun setType null, unapp), List(arg)))
+      val fun1 = typedPos(fun.pos)(Apply(gen.mkTypeApply(Select(fun setType null, unapp), targs), List(arg)))
 
       if (fun1.tpe.isErroneous) duplErrTree
       else {
@@ -3515,7 +3515,7 @@ trait Typers extends Modes with Adaptations with Tags {
       // and re-typechecks of the target of the unapply call in PATTERNmode,
       // this breaks down when the classTagExtractor (which defineds the unapply member) is not a simple reference to an object,
       // but an arbitrary tree as is the case here
-      doTypedUnapply(app, classTagExtractor, classTagExtractor, args, PATTERNmode, pt)
+      doTypedUnapply(app, classTagExtractor, classTagExtractor, Nil, args, PATTERNmode, pt)
     }
 
     // if there's a ClassTag that allows us to turn the unchecked type test for `pt` into a checked type test
@@ -4587,69 +4587,75 @@ trait Typers extends Modes with Adaptations with Tags {
         if (stableApplication && isPatternMode) {
           // treat stable function applications f() as expressions.
           typed1(tree, mode & ~PATTERNmode | EXPRmode, pt)
-        } else {
-          val funpt = if (isPatternMode) pt else WildcardType
-          val appStart = if (Statistics.canEnable) Statistics.startTimer(failedApplyNanos) else null
-          val opeqStart = if (Statistics.canEnable) Statistics.startTimer(failedOpEqNanos) else null
+        } else fun match {
+          case TypeApply(termRef, targs) if isPatternMode =>
+            // SI-884 Allow F[targs](pats) to expand to an unapply call with explicit type arguments
+            val typedTermRef = typed1(termRef, mode & ~PATTERNmode | EXPRmode, WildcardType)
+            val typedTargs = targs mapConserve (t => typedHigherKindedType(t, mode))
+            doTypedUnapply(tree, fun, typedTermRef, typedTargs, args, mode, pt)
+          case _ =>
+            val funpt = if (isPatternMode) pt else WildcardType
+            val appStart = if (Statistics.canEnable) Statistics.startTimer(failedApplyNanos) else null
+            val opeqStart = if (Statistics.canEnable) Statistics.startTimer(failedOpEqNanos) else null
 
-          def onError(reportError: => Tree): Tree = {
-              fun match {
-                case Select(qual, name)
-                if !isPatternMode && nme.isOpAssignmentName(newTermName(name.decode)) =>
-                  val qual1 = typedQualifier(qual)
-                  if (treeInfo.isVariableOrGetter(qual1)) {
-                    if (Statistics.canEnable) Statistics.stopTimer(failedOpEqNanos, opeqStart)
-                    convertToAssignment(fun, qual1, name, args)
-                  } else {
+            def onError(reportError: => Tree): Tree = {
+                fun match {
+                  case Select(qual, name)
+                  if !isPatternMode && nme.isOpAssignmentName(newTermName(name.decode)) =>
+                    val qual1 = typedQualifier(qual)
+                    if (treeInfo.isVariableOrGetter(qual1)) {
+                      if (Statistics.canEnable) Statistics.stopTimer(failedOpEqNanos, opeqStart)
+                      convertToAssignment(fun, qual1, name, args)
+                    } else {
+                      if (Statistics.canEnable) Statistics.stopTimer(failedApplyNanos, appStart)
+                        reportError
+                    }
+                  case _ =>
                     if (Statistics.canEnable) Statistics.stopTimer(failedApplyNanos, appStart)
-                      reportError
-                  }
-                case _ =>
-                  if (Statistics.canEnable) Statistics.stopTimer(failedApplyNanos, appStart)
-                  reportError
-              }
-          }
-          silent(_.typed(fun, forFunMode(mode), funpt),
-                 if ((mode & EXPRmode) != 0) false else context.ambiguousErrors,
-                 if ((mode & EXPRmode) != 0) tree else context.tree) match {
-            case SilentResultValue(fun1) =>
-              val fun2 = if (stableApplication) stabilizeFun(fun1, mode, pt) else fun1
-              if (Statistics.canEnable) Statistics.incCounter(typedApplyCount)
-              def isImplicitMethod(tpe: Type) = tpe match {
-                case mt: MethodType => mt.isImplicit
-                case _ => false
-              }
-              val useTry = (
-                   !isPastTyper
-                && fun2.isInstanceOf[Select]
-                && !isImplicitMethod(fun2.tpe)
-                && ((fun2.symbol eq null) || !fun2.symbol.isConstructor)
-                && (mode & (EXPRmode | SNDTRYmode)) == EXPRmode
-              )
-              val res =
-                if (useTry) tryTypedApply(fun2, args)
-                else doTypedApply(tree, fun2, args, mode, pt)
+                    reportError
+                }
+            }
+            silent(_.typed(fun, forFunMode(mode), funpt),
+                   if ((mode & EXPRmode) != 0) false else context.ambiguousErrors,
+                   if ((mode & EXPRmode) != 0) tree else context.tree) match {
+              case SilentResultValue(fun1) =>
+                val fun2 = if (stableApplication) stabilizeFun(fun1, mode, pt) else fun1
+                if (Statistics.canEnable) Statistics.incCounter(typedApplyCount)
+                def isImplicitMethod(tpe: Type) = tpe match {
+                  case mt: MethodType => mt.isImplicit
+                  case _ => false
+                }
+                val useTry = (
+                     !isPastTyper
+                  && fun2.isInstanceOf[Select]
+                  && !isImplicitMethod(fun2.tpe)
+                  && ((fun2.symbol eq null) || !fun2.symbol.isConstructor)
+                  && (mode & (EXPRmode | SNDTRYmode)) == EXPRmode
+                )
+                val res =
+                  if (useTry) tryTypedApply(fun2, args)
+                  else doTypedApply(tree, fun2, args, mode, pt)
 
-            /*
-              if (fun2.hasSymbol && fun2.symbol.isConstructor && (mode & EXPRmode) != 0) {
-                res.tpe = res.tpe.notNull
-              }
-              */
-              // TODO: In theory we should be able to call:
-              //if (fun2.hasSymbol && fun2.symbol.name == nme.apply && fun2.symbol.owner == ArrayClass) {
-              // But this causes cyclic reference for Array class in Cleanup. It is easy to overcome this
-              // by calling ArrayClass.info here (or some other place before specialize).
-              if (fun2.symbol == Array_apply && !res.isErrorTyped) {
-                val checked = gen.mkCheckInit(res)
-                // this check is needed to avoid infinite recursion in Duplicators
-                // (calling typed1 more than once for the same tree)
-                if (checked ne res) typed { atPos(tree.pos)(checked) }
-                else res
-              } else
-                res
-            case SilentTypeError(err) =>
-              onError({issue(err); setError(tree)})
-          }
+              /*
+                if (fun2.hasSymbol && fun2.symbol.isConstructor && (mode & EXPRmode) != 0) {
+                  res.tpe = res.tpe.notNull
+                }
+                */
+                // TODO: In theory we should be able to call:
+                //if (fun2.hasSymbol && fun2.symbol.name == nme.apply && fun2.symbol.owner == ArrayClass) {
+                // But this causes cyclic reference for Array class in Cleanup. It is easy to overcome this
+                // by calling ArrayClass.info here (or some other place before specialize).
+                if (fun2.symbol == Array_apply && !res.isErrorTyped) {
+                  val checked = gen.mkCheckInit(res)
+                  // this check is needed to avoid infinite recursion in Duplicators
+                  // (calling typed1 more than once for the same tree)
+                  if (checked ne res) typed { atPos(tree.pos)(checked) }
+                  else res
+                } else
+                  res
+              case SilentTypeError(err) =>
+                onError({issue(err); setError(tree)})
+            }
         }
       }
 

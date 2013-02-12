@@ -1,0 +1,28 @@
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> 
+
+scala> import reflect.ClassTag
+import reflect.ClassTag
+
+scala> object InstanceOf { def unapply[T](t: T)(implicit T: ClassTag[T]) = if (T.runtimeClass.isInstance(t)) Some(t) else None }
+defined module InstanceOf
+
+scala> ("hey!": Any) match { case InstanceOf[String](s) => s; case _ =>  "!" }
+res0: String = hey!
+
+scala> (false: Any)  match { case InstanceOf[String](s) => s; case _ =>  "!" }
+res1: String = !
+
+scala> case class Foo[M[_]](a: M[Int])
+warning: there were 1 feature warning(s); re-run with -feature for details
+defined class Foo
+
+scala> type IntAnd[x] = (Int, x)
+defined type alias IntAnd
+
+scala> (new Foo[({type l[a]=(Int, a)})#l](0, 0))  match { case Foo[IntAnd](x) => x }
+res2: (Int, Int) = (0,0)
+
+scala> 

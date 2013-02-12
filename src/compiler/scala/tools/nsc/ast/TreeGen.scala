@@ -288,9 +288,11 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
 
   /** Translate names in Select/Ident nodes to type names.
    */
-  def convertToTypeName(tree: Tree): Option[RefTree] = tree match {
-    case Select(qual, name) => Some(Select(qual, name.toTypeName))
-    case Ident(name)        => Some(Ident(name.toTypeName))
+  def convertToTypeName(tree: Tree): Option[RefTree] = convertName(tree, _.toTypeName)
+
+  private def convertName(tree: Tree, f: Name => Name): Option[RefTree] = tree match {
+    case Select(qual, name) => Some(Select(qual, f(name)))
+    case Ident(name)        => Some(Ident(f(name)))
     case _                  => None
   }
 

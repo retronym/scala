@@ -40,7 +40,7 @@ trait MemberHandlers {
         // XXX this is obviously inadequate but it's going to require some effort
         // to get right.
         if (name.toString startsWith "x$") ()
-        else importVars += name
+        else importVars ++= Set(name, name.toTermName) // .toTermName is a hack for SI-994; in `case Foo[X](x)`, `Foo` is parsed as a type name.
       case _        => super.traverse(ast)
     }
   }
