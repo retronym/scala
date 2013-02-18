@@ -456,17 +456,6 @@ trait MethodSynthesis {
      *      { z = <rhs>; z } where z can be an identifier or a field.
      */
     case class LazyValGetter(tree: ValDef) extends BaseGetter(tree) {
-      class ChangeOwnerAndModuleClassTraverser(oldowner: Symbol, newowner: Symbol)
-        extends ChangeOwnerTraverser(oldowner, newowner) {
-        
-        override def traverse(tree: Tree) {
-          tree match {
-            case _: DefTree => change(tree.symbol.moduleClass)
-            case _          =>
-          }
-          super.traverse(tree)
-        }
-      }
 
       // todo: in future this should be enabled but now other phases still depend on the flag for various reasons
       //override def flagsMask = (super.flagsMask & ~LAZY)
