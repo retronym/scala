@@ -217,6 +217,17 @@ trait Typers extends Modes with Adaptations with Tags {
     var context = context0
     def context1 = context
 
+    private def patchOwners(tree: Tree): Tree = openMacros match {
+      case macro :: _ if context.owner != NoSymbol =>
+        // SI-5787 Macros are likely to splice typed trees into locations
+        // where the owner of defined symbols is no longer suitable.
+        // We automatically remedy this here.
+        val macroCallSiteOwner = macro.callsiteTyper.context.owner
+        val traverser = new ChangeOwnerAndModuleClassTraverser(macroCallSiteOwner, context.owner)
+        traverser(tree)
+      case _ => tree
+    }
+
     def dropExistential(tp: Type): Type = tp match {
       case ExistentialType(tparams, tpe) =>
         new SubstWildcardMap(tparams).apply(tp)
@@ -5582,7 +5593,7 @@ trait Typers extends Modes with Adaptations with Tags {
         }
 
         val alreadyTyped = tree.tpe ne null
-        var tree1: Tree = if (alreadyTyped) tree else {
+        var tree1: Tree = if (alreadyTyped) patchOwners(tree) else {
           printTyping(
             ptLine("typing %s: pt = %s".format(ptTree(tree), ptPlugins),
               "undetparams"      -> context.undetparams,

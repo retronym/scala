@@ -1366,6 +1366,18 @@ trait Trees extends api.Trees { self: SymbolTable =>
     }
   }
 
+  final class ChangeOwnerAndModuleClassTraverser(oldowner: Symbol, newowner: Symbol)
+    extends ChangeOwnerTraverser(oldowner, newowner) {
+
+    override def traverse(tree: Tree) {
+      tree match {
+        case _: DefTree => change(tree.symbol.moduleClass)
+        case _          =>
+      }
+      super.traverse(tree)
+    }
+  }
+
   private class ShallowDuplicator(orig: Tree) extends Transformer {
     override val treeCopy = newStrictTreeCopier
     override def transform(tree: Tree) =
