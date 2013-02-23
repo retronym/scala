@@ -1044,8 +1044,15 @@ abstract class Erasure extends AddInterfaces
               if (qual.tpe != null && isPrimitiveValueClass(qual.tpe.typeSymbol) && targ.tpe != null && targ.tpe <:< AnyRefClass.tpe)
                 unit.error(sel.pos, "isInstanceOf cannot test if value types are references.")
 
-              def staticIsInstanceOf(staticResultIfNotNull: Boolean): Tree =
-                IF (qual OBJ_== NULL) THEN CODE.FALSE ELSE LIT(staticResultIfNotNull)
+              def staticIsInstanceOf(staticResultIfNotNull: Boolean): Tree = {
+                gen.evalOnce(qual, currentOwner, currentUnit) {
+                  qual0 =>
+                    if (staticResultIfNotNull)
+                      IF(qual0() OBJ_== NULL) THEN CODE.FALSE ELSE LIT(true)
+                    else
+                      LIT(false)
+                }
+              }
 
               def mkIsInstanceOf(q: () => Tree)(tp: Type): Tree =
                 Apply(
@@ -1075,7 +1082,18 @@ abstract class Erasure extends AddInterfaces
                     }
                   }
                 case _ =>
-                  tree
+                  val tpe = qual.tpe
+                  val checkTpe = targ.tpe
+                  val isSolid = (
+                       tpe.isFinalType && checkTpe.isFinalType
+                    || (tpe.typeSymbol.isClass && !tpe.typeSymbol.isTrait && checkTpe.typeSymbol.isClass && !checkTpe.typeSymbol.isTrait)
+                  )
+                  val isArray = (isReferenceArray(tpe) || isReferenceArray(checkTpe))
+                  if (!isArray && (tpe <:< checkTpe))
+                    staticIsInstanceOf(staticResultIfNotNull = true)
+                  else if (!isArray && isSolid && !(tpe <:< checkTpe))
+                    staticIsInstanceOf(staticResultIfNotNull = false)
+                  else tree
               }
             case _ => tree
           }
