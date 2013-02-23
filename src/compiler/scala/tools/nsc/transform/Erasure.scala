@@ -1044,6 +1044,9 @@ abstract class Erasure extends AddInterfaces
               if (qual.tpe != null && isPrimitiveValueClass(qual.tpe.typeSymbol) && targ.tpe != null && targ.tpe <:< AnyRefClass.tpe)
                 unit.error(sel.pos, "isInstanceOf cannot test if value types are references.")
 
+              def staticIsInstanceOf(staticResultIfNotNull: Boolean): Tree =
+                IF (qual OBJ_== NULL) THEN CODE.FALSE ELSE LIT(staticResultIfNotNull)
+
               def mkIsInstanceOf(q: () => Tree)(tp: Type): Tree =
                 Apply(
                   TypeApply(
@@ -1066,7 +1069,7 @@ abstract class Erasure extends AddInterfaces
                     // level of robustness (in addition to the short term fix.)
                     val parentTests = parents filterNot (qual.tpe <:< _)
 
-                    if (parentTests.isEmpty) Literal(Constant(true))
+                    if (parentTests.isEmpty) staticIsInstanceOf(staticResultIfNotNull = true)
                     else atPos(tree.pos) {
                       parentTests map mkIsInstanceOf(q) reduceRight gen.mkAnd
                     }
