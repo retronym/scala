@@ -2586,7 +2586,7 @@ BOOTRAPING TEST AND TEST SUITE
     <partest showlog="yes" erroronfailed="yes" javacmd="${java.home}/bin/java"
              timeout="2400000"
              srcdir="${partest.srcdir}"
-             scalacopts="${scalac.args.optimise}">
+             scalacopts="${scalac.args.optimise} -Yclone-trees">
       <compilationpath>
         <path refid="pack.classpath"/>
         <pathelement location="${pack.dir}/lib/scala-swing.jar"/>
