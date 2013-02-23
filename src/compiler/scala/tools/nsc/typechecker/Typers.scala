@@ -5593,7 +5593,9 @@ trait Typers extends Modes with Adaptations with Tags {
      *  @param pt   ...
      *  @return     ...
      */
-    def typed(tree: Tree, mode: Int, pt: Type): Tree = {
+    def typed(tree0: Tree, mode: Int, pt: Type): Tree = {
+
+      val tree = if (settings.cloneTrees.value) tree0.shallowDuplicate.setPos(tree0.pos) else tree0
       lastTreeToTyper = tree
       indentTyping()
 

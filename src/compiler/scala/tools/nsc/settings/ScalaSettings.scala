@@ -135,6 +135,7 @@ trait ScalaSettings extends AbsScalaSettings
   val noCompletion    = BooleanSetting    ("-Yno-completion", "Disable tab-completion in the REPL.")
   val Xdce            = BooleanSetting    ("-Ydead-code", "Perform dead code elimination.")
   val debug           = BooleanSetting    ("-Ydebug", "Increase the quantity of debugging output.")
+  val cloneTrees      = BooleanSetting    ("-Yclone-trees", "Return cloned trees from Typer#typed to flush out callers who assume we modify the input tree")
   //val doc           = BooleanSetting    ("-Ydoc", "Generate documentation")
   val termConflict    = ChoiceSetting     ("-Yresolve-term-conflict", "strategy", "Resolve term conflicts", List("package", "object", "error"), "error")
   val inline          = BooleanSetting    ("-Yinline", "Perform inlining when possible.")
