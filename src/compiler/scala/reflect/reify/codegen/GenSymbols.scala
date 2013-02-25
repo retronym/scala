@@ -77,7 +77,7 @@ trait GenSymbols {
         val resolver = if (sym.isType) nme.staticClass else nme.staticModule
         mirrorMirrorCall(resolver, reify(sym.fullName))
       } else {
-        if (reifyDebug) println("Locatable: %s (%s) owned by %s (%s) at %s".format(sym, sym.accurateKindString, sym.owner, sym.owner.accurateKindString, sym.owner.fullNameString))
+        if (reifyDebug) println(s"Locatable: $sym (${sym.accurateKindString}) owned by ${sym.owner} (${sym.owner.accurateKindString}) at ${sym.owner.fullNameString}")
         val rowner = reify(sym.owner)
         val rname = reify(sym.name.toString)
         if (sym.isType)
@@ -139,7 +139,7 @@ trait GenSymbols {
 
   def reifyFreeType(binding: Tree): Tree =
     reifyIntoSymtab(binding.symbol) { sym =>
-      if (reifyDebug) println("Free type: %s (%s)".format(sym, sym.accurateKindString))
+      if (reifyDebug) println(s"Free type: $sym (${sym.accurateKindString})")
       state.reificationIsConcrete = false
       val name: TermName = nme.REIFY_FREE_PREFIX append sym.name
       Reification(name, binding, mirrorBuildCall(nme.newFreeType, reify(sym.name.toString), mirrorBuildCall(nme.flagsFromBits, reify(sym.flags)), reify(origin(sym))))
@@ -147,7 +147,7 @@ trait GenSymbols {
 
   def reifySymDef(sym: Symbol): Tree =
     reifyIntoSymtab(sym) { sym =>
-      if (reifyDebug) println("Sym def: %s (%s)".format(sym, sym.accurateKindString))
+      if (reifyDebug) println(s"Sym def: $sym (${sym.accurateKindString})")
       val name: TermName = nme.REIFY_SYMDEF_PREFIX append sym.name
       def reifiedOwner = if (sym.owner.isLocatable) reify(sym.owner) else reifySymDef(sym.owner)
       Reification(name, Ident(sym), mirrorBuildCall(nme.newNestedSymbol, reifiedOwner, reify(sym.name), reify(sym.pos), mirrorBuildCall(nme.flagsFromBits, reify(sym.flags)), reify(sym.isClass)))

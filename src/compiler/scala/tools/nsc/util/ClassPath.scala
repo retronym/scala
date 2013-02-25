@@ -215,7 +215,7 @@ abstract class ClassPath[T] {
         val rep = packages find (_.name == pkg) flatMap (_ findClass rest)
         rep map {
           case x: ClassRep  => x
-          case x            => throw new FatalError("Unexpected ClassRep '%s' found searching for name '%s'".format(x, name))
+          case x            => throw new FatalError(s"Unexpected ClassRep '$x' found searching for name '$name'")
         }
       case _ =>
         classes find (_.name == name)
@@ -365,7 +365,7 @@ extends ClassPath[T] {
     new MergedClassPath[T](newEntries, context)
   }
   def show() {
-    println("ClassPath %s has %d entries and results in:\n".format(name, entries.size))
+    println(s"ClassPath $name has ${entries.size} entries and results in:\n")
     asClasspathString split ':' foreach (x => println("  " + x))
   }
   override def toString() = "merged classpath "+ entries.mkString("(", "\n", ")")

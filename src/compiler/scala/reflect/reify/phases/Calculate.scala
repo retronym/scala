@@ -20,7 +20,7 @@ trait Calculate {
   private def registerLocalSymbol(sym: Symbol, metalevel: Int): Unit =
     if (sym != null && sym != NoSymbol) {
       if (localSymbols contains sym)
-        assert(localSymbols(sym) == metalevel, "metalevel mismatch: expected %s, actual %s".format(localSymbols(sym), metalevel))
+        assert(localSymbols(sym) == metalevel, s"metalevel mismatch: expected ${localSymbols(sym)}, actual $metalevel")
       else
         localSymbols += (sym -> metalevel)
     }
@@ -38,7 +38,12 @@ trait Calculate {
         try super.traverse(tree)
         finally currMetalevel += 1
       case tree if tree.isDef =>
-        if (reifyDebug) println("boundSym: %s of type %s".format(tree.symbol, (tree.productIterator.toList collect { case tt: TypeTree => tt }).headOption.getOrElse(TypeTree(tree.tpe))))
+        if (reifyDebug) {
+          val tpt = (tree.productIterator.toList collectFirst {
+            case tt: TypeTree => tt
+          }).getOrElse(TypeTree(tree.tpe))
+          println(s"boundSym: ${tree.symbol} of type $tpt")
+        }
         registerLocalSymbol(tree.symbol, currMetalevel)
 
         bindRelatedSymbol(tree.symbol.sourceModule, "sourceModule")

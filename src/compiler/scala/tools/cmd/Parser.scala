@@ -29,7 +29,7 @@ object Parser extends RegexParsers with ParserUtil {
   def escaped(ch: Char): Parser[String] = "\\" + ch
   def mkQuoted(ch: Char): Parser[String] = (
       elem(ch) !~> rep(escaped(ch) | elemExcept(ch)) <~ ch ^^ (_.mkString)
-    | failure("Unmatched %s in input." format ch)
+    | failure(s"Unmatched $ch in input.")
   )
 
   /** Apparently windows can't deal with the quotes sticking around. */

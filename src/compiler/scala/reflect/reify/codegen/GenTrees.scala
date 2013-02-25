@@ -67,11 +67,11 @@ trait GenTrees {
     // usually we don't reify symbols/types, because they can be re-inferred during subsequent reflective compilation
     // however, reification of AnnotatedTypes is special. see `reifyType` to find out why.
     if (reifyTreeSymbols && tree.hasSymbolField) {
-      if (reifyDebug) println("reifying symbol %s for tree %s".format(tree.symbol, tree))
+      if (reifyDebug) println(s"reifying symbol ${tree.symbol} for tree $tree")
       rtree = mirrorBuildCall(nme.setSymbol, rtree, reify(tree.symbol))
     }
     if (reifyTreeTypes && tree.tpe != null) {
-      if (reifyDebug) println("reifying type %s for tree %s".format(tree.tpe, tree))
+      if (reifyDebug) println(s"reifying type ${tree.tpe} for tree $tree")
       rtree = mirrorBuildCall(nme.setType, rtree, reify(tree.tpe))
     }
 
@@ -129,12 +129,12 @@ trait GenTrees {
         if (sym.isLocalToReifee)
           mirrorCall(nme.This, reify(qual))
         else if (sym.isClass && !sym.isModuleClass) {
-          if (reifyDebug) println("This for %s, reified as freeVar".format(sym))
+          if (reifyDebug) println(s"This for $sym, reified as freeVar")
           if (reifyDebug) println("Free: " + sym)
           mirrorBuildCall(nme.Ident, reifyFreeTerm(This(sym)))
         }
         else {
-          if (reifyDebug) println("This for %s, reified as This".format(sym))
+          if (reifyDebug) println(s"This for $sym, reified as This")
           mirrorBuildCall(nme.This, reify(sym))
         }
 
@@ -163,7 +163,7 @@ trait GenTrees {
         }
 
       case _ =>
-        throw new Error("internal error: %s (%s, %s) is not supported".format(tree, tree.productPrefix, tree.getClass))
+        throw new Error(s"internal error: $tree (${tree.productPrefix}, ${tree.getClass}) is not supported")
     }
   }
 
@@ -182,7 +182,7 @@ trait GenTrees {
       if (sym.isLocalToReifee || tpe.isLocalToReifee || treeInfo.isWildcardStarType(tree))
         reifyProduct(tree)
       else {
-        if (reifyDebug) println("reifying bound type %s (underlying type is %s)".format(sym, tpe))
+        if (reifyDebug) println(s"reifying bound type $sym (underlying type is $tpe)")
 
         if (tpe.isSpliceable) {
           val spliced = spliceType(tpe)
@@ -225,17 +225,17 @@ trait GenTrees {
         reifyBoundType(tree)
 
       case _ =>
-        throw new Error("internal error: %s (%s, %s) is not supported".format(tree, tree.productPrefix, tree.getClass))
+        throw new Error(s"internal error: $tree (${tree.productPrefix}, ${tree.getClass}) is not supported")
     }
   }
 
   private def reifyNestedFreeDef(tree: Tree): Tree = {
-    if (reifyDebug) println("nested free def: %s".format(showRaw(tree)))
+    if (reifyDebug) println(s"nested free def: ${showRaw(tree)}")
     reifyProduct(tree)
   }
 
   private def reifyNestedFreeRef(tree: Tree): Tree = {
-    if (reifyDebug) println("nested free ref: %s".format(showRaw(tree)))
+    if (reifyDebug) println(s"nested free ref: ${showRaw(tree)}")
     reifyProduct(tree)
   }
 }

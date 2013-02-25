@@ -26,7 +26,7 @@ trait ReplStrings {
     "\"" + string2code(str) + "\""
 
   def any2stringOf(x: Any, maxlen: Int) =
-    "scala.runtime.ScalaRunTime.replStringOf(%s, %s)".format(x, maxlen)
+    s"scala.runtime.ScalaRunTime.replStringOf($x, $maxlen)"
 
   def words(s: String) = s.trim split "\\s+" filterNot (_ == "") toList
 }

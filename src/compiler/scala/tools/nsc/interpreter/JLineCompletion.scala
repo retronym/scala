@@ -71,7 +71,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
         var upgraded = false
         lazy val upgrade = {
           intp rebind param
-          intp.reporter.printMessage("\nRebinding stable value %s from %s to %s".format(param.name, tp, param.tpe))
+          intp.reporter.printMessage(s"\nRebinding stable value ${param.name} from $tp to ${param.tpe}")
           upgraded = true
           new TypeMemberCompletion(runtimeType)
         }
@@ -130,7 +130,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
         if (alts.nonEmpty) "" :: alts else Nil
       }
 
-    override def toString = "%s (%d members)".format(tp, members.size)
+    override def toString = s"$tp (${members.size} members)"
   }
 
   class PackageCompletion(tp: Type) extends TypeMemberCompletion(tp) {
@@ -182,7 +182,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
           default
       }
     }
-    override def toString = "<repl ids> (%s)".format(completions(0).size)
+    override def toString = s"<repl ids> (${completions(0).size})"
   }
 
   // user-issued wildcard imports like "import global._" or "import String._"
@@ -295,7 +295,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     // This is jline's entry point for completion.
     override def complete(buf: String, cursor: Int): Candidates = {
       verbosity = if (isConsecutiveTabs(buf, cursor)) verbosity + 1 else 0
-      repldbg("\ncomplete(%s, %d) last = (%s, %d), verbosity: %s".format(buf, cursor, lastBuf, lastCursor, verbosity))
+      repldbg(s"\ncomplete($buf, $cursor) last = ($lastBuf, $lastCursor), verbosity: $verbosity")
 
       // we don't try lower priority completions unless higher ones return no results.
       def tryCompletion(p: Parsed, completionFunction: Parsed => List[String]): Option[Candidates] = {
@@ -308,8 +308,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
             val advance = longestCommonPrefix(winners)
             lastCursor = p.position + advance.length
             lastBuf = (buf take p.position) + advance
-            repldbg("tryCompletion(%s, _) lastBuf = %s, lastCursor = %s, p.position = %s".format(
-              p, lastBuf, lastCursor, p.position))
+            repldbg(s"tryCompletion($p, _) lastBuf = $lastBuf, lastCursor = $lastCursor, p.position = ${p.position}")
             p.position
           }
 
@@ -341,7 +340,7 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
        */
       try tryAll
       catch { case ex: Throwable =>
-        repldbg("Error: complete(%s, %s) provoked".format(buf, cursor) + ex)
+        repldbg(s"Error: complete($buf, $cursor) provoked" + ex)
         Candidates(cursor,
           if (isReplDebug) List("<error:" + ex + ">")
           else Nil

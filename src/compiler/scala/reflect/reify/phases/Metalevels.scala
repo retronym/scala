@@ -121,7 +121,7 @@ trait Metalevels {
         val inlinees = symtab.syms filter (_.isLocalToReifee)
         inlinees foreach (inlinee => symtab.symAliases(inlinee) foreach (alias => inlineableBindings(alias) = symtab.symBinding(inlinee)))
         val symtab1 = symtab -- inlinees
-        if (reifyDebug) println("trimmed %s inlineable free defs from its symbol table: %s".format(inlinees.length, inlinees map (inlinee => symtab.symName(inlinee)) mkString(", ")))
+        if (reifyDebug) println(s"trimmed ${inlinees.length} inlineable free defs from its symbol table: ${inlinees map (inlinee => symtab.symName(inlinee)) mkString (", ")}")
         withinSplice { super.transform(TreeSplice(ReifiedTree(universe, mirror, symtab1, rtree, tpe, rtpe, concrete))) }
       case TreeSplice(splicee) =>
         if (reifyDebug) println("entering splice: " + splicee)
@@ -131,7 +131,7 @@ trait Metalevels {
           // why? see comments above
           // if (settings.logRuntimeSplices.value) reporter.echo(tree.pos, "this splice cannot be resolved statically")
           // withinSplice { super.transform(tree) }
-          if (reifyDebug) println("metalevel breach in %s: %s".format(tree, (breaches map (_.symbol)).distinct mkString ", "))
+          if (reifyDebug) println(s"metalevel breach in $tree: ${(breaches map (_.symbol)).distinct mkString ", "}")
           CannotReifyRuntimeSplice(tree)
         } else {
           withinSplice { super.transform(tree) }
@@ -140,9 +140,9 @@ trait Metalevels {
       // e.g. a free$Foo can well use free$x, if Foo is path-dependent w.r.t x
       // FreeRef(_, _) check won't work, because metalevels of symbol table and body are different, hence, freerefs in symbol table look different from freerefs in body
       case FreeRef(_, name) if inlineableBindings contains name =>
-        if (reifyDebug) println("inlineable free ref: %s in %s".format(name, showRaw(tree)))
+        if (reifyDebug) println(s"inlineable free ref: $name in ${showRaw(tree)}")
         val inlined = reify(inlineableBindings(name))
-        if (reifyDebug) println("verdict: inlined as %s".format(showRaw(inlined)))
+        if (reifyDebug) println(s"verdict: inlined as ${showRaw(inlined)}")
         inlined
       case _ =>
         super.transform(tree)

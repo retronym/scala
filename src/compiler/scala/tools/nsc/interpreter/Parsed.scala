@@ -44,7 +44,7 @@ class Parsed private (
   def isEscaped = !isAtStart && isEscapeChar(currentChar) && !isEscapeChar(prev.currentChar)
   def isDelimiter = !isQuoted && !isEscaped && isDelimiterChar(currentChar)
 
-  override def toString = "Parsed(%s / %d)".format(buffer, cursor)
+  override def toString = s"Parsed($buffer / $cursor)"
 }
 
 object Parsed {

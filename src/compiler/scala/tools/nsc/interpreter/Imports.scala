@@ -131,7 +131,7 @@ trait Imports {
     // add code for a new object to hold some imports
     def addWrapper() {
       val impname = nme.INTERPRETER_IMPORT_WRAPPER
-      code append "object %s {\n".format(impname)
+      code append s"object $impname {\n"
       trailingBraces append "}\n"
       accessPath append ("." + impname)
       currentImps.clear()

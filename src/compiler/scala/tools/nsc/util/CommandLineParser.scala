@@ -63,9 +63,9 @@ case class CommandLine(
     def isBinary(s: String) = isOption(s) && !isUnary(s) && (assumeBinary || (binaryArguments contains s))
 
     def unknownOption(opt: String) =
-      errorFn("Option '%s' not recognized.".format(opt))
+      errorFn(s"Option '$opt' not recognized.")
     def missingArg(opt: String, what: String) =
-      errorFn("Option '%s' requires argument, found %s instead.".format(opt, what))
+      errorFn(s"Option '$opt' requires argument, found $what instead.")
 
     def loop(args: List[String]): Map[String, String] = {
       def residual(xs: List[String]) = { residualBuffer ++= xs ; Map[String, String]() }
@@ -105,7 +105,7 @@ case class CommandLine(
   def get(arg: String) = argMap get arg
   def apply(arg: String) = argMap(arg)
 
-  override def toString() = "CommandLine(\n%s)\n" format (args map ("  " + _ + "\n") mkString)
+  override def toString() = s"CommandLine(\n${(args map ("  " + _ + "\n") mkString)})\n"
 }
 
 object CommandLineParser extends RegexParsers with ParserUtil {
@@ -115,7 +115,7 @@ object CommandLineParser extends RegexParsers with ParserUtil {
   def escaped(ch: Char): Parser[String] = "\\" + ch
   def mkQuoted(ch: Char): Parser[String] = (
       elem(ch) !~> rep(escaped(ch) | elemExcept(ch)) <~ ch ^^ (_.mkString)
-    | failure("Unmatched %s in input." format ch)
+    | failure(s"Unmatched $ch in input.")
   )
 
   /** Apparently windows can't deal with the quotes sticking around. */

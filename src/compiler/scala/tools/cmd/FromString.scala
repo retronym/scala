@@ -33,14 +33,14 @@ object FromString {
     override def isDefinedAt(s: String) = toDir(s).isDirectory
     def apply(s: String): Directory =
       if (isDefinedAt(s)) toDir(s)
-      else cmd.runAndExit(println("'%s' is not an existing directory." format s))
+      else cmd.runAndExit(println(s"'$s' is not an existing directory."))
   }
   def ExistingDirRelativeTo(root: Directory) = new FromString[Directory]()(tagOfDirectory) {
     private def resolve(s: String) = (toDir(s) toAbsoluteWithRoot root).toDirectory
     override def isDefinedAt(s: String) = resolve(s).isDirectory
     def apply(s: String): Directory =
       if (isDefinedAt(s)) resolve(s)
-      else cmd.runAndExit(println("'%s' is not an existing directory." format resolve(s)))
+      else cmd.runAndExit(println(s"'${resolve(s)}' is not an existing directory."))
   }
 
   /** Argument expander, i.e. turns single argument "foo bar baz" into argument

@@ -48,7 +48,7 @@ trait PresentationCompilerRequestsWorkingMode extends TestResources {
   private def withResponse[T](pos: Position, response: Response[T])(f: (Position, T) => Unit) {
     /** Return the filename:line:col version of this position. */
     def showPos(pos: Position): String =
-      "%s:%d:%d".format(pos.source.file.name, pos.line, pos.column)
+      s"${pos.source.file.name}:${pos.line}:${pos.column}"
 
     response.get(TIMEOUT) match {
       case Some(Left(t)) =>

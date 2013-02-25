@@ -28,7 +28,7 @@ trait ReplGlobal extends Global {
         val res = super.typed(tree, mode, pt)
         tree match {
           case Ident(name) if !tree.symbol.hasPackageFlag && !name.toString.startsWith("$") =>
-            repldbg("typed %s: %s".format(name, res.tpe))
+            repldbg(s"typed $name: ${res.tpe}")
           case _ =>
         }
         res

@@ -166,13 +166,13 @@ trait Reshape {
         // have all necessary symbols attached to them (i.e. that they can be recompiled in any lexical context)
         // if this assumption fails, please, don't be quick to add postprocessing here (like I did before)
         // but rather try to fix this in Typer, so that it produces quality originals (like it's done for typedAnnotated)
-        if (reifyDebug) println("TypeTree, essential: %s (%s)".format(tt.tpe, tt.tpe.kind))
-        if (reifyDebug) println("verdict: rolled back to original %s".format(tt.original))
+        if (reifyDebug) println(s"TypeTree, essential: ${tt.tpe} (${tt.tpe.kind})")
+        if (reifyDebug) println(s"verdict: rolled back to original ${tt.original}")
         transform(tt.original)
       } else {
         // type is deemed to be non-essential
         // erase it and hope that subsequent reflective compilation will be able to recreate it again
-        if (reifyDebug) println("TypeTree, non-essential: %s (%s)".format(tt.tpe, tt.tpe.kind))
+        if (reifyDebug) println(s"TypeTree, non-essential: ${tt.tpe} (${tt.tpe.kind})")
         if (reifyDebug) println("verdict: discarded")
         TypeTree()
       }
@@ -216,7 +216,7 @@ trait Reshape {
         }
       case at @ Annotated(annot, arg) =>
         if (reifyDebug) println("reify type annotations for: " + tree)
-        assert(at.tpe.isInstanceOf[AnnotatedType], "%s (%s)".format(at.tpe, at.tpe.kind))
+        assert(at.tpe.isInstanceOf[AnnotatedType], s"${at.tpe} (${at.tpe.kind})")
         val annot1 = toPreTyperAnnotation(at.tpe.asInstanceOf[AnnotatedType].annotations(0))
         if (reifyDebug) println("originals are: " + annot1)
         Annotated(annot1, arg).copyAttrs(at)
@@ -298,7 +298,7 @@ trait Reshape {
           val mods2 = toPreTyperModifiers(mods1, vdef.symbol)
           val name1 = nme.dropLocalSuffix(name)
           val vdef1 = ValDef(mods2, name1.toTermName, tpt, rhs)
-          if (reifyDebug) println("resetting visibility of field: %s => %s".format(vdef, vdef1))
+          if (reifyDebug) println(s"resetting visibility of field: $vdef => $vdef1")
           Some(vdef1) // no copyAttrs here, because new ValDef and old symbols are now out of sync
         case ddef: DefDef if !ddef.mods.isLazy =>
           // lazy val accessors are removed in reshapeLazyVals

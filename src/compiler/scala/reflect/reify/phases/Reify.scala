@@ -55,6 +55,6 @@ trait Reify extends GenSymbols
     case v if isAnyVal(v)         => Literal(Constant(v))
     case null                     => Literal(Constant(null))
     case _                        =>
-      throw new Error("reifee %s of type %s is not supported".format(reifee, reifee.getClass))
+      throw new Error(s"reifee $reifee of type ${reifee.getClass} is not supported")
   })
 }

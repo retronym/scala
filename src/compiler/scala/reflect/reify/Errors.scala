@@ -17,7 +17,7 @@ trait Errors {
   // hence we don't crash here, but nicely report a typechecking error and bail out asap
 
   def CannotReifyType(tpe: Type) = {
-    val msg = "implementation restriction: cannot reify type %s (%s)".format(tpe, tpe.kind)
+    val msg = s"implementation restriction: cannot reify type $tpe (${tpe.kind})"
     throw new ReificationException(defaultErrorPosition, msg)
   }
 

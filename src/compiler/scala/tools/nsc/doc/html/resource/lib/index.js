@@ -35,7 +35,7 @@ $(document).ready(function() {
         function fixIFrame() {
             $('iframe').height($(window).height() )
         }
-        $('iframe').bind("load",fixIFrame)
+        $('iframe').bind("load", fixIFrame);
         $('iframe').bind("resize",fixIFrame)
     }
 
@@ -80,28 +80,30 @@ function setFrameSrcFromUrlFragment() {
 // iframe url = "scala/Either.html"  =>  url fragment = "#scala.Either"
 // iframe url = "scala/Either.html#isRight:Boolean"  =>  url fragment = "#scala.Either@isRight:Boolean"
 function setUrlFragmentFromFrameSrc() {
-  try {
-    var commonLength = location.pathname.lastIndexOf("/");
-    var frameLocation = frames["template"].location;
-    var relativePath = frameLocation.pathname.slice(commonLength + 1);
+    var fragment;
+    var lastFragment;
+    try {
+        var commonLength = location.pathname.lastIndexOf("/");
+        var frameLocation = frames["template"].location;
+        var relativePath = frameLocation.pathname.slice(commonLength + 1);
 
-    if(!relativePath || frameLocation.pathname.indexOf("/") < 0)
-      return;
+        if (!relativePath || frameLocation.pathname.indexOf("/") < 0)
+            return;
 
-    // Add #, remove ".html" and replace "/" with "."
-    fragment = "#" + relativePath.replace(/\.html$/, "").replace(/\//g, ".");
+        // Add #, remove ".html" and replace "/" with "."
+        fragment = "#" + relativePath.replace(/\.html$/, "").replace(/\//g, ".");
 
-    // Add the frame's hash after an @
-    if(frameLocation.hash) fragment += ("@" + frameLocation.hash.slice(1));
+        // Add the frame's hash after an @
+        if (frameLocation.hash) fragment += ("@" + frameLocation.hash.slice(1));
 
-    // Use replace to not add history items
-    lastFragment = fragment;
-    location.replace(fragment);
-  }
-  catch(e) {
-    // Chrome doesn't allow reading the iframe's location when
-    // used on the local file system.
-  }
+        // Use replace to not add history items
+        lastFragment = fragment;
+        location.replace(fragment);
+    }
+    catch (e) {
+        // Chrome doesn't allow reading the iframe's location when
+        // used on the local file system.
+    }
 }
 
 var Index = {};
@@ -135,8 +137,7 @@ var Index = {};
             pack,
             '</a></li>'
         ].join('');
-    };
-
+    }
     function createListItem(template) {
         var inner = '';
 
@@ -164,7 +165,7 @@ var Index = {};
 
 
     ns.createPackageTree = function (pack, matched, focused) {
-        var html = $.map(matched, function (child, i) {
+        var html = $.map(matched,function (child, i) {
             return createListItem(child);
         }).join('');
 
@@ -182,7 +183,7 @@ var Index = {};
             html,
             '</ol></ol>'
         ].join('');
-    }
+    };
 
     ns.keys = function (obj) {
         var result = [];
@@ -191,7 +192,7 @@ var Index = {};
             result.push(key);
         }
         return result;
-    }
+    };
 
     var hiddenPackages = {};
 
@@ -211,7 +212,7 @@ var Index = {};
         $.each(subPackages(selected), function (index, element) {
             $(element).hide();
         });
-    }
+    };
 
     ns.showPackage = function (ol, state) {
         var selected = $('li.pack > .tplshow', ol).text();
@@ -400,7 +401,6 @@ function textFilter() {
             if (focusFilterState) {
                 if (pack == focusFilterState ||
                     pack.indexOf(focusFilterState + '.') == 0) {
-                    ;
                 } else {
                     continue;
                 }
@@ -430,7 +430,7 @@ function textFilter() {
 /* Configures the hide tool by adding the hide link to all packages. */
 function configureHideFilter() {
     $('#tpl li.pack a.packhide').click(function () {
-        var packhide = $(this)
+        var packhide = $(this);
         var action = packhide.text();
 
         var ol = $(this).parent().parent();

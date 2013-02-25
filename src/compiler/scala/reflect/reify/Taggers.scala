@@ -91,7 +91,7 @@ abstract class Taggers {
     val tagModule = tagTpe.typeSymbol.companionSymbol
     if (c.compilerSettings.contains("-Xlog-implicits"))
       c.echo(c.enclosingPosition, s"cannot materialize ${tagModule.name}[$tpe] as $result because:\n$reason")
-    c.abort(c.enclosingPosition, "No %s available for %s".format(tagModule.name, tpe))
+    c.abort(c.enclosingPosition, s"No ${tagModule.name} available for $tpe")
   }
 
   private def failExpr(result: Tree, reason: Any): Nothing = {

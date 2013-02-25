@@ -19,7 +19,7 @@ class ProcessResult(val line: String) {
   val exitCode = builder ! logger
   def lines    = buffer.toList
 
-  override def toString = "`%s` (%d lines, exit %d)".format(line, buffer.size, exitCode)
+  override def toString = s"`$line` (${buffer.size} lines, exit $exitCode)"
 }
 
 trait LoopCommands {

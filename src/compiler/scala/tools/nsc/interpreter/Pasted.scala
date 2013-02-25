@@ -73,14 +73,14 @@ abstract class Pasted {
             val (str1, str2) = code splitAt (idx + PromptString.length)
             str2 match {
               case resAssign(`resName`) => code
-              case _                    => "%sval %s = { %s }".format(str1, resName, str2)
+              case _                    => s"${str1}val $resName = { $str2 }"
             }
         }
       case _ => code
     }
 
     def run() {
-      println("// Replaying %d commands from transcript.\n" format cmds.size)
+      println(s"// Replaying ${cmds.size} commands from transcript.\n")
       cmds foreach { cmd =>
         print(PromptString)
         interpret(cmd)

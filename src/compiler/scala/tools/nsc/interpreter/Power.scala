@@ -71,8 +71,7 @@ class Power[ReplValsImpl <: ReplVals : ru.TypeTag: ClassTag](val intp: IMain, re
       val (repeats, unseen) = todo partition seen
       unseenHistory += unseen.size
       if (settings.verbose.value) {
-        println("%3d  %s accumulated, %s discarded.  This pass: %s unseen, %s repeats".format(
-          pass, keep.size, discarded, unseen.size, repeats.size))
+        println(f"$pass%3d  ${keep.size} accumulated, $discarded discarded.  This pass: ${unseen.size} unseen, ${repeats.size} repeats")
       }
       if (lastCount == processed || unseen.isEmpty || isFinished())
         return keep.toSet
@@ -192,7 +191,7 @@ class Power[ReplValsImpl <: ReplVals : ru.TypeTag: ClassTag](val intp: IMain, re
     def baseClasses       = tpe.baseClasses
 
     override def toString = value match {
-      case Some(x)  => "%s (%s)".format(x, shortClass)
+      case Some(x)  => s"$x ($shortClass)"
       case _        => runtimeClass.getName
     }
   }

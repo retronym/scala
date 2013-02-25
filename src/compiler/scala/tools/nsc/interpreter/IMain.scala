@@ -594,12 +594,13 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       )
     bindRep.callEither("set", value) match {
       case Left(ex) =>
-        repldbg("Set failed in bind(%s, %s, %s)".format(name, boundType, value))
+        repldbg(s"Set failed in bind($name, $boundType, $value)")
         repldbg(util.stackTraceString(ex))
         IR.Error
 
       case Right(_) =>
-        val line = "%sval %s = %s.value".format(modifiers map (_ + " ") mkString, name, bindRep.evalPath)
+        val modsString = modifiers map (_ + " ") mkString
+        val line = s"${modsString}val $name = ${bindRep.evalPath}.value"
         repldbg("Interpreting: " + line)
         interpret(line)
     }
@@ -618,8 +619,8 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     val newType  = p.tpe
     val tempName = freshInternalVarName()
 
-    quietRun("val %s = %s".format(tempName, name))
-    quietRun("val %s = %s.asInstanceOf[%s]".format(name, tempName, newType))
+    quietRun(s"val $tempName = $name")
+    quietRun(s"val $name = $tempName.asInstanceOf[$newType]")
   }
   def quietBind(p: NamedParam): IR.Result                               = beQuietDuring(bind(p))
   def bind(p: NamedParam): IR.Result                                    = bind(p.name, p.tpe, p.value)
@@ -819,7 +820,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
        */
       val evalResult = Request.this.value match {
         case NoSymbol => ""
-        case sym      => "lazy val %s = %s".format(lineRep.resultName, originalPath(sym))
+        case sym      => s"lazy val ${lineRep.resultName} = ${originalPath(sym)}"
       }
       // first line evaluates object to make sure constructor is run
       // initial "" so later code can uniformly be: + etc
@@ -896,7 +897,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       catch { case ex: Throwable => (lineRep.bindError(ex), false) }
     }
 
-    override def toString = "Request(line=%s, %s trees)".format(line, trees.size)
+    override def toString = s"Request(line=$line, ${trees.size} trees)"
   }
 
   /** Returns the name of the most recent interpreter result.

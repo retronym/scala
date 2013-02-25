@@ -149,7 +149,7 @@ trait MemberHandlers {
     override def definesTerm = Some(name)
     override def definesValue = true
     override def extraCodeToEvaluate(req: Request) =
-      """val %s = %s""".format(name, lhs)
+      s"val $name = $lhs"
 
     /** Print out lhs instead of the generated varName */
     override def resultExtractionCode(req: Request) = {
@@ -172,7 +172,7 @@ trait MemberHandlers {
     override def definesTerm = Some(name.toTermName) filter (_ => mods.isCase)
 
     override def resultExtractionCode(req: Request) =
-      codegenln("defined %s %s".format(keyword, name))
+      codegenln(s"defined $keyword $name")
   }
 
   class TypeAliasHandler(member: TypeDef) extends MemberDefHandler(member) {

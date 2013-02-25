@@ -53,7 +53,7 @@ package object reify {
     if (tpe.isSpliceable) {
       val classTagInScope = typer0.resolveClassTag(enclosingMacroPosition, tpe, allowMaterialization = false)
       if (!classTagInScope.isEmpty) return Select(classTagInScope, nme.runtimeClass)
-      if (concrete) throw new ReificationException(enclosingMacroPosition, "tpe %s is an unresolved spliceable type".format(tpe))
+      if (concrete) throw new ReificationException(enclosingMacroPosition, s"tpe $tpe is an unresolved spliceable type")
     }
 
     tpe.dealiasWiden match {

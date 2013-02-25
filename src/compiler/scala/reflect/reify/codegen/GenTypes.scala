@@ -75,7 +75,7 @@ trait GenTypes {
       val tagFlavor = if (concrete) tpnme.TypeTag.toString else tpnme.WeakTypeTag.toString
       // if this fails, it might produce the dreaded "erroneous or inaccessible type" error
       // to find out the whereabouts of the error run scalac with -Ydebug
-      if (reifyDebug) println("launching implicit search for %s.%s[%s]".format(universe, tagFlavor, tpe))
+      if (reifyDebug) println(s"launching implicit search for $universe.$tagFlavor[$tpe]")
       val result =
         typer.resolveTypeTag(defaultErrorPosition, universe.tpe, tpe, concrete = concrete, allowMaterialization = false) match {
           case failure if failure.isEmpty =>
@@ -166,7 +166,7 @@ trait GenTypes {
 
   /** Reify a tough type, i.e. the one that leads to creation of auxiliary symbols */
   private def reifyToughType(tpe: Type): Tree = {
-    if (reifyDebug) println("tough type: %s (%s)".format(tpe, tpe.kind))
+    if (reifyDebug) println(s"tough type: $tpe (${tpe.kind})")
 
     def reifyScope(scope: Scope): Tree = {
       scope foreach reifySymDef
@@ -190,7 +190,7 @@ trait GenTypes {
         tparams foreach reifySymDef
         mirrorFactoryCall(tpe, reify(tparams), reify(underlying))
       case _ =>
-        throw new Error("internal error: %s (%s) is not supported".format(tpe, tpe.kind))
+        throw new Error(s"internal error: $tpe (${tpe.kind}) is not supported")
     }
   }
 }

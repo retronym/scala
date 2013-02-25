@@ -173,7 +173,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
       val offset  = current - lines.size + 1
 
       for ((line, index) <- lines.zipWithIndex)
-        echo("%3d  %s".format(index + offset, line))
+        echo(f"${index + offset}%3d  $line")
     }
   }
 
@@ -194,7 +194,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
     val offset  = history.index - history.size + 1
 
     for ((line, index) <- history.asStrings.zipWithIndex ; if line.toLowerCase contains cmdline)
-      echo("%d %s".format(index + offset, line))
+      echo(s"${index + offset} $line")
   }
 
   private val currentPrompt = Properties.shellPromptString
@@ -245,12 +245,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
         val foundMsg       = if (found.isEmpty) "" else found.mkString(" // imports: ", ", ", "")
         val statsMsg       = List(typeMsg, termMsg, implicitMsg) filterNot (_ == "") mkString ("(", ", ", ")")
 
-        intp.reporter.printMessage("%2d) %-30s %s%s".format(
-          idx + 1,
-          handler.importString,
-          statsMsg,
-          foundMsg
-        ))
+        intp.reporter.printMessage(f"${idx + 1}%2d) ${handler.importString}%-30s ${statsMsg}${foundMsg}")
     }
   }
 
@@ -302,7 +297,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
 
   private def javapCommand(line: String): Result = {
     if (javap == null)
-      ":javap unavailable, no tools.jar at %s.  Set JDK_HOME.".format(jdkHome)
+      s":javap unavailable, no tools.jar at $jdkHome.  Set JDK_HOME."
     else if (line == "")
       ":javap [-lcsvp] [path1 path2 ...]"
     else
@@ -325,7 +320,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
     }
     else if (name == "") phased.get match {
       case NoPhaseName => "Usage: :phase <expr> (e.g. typer, erasure.next, erasure+3)"
-      case ph          => "Active phase is '%s'.  (To clear, :phase clear)".format(phased.get)
+      case ph          => s"Active phase is '${phased.get}'.  (To clear, :phase clear)"
     }
     else {
       val what = phased.parse(name)
@@ -335,7 +330,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
         intp.setExecutionWrapper(pathToPhaseWrapper)
         val activeMessage =
           if (what.toString.length == name.length) "" + what
-          else "%s (%s)".format(what, name)
+          else s"$what ($name)"
 
         "Active phase is now: " + activeMessage
       }
@@ -475,7 +470,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
     if (f.exists) {
       addedClasspath = ClassPath.join(addedClasspath, f.path)
       val totalClasspath = ClassPath.join(settings.classpath.value, addedClasspath)
-      echo("Added '%s'.  Your new classpath is:\n\"%s\"".format(f.path, totalClasspath))
+      echo(s"Added '${f.path}'.  Your new classpath is:\n\"$totalClasspath\"")
       replay()
     }
     else echo("The path '" + f + "' doesn't seem to exist.")

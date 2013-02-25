@@ -80,7 +80,8 @@ abstract class Reifier extends States
           ReifiedType(universe, mirror, symtab, tpe, rtree, reificationIsConcrete)
 
         case _ =>
-          throw new Error("reifee %s of type %s is not supported".format(reifee, if (reifee == null) "null" else reifee.getClass.toString))
+          val reifeeClassString = if (reifee == null) "null" else reifee.getClass.toString
+          throw new Error(s"reifee $reifee of type $reifeeClassString is not supported")
       }
 
       // todo. why do we resetAllAttrs?

@@ -27,7 +27,7 @@ private[tests] trait CoreTestDefs
           reporter.println("[response] aksTypeCompletion at " + format(pos))
           // we skip getClass because it changed signature between 1.5 and 1.6, so there is no
           // universal check file that we can provide for this to work
-          reporter.println("retrieved %d members".format(members.size))
+          reporter.println(s"retrieved ${members.size} members")
           compiler ask { () =>
             val filtered = members.filterNot(member => member.sym.name.toString == "getClass" || member.sym.isConstructor)
             reporter.println(filtered.map(memberPrinter).sortBy(_.toString()).mkString("\n"))

@@ -40,7 +40,7 @@ trait InteractiveTestSettings extends TestSettings with PresentationCompilerInst
     // pass any options coming from outside
     settings.processArgumentString(argsString) match {
       case (false, rest) =>
-        println("error processing arguments (unprocessed: %s)".format(rest))
+        println(s"error processing arguments (unprocessed: $rest)")
       case _ => ()
     }
 
@@ -53,7 +53,7 @@ trait InteractiveTestSettings extends TestSettings with PresentationCompilerInst
 
   /** If there's a file ending in .opts, read it and parse it for cmd line arguments. */
   protected val argsString = {
-    val optsFile = outDir / "%s.%s".format(System.getProperty("partest.testname"), TestOptionsFileExtension)
+    val optsFile = outDir / s"${System.getProperty("partest.testname")}.$TestOptionsFileExtension"
     val str = try File(optsFile).slurp() catch {
       case e: java.io.IOException => ""
     }
@@ -61,9 +61,9 @@ trait InteractiveTestSettings extends TestSettings with PresentationCompilerInst
   }
 
   override protected def printClassPath(implicit reporter: Reporter) {
-    reporter.println("\toutDir: %s".format(outDir.path))
-    reporter.println("\tbaseDir: %s".format(baseDir.path))
-    reporter.println("\targsString: %s".format(argsString))
+    reporter.println(s"\toutDir: ${outDir.path}")
+    reporter.println(s"\tbaseDir: ${baseDir.path}")
+    reporter.println(s"\targsString: $argsString")
     super.printClassPath(reporter)
   }
 }

@@ -10,7 +10,7 @@ object TestMarker {
     markers.get(marker.marker) match {
       case None => markers(marker.marker) = marker
       case Some(otherMarker) =>
-        val msg = "Marker `%s` is already used by %s. Please choose a different marker for %s".format(marker.marker, marker, otherMarker)
+        val msg = s"Marker `${marker.marker}` is already used by $marker. Please choose a different marker for $otherMarker"
         throw new DuplicateTestMarker(msg)
     }
   }

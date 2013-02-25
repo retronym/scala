@@ -66,7 +66,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   /** Inform with msg only when verboseIDE is true. */
   @inline final def informIDE(msg: => String) =
-    if (verboseIDE) println("[%s][%s]".format(projectName, msg))
+    if (verboseIDE) println(s"[$projectName][$msg]")
 
   override def forInteractive = true
 
@@ -185,7 +185,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
    *  and errors will be reported against it. */
   def enableIgnoredFile(file: AbstractFile) {
     ignoredFiles -= file
-    debugLog("Removed crashed file %s. Still in the ignored buffer: %s".format(file, ignoredFiles))
+    debugLog(s"Removed crashed file $file. Still in the ignored buffer: $ignoredFiles")
   }
 
   /** The currently active typer run */
@@ -361,9 +361,8 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
             // don't forget to service interrupt requests
             scheduler.dequeueAllInterrupts(_.execute())
 
-            debugLog("ShutdownReq: cleaning work queue (%d items)".format(units.size))
-            debugLog("Cleanup up responses (%d loadedType pending, %d parsedEntered pending)"
-                .format(waitLoadedTypeResponses.size, getParsedEnteredResponses.size))
+            debugLog(s"ShutdownReq: cleaning work queue (${units.size} items)")
+            debugLog(s"Cleanup up responses (${waitLoadedTypeResponses.size} loadedType pending, ${getParsedEnteredResponses.size} parsedEntered pending)")
             checkNoResponsesOutstanding()
 
             log.flush()
@@ -411,7 +410,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   @elidable(elidable.WARNING)
   override def assertCorrectThread() {
     assert(initializing || onCompilerThread,
-        "Race condition detected: You are running a presentation compiler method outside the PC thread.[phase: %s]".format(globalPhase) +
+        s"Race condition detected: You are running a presentation compiler method outside the PC thread.[phase: $globalPhase]" +
         " Please file a ticket with the current stack trace at https://www.assembla.com/spaces/scala-ide/support/tickets")
   }
 
@@ -460,8 +459,8 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
         if (!unit.isUpToDate)
           if (unit.problems.isEmpty || !settings.YpresentationStrict.value)
             typeCheck(unit)
-          else debugLog("%s has syntax errors. Skipped typechecking".format(unit))
-        else debugLog("already up to date: "+unit)
+          else debugLog(s"$unit has syntax errors. Skipped typechecking")
+        else debugLog(s"already up to date: $unit")
         for (r <- waitLoadedTypeResponses(unit.source))
           r set unit.body
         serviceParsedEntered()
@@ -479,9 +478,9 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
           lastException = Some(ex)
           ignoredFiles += unit.source.file
-          println("[%s] marking unit as crashed (crashedFiles: %s)".format(unit, ignoredFiles))
+          println(s"[$unit] marking unit as crashed (crashedFiles: $ignoredFiles)")
 
-          reporter.error(unit.body.pos, "Presentation compiler crashed while type checking this file: %s".format(ex.toString()))
+          reporter.error(unit.body.pos, s"Presentation compiler crashed while type checking this file: ${ex.toString()}")
       }
     }
 
