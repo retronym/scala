@@ -303,6 +303,7 @@ trait StdNames {
     val INITIALIZER: NameType              = CONSTRUCTOR // Is this buying us something?
     val LAZY_LOCAL: NameType               = "$lzy"
     val LAZY_SLOW_SUFFIX: NameType         = "$lzycompute"
+    val LAZY_LOCK: NameType                = "__lazyLock"
     val LOCAL_SUFFIX_STRING                = " "
     val UNIVERSE_BUILD_PREFIX: NameType    = "$u.build."
     val UNIVERSE_BUILD: NameType           = "$u.build"
@@ -827,7 +828,7 @@ trait StdNames {
     val toCharacter: NameType = "toCharacter"
     val toInteger: NameType   = "toInteger"
 
-    def newLazyValSlowComputeName(lzyValName: Name) = lzyValName append LAZY_SLOW_SUFFIX
+    def newLazyValSlowComputeName(lzyValName: Name): NameType = lzyValName append LAZY_SLOW_SUFFIX
 
     // ASCII names for operators
     val ADD      = encode("+")

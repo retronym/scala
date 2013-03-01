@@ -1,0 +1,4 @@
+error: method __lazyLock in object NoParams must not accept parameters to be used in lazy val or object locking.
+error: value __lazyLock in object NoOverload must not be overloaded to be used in lazy val or object locking.
+error: method __lazyLock in object NoPrimitive must erase to a subclass of AnyRef to be used in lazy val or object locking.
+three errors found

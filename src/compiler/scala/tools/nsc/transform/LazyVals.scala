@@ -47,6 +47,36 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
   }
 
   /**
+   * Construct a tree upon which to synchronize. By default, `this` or `$this` is
+   * used as the lock, but if the type of that reference contains a member `__lazyLock`,
+   * that is used instead.
+   *
+   * @param sym Either the enclosing class, or the `$this` parameter of methods in an impl class.
+   */
+  def lazyLock(sym: Symbol): Tree = {
+    val self = if (sym.isValueParameter) {
+      require(sym.name == nme.SELF, sym)
+      gen.mkAttributedIdent(sym)
+    } else {
+      require(sym.isClass, sym)
+      gen.mkAttributedThis(sym)
+    }
+    val member = sym.toInterface.info.member(nme.LAZY_LOCK)
+    if (settings.YlazyLock.value && member != NoSymbol) {
+      def fail(what: String): Tree = {
+        global.currentUnit.error(NoPosition, s"${member.fullLocationString} $what to be used in lazy val or object locking.")
+        EmptyTree
+      }
+      val info = member.info
+      if (member.isOverloaded) fail("must not be overloaded")
+      else if (info.paramss.flatten.nonEmpty) fail("must not accept parameters")
+      else if (!(info.finalResultType.erasure.typeSymbol isNonBottomSubClass ObjectClass)) fail("must erase to a subclass of AnyRef")
+      else gen.mkApplyIfNeeded(gen.mkAttributedSelect(self, member))
+    }
+    else self
+  }
+
+  /**
    * Transform local lazy accessors to check for the initialized bit.
    */
   class LazyValues(unit: CompilationUnit) extends TypingTransformer(unit) {
@@ -198,7 +228,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       debuglog(s"crete slow compute path $defSym with owner ${defSym.owner} for lazy val $lzyVal")
       if (bitmaps.contains(lzyVal))
         bitmaps(lzyVal).map(_.owner = defSym)
-      val rhs: Tree = (gen.mkSynchronizedCheck(clazz, cond, syncBody, stats)).changeOwner(currentOwner -> defSym)
+      val rhs: Tree = (gen.mkSynchronizedCheck(lazyLock(clazz), cond, syncBody, stats)).changeOwner(currentOwner -> defSym)
       DEF(defSym).mkTree(addBitmapDefs(lzyVal, BLOCK(rhs, retVal))) setSymbol defSym
     }
   

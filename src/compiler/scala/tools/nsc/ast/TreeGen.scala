@@ -363,9 +363,9 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
   def mkSynchronizedCheck(clazz: Symbol, cond: Tree, syncBody: List[Tree], stats: List[Tree]): Tree =
     mkSynchronizedCheck(mkAttributedThis(clazz), cond, syncBody, stats)
 
-  def mkSynchronizedCheck(attrThis: Tree, cond: Tree, syncBody: List[Tree], stats: List[Tree]): Tree =
+  def mkSynchronizedCheck(lock: Tree, cond: Tree, syncBody: List[Tree], stats: List[Tree]): Tree =
     Block(mkSynchronized(
-      attrThis,
+      lock,
       If(cond, Block(syncBody: _*), EmptyTree)) ::
       stats: _*)
 }

@@ -465,6 +465,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
 // --------- term transformation -----------------------------------------------
 
+
   protected def newTransformer(unit: CompilationUnit): Transformer =
     new MixinTransformer(unit)
 
@@ -776,11 +777,11 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       }
 
       def mkSlowPathDef(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
-                        stats: List[Tree], retVal: Tree, attrThis: Tree, args: List[Tree]): Symbol = {
+                        stats: List[Tree], retVal: Tree, lazyLock: Tree, args: List[Tree]): Symbol = {
         val defSym = clazz.newMethod(nme.newLazyValSlowComputeName(lzyVal.name), lzyVal.pos, PRIVATE)
         val params = defSym newSyntheticValueParams args.map(_.symbol.tpe)
         defSym setInfoAndEnter MethodType(params, lzyVal.tpe.resultType)
-        val rhs: Tree = (gen.mkSynchronizedCheck(attrThis, cond, syncBody, stats)).changeOwner(currentOwner -> defSym)
+        val rhs: Tree = (gen.mkSynchronizedCheck(lazyLock, cond, syncBody, stats)).changeOwner(currentOwner -> defSym)
         val strictSubst = new TreeSymSubstituterWithCopying(args.map(_.symbol), params)
         addDef(position(defSym), DEF(defSym).mkTree(strictSubst(BLOCK(rhs, retVal))) setSymbol defSym)
         defSym
@@ -788,12 +789,12 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
       def mkFastPathLazyBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
                              stats: List[Tree], retVal: Tree): Tree = {
-        mkFastPathBody(clazz, lzyVal, cond, syncBody, stats, retVal, gen.mkAttributedThis(clazz), List())
+        mkFastPathBody(clazz, lzyVal, cond, syncBody, stats, retVal, lazyVals.lazyLock(clazz), List())
       }
 
       def mkFastPathBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
-                        stats: List[Tree], retVal: Tree, attrThis: Tree, args: List[Tree]): Tree = {
-        val slowPathSym: Symbol = mkSlowPathDef(clazz, lzyVal, cond, syncBody, stats, retVal, attrThis, args)
+                        stats: List[Tree], retVal: Tree, lazyLock: Tree, args: List[Tree]): Tree = {
+        val slowPathSym: Symbol = mkSlowPathDef(clazz, lzyVal, cond, syncBody, stats, retVal, lazyLock, args)
         If(cond, fn (This(clazz), slowPathSym, args.map(arg => Ident(arg.symbol)): _*), retVal)
       }
 
@@ -863,12 +864,12 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         typedPos(init.head.pos)(mkFastPathLazyBody(clazz, lzyVal, cond, syncBody, nulls, retVal))
       }
 
-      def mkInnerClassAccessorDoubleChecked(attrThis: Tree, rhs: Tree, moduleSym: Symbol, args: List[Tree]): Tree =
+      def mkInnerClassAccessorDoubleChecked(lazyLock: Tree, rhs: Tree, moduleSym: Symbol, args: List[Tree]): Tree =
         rhs match {
           case Block(List(assign), returnTree) =>
             val Assign(moduleVarRef, _) = assign
             val cond                    = Apply(Select(moduleVarRef, Object_eq), List(NULL))
-            mkFastPathBody(clazz, moduleSym, cond, List(assign), List(NULL), returnTree, attrThis, args)
+            mkFastPathBody(clazz, moduleSym, cond, List(assign), List(NULL), returnTree, lazyLock, args)
           case _ =>
             abort("Invalid getter " + rhs + " for module in class " + clazz)
         }
@@ -934,7 +935,12 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
                 mkInnerClassAccessorDoubleChecked(
                   // Martin to Hubert: I think this can be replaced by selfRef(tree.pos)
                   // @PP: It does not seem so, it crashes for me trying to bootstrap.
-                  if (clazz.isImplClass) gen.mkAttributedIdent(stat.vparamss.head.head.symbol) else gen.mkAttributedThis(clazz),
+                  lazyVals.lazyLock(
+                    if (clazz.isImplClass) {
+                      val thisParam = stat.vparamss.head.head
+                      thisParam.symbol
+                    } else clazz
+                  ),
                   rhs, sym, stat.vparamss.head
                 )
               )
@@ -1073,8 +1079,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
             val rhs          = gen.newModule(sym, vdef.symbol.tpe)
             val assignAndRet = gen.mkAssignAndReturn(vdef.symbol, rhs)
-            val attrThis     = gen.mkAttributedThis(clazz)
-            val rhs1         = mkInnerClassAccessorDoubleChecked(attrThis, assignAndRet, sym, List())
+            val rhs1         = mkInnerClassAccessorDoubleChecked(lazyVals.lazyLock(clazz), assignAndRet, sym, List())
 
             addDefDef(sym, rhs1)
           }
