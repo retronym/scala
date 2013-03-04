@@ -38,6 +38,56 @@ trait TypeComparers {
     override def toString = tp1+" <:<? "+tp2
   }
 
+  private var subsametypeRecursions: Int = 0
+
+  private def isUnifiable(pre1: Type, pre2: Type) =
+    (beginsWithTypeVarOrIsRefined(pre1) || beginsWithTypeVarOrIsRefined(pre2)) && (pre1 =:= pre2)
+
+  /** Returns true iff we are past phase specialize,
+    *  sym1 and sym2 are two existential skolems with equal names and bounds,
+    *  and pre1 and pre2 are equal prefixes
+    */
+  private def isSameSpecializedSkolem(sym1: Symbol, sym2: Symbol, pre1: Type, pre2: Type) = {
+    sym1.isExistentialSkolem && sym2.isExistentialSkolem &&
+      sym1.name == sym2.name &&
+      phase.specialized &&
+      sym1.info =:= sym2.info &&
+      pre1 =:= pre2
+  }
+
+  private def isSubPre(pre1: Type, pre2: Type, sym: Symbol) =
+    if ((pre1 ne pre2) && (pre1 ne NoPrefix) && (pre2 ne NoPrefix) && pre1 <:< pre2) {
+      if (settings.debug.value) println(s"new isSubPre $sym: $pre1 <:< $pre2")
+      true
+    } else
+      false
+
+  private def equalSymsAndPrefixes(sym1: Symbol, pre1: Type, sym2: Symbol, pre2: Type): Boolean =
+    if (sym1 == sym2) sym1.hasPackageFlag || sym1.owner.hasPackageFlag || phase.erasedTypes || pre1 =:= pre2
+    else (sym1.name == sym2.name) && isUnifiable(pre1, pre2)
+
+
+  def isDifferentType(tp1: Type, tp2: Type): Boolean = try {
+    subsametypeRecursions += 1
+    undoLog undo { // undo type constraints that arise from operations in this block
+      !isSameType1(tp1, tp2)
+    }
+  } finally {
+    subsametypeRecursions -= 1
+    // XXX AM TODO: figure out when it is safe and needed to clear the log -- the commented approach below is too eager (it breaks #3281, #3866)
+    // it doesn't help to keep separate recursion counts for the three methods that now share it
+    // if (subsametypeRecursions == 0) undoLog.clear()
+  }
+
+  def isDifferentTypeConstructor(tp1: Type, tp2: Type): Boolean = tp1 match {
+    case TypeRef(pre1, sym1, _) =>
+      tp2 match {
+        case TypeRef(pre2, sym2, _) => sym1 != sym2 || isDifferentType(pre1, pre2)
+        case _ => true
+      }
+    case _ => true
+  }
+
   /** Do `tp1` and `tp2` denote equivalent types? */
   def isSameType(tp1: Type, tp2: Type): Boolean = try {
     if (Statistics.canEnable) Statistics.incCounter(sametypeCount)
