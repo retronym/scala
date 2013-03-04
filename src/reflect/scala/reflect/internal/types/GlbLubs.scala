@@ -181,6 +181,24 @@ trait GlbLubs  extends api.Types {
       if (rest exists (t1 => t1 <:< t)) rest else t :: rest
   }
 
+  /** Eliminate from list of types all elements which are a subtype
+    *  of some other element of the list. */
+  private def elimSub(ts: List[Type], depth: Int): List[Type] = {
+    def elimSub0(ts: List[Type]): List[Type] = ts match {
+      case List() => List()
+      case List(t) => List(t)
+      case t :: ts1 =>
+        val rest = elimSub0(ts1 filter (t1 => !isSubType(t1, t, decr(depth))))
+        if (rest exists (t1 => isSubType(t, t1, decr(depth)))) rest else t :: rest
+    }
+    val ts0 = elimSub0(ts)
+    if (ts0.isEmpty || ts0.tail.isEmpty) ts0
+    else {
+      val ts1 = ts0 mapConserve (t => elimAnonymousClass(t.dealiasWiden))
+      if (ts1 eq ts0) ts0
+      else elimSub(ts1, depth)
+    }
+  }
 
   private val lubResults = new mutable.HashMap[(Int, List[Type]), Type]
   private val glbResults = new mutable.HashMap[(Int, List[Type]), Type]
@@ -500,5 +518,6 @@ trait GlbLubs  extends api.Types {
 
     if (ts exists typeIsNotNull) res.notNull else res
   }
+
 
 }
