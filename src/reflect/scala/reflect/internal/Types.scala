@@ -98,11 +98,8 @@ trait Types
   /** Decrement depth unless it is a don't care. */
   /*TODO private*/ final def decr(depth: Int) = if (depth == AnyDepth) AnyDepth else depth - 1
 
-  /*TODO private*/ final val printLubs = sys.props contains "scalac.debug.lub"
   /*TODO private*/ final val traceTypeVars = sys.props contains "scalac.debug.tvar"
   /*TODO private*/ final val breakCycles = settings.breakCycles.value
-  /** In case anyone wants to turn off lub verification without reverting anything. */
-  /*TODO private*/ final val verifyLubs = true
   /** In case anyone wants to turn off type parameter bounds being used
    *  to seed type constraints.
    */

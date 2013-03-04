@@ -19,7 +19,11 @@ trait GlbLubs  extends api.Types {
   import definitions._
   import TypesStats._
 
-  // Lubs and Glbs ---------------------------------------------------------
+  private final val printLubs = sys.props contains "scalac.debug.lub"
+
+  /** In case anyone wants to turn off lub verification without reverting anything. */
+  private final val verifyLubs = true
+
 
   private def printLubMatrix(btsMap: Map[Type, List[Type]], depth: Int) {
     import util.TableDef
