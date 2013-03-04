@@ -4519,51 +4519,6 @@ trait Types
   def inheritsJavaVarArgsMethod(clazz: Symbol) =
     clazz.thisType.baseClasses exists isJavaVarargsAncestor
 
-  /** All types in list must be polytypes with type parameter lists of
-   *  same length as tparams.
-   *  Returns list of list of bounds infos, where corresponding type
-   *  parameters are renamed to tparams.
-   */
-  /*TODO private*/ def matchingBounds(tps: List[Type], tparams: List[Symbol]): List[List[Type]] = {
-    def getBounds(tp: Type): List[Type] = tp match {
-      case PolyType(tparams1, _) if sameLength(tparams1, tparams) =>
-        tparams1 map (tparam => tparam.info.substSym(tparams1, tparams))
-      case tp =>
-        if (tp ne tp.normalize) getBounds(tp.normalize)
-        else throw new NoCommonType(tps)
-    }
-    tps map getBounds
-  }
-
-  /** All types in list must be polytypes with type parameter lists of
-   *  same length as tparams.
-   *  Returns list of instance types, where corresponding type
-   *  parameters are renamed to tparams.
-   */
-  /*TODO private*/ def matchingInstTypes(tps: List[Type], tparams: List[Symbol]): List[Type] = {
-    def transformResultType(tp: Type): Type = tp match {
-      case PolyType(tparams1, restpe) if sameLength(tparams1, tparams) =>
-        restpe.substSym(tparams1, tparams)
-      case tp =>
-        if (tp ne tp.normalize) transformResultType(tp.normalize)
-        else throw new NoCommonType(tps)
-    }
-    tps map transformResultType
-  }
-
-  /** All types in list must be method types with equal parameter types.
-   *  Returns list of their result types.
-   */
-  /*TODO private*/ def matchingRestypes(tps: List[Type], pts: List[Type]): List[Type] =
-    tps map {
-      case mt @ MethodType(params1, res) if isSameTypes(mt.paramTypes, pts) =>
-        res
-      case NullaryMethodType(res) if pts.isEmpty =>
-        res
-      case _ =>
-        throw new NoCommonType(tps)
-    }
-
 // Errors and Diagnostics -----------------------------------------------------
 
   /** A throwable signalling a type error */
