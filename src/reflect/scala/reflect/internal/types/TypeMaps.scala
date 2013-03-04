@@ -326,6 +326,114 @@ trait TypeMaps extends api.Types {
     }
   }
 
+  /** The raw to existential map converts a ''raw type'' to an existential type.
+    *  It is necessary because we might have read a raw type of a
+    *  parameterized Java class from a class file. At the time we read the type
+    *  the corresponding class file might still not be read, so we do not
+    *  know what the type parameters of the type are. Therefore
+    *  the conversion of raw types to existential types might not have taken place
+    *  in ClassFileparser.sigToType (where it is usually done).
+    */
+  def rawToExistential = new TypeMap {
+    private var expanded = immutable.Set[Symbol]()
+    def apply(tp: Type): Type = tp match {
+      case TypeRef(pre, sym, List()) if isRawIfWithoutArgs(sym) =>
+        if (expanded contains sym) AnyRefClass.tpe
+        else try {
+          expanded += sym
+          val eparams = mapOver(typeParamsToExistentials(sym))
+          existentialAbstraction(eparams, typeRef(apply(pre), sym, eparams map (_.tpe)))
+        } finally {
+          expanded -= sym
+        }
+      case _ =>
+        mapOver(tp)
+    }
+  }
+  /***
+    *@M: I think this is more desirable, but Martin prefers to leave raw-types as-is as much as possible
+    object rawToExistentialInJava extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        // any symbol that occurs in a java sig, not just java symbols
+        // see http://lampsvn.epfl.ch/trac/scala/ticket/2454#comment:14
+        case TypeRef(pre, sym, List()) if !sym.typeParams.isEmpty =>
+          val eparams = typeParamsToExistentials(sym, sym.typeParams)
+          existentialAbstraction(eparams, TypeRef(pre, sym, eparams map (_.tpe)))
+        case _ =>
+          mapOver(tp)
+      }
+    }
+    */
+
+  /** Used by existentialAbstraction.
+    */
+  class ExistentialExtrapolation(tparams: List[Symbol]) extends TypeMap(trackVariance = true) {
+    private val occurCount = mutable.HashMap[Symbol, Int]()
+    private def countOccs(tp: Type) = {
+      tp foreach {
+        case TypeRef(_, sym, _) =>
+          if (tparams contains sym)
+            occurCount(sym) += 1
+        case _ => ()
+      }
+    }
+    def extrapolate(tpe: Type): Type = {
+      tparams foreach (t => occurCount(t) = 0)
+      countOccs(tpe)
+      for (tparam <- tparams)
+        countOccs(tparam.info)
+
+      apply(tpe)
+    }
+
+    /** If these conditions all hold:
+      *   1) we are in covariant (or contravariant) position
+      *   2) this type occurs exactly once in the existential scope
+      *   3) the widened upper (or lower) bound of this type contains no references to tparams
+      *  Then we replace this lone occurrence of the type with the widened upper (or lower) bound.
+      *  All other types pass through unchanged.
+      */
+    def apply(tp: Type): Type = {
+      val tp1 = mapOver(tp)
+      if (variance.isInvariant) tp1
+      else tp1 match {
+        case TypeRef(pre, sym, args) if tparams contains sym =>
+          val repl = if (variance.isPositive) dropSingletonType(tp1.bounds.hi) else tp1.bounds.lo
+          val count = occurCount(sym)
+          val containsTypeParam = tparams exists (repl contains _)
+          def msg = {
+            val word = if (variance.isPositive) "upper" else "lower"
+            s"Widened lone occurrence of $tp1 inside existential to $word bound"
+          }
+          if (!repl.typeSymbol.isBottomClass && count == 1 && !containsTypeParam)
+            logResult(msg)(repl)
+          else
+            tp1
+        case _ =>
+          tp1
+      }
+    }
+    override def mapOver(tp: Type): Type = tp match {
+      case SingleType(pre, sym) =>
+        if (sym.isPackageClass) tp // short path
+        else {
+          val pre1 = this(pre)
+          if ((pre1 eq pre) || !pre1.isStable) tp
+          else singleType(pre1, sym)
+        }
+      case _ => super.mapOver(tp)
+    }
+
+    // Do not discard the types of existential ident's. The
+    // symbol of the Ident itself cannot be listed in the
+    // existential's parameters, so the resulting existential
+    // type would be ill-formed.
+    override def mapOver(tree: Tree) = tree match {
+      case Ident(_) if tree.tpe.isStable => tree
+      case _                             => super.mapOver(tree)
+    }
+  }
+
   /** Might the given symbol be important when calculating the prefix
     *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
     *  the result will be `tp` unchanged if `pre` is trivial and `clazz`
