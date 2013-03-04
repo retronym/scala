@@ -5483,36 +5483,6 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
       t
   }
 
-  /*TODO private*/ def stripExistentialsAndTypeVars(ts: List[Type]): (List[Type], List[Symbol]) = {
-    val quantified = ts flatMap {
-      case ExistentialType(qs, _) => qs
-      case t => List()
-    }
-    def stripType(tp: Type): Type = tp match {
-      case ExistentialType(_, res) =>
-        res
-      case tv@TypeVar(_, constr) =>
-        if (tv.instValid) stripType(constr.inst)
-        else if (tv.untouchable) tv
-        else abort("trying to do lub/glb of typevar "+tp)
-      case t => t
-    }
-    val strippedTypes = ts mapConserve stripType
-    (strippedTypes, quantified)
-  }
-
-  def weakLub(ts: List[Type]) =
-    if (ts.nonEmpty && (ts forall isNumericValueType)) (numericLub(ts), true)
-    else if (ts exists typeHasAnnotations)
-      (annotationsLub(lub(ts map (_.withoutAnnotations)), ts), true)
-    else (lub(ts), false)
-
-  def numericLub(ts: List[Type]) =
-    ts reduceLeft ((t1, t2) =>
-      if (isNumericSubType(t1, t2)) t2
-      else if (isNumericSubType(t2, t1)) t1
-      else IntClass.tpe)
-
   def isWeakSubType(tp1: Type, tp2: Type) =
     tp1.deconst.normalize match {
       case TypeRef(_, sym1, _) if isNumericValueClass(sym1) =>
