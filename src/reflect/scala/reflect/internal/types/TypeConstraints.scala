@@ -2,23 +2,13 @@ package scala.reflect
 package internal
 package types
 
-import scala.collection.{ mutable, immutable, generic }
+import scala.collection.{ mutable, generic }
 import generic.Clearable
-import scala.ref.WeakReference
-import mutable.ListBuffer
-import Flags._
-import scala.util.control.ControlThrowable
-import scala.annotation.tailrec
-import util.Statistics
-import scala.runtime.ObjectRef
-import util.ThreeValues._
-import Variance._
 
 
 trait TypeConstraints extends api.Types {
   self: SymbolTable =>
   import definitions._
-  import TypesStats._
 
   /** A log of type variable with their original constraints. Used in order
     *  to undo constraints in the case of isSubType/isSameType failure.

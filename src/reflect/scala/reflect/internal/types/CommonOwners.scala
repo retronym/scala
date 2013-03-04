@@ -5,9 +5,6 @@ package types
 trait CommonOwners extends api.Types {
   self: SymbolTable =>
 
-  import definitions._
-  import TypesStats._
-
   /** The most deeply nested owner that contains all the symbols
     *  of thistype or prefixless typerefs/singletype occurrences in given type.
     */

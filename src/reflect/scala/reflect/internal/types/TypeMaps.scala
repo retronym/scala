@@ -3,21 +3,13 @@ package internal
 package types
 
 import scala.collection.{ mutable, immutable, generic }
-import generic.Clearable
-import scala.ref.WeakReference
-import mutable.ListBuffer
 import Flags._
-import scala.util.control.ControlThrowable
 import scala.annotation.tailrec
-import util.Statistics
-import scala.runtime.ObjectRef
-import util.ThreeValues._
 import Variance._
 
 trait TypeMaps extends api.Types {
   self: SymbolTable =>
   import definitions._
-  import TypesStats._
 
   /** Normalize any type aliases within this type (@see Type#normalize).
     *  Note that this depends very much on the call to "normalize", not "dealias",

@@ -14,7 +14,6 @@ import Flags._
 import scala.util.control.ControlThrowable
 import scala.annotation.tailrec
 import util.Statistics
-import scala.runtime.ObjectRef
 import util.ThreeValues._
 import Variance._
 
