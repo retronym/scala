@@ -11,13 +11,13 @@ trait CommonOwners extends api.Types {
   /** The most deeply nested owner that contains all the symbols
     *  of thistype or prefixless typerefs/singletype occurrences in given type.
     */
-  /*TODO private*/ def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
+  protected[internal] def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
 
   /** The most deeply nested owner that contains all the symbols
     *  of thistype or prefixless typerefs/singletype occurrences in given list
     *  of types.
     */
-  /*TODO private*/ def commonOwner(tps: List[Type]): Symbol = {
+  protected[internal] def commonOwner(tps: List[Type]): Symbol = {
     if (tps.isEmpty) NoSymbol
     else {
       commonOwnerMap.clear()
@@ -49,5 +49,5 @@ trait CommonOwners extends api.Types {
     }
   }
 
-  /*TODO private*/ lazy val commonOwnerMapObj = new CommonOwnerMap
+  private lazy val commonOwnerMapObj = new CommonOwnerMap
 }

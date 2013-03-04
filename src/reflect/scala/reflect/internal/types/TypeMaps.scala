@@ -441,7 +441,7 @@ trait TypeMaps extends api.Types {
     */
   def isPossiblePrefix(clazz: Symbol) = clazz.isClass && !clazz.isPackageClass
 
-  /*TODO private*/ def skipPrefixOf(pre: Type, clazz: Symbol) = (
+  protected[internal] def skipPrefixOf(pre: Type, clazz: Symbol) = (
     (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
     )
 

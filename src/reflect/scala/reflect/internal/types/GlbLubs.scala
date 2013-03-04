@@ -282,7 +282,7 @@ trait GlbLubs  extends api.Types {
   }
 
   /** The least upper bound wrt <:< of a list of types */
-  /*TODO private*/ def lub(ts: List[Type], depth: Int): Type = {
+  protected[internal] def lub(ts: List[Type], depth: Int): Type = {
     def lub0(ts0: List[Type]): Type = elimSub(ts0, depth) match {
       case List() => NothingClass.tpe
       case List(t) => t
@@ -434,7 +434,7 @@ trait GlbLubs  extends api.Types {
       }
   }
 
-  /*TODO private*/ def glb(ts: List[Type], depth: Int): Type = elimSuper(ts) match {
+  protected[internal] def glb(ts: List[Type], depth: Int): Type = elimSuper(ts) match {
     case List() => AnyClass.tpe
     case List(t) => t
     case ts0 => glbNorm(ts0, depth)

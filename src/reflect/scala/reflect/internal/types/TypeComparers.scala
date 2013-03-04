@@ -19,6 +19,8 @@ trait TypeComparers extends api.Types {
   import definitions._
   import TypesStats._
 
+  private final val LogPendingSubTypesThreshold = DefaultLogThreshhold
+
   private val pendingSubTypes = new mutable.HashSet[SubTypePair]
 
   class SubTypePair(val tp1: Type, val tp2: Type) {
@@ -117,7 +119,7 @@ trait TypeComparers extends api.Types {
     // if (subsametypeRecursions == 0) undoLog.clear()
   }
 
-  /*TODO private*/ def isSameType1(tp1: Type, tp2: Type): Boolean = {
+  private def isSameType1(tp1: Type, tp2: Type): Boolean = {
     if ((tp1 eq tp2) ||
       (tp1 eq ErrorType) || (tp1 eq WildcardType) ||
       (tp2 eq ErrorType) || (tp2 eq WildcardType))
@@ -394,7 +396,7 @@ trait TypeComparers extends api.Types {
       }))
 
   /** Does type `tp1` conform to `tp2`? */
-  /*TODO private*/ def isSubType2(tp1: Type, tp2: Type, depth: Int): Boolean = {
+  private def isSubType2(tp1: Type, tp2: Type, depth: Int): Boolean = {
     if ((tp1 eq tp2) || isErrorOrWildcard(tp1) || isErrorOrWildcard(tp2)) return true
     if ((tp1 eq NoType) || (tp2 eq NoType)) return false
     if (tp1 eq NoPrefix) return (tp2 eq NoPrefix) || tp2.typeSymbol.isPackageClass // !! I do not see how the "isPackageClass" would be warranted by the spec

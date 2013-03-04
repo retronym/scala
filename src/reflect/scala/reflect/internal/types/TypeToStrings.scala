@@ -21,7 +21,7 @@ trait TypeToStrings extends api.Types {
     */
   final val maxTostringRecursions = 50
 
-  /*TODO private*/ var tostringRecursions = 0
+  private var tostringRecursions = 0
 
   protected def typeToString(tpe: Type): String =
     if (tostringRecursions >= maxTostringRecursions) {

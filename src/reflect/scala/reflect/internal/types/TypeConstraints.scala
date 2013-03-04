@@ -97,8 +97,8 @@ trait TypeConstraints extends api.Types {
   /** @PP: Unable to see why these apparently constant types should need vals
     *  in every TypeConstraint, I lifted them out.
     */
-  /*TODO private*/ lazy val numericLoBound = IntClass.tpe
-  /*TODO private*/ lazy val numericHiBound = intersectionType(List(ByteClass.tpe, CharClass.tpe), ScalaPackageClass)
+  private lazy val numericLoBound = IntClass.tpe
+  private lazy val numericHiBound = intersectionType(List(ByteClass.tpe, CharClass.tpe), ScalaPackageClass)
 
   /** A class expressing upper and lower bounds constraints of type variables,
     * as well as their instantiations.

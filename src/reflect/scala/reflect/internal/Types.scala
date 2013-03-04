@@ -85,25 +85,25 @@ trait Types
   import definitions._
   import TypesStats._
 
-  /*TODO private*/ var explainSwitch = false
-  /*TODO private*/ final val emptySymbolSet = immutable.Set.empty[Symbol]
+  private var explainSwitch = false
+  private final val emptySymbolSet = immutable.Set.empty[Symbol]
 
-  /*TODO private*/ final val LogPendingSubTypesThreshold = 50
-  /*TODO private*/ final val LogPendingBaseTypesThreshold = 50
-  /*TODO private*/ final val LogVolatileThreshold = 50
+  protected[internal] final val DefaultLogThreshhold = 50
+  private final val LogPendingBaseTypesThreshold = DefaultLogThreshhold
+  private final val LogVolatileThreshold = DefaultLogThreshhold
 
   /** A don't care value for the depth parameter in lubs/glbs and related operations. */
-  /*TODO private*/ final val AnyDepth = -3
+  protected[internal] final val AnyDepth = -3
 
   /** Decrement depth unless it is a don't care. */
-  /*TODO private*/ final def decr(depth: Int) = if (depth == AnyDepth) AnyDepth else depth - 1
+  protected[internal] final def decr(depth: Int) = if (depth == AnyDepth) AnyDepth else depth - 1
 
-  /*TODO private*/ final val traceTypeVars = sys.props contains "scalac.debug.tvar"
-  /*TODO private*/ final val breakCycles = settings.breakCycles.value
+  private final val traceTypeVars = sys.props contains "scalac.debug.tvar"
+  private final val breakCycles = settings.breakCycles.value
   /** In case anyone wants to turn off type parameter bounds being used
    *  to seed type constraints.
    */
-  /*TODO private*/ final val propagateParameterBoundsToTypeVars = sys.props contains "scalac.debug.prop-constraints"
+  private final val propagateParameterBoundsToTypeVars = sys.props contains "scalac.debug.prop-constraints"
 
   protected val enableTypeVarExperimentals = settings.Xexperimental.value
 
@@ -247,7 +247,7 @@ trait Types
    *  type instead of the proxy. This gives buried existentials a
    *  chance to make peace with the other types. See SI-5330.
    */
-  /*TODO private*/ def narrowForFindMember(tp: Type): Type = {
+  private def narrowForFindMember(tp: Type): Type = {
     val w = tp.widen
     // Only narrow on widened type when we have to -- narrow is expensive unless the target is a singleton type.
     if ((tp ne w) && containsExistential(w)) w.narrow
@@ -1684,7 +1684,7 @@ trait Types
         define()
     }
   }
-  /*TODO private*/ def defineBaseClassesOfCompoundType(tpe: CompoundType, force: Boolean) {
+  private def defineBaseClassesOfCompoundType(tpe: CompoundType, force: Boolean) {
     val period = tpe.baseClassesPeriod
     if (period == currentPeriod) {
       if (force && breakCycles) {
@@ -2006,8 +2006,8 @@ trait Types
    * with synchronized, because they are accessed only from isVolatile, which is called only from
    * Typer.
    */
-  /*TODO private*/ var volatileRecursions: Int = 0
-  /*TODO private*/ val pendingVolatiles = new mutable.HashSet[Symbol]
+  private var volatileRecursions: Int = 0
+  private val pendingVolatiles = new mutable.HashSet[Symbol]
 
   class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
     require(args0.nonEmpty, this)
@@ -3405,13 +3405,13 @@ trait Types
 // Creators ---------------------------------------------------------------
 
   /** Rebind symbol `sym` to an overriding member in type `pre`. */
-  /*TODO private*/ def rebind(pre: Type, sym: Symbol): Symbol = {
+  private def rebind(pre: Type, sym: Symbol): Symbol = {
     if (!sym.isOverridableMember || sym.owner == pre.typeSymbol) sym
     else pre.nonPrivateMember(sym.name).suchThat(sym => sym.isType || sym.isStable) orElse sym
   }
 
   /** Convert a `super` prefix to a this-type if `sym` is abstract or final. */
-  /*TODO private*/ def removeSuper(tp: Type, sym: Symbol): Type = tp match {
+  private def removeSuper(tp: Type, sym: Symbol): Type = tp match {
     case SuperType(thistp, _) =>
       if (sym.isEffectivelyFinal || sym.isDeferred) thistp
       else tp
@@ -3660,9 +3660,9 @@ trait Types
 
 // Hash consing --------------------------------------------------------------
 
-  /*TODO private*/ val initialUniquesCapacity = 4096
-  /*TODO private*/ var uniques: util.HashSet[Type] = _
-  /*TODO private*/ var uniqueRunId = NoRunId
+  private val initialUniquesCapacity = 4096
+  private var uniques: util.HashSet[Type] = _
+  private var uniqueRunId = NoRunId
 
   protected def unique[T <: Type](tp: T): T = {
     if (Statistics.canEnable) Statistics.incCounter(rawTypeCount)
@@ -3704,7 +3704,7 @@ trait Types
   def containsExistential(tpe: Type) = tpe exists typeIsExistentiallyBound
   def existentialsInType(tpe: Type) = tpe withFilter typeIsExistentiallyBound map (_.typeSymbol)
 
-  /*TODO private*/ def isDummyOf(tpe: Type)(targ: Type) = {
+  private def isDummyOf(tpe: Type)(targ: Type) = {
     val sym = targ.typeSymbol
     sym.isTypeParameter && sym.owner == tpe.typeSymbol
   }
@@ -3803,16 +3803,16 @@ trait Types
    *  as a function over the maximum depth `td` of these types, and
    *  the maximum depth `bd` of all types in the base type sequences of these types.
    */
-  /*TODO private*/ def lubDepthAdjust(td: Int, bd: Int): Int =
+  private def lubDepthAdjust(td: Int, bd: Int): Int =
     if (settings.XfullLubs.value) bd
     else if (bd <= 3) bd
     else if (bd <= 5) td max (bd - 1)
     else if (bd <= 7) td max (bd - 2)
     else (td - 1) max (bd - 3)
 
-  /*TODO private*/ def symTypeDepth(syms: List[Symbol]): Int  = typeDepth(syms map (_.info))
-  /*TODO private*/ def typeDepth(tps: List[Type]): Int        = maxDepth(tps)
-  /*TODO private*/ def baseTypeSeqDepth(tps: List[Type]): Int = maxBaseTypeSeqDepth(tps)
+  private def symTypeDepth(syms: List[Symbol]): Int  = typeDepth(syms map (_.info))
+  private def typeDepth(tps: List[Type]): Int        = maxDepth(tps)
+  private def baseTypeSeqDepth(tps: List[Type]): Int = maxBaseTypeSeqDepth(tps)
 
   /** Is intersection of given types populated? That is,
    *  for all types tp1, tp2 in intersection
@@ -3926,8 +3926,8 @@ trait Types
    */
   final def hasLength(xs: List[_], len: Int) = xs.lengthCompare(len) == 0
 
-  /*TODO private*/ var basetypeRecursions: Int = 0
-  /*TODO private*/ val pendingBaseTypes = new mutable.HashSet[Type]
+  private var basetypeRecursions: Int = 0
+  private val pendingBaseTypes = new mutable.HashSet[Type]
 
 
   /** Does this type have a prefix that begins with a type variable,
@@ -3969,7 +3969,7 @@ trait Types
     || isValueElseNonValue(tp)          // otherwise only value types
   )
 
-  /*TODO private*/ def isHKTypeRef(tp: Type) = tp match {
+  private def isHKTypeRef(tp: Type) = tp match {
     case TypeRef(_, sym, Nil) => tp.isHigherKinded
     case _                    => false
   }
@@ -3985,7 +3985,7 @@ trait Types
    */
   /**** Not used right now, but kept around to document which Types
    *    land in which bucket.
-  /*TODO private*/ def isInternalTypeNotUsedAsTypeArg(tp: Type): Boolean = tp match {
+  private def isInternalTypeNotUsedAsTypeArg(tp: Type): Boolean = tp match {
     case AntiPolyType(pre, targs)            => true
     case ClassInfoType(parents, defs, clazz) => true
     case ErasedValueType(tref)               => true
@@ -3996,20 +3996,20 @@ trait Types
     case _                                   => false
   }
   ****/
-  /*TODO private*/ def isInternalTypeUsedAsTypeArg(tp: Type): Boolean = tp match {
+  private def isInternalTypeUsedAsTypeArg(tp: Type): Boolean = tp match {
     case WildcardType           => true
     case BoundedWildcardType(_) => true
     case ErrorType              => true
     case _: TypeVar             => true
     case _                      => false
   }
-  /*TODO private*/ def isAlwaysValueType(tp: Type) = tp match {
+  private def isAlwaysValueType(tp: Type) = tp match {
     case RefinedType(_, _)       => true
     case ExistentialType(_, _)   => true
     case ConstantType(_)         => true
     case _                       => false
   }
-  /*TODO private*/ def isAlwaysNonValueType(tp: Type) = tp match {
+  private def isAlwaysNonValueType(tp: Type) = tp match {
     case OverloadedType(_, _)          => true
     case NullaryMethodType(_)          => true
     case MethodType(_, _)              => true
@@ -4020,7 +4020,7 @@ trait Types
    *  can be given: true == value type, false == non-value type.  Otherwise,
    *  an exception is thrown.
    */
-  /*TODO private*/ def isValueElseNonValue(tp: Type): Boolean = tp match {
+  private def isValueElseNonValue(tp: Type): Boolean = tp match {
     case tp if isAlwaysValueType(tp)           => true
     case tp if isAlwaysNonValueType(tp)        => false
     case AnnotatedType(_, underlying, _)       => isValueElseNonValue(underlying)
@@ -4070,7 +4070,7 @@ trait Types
     corresponds3(tps1, tps2, tparams map (_.variance))(isSubArg)
   }
 
-  /*TODO private*/ def containsNull(sym: Symbol): Boolean =
+  protected[internal] def containsNull(sym: Symbol): Boolean =
     sym.isClass && sym != NothingClass &&
     !(sym isNonBottomSubClass AnyValClass) &&
     !(sym isNonBottomSubClass NotNullClass)
@@ -4092,7 +4092,7 @@ trait Types
   /** Does member `sym1` of `tp1` have a stronger type
    *  than member `sym2` of `tp2`?
    */
-  /*TODO private*/ def specializesSym(tp1: Type, sym1: Symbol, tp2: Type, sym2: Symbol, depth: Int): Boolean = {
+  protected[internal] def specializesSym(tp1: Type, sym1: Symbol, tp2: Type, sym2: Symbol, depth: Int): Boolean = {
     require((sym1 ne NoSymbol) && (sym2 ne NoSymbol), ((tp1, sym1, tp2, sym2, depth)))
     val info1 = tp1.memberInfo(sym1)
     val info2 = tp2.memberInfo(sym2).substThis(tp2.typeSymbol, tp1)
@@ -4226,7 +4226,7 @@ trait Types
 */
 
   /** Are `syms1` and `syms2` parameter lists with pairwise equivalent types? */
-  /*TODO private*/ def matchingParams(syms1: List[Symbol], syms2: List[Symbol], syms1isJava: Boolean, syms2isJava: Boolean): Boolean = syms1 match {
+  protected[internal] def matchingParams(syms1: List[Symbol], syms2: List[Symbol], syms1isJava: Boolean, syms2isJava: Boolean): Boolean = syms1 match {
     case Nil =>
       syms2.isEmpty
     case sym1 :: rest1 =>
@@ -4432,7 +4432,7 @@ trait Types
   }
 
   /** The current indentation string for traces */
-  /*TODO private*/ var indent: String = ""
+  protected[internal] var indent: String = ""
 
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
