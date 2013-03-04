@@ -2,7 +2,7 @@ package scala.reflect
 package internal
 package types
 
-trait CommonOwners extends api.Types {
+private[internal] trait CommonOwners {
   self: SymbolTable =>
 
   /** The most deeply nested owner that contains all the symbols

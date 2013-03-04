@@ -6,7 +6,7 @@ import scala.collection.{ mutable }
 import Flags._
 import util.Statistics
 
-trait TypeComparers extends api.Types {
+trait TypeComparers {
   self: SymbolTable =>
   import definitions._
   import TypesStats._

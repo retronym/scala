@@ -2,9 +2,7 @@ package scala.reflect
 package internal
 package types
 
-import scala.collection.{ mutable, generic }
-
-trait TypeToStrings extends api.Types {
+private[internal] trait TypeToStrings extends api.Types {
   self: SymbolTable =>
 
   /** The maximum number of recursions allowed in toString

@@ -2,12 +2,12 @@ package scala.reflect
 package internal
 package types
 
-import scala.collection.{ mutable, immutable, generic }
+import scala.collection.{ mutable, immutable }
 import Flags._
 import scala.annotation.tailrec
 import Variance._
 
-trait TypeMaps extends api.Types {
+private[internal] trait TypeMaps {
   self: SymbolTable =>
   import definitions._
 

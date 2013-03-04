@@ -2,11 +2,11 @@ package scala.reflect
 package internal
 package types
 
-import scala.collection.{ mutable, generic }
+import scala.collection.{ mutable }
 import util.Statistics
 import Variance._
 
-trait GlbLubs extends api.Types {
+private[internal] trait GlbLubs {
   self: SymbolTable =>
   import definitions._
   import TypesStats._

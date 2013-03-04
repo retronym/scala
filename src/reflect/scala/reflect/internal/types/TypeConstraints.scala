@@ -2,11 +2,11 @@ package scala.reflect
 package internal
 package types
 
-import scala.collection.{ mutable, generic }
+import scala.collection.{ generic }
 import generic.Clearable
 
 
-trait TypeConstraints extends api.Types {
+private[internal] trait TypeConstraints {
   self: SymbolTable =>
   import definitions._
 
