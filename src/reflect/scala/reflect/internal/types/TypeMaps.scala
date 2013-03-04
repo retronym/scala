@@ -19,6 +19,86 @@ trait TypeMaps extends api.Types {
   import definitions._
   import TypesStats._
 
+  /** Normalize any type aliases within this type (@see Type#normalize).
+    *  Note that this depends very much on the call to "normalize", not "dealias",
+    *  so it is no longer carries the too-stealthy name "deAlias".
+    */
+  object normalizeAliases extends TypeMap {
+    def apply(tp: Type): Type = tp match {
+      case TypeRef(_, sym, _) if sym.isAliasType =>
+        def msg = if (tp.isHigherKinded) s"Normalizing type alias function $tp" else s"Dealiasing type alias $tp"
+        mapOver(logResult(msg)(tp.normalize))
+      case _                                     => mapOver(tp)
+    }
+  }
+
+  /** Remove any occurrence of type <singleton> from this type and its parents */
+  object dropSingletonType extends TypeMap {
+    def apply(tp: Type): Type = {
+      tp match {
+        case TypeRef(_, SingletonClass, _) =>
+          AnyClass.tpe
+        case tp1 @ RefinedType(parents, decls) =>
+          parents filter (_.typeSymbol != SingletonClass) match {
+            case Nil                       => AnyClass.tpe
+            case p :: Nil if decls.isEmpty => mapOver(p)
+            case ps                        => mapOver(copyRefinedType(tp1, ps, decls))
+          }
+        case tp1 =>
+          mapOver(tp1)
+      }
+    }
+  }
+
+  /** Type with all top-level occurrences of abstract types replaced by their bounds */
+  object abstractTypesToBounds extends TypeMap {
+    def apply(tp: Type): Type = tp match {
+      case TypeRef(_, sym, _) if sym.isAliasType    => apply(tp.dealias)
+      case TypeRef(_, sym, _) if sym.isAbstractType => apply(tp.bounds.hi)
+      case rtp @ RefinedType(parents, decls)        => copyRefinedType(rtp, parents mapConserve this, decls)
+      case AnnotatedType(_, _, _)                   => mapOver(tp)
+      case _                                        => tp             // no recursion - top level only
+    }
+  }
+
+  // Set to true for A* => Seq[A]
+  //   (And it will only rewrite A* in method result types.)
+  //   This is the pre-existing behavior.
+  // Or false for Seq[A] => Seq[A]
+  //   (It will rewrite A* everywhere but method parameters.)
+  //   This is the specified behavior.
+  protected def etaExpandKeepsStar = false
+
+  /** Turn any T* types into Seq[T] except when
+    *  in method parameter position.
+    */
+  object dropIllegalStarTypes extends TypeMap {
+    def apply(tp: Type): Type = tp match {
+      case MethodType(params, restpe) =>
+        // Not mapping over params
+        val restpe1 = apply(restpe)
+        if (restpe eq restpe1) tp
+        else MethodType(params, restpe1)
+      case TypeRef(_, RepeatedParamClass, arg :: Nil) =>
+        seqType(arg)
+      case _ =>
+        if (etaExpandKeepsStar) tp else mapOver(tp)
+    }
+  }
+
+  trait AnnotationFilter extends TypeMap {
+    def keepAnnotation(annot: AnnotationInfo): Boolean
+
+    override def mapOver(annot: AnnotationInfo) =
+      if (keepAnnotation(annot)) super.mapOver(annot)
+      else UnmappableAnnotation
+  }
+
+  trait KeepOnlyTypeConstraints extends AnnotationFilter {
+    // filter keeps only type constraint annotations
+    def keepAnnotation(annot: AnnotationInfo) = annot matches TypeConstraintClass
+  }
+
   // todo. move these into scala.reflect.api
 
   /** A prototype for mapping a function over all possible types
