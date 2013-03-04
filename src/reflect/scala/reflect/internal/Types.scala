@@ -77,28 +77,28 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   import definitions._
   import TypesStats._
 
-  private var explainSwitch = false
-  private final val emptySymbolSet = immutable.Set.empty[Symbol]
+  /*TODO private*/ var explainSwitch = false
+  /*TODO private*/ final val emptySymbolSet = immutable.Set.empty[Symbol]
 
-  private final val LogPendingSubTypesThreshold = 50
-  private final val LogPendingBaseTypesThreshold = 50
-  private final val LogVolatileThreshold = 50
+  /*TODO private*/ final val LogPendingSubTypesThreshold = 50
+  /*TODO private*/ final val LogPendingBaseTypesThreshold = 50
+  /*TODO private*/ final val LogVolatileThreshold = 50
 
   /** A don't care value for the depth parameter in lubs/glbs and related operations. */
-  private final val AnyDepth = -3
+  /*TODO private*/ final val AnyDepth = -3
 
   /** Decrement depth unless it is a don't care. */
-  private final def decr(depth: Int) = if (depth == AnyDepth) AnyDepth else depth - 1
+  /*TODO private*/ final def decr(depth: Int) = if (depth == AnyDepth) AnyDepth else depth - 1
 
-  private final val printLubs = sys.props contains "scalac.debug.lub"
-  private final val traceTypeVars = sys.props contains "scalac.debug.tvar"
-  private final val breakCycles = settings.breakCycles.value
+  /*TODO private*/ final val printLubs = sys.props contains "scalac.debug.lub"
+  /*TODO private*/ final val traceTypeVars = sys.props contains "scalac.debug.tvar"
+  /*TODO private*/ final val breakCycles = settings.breakCycles.value
   /** In case anyone wants to turn off lub verification without reverting anything. */
-  private final val verifyLubs = true
+  /*TODO private*/ final val verifyLubs = true
   /** In case anyone wants to turn off type parameter bounds being used
    *  to seed type constraints.
    */
-  private final val propagateParameterBoundsToTypeVars = sys.props contains "scalac.debug.prop-constraints"
+  /*TODO private*/ final val propagateParameterBoundsToTypeVars = sys.props contains "scalac.debug.prop-constraints"
 
   protected val enableTypeVarExperimentals = settings.Xexperimental.value
 
@@ -316,7 +316,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  type instead of the proxy. This gives buried existentials a
    *  chance to make peace with the other types. See SI-5330.
    */
-  private def narrowForFindMember(tp: Type): Type = {
+  /*TODO private*/ def narrowForFindMember(tp: Type): Type = {
     val w = tp.widen
     // Only narrow on widened type when we have to -- narrow is expensive unless the target is a singleton type.
     if ((tp ne w) && containsExistential(w)) w.narrow
@@ -1753,7 +1753,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
         define()
     }
   }
-  private def defineBaseClassesOfCompoundType(tpe: CompoundType, force: Boolean) {
+  /*TODO private*/ def defineBaseClassesOfCompoundType(tpe: CompoundType, force: Boolean) {
     val period = tpe.baseClassesPeriod
     if (period == currentPeriod) {
       if (force && breakCycles) {
@@ -2075,8 +2075,8 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    * with synchronized, because they are accessed only from isVolatile, which is called only from
    * Typer.
    */
-  private var volatileRecursions: Int = 0
-  private val pendingVolatiles = new mutable.HashSet[Symbol]
+  /*TODO private*/ var volatileRecursions: Int = 0
+  /*TODO private*/ val pendingVolatiles = new mutable.HashSet[Symbol]
 
   class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
     require(args0.nonEmpty, this)
@@ -3474,13 +3474,13 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 // Creators ---------------------------------------------------------------
 
   /** Rebind symbol `sym` to an overriding member in type `pre`. */
-  private def rebind(pre: Type, sym: Symbol): Symbol = {
+  /*TODO private*/ def rebind(pre: Type, sym: Symbol): Symbol = {
     if (!sym.isOverridableMember || sym.owner == pre.typeSymbol) sym
     else pre.nonPrivateMember(sym.name).suchThat(sym => sym.isType || sym.isStable) orElse sym
   }
 
   /** Convert a `super` prefix to a this-type if `sym` is abstract or final. */
-  private def removeSuper(tp: Type, sym: Symbol): Type = tp match {
+  /*TODO private*/ def removeSuper(tp: Type, sym: Symbol): Type = tp match {
     case SuperType(thistp, _) =>
       if (sym.isEffectivelyFinal || sym.isDeferred) thistp
       else tp
@@ -3794,9 +3794,9 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 
 // Hash consing --------------------------------------------------------------
 
-  private val initialUniquesCapacity = 4096
-  private var uniques: util.HashSet[Type] = _
-  private var uniqueRunId = NoRunId
+  /*TODO private*/ val initialUniquesCapacity = 4096
+  /*TODO private*/ var uniques: util.HashSet[Type] = _
+  /*TODO private*/ var uniqueRunId = NoRunId
 
   protected def unique[T <: Type](tp: T): T = {
     if (Statistics.canEnable) Statistics.incCounter(rawTypeCount)
@@ -3813,8 +3813,8 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   /** @PP: Unable to see why these apparently constant types should need vals
    *  in every TypeConstraint, I lifted them out.
    */
-  private lazy val numericLoBound = IntClass.tpe
-  private lazy val numericHiBound = intersectionType(List(ByteClass.tpe, CharClass.tpe), ScalaPackageClass)
+  /*TODO private*/ lazy val numericLoBound = IntClass.tpe
+  /*TODO private*/ lazy val numericHiBound = intersectionType(List(ByteClass.tpe, CharClass.tpe), ScalaPackageClass)
 
   /** A class expressing upper and lower bounds constraints of type variables,
    * as well as their instantiations.
@@ -4193,7 +4193,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   def containsExistential(tpe: Type) = tpe exists typeIsExistentiallyBound
   def existentialsInType(tpe: Type) = tpe withFilter typeIsExistentiallyBound map (_.typeSymbol)
 
-  private def isDummyOf(tpe: Type)(targ: Type) = {
+  /*TODO private*/ def isDummyOf(tpe: Type)(targ: Type) = {
     val sym = targ.typeSymbol
     sym.isTypeParameter && sym.owner == tpe.typeSymbol
   }
@@ -4344,7 +4344,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    */
   def isPossiblePrefix(clazz: Symbol) = clazz.isClass && !clazz.isPackageClass
 
-  private def skipPrefixOf(pre: Type, clazz: Symbol) = (
+  /*TODO private*/ def skipPrefixOf(pre: Type, clazz: Symbol) = (
     (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
   )
 
@@ -4976,13 +4976,13 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   /** The most deeply nested owner that contains all the symbols
    *  of thistype or prefixless typerefs/singletype occurrences in given type.
    */
-  private def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
+  /*TODO private*/ def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
 
   /** The most deeply nested owner that contains all the symbols
    *  of thistype or prefixless typerefs/singletype occurrences in given list
    *  of types.
    */
-  private def commonOwner(tps: List[Type]): Symbol = {
+  /*TODO private*/ def commonOwner(tps: List[Type]): Symbol = {
     if (tps.isEmpty) NoSymbol
     else {
       commonOwnerMap.clear()
@@ -5014,7 +5014,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     }
   }
 
-  private lazy val commonOwnerMapObj = new CommonOwnerMap
+  /*TODO private*/ lazy val commonOwnerMapObj = new CommonOwnerMap
 
   class MissingAliasControl extends ControlThrowable
   val missingAliasException = new MissingAliasControl
@@ -5175,16 +5175,16 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  as a function over the maximum depth `td` of these types, and
    *  the maximum depth `bd` of all types in the base type sequences of these types.
    */
-  private def lubDepthAdjust(td: Int, bd: Int): Int =
+  /*TODO private*/ def lubDepthAdjust(td: Int, bd: Int): Int =
     if (settings.XfullLubs.value) bd
     else if (bd <= 3) bd
     else if (bd <= 5) td max (bd - 1)
     else if (bd <= 7) td max (bd - 2)
     else (td - 1) max (bd - 3)
 
-  private def symTypeDepth(syms: List[Symbol]): Int  = typeDepth(syms map (_.info))
-  private def typeDepth(tps: List[Type]): Int        = maxDepth(tps)
-  private def baseTypeSeqDepth(tps: List[Type]): Int = maxBaseTypeSeqDepth(tps)
+  /*TODO private*/ def symTypeDepth(syms: List[Symbol]): Int  = typeDepth(syms map (_.info))
+  /*TODO private*/ def typeDepth(tps: List[Type]): Int        = maxDepth(tps)
+  /*TODO private*/ def baseTypeSeqDepth(tps: List[Type]): Int = maxBaseTypeSeqDepth(tps)
 
   /** Is intersection of given types populated? That is,
    *  for all types tp1, tp2 in intersection
@@ -5266,16 +5266,16 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     }
   }
 
-  private var subsametypeRecursions: Int = 0
+  /*TODO private*/ var subsametypeRecursions: Int = 0
 
-  private def isUnifiable(pre1: Type, pre2: Type) =
+  /*TODO private*/ def isUnifiable(pre1: Type, pre2: Type) =
     (beginsWithTypeVarOrIsRefined(pre1) || beginsWithTypeVarOrIsRefined(pre2)) && (pre1 =:= pre2)
 
   /** Returns true iff we are past phase specialize,
    *  sym1 and sym2 are two existential skolems with equal names and bounds,
    *  and pre1 and pre2 are equal prefixes
    */
-  private def isSameSpecializedSkolem(sym1: Symbol, sym2: Symbol, pre1: Type, pre2: Type) = {
+  /*TODO private*/ def isSameSpecializedSkolem(sym1: Symbol, sym2: Symbol, pre1: Type, pre2: Type) = {
     sym1.isExistentialSkolem && sym2.isExistentialSkolem &&
     sym1.name == sym2.name &&
     phase.specialized &&
@@ -5283,14 +5283,14 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     pre1 =:= pre2
   }
 
-  private def isSubPre(pre1: Type, pre2: Type, sym: Symbol) =
+  /*TODO private*/ def isSubPre(pre1: Type, pre2: Type, sym: Symbol) =
     if ((pre1 ne pre2) && (pre1 ne NoPrefix) && (pre2 ne NoPrefix) && pre1 <:< pre2) {
       if (settings.debug.value) println(s"new isSubPre $sym: $pre1 <:< $pre2")
       true
     } else
       false
 
-  private def equalSymsAndPrefixes(sym1: Symbol, pre1: Type, sym2: Symbol, pre2: Type): Boolean =
+  /*TODO private*/ def equalSymsAndPrefixes(sym1: Symbol, pre1: Type, sym2: Symbol, pre2: Type): Boolean =
     if (sym1 == sym2) sym1.hasPackageFlag || sym1.owner.hasPackageFlag || phase.erasedTypes || pre1 =:= pre2
     else (sym1.name == sym2.name) && isUnifiable(pre1, pre2)
 
@@ -5359,7 +5359,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   }
   */
 
-  private def isSameType1(tp1: Type, tp2: Type): Boolean = {
+  /*TODO private*/ def isSameType1(tp1: Type, tp2: Type): Boolean = {
     if ((tp1 eq tp2) ||
         (tp1 eq ErrorType) || (tp1 eq WildcardType) ||
         (tp2 eq ErrorType) || (tp2 eq WildcardType))
@@ -5556,9 +5556,9 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    */
   final def hasLength(xs: List[_], len: Int) = xs.lengthCompare(len) == 0
 
-  private val pendingSubTypes = new mutable.HashSet[SubTypePair]
-  private var basetypeRecursions: Int = 0
-  private val pendingBaseTypes = new mutable.HashSet[Type]
+  /*TODO private*/ val pendingSubTypes = new mutable.HashSet[SubTypePair]
+  /*TODO private*/ var basetypeRecursions: Int = 0
+  /*TODO private*/ val pendingBaseTypes = new mutable.HashSet[Type]
 
   def isSubType(tp1: Type, tp2: Type): Boolean = isSubType(tp1, tp2, AnyDepth)
 
@@ -5654,7 +5654,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     || isValueElseNonValue(tp)          // otherwise only value types
   )
 
-  private def isHKTypeRef(tp: Type) = tp match {
+  /*TODO private*/ def isHKTypeRef(tp: Type) = tp match {
     case TypeRef(_, sym, Nil) => tp.isHigherKinded
     case _                    => false
   }
@@ -5670,7 +5670,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    */
   /**** Not used right now, but kept around to document which Types
    *    land in which bucket.
-  private def isInternalTypeNotUsedAsTypeArg(tp: Type): Boolean = tp match {
+  /*TODO private*/ def isInternalTypeNotUsedAsTypeArg(tp: Type): Boolean = tp match {
     case AntiPolyType(pre, targs)            => true
     case ClassInfoType(parents, defs, clazz) => true
     case ErasedValueType(tref)               => true
@@ -5681,20 +5681,20 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     case _                                   => false
   }
   ****/
-  private def isInternalTypeUsedAsTypeArg(tp: Type): Boolean = tp match {
+  /*TODO private*/ def isInternalTypeUsedAsTypeArg(tp: Type): Boolean = tp match {
     case WildcardType           => true
     case BoundedWildcardType(_) => true
     case ErrorType              => true
     case _: TypeVar             => true
     case _                      => false
   }
-  private def isAlwaysValueType(tp: Type) = tp match {
+  /*TODO private*/ def isAlwaysValueType(tp: Type) = tp match {
     case RefinedType(_, _)       => true
     case ExistentialType(_, _)   => true
     case ConstantType(_)         => true
     case _                       => false
   }
-  private def isAlwaysNonValueType(tp: Type) = tp match {
+  /*TODO private*/ def isAlwaysNonValueType(tp: Type) = tp match {
     case OverloadedType(_, _)          => true
     case NullaryMethodType(_)          => true
     case MethodType(_, _)              => true
@@ -5705,7 +5705,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  can be given: true == value type, false == non-value type.  Otherwise,
    *  an exception is thrown.
    */
-  private def isValueElseNonValue(tp: Type): Boolean = tp match {
+  /*TODO private*/ def isValueElseNonValue(tp: Type): Boolean = tp match {
     case tp if isAlwaysValueType(tp)           => true
     case tp if isAlwaysNonValueType(tp)        => false
     case AnnotatedType(_, underlying, _)       => isValueElseNonValue(underlying)
@@ -5795,7 +5795,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   }
 
   /** Does type `tp1` conform to `tp2`? */
-  private def isSubType2(tp1: Type, tp2: Type, depth: Int): Boolean = {
+  /*TODO private*/ def isSubType2(tp1: Type, tp2: Type, depth: Int): Boolean = {
     if ((tp1 eq tp2) || isErrorOrWildcard(tp1) || isErrorOrWildcard(tp2)) return true
     if ((tp1 eq NoType) || (tp2 eq NoType)) return false
     if (tp1 eq NoPrefix) return (tp2 eq NoPrefix) || tp2.typeSymbol.isPackageClass // !! I do not see how the "isPackageClass" would be warranted by the spec
@@ -5992,7 +5992,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     firstTry
   }
 
-  private def containsNull(sym: Symbol): Boolean =
+  /*TODO private*/ def containsNull(sym: Symbol): Boolean =
     sym.isClass && sym != NothingClass &&
     !(sym isNonBottomSubClass AnyValClass) &&
     !(sym isNonBottomSubClass NotNullClass)
@@ -6014,7 +6014,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   /** Does member `sym1` of `tp1` have a stronger type
    *  than member `sym2` of `tp2`?
    */
-  private def specializesSym(tp1: Type, sym1: Symbol, tp2: Type, sym2: Symbol, depth: Int): Boolean = {
+  /*TODO private*/ def specializesSym(tp1: Type, sym1: Symbol, tp2: Type, sym2: Symbol, depth: Int): Boolean = {
     require((sym1 ne NoSymbol) && (sym2 ne NoSymbol), ((tp1, sym1, tp2, sym2, depth)))
     val info1 = tp1.memberInfo(sym1)
     val info2 = tp2.memberInfo(sym2).substThis(tp2.typeSymbol, tp1)
@@ -6148,7 +6148,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 */
 
   /** Are `syms1` and `syms2` parameter lists with pairwise equivalent types? */
-  private def matchingParams(syms1: List[Symbol], syms2: List[Symbol], syms1isJava: Boolean, syms2isJava: Boolean): Boolean = syms1 match {
+  /*TODO private*/ def matchingParams(syms1: List[Symbol], syms2: List[Symbol], syms1isJava: Boolean, syms2isJava: Boolean): Boolean = syms1 match {
     case Nil =>
       syms2.isEmpty
     case sym1 :: rest1 =>
@@ -6272,7 +6272,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 
 // Lubs and Glbs ---------------------------------------------------------
 
-  private def printLubMatrix(btsMap: Map[Type, List[Type]], depth: Int) {
+  /*TODO private*/ def printLubMatrix(btsMap: Map[Type, List[Type]], depth: Int) {
     import util.TableDef
     import TableDef.Column
     def str(tp: Type) = {
@@ -6329,7 +6329,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *                  (except that type constructors have been applied to their dummyArgs)
    *  @See baseTypeSeq  for a definition of sorted and upwards closed.
    */
-  private def lubList(ts: List[Type], depth: Int): List[Type] = {
+  /*TODO private*/ def lubList(ts: List[Type], depth: Int): List[Type] = {
     var lubListDepth = 0
     // This catches some recursive situations which would otherwise
     // befuddle us, e.g. pos/hklub0.scala
@@ -6409,7 +6409,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   }
 
   /** The minimal symbol of a list of types (as determined by `Symbol.isLess`). */
-  private def minSym(tps: List[Type]): Symbol =
+  /*TODO private*/ def minSym(tps: List[Type]): Symbol =
     (tps.head.typeSymbol /: tps.tail) {
       (sym1, tp2) => if (tp2.typeSymbol isLess sym1) tp2.typeSymbol else sym1
     }
@@ -6424,7 +6424,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 
   /** Eliminate from list of types all elements which are a supertype
    *  of some other element of the list. */
-  private def elimSuper(ts: List[Type]): List[Type] = ts match {
+  /*TODO private*/ def elimSuper(ts: List[Type]): List[Type] = ts match {
     case List() => List()
     case List(t) => List(t)
     case t :: ts1 =>
@@ -6441,7 +6441,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
 
   /** Eliminate from list of types all elements which are a subtype
    *  of some other element of the list. */
-  private def elimSub(ts: List[Type], depth: Int): List[Type] = {
+  /*TODO private*/ def elimSub(ts: List[Type], depth: Int): List[Type] = {
     def elimSub0(ts: List[Type]): List[Type] = ts match {
       case List() => List()
       case List(t) => List(t)
@@ -6458,7 +6458,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     }
   }
 
-  private def stripExistentialsAndTypeVars(ts: List[Type]): (List[Type], List[Symbol]) = {
+  /*TODO private*/ def stripExistentialsAndTypeVars(ts: List[Type]): (List[Type], List[Symbol]) = {
     val quantified = ts flatMap {
       case ExistentialType(qs, _) => qs
       case t => List()
@@ -6520,8 +6520,8 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
     && isNumericSubClass(tp1.typeSymbol, tp2.typeSymbol)
   )
 
-  private val lubResults = new mutable.HashMap[(Int, List[Type]), Type]
-  private val glbResults = new mutable.HashMap[(Int, List[Type]), Type]
+  /*TODO private*/ val lubResults = new mutable.HashMap[(Int, List[Type]), Type]
+  /*TODO private*/ val glbResults = new mutable.HashMap[(Int, List[Type]), Type]
 
   /** Given a list of types, finds all the base classes they have in
    *  common, then returns a list of type constructors derived directly
@@ -6568,7 +6568,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   }
 
   /** The least upper bound wrt <:< of a list of types */
-  private def lub(ts: List[Type], depth: Int): Type = {
+  /*TODO private*/ def lub(ts: List[Type], depth: Int): Type = {
     def lub0(ts0: List[Type]): Type = elimSub(ts0, depth) match {
       case List() => NothingClass.tpe
       case List(t) => t
@@ -6701,8 +6701,8 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  The counter breaks this recursion after two calls.
    *  If the recursion is broken, no member is added to the glb.
    */
-  private var globalGlbDepth = 0
-  private final val globalGlbLimit = 2
+  /*TODO private*/ var globalGlbDepth = 0
+  /*TODO private*/ final val globalGlbLimit = 2
 
   /** The greatest lower bound of a list of types (as determined by `<:<`). */
   def glb(ts: List[Type]): Type = elimSuper(ts) match {
@@ -6720,7 +6720,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
      }
   }
 
-  private def glb(ts: List[Type], depth: Int): Type = elimSuper(ts) match {
+  /*TODO private*/ def glb(ts: List[Type], depth: Int): Type = elimSuper(ts) match {
     case List() => AnyClass.tpe
     case List(t) => t
     case ts0 => glbNorm(ts0, depth)
@@ -6978,7 +6978,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  Returns list of list of bounds infos, where corresponding type
    *  parameters are renamed to tparams.
    */
-  private def matchingBounds(tps: List[Type], tparams: List[Symbol]): List[List[Type]] = {
+  /*TODO private*/ def matchingBounds(tps: List[Type], tparams: List[Symbol]): List[List[Type]] = {
     def getBounds(tp: Type): List[Type] = tp match {
       case PolyType(tparams1, _) if sameLength(tparams1, tparams) =>
         tparams1 map (tparam => tparam.info.substSym(tparams1, tparams))
@@ -6994,7 +6994,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    *  Returns list of instance types, where corresponding type
    *  parameters are renamed to tparams.
    */
-  private def matchingInstTypes(tps: List[Type], tparams: List[Symbol]): List[Type] = {
+  /*TODO private*/ def matchingInstTypes(tps: List[Type], tparams: List[Symbol]): List[Type] = {
     def transformResultType(tp: Type): Type = tp match {
       case PolyType(tparams1, restpe) if sameLength(tparams1, tparams) =>
         restpe.substSym(tparams1, tparams)
@@ -7008,7 +7008,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   /** All types in list must be method types with equal parameter types.
    *  Returns list of their result types.
    */
-  private def matchingRestypes(tps: List[Type], pts: List[Type]): List[Type] =
+  /*TODO private*/ def matchingRestypes(tps: List[Type], pts: List[Type]): List[Type] =
     tps map {
       case mt @ MethodType(params1, res) if isSameTypes(mt.paramTypes, pts) =>
         res
@@ -7042,7 +7042,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
   }
 
   /** The current indentation string for traces */
-  private var indent: String = ""
+  /*TODO private*/ var indent: String = ""
 
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
@@ -7113,7 +7113,7 @@ trait Types extends api.Types with types.TypeComparers with types.TypeToStrings 
    */
   final val maxTostringRecursions = 50
 
-  private var tostringRecursions = 0
+  /*TODO private*/ var tostringRecursions = 0
 
   protected def typeToString(tpe: Type): String =
     if (tostringRecursions >= maxTostringRecursions) {
