@@ -18,6 +18,61 @@ trait TypeComparers {
   self: SymbolTable =>
   import definitions._
 
+  def isSubType(tp1: Type, tp2: Type): Boolean = isSubType(tp1, tp2, AnyDepth)
+
+  def isSubType(tp1: Type, tp2: Type, depth: Int): Boolean = try {
+    subsametypeRecursions += 1
+
+    //OPT cutdown on Function0 allocation
+    //was:
+    //    undoLog undoUnless { // if subtype test fails, it should not affect constraints on typevars
+    //      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
+    //        val p = new SubTypePair(tp1, tp2)
+    //        if (pendingSubTypes(p))
+    //          false
+    //        else
+    //          try {
+    //            pendingSubTypes += p
+    //            isSubType2(tp1, tp2, depth)
+    //          } finally {
+    //            pendingSubTypes -= p
+    //          }
+    //      } else {
+    //        isSubType2(tp1, tp2, depth)
+    //      }
+    //    }
+
+    undoLog.lock()
+    try {
+      val before = undoLog.log
+      var result = false
+
+      try result = { // if subtype test fails, it should not affect constraints on typevars
+        if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
+          val p = new SubTypePair(tp1, tp2)
+          if (pendingSubTypes(p))
+            false
+          else
+            try {
+              pendingSubTypes += p
+              isSubType2(tp1, tp2, depth)
+            } finally {
+              pendingSubTypes -= p
+            }
+        } else {
+          isSubType2(tp1, tp2, depth)
+        }
+      } finally if (!result) undoLog.undoTo(before)
+
+      result
+    } finally undoLog.unlock()
+  } finally {
+    subsametypeRecursions -= 1
+    // XXX AM TODO: figure out when it is safe and needed to clear the log -- the commented approach below is too eager (it breaks #3281, #3866)
+    // it doesn't help to keep separate recursion counts for the three methods that now share it
+    // if (subsametypeRecursions == 0) undoLog.clear()
+  }
+
   /** Does type `tp1` conform to `tp2`? */
   /*TODO private*/ def isSubType2(tp1: Type, tp2: Type, depth: Int): Boolean = {
     if ((tp1 eq tp2) || isErrorOrWildcard(tp1) || isErrorOrWildcard(tp2)) return true
