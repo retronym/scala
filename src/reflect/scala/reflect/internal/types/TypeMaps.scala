@@ -14,7 +14,7 @@ import scala.runtime.ObjectRef
 import util.ThreeValues._
 import Variance._
 
-trait TypeMaps {
+trait TypeMaps extends api.Types {
   self: SymbolTable =>
   import definitions._
   // todo. move these into scala.reflect.api

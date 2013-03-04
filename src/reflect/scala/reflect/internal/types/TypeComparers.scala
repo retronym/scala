@@ -14,7 +14,7 @@ import scala.runtime.ObjectRef
 import util.ThreeValues._
 import Variance._
 
-trait TypeComparers {
+trait TypeComparers extends api.Types {
   self: SymbolTable =>
   import definitions._
   import TypesStats._

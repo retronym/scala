@@ -14,7 +14,7 @@ import scala.runtime.ObjectRef
 import util.ThreeValues._
 import Variance._
 
-trait GlbLubs {
+trait GlbLubs  extends api.Types {
   self: SymbolTable =>
 
 }
