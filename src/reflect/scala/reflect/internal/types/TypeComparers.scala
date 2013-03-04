@@ -591,4 +591,37 @@ trait TypeComparers extends api.Types {
     firstTry
   }
 
+
+  def isWeakSubType(tp1: Type, tp2: Type) =
+    tp1.deconst.normalize match {
+      case TypeRef(_, sym1, _) if isNumericValueClass(sym1) =>
+        tp2.deconst.normalize match {
+          case TypeRef(_, sym2, _) if isNumericValueClass(sym2) =>
+            isNumericSubClass(sym1, sym2)
+          case tv2 @ TypeVar(_, _) =>
+            tv2.registerBound(tp1, isLowerBound = true, isNumericBound = true)
+          case _ =>
+            isSubType(tp1, tp2)
+        }
+      case tv1 @ TypeVar(_, _) =>
+        tp2.deconst.normalize match {
+          case TypeRef(_, sym2, _) if isNumericValueClass(sym2) =>
+            tv1.registerBound(tp2, isLowerBound = false, isNumericBound = true)
+          case _ =>
+            isSubType(tp1, tp2)
+        }
+      case _ =>
+        isSubType(tp1, tp2)
+    }
+
+  /** The isNumericValueType tests appear redundant, but without them
+    *  test/continuations-neg/function3.scala goes into an infinite loop.
+    *  (Even if the calls are to typeSymbolDirect.)
+    */
+  def isNumericSubType(tp1: Type, tp2: Type): Boolean = (
+    isNumericValueType(tp1)
+      && isNumericValueType(tp2)
+      && isNumericSubClass(tp1.typeSymbol, tp2.typeSymbol)
+    )
+
 }

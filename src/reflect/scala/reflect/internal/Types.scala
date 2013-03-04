@@ -77,6 +77,7 @@ trait Types
   extends api.Types
   with types.TypeComparers
   with types.TypeToStrings
+  with types.CommonOwners
   with types.GlbLubs
   with types.TypeMaps
   with types.TypeConstraints { self: SymbolTable =>
@@ -3928,17 +3929,6 @@ trait Types
 
   def singletonBounds(hi: Type) = TypeBounds.upper(intersectionType(List(hi, SingletonClass.tpe)))
 
-  /** Might the given symbol be important when calculating the prefix
-   *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
-   *  the result will be `tp` unchanged if `pre` is trivial and `clazz`
-   *  is a symbol such that isPossiblePrefix(clazz) == false.
-   */
-  def isPossiblePrefix(clazz: Symbol) = clazz.isClass && !clazz.isPackageClass
-
-  /*TODO private*/ def skipPrefixOf(pre: Type, clazz: Symbol) = (
-    (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
-  )
-
   /**
    * A more persistent version of `Type#memberType` which does not require
    * that the symbol is a direct member of the prefix.
@@ -3983,49 +3973,6 @@ trait Types
     assert(sym.isTerm || result.typeSymbol == sym, s"($result).typeSymbol = ${result.typeSymbol}; expected ${sym}")
     result
   }
-
-  /** The most deeply nested owner that contains all the symbols
-   *  of thistype or prefixless typerefs/singletype occurrences in given type.
-   */
-  /*TODO private*/ def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
-
-  /** The most deeply nested owner that contains all the symbols
-   *  of thistype or prefixless typerefs/singletype occurrences in given list
-   *  of types.
-   */
-  /*TODO private*/ def commonOwner(tps: List[Type]): Symbol = {
-    if (tps.isEmpty) NoSymbol
-    else {
-      commonOwnerMap.clear()
-      tps foreach (commonOwnerMap traverse _)
-      if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
-    }
-  }
-
-  protected def commonOwnerMap: CommonOwnerMap = commonOwnerMapObj
-
-  protected class CommonOwnerMap extends TypeTraverserWithResult[Symbol] {
-    var result: Symbol = _
-
-    def clear() { result = null }
-
-    private def register(sym: Symbol) {
-      // First considered type is the trivial result.
-      if ((result eq null) || (sym eq NoSymbol))
-        result = sym
-      else
-        while ((result ne NoSymbol) && (result ne sym) && !(sym isNestedIn result))
-          result = result.owner
-    }
-    def traverse(tp: Type) = tp.normalize match {
-      case ThisType(sym)                => register(sym)
-      case TypeRef(NoPrefix, sym, args) => register(sym.owner) ; args foreach traverse
-      case SingleType(NoPrefix, sym)    => register(sym.owner)
-      case _                            => mapOver(tp)
-    }
-  }
-
-  /*TODO private*/ lazy val commonOwnerMapObj = new CommonOwnerMap
 
   class MissingAliasControl extends ControlThrowable
   val missingAliasException = new MissingAliasControl
@@ -4515,38 +4462,6 @@ trait Types
     case _ =>
       t
   }
-
-  def isWeakSubType(tp1: Type, tp2: Type) =
-    tp1.deconst.normalize match {
-      case TypeRef(_, sym1, _) if isNumericValueClass(sym1) =>
-        tp2.deconst.normalize match {
-          case TypeRef(_, sym2, _) if isNumericValueClass(sym2) =>
-            isNumericSubClass(sym1, sym2)
-          case tv2 @ TypeVar(_, _) =>
-            tv2.registerBound(tp1, isLowerBound = true, isNumericBound = true)
-          case _ =>
-            isSubType(tp1, tp2)
-        }
-      case tv1 @ TypeVar(_, _) =>
-        tp2.deconst.normalize match {
-          case TypeRef(_, sym2, _) if isNumericValueClass(sym2) =>
-            tv1.registerBound(tp2, isLowerBound = false, isNumericBound = true)
-          case _ =>
-            isSubType(tp1, tp2)
-        }
-      case _ =>
-        isSubType(tp1, tp2)
-    }
-
-  /** The isNumericValueType tests appear redundant, but without them
-   *  test/continuations-neg/function3.scala goes into an infinite loop.
-   *  (Even if the calls are to typeSymbolDirect.)
-   */
-  def isNumericSubType(tp1: Type, tp2: Type): Boolean = (
-       isNumericValueType(tp1)
-    && isNumericValueType(tp2)
-    && isNumericSubClass(tp1.typeSymbol, tp2.typeSymbol)
-  )
 
   /** A list of the typevars in a type. */
   def typeVarsInType(tp: Type): List[TypeVar] = {

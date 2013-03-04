@@ -246,6 +246,17 @@ trait TypeMaps extends api.Types {
     }
   }
 
+  /** Might the given symbol be important when calculating the prefix
+    *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
+    *  the result will be `tp` unchanged if `pre` is trivial and `clazz`
+    *  is a symbol such that isPossiblePrefix(clazz) == false.
+    */
+  def isPossiblePrefix(clazz: Symbol) = clazz.isClass && !clazz.isPackageClass
+
+  /*TODO private*/ def skipPrefixOf(pre: Type, clazz: Symbol) = (
+    (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
+    )
+
   def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap =
     new AsSeenFromMap(pre, clazz)
 
