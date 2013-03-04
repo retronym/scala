@@ -73,7 +73,7 @@ import Variance._
     // only used during erasure of derived value classes.
 */
 
-trait Types extends api.Types { self: SymbolTable =>
+trait Types extends api.Types with types.TypeComparers with types.TypeToStrings with types.GlbLubs with types.TypeMaps { self: SymbolTable =>
   import definitions._
   import TypesStats._
 
