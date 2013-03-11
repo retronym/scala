@@ -4955,6 +4955,8 @@ trait Typers extends Modes with Adaptations with Tags {
        *                   (2) Change imported symbols to selections
        */
       def typedIdent(tree: Tree, name: Name): Tree = {
+
+        println(s"typedIdent($tree, $name)")
         var errorContainer: AbsTypeError = null
         def ambiguousError(msg: String) = {
           assert(errorContainer == null, "Cannot set ambiguous error twice for identifier")
