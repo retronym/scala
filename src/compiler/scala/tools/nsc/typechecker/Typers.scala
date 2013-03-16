@@ -79,7 +79,7 @@ trait Typers extends Modes with Adaptations with Tags {
   // that are turned private by typedBlock
   private final val SYNTHETIC_PRIVATE = TRANS_FLAG
 
-  private def isPastTyper = phase.id > currentRun.typerPhase.id
+  private def isPastTyper = phaseId > currentRunTyperId
 
   // To enable decent error messages when the typer crashes.
   // TODO - this only catches trees which go through def typed,

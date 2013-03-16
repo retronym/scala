@@ -142,6 +142,7 @@ abstract class SymbolTable extends macros.Universe
   // sigh, this has to be public or atPhase doesn't inline.
   var phStack: List[Phase] = Nil
   private[this] var ph: Phase = NoPhase
+  private[this] var phId: Phase#Id = -1
   private[this] var per = NoPeriod
 
   final def atPhaseStack: List[Phase] = phStack
@@ -150,6 +151,7 @@ abstract class SymbolTable extends macros.Universe
       Statistics.incCounter(SymbolTableStats.phaseCounter)
     ph
   }
+  final def phaseId: Phase#Id = phId
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
@@ -160,6 +162,7 @@ abstract class SymbolTable extends macros.Universe
     //System.out.println("setting phase to " + p)
     assert((p ne null) && p != NoPhase, p)
     ph = p
+    phId = p.id
     per = period(currentRunId, p.id)
   }
   final def pushPhase(ph: Phase): Phase = {

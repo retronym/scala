@@ -1613,17 +1613,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  inheritance graph (i.e. subclass.isLess(superclass) always holds).
      *  the ordering is given by: (_.isType, -_.baseTypeSeq.length) for type symbols, followed by `id`.
      */
-    final def isLess(that: Symbol): Boolean = {
-      def baseTypeSeqLength(sym: Symbol) =
-        if (sym.isAbstractType) 1 + sym.info.bounds.hi.baseTypeSeq.length
-        else sym.info.baseTypeSeq.length
-      if (this.isType)
-        (that.isType &&
-         { val diff = baseTypeSeqLength(this) - baseTypeSeqLength(that)
-           diff > 0 || diff == 0 && this.id < that.id })
-      else
-        that.isType || this.id < that.id
-    }
+    final def isLess(that: Symbol): Boolean = self.isLess0(this, that, this.baseTypeSeqLength, that.baseTypeSeqLength)
+
+    def baseTypeSeqLength =
+      if (isAbstractType) 1 + info.bounds.hi.baseTypeSeq.length
+      else info.baseTypeSeq.length
 
     /** A partial ordering between symbols.
      *  (this isNestedIn that) holds iff this symbol is defined within
@@ -2637,16 +2631,17 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def isCaseAccessorMethod = isCaseAccessor
 
     def typeAsMemberOf(pre: Type): Type = {
+      val info0 = info
       if (mtpePeriod == currentPeriod) {
-        if ((mtpePre eq pre) && (mtpeInfo eq info)) return mtpeResult
+        if ((mtpePre eq pre) && (mtpeInfo eq info0)) return mtpeResult
       } else if (isValid(mtpePeriod)) {
         mtpePeriod = currentPeriod
-        if ((mtpePre eq pre) && (mtpeInfo eq info)) return mtpeResult
+        if ((mtpePre eq pre) && (mtpeInfo eq info0)) return mtpeResult
       }
       val res = pre.computeMemberType(this)
       mtpePeriod = currentPeriod
       mtpePre = pre
-      mtpeInfo = info
+      mtpeInfo = info0
       mtpeResult = res
       res
     }
@@ -3331,6 +3326,17 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (from.isSourceMethod) from
     else if (from.isClass) NoSymbol
     else closestEnclMethod(from.owner)
+
+  final def isLess0(thiz: Symbol, that: Symbol,
+                    thizBaseTypeSeqLength: Int, thatBaseTypeSeqLength: Int): Boolean = {
+    if (thiz.isType)
+      (that.isType &&
+       { val diff = thizBaseTypeSeqLength - thatBaseTypeSeqLength
+         diff > 0 || diff == 0 && thiz.id < that.id })
+    else
+      that.isType || thiz.id < that.id
+  }
+
 
   /** An exception for cyclic references of symbol definitions */
   case class CyclicReference(sym: Symbol, info: Type)

@@ -1034,6 +1034,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   private var curRun: Run = null
   private var curRunId = 0
+  private var curRunTyperId: Int = -1
 
   /** A hook that lets subclasses of `Global` define whether a package or class should be kept loaded for the
    *  next compiler run. If the parameter `sym` is a class or object, and `clearOnNextRun(sym)` returns `true`,
@@ -1070,6 +1071,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
    */
   private [nsc] def dropRun() {
     curRun = null
+    curRunTyperId = -1
   }
 
   object typeDeconstruct extends {
@@ -1093,6 +1095,10 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   def currentRun: Run              = curRun
   def currentUnit: CompilationUnit = if (currentRun eq null) NoCompilationUnit else currentRun.currentUnit
   def currentSource: SourceFile    = if (currentUnit.exists) currentUnit.source else lastSeenSourceFile
+  def currentRunTyperId: Int       = {
+    if (curRunTyperId < 0) curRunTyperId = currentRun.typerPhase.id
+    curRunTyperId
+  }
 
   // TODO - trim these to the absolute minimum.
   @inline final def afterErasure[T](op: => T): T        = afterPhase(currentRun.erasurePhase)(op)
@@ -1283,6 +1289,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       /** Initialization. */
       curRunId += 1
       curRun = this
+      curRunTyperId = -1
 
       /** Set phase to a newly created syntaxAnalyzer and call definitions.init. */
       val parserPhase: Phase = syntaxAnalyzer.newPhase(NoPhase)

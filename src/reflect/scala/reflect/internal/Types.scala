@@ -985,12 +985,13 @@ trait Types extends api.Types { self: SymbolTable =>
       val bts = baseTypeSeq
       var lo = 0
       var hi = bts.length - 1
+      val symBaseTypeSeqLength = sym.baseTypeSeqLength
       while (lo <= hi) {
         val mid = (lo + hi) / 2
         val btssym = bts.typeSymbol(mid)
         if (sym == btssym) return mid
-        else if (sym isLess btssym) hi = mid - 1
-        else if (btssym isLess sym) lo = mid + 1
+        else if (isLess0(sym, btssym, symBaseTypeSeqLength, btssym.baseTypeSeqLength)) hi = mid - 1
+        else if (isLess0(btssym, sym, btssym.baseTypeSeqLength, symBaseTypeSeqLength)) lo = mid + 1
         else abort()
       }
       -1
@@ -4267,7 +4268,10 @@ trait Types extends api.Types { self: SymbolTable =>
      *  be returned, or whether they must be cloned.  Overridden in VariantTypeMap.
      */
     protected def noChangeToSymbols(origSyms: List[Symbol]) =
-      origSyms forall (sym => sym.info eq this(sym.info))
+      origSyms forall {sym =>
+        val info = sym.info
+        info eq this(info)
+      }
 
     /** Map this function over given scope */
     def mapOver(scope: Scope): Scope = {
