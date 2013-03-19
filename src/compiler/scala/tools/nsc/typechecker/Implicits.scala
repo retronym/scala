@@ -193,7 +193,7 @@ trait Implicits {
       case NullaryMethodType(restpe) =>
         containsError(restpe)
       case mt @ MethodType(_, restpe) =>
-        (mt.paramTypes exists typeIsError) || containsError(restpe)
+        (mt.params exists (param => typeIsError(param.tpe))) || containsError(restpe)
       case _ =>
         tp.isError
     }
@@ -537,7 +537,11 @@ trait Implicits {
       // side is a class, else we may not know enough.
       case tr1 @ TypeRef(_, sym1, _) if sym1.isClass =>
         tp2.dealiasWiden match {
-          case TypeRef(_, sym2, _)         => sym2.isClass && !(sym1 isWeakSubClass sym2)
+          case TypeRef(_, sym2, _)         =>
+            if (sym1 == ByNameParamClass ^ sym2 == ByNameParamClass)
+              true
+            else
+              sym2.isClass && !(sym1 isWeakSubClass sym2)
           case RefinedType(parents, decls) => decls.nonEmpty && tr1.member(decls.head.name) == NoSymbol
           case _                           => false
         }

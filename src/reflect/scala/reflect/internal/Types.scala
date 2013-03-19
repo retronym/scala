@@ -2588,12 +2588,17 @@ trait Types extends api.Types { self: SymbolTable =>
     private def isTrivialResult =
       resultType.isTrivial && (resultType eq resultType.withoutAnnotations)
 
-    private def areTrivialParams(ps: List[Symbol]): Boolean = ps match {
-      case p :: rest =>
-        p.tpe.isTrivial && !typesContain(paramTypes, p) && !(resultType contains p) &&
-        areTrivialParams(rest)
-      case _ =>
-        true
+    private def areTrivialParams(ps: List[Symbol]): Boolean = {
+      def areTrivialParams0(ps: List[Symbol]): Boolean = {
+        ps match {
+          case p :: rest =>
+            p.tpe.isTrivial && !symTypesContain(params, p) && !(resultType contains p) &&
+              areTrivialParams0(rest)
+          case _ =>
+            true
+        }
+      }
+      areTrivialParams0(ps)
     }
 
     def isImplicit = params.nonEmpty && params.head.isImplicit
@@ -7368,6 +7373,11 @@ trait Types extends api.Types { self: SymbolTable =>
 
   @tailrec private def typesContain(tps: List[Type], sym: Symbol): Boolean = tps match {
     case tp :: rest => (tp contains sym) || typesContain(rest, sym)
+    case _ => false
+  }
+
+  @tailrec private def symTypesContain(syms: List[Symbol], sym: Symbol): Boolean = syms match {
+    case sym :: rest => (sym.tpe contains sym) || symTypesContain(rest, sym)
     case _ => false
   }
 

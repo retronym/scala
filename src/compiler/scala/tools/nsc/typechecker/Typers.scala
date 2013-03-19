@@ -79,7 +79,7 @@ trait Typers extends Modes with Adaptations with Tags {
   // that are turned private by typedBlock
   private final val SYNTHETIC_PRIVATE = TRANS_FLAG
 
-  private def isPastTyper = phaseId > currentRunTyperId
+  private def isPastTyper = global.phaseId > currentRunTyperId
 
   // To enable decent error messages when the typer crashes.
   // TODO - this only catches trees which go through def typed,
@@ -630,10 +630,12 @@ trait Typers extends Modes with Adaptations with Tags {
      *  4. Give getClass calls a more precise type based on the type of the target of the call.
      */
     private def stabilize(tree: Tree, pre: Type, mode: Int, pt: Type): Tree = {
-      if (tree.symbol.isOverloaded && !inFunMode(mode))
+      val sym0 = tree.symbol
+      val sym = if (sym0.isOverloaded && !inFunMode(mode)) {
         inferExprAlternative(tree, pt)
+        tree.symbol
+      } else sym0
 
-      val sym = tree.symbol
       def fail() = NotAValueError(tree, sym)
 
       if (tree.isErrorTyped) tree
@@ -4131,8 +4133,9 @@ trait Typers extends Modes with Adaptations with Tags {
 
     final def deindentTyping() = context.typingIndentLevel -= 2
     final def indentTyping() = context.typingIndentLevel += 2
+    private[this] val printTypings0 = printTypings // OPT
     @inline final def printTyping(s: => String) = {
-      if (printTypings)
+      if (printTypings0)
         println(context.typingIndent + s.replaceAll("\n", "\n" + context.typingIndent))
     }
     @inline final def printInference(s: => String) = {

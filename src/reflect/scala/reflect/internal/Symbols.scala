@@ -1285,44 +1285,50 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
       var infos = this.infos
-      assert(infos != null)
+      //assert(infos != null)
       val curPeriod = currentPeriod
       val curPid = phaseId(curPeriod)
 
       if (validTo != NoPeriod) {
         // skip any infos that concern later phases
-        while (curPid < phaseId(infos.validFrom) && infos.prev != null)
-          infos = infos.prev
+        def skipFuture() {
+          while (curPid < phaseId(infos.validFrom) && infos.prev != null)
+            infos = infos.prev
+        }
 
+        skipFuture()
         if (validTo < curPeriod) {
-          assertCorrectThread()
-          // adapt any infos that come from previous runs
-          val current = phase
-          try {
-            infos = adaptInfos(infos)
+          def update() {
+            assertCorrectThread()
+            // adapt any infos that come from previous runs
+            val current = phase
+            try {
+              infos = adaptInfos(infos)
 
-            //assert(runId(validTo) == currentRunId, name)
-            //assert(runId(infos.validFrom) == currentRunId, name)
+              //assert(runId(validTo) == currentRunId, name)
+              //assert(runId(infos.validFrom) == currentRunId, name)
 
-            if (validTo < curPeriod) {
-              var itr = infoTransformers.nextFrom(phaseId(validTo))
-              infoTransformers = itr; // caching optimization
-              while (itr.pid != NoPhase.id && itr.pid < current.id) {
-                phase = phaseWithId(itr.pid)
-                val info1 = itr.transform(this, infos.info)
-                if (info1 ne infos.info) {
-                  infos = TypeHistory(currentPeriod + 1, info1, infos)
-                  this.infos = infos
+              if (validTo < curPeriod) {
+                var itr = infoTransformers.nextFrom(phaseId(validTo))
+                infoTransformers = itr; // caching optimization
+                while (itr.pid != NoPhase.id && itr.pid < current.id) {
+                  phase = phaseWithId(itr.pid)
+                  val info1 = itr.transform(this, infos.info)
+                  if (info1 ne infos.info) {
+                    infos = TypeHistory(currentPeriod + 1, info1, infos)
+                    this.infos = infos
+                  }
+                  _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
+                  itr = itr.next
                 }
-                _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
-                itr = itr.next
+                _validTo = if (itr.pid == NoPhase.id) curPeriod
+                else period(currentRunId, itr.pid)
               }
-              _validTo = if (itr.pid == NoPhase.id) curPeriod
-                         else period(currentRunId, itr.pid)
+            } finally {
+              phase = current
             }
-          } finally {
-            phase = current
           }
+          update()
         }
       }
       infos.info
@@ -1616,7 +1622,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def isLess(that: Symbol): Boolean = self.isLess0(this, that, this.baseTypeSeqLength, that.baseTypeSeqLength)
 
     def baseTypeSeqLength =
-      if (isAbstractType) 1 + info.bounds.hi.baseTypeSeq.length
+      if (!isType) 0
+      else if (isAbstractType) 1 + info.bounds.hi.baseTypeSeq.length
       else info.baseTypeSeq.length
 
     /** A partial ordering between symbols.

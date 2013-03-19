@@ -1882,7 +1882,7 @@ abstract class GenICode extends SubComponent  {
       var bb: BasicBlock = _
 
       /** Map from label symbols to label objects. */
-      var labels = perRunCaches.newMap[Symbol, Label]()
+      var labels = mutable.HashMap[Symbol, Label]()
 
       /** Current method definition. */
       var defdef: DefDef = _

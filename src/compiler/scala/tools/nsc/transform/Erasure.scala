@@ -1230,7 +1230,7 @@ abstract class Erasure extends AddInterfaces
         case Template(parents, self, body) =>
           assert(!currentOwner.isImplClass)
           //Console.println("checking no dble defs " + tree)//DEBUG
-          checkNoDoubleDefs(tree.symbol.owner)
+          //checkNoDoubleDefs(tree.symbol.owner)
           treeCopy.Template(tree, parents, emptyValDef, addBridges(body, currentOwner))
 
         case Match(selector, cases) =>

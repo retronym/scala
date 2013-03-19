@@ -436,8 +436,9 @@ trait TypeDiagnostics {
       }
 
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
-        if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
-          exprStack push fn.symbol
+        val sym = fn.symbol
+        if (sym != null && sym.isMethod && !sym.isConstructor) {
+          exprStack push sym
           try f finally exprStack.pop()
         } else f
       }
