@@ -1,4 +1,4 @@
       size                class instance
 ========================================================================
-  56 bytes  nternal.Types$ClassArgsTypeRef List[Int]
-  56 bytes  ernal.Types$ClassNoArgsTypeRef String
+  40 bytes  nternal.Types$ClassArgsTypeRef List[Int]
+  40 bytes  ernal.Types$ClassNoArgsTypeRef String

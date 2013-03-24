@@ -8,7 +8,13 @@ package internal
 
 import scala.annotation.elidable
 import scala.collection.{ mutable, immutable }
+import scala.collection.generic.Clearable
 import util._
+
+class JavaMapWithDefault[K, V](default: V) extends java.util.HashMap[K, V](1024) with Clearable {
+  def apply(key: K): V               = if (this containsKey key) this get key else default
+  def update(key: K, value: V): Unit = this.put(key, value)
+}
 
 abstract class SymbolTable extends macros.Universe
                               with Collections
@@ -304,7 +310,6 @@ abstract class SymbolTable extends macros.Universe
 
   object perRunCaches {
     import java.lang.ref.WeakReference
-    import scala.collection.generic.Clearable
 
     // Weak references so the garbage collector will take care of
     // letting us know when a cache is really out of commission.
@@ -326,6 +331,7 @@ abstract class SymbolTable extends macros.Universe
       }
     }
 
+    def newJavaMap[K, V](d: V)    = recordCache(new JavaMapWithDefault[K, V](d))
     def newWeakMap[K, V]()        = recordCache(mutable.WeakHashMap[K, V]())
     def newMap[K, V]()            = recordCache(mutable.HashMap[K, V]())
     def newSet[K]()               = recordCache(mutable.HashSet[K]())

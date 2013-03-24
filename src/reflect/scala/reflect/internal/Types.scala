@@ -87,6 +87,12 @@ trait Types
   private var explainSwitch = false
   private final val emptySymbolSet = immutable.Set.empty[Symbol]
 
+  private val parentsCacheMap      = perRunCaches.newJavaMap[Type, List[Type]](null)
+  private val parentsPeriodMap     = perRunCaches.newJavaMap[Type, Period](NoPeriod)
+  private val baseTypeSeqCacheMap  = perRunCaches.newJavaMap[Type, BaseTypeSeq](null)
+  private val baseTypeSeqPeriodMap = perRunCaches.newJavaMap[Type, Period](NoPeriod)
+  private val normalizedMap        = perRunCaches.newJavaMap[Type, Type](null)
+
   protected[internal] final val DefaultLogThreshhold = 50
   private final val LogPendingBaseTypesThreshold = DefaultLogThreshhold
   private final val LogVolatileThreshold = DefaultLogThreshhold
@@ -2259,11 +2265,16 @@ trait Types
         trivial = fromBoolean(!sym.isTypeParameter && pre.isTrivial && areTrivialTypes(args))
       toBoolean(trivial)
     }
-    private[reflect] var parentsCache: List[Type]      = _
-    private[reflect] var parentsPeriod                 = NoPeriod
-    private[reflect] var baseTypeSeqCache: BaseTypeSeq = _
-    private[reflect] var baseTypeSeqPeriod             = NoPeriod
-    private var normalized: Type                       = _
+    private[reflect] def parentsCache: List[Type]      = parentsCacheMap(this)
+    private[reflect] def parentsPeriod                 = parentsPeriodMap(this)
+    private[reflect] def baseTypeSeqCache: BaseTypeSeq = baseTypeSeqCacheMap(this)
+    private[reflect] def baseTypeSeqPeriod             = baseTypeSeqPeriodMap(this)
+    private def normalized: Type                       = normalizedMap(this)
+    private[reflect] def parentsCache_=(tps: List[Type]): Unit = parentsCacheMap(this) = tps
+    private[reflect] def parentsPeriod_=(p: Period): Unit      = parentsPeriodMap(this) = p
+    private[reflect] def baseTypeSeqCache_=(bts: BaseTypeSeq): Unit = baseTypeSeqCacheMap(this) = bts
+    private[reflect] def baseTypeSeqPeriod_=(p: Period): Unit = baseTypeSeqPeriodMap(this) = p
+    private def normalized_=(tp: Type): Unit                  = normalizedMap(this) = tp
 
     //OPT specialize hashCode
     override final def computeHashCode = {
