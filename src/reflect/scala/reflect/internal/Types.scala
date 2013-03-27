@@ -1979,7 +1979,7 @@ trait Types
   private var volatileRecursions: Int = 0
   private val pendingVolatiles = new mutable.HashSet[Symbol]
 
-  class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
+  class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, TypeList[this.type](args0)) {
     require(args0.nonEmpty, this)
 
     /** No unapplied type params size it has (should have) equally as many args. */
@@ -2032,7 +2032,7 @@ trait Types
     override protected def finishPrefix(rest: String) = "" + thisInfo
   }
 
-  class NoArgsTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
+  class NoArgsTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, TypeList[this.type](Nil)) {
     // A reference (in a Scala program) to a type that has type parameters, but where the reference
     // does not include type arguments. Note that it doesn't matter whether the symbol refers
     // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
@@ -2235,7 +2235,24 @@ trait Types
    *
    * @M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
-  abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
+  abstract class TypeRef(val pre: Type, val sym: Symbol, private val args0: TypeList[this.type]) extends UniqueType with TypeRefApi {
+    def args: List[Type] = args0.toList
+
+    override def productPrefix: String = "TypeRef"
+
+    def productArity: Int = 3
+
+    def productElement(n: Int): Any = n match {
+      case 0 => pre; case 1 => sym; case 2 => args
+    }
+
+    override def productIterator: Iterator[Any] = (pre :: sym :: args :: Nil).iterator
+
+    def canEqual(that: Any): Boolean = that match {
+      case _: TypeRef => true
+      case _ => false
+    }
+
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2266,6 +2283,11 @@ trait Types
     // the "actual" type arguments are types that simply reference the
     // corresponding type parameters (unbound type variables)
     def transform(tp: Type): Type
+
+    override final def equals(other: Any): Boolean = other match {
+      case tr2: TypeRef => pre == tr2.pre && sym == tr2.sym && args0 == tr2.args0
+      case _ => false
+    }
 
     // eta-expand, subtyping relies on eta-expansion of higher-kinded types
     protected def normalizeImpl: Type = if (isHigherKinded) etaExpand else super.normalize
@@ -2423,6 +2445,7 @@ trait Types
   }
 
   object TypeRef extends TypeRefExtractor {
+    def unapply(typeRef: TypeRef): Option[(Type, Symbol, List[Type])] = Some((typeRef.pre, typeRef.sym, typeRef.args))
     def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
       if (args.nonEmpty) {
         if (sym.isAliasType)              new ArgsTypeRef(pre, sym, args) with AliasTypeRef
@@ -4603,4 +4626,34 @@ object TypesStats {
     finally
   }
   */
+}
+
+class TypeList[SymTab <: SymbolTable](val args: Any) extends AnyVal {
+  def toList: List[SymTab#Type] = args match {
+    case tps: List[_] => tps.asInstanceOf[List[SymTab#Type]]
+    case tp => tp.asInstanceOf[SymTab#Type] :: Nil
+  }
+}
+
+object TypeList {
+  private val freq = Array.fill(1024)(0)
+  sys.addShutdownHook{
+    println("=" * 80)
+    println("TypeRef args distribution")
+    println("=" * 80)
+    val sum = freq.sum
+    freq.take(10).zipWithIndex.map {
+      case (n, i) => f"$i%2d $n%12d ${100d * n.toDouble / sum}%.2f%"
+    }.foreach(println)
+  }
+
+  def apply[SymTab <: SymbolTable](tps: List[_]) = {
+    freq(tps.length) = freq(tps.length) + 1
+    new TypeList[SymTab](tps match {
+      case tp :: Nil => tp
+      case _ => tps
+    })
+  }
+
+  //def unapplySeq[SymTab <: SymbolTable](tl: TypeList[this.type]):  = Some(tl.args)
 }
