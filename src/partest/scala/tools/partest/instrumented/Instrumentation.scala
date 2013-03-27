@@ -6,6 +6,7 @@
 package scala.tools.partest.instrumented
 
 import scala.collection.JavaConverters._
+import scala.tools.partest.javaagent.ProfilingAgent
 
 case class MethodCallTrace(className: String, methodName: String, methodDescriptor: String) {
   override def toString(): String = className + "." + methodName + methodDescriptor
@@ -55,6 +56,7 @@ object Instrumentation {
   def stopProfiling(): Unit = Profiler.stopProfiling()
   def resetProfiling(): Unit = Profiler.resetProfiling()
   def isProfiling(): Boolean = Profiler.isProfiling()
+  def objectSize(obj: AnyRef) = ProfilingAgent.getObjectSize(obj)
 
   def getStatistics: Statistics = {
     val isProfiling = Profiler.isProfiling()

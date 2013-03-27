@@ -26,5 +26,10 @@ object Test {
     println(true)
     stopProfiling()
     printStatistics()
+
+    // We can also hook query the VM for the (shallow) size of our classes.
+    class A(a: Int)
+    val a = new A(0)
+    println(s"class ${a.getClass} consumes ${objectSize(a)} bytes")
   }
 }
