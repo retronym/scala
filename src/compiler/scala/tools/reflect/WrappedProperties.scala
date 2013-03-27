@@ -28,7 +28,14 @@ trait WrappedProperties extends PropertiesTrait {
 
   def systemProperties: Iterator[(String, String)] = {
     import scala.collection.JavaConverters._
-    wrap(System.getProperties.asScala.iterator) getOrElse Iterator.empty
+    wrap {
+      import System.{getProperty, getProperties}
+      val keys = getProperties.keySet().asScala.iterator
+      keys.collect {
+        case (k: String) if getProperty(k) != null => // hardened against non String properties, see run/sys-prop-object-a.scala
+          (k, getProperty(k))
+      }
+    } getOrElse Iterator.empty
   }
 }
 
