@@ -4636,24 +4636,11 @@ class TypeList[SymTab <: SymbolTable](val args: Any) extends AnyVal {
 }
 
 object TypeList {
-  private val freq = Array.fill(1024)(0)
-  sys.addShutdownHook{
-    println("=" * 80)
-    println("TypeRef args distribution")
-    println("=" * 80)
-    val sum = freq.sum
-    freq.take(10).zipWithIndex.map {
-      case (n, i) => f"$i%2d $n%12d ${100d * n.toDouble / sum}%.2f%"
-    }.foreach(println)
-  }
-
   def apply[SymTab <: SymbolTable](tps: List[_]) = {
-    freq(tps.length) = freq(tps.length) + 1
     new TypeList[SymTab](tps match {
-      case tp :: Nil => tp
+      case tp :: Nil =>
+         tp
       case _ => tps
     })
   }
-
-  //def unapplySeq[SymTab <: SymbolTable](tl: TypeList[this.type]):  = Some(tl.args)
 }
