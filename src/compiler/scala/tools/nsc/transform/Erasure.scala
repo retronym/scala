@@ -309,7 +309,7 @@ abstract class Erasure extends AddInterfaces
           else jsig(etp)
       }
     }
-    if (needsJavaSig(info)) {
+    if (!nme.isDefaultGetter(sym0.name) && needsJavaSig(info)) {
       try Some(jsig(info, toplevel = true))
       catch { case ex: UnknownSig => None }
     }
