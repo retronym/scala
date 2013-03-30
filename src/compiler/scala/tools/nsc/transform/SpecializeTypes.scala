@@ -852,6 +852,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           debuglog("%s expands to %s in %s".format(sym, specMember.name.decode, pp(env)))
           info(specMember) = NormalizedMember(sym)
           newOverload(sym, specMember, env)
+          println(s"entering $specMember : ${specMember.info} into $owner")
           owner.info.decls.enter(specMember)
           specMember
         }
