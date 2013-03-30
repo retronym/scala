@@ -427,6 +427,8 @@ trait StdNames {
         case idx => name.toTermName take idx
       }
     )
+    def isDefaultGetter(name: Name): Boolean =
+      name containsName DEFAULT_GETTER_STRING
 
     def localDummyName(clazz: Symbol): TermName = newTermName(LOCALDUMMY_PREFIX + clazz.name + ">")
     def superName(name: Name): TermName         = newTermName(SUPER_PREFIX_STRING + name)

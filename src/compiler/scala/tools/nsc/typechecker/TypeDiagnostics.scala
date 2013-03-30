@@ -488,7 +488,7 @@ trait TypeDiagnostics {
         val unused = p.unusedTerms
         unused foreach { defn: DefTree =>
           val sym             = defn.symbol
-          val isDefaultGetter = sym.name containsName nme.DEFAULT_GETTER_STRING
+          val isDefaultGetter = nme.isDefaultGetter(sym.name)
           val pos = (
             if (defn.pos.isDefined) defn.pos
             else if (sym.pos.isDefined) sym.pos

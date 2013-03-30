@@ -1501,7 +1501,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
         // on Unit, in which case we had better let it slide.
         val isOk = (
              sym.isGetter
-          || (sym.name containsName nme.DEFAULT_GETTER_STRING)
+          || (nme.isDefaultGetter(sym.name))
           || sym.allOverriddenSymbols.exists(over => !(over.tpe.resultType =:= sym.tpe.resultType))
         )
         if (!isOk)
