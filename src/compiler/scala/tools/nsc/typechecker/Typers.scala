@@ -492,8 +492,11 @@ trait Typers extends Adaptations with Tags {
     @inline
     final def typerReportAnyContextErrors[T](c: Context)(f: Typer => T): T = {
       val res = f(newTyper(c))
-      if (c.hasErrors)
-        context.issue(c.errBuffer.head)
+      if (c.hasErrors) {
+        context.issue(c.errBuffer.head) // TODO Why just the first?
+        context.flushBuffer()
+      }
+      // TODO what about buffered warnings?
       res
     }
 
