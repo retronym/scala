@@ -101,12 +101,23 @@ trait Contexts { self: Analyzer =>
   }
 
   def resetContexts() {
+    def flushWarningsErrors(sc: Context) {
+      def checkEmpty(as: Iterable[Any]) {
+        as.toList.headOption foreach {
+          a =>
+            devWarning(s"The context $sc contained unflushed warning/error: " + a)
+        }
+      }
+      checkEmpty(sc.flushAndReturnBuffer())
+      checkEmpty(sc.flushAndReturnWarningsBuffer())
+    }
     var sc = startContext
     while (sc != NoContext) {
       sc.tree match {
         case Import(qual, _) => qual setType singleType(qual.symbol.owner.thisType, qual.symbol)
         case _               =>
       }
+      flushWarningsErrors(sc)
       sc = sc.outer
     }
   }

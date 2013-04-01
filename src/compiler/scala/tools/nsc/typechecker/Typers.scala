@@ -5302,6 +5302,13 @@ trait Typers extends Adaptations with Tags {
         if (tree1.tpe eq null)
           return setError(tree)
 
+
+        tree1.tpe match {
+          case et: ExistentialType =>
+            // println(et)
+
+          case _ =>
+        }
         if (!alreadyTyped) {
           printTyping("typed %s: %s%s".format(
             ptTree(tree1), tree1.tpe,
