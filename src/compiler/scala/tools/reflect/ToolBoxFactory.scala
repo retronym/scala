@@ -71,7 +71,7 @@ abstract class ToolBoxFactory[U <: JavaUniverse](val u: U) { factorySelf =>
         // That's why we cannot allow inputs of toolboxes to be typechecked,
         // at least not until the aforementioned issue is closed.
         val typed = expr filter (t => t.tpe != null && t.tpe != NoType && !t.isInstanceOf[TypeTree])
-        if (!typed.isEmpty) throw ToolBoxError("reflective toolbox has failed: cannot operate on trees that are already typed")
+        if (typed.nonEmpty) throw ToolBoxError("reflective toolbox has failed: cannot operate on trees that are already typed.\nThese trees are typed: " + typed.mkString("\n"))
 
         val freeTypes = expr.freeTypes
         if (freeTypes.length > 0) {

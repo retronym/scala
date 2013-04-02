@@ -324,6 +324,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
         else
           super.transform {
             tree match {
+              case UnApply(Apply(Select(qual, nme.unapply | nme.unapplySeq), List(Ident(nme.SELECTOR_DUMMY))), args) =>  // TODO multiple arg lists?
+                Apply(transform(qual), transformTrees(args))
               case tpt: TypeTree =>
                 if (tpt.original != null)
                   transform(tpt.original)
