@@ -4025,7 +4025,10 @@ trait Typers extends Adaptations with Tags {
           findSelection(cxTree) match {
             case Some((opName, treeInfo.Applied(_, targs, _))) =>
               val fun = gen.mkTypeApply(Select(qual, opName), targs)
-              atPos(qual.pos)(Apply(fun, Literal(Constant(name.decode)) :: Nil))
+              val nameStringLit = atPos(treeSelection.pos.withStart(treeSelection.pos.point).makeTransparent) {
+                Literal(Constant(name.decode))
+              }
+              atPos(qual.pos)(Apply(fun, nameStringLit :: Nil))
             case _ =>
               setError(tree)
           }
@@ -4034,7 +4037,7 @@ trait Typers extends Adaptations with Tags {
 
       def wrapErrors(tree: Tree, typeTree: Typer => Tree): Tree =
         silent(typeTree) orElse (err => DynamicRewriteError(tree, err))
-        }
+    }
 
     final def deindentTyping() = context.typingIndentLevel -= 2
     final def indentTyping() = context.typingIndentLevel += 2
