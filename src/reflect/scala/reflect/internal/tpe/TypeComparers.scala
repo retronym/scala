@@ -118,7 +118,200 @@ trait TypeComparers {
     // if (subsametypeRecursions == 0) undoLog.clear()
   }
 
+  ///////////////////////////////////////////////////////////////////
+  private def isSameType1Old(tp1: Type, tp2: Type): Boolean = logResult(s"isSameTypeOld(${debugString(tp1)}, ${debugString(tp2)})"){
+    if ((tp1 eq tp2) ||
+      (tp1 eq ErrorType) || (tp1 eq WildcardType) ||
+      (tp2 eq ErrorType) || (tp2 eq WildcardType))
+      true
+    else if ((tp1 eq NoType) || (tp2 eq NoType))
+      false
+    else if (tp1 eq NoPrefix) // !! I do not see how this would be warranted by the spec
+      tp2.typeSymbol.isPackageClass
+    else if (tp2 eq NoPrefix) // !! I do not see how this would be warranted by the spec
+      tp1.typeSymbol.isPackageClass
+    else {
+      isSameType2Old(tp1, tp2) || {
+        val tp1n = normalizePlus(tp1)
+        val tp2n = normalizePlus(tp2)
+        ((tp1n ne tp1) || (tp2n ne tp2)) && isSameType(tp1n, tp2n)
+      }
+    }
+  }
+
+  def isSameType2Old(tp1: Type, tp2: Type): Boolean = {
+    tp1 match {
+      case tr1: TypeRef =>
+        tp2 match {
+          case tr2: TypeRef =>
+            return (equalSymsAndPrefixes(tr1.sym, tr1.pre, tr2.sym, tr2.pre) &&
+              ((tp1.isHigherKinded && tp2.isHigherKinded && tp1.normalize =:= tp2.normalize) ||
+                isSameTypes(tr1.args, tr2.args))) ||
+              ((tr1.pre, tr2.pre) match {
+                case (tv @ TypeVar(_,_), _) => tv.registerTypeSelection(tr1.sym, tr2)
+                case (_, tv @ TypeVar(_,_)) => tv.registerTypeSelection(tr2.sym, tr1)
+                case _ => false
+              })
+          case _: SingleType =>
+            return isSameType2Old(tp2, tp1)  // put singleton type on the left, caught below
+          case _ =>
+        }
+      case tt1: ThisType =>
+        tp2 match {
+          case tt2: ThisType =>
+            if (tt1.sym == tt2.sym) return true
+          case _ =>
+        }
+      case st1: SingleType =>
+        tp2 match {
+          case st2: SingleType =>
+            if (equalSymsAndPrefixes(st1.sym, st1.pre, st2.sym, st2.pre)) return true
+          case TypeRef(pre2, sym2, Nil) =>
+            if (sym2.isModuleClass && equalSymsAndPrefixes(st1.sym, st1.pre, sym2.sourceModule, pre2)) return true
+          case _ =>
+        }
+      case ct1: ConstantType =>
+        tp2 match {
+          case ct2: ConstantType =>
+            return (ct1.value == ct2.value)
+          case _ =>
+        }
+      case rt1: RefinedType =>
+        tp2 match {
+          case rt2: RefinedType => //
+            def isSubScope(s1: Scope, s2: Scope): Boolean = s2.toList.forall {
+              sym2 =>
+                var e1 = s1.lookupEntry(sym2.name)
+                (e1 ne null) && {
+                  val substSym = sym2.info.substThis(sym2.owner, e1.sym.owner)
+                  var isEqual = false
+                  while (!isEqual && (e1 ne null)) {
+                    isEqual = e1.sym.info =:= substSym
+                    e1 = s1.lookupNextEntry(e1)
+                  }
+                  isEqual
+                }
+            }
+            //Console.println("is same? " + tp1 + " " + tp2 + " " + tp1.typeSymbol.owner + " " + tp2.typeSymbol.owner)//DEBUG
+            return isSameTypes(rt1.parents, rt2.parents) && {
+              val decls1 = rt1.decls
+              val decls2 = rt2.decls
+              isSubScope(decls1, decls2) && isSubScope(decls2, decls1)
+            }
+          case _ =>
+        }
+      case mt1: MethodType =>
+        tp2 match {
+          case mt2: MethodType =>
+            return isSameTypes(mt1.paramTypes, mt2.paramTypes) &&
+              mt1.resultType =:= mt2.resultType.substSym(mt2.params, mt1.params) &&
+              mt1.isImplicit == mt2.isImplicit
+          // note: no case NullaryMethodType(restpe) => return mt1.params.isEmpty && mt1.resultType =:= restpe
+          case _ =>
+        }
+      case NullaryMethodType(restpe1) =>
+        tp2 match {
+          // note: no case mt2: MethodType => return mt2.params.isEmpty && restpe  =:= mt2.resultType
+          case NullaryMethodType(restpe2) =>
+            return restpe1 =:= restpe2
+          case _ =>
+        }
+      case PolyType(tparams1, res1) =>
+        tp2 match {
+          case PolyType(tparams2, res2) =>
+            //            assert((tparams1 map (_.typeParams.length)) == (tparams2 map (_.typeParams.length)))
+            // @M looks like it might suffer from same problem as #2210
+            return (
+              (sameLength(tparams1, tparams2)) && // corresponds does not check length of two sequences before checking the predicate
+                (tparams1 corresponds tparams2)(_.info =:= _.info.substSym(tparams2, tparams1)) &&
+                res1 =:= res2.substSym(tparams2, tparams1)
+              )
+          case _ =>
+        }
+      case ExistentialType(tparams1, res1) =>
+        tp2 match {
+          case ExistentialType(tparams2, res2) =>
+            // @M looks like it might suffer from same problem as #2210
+            return (
+              // corresponds does not check length of two sequences before checking the predicate -- faster & needed to avoid crasher in #2956
+              sameLength(tparams1, tparams2) &&
+                (tparams1 corresponds tparams2)(_.info =:= _.info.substSym(tparams2, tparams1)) &&
+                res1 =:= res2.substSym(tparams2, tparams1)
+              )
+          case _ =>
+        }
+      case TypeBounds(lo1, hi1) =>
+        tp2 match {
+          case TypeBounds(lo2, hi2) =>
+            return lo1 =:= lo2 && hi1 =:= hi2
+          case _ =>
+        }
+      case BoundedWildcardType(bounds) =>
+        return bounds containsType tp2
+      case _ =>
+    }
+    tp2 match {
+      case BoundedWildcardType(bounds) =>
+        return bounds containsType tp1
+      case _ =>
+    }
+    tp1 match {
+      case tv @ TypeVar(_,_) =>
+        return tv.registerTypeEquality(tp2, typeVarLHS = true)
+      case _ =>
+    }
+    tp2 match {
+      case tv @ TypeVar(_,_) =>
+        return tv.registerTypeEquality(tp1, typeVarLHS = false)
+      case _ =>
+    }
+    tp1 match {
+      case _: AnnotatedType =>
+        return annotationsConform(tp1, tp2) && annotationsConform(tp2, tp1) && tp1.withoutAnnotations =:= tp2.withoutAnnotations
+      case _ =>
+    }
+    tp2 match {
+      case _: AnnotatedType =>
+        return annotationsConform(tp1, tp2) && annotationsConform(tp2, tp1) && tp1.withoutAnnotations =:= tp2.withoutAnnotations
+      case _ =>
+    }
+    tp1 match {
+      case _: SingletonType =>
+        tp2 match {
+          case _: SingletonType =>
+            def chaseDealiasedUnderlying(tp: Type): Type = {
+              var origin = tp
+              var next = origin.underlying.dealias
+              while (next.isInstanceOf[SingletonType]) {
+                assert(origin ne next, origin)
+                origin = next
+                next = origin.underlying.dealias
+              }
+              origin
+            }
+            val origin1 = chaseDealiasedUnderlying(tp1)
+            val origin2 = chaseDealiasedUnderlying(tp2)
+            ((origin1 ne tp1) || (origin2 ne tp2)) && (origin1 =:= origin2)
+          case _ =>
+            false
+        }
+      case _ =>
+        false
+    }
+  }
+  ///////////////////////////////////////////////////////////////////
+
+
+
   private def isSameType1(tp1: Type, tp2: Type): Boolean = {
+    val newResult = isSameType1New(tp1, tp2)
+    val oldResult = isSameType1Old(tp1, tp2)
+    assert(newResult == oldResult, (tp1, tp2, newResult, oldResult))
+    newResult
+    oldResult
+  }
+
+  private def isSameType1New(tp1: Type, tp2: Type): Boolean = logResult(s"isSameTypeNew(${debugString(tp1)}, ${debugString(tp2)})"){
     if ((tp1 eq tp2) ||
       (tp1 eq ErrorType) || (tp1 eq WildcardType) ||
       (tp2 eq ErrorType) || (tp2 eq WildcardType))
