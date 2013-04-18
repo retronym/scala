@@ -61,8 +61,10 @@ package object reify {
         val componentErasure = reifyRuntimeClass(global)(typer0, componentTpe, concrete)
         gen.mkMethodCall(arrayClassMethod, List(componentErasure))
       case _ =>
-        var erasure = tpe.erasure
-        if (tpe.typeSymbol.isDerivedValueClass && global.phase.id < global.currentRun.erasurePhase.id) erasure = tpe
+        val erasure =
+          if (!global.phase.erasedTypes && tpe.typeSymbol.isDerivedValueClass)
+            tpe.normalize // SI-7375 `tpe.typeSymbol` normalizes, so must we here.
+          else tpe.erasure
         gen.mkNullaryCall(Predef_classOf, List(erasure))
     }
   }
