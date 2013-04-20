@@ -1,0 +1,17 @@
+[[syntax trees at end of                     typer]] // newSource1
+[13]package [13]<empty> {
+  [13]object Test extends [18][103]scala.AnyRef {
+    [18]def <init>(): [18]Test.type = [18]{
+      [18][18][18]Test.super.<init>();
+      [18]()
+    };
+    [29]if ([29][29][29]"".isEmpty())
+      [29]{
+        [46][39][39]scala.this.Predef.println([47]"1");
+        [67][60][60]scala.this.Predef.println([68]"2")
+      }
+    else
+      [29]Predef.???
+  }
+}
+
