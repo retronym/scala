@@ -140,6 +140,16 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
           if (alts.size > 1)
             alts foreach (x => unit.warning(x.pos, "parameterized overloaded implicit methods are not visible as view bounds"))
         }
+
+        val members = clazz.info.members
+        val implicitMembers = members filter (x => x.tpe match { case mt: MethodType => mt.isImplicit case _ => false})
+        implicitMembers foreach { sym =>
+          val alts = clazz.info.decl(sym.name).filter(_.paramss.isEmpty).alternatives
+          alts foreach { alt =>
+            unit.warning(alt.pos,
+              s"Calls to parmeterless ${alt} will be easy to mistake for calls to ${sym.defString}, which has a single implicit parameter list.")
+          }
+        }
       }
     }
 

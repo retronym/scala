@@ -1,0 +1,7 @@
+implicit-overload.scala:6: error: Calls to parmeterless method foo will be easy to mistake for calls to def foo(implicit a: Any): Int, which has a single implicit parameter list.
+  def foo = 0
+      ^
+implicit-overload.scala:10: error: Calls to parmeterless value foo will be easy to mistake for calls to def foo(implicit a: Any): Int, which has a single implicit parameter list.
+  val foo = 0
+      ^
+two errors found
