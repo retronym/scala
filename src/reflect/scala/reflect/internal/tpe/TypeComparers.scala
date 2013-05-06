@@ -101,12 +101,17 @@ trait TypeComparers {
 
     undoLog.lock()
     try {
-      val before = undoLog.log
+      val before = undoLog.size // log
       var result = false
       try {
         result = isSameType1(tp1, tp2)
       }
-      finally if (!result) undoLog.undoTo(before)
+      finally {
+        if (result)
+          undoLog dropTo before
+        else
+          undoLog undoTo before
+      }
       result
     }
     finally undoLog.unlock()
@@ -150,8 +155,8 @@ trait TypeComparers {
     && (tp1.normalize =:= tp2.normalize)
   )
   private def isSameTypeRef(tr1: TypeRef, tr2: TypeRef) = (
-       equalSymsAndPrefixes(tr1.sym, tr1.pre, tr2.sym, tr2.pre)
-    && (isSameHKTypes(tr1, tr2) || isSameTypes(tr1.args, tr2.args))
+       (tr1.sym.isNothingClass && tr2.sym.isNothingClass)
+    || equalSymsAndPrefixes(tr1.sym, tr1.pre, tr2.sym, tr2.pre) && (isSameHKTypes(tr1, tr2) || isSameTypes(tr1.args, tr2.args))
   )
 
   private def isSameSingletonType(tp1: SingletonType, tp2: SingletonType): Boolean = {
@@ -265,7 +270,7 @@ trait TypeComparers {
 
     undoLog.lock()
     try {
-      val before = undoLog.log
+      val before = undoLog.size // log
       var result = false
 
       try result = { // if subtype test fails, it should not affect constraints on typevars
@@ -283,7 +288,13 @@ trait TypeComparers {
         } else {
           isSubType2(tp1, tp2, depth)
         }
-      } finally if (!result) undoLog.undoTo(before)
+      }
+      finally {
+        if (result)
+          undoLog dropTo before
+        else
+          undoLog undoTo before
+      }
 
       result
     } finally undoLog.unlock()
@@ -315,7 +326,7 @@ trait TypeComparers {
   def isHKSubType(tp1: Type, tp2: Type, depth: Int): Boolean = {
     def isSub(ntp1: Type, ntp2: Type) = (ntp1.withoutAnnotations, ntp2.withoutAnnotations) match {
       case (TypeRef(_, AnyClass, _), _)                                     => false                    // avoid some warnings when Nothing/Any are on the other side
-      case (_, TypeRef(_, NothingClass, _))                                 => false
+      case (_, TypeRef(_, NothingClass | TaggedNothingClass, _))            => false
       case (pt1: PolyType, pt2: PolyType)                                   => isPolySubType(pt1, pt2)  // @assume both .isHigherKinded (both normalized to PolyType)
       case (_: PolyType, MethodType(ps, _)) if ps exists (_.tpe.isWildcard) => false                    // don't warn on HasMethodMatching on right hand side
       case _                                                                =>                          // @assume !(both .isHigherKinded) thus cannot be subtypes
@@ -324,7 +335,7 @@ trait TypeComparers {
         false
     }
 
-    (    tp1.typeSymbol == NothingClass       // @M Nothing is subtype of every well-kinded type
+    (    tp1.typeSymbol.isNothingClass        // @M Nothing is subtype of every well-kinded type
       || tp2.typeSymbol == AnyClass           // @M Any is supertype of every well-kinded type (@PP: is it? What about continuations plugin?)
       || isSub(tp1.normalize, tp2.normalize) && annotationsConform(tp1, tp2)  // @M! normalize reduces higher-kinded case to PolyType's
     )
@@ -338,6 +349,8 @@ trait TypeComparers {
     if (tp2 eq NoPrefix) return tp1.typeSymbol.isPackageClass
     if (isSingleType(tp1) && isSingleType(tp2) || isConstantType(tp1) && isConstantType(tp2)) return tp1 =:= tp2
     if (tp1.isHigherKinded || tp2.isHigherKinded) return isHKSubType(tp1, tp2, depth)
+    // if (tp1.typeSymbolDirect.isNothingClass) return true
+    // if (tp2.typeSymbolDirect.isNothingClass) return false
 
     /* First try, on the right:
      *   - unwrap Annotated types, BoundedWildcardTypes,
@@ -498,12 +511,12 @@ trait TypeComparers {
             else sym1.isRefinementClass && retry(sym1.info, tp2)
           )
           sym1 match {
-            case NothingClass                     => true
-            case NullClass                        => nullOnLeft
-            case _: ClassSymbol                   => classOnLeft
-            case _: TypeSymbol if sym1.isDeferred => abstractTypeOnLeft(tp1.bounds.hi)
-            case _: TypeSymbol                    => retry(tp1.normalize, tp2.normalize)
-            case _                                => false
+            case NothingClass | TaggedNothingClass => true
+            case NullClass                         => nullOnLeft
+            case _: ClassSymbol                    => classOnLeft
+            case _: TypeSymbol if sym1.isDeferred  => abstractTypeOnLeft(tp1.bounds.hi)
+            case _: TypeSymbol                     => retry(tp1.normalize, tp2.normalize)
+            case _                                 => false
           }
         case RefinedType(parents, _) => parents exists (retry(_, tp2))
         case _: SingletonType        => retry(tp1.underlying, tp2)

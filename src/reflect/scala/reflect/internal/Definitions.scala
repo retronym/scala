@@ -304,15 +304,33 @@ trait Definitions extends api.StandardDefinitions {
     }
     final object NothingClass extends BottomClassSymbol(tpnme.Nothing, AnyClass) {
       override def isSubClass(that: Symbol) = true
+      override def isNothingClass = true
     }
     final object NullClass extends BottomClassSymbol(tpnme.Null, AnyRefClass) {
       override def isSubClass(that: Symbol) = (
            (that eq AnyClass)
-        || (that ne NothingClass) && (that isSubClass ObjectClass)
+        || !that.isNothingClass && (that isSubClass ObjectClass)
       )
     }
-    lazy val NothingTpe = definitions.NothingClass.toTypeConstructor
-    lazy val NullTpe    = definitions.NullClass.toTypeConstructor
+    final object TaggedNothingClass extends ClassSymbol(ScalaPackageClass, NoPosition, "TaggedNothing") {
+      locally {
+        this initFlags ABSTRACT | FINAL
+        val tparam = newTypeParameter("T0", NoPosition, COVARIANT) setInfo TypeBounds(NothingTpe, AnyTpe)
+        this setInfoAndEnter GenPolyType(tparam :: Nil, ClassInfoType(AnyTpe :: Nil, newScope, this))
+      }
+      override def isBottomClass = true
+      override def isNothingClass = true
+      override def isSubClass(that: Symbol) = true
+    }
+
+    lazy val NullTpe                      = definitions.NullClass.toTypeConstructor
+    lazy val NothingTpe                   = definitions.NothingClass.toTypeConstructor
+    lazy val FailedInferenceNothing       = newTaggedNothing("failed type inference")
+    lazy val ExplicitlyGivenNothing       = newTaggedNothing("explicit type argument")
+    lazy val NoLowerBoundNothing          = newTaggedNothing("constructed upper or empty bounds")
+    lazy val UnspecifiedLowerBoundNothing = newTaggedNothing("empty lower bound")
+    lazy val EmptyListLubNothing          = newTaggedNothing("lub of empty list")
+    lazy val GlbFailureNothing            = newTaggedNothing("glb failure")
 
     // exceptions and other throwables
     lazy val ClassCastExceptionClass        = requiredClass[ClassCastException]
@@ -1068,7 +1086,7 @@ trait Definitions extends api.StandardDefinitions {
     lazy val isBox = boxMethod.values.toSet[Symbol]
 
     /** Is symbol a phantom class for which no runtime representation exists? */
-    lazy val isPhantomClass = Set[Symbol](AnyClass, AnyValClass, NullClass, NothingClass)
+    lazy val isPhantomClass = Set[Symbol](AnyClass, AnyValClass, NullClass, NothingClass, TaggedNothingClass)
     /** Lists core classes that don't have underlying bytecode, but are synthesized on-the-fly in every reflection universe */
     lazy val syntheticCoreClasses = List(
       AnnotationDefaultAttr, // #2264
@@ -1080,6 +1098,7 @@ trait Definitions extends api.StandardDefinitions {
       AnyValClass,
       NullClass,
       NothingClass,
+      TaggedNothingClass,
       SingletonClass
     )
     /** Lists core methods that don't have underlying bytecode, but are synthesized on-the-fly in every reflection universe */

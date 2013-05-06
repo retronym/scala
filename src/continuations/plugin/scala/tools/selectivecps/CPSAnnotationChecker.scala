@@ -33,7 +33,7 @@ abstract class CPSAnnotationChecker extends CPSUtils {
       vprintln("check annotations: " + tpe1 + " <:< " + tpe2)
 
       // Nothing is least element, but Any is not the greatest
-      if (tpe1.typeSymbol eq NothingClass)
+      if (tpe1.typeSymbol.isNothingClass)
         return true
 
       val annots1 = cpsParamAnnotation(tpe1)
@@ -95,7 +95,7 @@ abstract class CPSAnnotationChecker extends CPSUtils {
     override def adaptBoundsToAnnotations(bounds: List[TypeBounds], tparams: List[Symbol], targs: List[Type]): List[TypeBounds] = {
       if (!cpsEnabled) return bounds
 
-      val anyAtCPS = newCpsParamsMarker(NothingClass.tpe, AnyClass.tpe)
+      val anyAtCPS = newCpsParamsMarker(NothingTpe, AnyClass.tpe)
       if (isFunctionType(tparams.head.owner.tpe_*) || isPartialFunctionType(tparams.head.owner.tpe_*)) {
         vprintln("function bound: " + tparams.head.owner.tpe + "/"+bounds+"/"+targs)
         if (hasCpsParamTypes(targs.last))

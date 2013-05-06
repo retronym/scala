@@ -102,7 +102,7 @@ trait DestructureTypes {
       case _        => this("pre", pre)
     }
     def typeBounds(lo0: Type, hi0: Type): Node = {
-      val lo = if ((lo0 eq WildcardType) || (lo0.typeSymbol eq NothingClass)) wrapEmpty else this("lo", lo0)
+      val lo = if (lo0.isWildcard || lo0.typeSymbol.isNothingClass) wrapEmpty else this("lo", lo0)
       val hi = if ((hi0 eq WildcardType) || (hi0.typeSymbol eq AnyClass)) wrapEmpty else this("hi", hi0)
 
       product("TypeBounds", lo, hi)

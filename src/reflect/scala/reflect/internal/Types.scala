@@ -1448,9 +1448,9 @@ trait Types
   final class UniqueTypeBounds(lo: Type, hi: Type) extends TypeBounds(lo, hi)
 
   object TypeBounds extends TypeBoundsExtractor {
-    def empty: TypeBounds           = apply(NothingClass.tpe, AnyClass.tpe)
-    def upper(hi: Type): TypeBounds = apply(NothingClass.tpe, hi)
-    def lower(lo: Type): TypeBounds = apply(lo, AnyClass.tpe)
+    def empty: TypeBounds           = apply(NoLowerBoundNothing, AnyTpe)
+    def upper(hi: Type): TypeBounds = apply(NoLowerBoundNothing, hi)
+    def lower(lo: Type): TypeBounds = apply(lo, AnyTpe)
     def apply(lo: Type, hi: Type): TypeBounds = {
       unique(new UniqueTypeBounds(lo, hi)).asInstanceOf[TypeBounds]
     }
@@ -1994,8 +1994,8 @@ trait Types
       // too little information is known to determine its kind, and
       // it later turns out not to have kind *. See SI-4070.  Only
       // logging it for now.
-      if (sym.typeParams.size != args.size)
-        devWarning(s"$this.transform($tp), but tparams.isEmpty and args=$args")
+      if (!sym.isNothingClass && sym.typeParams.size != args.size)
+        devWarning(s"$this.transform($tp), but tparams=${sym.typeParams} and args=$args")
 
       asSeenFromOwner(tp).instantiateTypeParams(sym.typeParams, args)
     }
@@ -2311,7 +2311,7 @@ trait Types
 
     override def baseClasses      = thisInfo.baseClasses
     override def baseTypeSeqDepth = baseTypeSeq.maxDepth
-    override def isStable         = (sym eq NothingClass) || (sym eq SingletonClass)
+    override def isStable         = sym.isNothingClass || (sym eq SingletonClass)
     override def prefix           = pre
     override def termSymbol       = super.termSymbol
     override def termSymbolDirect = super.termSymbol
@@ -2428,10 +2428,17 @@ trait Types
   // No longer defined as anonymous classes in `object TypeRef` to avoid an unnecessary outer pointer.
   private final class AliasArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AliasTypeRef
   private final class AbstractArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AbstractTypeRef
-  private final class ClassArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with ClassTypeRef
+  private       class ClassArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with ClassTypeRef
   private final class AliasNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AliasTypeRef
   private final class AbstractNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AbstractTypeRef
   private final class ClassNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with ClassTypeRef
+  private final class TaggedNothingTypeRef private (arg: Type) extends ClassArgsTypeRef(NoPrefix, TaggedNothingClass, arg :: Nil) {
+    def this(name: String) = this(singleType(NoPrefix, TaggedNothingClass newAbstractType name setInfo TypeBounds(NothingTpe, AnyTpe)))
+
+    private def name = args.head.typeSymbol.name
+    override def toString = s"Nothing($name)"
+  }
+  def newTaggedNothing(name: String): TypeRef = new TaggedNothingTypeRef(name)
 
   object TypeRef extends TypeRefExtractor {
     def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
@@ -2749,12 +2756,14 @@ trait Types
 
     def withTypeVars(op: Type => Boolean, depth: Int): Boolean = {
       val quantifiedFresh = cloneSymbols(quantified)
-      val tvars = quantifiedFresh map (tparam => TypeVar(tparam))
-      val underlying1 = underlying.instantiateTypeParams(quantified, tvars) // fuse subst quantified -> quantifiedFresh -> tvars
-      op(underlying1) && {
-        solve(tvars, quantifiedFresh, quantifiedFresh map (_ => Invariant), upper = false, depth) &&
-        isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, tvars map (_.constr.inst))
-      }
+      val tvars           = quantifiedFresh map (tparam => TypeVar(tparam))
+      val underlying1     = underlying.instantiateTypeParams(quantified, tvars) // fuse subst quantified -> quantifiedFresh -> tvars
+      logResult(s"withTypeVars/qfresh=$quantifiedFresh, underlying1=$underlying1")(
+        op(underlying1) && {
+          solve(tvars, quantifiedFresh, quantifiedFresh map (_ => Invariant), upper = false, depth) &&
+          isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, tvars map (_.constr.inst))
+        }
+      )
     }
   }
 
@@ -2932,11 +2941,7 @@ trait Types
    *
    *  Precondition for this class, enforced structurally: args.isEmpty && params.isEmpty.
    */
-  abstract case class TypeVar(
-                               origin: Type,
-    var constr: TypeConstraint
-  ) extends Type {
-
+  abstract case class TypeVar(origin: Type, var constr: TypeConstraint) extends Type {
     // We don't want case class equality/hashing as TypeVar-s are mutable,
     // and TypeRefs based on them get wrongly `uniqued` otherwise. See SI-7226.
     override def hashCode(): Int = System.identityHashCode(this)
@@ -3015,7 +3020,7 @@ trait Types
       // if we were compared against later typeskolems, repack the existential,
       // because skolems are only compatible if they were created at the same level
       val res = if (shouldRepackType) repackExistential(tp) else tp
-      constr.inst = TypeVar.trace("setInst", "In " + originLocation + ", " + originName + "=" + res)(res)
+      constr.inst = TypeVar.trace("setInst", s"setInst($tp) in $originLocation, $originName=$res")(res)
       this
     }
 
@@ -3049,7 +3054,7 @@ trait Types
     def registerBound(tp: Type, isLowerBound: Boolean, isNumericBound: Boolean = false): Boolean = {
       // println("regBound: "+(safeToString, debugString(tp), isLowerBound)) //@MDEBUG
       if (isLowerBound)
-        assert(tp != this)
+        assert(tp != this, tp)
 
       // side effect: adds the type to upper or lower bounds
       def addBound(tp: Type) {
@@ -3079,17 +3084,14 @@ trait Types
        *  }}}
        */
       def unifySimple = {
-        val sym = tp.typeSymbol
-        if (sym == NothingClass || sym == AnyClass) { // kind-polymorphic
-          // SI-7126 if we register some type alias `T=Any`, we can later end
-          // with malformed types like `T[T]` during type inference in
-          // `handlePolymorphicCall`. No such problem if we register `Any`.
-          addBound(sym.tpe)
-          true
-        } else if (params.isEmpty) {
-          addBound(tp)
-          true
-        } else false
+        def add(tp: Type): Boolean = { addBound(tp) ; true }
+        // SI-7126 if we register some type alias `T=Any`, we can later end
+        // with malformed types like `T[T]` during type inference in
+        // `handlePolymorphicCall`. No such problem if we register `Any`.
+        tp.typeSymbol match {
+          case AnyClass => add(AnyTpe)
+          case sym      => (sym.isNothingClass || params.isEmpty) && add(tp)
+        }
       }
 
       /*  Full case: involving a check of the form
@@ -3106,7 +3108,7 @@ trait Types
             val rhs = if (isLowerBound) typeArgs else tp.typeArgs
             // this is a higher-kinded type var with same arity as tp.
             // side effect: adds the type constructor itself as a bound
-            addBound(tp.typeConstructor)
+            addBound(logResult(s"unifyFull($tpe)#addBound")(tp.typeConstructor))
             isSubArgs(lhs, rhs, params, AnyDepth)
           }
         }
@@ -3141,9 +3143,9 @@ trait Types
 
       // AM: I think we could use the `suspended` flag to avoid side-effecting during unification
       if (suspended)         // constraint accumulation is disabled
-        checkSubtype(tp, origin)
+        logResult(s"$this is suspended: checkSubtype($tp, $origin)")(checkSubtype(tp, origin))
       else if (constr.instValid)  // type var is already set
-        checkSubtype(tp, constr.inst)
+        logResult(s"$this is already set: checkSubtype($tp, ${constr.inst})")(checkSubtype(tp, constr.inst))
       else isRelatable(tp) && {
         unifySimple || unifyFull(tp) || (
           // only look harder if our gaze is oriented toward Any
@@ -3212,7 +3214,7 @@ trait Types
       else super.normalize
     )
     override def typeSymbol = origin.typeSymbol
-    override def isStable = origin.isStable
+    override def isStable   = origin.isStable
     override def isVolatile = origin.isVolatile
 
     private def tparamsOfSym(sym: Symbol) = sym.info match {
@@ -3557,6 +3559,7 @@ trait Types
     }
 
     tycon match {
+      // case TypeRef(pre, TaggedNothingClass, arg :: Nil)   => tycon
       case TypeRef(pre, sym @ (NothingClass|AnyClass), _) => copyTypeRef(tycon, pre, sym, Nil)   //@M drop type args to Any/Nothing
       case TypeRef(pre, sym, Nil)                         => copyTypeRef(tycon, pre, sym, args)
       case TypeRef(pre, sym, bogons)                      => devWarning(s"Dropping $bogons from $tycon in appliedType.") ; copyTypeRef(tycon, pre, sym, args)
@@ -4509,7 +4512,7 @@ trait Types
   private[scala] val boundsContainType = (bounds: TypeBounds, tp: Type) => bounds containsType tp
   private[scala] val typeListIsEmpty = (ts: List[Type]) => ts.isEmpty
   private[scala] val typeIsSubTypeOfSerializable = (tp: Type) => tp <:< SerializableClass.tpe
-  private[scala] val typeIsNothing = (tp: Type) => tp.typeSymbolDirect eq NothingClass
+  private[scala] val typeIsNothing = (tp: Type) => tp.typeSymbolDirect.isNothingClass
   private[scala] val typeIsAny = (tp: Type) => tp.typeSymbolDirect eq AnyClass
   private[scala] val typeIsHigherKinded = (tp: Type) => tp.isHigherKinded
 

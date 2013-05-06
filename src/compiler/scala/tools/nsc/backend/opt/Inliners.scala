@@ -41,11 +41,7 @@ abstract class Inliners extends SubComponent {
   import global._
   import icodes._
   import icodes.opcodes._
-  import definitions.{
-    NullClass, NothingClass, ObjectClass,
-    PredefModule, RuntimePackage, ScalaInlineClass, ScalaNoInlineClass,
-    isFunctionType, isByNameParamType
-  }
+  import definitions._
 
   val phaseName = "inliner"
 
@@ -144,7 +140,7 @@ abstract class Inliners extends SubComponent {
     }
   }
 
-  def isBottomType(sym: Symbol) = sym == NullClass || sym == NothingClass
+  def isBottomType(sym: Symbol) = sym.isBottomClass
 
   /** Is the given class a closure? */
   def isClosureClass(cls: Symbol): Boolean =

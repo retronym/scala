@@ -255,7 +255,7 @@ abstract class TreeGen extends macros.TreeBuilder {
    *  which is appropriate to the given Type.
    */
   def mkZero(tp: Type): Tree = tp.typeSymbol match {
-    case NothingClass => mkMethodCall(Predef_???, Nil) setType NothingClass.tpe
+    case NothingClass => mkMethodCall(Predef_???, Nil) setType ExplicitlyGivenNothing
     case _            => Literal(mkConstantZero(tp)) setType tp
   }
 

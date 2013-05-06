@@ -191,7 +191,7 @@ trait Infer extends Checkable {
 
   /** Is type fully defined, i.e. no embedded anytypes or wildcards in it?
    */
-  private[typechecker] def isFullyDefined(tp: Type): Boolean = tp match {
+  private[typechecker] def isFullyDefined(tp: Type): Boolean = /*printResult(s"isFullyDefined($tp)")*/(tp match {
     case WildcardType | BoundedWildcardType(_) | NoType =>
       false
     case NoPrefix | ThisType(_) | ConstantType(_) =>
@@ -210,7 +210,7 @@ trait Infer extends Checkable {
       } catch {
         case ex: NoInstance => false
       }
-  }
+  })
 
   /** Solve constraint collected in types `tvars`.
    *
@@ -414,7 +414,7 @@ trait Infer extends Checkable {
      *  `isAsSpecific` no longer prefers A by testing applicability to A for both m(A) and m(=>A)
      *  since that induces a tie between m(=>A) and m(=>A,B*) [SI-3761]
      */
-    private def isCompatible(tp: Type, pt: Type): Boolean = {
+    private def isCompatible(tp: Type, pt: Type): Boolean = /*printResult(s"isCompatible($tp, $pt)")*/ {
       def isCompatibleByName(tp: Type, pt: Type): Boolean = (
         isByNameParamType(pt) && !isByNameParamType(tp) && isCompatible(tp, dropByName(pt))
       )
@@ -571,7 +571,7 @@ trait Infer extends Checkable {
         def unapply(m: Result): Some[(List[Symbol], List[Type], List[Type], List[Symbol])] = Some(toLists{
           val (ok, nok) = m.map{case (p, a) => (p, a.getOrElse(null))}.partition(_._2 ne null)
           val (okArgs, okTparams) = ok.unzip
-          (okArgs, okTparams, m.values.map(_.getOrElse(NothingClass.tpe)), nok.keys)
+          (okArgs, okTparams, m.values.map(_ getOrElse FailedInferenceNothing), nok.keys)
         })
       }
 
@@ -595,14 +595,51 @@ trait Infer extends Checkable {
      *  @return map from tparams to inferred arg, if inference was successful, tparams that map to None are considered left undetermined
      *    type parameters that are inferred as `scala.Nothing` and that are not covariant in `restpe` are taken to be undetermined
      */
-    def adjustTypeArgs(tparams: List[Symbol], tvars: List[TypeVar], targs: List[Type], restpe: Type = WildcardType): AdjustedTypeArgs.Result  = {
+    def adjustTypeArgs(tparams: List[Symbol], tvars: List[TypeVar], targs: List[Type], restpe: Type = WildcardType): AdjustedTypeArgs.Result  = /*printResult(s"adjustTypeArgs($tparams, $tvars, $targs, $restpe)")*/ {
       val buf = AdjustedTypeArgs.Result.newBuilder[Symbol, Option[Type]]
+      def implicitParams(tp: Type): List[Symbol] = tp match {
+        case MethodType(params, restpe) if params.nonEmpty && params.head.isImplicit => params
+        case MethodType(params, restpe)                                              => implicitParams(restpe)
+        case PolyType(tparams, restpe)                                               => implicitParams(restpe)
+        case _                                                                       => Nil
+      }
+      def implicitResult(tp: Type): Type = tp match {
+        case MethodType(params, restpe) if params.nonEmpty && params.head.isImplicit => restpe
+        case MethodType(_, restpe)                                                   => implicitResult(restpe)
+        case PolyType(_, restpe)                                                     => implicitResult(restpe)
+        case _                                                                       => NoType
+      }
 
       foreach3(tparams, tvars, targs) { (tparam, tvar, targ) =>
-        val retract = (
-              targ.typeSymbol == NothingClass                                         // only retract Nothings
-          && (restpe.isWildcard || !varianceInType(restpe)(tparam).isPositive)  // don't retract covariant occurrences
-        )
+        def variance           = varianceInType(restpe)(tparam)
+        def wild               = restpe.isWildcard
+        def imps               = implicitParams(restpe)
+        def impResult          = implicitResult(restpe)
+        def impTypes           = imps map (_.tpe)
+        def undetsInImplicits  = tparams filter (p => impTypes exists (tp => tp contains p))
+        def undetsInResult     = tparams filter (p => impResult contains p)
+        def classesInImplicits = impTypes map (_.typeSymbolDirect)
+        def classInResult      = impResult.typeSymbolDirect
+        def tparamInAndOut     = (undetsInImplicits contains tparam) && (undetsInResult contains tparam)
+
+        if (undetsInImplicits.nonEmpty || undetsInResult.nonEmpty)
+          log(s"undetsInImplicits=$undetsInImplicits undetsInResult=$undetsInResult")
+        if (classesInImplicits.nonEmpty)
+          log(s"classesInImplicits=$classesInImplicits classInResult=$classInResult")
+
+        val retract = targ.typeSymbol.isNothingClass && {
+          targ match {
+            case FailedInferenceNothing => true
+            case ExplicitlyGivenNothing => false
+            case _                      => tparamInAndOut || wild //&& !variance.isPositive
+
+            // case _ if wild              => !variance.isPositive
+            // case _                      => tparamInAndOut
+            // case _ if !wild          => undetsInImplicits.nonEmpty
+            // case _                   => !variance.isPositive
+          }
+        }
+        log(f"targ=$targ retract=$retract%-5s for $tparam in ${tparam.owner}, v=$variance, w=$wild, tparamInAndOut=$tparamInAndOut, restpe=$restpe")
 
         buf += ((tparam,
           if (retract) None
@@ -633,8 +670,7 @@ trait Infer extends Checkable {
     *
     *  @throws                  NoInstance
     */
-    def methTypeArgs(tparams: List[Symbol], formals: List[Type], restpe: Type,
-                     argtpes: List[Type], pt: Type): AdjustedTypeArgs.Result = {
+    def methTypeArgs(tparams: List[Symbol], formals: List[Type], restpe: Type, argtpes: List[Type], pt: Type): AdjustedTypeArgs.Result = /*printResult(s"methTypeArgs($tparams, $formals, $restpe, $argtpes, $pt)")*/ {
       val tvars = tparams map freshVar
       if (!sameLength(formals, argtpes))
         throw new NoInstance("parameter lists differ in length")
@@ -1216,19 +1252,17 @@ trait Infer extends Checkable {
         try {
           val pt      = if (pt0.typeSymbol == UnitClass) WildcardType else pt0
           val formals = formalTypes(mt.paramTypes, args.length)
-          val argtpes  = tupleIfNecessary(formals, args map (x => elimAnonymousClass(x.tpe.deconst)))
-          val restpe  = fn.tpe.resultType(argtpes)
+          val argtpes = tupleIfNecessary(formals, args map (x => elimAnonymousClass(x.tpe.deconst)))
+          val restpe  = mt resultType argtpes
+          def undet_s = undetparams.map(_.name).mkString(", ")
 
           val AdjustedTypeArgs.AllArgsAndUndets(okparams, okargs, allargs, leftUndet) =
             methTypeArgs(undetparams, formals, restpe, argtpes, pt)
 
-          printInference("[infer method] solving for %s in %s based on (%s)%s (%s)".format(
-            undetparams.map(_.name).mkString(", "),
-            fn.tpe,
-            argtpes.mkString(", "),
-            restpe,
-            (okparams map (_.name), okargs).zipped.map(_ + "=" + _).mkString("solved: ", ", ", "")
-          ))
+          def args_s  = argtpes.mkString("(", ", ", ")" + restpe)
+          def ok_s    = (okparams map (_.name), okargs).zipped.map(_ + "=" + _).mkString("solved: ", ", ", "")
+
+          printInference(s"[infer method] solving for $undet_s in $mt based on $args_s ($ok_s) left undet: $leftUndet")
 
           if (checkBounds(fn, NoPrefix, NoSymbol, undetparams, allargs, "inferred ")) {
             val treeSubst = new TreeTypeSubstituter(okparams, okargs)

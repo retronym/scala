@@ -75,6 +75,9 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       // we can live without it or deliver that info some other way.
       log(s"Stabilizing module method for ${sym.fullLocationString}")
     }
+    // if (tp.typeSymbol.isNothingClass)
+    //   printResult("Updating info of " + sym)(sym updateInfo NothingTpe)
+
     super.transformInfo(sym, tp)
   }
 
@@ -1561,6 +1564,12 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
     }
 
     override def transform(tree: Tree): Tree = {
+      // for (t <- tree) t.tpe match {
+      //   case TypeRef(_, definitions.TaggedNothingClass, arg :: Nil) =>
+      //     println(s"Replacing $arg with regular Nothing")
+      //     t setType definitions.NothingTpe
+      //   case _ =>
+      // }
       val savedLocalTyper = localTyper
       val savedCurrentApplication = currentApplication
       try {

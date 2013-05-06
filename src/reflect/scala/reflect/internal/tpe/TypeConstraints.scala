@@ -5,7 +5,7 @@ package tpe
 
 import scala.collection.{ generic }
 import generic.Clearable
-
+import util.Origins
 
 private[internal] trait TypeConstraints {
   self: SymbolTable =>
@@ -22,6 +22,13 @@ private[internal] trait TypeConstraints {
     private type UndoPairs = List[(TypeVar, TypeConstraint)]
     //OPT this method is public so we can do `manual inlining`
     var log: UndoPairs = List()
+    var size: Int = 0
+    private def pop() = {
+      val res = log.head
+      log = log.tail
+      size -= 1
+      res
+    }
 
     /*
      * These two methods provide explicit locking mechanism that is overridden in SynchronizedUndoLog.
@@ -47,37 +54,75 @@ private[internal] trait TypeConstraints {
 
     /** Undo all changes to constraints to type variables upto `limit`. */
     //OPT this method is public so we can do `manual inlining`
-    def undoTo(limit: UndoPairs) {
+    def undoTo(limit: Int) {
+      if (limit != size)
+        self.log(s"[undo] log has $size/${log.size} entries, undo to $limit")
+
       assertCorrectThread()
-      while ((log ne limit) && log.nonEmpty) {
-        val (tv, constr) = log.head
+      while (size > limit) {
+        val (tv, constr) = pop()
+        self.log(s"[undo] $tv.constr = $constr")
         tv.constr = constr
-        log = log.tail
       }
+    }
+    def dropTo(limit: Int) {
+      if (limit != size)
+        self.log(s"[undo] log has $size/${log.size} entries, drop to $limit")
+
+      while (size > limit)
+        pop()
     }
 
     /** No sync necessary, because record should only
       *  be called from within an undo or undoUnless block,
       *  which is already synchronized.
       */
-    private[reflect] def record(tv: TypeVar) = {
-      log ::= ((tv, tv.constr.cloneInternal))
+    private[reflect] def record(tv: TypeVar) = Origins("record", 4) {
+      // self.log(s"($tv)")
+      log ::= logResult(s"[undo+] ")(((tv, tv.constr.cloneInternal)))
+      size += 1
     }
 
     def clear() {
       lock()
-      try {
-        if (settings.debug)
-          self.log("Clearing " + log.size + " entries from the undoLog.")
-        log = Nil
-      } finally unlock()
+      self.log(s"Clearing ${log.size} entries from the undoLog.")
+      log.zipWithIndex foreach { case ((k, v), i) =>
+        def loop(xs: List[Symbol]): List[Symbol] = xs match {
+          case Nil                 => Nil
+          case c :: _ if c.isClass => c :: Nil
+          case c :: cs             => c :: loop(cs)
+        }
+        val os = loop(k.origin.typeSymbolDirect.ownerChain)
+        // val os = k.origin.typeSymbolDirect.ownerChain
+
+        // val o1 = k.origin.typeSymbolDirect
+        // val o2 = o1.enclMethod orElse o1.safeOwner
+        // val o3 = o1.enclClass orElse o1.safeOwner
+        // val c_s = List(o1, o2, o3).distinct filterNot (_ eq NoSymbol)
+        val c_s = os map (s =>
+          if (s.isMethod) s.defString
+          else if (s.isClass) s.fullNameString
+          else s.nameString
+        ) mkString " in "
+
+        // val c_s = k.origin.typeSymbolDirect.enclMethod match {
+        //   case NoSymbol => k.origin.typeSymbolDirect + " in " + k.origin.typeSymbolDirect.safeOwner
+        //   case m        => m.defString + " in " + m.enclClass.fullNameString
+        // }
+        // val m_s  = k.origin.typeSymbolDirect.enclMethod
+        // val c_s  = m_s.enclClass.fullNameString
+        // val mc_s = s"$c_s#${m_s.defString}"
+        self.log(f"$i%3s) $k%30s -> $v%-20s ($c_s)")
+      }
+      try { log = Nil ; size = 0 } finally unlock()
     }
 
     // `block` should not affect constraints on typevars
-    def undo[T](block: => T): T = {
+    def undo[T](block: => T): T = Origins("undo", 4) {
+      self.log(s"Undolog.undo(${log.size} entries)")
       lock()
       try {
-        val before = log
+        val before = size
 
         try block
         finally undoTo(before)
@@ -111,8 +156,8 @@ private[internal] trait TypeConstraints {
       *  guarding addLoBound/addHiBound somehow broke raw types so it
       *  only guards against being created with them.]
       */
-    private var lobounds = lo0 filterNot typeIsNothing
-    private var hibounds = hi0 filterNot typeIsAny
+    private var lobounds = lo0 //filterNot typeIsNothing
+    private var hibounds = hi0 //filterNot typeIsAny
     private var numlo = numlo0
     private var numhi = numhi0
     private var avoidWidening = avoidWidening0
@@ -128,10 +173,8 @@ private[internal] trait TypeConstraints {
       // depends on these subtype tests being performed to make forward progress when
       // there are mutally recursive type vars.
       // See pos/t6367 and pos/t6499 for the competing test cases.
-      val mustConsider = tp.typeSymbol match {
-        case NothingClass => true
-        case _            => !(lobounds contains tp)
-      }
+      val mustConsider = tp.typeSymbol.isNothingClass || !(lobounds contains tp)
+
       if (mustConsider) {
         if (isNumericBound && isNumericValueType(tp)) {
           if (numlo == NoType || isNumericSubType(numlo, tp))
@@ -177,6 +220,7 @@ private[internal] trait TypeConstraints {
         (numhi == NoType || (tp weak_<:< numhi))
 
     var inst: Type = NoType // @M reduce visibility?
+    private def instString = if (inst eq null) "null" else inst.safeToString
 
     def instValid = (inst ne null) && (inst ne NoType)
 
@@ -196,7 +240,7 @@ private[internal] trait TypeConstraints {
         lostr ++ histr mkString ("[", " | ", "]")
       }
       if (inst eq NoType) boundsStr
-      else boundsStr + " _= " + inst.safeToString
+      else s"$boundsStr _= $instString"
     }
   }
 
@@ -233,29 +277,32 @@ private[internal] trait TypeConstraints {
             solveOne(tvar2, tparam2, variance2)
           }
         })
+        def inst(tp: Type): Type = tp.instantiateTypeParams(tparams, tvars)
+
         if (!cyclic) {
           if (up) {
             if (bound.typeSymbol != AnyClass) {
               log(s"$tvar addHiBound $bound.instantiateTypeParams($tparams, $tvars)")
-              tvar addHiBound bound.instantiateTypeParams(tparams, tvars)
+              tvar addHiBound inst(bound)
             }
             for (tparam2 <- tparams)
               tparam2.info.bounds.lo.dealias match {
                 case TypeRef(_, `tparam`, _) =>
                   log(s"$tvar addHiBound $tparam2.tpeHK.instantiateTypeParams($tparams, $tvars)")
-                  tvar addHiBound tparam2.tpeHK.instantiateTypeParams(tparams, tvars)
+                  tvar addHiBound inst(tparam2.tpeHK)
                 case _ =>
               }
-          } else {
-            if (bound.typeSymbol != NothingClass && bound.typeSymbol != tparam) {
+          }
+          else {
+            if (!bound.typeSymbol.isNothingClass && bound.typeSymbol != tparam) {
               log(s"$tvar addLoBound $bound.instantiateTypeParams($tparams, $tvars)")
-              tvar addLoBound bound.instantiateTypeParams(tparams, tvars)
+              tvar addLoBound inst(bound)
             }
             for (tparam2 <- tparams)
               tparam2.info.bounds.hi.dealias match {
                 case TypeRef(_, `tparam`, _) =>
                   log(s"$tvar addLoBound $tparam2.tpeHK.instantiateTypeParams($tparams, $tvars)")
-                  tvar addLoBound tparam2.tpeHK.instantiateTypeParams(tparams, tvars)
+                  tvar addLoBound inst(tparam2.tpeHK)
                 case _ =>
               }
           }

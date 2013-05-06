@@ -390,7 +390,7 @@ abstract class SelectiveANFTransform extends PluginComponent with Transform with
 
       if (cpsR.isDefined && !bot.isDefined) {
 
-        if (!expr.isEmpty && (expr.tpe.typeSymbol ne NothingClass)) {
+        if (!expr.isEmpty && !expr.tpe.typeSymbol.isNothingClass) {
           // must convert!
           debuglog("cps type conversion (has: " + cpsA + "/" + spc + "/" + expr.tpe  + ")")
           debuglog("cps type conversion (expected: " + cpsR.get + "): " + expr)
@@ -424,10 +424,14 @@ abstract class SelectiveANFTransform extends PluginComponent with Transform with
             //
             // TODO - obviously this should be done earlier, differently, or with
             // a more skilled hand.  Most likely, all three.
-            if ((b.typeSymbol eq NothingClass) && call.tpe.exists(_ eq WildcardType))
-              unit.error(tree.pos, "cannot cps-transform malformed (possibly in shift/reset placement) expression")
-            else
-              return ((stms, call))
+            if (b.typeSymbol.isNothingClass) {
+              b.dealias match {
+                case NothingTpe if call.tpe.exists(_.isWildcard) =>
+                  unit.error(tree.pos, "cannot cps-transform malformed (possibly in shift/reset placement) expression")
+                case _ =>
+                  return ((stms, call))
+              }
+            }
           }
           catch {
             case ex:TypeError =>

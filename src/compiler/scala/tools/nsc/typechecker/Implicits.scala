@@ -1089,7 +1089,10 @@ trait Implicits {
     /** Creates a tree will produce a tag of the requested flavor.
       * An EmptyTree is returned if materialization fails.
       */
-    private def tagOfType(pre: Type, tp: Type, tagClass: Symbol): SearchResult = {
+    private def tagOfType(pre: Type, tp0: Type, tagClass: Symbol): SearchResult = {
+      // println(s"tagOfType($pre, $tp0, $tagClass)")
+      val tp = if (tp0.typeSymbol.isNothingClass) NothingTpe else tp0
+
       def success(arg: Tree) = {
         def isMacroException(msg: String): Boolean =
           // [Eugene] very unreliable, ask Hubert about a better way
@@ -1215,9 +1218,10 @@ trait Implicits {
             // looking for a manifest of a type parameter that hasn't been inferred by now,
             // can't do much, but let's not fail
             else if (undetParams contains sym) {
-              // #3859: need to include the mapping from sym -> NothingClass.tpe in the SearchResult
-              mot(NothingClass.tpe, sym :: from, NothingClass.tpe :: to)
-            } else {
+              // #3859: need to include the mapping from sym -> InsufficientInfoNothing in the SearchResult
+              logResult(s"mot($sym)")(mot(NothingTpe, sym :: from, NothingTpe :: to))
+            }
+            else {
               // a manifest should have been found by normal searchImplicit
               EmptyTree
             }

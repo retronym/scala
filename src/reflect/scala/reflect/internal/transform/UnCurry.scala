@@ -40,6 +40,9 @@ trait UnCurry {
           apply(MethodType(h.cloneSymbol.resetFlag(IMPLICIT) :: t, restpe))
         case NullaryMethodType(restpe) =>
           apply(MethodType(List(), restpe))
+        case TypeRef(_, TaggedNothingClass, arg :: Nil) =>
+          log(s"Uncurry replacing $arg with regular nothing.")
+          NothingTpe
         case TypeRef(pre, ByNameParamClass, arg :: Nil) =>
           apply(functionType(List(), arg))
         case TypeRef(pre, RepeatedParamClass, arg :: Nil) =>

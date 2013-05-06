@@ -550,7 +550,7 @@ trait TypeDiagnostics {
 
       private def treeOK(tree: Tree) = {
         val isLabelDef = tree match { case _: LabelDef => true; case _ => false}
-        tree.tpe != null && tree.tpe.typeSymbol == NothingClass && !isLabelDef
+        tree.tpe != null && tree.tpe.typeSymbol.isNothingClass && !isLabelDef
       }
 
       @inline def updateExpr[A](fn: Tree)(f: => A) = {

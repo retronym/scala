@@ -154,7 +154,7 @@ trait Kinds {
 
       if (!sameLength(hkargs, hkparams)) {
         // Any and Nothing are kind-overloaded
-        if (arg == AnyClass || arg == NothingClass) NoKindErrors
+        if (arg == AnyClass || arg.isNothingClass) NoKindErrors
         // shortcut: always set error, whether explainTypesOrNot
         else return kindErrors.arityError(arg -> param)
       }

@@ -519,6 +519,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** The bottom classes are Nothing and Null, found in Definitions. */
     def isBottomClass  = false
+    def isNothingClass = false
 
     /** These are all tests for varieties of ClassSymbol, which has these subclasses:
      *  - ModuleClassSymbol
@@ -1713,8 +1714,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  infinitely many non-bottom subclasses, not only 9?
      */
     def isBottomSubClass(that: Symbol) = (
-         (this eq NothingClass)
-      || (this eq NullClass) && that.isClass && (that ne NothingClass) && !(that isNonBottomSubClass AnyValClass)
+         this.isNothingClass
+      || (this eq NullClass) && that.isClass && !that.isNothingClass && !(that isNonBottomSubClass AnyValClass)
     )
 
     /** Overridden in NullClass and NothingClass for custom behavior.

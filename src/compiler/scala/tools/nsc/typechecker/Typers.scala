@@ -891,7 +891,7 @@ trait Typers extends Adaptations with Tags {
           // (e.g., m[Int] --> tree.tpe.symbol.typeParams.length == 1, tree.tpe.typeParams.length == 0!)
           !sameLength(tree.tpe.typeParams, pt.typeParams) &&
           !(tree.tpe.typeSymbol == AnyClass ||
-            tree.tpe.typeSymbol == NothingClass ||
+            tree.tpe.typeSymbol.isNothingClass ||
             pt == WildcardType)) {
           // Check that the actual kind arity (tree.symbol.typeParams.length) conforms to the expected
           // kind-arity (pt.typeParams.length). Full checks are done in checkKindBounds in Infer.
@@ -2278,7 +2278,7 @@ trait Typers extends Adaptations with Tags {
           checkSelfConstructorArgs(ddef, meth.owner)
       }
 
-      if (tpt1.tpe.typeSymbol != NothingClass && !context.returnsSeen && rhs1.tpe.typeSymbol != NothingClass)
+      if (!tpt1.tpe.typeSymbol.isNothingClass && !context.returnsSeen && !rhs1.tpe.typeSymbol.isNothingClass)
         rhs1 = checkDead(rhs1)
 
       if (!isPastTyper && meth.owner.isClass &&
@@ -3078,7 +3078,7 @@ trait Typers extends Adaptations with Tags {
             case AssignOrNamedArg(Ident(name), rhs) =>
               NamedType(name, shapeType(rhs))
             case _ =>
-              NothingClass.tpe
+              NothingTpe
           }
           val argtypes = args map shapeType
           val pre = fun.symbol.tpe.prefix
@@ -4281,7 +4281,7 @@ trait Typers extends Adaptations with Tags {
                 unit.warning(tree.pos, "enclosing method " + name + " has result type Unit: return value discarded")
             }
             val res = treeCopy.Return(tree, checkDead(expr1)).setSymbol(enclMethod.owner)
-            val tp = pluginsTypedReturn(NothingClass.tpe, this, res, restpt.tpe)
+            val tp = pluginsTypedReturn(ExplicitlyGivenNothing, this, res, restpt.tpe)
             res.setType(tp)
           }
         }
@@ -4394,10 +4394,8 @@ trait Typers extends Adaptations with Tags {
             // See #4712 for a case where this situation arises,
             if ((fun.symbol ne null) && fun.symbol.isJavaDefined) {
               val newtpe = rawToExistential(fun.tpe)
-              if (fun.tpe ne newtpe) {
-                // println("late cooking: "+fun+":"+fun.tpe) // DEBUG
-                return tryTypedApply(fun setType newtpe, args)
-              }
+              if (fun.tpe ne newtpe)
+                return logResult(s"Late cooking $fun: ${fun.tpe}")(tryTypedApply(fun setType newtpe, args))
             }
 
             def treesInResult(tree: Tree): List[Tree] = tree :: (tree match {
@@ -4783,6 +4781,13 @@ trait Typers extends Adaptations with Tags {
         && !(inPatternConstructor && sym.isMethod && !sym.isStable)
       )
 
+      def explicitNothingForTypedIdent(t: Tree): Tree = (
+        if (t.tpe.typeSymbol.isNothingClass)
+          logResult(s"Updating ${t.shortClass} $t in ${context.owner.fullNameString} to ExplicitlyGivenNothing")(t setType ExplicitlyGivenNothing)
+        else
+          t
+      )
+
       /* Attribute an identifier consisting of a simple name or an outer reference.
        *
        * @param tree      The tree representing the identifier.
@@ -4790,7 +4795,7 @@ trait Typers extends Adaptations with Tags {
        * Transformations: (1) Prefix class members with this.
        *                  (2) Change imported symbols to selections
        */
-      def typedIdent(tree: Tree, name: Name): Tree = {
+      def typedIdent(tree: Tree, name: Name): Tree = explicitNothingForTypedIdent {
         // setting to enable unqualified idents in empty package (used by the repl)
         def inEmptyPackage = if (settings.exposeEmptyPackage) lookupInEmpty(name) else NoSymbol
 
@@ -5005,7 +5010,7 @@ trait Typers extends Adaptations with Tags {
 
       def typedThrow(tree: Throw) = {
         val expr1 = typed(tree.expr, EXPRmode | BYVALmode, ThrowableClass.tpe)
-        treeCopy.Throw(tree, expr1) setType NothingClass.tpe
+        treeCopy.Throw(tree, expr1) setType ExplicitlyGivenNothing
       }
 
       def typedTyped(tree: Typed) = {
@@ -5174,7 +5179,7 @@ trait Typers extends Adaptations with Tags {
       }
 
       def typedTypeBoundsTree(tree: TypeBoundsTree) = {
-        val lo1 = if (tree.lo.isEmpty) TypeTree(NothingTpe) else typedType(tree.lo, mode)
+        val lo1 = if (tree.lo.isEmpty) TypeTree(UnspecifiedLowerBoundNothing) else typedType(tree.lo, mode)
         val hi1 = if (tree.hi.isEmpty) TypeTree(AnyTpe) else typedType(tree.hi, mode)
         treeCopy.TypeBoundsTree(tree, lo1, hi1) setType TypeBounds(lo1.tpe, hi1.tpe)
       }

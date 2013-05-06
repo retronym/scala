@@ -109,7 +109,7 @@ abstract class Reifier extends States
       // needs to be solved some day
       // maybe try `resetLocalAttrs` once the dust settles
       var importantSymbols = Set[Symbol](
-        NothingClass, AnyClass, SingletonClass, PredefModule, ScalaRunTimeModule, TypeCreatorClass, TreeCreatorClass, MirrorClass,
+        NothingClass, TaggedNothingClass, AnyClass, SingletonClass, PredefModule, ScalaRunTimeModule, TypeCreatorClass, TreeCreatorClass, MirrorClass,
         ApiUniverseClass, JavaUniverseClass, ReflectRuntimePackage, ReflectRuntimeCurrentMirror)
       importantSymbols ++= importantSymbols map (_.companionSymbol)
       importantSymbols ++= importantSymbols map (_.moduleClass)

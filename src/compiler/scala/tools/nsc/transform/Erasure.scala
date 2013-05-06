@@ -133,7 +133,7 @@ abstract class Erasure extends AddInterfaces
           ObjectClass.tpe
         else if (sym == UnitClass)
           BoxedUnitClass.tpe
-        else if (sym == NothingClass)
+        else if (sym.isNothingClass)
           RuntimeNothingClass.tpe
         else if (sym == NullClass)
           RuntimeNullClass.tpe
@@ -258,7 +258,7 @@ abstract class Erasure extends AddInterfaces
             jsig(ObjectClass.tpe)
           else if (sym == UnitClass)
             jsig(BoxedUnitClass.tpe)
-          else if (sym == NothingClass)
+          else if (sym.isNothingClass)
             jsig(RuntimeNothingClass.tpe)
           else if (sym == NullClass)
             jsig(RuntimeNullClass.tpe)
@@ -554,10 +554,10 @@ abstract class Erasure extends AddInterfaces
           case UnitClass  =>
             if (treeInfo isExprSafeToInline tree) REF(BoxedUnit_UNIT)
             else BLOCK(tree, REF(BoxedUnit_UNIT))
-          case NothingClass => tree // a non-terminating expression doesn't need boxing
           case x          =>
-            assert(x != ArrayClass)
-            tree match {
+            assert(x != ArrayClass, tree)
+            if (x.isNothingClass) tree  // a non-terminating expression doesn't need boxing
+            else tree match {
               /* Can't always remove a Box(Unbox(x)) combination because the process of boxing x
                * may lead to throwing an exception.
                *
