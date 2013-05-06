@@ -464,7 +464,7 @@ trait Implicits {
        ptres match {
          case HasMethodMatching(name, argtpes, restpe) =>
            (tpres.member(name) filter (m =>
-             isApplicableSafe(undet, m.tpe, argtpes, restpe))) != NoSymbol
+             isApplicableSafe(undet, tpres memberType m, argtpes, restpe))) != NoSymbol
          case _ =>
            tpres <:< ptres
        }
