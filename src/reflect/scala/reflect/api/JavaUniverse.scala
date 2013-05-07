@@ -32,7 +32,8 @@ trait JavaUniverse extends Universe with JavaMirrors { self =>
     TypeTag(mirror0.asInstanceOf[Mirror], new TypeCreator {
       def apply[U <: Universe with Singleton](mirror: scala.reflect.api.Mirror[U]): U # Type = {
         mirror.universe match {
-          case ju: JavaUniverse =>
+          case ju0: JavaUniverse =>
+            val ju: Universe with JavaUniverse = ju0 // workaround for SI-7459, see pending/t7459c for a minimization
             val jm = mirror.asInstanceOf[ju.Mirror]
             val sym = jm.classSymbol(manifest.runtimeClass)
             val tpe =

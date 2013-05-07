@@ -232,8 +232,34 @@ trait MatchTranslation {
       val selectorSym = freshSym(selector.pos, pureType(selectorTp)) setFlag treeInfo.SYNTH_CASE_FLAGS
 
       // pt = Any* occurs when compiling test/files/pos/annotDepMethType.scala  with -Xexperimental
-      val combined = combineCases(selector, selectorSym, nonSyntheticCases map translateCase(selectorSym, pt), pt, matchOwner, defaultOverride)
+      val treeMakers = nonSyntheticCases map translateCase(selectorSym, pt)
+      var combined = combineCases(selector, selectorSym, treeMakers, pt, matchOwner, defaultOverride)
+      mforeach(treeMakers) { (maker: TreeMaker) =>
+        val s = maker.substitution
+        val from = s.from
+        val to = s.to
+        val (from1, to1) = (from.zip(to)).collect {
+          case (f, i @ Ident(_)) if !f.isSynthetic => (f, i.symbol)
+        }.unzip
 
+        combined = combined.substituteSymbols(from1, to1)
+        maker match {
+          case pspb: PreserveSubPatBinders =>
+            val stored = pspb.stored
+            val typeSubs = stored.toList.collect {
+              case (sym, sel @ Select(i @ Ident(pre), name)) =>
+                // TODO generalize to arbitrary nested selections.
+                // TODO check if stable
+                val tp = singleType(singleType(NoPrefix, i.symbol), sel.symbol)
+                (sym, tp)
+              case (sym, tree) =>
+                abort(s"unhandled substutition: $sym ~> $tree")
+            }
+            val (fromSyms, toTypes) = typeSubs.unzip
+            combined = combined.substituteTypes(fromSyms, toTypes)
+          case _ =>
+        }
+      }
       if (Statistics.canEnable) Statistics.stopTimer(patmatNanos, start)
       combined
     }

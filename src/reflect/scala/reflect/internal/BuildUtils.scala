@@ -537,15 +537,13 @@ trait BuildUtils { self: SymbolTable =>
       def unapply(tree: Tree): Option[Tree] = gen.Filter.unapply(tree)
     }
 
-    // If a tree in type position isn't provided by the user (e.g. `tpt` fields of
-    // `ValDef` and `DefDef`, function params etc), then it's going to be parsed as
-    // TypeTree with empty original and empty tpe. This extractor matches such trees
-    // so that one can write q"val x = 2" to match typecheck(q"val x = 2"). Note that
-    // TypeTree() is the only possible representation for empty trees in type positions.
-    // We used to sometimes receive EmptyTree in such cases, but not anymore.
-    object SyntacticEmptyTypeTree extends SyntacticEmptyTypeTreeExtractor {
-      def apply(): TypeTree = self.TypeTree()
-      def unapply(tt: TypeTree): Boolean = tt.original == null || tt.original.isEmpty
+    // abstract over possible alternative representations of no type in valdef
+    protected object EmptyTypTree {
+      def unapply(tree: Tree): Boolean = tree match {
+        case EmptyTree => true
+        case tt: TypeTree if (tt.original == null || tt.original.isEmpty) => true
+        case _ => false
+      }
     }
 
     // match a sequence of desugared `val $pat = $value`
@@ -563,8 +561,8 @@ trait BuildUtils { self: SymbolTable =>
         case ValDef(_, name1, _, Match(MaybeUnchecked(value), CaseDef(pat, EmptyTree, Ident(name2)) :: Nil)) :: UnPatSeq(rest)
           if name1 == name2 =>
           Some((pat, value) :: rest)
-        // case q"${_} val $name: ${SyntacticEmptyTypeTree()} = $value" :: UnPatSeq(rest) =>
-        case ValDef(_, name, SyntacticEmptyTypeTree(), value) :: UnPatSeq(rest) =>
+        // case q"${_} val $name: ${EmptyTypTree()} = $value" :: UnPatSeq(rest) =>
+        case ValDef(_, name, EmptyTypTree(), value) :: UnPatSeq(rest) =>
           Some((Bind(name, self.Ident(nme.WILDCARD)), value) :: rest)
         // case q"${_} val $name: $tpt = $value" :: UnPatSeq(rest) =>
         case ValDef(_, name, tpt, value) :: UnPatSeq(rest) =>
@@ -606,8 +604,8 @@ trait BuildUtils { self: SymbolTable =>
       def unapply(tree: Tree): Option[(Tree, Tree)] = tree match {
         case Function(ValDef(Modifiers(PARAM, _, _), name, tpt, EmptyTree) :: Nil, body) =>
           tpt match {
-            case SyntacticEmptyTypeTree() => Some((Bind(name, self.Ident(nme.WILDCARD)), body))
-            case _                        => Some((Bind(name, Typed(self.Ident(nme.WILDCARD), tpt)), body))
+            case EmptyTypTree() => Some((Bind(name, self.Ident(nme.WILDCARD)), body))
+            case _              => Some((Bind(name, Typed(self.Ident(nme.WILDCARD), tpt)), body))
           }
         case UnVisitor(_, CaseDef(pat, EmptyTree, body) :: Nil) =>
           Some((pat, body))

@@ -216,9 +216,9 @@ trait MatchCodeGen extends Interface {
         def flatMapCond(cond: Tree, res: Tree, nextBinder: Symbol, next: Tree): Tree = {
           val rest = (
             // only emit a local val for `nextBinder` if it's actually referenced in `next`
-            if (next.exists(_.symbol eq nextBinder))
+//            if (next.exists(_.symbol eq nextBinder))
               BLOCK(ValDef(nextBinder, res), next)
-            else next
+//            else next
           )
           ifThenElseZero(cond, rest)
         }
