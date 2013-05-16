@@ -1327,9 +1327,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     /** Set initial info. */
-    def setInfo(info: Type): this.type  = { info_=(info); this }
+    def setInfo(info: Type): this.type                 = { info_=(info); this }
     /** Modifies this symbol's info in place. */
-    def modifyInfo(f: Type => Type): this.type = setInfo(f(info))
+    def modifyInfo(f: Type => Type): this.type         = setInfo(f(info))
+    def modifyInfoConserve(f: Type => Type): this.type = {val t = f(info); if (t ne info) setInfo(t); this }
     /** Substitute second list of symbols for first in current info. */
     def substInfo(syms0: List[Symbol], syms1: List[Symbol]): this.type =
       if (syms0.isEmpty) this
@@ -1498,17 +1499,18 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      * This is done in checkAccessible and overriding checks in refchecks
      * We can't do this on class loading because it would result in infinite cycles.
      */
-    def cookJavaRawInfo(): Unit = {
+    final def cookJavaRawInfo() {
       // only try once...
       if (this hasFlag TRIEDCOOKING)
         return
 
       this setFlag TRIEDCOOKING
       info  // force the current info
+      // See comments on SI-7482 to motivate the modifyInfoConserve.
       if (isJavaDefined || isType && owner.isJavaDefined)
-        this modifyInfo rawToExistential
+        this modifyInfoConserve rawToExistential
       else if (isOverloaded)
-        alternatives withFilter (_.isJavaDefined) foreach (_ modifyInfo rawToExistential)
+        alternatives withFilter (_.isJavaDefined) foreach (_ modifyInfoConserve rawToExistential)
     }
 
     /** The logic approximately boils down to finding the most recent phase
