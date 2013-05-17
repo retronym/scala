@@ -250,29 +250,6 @@ trait Typers extends Adaptations with Tags {
       case _ => tp
     }
 
-    /** Check that `tree` is a stable expression.
-     */
-    def checkStable(tree: Tree): Tree = (
-      if (treeInfo.isExprSafeToInline(tree)) tree
-      else if (tree.isErrorTyped) tree
-      else UnstableTreeError(tree)
-    )
-
-    /** Would tree be a stable (i.e. a pure expression) if the type
-     *  of its symbol was not volatile?
-     */
-    protected def isStableExceptVolatile(tree: Tree) = {
-      tree.hasSymbolField && tree.symbol != NoSymbol && tree.tpe.isVolatile &&
-      { val savedTpe = tree.symbol.info
-        val savedSTABLE = tree.symbol getFlag STABLE
-        tree.symbol setInfo AnyRefClass.tpe
-        tree.symbol setFlag STABLE
-        val result = treeInfo.isExprSafeToInline(tree)
-        tree.symbol setInfo savedTpe
-        tree.symbol setFlag savedSTABLE
-        result
-      }
-    }
     private def errorNotClass(tpt: Tree, found: Type)  = { ClassTypeRequiredError(tpt, found); false }
     private def errorNotStable(tpt: Tree, found: Type) = { TypeNotAStablePrefixError(tpt, found); false }
 
@@ -591,7 +568,7 @@ trait Typers extends Adaptations with Tags {
       }
 
     /** Post-process an identifier or selection node, performing the following:
-     *  1. Check that non-function pattern expressions are stable
+     *  1. Check that non-function pattern expressions are stable (ignoring volatility concerns -- SI-6815)
      *       (and narrow the type of modules: a module reference in a pattern has type Foo.type, not "object Foo")
      *  2. Check that packages and static modules are not used as values
      *  3. Turn tree type into stable type if possible and required by context.
@@ -608,9 +585,7 @@ trait Typers extends Adaptations with Tags {
       val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
 
       def isModuleTypedExpr = (
-           sym.isStable
-        && pre.isStable
-        && !isByNameParamType(tree.tpe)
+           treeInfo.admitsTypeSelection(tree)
         && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
       )
       def isStableValueRequired = (
@@ -630,11 +605,16 @@ trait Typers extends Adaptations with Tags {
       def narrowIf(tree: Tree, condition: Boolean) =
         if (condition) tree setType singleType(pre, sym) else tree
 
+      def checkStable(tree: Tree): Tree =
+        if (treeInfo.isStableIdentifierPattern(tree)) tree
+        else UnstableTreeError(tree)
+
       if (tree.isErrorTyped)
         tree
       else if (!sym.isValue && isStableValueRequired) // (2)
         NotAValueError(tree, sym)
       else if (isStableIdPattern)                     // (1)
+        // A module reference in a pattern has type Foo.type, not "object Foo"
         narrowIf(checkStable(tree), sym.isModuleNotMethod)
       else if (isModuleTypedExpr)                     // (3)
         narrowIf(tree, true)
@@ -4487,6 +4467,7 @@ trait Typers extends Adaptations with Tags {
         }
 
       def normalTypedApply(tree: Tree, fun: Tree, args: List[Tree]) = {
+        // TODO: replace `fun.symbol.isStable` by `treeInfo.isStableIdentifierPattern(fun)`
         val stableApplication = (fun.symbol ne null) && fun.symbol.isMethod && fun.symbol.isStable
         val funpt = if (mode.inPatternMode) pt else WildcardType
         val appStart = if (Statistics.canEnable) Statistics.startTimer(failedApplyNanos) else null
@@ -4794,24 +4775,25 @@ trait Typers extends Adaptations with Tags {
           typedSelect(tree, typedSelectOrSuperQualifier(qual), nme.CONSTRUCTOR)
         case Select(qual, name) =>
           if (Statistics.canEnable) Statistics.incCounter(typedSelectCount)
-          val qual1 = checkDead(typedQualifier(qual, mode)) match {
-            case q if name.isTypeName => checkStable(q)
-            case q                    => q
-          }
+          val qualTyped = checkDead(typedQualifier(qual, mode))
+          val qualStableOrError =
+            if (qualTyped.isErrorTyped || !name.isTypeName || treeInfo.admitsTypeSelection(qualTyped))
+              qualTyped
+            else
+              UnstableTreeError(qualTyped)
           val tree1 = name match {
-            case nme.withFilter => tryWithFilterAndFilter(tree, qual1)
-            case _              => typedSelect(tree, qual1, name)
+            case nme.withFilter => tryWithFilterAndFilter(tree, qualStableOrError)
+            case _              => typedSelect(tree, qualStableOrError, name)
           }
           def sym = tree1.symbol
           if (tree.isInstanceOf[PostfixSelect])
             checkFeature(tree.pos, PostfixOpsFeature, name.decode)
           if (sym != null && sym.isOnlyRefinementMember)
             checkFeature(tree1.pos, ReflectiveCallsFeature, sym.toString)
-
-          qual1.symbol match {
-            case s: Symbol if s.isRootPackage => treeCopy.Ident(tree1, name)
-            case _                            => tree1
-          }
+            qualStableOrError.symbol match {
+              case s: Symbol if s.isRootPackage => treeCopy.Ident(tree1, name)
+              case _                            => tree1
+            }
       }
 
       /* A symbol qualifies if:
@@ -5203,12 +5185,16 @@ trait Typers extends Adaptations with Tags {
       }
 
       def typedSingletonTypeTree(tree: SingletonTypeTree) = {
-        val ref1 = checkStable(
-          context.withImplicitsDisabled(
+        val refTyped =
+          context.withImplicitsDisabled {
             typed(tree.ref, MonoQualifierModes | mode.onlyTypePat, AnyRefClass.tpe)
-          )
-        )
-        tree setType ref1.tpe.resultType
+          }
+
+        if (!refTyped.isErrorTyped)
+          tree setType refTyped.tpe.resultType
+
+        if (treeInfo.admitsTypeSelection(refTyped)) tree
+        else UnstableTreeError(refTyped)
       }
 
       def typedSelectFromTypeTree(tree: SelectFromTypeTree) = {
