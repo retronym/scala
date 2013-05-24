@@ -209,7 +209,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
         case Nil      => Nil
         case hd :: tl =>
           assert(!hd.typeSymbol.isTrait, clazz)
-          if (clazz.isTrait) erasedTypeRef(ObjectClass) :: tl
+          if (clazz.isTrait) ObjectTpe :: tl
           else parents
       }
       val decls1 = scopeTransform(clazz)(

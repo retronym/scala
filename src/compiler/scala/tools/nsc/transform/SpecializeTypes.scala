@@ -52,7 +52,10 @@ import scala.annotation.tailrec
  */
 abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   import global._
+  import definitions._
   import Flags._
+  import rootMirror.RootClass
+
   /** the name of the phase: */
   val phaseName: String = "specialize"
 
@@ -67,14 +70,6 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   def emptyEnv: TypeEnv = Map[Symbol, Type]()
 
   private implicit val typeOrdering: Ordering[Type] = Ordering[String] on ("" + _.typeSymbol.name)
-
-  import definitions.{
-    BooleanClass, UnitClass, ArrayClass,
-    ScalaValueClasses, isPrimitiveValueClass, isPrimitiveValueType,
-    SpecializedClass, UnspecializedClass, AnyRefClass, ObjectClass,
-    GroupOfSpecializable, uncheckedVarianceClass, ScalaInlineClass
-  }
-  import rootMirror.RootClass
 
   /** TODO - this is a lot of maps.
    */
@@ -139,12 +134,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   // If we replace `isBoundedGeneric` with (tp <:< AnyRefClass.tpe),
   // then pos/spec-List.scala fails - why? Does this kind of check fail
   // for similar reasons? Does `sym.isAbstractType` make a difference?
-  private def isSpecializedAnyRefSubtype(tp: Type, sym: Symbol) = {
-    specializedOn(sym).exists(s => !isPrimitiveValueClass(s)) &&
-    !isPrimitiveValueClass(tp.typeSymbol) &&
-    isBoundedGeneric(tp)
-    //(tp <:< AnyRefClass.tpe)
-  }
+  private def isSpecializedAnyRefSubtype(tp: Type, sym: Symbol) = (
+       specializedOn(sym).exists(s => !isPrimitiveValueClass(s))
+    && isReferenceType(tp)
+  )
 
   object TypeEnv {
     /** Return a new type environment binding specialized type parameters of sym to
