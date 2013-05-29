@@ -1,0 +1,14 @@
+class scala.tools.asm.tree.MethodNode
+   L0
+    LINENUMBER 6 L0
+    LDC "LINE 6"
+    INVOKEVIRTUAL java/lang/String.toString ()Ljava/lang/String;
+   L1
+    LINENUMBER 5 L1
+    POP
+    RETURN
+   L2
+    LOCALVARIABLE this LInlinePosition; L0 L2 0
+    MAXSTACK = 1
+    MAXLOCALS = 1
+

@@ -878,6 +878,7 @@ abstract class Inliners extends SubComponent {
           }
           // check any pending NEW's
           pending remove i foreach (_.init = newInstr.asInstanceOf[CALL_METHOD])
+          newInstr.setPos(i.pos)
           newInstr
         }
 
@@ -909,7 +910,8 @@ abstract class Inliners extends SubComponent {
         val calleeLin = inc.m.linearizedBlocks()
         calleeLin foreach { bb =>
           var info = if(hasRETURN) (a in bb) else null
-          def emitInlined(i: Instruction) = inlinedBlock(bb).emit(i, targetPos)
+          def sameSource(p1: Position, p2: Position) = p1 != NoPosition && p2 != NoPosition && p1.source == p2.source
+          def emitInlined(i: Instruction) = inlinedBlock(bb).emit(i, if (sameSource(targetPos, i.pos)) i.pos else targetPos)
           def emitDrops(toDrop: Int)      = info.stack.types drop toDrop foreach (t => emitInlined(DROP(t)))
 
           for (i <- bb) {
