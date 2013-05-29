@@ -6,9 +6,20 @@ class scala.tools.asm.tree.MethodNode
    L1
     LINENUMBER 5 L1
     POP
-    RETURN
    L2
-    LOCALVARIABLE this LInlinePosition; L0 L2 0
+    LINENUMBER 9 L2
+    GETSTATIC OtherFile$.MODULE$ : LOtherFile$;
+    ASTORE 1
+   L3
+    LINENUMBER 2 L3
+    LDC "OtherFile:Line2"
+    INVOKEVIRTUAL java/lang/String.toString ()Ljava/lang/String;
+   L4
+    LINENUMBER 8 L4
+    POP
+    RETURN
+   L5
+    LOCALVARIABLE this LInlinePosition; L0 L5 0
     MAXSTACK = 1
-    MAXLOCALS = 1
+    MAXLOCALS = 2
 
