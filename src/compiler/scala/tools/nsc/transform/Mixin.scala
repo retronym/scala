@@ -162,8 +162,11 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     debuglog("new member of " + clazz + ":" + member.defString)
     clazz.info.decls enter member setFlag MIXEDIN
   }
+
   def cloneAndAddMember(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol =
     addMember(clazz, cloneBeforeErasure(mixinClass, mixinMember, clazz))
+
+  private val bridgeTo = perRunCaches.newMap[Symbol, SymbolPair]()
 
   def cloneBeforeErasure(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol = {
     val newSym = enteringErasure {
@@ -172,18 +175,30 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       // info) as they are seen from the class.  We can't use the member that we get from the
       // implementation class, as it's a clone that was made after erasure, and thus it does not
       // know its info at the beginning of erasure anymore.
-      //   Optimize: no need if mixinClass has no typeparams.
-      mixinMember cloneSymbol clazz modifyInfo (info =>
-        if (mixinClass.typeParams.isEmpty) info
-        else (clazz.thisType baseType mixinClass) memberInfo mixinMember
-      )
+      val sym = mixinMember cloneSymbol clazz
+
+      def forwarderInfo(forwardee: Type): Type =
+        (clazz.thisType baseType mixinClass) memberInfo mixinMember
+      // Optimize: no need if mixinClass has no typeparams.
+      val result =
+        if (mixinClass.typeParams.isEmpty) sym
+        else sym modifyInfo (info => forwarderInfo(info))
+
+      // Add a bridge, if needed.
+      val root = sym.owner
+      val pair = new SymbolPair(root, sym, mixinMember)
+      if (erasure.isBridgeNeeded(pair)) {
+        log("bridge needed for: " + pair)
+        val bridgeSym = erasure.makeBridgeSymbol(root, pair)
+        enteringMixin {
+          addMember(clazz, bridgeSym)
+        }
+        bridgeTo(bridgeSym) = pair
+      }
+
+      result
     }
-    // clone before erasure got rid of type info we'll need to generate a javaSig
-    // now we'll have the type info at (the beginning of) erasure in our history,
-    // and now newSym has the info that's been transformed to fit this period
-    // (no need for asSeenFrom as phase.erasedTypes)
-    // TODO: verify we need the updateInfo and document why
-    newSym updateInfo (mixinMember.info cloneInfo newSym)
+    newSym
   }
 
   /** Add getters and setters for all non-module fields of an implementation
@@ -269,8 +284,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         val imember = member overriddenSymbol mixinInterface
         imember overridingSymbol clazz match {
           case NoSymbol =>
-            if (clazz.info.findMember(member.name, 0, lateDEFERRED, stableOnly = false).alternatives contains imember)
-              cloneAndAddMixinMember(mixinInterface, imember).asInstanceOf[TermSymbol] setAlias member
+            if (clazz.info.findMember(member.name, 0, lateDEFERRED, stableOnly = false).alternatives contains imember) {
+              val forwarder = cloneAndAddMixinMember(mixinInterface, imember).asInstanceOf[TermSymbol] setAlias member
+              log("Adding forwarder from %s to %s during mixin:\n  before erasure: %s => %s\n   after erasure: %s => %s".format(
+                clazz, member.owner,
+                enteringErasure(forwarder.defString), enteringErasure(member.defString),
+                forwarder.defString, member.defString)
+              )
+            }
           case _        =>
         }
       }
@@ -1076,11 +1097,20 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             // add superaccessors
             addDefDef(sym)
           }
+          else if (sym.isBridge) {
+            val bridge = sym
+            val root = sym.owner
+            val pair = bridgeTo(bridge)
+            val bridgeDefDef = erasure.makeBridgeDefDef(root, bridge, pair)
+            addDefDef(bridge, localTyper.typed(bridgeDefDef.rhs, bridge.tpe.finalResultType)) // TODO run erasure tree transformer over this?
+          }
           else {
             // add forwarders
             assert(sym.alias != NoSymbol, sym)
             // debuglog("New forwarder: " + sym.defString + " => " + sym.alias.defString)
-            if (!sym.isMacro) addDefDef(sym, Apply(staticRef(sym.alias), gen.mkAttributedThis(clazz) :: sym.paramss.head.map(Ident)))
+            if (!sym.isMacro) {
+              addDefDef(sym, Apply(staticRef(sym.alias), gen.mkAttributedThis(clazz) :: sym.paramss.head.map(Ident)))
+            }
           }
         }
       }

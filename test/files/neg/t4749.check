@@ -25,6 +25,10 @@ t4749.scala:26: warning: Fail6 has a main method with parameter type Array[Strin
 
   object Fail6 {
          ^
+t4749.scala:35: warning: Fail7 has a main method with parameter type Array[String], but bippy.Fail7 will not be a runnable program.
+  Reason: main methods cannot refer to type parameters or abstract types.
+  object Fail7 extends FailBippy[Unit] { }
+         ^
 error: No warnings can be incurred under -Xfatal-warnings.
-6 warnings found
+7 warnings found
 one error found

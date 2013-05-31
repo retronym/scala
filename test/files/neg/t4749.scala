@@ -29,6 +29,10 @@ package bippy {
   class Fail6 {
     def main = "bippy"
   }
+  trait FailBippy[T] {
+    def main(args: Array[String]): T = null.asInstanceOf[T]
+  }
+  object Fail7 extends FailBippy[Unit] { }
 
   object Win1 {
     def main(args: Array[String]): Unit = ()
@@ -36,9 +40,5 @@ package bippy {
   object Win2 extends Bippy[Unit] {
     override def main(args: Array[String]): Unit = ()
   }
-  trait WinBippy[T] {
-    def main(args: Array[String]): T = null.asInstanceOf[T]
-  }
-  object Win3 extends WinBippy[Unit] { }
 }
 

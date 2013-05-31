@@ -444,30 +444,18 @@ abstract class Erasure extends AddInterfaces
       val other  = high
       val otpe   = highErased
 
-      val bridgeNeeded = exitingErasure (
-        !member.isMacro &&
-        !(other.tpe =:= member.tpe) &&
-        !(deconstMap(other.tpe) =:= deconstMap(member.tpe)) &&
-        { var e = bridgesScope.lookupEntry(member.name)
-          while ((e ne null) && !((e.sym.tpe =:= otpe) && (bridgeTarget(e.sym) == member)))
-            e = bridgesScope.lookupNextEntry(e)
-          (e eq null)
-        }
-      )
+      val bridgeNeeded = isBridgeNeeded(pair) && {
+        var e = bridgesScope.lookupEntry(member.name)
+        while ((e ne null) && !((e.sym.tpe =:= otpe) && (bridgeTarget(e.sym) == member)))
+          e = bridgesScope.lookupNextEntry(e)
+        (e eq null)
+      }
+
       if (!bridgeNeeded)
         return
 
-      val newFlags = (member.flags | BRIDGE | ARTIFACT) & ~(ACCESSOR | DEFERRED | LAZY | lateDEFERRED)
-      val bridge   = other.cloneSymbolImpl(root, newFlags) setPos root.pos
+      val bridge   = makeBridgeSymbol(root, pair)
 
-      debuglog("generating bridge from %s (%s): %s to %s: %s".format(
-        other, flagsToString(newFlags),
-        otpe + other.locationString, member,
-        specialErasure(root)(member.tpe) + member.locationString)
-      )
-
-      // the parameter symbols need to have the new owner
-      bridge setInfo (otpe cloneInfo bridge)
       bridgeTarget(bridge) = member
 
       if (!(member.tpe exists (_.typeSymbol.isDerivedValueClass)) ||
@@ -479,46 +467,79 @@ abstract class Erasure extends AddInterfaces
         }
 
         bridgesScope enter bridge
-        bridges ::= makeBridgeDefDef(bridge, member, other)
+        bridges ::= makeBridgeDefDef(bridge, pair)
       }
     }
 
-    def makeBridgeDefDef(bridge: Symbol, member: Symbol, other: Symbol) = exitingErasure {
-      // type checking ensures we can safely call `other`, but unless `member.tpe <:< other.tpe`,
-      // calling `member` is not guaranteed to succeed in general, there's
-      // nothing we can do about this, except for an unapply: when this subtype test fails,
-      // return None without calling `member`
-      //
-      // TODO: should we do this for user-defined unapplies as well?
-      // does the first argument list have exactly one argument -- for user-defined unapplies we can't be sure
-      def maybeWrap(bridgingCall: Tree): Tree = {
-        val guardExtractor = ( // can't statically know which member is going to be selected, so don't let this depend on member.isSynthetic
-             (member.name == nme.unapply || member.name == nme.unapplySeq)
-          && !exitingErasure((member.tpe <:< other.tpe))) // no static guarantees (TODO: is the subtype test ever true?)
+    def makeBridgeDefDef(bridge: Symbol, pair: SymbolPair): Tree =
+      Erasure.this.makeBridgeDefDef(root, bridge, pair)
+  }
 
-        import CODE._
-        val _false    = FALSE
-        val pt        = member.tpe.resultType
-        lazy val zero =
-          if      (_false.tpe <:< pt)    _false
-          else if (NoneModule.tpe <:< pt) REF(NoneModule)
-          else EmptyTree
+  final def isBridgeNeeded(pair: SymbolPair): Boolean = {
+    val member = pair.low
+    val other = pair.high
+    exitingErasure(
+         !member.isMacro
+      && !(other.tpe =:= member.tpe)
+      && !(deconstMap(other.tpe) =:= deconstMap(member.tpe))
+    )
+  }
 
-        if (guardExtractor && (zero ne EmptyTree)) {
-          val typeTest = gen.mkIsInstanceOf(REF(bridge.firstParam), member.tpe.params.head.tpe)
-          IF (typeTest) THEN bridgingCall ELSE zero
-        } else bridgingCall
-      }
-      val rhs = member.tpe match {
-        case MethodType(Nil, ConstantType(c)) => Literal(c)
-        case _                                =>
-          val sel: Tree    = Select(This(root), member)
-          val bridgingCall = (sel /: bridge.paramss)((fun, vparams) => Apply(fun, vparams map Ident))
+  final def makeBridgeSymbol(root: Symbol, pair: SymbolPair): Symbol = {
+    import pair._
+    val member = low
+    val other  = high
+    val otpe   = highErased
+    val newFlags = (member.flags | BRIDGE | ARTIFACT) & ~(ACCESSOR | DEFERRED | LAZY | lateDEFERRED)
+    val bridge   = pair.low.cloneSymbolImpl(root, newFlags) setPos root.pos
 
-          maybeWrap(bridgingCall)
-      }
-      DefDef(bridge, rhs)
+    debuglog("generating bridge from %s (%s): %s to %s: %s".format(
+      other, flagsToString(newFlags),
+      otpe + other.locationString, member,
+      specialErasure(root)(member.tpe) + member.locationString)
+    )
+
+    // the parameter symbols need to have the new owner
+    bridge setInfo (otpe cloneInfo bridge)
+  }
+
+  final def makeBridgeDefDef(root: Symbol, bridge: Symbol, pair: SymbolPair): DefDef = exitingErasure {
+    val member = pair.low
+    val other = pair.high
+    // type checking ensures we can safely call `other`, but unless `member.tpe <:< other.tpe`,
+    // calling `member` is not guaranteed to succeed in general, there's
+    // nothing we can do about this, except for an unapply: when this subtype test fails,
+    // return None without calling `member`
+    //
+    // TODO: should we do this for user-defined unapplies as well?
+    // does the first argument list have exactly one argument -- for user-defined unapplies we can't be sure
+    def maybeWrap(bridgingCall: Tree): Tree = {
+      val guardExtractor = ( // can't statically know which member is going to be selected, so don't let this depend on member.isSynthetic
+           (member.name == nme.unapply || member.name == nme.unapplySeq)
+        && !exitingErasure((member.tpe <:< other.tpe))) // no static guarantees (TODO: is the subtype test ever true?)
+
+      import CODE._
+      val _false    = FALSE
+      val pt        = member.tpe.resultType
+      lazy val zero =
+        if      (_false.tpe <:< pt)    _false
+        else if (NoneModule.tpe <:< pt) REF(NoneModule)
+        else EmptyTree
+
+      if (guardExtractor && (zero ne EmptyTree)) {
+        val typeTest = gen.mkIsInstanceOf(REF(bridge.firstParam), member.tpe.params.head.tpe)
+        IF (typeTest) THEN bridgingCall ELSE zero
+      } else bridgingCall
     }
+    val rhs = member.tpe match {
+      case MethodType(Nil, ConstantType(c)) => Literal(c)
+      case _                                =>
+        val sel: Tree    = Select(This(root), member)
+        val bridgingCall = (sel /: bridge.paramss)((fun, vparams) => Apply(fun, vparams map Ident))
+
+        maybeWrap(bridgingCall)
+    }
+    DefDef(bridge, rhs)
   }
 
   /** The modifier typer which retypes with erased types. */
