@@ -161,6 +161,12 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     debuglog("new member of " + clazz + ":" + member.defString)
     clazz.info.decls enter member setFlag MIXEDIN
   }
+  /** Warning: subtle issues at play!
+   *  The info of the cloned symbol used to be calculated as:
+   *    (clazz.thisType baseType mixinClass) memberInfo mixinMember
+   *  This is not correct! See test run/t3452b for an example
+   *  of runtime failure.
+   */
   def cloneAndAddMember(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol =
     addMember(clazz, cloneBeforeErasure(mixinClass, mixinMember, clazz))
 
@@ -172,17 +178,19 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       // implementation class, as it's a clone that was made after erasure, and thus it does not
       // know its info at the beginning of erasure anymore.
       //   Optimize: no need if mixinClass has no typeparams.
-      mixinMember cloneSymbol clazz modifyInfo (info =>
-        if (mixinClass.typeParams.isEmpty) info
-        else (clazz.thisType baseType mixinClass) memberInfo mixinMember
-      )
+      val sym = mixinMember cloneSymbol clazz
+      // Optimize: no need if mixinClass has no typeparams.
+      if (mixinClass.typeParams.isEmpty) sym
+      else sym modifyInfo (_.asSeenFrom(clazz.thisType, clazz))
     }
     // clone before erasure got rid of type info we'll need to generate a javaSig
     // now we'll have the type info at (the beginning of) erasure in our history,
     // and now newSym has the info that's been transformed to fit this period
     // (no need for asSeenFrom as phase.erasedTypes)
     // TODO: verify we need the updateInfo and document why
-    newSym updateInfo (mixinMember.info cloneInfo newSym)
+    // addMember(clazz, newSym)
+    newSym
+    // updateInfo (mixinMember.info cloneInfo newSym)
   }
 
   /** Add getters and setters for all non-module fields of an implementation
@@ -268,8 +276,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         val imember = member overriddenSymbol mixinInterface
         imember overridingSymbol clazz match {
           case NoSymbol =>
-            if (clazz.info.findMember(member.name, 0, lateDEFERRED, stableOnly = false).alternatives contains imember)
-              cloneAndAddMixinMember(mixinInterface, imember).asInstanceOf[TermSymbol] setAlias member
+            if (clazz.info.findMember(member.name, 0, lateDEFERRED, stableOnly = false).alternatives contains imember) {
+              val forwarder = cloneAndAddMixinMember(mixinInterface, imember).asInstanceOf[TermSymbol] setAlias member
+              log("Adding forwarder from %s to %s during mixin:\n  before erasure: %s => %s\n   after erasure: %s => %s".format(
+                clazz, member.owner,
+                enteringErasure(forwarder.defString), enteringErasure(member.defString),
+                forwarder.defString, member.defString)
+              )
+            }
           case _        =>
         }
       }
