@@ -1068,6 +1068,7 @@ trait Types
           var bcs = bcs0
           while (!bcs.isEmpty) {
             val decls = bcs.head.info.decls
+            if (bcs.head.isJavaDefined) excluded = excluded & ~DEFERRED // SI-6760 In Java, abstract can override concrete.
             var entry = decls.lookupEntry(name)
             while (entry ne null) {
               val sym = entry.sym
