@@ -91,8 +91,8 @@ abstract class ClassfileParser {
   }
   @inline private def pushBusy[T](sym: Symbol)(body: => T): T = {
     busy match {
-      case Some(`sym`)  => throw new IOException(s"unsatisfiable cyclic dependency in '$sym'")
-      case Some(sym1)   => throw new IOException(s"illegal class file dependency between '$sym' and '$sym1'")
+      case Some(`sym`)  => throw new CyclicDependencyError(sym)
+      case Some(sym1)   => throw new IllegalClassFileDependency(sym, sym1)
       case _            => ()
     }
 
@@ -916,7 +916,15 @@ abstract class ClassfileParser {
              LONG_TAG | FLOAT_TAG | DOUBLE_TAG =>
           Some(LiteralAnnotArg(pool.getConstant(index)))
         case CLASS_TAG  =>
-          Some(LiteralAnnotArg(Constant(pool.getType(index))))
+          try {
+            val tp = pool.getType(index)
+            Some(LiteralAnnotArg(Constant(tp)))
+          } catch {
+            case cce: CyclicClassError =>
+              debuglog(util.stackTraceString(cce))
+              warning(s"recovering from: $cce")
+              None
+          }
         case ENUM_TAG   =>
           val t = pool.getType(index)
           val n = readName()
@@ -1222,4 +1230,11 @@ abstract class ClassfileParser {
 
   protected def getScope(flags: JavaAccFlags): Scope =
     if (flags.isStatic) staticScope else instanceScope
+
+  abstract class CyclicClassError(msg: String) extends Exception(msg)
+  private final class CyclicDependencyError(sym: Symbol)
+    extends CyclicClassError(s"unsatisfiable cyclic dependency in '$sym'")
+  private final class IllegalClassFileDependency(sym1: Symbol, sym2: Symbol)
+    extends CyclicClassError(s"illegal class file dependency between '$sym1' and '$sym2'")
+
 }
