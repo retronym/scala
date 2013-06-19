@@ -1069,22 +1069,16 @@ trait Types
         //Console.println("find member " + name.decode + " in " + this + ":" + this.baseClasses)//DEBUG
         var membertpe: Type = null
         var required = requiredFlags
-        var excluded = excludedFlags | DEFERRED
+        var excluded: Long = excludedFlags | DEFERRED
+        var seenFirstNonRefinementClass: Boolean = false
         var continue = true
         var self: Type = null
+        var refinementParents: List[Symbol] = Nil
 
         while (continue) {
           continue = false
           val bcs0 = baseClasses
           var bcs = bcs0
-          // omit PRIVATE LOCALS unless selector class is contained in class owning the def.
-          def admitPrivateLocal(owner: Symbol): Boolean = {
-            val selectorClass = this match {
-              case tt: ThisType => tt.sym // SI-7507 the first base class is not necessarily the selector class.
-              case _            => bcs0.head
-            }
-            selectorClass.hasTransOwner(owner)
-          }
           while (!bcs.isEmpty) {
             val decls = bcs.head.info.decls
             var entry = decls.lookupEntry(name)
@@ -1095,9 +1089,12 @@ trait Types
                 val excl = flags & excluded
                 val isMember = (
                      excl == 0L
-                  && (    (bcs eq bcs0)
-                       || (flags & PrivateLocal) != PrivateLocal
-                       || admitPrivateLocal(bcs.head)
+                  && (
+                          (flags & PRIVATE) != PRIVATE              // non-privates are always members
+                       || (
+                               !seenFirstNonRefinementClass         // classes don't inherit privates
+                            || refinementParents.contains(bcs.head) // refinements inherit privates of direct parents
+                          )
                      )
                 )
                 if (isMember) {
@@ -1152,7 +1149,13 @@ trait Types
               }
               entry = decls lookupNextEntry entry
             } // while (entry ne null)
-            // excluded = excluded | LOCAL
+
+            val sym = bcs.head
+            if (sym.isRefinementClass)
+              refinementParents :::= bcs.head.parentSymbols // keep track of direct parents of refinements
+            else if (sym.isClass)
+              seenFirstNonRefinementClass = true
+
             bcs = if (name == nme.CONSTRUCTOR) Nil else bcs.tail
           } // while (!bcs.isEmpty)
           required |= DEFERRED

@@ -34,8 +34,12 @@ abstract class OverridingPairs {
      *  and hidden symbols, including bridges. But it may be refined in subclasses.
      *
      */
-    protected def exclude(sym: Symbol): Boolean =
-      sym.isConstructor || sym.isPrivateLocal || sym.isArtifact
+    protected def exclude(sym: Symbol): Boolean = (
+         sym.isConstructor
+      || sym.isPrivateLocal
+      || (sym.isPrivate && sym.owner != base)
+      || sym.isArtifact
+    )
 
     /** The parents of base (may also be refined).
      */
