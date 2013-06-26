@@ -102,8 +102,12 @@ trait MatchTranslation { self: PatternMatching  =>
       * NOTE: the resulting tree is not type checked, nor are nested pattern matches transformed
       *   thus, you must typecheck the result (and that will in turn translate nested matches)
       *   this could probably optimized... (but note that the matchStrategy must be solved for each nested patternmatch)
+      *
+      * @return (pt, tree) The expected type used to translate the cases, and translated tree.
+      *                    Note: the returned tree can itself be a `Match` if we can emit a switch,
+      *                          these are consumed by the backend.
       */
-    def translateMatch(match_ : Match): Tree = {
+    def translateMatch(match_ : Match): (Type, Tree) = {
       val Match(selector, cases) = match_
 
       val (nonSyntheticCases, defaultOverride) = cases match {
@@ -147,7 +151,7 @@ trait MatchTranslation { self: PatternMatching  =>
       val combined = combineCases(selector, selectorSym, nonSyntheticCases map translateCase(selectorSym, pt), pt, matchOwner, defaultOverride)
 
       if (Statistics.canEnable) Statistics.stopTimer(patmatNanos, start)
-      combined
+      (pt, combined)
     }
 
     // return list of typed CaseDefs that are supported by the backend (typed/bind/wildcard)
