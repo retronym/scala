@@ -985,6 +985,9 @@ trait Types
       else (baseClasses.head.newOverloaded(this, alts))
     }
 
+    // !!!
+    // !!! DUPLICATED LOGIC ALERT, edits in `findMembers` here must be replicated in `findMember`.
+    // !!!
     def findMembers(excludedFlags: Long, requiredFlags: Long): Scope = {
       def findMembersInternal: Scope = {
         var members: Scope = null
@@ -996,6 +999,8 @@ trait Types
         var excluded = excludedFlags | DEFERRED
         var continue = true
         var self: Type = null
+        var seenFirstNonRefinementClass: Boolean = false
+        var refinementParents: List[Symbol] = Nil
         while (continue) {
           continue = false
           val bcs0 = baseClasses
@@ -1008,25 +1013,39 @@ trait Types
               val flags = sym.flags
               if ((flags & required) == required) {
                 val excl = flags & excluded
-                if (excl == 0L &&
-                    (// omit PRIVATE LOCALS unless selector class is contained in class owning the def.
-                     (bcs eq bcs0) ||
-                     (flags & PrivateLocal) != PrivateLocal ||
-                     (bcs0.head.hasTransOwner(bcs.head)))) {
+                val isMember = (
+                     excl == 0L
+                  && (
+                          (flags & PRIVATE) != PRIVATE              // non-privates are always members
+                       || (
+                               !seenFirstNonRefinementClass         // classes don't inherit privates
+                            || refinementParents.contains(bcs.head) // refinements inherit privates of direct parents
+                          )
+                     )
+                )
+
+                // !!!
+                // !!! DUPLICATED LOGIC ALERT, edits in `findMembers` here must be replicated in `findMember`.
+                // !!!
+                if (isMember) {
                   if (members eq null) members = newFindMemberScope
                   var others: ScopeEntry = members.lookupEntry(sym.name)
                   var symtpe: Type = null
-                  while ((others ne null) && {
-                           val other = others.sym
-                           (other ne sym) &&
-                           ((other.owner eq sym.owner) ||
-                            (flags & PRIVATE) != 0 || {
-                               if (self eq null) self = narrowForFindMember(this)
-                               if (symtpe eq null) symtpe = self.memberType(sym)
-                               !(self.memberType(other) matches symtpe)
-                            })}) {
-                    others = members lookupNextEntry others
+                  @inline def computeSelfAndSymtpe() = {
+                    if (self eq null)   self   = narrowForFindMember(this)
+                    if (symtpe eq null) symtpe = self.memberType(sym)
                   }
+                  while (    (others ne null)
+                          && {
+                                val other = others.sym
+                                (    (other ne sym)
+                                  && (    (other.owner eq sym.owner)
+                                       || (flags & PRIVATE) != 0
+                                       || { computeSelfAndSymtpe(); !(self.memberType(other) matches symtpe)}
+                                     )
+                                )
+                             }
+                        ) others = members lookupNextEntry others
                   if (others eq null) members enter sym
                 } else if (excl == DEFERRED) {
                   continue = true
@@ -1034,8 +1053,13 @@ trait Types
               }
               entry = entry.next
             } // while (entry ne null)
-            // excluded = excluded | LOCAL
-            bcs = bcs.tail
+            val sym = bcs.head
+            if (sym.isRefinementClass)
+              refinementParents :::= bcs.head.parentSymbols // keep track of direct parents of refinements
+            else if (sym.isClass)
+              seenFirstNonRefinementClass = true
+
+            bcs = bcs.tail // Unlike `findMember`, we can't when constructor here.
           } // while (!bcs.isEmpty)
           required |= DEFERRED
           excluded &= ~(DEFERRED.toLong)
@@ -1052,12 +1076,15 @@ trait Types
      *  Find member(s) in this type. If several members matching criteria are found, they are
      *  returned in an OverloadedSymbol
      *
-     *  @param name           The member's name, where nme.ANYNAME means `unspecified`
+     *  @param name           The member's name
      *  @param excludedFlags  Returned members do not have these flags
      *  @param requiredFlags  Returned members do have these flags
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     //TODO: use narrow only for modules? (correct? efficiency gain?)
+    // !!!
+    // !!! DUPLICATED LOGIC ALERT, edits in `findMember` must be replicated in `findMembers`.
+    // !!!
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
       def findMemberInternal: Symbol = {
         var member: Symbol        = NoSymbol
@@ -1070,9 +1097,9 @@ trait Types
         var membertpe: Type = null
         var required = requiredFlags
         var excluded: Long = excludedFlags | DEFERRED
-        var seenFirstNonRefinementClass: Boolean = false
         var continue = true
         var self: Type = null
+        var seenFirstNonRefinementClass: Boolean = false
         var refinementParents: List[Symbol] = Nil
 
         while (continue) {
@@ -1097,6 +1124,10 @@ trait Types
                           )
                      )
                 )
+
+                // !!!
+                // !!! DUPLICATED LOGIC ALERT, edits in `findMember` must be replicated in `findMembers`.
+                // !!!
                 if (isMember) {
                   if (name.isTypeName || (stableOnly && sym.isStable && !sym.hasVolatileType)) {
                     if (Statistics.canEnable) Statistics.popTimer(typeOpsStack, start)
@@ -1122,12 +1153,20 @@ trait Types
                   } else { // Already found 2 or more members
                     var others: List[Symbol] = members
                     var symtpe: Type = null
-                    @inline def computeSelfAndSymtpe() = {
-                      if (self eq null)   self   = narrowForFindMember(this)
-                      if (symtpe eq null) symtpe = self.memberType(sym)
+                    @inline
+                    def isNewMember(other: Symbol): Boolean = {
+                      (    (other ne sym)
+                        && (    (other.owner eq sym.owner)
+                             || (flags & PRIVATE) != 0
+                             || {
+                                    if (self eq null) { self = narrowForFindMember(this); symtpe = self.memberType(sym) }
+                                    !(self.memberType(other) matches symtpe)
+                                }
+                           )
+                      )
                     }
                     while (    (others ne null)
-                            && {
+                            && isNewMember(others.head)
                                   val other = others.head
                                   (    (other ne sym)
                                     && (    (other.owner eq sym.owner)
@@ -1150,6 +1189,9 @@ trait Types
               entry = decls lookupNextEntry entry
             } // while (entry ne null)
 
+            // !!!
+            // !!! DUPLICATED LOGIC ALERT, edits in `findMember` must be replicated in `findMembers`.
+            // !!!
             val sym = bcs.head
             if (sym.isRefinementClass)
               refinementParents :::= bcs.head.parentSymbols // keep track of direct parents of refinements
