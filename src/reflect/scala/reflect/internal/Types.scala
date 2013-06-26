@@ -6696,7 +6696,12 @@ trait Types extends api.Types { self: SymbolTable =>
     val ts0 = elimSub0(ts)
     if (ts0.isEmpty || ts0.tail.isEmpty) ts0
     else {
-      val ts1 = ts0 mapConserve (t => elimAnonymousClass(t.dealiasWiden))
+      // This was changed to `dealiasWiden` after deliberation https://github.com/scala/scala/pull/2022#discussion_r2832997
+      // That triggered a regression SI-7621 as dealises `this.Alias` to an unwanted skolem, so reverting to `.underlying`
+      val ts1 = ts0 mapConserve (t => elimAnonymousClass(t.underlying))
+      val widen = ts0.last.dealiasWiden
+      if (widen.toString == "_2")
+        ""
       if (ts1 eq ts0) ts0
       else elimSub(ts1, depth)
     }
