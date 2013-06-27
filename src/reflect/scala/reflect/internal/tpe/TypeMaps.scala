@@ -795,18 +795,32 @@ private[internal] trait TypeMaps {
 
   /** A map to implement the `subst` method. */
   class SubstTypeMap(val from: List[Symbol], val to: List[Type]) extends SubstMap(from, to) {
+    private[this] val fromIds = from.map(_.id).toArray
+    private[this] val toTypes = to.toArray
+    private[this] val len     = fromIds.length
+    private[this] def indexOf(symId: Int): Int = {
+      var idx = 0;
+      while (idx < len) {
+        if (fromIds(idx) == symId)
+          return idx
+        else
+          idx += 1
+      }
+      -1
+    }
     protected def toType(fromtp: Type, tp: Type) = tp
 
     override def mapOver(tree: Tree, giveup: () => Nothing): Tree = {
       object trans extends TypeMapTransformer {
         override def transform(tree: Tree) = tree match {
-          case Ident(name) =>
-            from indexOf tree.symbol match {
-              case -1   => super.transform(tree)
-              case idx  =>
-                val totpe = to(idx)
-                if (totpe.isStable) tree.duplicate setType totpe
-                else giveup()
+          case _: Ident if tree.symbol ne null =>
+            val idx = indexOf(tree.symbol.id)
+            if (idx == -1)
+              super.transform(tree)
+            else {
+              val totpe = toTypes(idx)
+              if (totpe.isStable) tree.duplicate setType totpe
+              else giveup()
             }
           case _ =>
             super.transform(tree)
