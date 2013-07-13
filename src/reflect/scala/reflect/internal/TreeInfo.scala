@@ -52,23 +52,6 @@ abstract class TreeInfo {
     case _                             => false
   }
 
-  /** Is tree a pure (i.e. non-side-effecting) definition?
-   */
-  def isPureDef(tree: Tree): Boolean = tree match {
-    case EmptyTree
-       | ClassDef(_, _, _, _)
-       | TypeDef(_, _, _, _)
-       | Import(_, _)
-       | DefDef(_, _, _, _, _, _) =>
-      true
-    case ValDef(mods, _, _, rhs) =>
-      !mods.isMutable && isExprSafeToInline(rhs)
-    case docDef: DocDef =>
-      isPureDef(docDef.definition)
-    case _ =>
-      false
-  }
-
   /** Is `tree` a path, defined as follows? (Spec: 3.1 Paths)
    *
    * - The empty path ε (which cannot be written explicitly in user programs).
@@ -153,6 +136,77 @@ abstract class TreeInfo {
   // TODO SI-5304 tighten this up so we don't elide side effect in module loads
   def isQualifierSafeToElide(tree: Tree): Boolean = isExprSafeToInline(tree)
 
+  private trait EffectAnalyzer {
+    private def isPureDef(tree: Tree): Boolean = tree match {
+      case EmptyTree
+         | ClassDef(_, _, _, _)
+         | TypeDef(_, _, _, _)
+         | Import(_, _)
+         | DefDef(_, _, _, _, _, _) =>
+        true
+      case ValDef(mods, _, _, rhs) =>
+        !mods.isMutable && this(rhs)
+      case docDef: DocDef =>
+        isPureDef(docDef.definition)
+      case _ =>
+        false
+    }
+
+    protected def check(tree: Tree): Boolean
+
+    final def apply(tree: Tree): Boolean = tree match {
+      case EmptyTree | This(_) | Super(_, _) | Literal(_) => true
+      case TypeApply(fn, _) =>
+        this(fn)
+      case Typed(expr, _) =>
+        this(expr)
+      case Block(stats, expr) =>
+        (stats forall isPureDef) && this(expr)
+      case Apply(Select(free@Ident(_), nme.apply), _) if free.symbol.name endsWith nme.REIFY_FREE_VALUE_SUFFIX =>
+        // see a detailed explanation of this trick in `GenSymbols.reifyFreeTerm`
+        free.symbol.hasStableFlag && this(free)
+      case Apply(fn, List()) =>
+        // Note: After uncurry, field accesses are represented as Apply(getter, Nil),
+        // so an Apply can also be pure.
+        // However, before typing, applications of nullary functional values are also
+        // Apply(function, Nil) trees. To prevent them from being treated as pure,
+        // we check that the callee is a method.
+        // The callee might also be a Block, which has a null symbol, so we guard against that (SI-7185)
+        fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isLazy && this(fn)
+      case Select(Literal(const), name) =>
+        // this case is mostly to allow expressions like -5 and +7, but any
+        // member of an anyval should be safely pure
+        const.isAnyVal && (const.tpe.member(name) != NoSymbol)
+      case Ident(_)        =>
+        check(tree)
+      case Select(qual, name) =>
+        check(tree) && this(qual)
+      case Apply(Select(free @ Ident(_), nme.apply), _) if free.symbol.name endsWith nme.REIFY_FREE_VALUE_SUFFIX =>
+        // see a detailed explanation of this trick in `GenSymbols.reifyFreeTerm`
+        free.symbol.hasStableFlag && this(free)
+      case Apply(fn, List()) =>
+        // Note: After uncurry, field accesses are represented as Apply(getter, Nil),
+        // so an Apply can also be pure.
+        // However, before typing, applications of nullary functional values are also
+        // Apply(function, Nil) trees. To prevent them from being treated as pure,
+        // we check that the callee is a method.
+        // The callee might also be a Block, which has a null symbol, so we guard against that (SI-7185)
+        fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isLazy && this(fn)
+      case _ =>
+        false
+    }
+  }
+
+  private object isPureAnalyzer extends EffectAnalyzer {
+    protected def check(tree: Tree) =
+      tree.symbol.isStable && !definitions.isByNameParamType(tree.symbol.tpe_*) && !(tree.symbol.isModule || tree.symbol.isLazy)
+  }
+
+  private object isExprSafeToInlineAnalyzer extends EffectAnalyzer {
+    protected def check(tree: Tree) =
+      tree.symbol.isStable && !definitions.isByNameParamType(tree.symbol.tpe_*)
+  }
+
   /** Is tree an expression which can be inlined without affecting program semantics?
    *
    *  Note that this is not called "isExprPure" since purity (lack of side-effects)
@@ -161,40 +215,9 @@ abstract class TreeInfo {
    *  takes a different code path than all to follow; but they are safe to inline
    *  because the expression result from evaluating them is always the same.
    */
-  def isExprSafeToInline(tree: Tree): Boolean = tree match {
-    case EmptyTree
-       | This(_)
-       | Super(_, _)
-       | Literal(_) =>
-      true
-    case Ident(_) =>
-      tree.symbol.isStable
-    // this case is mostly to allow expressions like -5 and +7, but any
-    // member of an anyval should be safely pure
-    case Select(Literal(const), name) =>
-      const.isAnyVal && (const.tpe.member(name) != NoSymbol)
-    case Select(qual, _) =>
-      tree.symbol.isStable && isExprSafeToInline(qual)
-    case TypeApply(fn, _) =>
-      isExprSafeToInline(fn)
-    case Apply(Select(free @ Ident(_), nme.apply), _) if free.symbol.name endsWith nme.REIFY_FREE_VALUE_SUFFIX =>
-      // see a detailed explanation of this trick in `GenSymbols.reifyFreeTerm`
-      free.symbol.hasStableFlag && isExprSafeToInline(free)
-    case Apply(fn, List()) =>
-      // Note: After uncurry, field accesses are represented as Apply(getter, Nil),
-      // so an Apply can also be pure.
-      // However, before typing, applications of nullary functional values are also
-      // Apply(function, Nil) trees. To prevent them from being treated as pure,
-      // we check that the callee is a method.
-      // The callee might also be a Block, which has a null symbol, so we guard against that (SI-7185)
-      fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isLazy && isExprSafeToInline(fn)
-    case Typed(expr, _) =>
-      isExprSafeToInline(expr)
-    case Block(stats, expr) =>
-      (stats forall isPureDef) && isExprSafeToInline(expr)
-    case _ =>
-      false
-  }
+  def isExprSafeToInline(tree: Tree): Boolean = isExprSafeToInlineAnalyzer(tree)
+
+  def isPure(tree: Tree): Boolean = isPureAnalyzer(tree)
 
   /** As if the name of the method didn't give it away,
    *  this logic is designed around issuing helpful
@@ -313,6 +336,12 @@ abstract class TreeInfo {
       expr
     case _ =>
       tree
+  }
+
+  /** Strip statement-free blocks from `tree` */
+  def stripBlocks(tree: Tree) = tree match {
+    case SeeThroughBlocks(inner) => inner
+    case x => x
   }
 
   /** Strips layers of `.asInstanceOf[T]` / `_.$asInstanceOf[T]()` from an expression */
@@ -810,6 +839,9 @@ abstract class TreeInfo {
       case Block(Nil, expr)         => unapply(expr)
       case _                        => unapplyImpl(x)
     }
+  }
+  object SeeThroughBlocks extends SeeThroughBlocks[Option[Tree]] {
+    protected def unapplyImpl(x: Tree) = Some(x)
   }
   object IsTrue extends SeeThroughBlocks[Boolean] {
     protected def unapplyImpl(x: Tree): Boolean = x match {

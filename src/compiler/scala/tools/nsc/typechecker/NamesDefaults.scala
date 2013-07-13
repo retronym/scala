@@ -317,7 +317,7 @@ trait NamesDefaults { self: Analyzer =>
     if (isNamedApplyBlock(tree)) {
       context.namedApplyBlockInfo.get._1
     } else tree match {
-      // `fun` is typed. `namelessArgs` might be typed or not, if they are types are kept.
+      // `fun` is typed. `namelessArgs` might be typed or not, if they are, types are kept.
       case Apply(fun, namelessArgs) =>
         val transformedFun = transformNamedApplication(typer, mode, pt)(fun, x => x)
         if (transformedFun.isErroneous) setError(tree)
@@ -329,9 +329,22 @@ trait NamesDefaults { self: Analyzer =>
 
           // type the application without names; put the arguments in definition-site order
           val typedApp = doTypedApply(tree, funOnly, reorderArgs(namelessArgs, argPos), mode, pt)
+          def mkBlock(expr: Tree, valDefs: List[Tree], args: List[Tree]): Tree = {
+            // cannot call blockTyper.typedBlock here, because the method expr might be partially applied only
+            val res = blockTyper.doTypedApply(tree, expr, args, mode, pt)
+            res.setPos(res.pos.makeTransparent)
+            val block = Block(stats ::: valDefs, res).setType(res.tpe).setPos(tree.pos.makeTransparent)
+            context.namedApplyBlockInfo =
+              Some((block, NamedApplyInfo(qual, targs, vargss :+ args, blockTyper)))
+            block
+          }
           typedApp match {
             case Apply(expr, typedArgs) if (typedApp :: typedArgs).exists(_.isErrorTyped) =>
               setError(tree) // bail out with and erroneous Apply *or* erroneous arguments, see SI-7238, SI-7509
+            case Apply(expr, args) if args.forall(treeInfo.isPure) =>
+              // SI-7656 We can reorder pure arguments in-place as we don't need to preserve evaluation order.
+              //         Useful for annotations.
+              mkBlock(expr, Nil, args)
             case Apply(expr, typedArgs) =>
               // Extract the typed arguments, restore the call-site evaluation order (using
               // ValDef's in the block), change the arguments to these local values.
@@ -356,13 +369,7 @@ trait NamesDefaults { self: Analyzer =>
                     }
                   }
               })
-              // cannot call blockTyper.typedBlock here, because the method expr might be partially applied only
-              val res = blockTyper.doTypedApply(tree, expr, refArgs, mode, pt)
-              res.setPos(res.pos.makeTransparent)
-              val block = Block(stats ::: valDefs.flatten, res).setType(res.tpe).setPos(tree.pos.makeTransparent)
-              context.namedApplyBlockInfo =
-                Some((block, NamedApplyInfo(qual, targs, vargss :+ refArgs, blockTyper)))
-              block
+              mkBlock(expr, valDefs.flatten, refArgs)
             case _ => tree
           }
         }

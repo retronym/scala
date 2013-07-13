@@ -1,0 +1,9 @@
+Expr[(Int, String)]({
+  Test.this.foo(0.toInt, Test.this.s)
+})
+(0,1)
+Expr[(Int, String)]({
+  <artifact> val x$1 = Test.this.toString();
+  <artifact> val x$2 = 0;
+  Test.this.foo(x$2, x$1)
+})

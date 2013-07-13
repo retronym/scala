@@ -1,0 +1,16 @@
+{
+  def x(c: <byname>[Test.this.C]) = {
+    <synthetic> val eta$0$1 = c;
+    <synthetic> val eta$1$1 = c;
+    ((b) => eta$1$1.foo(eta$0$1)(b))
+  };
+  ()
+}
+{
+  def byname(f: Function1[<byname>[Test.this.C], Any]) = ();
+  byname(((c) => {
+    <synthetic> val eta$0$2 = c;
+    <synthetic> val eta$1$2 = c;
+    ((b) => eta$1$2.foo(eta$0$2)(b))
+  }))
+}

@@ -3239,8 +3239,9 @@ trait Typers extends Adaptations with Tags {
                 doTypedApply(tree, fun, namelessArgs, mode, pt)
               } else {
                 checkNotMacro()
-                transformNamedApplication(Typer.this, mode, pt)(
-                                          treeCopy.Apply(tree, fun, namelessArgs), argPos)
+                val transformed = transformNamedApplication(Typer.this, mode, pt)(
+                                                            treeCopy.Apply(tree, fun, namelessArgs), argPos)
+                treeInfo.stripBlocks(transformed)
               }
             } else {
               // defaults are needed. they are added to the argument list in named style as
@@ -3705,10 +3706,11 @@ trait Typers extends Adaptations with Tags {
               AnnotationInfo(annType, args, List()).setOriginal(typedAnn).setPos(t.pos)
 
             case Block(stats, expr) =>
-              context.warning(t.pos, "Usage of named or default arguments transformed this annotation\n"+
-                                "constructor call into a block. The corresponding AnnotationInfo\n"+
-                                "will contain references to local values and default getters instead\n"+
-                                "of the actual argument trees")
+              if (stats.nonEmpty)
+                context.warning(t.pos, "Usage of named or default arguments transformed this annotation\n"+
+                                  "constructor call into a block. The corresponding AnnotationInfo\n"+
+                                  "will contain references to local values and default getters instead\n"+
+                                  "of the actual argument trees")
               annInfo(expr)
 
             case Apply(fun, args) =>
