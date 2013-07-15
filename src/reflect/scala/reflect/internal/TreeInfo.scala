@@ -48,7 +48,8 @@ abstract class TreeInfo {
     case TypeDef(_, _, _, _)           => true
     case DefDef(mods, _, _, _, _, __)  => mods.isDeferred
     case ValDef(mods, _, _, _)         => mods.isDeferred
-    case _ => false
+    case docDef: DocDef                => isInterfaceMember(docDef.definition)
+    case _                             => false
   }
 
   /** Is tree a pure (i.e. non-side-effecting) definition?
@@ -62,6 +63,8 @@ abstract class TreeInfo {
       true
     case ValDef(mods, _, _, rhs) =>
       !mods.isMutable && isExprSafeToInline(rhs)
+    case docDef: DocDef =>
+      isPureDef(docDef.definition)
     case _ =>
       false
   }

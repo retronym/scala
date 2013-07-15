@@ -582,6 +582,14 @@ trait Trees extends api.Trees { self: SymbolTable =>
 
   def TypeTree(tp: Type): TypeTree = TypeTree() setType tp
 
+  // Fleshed out in scala.tools.nsc with ScalaDoc specific, but defined abstractly
+  // here to allow us to unwrap the underlying definition in `TreeInfo` in scala-reflect.
+  // This seems preferable to the old approach of overriding members of `TreeInfo` in
+  // scala-compiler.
+  trait DocDef extends Tree {
+    def definition: Tree
+  }
+
   override type TreeCopier <: InternalTreeCopierOps
   abstract class InternalTreeCopierOps extends TreeCopierOps {
     def ApplyDynamic(tree: Tree, qual: Tree, args: List[Tree]): ApplyDynamic
