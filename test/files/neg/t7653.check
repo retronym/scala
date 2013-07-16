@@ -1,0 +1,4 @@
+t7653.scala:2: error: percent signs not directly following splicees must be escaped
+  f"%"()
+    ^
+one error found

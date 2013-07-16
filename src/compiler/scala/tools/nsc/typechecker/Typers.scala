@@ -5325,6 +5325,7 @@ trait Typers extends Adaptations with Tags {
 
       val startByType = if (Statistics.canEnable) Statistics.pushTimer(byTypeStack, byTypeNanos(tree.getClass)) else null
       if (Statistics.canEnable) Statistics.incCounter(visitsByType, tree.getClass)
+      var alreadyTyped = false
       try {
         if (context.retyping &&
             (tree.tpe ne null) && (tree.tpe.isErroneous || !(tree.tpe <:< ptPlugins))) {
@@ -5332,7 +5333,7 @@ trait Typers extends Adaptations with Tags {
           if (tree.hasSymbolField) tree.symbol = NoSymbol
         }
 
-        val alreadyTyped = tree.tpe ne null
+        alreadyTyped = tree.tpe ne null
         val tree1: Tree = if (alreadyTyped) tree else {
           printTyping(
             ptLine("typing %s: pt = %s".format(ptTree(tree), ptPlugins),
@@ -5380,7 +5381,8 @@ trait Typers extends Adaptations with Tags {
         result
       } catch {
         case ex: TypeError =>
-          tree.clearType()
+          if (!alreadyTyped) tree.clearType()
+          else debuglog(s"not clearing type after type error: ${ex.getMessage} as the tree was already typed.")
           // The only problematic case are (recoverable) cyclic reference errors which can pop up almost anywhere.
           printTyping("caught %s: while typing %s".format(ex, tree)) //DEBUG
 
