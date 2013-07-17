@@ -613,37 +613,45 @@ abstract class ClassfileParser {
         in.skip(4); skipAttributes()
       } else {
         val name = readName()
-        val sym = ownerForFlags(jflags).newMethod(name.toTermName, NoPosition, sflags)
-        var info = pool.getType(sym, u2)
-        if (name == nme.CONSTRUCTOR)
-          info match {
-            case MethodType(params, restpe) =>
-              // if this is a non-static inner class, remove the explicit outer parameter
-              val newParams = innerClasses getEntry currentClass match {
-                case Some(entry) if !isScalaRaw && !entry.jflags.isStatic =>
-                  /* About `clazz.owner.isPackage` below: SI-5957
-                   * For every nested java class A$B, there are two symbols in the scala compiler.
-                   *  1. created by SymbolLoader, because of the existence of the A$B.class file, owner: package
-                   *  2. created by ClassfileParser of A when reading the inner classes, owner: A
-                   * If symbol 1 gets completed (e.g. because the compiled source mentions `A$B`, not `A#B`), the
-                   * ClassfileParser for 1 executes, and clazz.owner is the package.
-                   */
-                  assert(params.head.tpe.typeSymbol == clazz.owner || clazz.owner.isPackage, params.head.tpe.typeSymbol + ": " + clazz.owner)
-                  params.tail
-                case _ =>
-                  params
-              }
-              info = MethodType(newParams, clazz.tpe)
-          }
-        // Note: the info may be overrwritten later with a generic signature
-        // parsed from SignatureATTR
-        sym setInfo info
-        propagatePackageBoundary(jflags, sym)
-        parseAttributes(sym, info)
-        if (jflags.isVarargs)
-          sym modifyInfo arrayToRepeated
+        if (name == nme.CONSTRUCTOR && jflags.isSynthetic) {
+          // SI-7455 skip synthetic constructors which are added to private inner classes for access.
+          //         See run/t7455 for an example
+          debuglog(s"skipping synthetic constuctor in $currentClass")
+          in.skip(2)
+          skipAttributes()
+        } else {
+          val sym = ownerForFlags(jflags).newMethod(name.toTermName, NoPosition, sflags)
+          var info = pool.getType(sym, u2)
+          if (name == nme.CONSTRUCTOR)
+            info match {
+              case MethodType(params, restpe) =>
+                // if this is a non-static inner class, remove the explicit outer parameter
+                val newParams = innerClasses getEntry currentClass match {
+                  case Some(entry) if !isScalaRaw && !entry.jflags.isStatic =>
+                    /* About `clazz.owner.isPackage` below: SI-5957
+                     * For every nested java class A$B, there are two symbols in the scala compiler.
+                     *  1. created by SymbolLoader, because of the existence of the A$B.class file, owner: package
+                     *  2. created by ClassfileParser of A when reading the inner classes, owner: A
+                     * If symbol 1 gets completed (e.g. because the compiled source mentions `A$B`, not `A#B`), the
+                     * ClassfileParser for 1 executes, and clazz.owner is the package.
+                     */
+                    assert(params.head.tpe.typeSymbol == clazz.owner || clazz.owner.isPackage, params.head.tpe.typeSymbol + ": " + clazz.owner)
+                    params.tail
+                  case _ =>
+                    params
+                }
+                info = MethodType(newParams, clazz.tpe)
+            }
+          // Note: the info may be overrwritten later with a generic signature
+          // parsed from SignatureATTR
+          sym setInfo info
+          propagatePackageBoundary(jflags, sym)
+          parseAttributes(sym, info)
+          if (jflags.isVarargs)
+            sym modifyInfo arrayToRepeated
 
-        getScope(jflags) enter sym
+          getScope(jflags) enter sym
+        }
       }
     }
   }
