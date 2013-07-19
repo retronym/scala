@@ -1434,12 +1434,12 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
                 applyRefchecksToAnnotations(dc.check()) // #2416
               case _ =>
             }
+            doTypeTraversal(tree) {
+              case AnnotatedType(annots, _, _)  => applyChecks(annots)
+              case _ =>
+            }
           }
 
-          doTypeTraversal(tree) {
-            case AnnotatedType(annots, _, _)  => applyChecks(annots)
-            case _ =>
-          }
         case _ =>
       }
     }
@@ -1616,16 +1616,20 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
                   // tpt has the right type if the deferred checks are ok
                 case _ =>
               }
+
+              // Disable checking of bounds for TypeTrees with no original tree. These can show up
+              // here after macros or named argument transforms create them based on LUBs which don't
+              // conform to the constraints, e.g. non-conformant-lub/Lub.scala
+              val existentialParams = new ListBuffer[Symbol]
+              doTypeTraversal(tree) { // check all bounds, except those that are existential type parameters
+                case ExistentialType(tparams, tpe) =>
+                  existentialParams ++= tparams
+                case t: TypeRef =>
+                  checkTypeRef(deriveTypeWithWildcards(existentialParams.toList)(t), tree)
+                case _ =>
+              }
             }
 
-            val existentialParams = new ListBuffer[Symbol]
-            doTypeTraversal(tree) { // check all bounds, except those that are existential type parameters
-              case ExistentialType(tparams, tpe) =>
-                existentialParams ++= tparams
-              case t: TypeRef =>
-                checkTypeRef(deriveTypeWithWildcards(existentialParams.toList)(t), tree)
-              case _ =>
-            }
             tree
 
           case TypeApply(fn, args) =>
