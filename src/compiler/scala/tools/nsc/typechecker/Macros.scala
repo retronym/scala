@@ -222,8 +222,8 @@ trait Macros extends scala.tools.reflect.FastTrack with Traces {
     if (paramss.isEmpty || paramss.last.isEmpty) return paramss // no implicit parameters in the signature => nothing to do
     if (paramss.head.isEmpty || !(paramss.head.head.tpe <:< MacroContextClass.tpe)) return paramss // no context parameter in the signature => nothing to do
     def transformTag(param: Symbol): Symbol = param.tpe.dealias match {
-      case TypeRef(SingleType(SingleType(NoPrefix, c), universe), WeakTypeTagClass, targ :: Nil)
-      if c == paramss.head.head && universe == MacroContextUniverse =>
+      case TypeRef(SingleType(SingleType(NoPrefix, c), universe), sym, targ :: Nil)
+      if c == paramss.head.head && sym == WeakTypeTagClass && universe == MacroContextUniverse =>
         transform(param, targ.typeSymbol)
       case _ =>
         param
