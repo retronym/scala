@@ -503,10 +503,11 @@ trait Definitions extends api.StandardDefinitions {
     lazy val ClassTagModule         = requiredModule[scala.reflect.ClassTag[_]]
     lazy val ClassTagClass          = requiredClass[scala.reflect.ClassTag[_]]
     lazy val TypeTagsClass          = getClassIfDefined("scala.reflect.api.TypeTags") // defined in scala-reflect.jar, so we need to be careful
-    lazy val WeakTypeTagClass       = TypeTagsClass.map(sym => getMemberClass(sym, tpnme.WeakTypeTag))
-    lazy val WeakTypeTagModule      = TypeTagsClass.map(sym => getMemberModule(sym, nme.WeakTypeTag))
-    lazy val TypeTagClass           = TypeTagsClass.map(sym => getMemberClass(sym, tpnme.TypeTag))
-    lazy val TypeTagModule          = TypeTagsClass.map(sym => getMemberModule(sym, nme.TypeTag))
+         // These non top-level symbols must be defs, see SI-7678
+         def WeakTypeTagClass       = TypeTagsClass.map(sym => getMemberClass(sym, tpnme.WeakTypeTag))
+         def WeakTypeTagModule      = TypeTagsClass.map(sym => getMemberModule(sym, nme.WeakTypeTag))
+         def TypeTagClass           = TypeTagsClass.map(sym => getMemberClass(sym, tpnme.TypeTag))
+         def TypeTagModule          = TypeTagsClass.map(sym => getMemberModule(sym, nme.TypeTag))
          def materializeClassTag    = getMemberMethod(ReflectPackage, nme.materializeClassTag)
          def materializeWeakTypeTag = ReflectApiPackage.map(sym => getMemberMethod(sym, nme.materializeWeakTypeTag))
          def materializeTypeTag     = ReflectApiPackage.map(sym => getMemberMethod(sym, nme.materializeTypeTag))
