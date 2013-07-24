@@ -1349,7 +1349,7 @@ trait Namers extends MethodSynthesis {
       if (expr1.isErrorTyped)
         ErrorType
       else {
-        if (!treeInfo.isStableIdentifierPattern(expr1))
+        if (!treeInfo.isStableIdentifierPattern(expr1) && !context.unit.isJava)
           typer.TyperErrorGen.UnstableTreeError(expr1)
 
         val newImport = treeCopy.Import(imp, expr1, selectors).asInstanceOf[Import]

@@ -4687,17 +4687,22 @@ trait Typers extends Adaptations with Tags {
         if (!reallyExists(sym)) {
           def handleMissing: Tree = {
             def errorTree = missingSelectErrorTree(tree, qual, name)
-            def asTypeSelection = (
-              if (context.unit.isJava && name.isTypeName) {
-                // SI-3120 Java uses the same syntax, A.B, to express selection from the
-                // value A and from the type A. We have to try both.
-                atPos(tree.pos)(gen.convertToSelectFromType(qual, name)) match {
+            def javaFallback(cond: Boolean, fallbackTree: => Tree): Option[Tree] = {
+              if (context.unit.isJava && cond) {
+                atPos(tree.pos)(fallbackTree) match {
                   case EmptyTree => None
                   case tree1     => Some(typed1(tree1, mode, pt))
                 }
               }
               else None
-            )
+            }
+            // SI-3120 Java uses the same syntax, A.B, to express selection from the
+            // value A and from the type A. We have to try both.
+            def asSelectionFromType = javaFallback(name.isTypeName, gen.convertToSelectFromType(qual, name))
+            // SI-7675 Similarly, Java source can `import pkg.SomeClass.InnerClass`. We need
+            //         to convert TermName("SomeClass") to a TypeName as a fallback.
+            def asSelectionOfType = javaFallback(name.isTermName, Select(qual, name.toTypeName))
+
             debuglog(s"""
               |qual=$qual:${qual.tpe}
               |symbol=${qual.tpe.termSymbol.defString}
@@ -4711,7 +4716,7 @@ trait Typers extends Adaptations with Tags {
             // 1) Try converting a term selection on a java class into a type selection.
             // 2) Try expanding according to Dynamic rules.
             // 3) Try looking up the name in the qualifier.
-            asTypeSelection orElse asDynamicCall getOrElse (lookupInQualifier(qual, name) match {
+            asSelectionFromType orElse asSelectionOfType orElse asDynamicCall getOrElse (lookupInQualifier(qual, name) match {
               case NoSymbol => setError(errorTree)
               case found    => typed1(tree setSymbol found, mode, pt)
             })
@@ -4857,10 +4862,14 @@ trait Typers extends Adaptations with Tags {
             typedClassOf(tree, TypeTree(pt.typeArgs.head))
           else {
               val pre1  = if (sym.isTopLevel) sym.owner.thisType else if (qual == EmptyTree) NoPrefix else qual.tpe
-              val tree1 = if (qual == EmptyTree) tree else atPos(tree.pos)(Select(atPos(tree.pos.focusStart)(qual), name))
+              val tree1 =
+                if (qual == EmptyTree) tree
+                else if (context.unit.isJava && qual.isType && name.isTypeName)
+                  atPos(tree.pos)(SelectFromTypeTree(atPos(tree.pos.focusStart)(qual), name.toTypeName))
+                else atPos(tree.pos)(Select(atPos(tree.pos.focusStart)(qual), name))
               val (tree2, pre2) = makeAccessible(tree1, sym, pre1, qual)
-            // SI-5967 Important to replace param type A* with Seq[A] when seen from from a reference, to avoid
-            //         inference errors in pattern matching.
+              // SI-5967 Important to replace param type A* with Seq[A] when seen from from a reference, to avoid
+              //         inference errors in pattern matching.
               stabilize(tree2, pre2, mode, pt) modifyType dropIllegalStarTypes
             }) setAttachments tree.attachments
           }
