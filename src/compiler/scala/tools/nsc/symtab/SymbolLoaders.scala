@@ -22,6 +22,11 @@ import scala.reflect.io.{ AbstractFile, NoAbstractFile }
 abstract class SymbolLoaders {
   val global: Global
   import global._
+
+  /**
+   * Required by ClassfileParser. Check documentation in that class for details.
+   */
+  protected def lookupMemberAtTyperPhaseIfPossible(sym: Symbol, name: Name): Symbol
   import SymbolLoadersStats._
 
   protected def enterIfNew(owner: Symbol, member: Symbol, completer: SymbolLoader): Symbol = {
@@ -246,7 +251,10 @@ abstract class SymbolLoaders {
   class ClassfileLoader(val classfile: AbstractFile) extends SymbolLoader with FlagAssigningCompleter {
     private object classfileParser extends {
       val global: SymbolLoaders.this.global.type = SymbolLoaders.this.global
-    } with ClassfileParser
+    } with ClassfileParser {
+      protected def lookupMemberAtTyperPhaseIfPossible(sym: Symbol, name: Name): Symbol =
+        SymbolLoaders.this.lookupMemberAtTyperPhaseIfPossible(sym, name)
+    }
 
     protected def description = "class file "+ classfile.toString
 
