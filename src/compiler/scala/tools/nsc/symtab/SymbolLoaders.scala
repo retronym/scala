@@ -262,6 +262,9 @@ abstract class SymbolLoaders {
     private object classfileParser extends {
       val symbolTable: SymbolLoaders.this.symbolTable.type = SymbolLoaders.this.symbolTable
     } with ClassfileParser {
+      type ConstantPool = AbsConstantPool
+      def newConstantPool: ConstantPool = new AbsConstantPool
+
       protected def lookupMemberAtTyperPhaseIfPossible(sym: Symbol, name: Name): Symbol =
         SymbolLoaders.this.lookupMemberAtTyperPhaseIfPossible(sym, name)
       /*

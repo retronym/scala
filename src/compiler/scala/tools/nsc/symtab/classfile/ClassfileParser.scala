@@ -55,26 +55,7 @@ abstract class ClassfileParser {
   protected var staticModule: Symbol = _    // the module symbol containing static members
   protected var instanceScope: Scope = _    // the scope of all instance definitions
   protected var staticScope: Scope = _      // the scope of all static definitions
-
-  /**
-   * This class serves as mutable variable that can be reset multiple times by calling `init()` method.
-   *
-   * It allows ICodeReader to subclass a ConstantPool and make sure that the subclass instance
-   * is used everywhere in class file parsing logic.
-   */
-  protected abstract class ConstantPoolManager[+T <: ConstantPool] {
-    def get: T
-    def init(): Unit
-  }
-  protected val poolManager: ConstantPoolManager[ConstantPool] = new ConstantPoolManager[ConstantPool] {
-    private var pool: ConstantPool = _
-    def get: ConstantPool = pool
-    def init(): Unit = {
-      pool = new ConstantPool // the classfile's constant pool
-    }
-  }
-  protected def pool: ConstantPool = poolManager.get
-
+  protected var pool: ConstantPool = _      // the classfile's constant pool
   protected var isScala: Boolean = _        // does class file describe a scala class?
   protected var isScalaAnnot: Boolean = _   // does class file describe a scala class with its pickled info in an annotation?
   protected var isScalaRaw: Boolean = _     // this class file is a scala class with no pickled info
@@ -158,7 +139,7 @@ abstract class ClassfileParser {
       this.isScala      = false
 
       parseHeader()
-      this.poolManager.init()
+      this.pool = newConstantPool
       parseClass()
     }
   }
@@ -173,12 +154,13 @@ abstract class ClassfileParser {
       abort(s"class file ${in.file} has unknown version $major.$minor, should be at least $JAVA_MAJOR_VERSION.$JAVA_MINOR_VERSION")
   }
 
+  type ConstantPool <: AbsConstantPool
+  def newConstantPool: ConstantPool
+
   /**
-   * Constructor of this class should not be called directly.
-   *
-   * See also ConstantPoolManager.
+   * Constructor of this class should not be called directly, use `newConstantPool` instead.
    */
-  protected class ConstantPool {
+  protected class AbsConstantPool {
     protected val len          = u2
     protected val starts       = new Array[Int](len)
     protected val values       = new Array[AnyRef](len)
@@ -352,7 +334,7 @@ abstract class ClassfileParser {
         case xs: Array[Byte] => xs
         case _               =>
           val arr: Array[Byte] = indices.toArray flatMap { index =>
-            if (index <= 0 || ConstantPool.this.len <= index) errorBadIndex(index)
+            if (index <= 0 || AbsConstantPool.this.len <= index) errorBadIndex(index)
             val start = firstExpecting(index, CONSTANT_UTF8)
             val len   = (in getChar start).toInt
             in.buf drop start + 2 take len

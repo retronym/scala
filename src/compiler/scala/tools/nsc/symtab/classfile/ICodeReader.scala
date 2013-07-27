@@ -29,14 +29,8 @@ abstract class ICodeReader extends ClassfileParser {
   var staticCode:   IClass = null          // the ICode class static members
   var method: IMethod = NoIMethod          // the current IMethod
   var isScalaModule = false
-  override protected val poolManager: ConstantPoolManager[ICodeConstantPool] = new ConstantPoolManager[ICodeConstantPool] {
-    private var pool: ICodeConstantPool = _
-    def get: ICodeConstantPool = pool
-    def init(): Unit = {
-      pool = new ICodeConstantPool // the classfile's constant pool
-    }
-  }
-  protected override def pool: ICodeConstantPool = poolManager.get
+  type ConstantPool = ICodeConstantPool
+  override def newConstantPool = new ICodeConstantPool
 
   /** Try to force the chain of enclosing classes for the given name. Otherwise
    *  flatten would not lift classes that were not referenced in the source code.
@@ -59,7 +53,7 @@ abstract class ICodeReader extends ClassfileParser {
     sym
   }
 
-  protected class ICodeConstantPool extends ConstantPool {
+  protected class ICodeConstantPool extends AbsConstantPool {
     /** Return the symbol of the class member at `index`.
      *  The following special cases exist:
      *   - If the member refers to special `MODULE$` static field, return
