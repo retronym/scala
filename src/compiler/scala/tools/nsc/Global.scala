@@ -1088,7 +1088,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     supplementErrorMessage(msg, caught)
   }
   def supplementErrorMessage(errorMessage: String, caught: Throwable): String = {
-    def tree = analyzer.lastTreeToTyper
+    def tree = currentRun.crashTree
     def phaseMsg = if (globalPhase eq phase) "" + phase else s"globalPhase=$globalPhase, entering=$phase"
     def stackCrashInfo = {
       val frames0 = caught.getStackTrace.toList
@@ -1138,9 +1138,9 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       if (currentRun.reportedCrash) ""
       else try {
         currentRun.reportedCrash = true
-        val sections = analyzer.typerTreeDepth match {
-          case 0 => baselineCrashInfo :: Nil
-          case _ => baselineCrashInfo :: treeCrashInfo :: fileCrashInfo :: Nil
+        val sections = tree match {
+          case EmptyTree => baselineCrashInfo :: Nil
+          case _         => baselineCrashInfo :: treeCrashInfo :: fileCrashInfo :: Nil
         }
         sections.mkString("\n", "\n\n", "\n")
       }
@@ -1207,6 +1207,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
      *  pouring out stack traces once this is true.
      */
     private[nsc] final var reportedCrash = false
+    private[nsc] final var crashTree: Tree = EmptyTree
 
     private val unitbuf = new mutable.ListBuffer[CompilationUnit]
     val compiledFiles   = new mutable.HashSet[String]

@@ -5307,10 +5307,17 @@ trait Typers extends Adaptations with Tags with TypersTracking {
       )
       val startByType = if (Statistics.canEnable) Statistics.pushTimer(byTypeStack, byTypeNanos(tree.getClass)) else null
       if (Statistics.canEnable) Statistics.incCounter(visitsByType, tree.getClass)
-      pushLastTreeToTyper(tree)
       try body
+      catch {
+        case ex @ (_: AssertionError | _: FatalError) =>
+            // To enable decent error messages when the typer crashes.
+            // TODO - this only catches trees which go through def typed,
+            // but there are all kinds of back ways - typedClassDef, etc. etc.
+            // Funnel everything through one doorway.
+          currentRun.crashTree = tree
+          throw ex
+      }
       finally {
-        popLastTreeToTyper()
         if (Statistics.canEnable) Statistics.popTimer(byTypeStack, startByType)
       }
     }
