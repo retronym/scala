@@ -281,12 +281,6 @@ trait Definitions extends api.StandardDefinitions {
     lazy val StringTpe       = StringClass.tpe
     lazy val ThrowableTpe    = ThrowableClass.tpe
 
-    // Note: this is not the type alias AnyRef, it's a companion-like
-    // object used by the @specialize annotation.
-    lazy val AnyRefModule = getMemberModule(ScalaPackageClass, nme.AnyRef)
-    @deprecated("Use AnyRefModule", "2.10.0")
-    def Predef_AnyRef = AnyRefModule
-
     lazy val AnyValClass: ClassSymbol = (ScalaPackageClass.info member tpnme.AnyVal orElse {
       val anyval    = enterNewClass(ScalaPackageClass, tpnme.AnyVal, AnyTpe :: Nil, ABSTRACT)
       val av_constr = anyval.newClassConstructor(NoPosition)
@@ -984,8 +978,8 @@ trait Definitions extends api.StandardDefinitions {
     @deprecated("Moved to rootMirror.getModule", "2.10.0")
     def getModule(fullname: Name): ModuleSymbol = rootMirror.getModule(fullname)
 
-    private def fatalMissingSymbol(owner: Symbol, name: Name, what: String = "member") = {
-      throw new FatalError(owner + " does not have a " + what + " " + name)
+    private def fatalMissingSymbol(owner: Symbol, name: Name, what: String = "member", addendum: String = "") = {
+      throw new FatalError(owner + " does not have a " + what + " " + name + addendum)
     }
 
     def getLanguageFeature(name: String, owner: Symbol = languageFeatureModule): Symbol = getMember(owner, newTypeName(name))
@@ -1020,7 +1014,8 @@ trait Definitions extends api.StandardDefinitions {
     def getMemberModule(owner: Symbol, name: Name): ModuleSymbol = {
       getMember(owner, name.toTermName) match {
         case x: ModuleSymbol => x
-        case _               => fatalMissingSymbol(owner, name, "member object")
+        case NoSymbol        => fatalMissingSymbol(owner, name, "member object")
+        case other           => fatalMissingSymbol(owner, name, "member object", addendum = s". A symbol ${other} of kind ${other.accurateKindString} already exists.")
       }
     }
     def getTypeMember(owner: Symbol, name: Name): TypeSymbol = {
