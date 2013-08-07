@@ -14,7 +14,7 @@ private[internal] trait TypeConstraints {
   /** A log of type variable with their original constraints. Used in order
     *  to undo constraints in the case of isSubType/isSameType failure.
     */
-  private lazy val _undoLog = new UndoLog
+  private lazy val _undoLog = newUndoLog
   def undoLog = _undoLog
 
   protected def newUndoLog = new UndoLog

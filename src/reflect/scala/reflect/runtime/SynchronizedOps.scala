@@ -9,6 +9,7 @@ private[reflect] trait SynchronizedOps extends internal.SymbolTable
 
 // Names
 
+  // TODO JZ Why lazy? Same question for other locks.
   // this lock isn't subsumed by the reflection GIL
   // because there's no way newXXXName methods are going to call anything reflective
   // therefore we don't have a danger of a deadlock from having a fine-grained lock for name creation

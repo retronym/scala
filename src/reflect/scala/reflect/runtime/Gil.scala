@@ -3,7 +3,7 @@ package runtime
 
 private[reflect] trait Gil {
   self: SymbolTable =>
-
+  // TODO JZ Why lazy?
   // fixme... please...
   // there are the following avenues of optimization we discussed with Roland:
   // 1) replace PackageScope locks with ConcurrentHashMap, because PackageScope materializers seem to be idempotent

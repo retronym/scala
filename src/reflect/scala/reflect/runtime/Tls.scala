@@ -3,6 +3,7 @@ package runtime
 
 import java.lang.Thread._
 
+// TODO JZ Non abbreviated name for this.
 private[reflect] trait Tls {
   self: SymbolTable =>
 
