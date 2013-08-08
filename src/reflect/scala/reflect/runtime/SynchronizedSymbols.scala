@@ -7,13 +7,13 @@ import scala.collection.{ immutable, mutable }
 
 private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: SymbolTable =>
 
-  private val atomicIds = new java.util.concurrent.atomic.AtomicInteger(0)
+  private lazy val atomicIds = new java.util.concurrent.atomic.AtomicInteger(0)
   override protected def nextId() = atomicIds.incrementAndGet()
 
-  private val atomicExistentialIds = new java.util.concurrent.atomic.AtomicInteger(0)
+  private lazy val atomicExistentialIds = new java.util.concurrent.atomic.AtomicInteger(0)
   override protected def nextExistentialId() = atomicExistentialIds.incrementAndGet()
 
-  private val _recursionTable = mkThreadLocalStorage(immutable.Map.empty[Symbol, Int])
+  private lazy val _recursionTable = mkThreadLocalStorage(immutable.Map.empty[Symbol, Int])
   override def recursionTable = _recursionTable.get
   override def recursionTable_=(value: immutable.Map[Symbol, Int]) = _recursionTable.set(value)
 
