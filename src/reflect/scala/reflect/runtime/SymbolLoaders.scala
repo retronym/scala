@@ -111,8 +111,13 @@ private[reflect] trait SymbolLoaders { self: SymbolTable =>
                 val module = origOwner.info decl name.toTermName
                 assert(clazz != NoSymbol)
                 assert(module != NoSymbol)
-                pkgClass.info.decls enter clazz
-                pkgClass.info.decls enter module
+                def enterIfNew(sym: Symbol) = {
+                  if (!pkgClass.info.decls.exists(_.name == sym.name))
+                    pkgClass.info.decls enter sym
+                }
+
+                enterIfNew(clazz)
+                enterIfNew(module)
                 (clazz, module)
               }
             debugInfo(s"created $module/${module.moduleClass} in $pkgClass")

@@ -1195,6 +1195,7 @@ trait Definitions extends api.StandardDefinitions {
       // so far so good, but there's a subtle detail. if forcing of ScalaPackageClass was called by a syntheticCoreClasses lazy val,
       // then this lazy val will be entered twice: once during step 7 and once when returning from the original call
       // to avoid this we need to initialize ScalaPackageClass first and only then synthesize the core classes
+      ObjectClass.initialize
       ScalaPackageClass.initialize
       // force initialization of every symbol that is synthesized or hijacked by the compiler
       val forced1 = symbolsNotPresentInBytecode
