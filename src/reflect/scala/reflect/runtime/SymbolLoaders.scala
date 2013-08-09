@@ -103,8 +103,10 @@ private[reflect] trait SymbolLoaders { self: SymbolTable =>
       if (isCompilerUniverse) super.enter(sym)
       else {
         val existing = super.lookupEntry(sym.name)
-        assert(existing == null || existing.sym.isMethod, s"pkgClass = $pkgClass, sym = $sym, existing = $existing")
-        super.enter(sym)
+        if (existing == null || existing.sym.isMethod)
+          super.enter(sym)
+        else
+          existing.sym.asInstanceOf[T]
       }
     }
 
@@ -154,6 +156,7 @@ private[reflect] trait SymbolLoaders { self: SymbolTable =>
                 // 7) that might materialize symbols and enter them into our scope (because syntheticCoreClasses live in rootMirror)
                 // 8) now we come back here and try to enter one of the now entered symbols => BAM!
                 // therefore we use enterIfNew rather than just enter
+                ???
                 enterIfNew(clazz)
                 enterIfNew(module)
                 (clazz, module)

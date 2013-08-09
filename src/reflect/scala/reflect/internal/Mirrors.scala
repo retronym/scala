@@ -259,7 +259,7 @@ trait Mirrors extends api.Mirrors {
           assert(theirOwner.isPackageClass, s"theirSym = $theirSym, theirOwner = $theirOwner")
           val ourOwner = staticPackage(theirOwner.fullName).moduleClass
           val ourSym = theirSym // just copy the symbol into our branch of the symbol table
-          ourOwner.info.decls enterIfNew ourSym
+          ourOwner.info.decls enter ourSym
         })
       }
 

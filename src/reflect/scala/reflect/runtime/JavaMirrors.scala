@@ -522,7 +522,8 @@ private[reflect] trait JavaMirrors extends internal.SymbolTable with api.JavaUni
     /** The mirror that corresponds to the classloader that original defined the given Java class */
     def mirrorDefining(jclazz: jClass[_]): JavaMirror = {
       val cl = jclazz.getClassLoader
-      if (cl == this.classLoader) this else runtimeMirror(cl)
+      // cl == null shows up in the OSGi based BasicReflectionTest
+      if (cl == this.classLoader || cl == null) this else runtimeMirror(cl)
     }
 
     private object unpickler extends UnPickler {
