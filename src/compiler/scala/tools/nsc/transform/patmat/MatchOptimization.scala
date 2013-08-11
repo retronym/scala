@@ -39,7 +39,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
 
       // interpret:
       val dependencies = new mutable.LinkedHashMap[Test, Set[Prop]]
-      val tested = new mutable.HashSet[Prop]
+      val tested = mutable.LinkedHashSet[Prop]()
 
       // TODO: use SAT solver instead of hashconsing props and approximating implication by subset/equality
       def storeDependencies(test: Test) = {
@@ -88,7 +88,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
       // then, collapse these contiguous sequences of reusing tests
       // store the result of the final test and the intermediate results in hoisted mutable variables (TODO: optimize: don't store intermediate results that aren't used)
       // replace each reference to a variable originally bound by a collapsed test by a reference to the hoisted variable
-      val reused = new mutable.HashMap[TreeMaker, ReusedCondTreeMaker]
+      val reused = mutable.LinkedHashMap[TreeMaker, ReusedCondTreeMaker]()
       var okToCall = false
       val reusedOrOrig = (tm: TreeMaker) => {assert(okToCall); reused.getOrElse(tm, tm)}
 

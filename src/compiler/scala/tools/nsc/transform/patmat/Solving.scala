@@ -202,8 +202,8 @@ trait Solving extends Logic {
             withLit(findModelFor(dropUnit(f, unitLit)), unitLit)
           case _ =>
             // partition symbols according to whether they appear in positive and/or negative literals
-            val pos = new mutable.HashSet[Sym]()
-            val neg = new mutable.HashSet[Sym]()
+            val pos = mutable.LinkedHashSet[Sym]()
+            val neg = mutable.LinkedHashSet[Sym]()
             f.foreach{_.foreach{ lit =>
               if (lit.pos) pos += lit.sym else neg += lit.sym
             }}

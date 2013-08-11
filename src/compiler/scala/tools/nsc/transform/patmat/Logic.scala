@@ -144,7 +144,7 @@ trait Logic extends Debugging  {
     }
 
     def gatherVariables(p: Prop): Set[Var] = {
-      val vars = new mutable.HashSet[Var]()
+      val vars = mutable.LinkedHashSet[Var]()
       (new PropTraverser {
         override def applyVar(v: Var) = vars += v
       })(p)
@@ -193,7 +193,7 @@ trait Logic extends Debugging  {
     def removeVarEq(props: List[Prop], modelNull: Boolean = false): (Formula, List[Formula]) = {
       val start = if (Statistics.canEnable) Statistics.startTimer(patmatAnaVarEq) else null
 
-      val vars = new scala.collection.mutable.HashSet[Var]
+      val vars = scala.collection.mutable.LinkedHashSet[Var]()
 
       object gatherEqualities extends PropTraverser {
         override def apply(p: Prop) = p match {
@@ -315,7 +315,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       private[this] def observed() = {} //canModify = Some(Thread.currentThread.getStackTrace)
 
       // don't access until all potential equalities have been registered using registerEquality
-      private[this] val symForEqualsTo = new mutable.HashMap[Const, Sym]
+      private[this] val symForEqualsTo = mutable.LinkedHashMap[Const, Sym]()
 
       // when looking at the domain, we only care about types we can check at run time
       val staticTpCheckable: Type = checkableType(staticTp)
@@ -445,7 +445,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
  but we can safely pretend types are mutually exclusive as long as there are no counter-examples in the match we're analyzing}
 */
 
-        val excludedPair = new mutable.HashSet[ExcludedPair]
+        val excludedPair = mutable.LinkedHashSet[ExcludedPair]()
 
         case class ExcludedPair(a: Const, b: Const) {
           override def equals(o: Any) = o match {
@@ -523,7 +523,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
               fresh
           })
 
-      private val trees = mutable.HashSet.empty[Tree]
+      private val trees = mutable.LinkedHashSet[Tree]()
 
       // hashconsing trees (modulo value-equality)
       private[TreesAndTypesDomain] def uniqueTpForTree(t: Tree): Type =

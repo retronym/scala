@@ -158,9 +158,9 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
     class TreeMakersToProps(val root: Symbol) {
       prepareNewAnalysis() // reset hash consing for Var and Const
 
-      private[this] val uniqueEqualityProps = new scala.collection.mutable.HashMap[(Tree, Tree), Eq]
-      private[this] val uniqueNonNullProps = new scala.collection.mutable.HashMap[Tree, Not]
-      private[this] val uniqueTypeProps = new scala.collection.mutable.HashMap[(Tree, Type), Eq]
+      private[this] val uniqueEqualityProps = mutable.LinkedHashMap[(Tree, Tree), Eq]()
+      private[this] val uniqueNonNullProps = mutable.LinkedHashMap[Tree, Not]()
+      private[this] val uniqueTypeProps = mutable.LinkedHashMap[(Tree, Type), Eq]()
 
       def uniqueEqualityProp(testedPath: Tree, rhs: Tree): Prop =
         uniqueEqualityProps getOrElseUpdate((testedPath, rhs), Eq(Var(testedPath), ValueConst(rhs)))
@@ -173,8 +173,8 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
         uniqueTypeProps getOrElseUpdate((testedPath, pt), Eq(Var(testedPath), TypeConst(checkableType(pt))))
 
       // a variable in this set should never be replaced by a tree that "does not consist of a selection on a variable in this set" (intuitively)
-      private val pointsToBound = mutable.HashSet(root)
-      private val trees         = mutable.HashSet.empty[Tree]
+      private val pointsToBound = mutable.LinkedHashSet(root)
+      private val trees         = mutable.LinkedHashSet[Tree]()
 
       // the substitution that renames variables to variables in pointsToBound
       private var normalize: Substitution  = EmptySubstitution
@@ -592,7 +592,7 @@ trait MatchAnalysis extends MatchApproximation {
           case _ => varAssignment.find{case (v, a) => chop(v.path) == path}.map(_._1)
         }
 
-        private val uniques = new mutable.HashMap[Var, VariableAssignment]
+        private val uniques = mutable.HashMap[Var, VariableAssignment]()
         private def unique(variable: Var): VariableAssignment =
           uniques.getOrElseUpdate(variable, {
             val (eqTo, neqTo) = varAssignment.getOrElse(variable, (Nil, Nil)) // TODO
@@ -619,7 +619,7 @@ trait MatchAnalysis extends MatchApproximation {
 
       // node in the tree that describes how to construct a counter-example
       case class VariableAssignment(variable: Var, equalTo: List[Const], notEqualTo: List[Const]) {
-        private val fields: mutable.Map[Symbol, VariableAssignment] = mutable.HashMap.empty
+        private val fields: mutable.Map[Symbol, VariableAssignment] = mutable.LinkedHashMap[Symbol, VariableAssignment]()
         // need to prune since the model now incorporates all super types of a constant (needed for reachability)
         private lazy val uniqueEqualTo = equalTo filterNot (subsumed => equalTo.exists(better => (better ne subsumed) && instanceOfTpImplies(better.tp, subsumed.tp)))
         private lazy val prunedEqualTo = uniqueEqualTo filterNot (subsumed => variable.staticTpCheckable <:< subsumed.tp)
