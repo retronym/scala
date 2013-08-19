@@ -81,6 +81,31 @@ class C7 extends C6[Int] {
     super.f1(x1, x2, x3, x4)
 }
 
+//
+// SI-7449
+//
+
+class Param[A]
+class ValueCycle(val s: Param[ValueCycle]) extends AnyVal
+class ValueParamString(val s: Param[String]) extends AnyVal
+class C8 {
+  def f1(x1: ValueCycle, x2: Param[ValueCycle]) = ()
+  def f2(x1: ValueParamString) = ()
+  def f3(x1: ValA[List[String]]) = ()
+}
+
+class ValMA[M[_], A](val ma: M[A]) extends AnyVal
+class B9[M[_], A] {
+  type T = ValMA[M, A]
+  def f1(x1: T) = ()
+}
+class C9 extends B9[List, String] {
+  override def f1(x1: T) = super.f1(x1)
+}
+class C10 extends B9[({type ID[x]=x})#ID, String] {
+  override def f1(x1: T) = super.f1(x1)
+}
+
 object Test {
   def show[A: ClassTag] = {
     println(classTag[A].runtimeClass.getName)
@@ -102,5 +127,9 @@ object Test {
     show[ValueInt]
     show[RefInt]
     show[RefInteger]
+
+    show[C8]
+    show[C9]
+    show[C10]
   }
 }

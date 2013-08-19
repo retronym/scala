@@ -1,3 +1,4 @@
+warning: there were 2 feature warning(s); re-run with -feature for details
 C0
 public int C0.v1(int)
 public <A> int C0.v1(int)
@@ -14,9 +15,9 @@ public <A> java.lang.Object C1.v1(java.lang.Object)
 public java.lang.Object C1.v3()
 public <A> java.lang.Object C1.v3()
 public java.lang.Object C1.v4(java.lang.Object,scala.collection.immutable.List)
-public <A> java.lang.Object C1.v4(java.lang.Object,scala.collection.immutable.List<java.lang.Object>)
+public <A> java.lang.Object C1.v4(java.lang.Object,scala.collection.immutable.List<ValAny<A>>)
 public scala.collection.immutable.List C1.v2()
-public <A> scala.collection.immutable.List<java.lang.Object> C1.v2()
+public <A> scala.collection.immutable.List<ValAny<A>> C1.v2()
 
 C2
 public java.lang.String C2.v1(java.lang.String)
@@ -24,9 +25,9 @@ public <A> java.lang.String C2.v1(java.lang.String)
 public java.lang.String C2.v3()
 public <A> java.lang.String C2.v3()
 public java.lang.String C2.v4(java.lang.String,scala.collection.immutable.List)
-public <A> java.lang.String C2.v4(java.lang.String,scala.collection.immutable.List<java.lang.String>)
+public <A> java.lang.String C2.v4(java.lang.String,scala.collection.immutable.List<ValStr<A>>)
 public scala.collection.immutable.List C2.v2()
-public <A> scala.collection.immutable.List<java.lang.String> C2.v2()
+public <A> scala.collection.immutable.List<ValStr<A>> C2.v2()
 
 C3
 public java.lang.Object C3.v1(java.lang.Object)
@@ -34,11 +35,11 @@ public A C3.v1(A)
 public java.lang.Object C3.v3()
 public A C3.v3()
 public java.lang.Object C3.v4(java.lang.Object,scala.collection.immutable.List)
-public A C3.v4(A,scala.collection.immutable.List<A>)
+public A C3.v4(A,scala.collection.immutable.List<ValA<A>>)
 public java.lang.Object C3.x()
 public A C3.x()
 public scala.collection.immutable.List C3.v2()
-public scala.collection.immutable.List<A> C3.v2()
+public scala.collection.immutable.List<ValA<A>> C3.v2()
 
 C4
 public java.lang.Integer C4.v1(java.lang.Integer)
@@ -56,9 +57,9 @@ public java.lang.String C4B.v1(java.lang.String)
 public java.lang.String C4B.v3()
 public java.lang.String C4B.v3()
 public java.lang.String C4B.v4(java.lang.String,scala.collection.immutable.List)
-public java.lang.String C4B.v4(java.lang.String,scala.collection.immutable.List<java.lang.String>)
+public java.lang.String C4B.v4(java.lang.String,scala.collection.immutable.List<ValA<java.lang.String>>)
 public scala.collection.immutable.List C4B.v2()
-public scala.collection.immutable.List<java.lang.String> C4B.v2()
+public scala.collection.immutable.List<ValA<java.lang.String>> C4B.v2()
 
 C5
 public double C5.f2(int,java.lang.Object,java.lang.String,double)
@@ -129,4 +130,24 @@ public java.lang.Integer RefInteger.x()
 public java.lang.Integer RefInteger.x()
 public java.lang.Object RefInteger.x()
 public java.lang.Object RefInteger.x()
+
+C8
+public void C8.f1(Param,Param)
+public void C8.f1(Param<ValueCycle>,Param<ValueCycle>)
+public void C8.f2(Param)
+public void C8.f2(Param<java.lang.String>)
+public void C8.f3(scala.collection.immutable.List)
+public void C8.f3(scala.collection.immutable.List<java.lang.String>)
+
+C9
+public void C9.f1(java.lang.Object)
+public void C9.f1(java.lang.Object)
+public void C9.f1(scala.collection.immutable.List)
+public void C9.f1(scala.collection.immutable.List<java.lang.String>)
+
+C10
+public void C10.f1(java.lang.Object)
+public void C10.f1(java.lang.Object)
+public void C10.f1(java.lang.String)
+public void C10.f1(java.lang.String)
 

@@ -47,10 +47,16 @@ abstract class Erasure extends AddInterfaces
           case st: SubType =>
             traverse(st.supertype)
           case TypeRef(pre, sym, args) =>
-            if (sym == ArrayClass) args foreach traverse
+            if (sym.isDerivedValueClass) {
+              // Note: in a signature like: `def f(x: List[ValueClass[String]])` we shouldn't unbox the
+              // value class. But we won't get here, because the surrounding `List[...]` will trigger `!args.isEmpty`
+              traverse(underlyingOfValueClass(sym).asSeenFrom(pre, sym))
+            }
+            else if (sym == ArrayClass) args foreach traverse
             else if (sym.isTypeParameterOrSkolem || sym.isExistentiallyBound || !args.isEmpty) result = true
             else if (sym.isClass) traverse(rebindInnerClass(pre, sym)) // #2585
             else if (!sym.isTopLevel) traverse(pre)
+
           case PolyType(_, _) | ExistentialType(_, _) =>
             result = true
           case RefinedType(parents, _) =>
@@ -175,6 +181,7 @@ abstract class Erasure extends AddInterfaces
    */
   def javaSig(sym0: Symbol, info: Type): Option[String] = enteringErasure {
     val isTraitSignature = sym0.enclClass.isTrait
+    var unboxValueClass = true // SI-7449 only top level occurences of value classes in MethodTypes should be unboxed.
 
     def superSig(parents: List[Type]) = {
       val ps = (
@@ -224,7 +231,10 @@ abstract class Erasure extends AddInterfaces
               else if (!(bounds.lo <:< NullTpe)) "-" + boxedSig(bounds.lo)
               else "*"
             } else {
-              boxedSig(tp)
+              val saved = unboxValueClass
+              unboxValueClass = false
+              try boxedSig(tp)
+              finally unboxValueClass = saved
             }
           def classSig = {
             val preRebound = pre.baseType(sym.owner) // #2585
@@ -267,7 +277,7 @@ abstract class Erasure extends AddInterfaces
             else if (sym == UnitClass) jsig(BoxedUnitTpe)
             else abbrvTag(sym).toString
           }
-          else if (sym.isDerivedValueClass) {
+          else if (sym.isDerivedValueClass && unboxValueClass) {
             val unboxed     = sym.derivedValueClassUnbox.info.finalResultType
             val unboxedSeen = (tp memberType sym.derivedValueClassUnbox).finalResultType
             def unboxedMsg  = if (unboxed == unboxedSeen) "" else s", seen within ${sym.simpleName} as $unboxedSeen"
