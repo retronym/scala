@@ -91,12 +91,13 @@ class C7 extends C6[Int] {
 //
 
 class Param[A]
-// TODO class ValueCycle(val s: Param[ValueCycle]) extends AnyVal
+class ValueCycle(val s: Param[ValueCycle]) extends AnyVal
 class ValueParamString(val s: Param[String]) extends AnyVal
 class C8 {
-  // def f1[Z](x1: ValueCycle, x2: Param[ValueCycle]) = ()
+  // before SI-7449, caused StackOverflowError during erasure
+  def f1[Z](x1: ValueCycle, x2: Param[ValueCycle]) = ()
   def f2[Z](x1: ValueParamString) = ()
-  def f3(x1: ValueParamString) = () // still needs generic signature!
+  def f3(x1: ValueParamString) = () // before SI-7449, this lacked a generic signature.
   def f5[Z](x1: ValA[List[String]]) = ()
 }
 
