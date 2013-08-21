@@ -88,7 +88,7 @@ trait Erasure {
   /** The type of the argument of a value class reference after erasure
    *  This method needs to be called at a phase no later than erasurephase
    */
-  def erasedValueClassArg(tref: TypeRef): Type = {
+  final def erasedValueClassArg(tref: TypeRef): Type = {
     assert(!phase.erasedTypes)
     val clazz = tref.sym
     if (valueClassIsParametric(clazz)) {
@@ -110,10 +110,32 @@ trait Erasure {
   }
 
   abstract class ErasureMap extends TypeMap {
+    var state: ErasureMapState = ErasureMapState.TopLevel
+    @inline def inArgs[T](t: => T): T = {
+      val saved = state
+      state = ErasureMapState.ClassTypeArg
+      try t finally state = saved
+    }
+    @inline def inArrayArgs[T](t: => T): T = {
+      val saved = state
+      state = ErasureMapState.ArrayTypeArg
+      try t finally state = saved
+    }
+    def isInArgs: Boolean = state == ErasureMapState.ClassTypeArg
+    def isInArrayArgs: Boolean = state == ErasureMapState.ArrayTypeArg
     def mergeParents(parents: List[Type]): Type
 
-    def eraseNormalClassRef(pre: Type, clazz: Symbol): Type =
+    def eraseNormalClassRef(pre: Type, clazz: Symbol, args: List[Type]): Type =
       typeRef(apply(rebindInnerClass(pre, clazz)), clazz, List()) // #2585
+
+    def eraseAliasOrAbstractType(pre: Type, sym: Symbol, args: List[Type]): Type =
+      apply(sym.info asSeenFrom (pre, sym.owner))
+
+    def eraseArray(tp: TypeRef) = {
+      if (unboundedGenericArrayLevel(tp) == 1) ObjectTpe
+      else if (tp.args.head.typeSymbol.isBottomClass) arrayType(ObjectTpe)
+      else typeRef(apply(tp.pre), tp.sym, inArrayArgs(tp.args map apply))
+    }
 
     protected def eraseDerivedValueClassRef(tref: TypeRef): Type = erasedValueClassArg(tref)
 
@@ -123,16 +145,14 @@ trait Erasure {
       case st: SubType =>
         apply(st.supertype)
       case tref @ TypeRef(pre, sym, args) =>
-        if (sym == ArrayClass)
-          if (unboundedGenericArrayLevel(tp) == 1) ObjectTpe
-          else if (args.head.typeSymbol.isBottomClass) arrayType(ObjectTpe)
-          else typeRef(apply(pre), sym, args map applyInArray)
+        if (sym == ArrayClass) eraseArray(tref)
         else if (sym == AnyClass || sym == AnyValClass || sym == SingletonClass) ObjectTpe
         else if (sym == UnitClass) BoxedUnitTpe
+        //else if (sym == NullClass) RuntimeNullClass.tpe TODO JZ
         else if (sym.isRefinementClass) apply(mergeParents(tp.parents))
-        else if (sym.isDerivedValueClass) eraseDerivedValueClassRef(tref)
-        else if (sym.isClass) eraseNormalClassRef(pre, sym)
-        else apply(sym.info asSeenFrom (pre, sym.owner)) // alias type or abstract type
+        else if (sym.isDerivedValueClass && !isInArgs) eraseDerivedValueClassRef(tref)
+        else if (sym.isClass) eraseNormalClassRef(pre, sym, args)
+        else eraseAliasOrAbstractType(pre, sym, args)
       case PolyType(tparams, restpe) =>
         apply(restpe)
       case ExistentialType(tparams, restpe) =>
@@ -156,11 +176,6 @@ trait Erasure {
           decls, clazz)
       case _ =>
         mapOver(tp)
-    }
-
-    def applyInArray(tp: Type): Type = tp match {
-      case TypeRef(pre, sym, args) if (sym.isDerivedValueClass) => eraseNormalClassRef(pre, sym)
-      case _ => apply(tp)
     }
   }
 
@@ -281,12 +296,61 @@ trait Erasure {
     }
   }
 
-  object boxingErasure extends ScalaErasureMap {
-    override def eraseNormalClassRef(pre: Type, clazz: Symbol) =
-      if (isPrimitiveValueClass(clazz)) boxedClass(clazz).tpe
-      else super.eraseNormalClassRef(pre, clazz)
+  class BoxingErasureMap extends ScalaErasureMap {
+    override def eraseNormalClassRef(pre: Type, clazz: Symbol, args: List[Type]) =
+      if (!isInArrayArgs && isPrimitiveValueClass(clazz)) boxedClass(clazz).tpe
+      else super.eraseNormalClassRef(pre, clazz, args)
     override def eraseDerivedValueClassRef(tref: TypeRef) =
-      super.eraseNormalClassRef(tref.pre, tref.sym)
+      super.eraseNormalClassRef(tref.pre, tref.sym, tref.args)
+  }
+  object boxingErasure extends BoxingErasureMap
+
+  def javaSignatureErasure(tp: Type): Type = {
+    println(s"javaSignatureErasure($tp)")
+
+    object JavaSignatureErasureMap extends BoxingErasureMap {
+      var boxValueClass = false
+      override def eraseNormalClassRef(pre: Type, clazz: Symbol, args: List[Type]) =
+        if (boxValueClass && isPrimitiveValueClass(clazz)) boxedClass(clazz).tpe
+        else if (isInArgs && isPrimitiveValueClass(clazz)) ObjectTpe
+        else typeRef(apply(rebindInnerClass(pre, clazz)), clazz, inArgs(args map apply))
+
+      override def eraseAliasOrAbstractType(pre: Type, sym: Symbol, args: List[Type]): Type =
+        typeRef(pre, sym, inArgs(args map apply))
+
+      override def eraseDerivedValueClassRef(tref: TypeRef): Type = {
+        val clazz = tref.sym
+        val underlying = tref.memberType(clazz.derivedValueClassUnbox).resultType
+        if (valueClassIsParametric(clazz)) {
+          val saved = boxValueClass
+          boxValueClass = true
+          try apply(underlying)
+          finally boxValueClass = saved
+        } else {
+          apply(underlying)
+        }
+      }
+
+      override def apply(tp: Type): Type = tp match {
+        case _: PolyType | _: ExistentialType | _: AnnotatedType =>
+          mapOver(tp)
+        case _ => super.apply(tp)
+      }
+    }
+    object JavaSignatureErasureTopLevelMap extends TypeMap {
+      def apply(tp: Type): Type = tp match {
+        case mt @ MethodType(params, resultType) =>
+          def eraseArgOrReturn(tp: Type): Type = {
+            JavaSignatureErasureMap(tp)
+          }
+          MethodType(
+            cloneSymbolsAndModify(params, eraseArgOrReturn),
+            eraseArgOrReturn(resultType.resultType(mt.paramTypes))
+          )
+        case _ => mapOver(tp)
+      }
+    }
+    JavaSignatureErasureTopLevelMap(tp)
   }
 
   /** The intersection dominator (SLS 3.7) of a list of types is computed as follows.
@@ -366,4 +430,11 @@ trait Erasure {
       specialErasure(sym)(tp)
     }
   }
+}
+
+class ErasureMapState private(val value: Int) extends AnyVal
+object ErasureMapState {
+  val TopLevel = new ErasureMapState(0)
+  val ArrayTypeArg = new ErasureMapState(2)
+  val ClassTypeArg = new ErasureMapState(1)
 }

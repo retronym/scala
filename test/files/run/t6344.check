@@ -42,11 +42,11 @@ public <Z> scala.collection.immutable.List<ValA<A>> C3.v2()
 
 C4
 public java.lang.Integer C4.v1(java.lang.Integer)
-public <Z> int C4.v1(int)
+public <Z> java.lang.Integer C4.v1(java.lang.Integer)
 public java.lang.Integer C4.v3()
-public <Z> int C4.v3()
+public <Z> java.lang.Integer C4.v3()
 public java.lang.Integer C4.v4(java.lang.Integer,scala.collection.immutable.List)
-public <Z> int C4.v4(int,scala.collection.immutable.List<ValA<java.lang.Object>>)
+public <Z> java.lang.Integer C4.v4(java.lang.Integer,scala.collection.immutable.List<ValA<java.lang.Object>>)
 public scala.collection.immutable.List C4.v2()
 public <Z> scala.collection.immutable.List<ValA<java.lang.Object>> C4.v2()
 
@@ -60,15 +60,25 @@ public <Z> java.lang.String C4B.v4(java.lang.String,scala.collection.immutable.L
 public scala.collection.immutable.List C4B.v2()
 public <Z> scala.collection.immutable.List<ValA<java.lang.String>> C4B.v2()
 
+C4C
+public java.lang.Integer[] C4C.v1(java.lang.Integer[])
+public <Z> int[] C4C.v1(int[])
+public java.lang.Object[] C4C.v1(java.lang.Object[])
+public <Z> java.lang.Object[] C4C.v1(java.lang.Object[])
+public java.lang.String[] C4C.v1(java.lang.String[])
+public <Z> java.lang.String[] C4C.v1(java.lang.String[])
+public scala.runtime.BoxedUnit C4C.v1(scala.runtime.BoxedUnit)
+public <Z> scala.runtime.BoxedUnit C4C.v1(scala.runtime.BoxedUnit)
+
 C5
 public double C5.f2(int,java.lang.Object,java.lang.String,double)
 public <Z> double C5.f2(int,java.lang.Object,java.lang.String,double)
 public int C5.f3(java.lang.Integer)
-public <Z> int C5.f3(int)
+public <Z> int C5.f3(java.lang.Integer)
 public int C5.f4(java.lang.Integer)
-public <Z> int C5.f4(int)
+public <Z> int C5.f4(java.lang.Integer)
 public int C5.f5(java.lang.Integer)
-public <Z> int C5.f5(int)
+public <Z> int C5.f5(java.lang.Integer)
 public java.lang.Object C5.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 public <A> A C5.f1(int,java.lang.Object,java.lang.String,A)
 
@@ -78,7 +88,7 @@ public <Z> A C6.f1(int,java.lang.Object,java.lang.String,A)
 
 C7
 public java.lang.Integer C7.f1(int,java.lang.Object,java.lang.String,java.lang.Integer)
-public <Z> int C7.f1(int,java.lang.Object,java.lang.String,int)
+public <Z> java.lang.Integer C7.f1(int,java.lang.Object,java.lang.String,java.lang.Integer)
 public java.lang.Object C7.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 public java.lang.Object C7.f1(int,java.lang.Object,java.lang.String,java.lang.Object)
 
@@ -131,8 +141,6 @@ public java.lang.Object RefInteger.x()
 public java.lang.Object RefInteger.x()
 
 C8
-public void C8.f1(Param,Param)
-public <Z> void C8.f1(Param<ValueCycle>,Param<ValueCycle>)
 public void C8.f2(Param)
 public <Z> void C8.f2(Param<java.lang.String>)
 public void C8.f3(Param)

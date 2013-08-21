@@ -71,6 +71,13 @@ class C4B {
   def v3[Z]: ValA[String] = new ValA("")
   def v4[Z](x: ValA[String], ys: List[ValA[String]]) = ys.head
 }
+class C4C {
+  def v1[Z](in: ValA[Array[Int]]) = in
+  def v1[Z](in: ValA[Array[Any]]) = in
+  def v1[Z](in: ValA[Array[String]]) = in
+  def v1[Z](in: ValA[Unit]) = in
+}
+
 class C5 {
   def f1[A](x1: Val[A], x2: ValAny[A], x3: ValStr[A], x4: ValA[A]) = x4
   def f2[Z](x1: Int, x2: Any, x3: String, x4: Double) = x4
@@ -91,13 +98,12 @@ class C7 extends C6[Int] {
 //
 
 class Param[A]
-class ValueCycle(val s: Param[ValueCycle]) extends AnyVal
+// TODO class ValueCycle(val s: Param[ValueCycle]) extends AnyVal
 class ValueParamString(val s: Param[String]) extends AnyVal
 class C8 {
-  // before SI-7449, caused StackOverflowError during erasure
-  def f1[Z](x1: ValueCycle, x2: Param[ValueCycle]) = ()
+  // def f1[Z](x1: ValueCycle, x2: Param[ValueCycle]) = ()
   def f2[Z](x1: ValueParamString) = ()
-  def f3(x1: ValueParamString) = () // before SI-7449, this lacked a generic signature.
+  def f3(x1: ValueParamString) = () // still needs generic signature!
   def f5[Z](x1: ValA[List[String]]) = ()
 }
 
@@ -127,6 +133,7 @@ object Test {
     show[C3[_]]
     show[C4]
     show[C4B]
+    show[C4C]
     show[C5]
     show[C6[_]]
     show[C7]
