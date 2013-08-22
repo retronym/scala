@@ -32,6 +32,18 @@ trait Names extends api.Names with LowPriorityNames {
 
   final val nameDebug = false
 
+  // Ideally we would just synchronize unconditionally and let HotSpot's Biased Locking
+  // kick in in the compiler universe, where access to the lock is single threaded. But,
+  // objects created in the first 4seconds of the JVM startup aren't eligible for biased
+  // locking.
+  //
+  // We might also be able to accept the performance hit, but we don't have tools to
+  // detect performance regressions.
+  //
+  // Discussion: https://groups.google.com/forum/#!search/biased$20scala-internals/scala-internals/0cYB7SkJ-nM/47MLhsgw8jwJ
+  protected def synchronizeNames: Boolean = false
+  private val nameLock: Object = new {}
+
   /** Memory to store all names sequentially. */
   var chrs: Array[Char] = new Array[Char](NAME_SIZE)
   private var nc = 0
@@ -90,22 +102,26 @@ trait Names extends api.Names with LowPriorityNames {
    *  string is not at the very end.)
    */
   protected def newTermName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
-    val h = hashValue(cs, offset, len) & HASH_MASK
-    var n = termHashtable(h)
-    while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
-      n = n.next
+    def body = {
+      val h = hashValue(cs, offset, len) & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+        n = n.next
 
-    if (n ne null) n
-    else {
-      // The logic order here is future-proofing against the possibility
-      // that name.toString will become an eager val, in which case the call
-      // to enterChars cannot follow the construction of the TermName.
-      val ncStart = nc
-      enterChars(cs, offset, len)
-      if (cachedString ne null) new TermName_S(ncStart, len, h, cachedString)
-      else new TermName_R(ncStart, len, h)
+      if (n ne null) n
+      else {
+        // The logic order here is future-proofing against the possibility
+        // that name.toString will become an eager val, in which case the call
+        // to enterChars cannot follow the construction of the TermName.
+        val ncStart = nc
+        enterChars(cs, offset, len)
+        if (cachedString ne null) new TermName_S(ncStart, len, h, cachedString)
+        else new TermName_R(ncStart, len, h)
+      }
     }
+    if (synchronizeNames) nameLock.synchronized(body) else body
   }
+
   protected def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
 
@@ -481,6 +497,7 @@ trait Names extends api.Names with LowPriorityNames {
     override def toString = new String(chrs, index, len)
   }
 
+  // SYNCNOTE: caller to constructor must synchronize if `synchronizeNames` is enabled
   sealed abstract class TermName(index0: Int, len0: Int, hash: Int) extends Name(index0, len0) {
     type ThisNameType = TermName
     protected[this] def thisName: TermName = this
@@ -491,13 +508,16 @@ trait Names extends api.Names with LowPriorityNames {
     def isTypeName: Boolean = false
     def toTermName: TermName = this
     def toTypeName: TypeName = {
-      val h = hashValue(chrs, index, len) & HASH_MASK
-      var n = typeHashtable(h)
-      while ((n ne null) && n.start != index)
-        n = n.next
+      def body = {
+        val h = hashValue(chrs, index, len) & HASH_MASK
+        var n = typeHashtable(h)
+        while ((n ne null) && n.start != index)
+          n = n.next
 
-      if (n ne null) n
-      else createCompanionName(h)
+        if (n ne null) n
+        else createCompanionName(h)
+      }
+      if (synchronizeNames) nameLock.synchronized(body) else body
     }
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
@@ -505,6 +525,7 @@ trait Names extends api.Names with LowPriorityNames {
       newTermName(chrs, start + from, to - from)
 
     def nameKind = "term"
+    /** SYNCNOTE: caller must synchronize if `synchronizeNames` is enabled */
     protected def createCompanionName(h: Int): TypeName
   }
 
@@ -516,16 +537,20 @@ trait Names extends api.Names with LowPriorityNames {
 
     var next: TypeName = typeHashtable(hash)
     typeHashtable(hash) = this
+
     def isTermName: Boolean = false
     def isTypeName: Boolean = true
     def toTermName: TermName = {
-      val h = hashValue(chrs, index, len) & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && n.start != index)
-        n = n.next
+      def body = {
+        val h = hashValue(chrs, index, len) & HASH_MASK
+        var n = termHashtable(h)
+        while ((n ne null) && n.start != index)
+          n = n.next
 
-      if (n ne null) n
-      else createCompanionName(h)
+        if (n ne null) n
+        else createCompanionName(h)
+      }
+      if (synchronizeNames) nameLock.synchronized(body) else body
     }
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
@@ -535,6 +560,7 @@ trait Names extends api.Names with LowPriorityNames {
 
     def nameKind = "type"
     override def decode = if (nameDebug) super.decode + "!" else super.decode
+    /** SYNCNOTE: caller must synchronize if `synchronizeNames` is enabled */
     protected def createCompanionName(h: Int): TermName
   }
 
