@@ -47,7 +47,7 @@ trait MarkupParsers {
     type PositionType = Position
     type InputType    = CharArrayReader
     type ElementType  = Tree
-    type AttributesType = mutable.Map[String, Tree]
+    type AttributesType = (List[Tree], mutable.Map[String, Tree])
     type NamespaceType = Any  // namespaces ignored
 
     def mkAttributes(name: String, other: NamespaceType): AttributesType = xAttributes
@@ -108,40 +108,53 @@ trait MarkupParsers {
      *                      | `"` { _ } `"`
      *                      | `{` scalablock `}`
      */
-    def xAttributes = {
+    def xAttributes: (List[Tree /*Attribute*/], mutable.LinkedHashMap[String, Tree]) = {
       val aMap = mutable.LinkedHashMap[String, Tree]()
 
-      while (isNameStart(ch)) {
-        val start = curOffset
-        val key = xName
-        xEQ()
-        val mid = curOffset
-        val value: Tree = ch match {
-          case '"' | '\'' =>
-            val tmp = xAttributeValue(ch_returning_nextch)
+      var done = false
+      while (!done) {
+        if (isNameStart(ch)) {
+          val start = curOffset
+          val key = xName
+          xEQ()
+          val mid = curOffset
+          val value: Tree = ch match {
+            case '"' | '\'' =>
+              val tmp = xAttributeValue(ch_returning_nextch)
 
-            try handle.parseAttribute(r2p(start, mid, curOffset), tmp)
-            catch {
-              case e: RuntimeException =>
-                errorAndResult("error parsing attribute value", parser.errorTermTree)
-            }
+              try handle.parseAttribute(r2p(start, mid, curOffset), tmp)
+              catch {
+                case e: RuntimeException =>
+                  errorAndResult("error parsing attribute value", parser.errorTermTree)
+              }
 
-          case '{'  =>
-            nextch()
-            xEmbeddedExpr
-          case SU =>
-            throw TruncatedXMLControl
-          case _ =>
-            errorAndResult("' or \" delimited attribute value or '{' scala-expr '}' expected", Literal(Constant("<syntax-error>")))
+            case '{'  =>
+              nextch()
+              xEmbeddedExpr
+            case SU =>
+              throw TruncatedXMLControl
+            case _ =>
+              errorAndResult("' or \" delimited attribute value or '{' scala-expr '}' expected", Literal(Constant("<syntax-error>")))
+          }
+          // well-formedness constraint: unique attribute names
+          if (aMap contains key)
+            reportSyntaxError("attribute %s may only be defined once" format key)
+
+          aMap(key) = value
+          if (ch != '/' && ch != '>')
+            xSpace()
+        } else if (ch == '{') {
+          nextch()
+          xEmbeddedExpr
+          val start = curOffset
+          val mid = curOffset
+          val tree = handle.parseAttribute(r2p(start, mid, curOffset), "dummy")
+          aMap("dummy") = tree
+        } else {
+          done = true
         }
-        // well-formedness constraint: unique attribute names
-        if (aMap contains key)
-          reportSyntaxError("attribute %s may only be defined once" format key)
-
-        aMap(key) = value
-        if (ch != '/' && ch != '>')
-          xSpace()
       }
+
       aMap
     }
 
