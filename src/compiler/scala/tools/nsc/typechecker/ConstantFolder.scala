@@ -20,20 +20,33 @@ abstract class ConstantFolder {
   import global._
   import definitions._
 
-  /** If tree is a constant operation, replace with result. */
+  private object Const {
+    def unapply(t: Tree): Option[Constant] = t.tpe match {
+      case ConstantType(constant) => Some(constant)
+      case _ => None
+    }
+  }
+
+  final def foldTree(tree: Tree): Tree = {
+    tree.tpe match {
+      case tp @ ConstantType(c : Constant) =>
+        treeCopy.Literal(result, c)
+      case _ =>F
+        result
+    }
+  }
+
+  /** If tree is a constant operation, set its type to a ConstantType. */
   def apply(tree: Tree): Tree = fold(tree, tree match {
-    case Apply(Select(Literal(x), op), List(Literal(y))) => foldBinop(op, x, y)
-    case Select(Literal(x), op) => foldUnop(op, x)
+    case Apply(Select(Const(x), op), List(Const(y))) => foldBinop(op, x, y)
+    case Select(Const(x), op) => foldUnop(op, x)
     case _ => null
   })
 
   /** If tree is a constant value that can be converted to type `pt`, perform
    *  the conversion.
-   *
-   *  @param tree ...
-   *  @param pt ...
    */
-  def apply(tree: Tree, pt: Type): Tree = fold(apply(tree), tree.tpe match {
+  def apply(tree: Tree, pt: Type): Tree = fold(tree, tree.tpe match {
     case ConstantType(x) => x convertTo pt
     case _ => null
   })

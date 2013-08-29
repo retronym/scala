@@ -1841,6 +1841,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
               varianceValidator.traverse(result)
           case _ =>
         }
+        result = constfold.foldTree(result)
         result
       } catch {
         case ex: TypeError =>

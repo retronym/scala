@@ -1,0 +1,22 @@
+Type in expressions to have them evaluated.
+Type :help for more information.
+
+scala> 
+
+scala> :power
+** Power User mode enabled - BEEP WHIR GYVE **
+** :phase has been set to 'typer'.          **
+** scala.tools.nsc._ has been imported      **
+** global._, definitions._ also imported    **
+** Try  :help, :vals, power.<tab>           **
+
+scala> object O { final val x = 22; final val y = "" }
+defined module O
+
+scala> val t1 = reify { O.x }
+t1: $r.intp.global.Expr[Int(22)] = Expr[Int(22)]($read.O.x)
+
+scala> val t2 = reify { 1 + 1 }
+t2: $r.intp.global.Expr[Int(2)] = Expr[Int(2)](1.$plus(1))
+
+scala> 

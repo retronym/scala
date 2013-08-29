@@ -816,7 +816,7 @@ trait Typers extends Modes with Adaptations with Tags {
     /** Perform the following adaptations of expression, pattern or type `tree` wrt to
      *  given mode `mode` and given prototype `pt`:
      *  (-1) For expressions with annotated types, let AnnotationCheckers decide what to do
-     *  (0) Convert expressions with constant types to literals (unless in interactive/scaladoc mode)
+     *  (0) REMOVED  (was: convert expressions with constant types to literals (unless in interactive/scaladoc mode))
      *  (1) Resolve overloading, unless mode contains FUNmode
      *  (2) Apply parameterless functions
      *  (3) Apply polymorphic types to fresh instances of their type parameters and
@@ -1087,13 +1087,6 @@ trait Typers extends Modes with Adaptations with Tags {
       tree.tpe match {
         case atp @ AnnotatedType(_, _, _) if canAdaptAnnotations(tree, this, mode, pt) => // (-1)
           adaptAnnotations(tree, this, mode, pt)
-        case ct @ ConstantType(value) if inNoModes(mode, TYPEmode | FUNmode) && (ct <:< pt) && !forScaladoc && !forInteractive => // (0)
-          val sym = tree.symbol
-          if (sym != null && sym.isDeprecated) {
-            val msg = sym.toString + sym.locationString + " is deprecated: " + sym.deprecationMessage.getOrElse("")
-            unit.deprecationWarning(tree.pos, msg)
-          }
-          treeCopy.Literal(tree, value)
         case OverloadedType(pre, alts) if !inFunMode(mode) => // (1)
           inferExprAlternative(tree, pt)
           adapt(tree, mode, pt, original)

@@ -1,0 +1,67 @@
+newSource1.scala:6: warning: a pure expression does nothing in statement position; you may be omitting necessary parentheses
+   O.x
+     ^
+[[syntax trees at end of                     typer]] // newSource1.scala
+package <empty> {
+  object O extends scala.AnyRef {
+    def <init>(): O.type = {
+      O.super.<init>();
+      ()
+    };
+    final private[this] val x: Int(22) = 22;
+    final <stable> <accessor> def x: Int = O.this.x;
+    final private[this] val y: String("") = "";
+    final <stable> <accessor> def y: String = O.this.y
+  };
+  class ann extends scala.annotation.Annotation with scala.annotation.StaticAnnotation {
+    <paramaccessor> private[this] val a: Any = _;
+    def <init>(a: Any): ann = {
+      ann.super.<init>();
+      ()
+    }
+  };
+  @ann(O.x) class Test extends scala.AnyRef {
+    def <init>(): Test = {
+      Test.super.<init>();
+      ()
+    };
+    O.x;
+    scala.this.Predef.println(1.+(1));
+    scala.this.Predef.println(1./(0));
+    @ann(43.-(1)) def bar: Int = 0;
+    @ann(1./(0)) def foo: Int = 1./(0)
+  }
+}
+
+[[syntax trees at end of                 refchecks]] // newSource1.scala
+package <empty> {
+  object O extends scala.AnyRef {
+    def <init>(): O.type = {
+      O.super.<init>();
+      ()
+    };
+    final private[this] val x: Int(22) = 22;
+    final <stable> <accessor> def x: Int = 22;
+    final private[this] val y: String("") = "";
+    final <stable> <accessor> def y: String = ""
+  };
+  class ann extends scala.annotation.Annotation with scala.annotation.StaticAnnotation {
+    <paramaccessor> private[this] val a: Any = _;
+    def <init>(a: Any): ann = {
+      ann.super.<init>();
+      ()
+    }
+  };
+  @ann(O.x) class Test extends scala.AnyRef {
+    def <init>(): Test = {
+      Test.super.<init>();
+      ()
+    };
+    22;
+    scala.this.Predef.println(2);
+    scala.this.Predef.println(1./(0));
+    @ann(43.-(1)) def bar: Int = 0;
+    @ann(1./(0)) def foo: Int = 1./(0)
+  }
+}
+
