@@ -224,6 +224,24 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           val extensionParams = allParameters(extensionMono)
           val extensionThis   = gen.mkAttributedStableRef(thiz setPos extensionMeth.pos)
 
+          val skolemsSet = mutable.LinkedHashSet[Symbol]()
+          def defines(tree: Tree, sym: Symbol) =
+                  sym.isExistentialSkolem && sym.unpackLocation == tree ||
+                  tree.isDef && tree.symbol == sym
+          for {
+            t <- rhs
+            tp0 <- (List(t.tpe) ++ (if (t.isDef) List(t.symbol.info) else Nil))
+            tp <- tp0
+          } {
+            tp match {
+              case TypeRef(_, sym, _) if sym.isExistentialSkolem && rhs.exists(t => defines(t, sym)) =>
+                skolemsSet += sym
+              case _ =>
+            }
+          }
+          val oldSkolems = skolemsSet.toList
+          val newSkolems = deriveSymbols(oldSkolems, _.substInfo(origTpeParams, extensionTpeParams).substInfo(origParams, extensionParams))
+
           val extensionBody = (
             rhs
               .substituteSymbols(origTpeParams, extensionTpeParams)
@@ -231,14 +249,12 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
               .substituteThis(origThis, extensionThis)
               .changeOwner(origMeth -> extensionMeth)
           )
-          val castBody =
-            if (extensionBody.tpe <:< extensionMono.finalResultType)
-              extensionBody
-            else
-              gen.mkCastPreservingAnnotations(extensionBody, extensionMono.finalResultType) // SI-7818 e.g. mismatched existential skolems
+
+          // SI-7818 avoiding dreaded mismatched existential skolems
+          val newBody = extensionBody.substituteSymbols(oldSkolems, newSkolems)
 
           // Record the extension method ( FIXME: because... ? )
-          extensionDefs(companion) += atPos(tree.pos)(DefDef(extensionMeth, castBody))
+          extensionDefs(companion) += atPos(tree.pos)(DefDef(extensionMeth, newBody))
 
           // These three lines are assembling Foo.bar$extension[T1, T2, ...]($this)
           // which leaves the actual argument application for extensionCall.
