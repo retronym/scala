@@ -742,7 +742,7 @@ trait Scanners extends ScannersCommon {
         }
       } else if (ch == '$') {
         nextRawChar()
-        if (ch == '$') {
+        if (ch == '$' || ch == '"') {
           putChar(ch)
           nextRawChar()
           getStringPart(multiLine)
