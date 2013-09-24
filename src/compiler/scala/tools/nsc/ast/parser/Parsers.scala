@@ -2312,10 +2312,11 @@ self =>
           case LBRACE   => importSelectors()      // import foo.bar.{ x, y, z }
           case _        =>
             val nameOffset = in.offset
-            val name = ident()
+            val name       = ident()
+            val end        = in.offset
             if (acceptIfPresent(DOT))
               // import foo.bar.ident.<unknown> and so create a select node and recurse.
-              return loop(atPos(start, if (name == nme.ERROR) in.offset else nameOffset)(Select(expr, name)))
+              return loop(atPos(start, if (name == nme.ERROR) in.offset else nameOffset, end)(Select(expr, name)))
             // import foo.bar.Baz;
             else List(makeImportSelector(name, nameOffset))
         }

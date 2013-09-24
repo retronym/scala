@@ -23,6 +23,52 @@ val Pat(x) = 0
   <4:10>case <4:10>[4:7]Pat(<8:9>(x @ [8]_)) => <4:10>x
 }
 
+val (a, b) = null
+[X]{
+  [4/0:17]<synthetic> <artifact> private[this] val x$1 = <4:17>[13:17][13:17]null: @[13]scala.unchecked match {
+    <4:10>case <4:10>[4]scala.Tuple2(<5:6>(a @ [5]_), <8:9>(b @ [8]_)) => <4:10><4:10>scala.Tuple2(<4:10>a, <4:10>b)
+  };
+  [5]val a = [5]x$1._1;
+  [8]val b = [8]x$1._2;
+  [X]()
+}
+
 def x = 0
 [4/0:9]def x = [8:9]0
+
+import a.b
+[7/0:10]import a.b
+<7:8>a
+
+import a.{b => c, d}
+[7/0:20]import a.{b=>c, d}
+<7:8>a
+
+import a.b, c.d
+[X]{
+  [7/0:10]import a.b;
+  [12:15]import c.d;
+  [X]()
+}
+
+new C
+[4/0:5][4/0:5][4/0:5]new [4:5]C()
+
+new C[A] {}
+[4/0:11]{
+  <4:11>final class $anon extends [4:11][4:8][4:5]C[[6:7]A] {
+    [4]def <init>() = [4]{
+      [X][X]super.<init>();
+      [4]()
+    };
+    [X]<empty>
+  };
+  [0:3][0:3][0:3]new [4]$anon()
+}
+
+new Some("")
+[4/0:12][4:8][4:8]new [4:8]Some([9:11]"")
+
+def foo[A: T] = 0
+[4/0:17]def foo[[8:9]A[9]](implicit [4/9:12]evidence$1: [11/9:12][11:12]T[[11]A]) = [16:17]0
 
