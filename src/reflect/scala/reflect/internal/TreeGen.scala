@@ -401,8 +401,8 @@ abstract class TreeGen extends macros.TreeBuilder {
     def enclosingPos = wrappingPos(cpos, parents ::: List(self) ::: stats)
     def upos         = cpos union npos
     def anonTemplate = atPos(cpos)(mkTemplate(parents, self, NoMods, ListOfNil, stats, cpos))
-    def anonClass    = atPos(anonTemplate.pos.makeTransparent)(ClassDef(Modifiers(FINAL), tpnme.ANON_CLASS_NAME, Nil, anonTemplate))
-    def anonNew      = atPos(npos)(New(Ident(tpnme.ANON_CLASS_NAME) setPos cpos.focus, Nil))
+    def anonClass    = atPos(anonTemplate.pos)(ClassDef(Modifiers(FINAL), tpnme.ANON_CLASS_NAME, Nil, anonTemplate))
+    def anonNew      = atPos(npos)(New(Ident(tpnme.ANON_CLASS_NAME) setPos npos.focusStart, Nil, npos))
 
     // `Parsers.template` no longer differentiates tpts and their argss
     // e.g. `C()` will be represented as a single tree Apply(Ident(C), Nil)

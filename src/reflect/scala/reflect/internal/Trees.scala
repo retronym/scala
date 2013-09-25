@@ -459,7 +459,8 @@ trait Trees extends api.Trees { self: SymbolTable =>
 
   def ApplyConstructor(tpt: Tree, args: List[Tree]) = ApplyConstructor(tpt, args, NoPosition)
   def ApplyConstructor(tpt: Tree, args: List[Tree], npos: Position) = {
-    val newPos = if (npos.isDefined) tpt.pos.withStart(npos.start) else NoPosition
+    // TODO migrate to `withPoint(tpt.start)` once scala-refactoring supports this.
+    val newPos = if (npos.isDefined) tpt.pos.union(npos).withPoint(npos.start) else NoPosition
     Apply(Select(New(tpt).setPos(newPos), nme.CONSTRUCTOR), args)
   }
 
