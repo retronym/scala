@@ -457,7 +457,11 @@ trait Trees extends api.Trees { self: SymbolTable =>
   // copying trees will all too easily forget to distinguish subclasses
   class ApplyImplicitView(fun: Tree, args: List[Tree]) extends Apply(fun, args)
 
-  def ApplyConstructor(tpt: Tree, args: List[Tree]) = Apply(Select(New(tpt), nme.CONSTRUCTOR), args)
+  def ApplyConstructor(tpt: Tree, args: List[Tree]) = ApplyConstructor(tpt, args, NoPosition)
+  def ApplyConstructor(tpt: Tree, args: List[Tree], npos: Position) = {
+    val newPos = if (npos.isDefined) tpt.pos.withStart(npos.start) else NoPosition
+    Apply(Select(New(tpt).setPos(newPos), nme.CONSTRUCTOR), args)
+  }
 
   // Creates a constructor call from the constructor symbol.  This is
   // to avoid winding up with an OverloadedType for the constructor call.
@@ -1103,9 +1107,10 @@ trait Trees extends api.Trees { self: SymbolTable =>
   /** Factory method for object creation `new tpt(args_1)...(args_n)`
    *  A `New(t, as)` is expanded to: `(new t).<init>(as)`
    */
-  def New(tpt: Tree, argss: List[List[Tree]]): Tree = argss match {
-    case Nil        => ApplyConstructor(tpt, Nil)
-    case xs :: rest => rest.foldLeft(ApplyConstructor(tpt, xs): Tree)(Apply.apply)
+  def New(tpt: Tree, argss: List[List[Tree]]): Tree = New(tpt, argss, NoPosition)
+  def New(tpt: Tree, argss: List[List[Tree]], npos: Position = NoPosition): Tree = argss match {
+    case Nil        => ApplyConstructor(tpt, Nil, npos)
+    case xs :: rest => rest.foldLeft(ApplyConstructor(tpt, xs, npos): Tree)(Apply.apply)
   }
 
   /** 0-1 argument list new, based on a type.

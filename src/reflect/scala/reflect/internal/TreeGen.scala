@@ -411,7 +411,7 @@ abstract class TreeGen extends macros.TreeBuilder {
     // but in this degenerate case we need to perform postprocessing
     parents match {
       case Nil                                                         => mkNew(List(scalaAnyRefConstr), self, stats, npos, cpos)
-      case treeInfo.AppliedArgs(callee, argss) :: Nil if stats.isEmpty => atPos(upos)(New(callee, argss))
+      case treeInfo.AppliedArgs(callee, argss) :: Nil if stats.isEmpty => atPos(upos)(New(callee, argss, npos))
       case _                                                           => atPos(upos)(mkBlock(anonClass :: anonNew :: Nil))
     }
   }
