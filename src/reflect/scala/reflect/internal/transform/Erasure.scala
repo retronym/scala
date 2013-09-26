@@ -132,7 +132,12 @@ trait Erasure {
         else if (sym.isRefinementClass) apply(mergeParents(tp.parents))
         else if (sym.isDerivedValueClass) eraseDerivedValueClassRef(tref)
         else if (sym.isClass) eraseNormalClassRef(pre, sym)
-        else apply(sym.info asSeenFrom (pre, sym.owner)) // alias type or abstract type
+        else {
+          val seen = sym.info asSeenFrom (pre, sym.owner)
+          if (seen eq tp)
+            tp
+          else apply(seen)
+        } // alias type or abstract type
       case PolyType(tparams, restpe) =>
         apply(restpe)
       case ExistentialType(tparams, restpe) =>

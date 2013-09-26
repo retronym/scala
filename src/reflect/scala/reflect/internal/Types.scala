@@ -2316,13 +2316,19 @@ trait Types
     final def coevolveSym(pre1: Type): Symbol =
       if (pre eq pre1) sym else pre1 match {
         case RefinedType(_, decls1) =>
-          this match {
+          val sym1 = this match {
             case _: AliasTypeRef =>
               // Don't look at parents -- it would be an error to override alias types anyway
               // This code was moved up from `AliasTypeRef` in the fix for SI-6493.
               (decls1 lookup sym.name)
+            case _: ModuleTypeRef =>
+              pre1.member(sym.name.toTermName) // pos/t6493b.scala
             case _ =>
-              pre1.member(sym.name) // pos/t6493b.scala fails if we just look at decls
+              pre1.member(sym.name) // run/t6493, pos/t6493b.scala
+          }
+          sym1.orElse {
+            devWarning("Unable to coevolve $this against $pre1")
+            sym
           }
         case _                      => sym
       }

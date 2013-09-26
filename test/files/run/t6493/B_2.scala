@@ -1,3 +1,6 @@
 object Test {
-  def main(args: Array[String]): Unit = one.foo
+  def main(args: Array[String]): Unit = {
+    one.foo
+    one.module
+  }
 }
