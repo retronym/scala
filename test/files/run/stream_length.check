@@ -1,5 +1,0 @@
-#partest !avian
-Length: 970299
-#partest avian
-!!!TEST SKIPPED!!!
-See SI-7600 for further information.

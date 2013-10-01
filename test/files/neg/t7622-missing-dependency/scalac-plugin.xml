@@ -1,5 +1,0 @@
-<plugin>
-  <name>myplugin</name>
-  <classname>scala.test.plugins.ThePlugin</classname>
-</plugin>
-

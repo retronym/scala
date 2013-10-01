@@ -1,6 +1,0 @@
-t4515.scala:37: error: type mismatch;
- found   : _$1 where type _$1
- required: _$2
-        handler.onEvent(target, ctx.getEvent, node, ctx)
-                                    ^
-one error found

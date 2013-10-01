@@ -1,4 +1,0 @@
-
-// if we are truly companions, I can see your foo
-class Foo { private val foo = 7 }
-object Foo { def apply(f: Foo) = f.foo }

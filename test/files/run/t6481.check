@@ -1,4 +1,0 @@
-delayed init
-new foo(1, 2)
-delayed init
-new foo(b = 2, a = 1)
