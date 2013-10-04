@@ -586,23 +586,27 @@ trait Implicits {
         if (isLocal && !isScalaDoc) {
           // SI-4270 SI-5376 Always use an unattributed Ident for implicits in the local scope,
           // rather than an attributed Select, to detect shadowing.
-          Ident(info.name)
+          val boundSym = context.lookupSymbol(info.name, (sym => true)).symbol
+          val tree = gen.mkAttributedStableRef(info.pre, info.sym)
+          if (boundSym != info.sym) {
+            val reason = s"candidate implicit ${info.sym.fullLocationString} is shadowed by ${boundSym.fullLocationString}"
+            return failure(tree, reason)
+          }
+          tree
         } else {
           assert(info.pre != NoPrefix, info)
-          // SI-2405 Not info.name, which might be an aliased import
-          val implicitMemberName = info.sym.name
-          Select(gen.mkAttributedQualifier(info.pre), implicitMemberName)
+          gen.mkAttributedSelect(gen.mkAttributedQualifier(info.pre), info.sym)
         }
       }
       typingLog("considering", typeDebug.ptTree(itree))
 
       def fail(reason: String): SearchResult = failure(itree, reason)
-      def fallback = typed1(itree, EXPRmode, wildPt)
+      def fallback = itree
       try {
         val itree1 = if (!isView) fallback else pt match {
           case Function1(arg1, arg2) =>
             typed1(
-              atPos(itree.pos)(Apply(itree, List(Ident("<argument>") setType approximate(arg1)))),
+              atPos(itree.pos)(Apply(itree, List(Ident("<argument>") setType approximate(arg1)))), // TODO use preallocate name
               EXPRmode,
               approximate(arg2)
             )
@@ -622,20 +626,8 @@ trait Implicits {
 
         typingStack.showAdapt(itree, itree2, pt, context)
 
-        def hasMatchingSymbol(tree: Tree): Boolean = (tree.symbol == info.sym) || {
-          tree match {
-            case Apply(fun, _)          => hasMatchingSymbol(fun)
-            case TypeApply(fun, _)      => hasMatchingSymbol(fun)
-            case Select(pre, nme.apply) => pre.symbol == info.sym
-            case _                      => false
-          }
-        }
-
         if (context.hasErrors)
           fail("hasMatchingSymbol reported error: " + context.firstError.get.errMsg)
-        else if (isLocal && !hasMatchingSymbol(itree1))
-          fail("candidate implicit %s is shadowed by %s".format(
-            info.sym.fullLocationString, itree1.symbol.fullLocationString))
         else {
           val tvars = undetParams map freshVar
           def ptInstantiated = pt.instantiateTypeParams(undetParams, tvars)
