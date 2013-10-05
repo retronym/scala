@@ -1139,6 +1139,11 @@ private[internal] trait TypeMaps {
       case TypeVar(_, _) => mapOver(tp)
       case AnnotatedType(_,_,_) => mapOver(tp)
       case ExistentialType(_, _) => mapOver(tp)
+      // TODO JZ Is this also needed?
+      // case ConstantType(Constant(sym: TermSymbol)) =>
+      // val sym1 = adaptToNewRun(NoPrefix, sym)
+      // val tp1 = ConstantType(Constant(sym1))
+      // tp1
       case _ => tp
     }
   }
