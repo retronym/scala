@@ -2081,7 +2081,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  to the class.  As presently implemented this potentially returns class for
      *  any symbol except NoSymbol.
      */
-    def companionClass: Symbol = flatOwnerInfo.decl(name.toTypeName).orElse(this.rawowner.originalInfo.decl(name.toTypeName)).suchThat(_ isCoDefinedWith this)
+    def companionClass: Symbol = flatOwnerInfo.decl(name.toTypeName).orElse{
+      val fallBack = rawowner.originalInfo.decl(name.toTypeName)
+      fallBack.andAlso(found => devWarning(s"SI-6613 Unable to find the companion class for $this in `flatOwnerInfo`, but could find it ($found) via rawowner.originalInfo"))
+    }.suchThat(_ isCoDefinedWith this)
 
     /** For a class: the module or case class factory with the same name in the same package.
      *  For all others: NoSymbol
