@@ -660,7 +660,18 @@ trait Types
         if (trivial) this
         else {
           val m     = newAsSeenFromMap(pre.normalize, clazz)
+          val m2    = new OldAsSeenFromMap(pre.normalize, clazz)
           val tp    = m(this)
+          val tp2   = m2(this)
+          if (tp.toString != tp2.toString) {
+            sys.error(
+              s"""
+                 | $this.asSeenFrom($pre, $clazz) changed:
+                 |   WAS: $tp2
+                 |   NOW: $tp
+              """.stripMargin)
+            println((this, pre, clazz, tp, tp2))
+          }
           val tp1   = existentialAbstraction(m.capturedParams, tp)
 
           if (m.capturedSkolems.isEmpty) tp1

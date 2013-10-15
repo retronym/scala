@@ -436,6 +436,154 @@ private[internal] trait TypeMaps {
   def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap =
     new AsSeenFromMap(pre, clazz)
 
+    /** A map to compute the asSeenFrom method  */
+  class OldAsSeenFromMap(pre: Type, clazz: Symbol) extends TypeMap with KeepOnlyTypeConstraints {
+    var capturedSkolems: List[Symbol] = List()
+    var capturedParams: List[Symbol] = List()
+
+    private def skipPrefixOf(pre: Type, clazz: Symbol) = (
+      (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
+    )
+
+    override def mapOver(tree: Tree, giveup: ()=>Nothing): Tree = {
+      object annotationArgRewriter extends TypeMapTransformer {
+        private def canRewriteThis(sym: Symbol) = (
+             (sym isNonBottomSubClass clazz)
+          && (pre.widen.typeSymbol isNonBottomSubClass sym)
+          && (pre.isStable || giveup())
+        )
+        // what symbol should really be used?
+        private def newTermSym() = {
+          val p = pre.typeSymbol
+          p.owner.newValue(p.name.toTermName, p.pos) setInfo pre
+        }
+        /** Rewrite `This` trees in annotation argument trees */
+        override def transform(tree: Tree): Tree = super.transform(tree) match {
+          case This(_) if canRewriteThis(tree.symbol) => gen.mkAttributedQualifier(pre, newTermSym())
+          case tree                                   => tree
+        }
+      }
+      annotationArgRewriter.transform(tree)
+    }
+
+    def stabilize(pre: Type, clazz: Symbol): Type = {
+      capturedParams find (_.owner == clazz) match {
+        case Some(qvar) => qvar.tpe
+        case _          =>
+          val qvar = clazz freshExistential nme.SINGLETON_SUFFIX setInfo singletonBounds(pre)
+          capturedParams ::= qvar
+          qvar.tpe
+      }
+    }
+
+    def apply(tp: Type): Type =
+      tp match {
+        case ThisType(sym) =>
+          def toPrefix(pre: Type, clazz: Symbol): Type =
+            if (skipPrefixOf(pre, clazz)) tp
+            else if ((sym isNonBottomSubClass clazz) &&
+                     (pre.widen.typeSymbol isNonBottomSubClass sym)) {
+              val pre1 = pre match {
+                case SuperType(thistp, _) => thistp
+                case _ => pre
+              }
+              if (!(pre1.isStable ||
+                    pre1.typeSymbol.isPackageClass ||
+                    pre1.typeSymbol.isModuleClass && pre1.typeSymbol.isStatic)) {
+                stabilize(pre1, sym)
+              } else {
+                pre1
+              }
+            } else {
+              toPrefix(pre.baseType(clazz).prefix, clazz.owner)
+            }
+          toPrefix(pre, clazz)
+        case SingleType(pre, sym) =>
+          if (sym.isPackageClass) tp // short path
+          else {
+            val pre1 = this(pre)
+            if (pre1 eq pre) tp
+            else if (pre1.isStable) singleType(pre1, sym)
+            else pre1.memberType(sym).resultType //todo: this should be rolled into existential abstraction
+          }
+        // AM: Martin, is this description accurate?
+        // walk the owner chain of `clazz` (the original argument to asSeenFrom) until we find the type param's owner (while rewriting pre as we crawl up the owner chain)
+        // once we're at the owner, extract the information that pre encodes about the type param,
+        // by minimally subsuming pre to the type instance of the class that owns the type param,
+        // the type we're looking for is the type instance's type argument at the position corresponding to the type parameter
+        // optimisation: skip this type parameter if it's not owned by a class, as those params are not influenced by the prefix through which they are seen
+        // (concretely: type params of anonymous type functions, which currently can only arise from normalising type aliases, are owned by the type alias of which they are the eta-expansion)
+        // (skolems also aren't affected: they are ruled out by the isTypeParameter check)
+        case TypeRef(prefix, sym, args) if (sym.isTypeParameter && sym.owner.isClass) =>
+          def toInstance(pre: Type, clazz: Symbol): Type =
+            if (skipPrefixOf(pre, clazz)) mapOver(tp)
+            //@M! see test pos/tcpoly_return_overriding.scala why mapOver is necessary
+            else {
+              def throwError = abort("" + tp + sym.locationString + " cannot be instantiated from " + pre.widen)
+
+              val symclazz = sym.owner
+              if (symclazz == clazz && !pre.widen.isInstanceOf[TypeVar] && (pre.widen.typeSymbol isNonBottomSubClass symclazz)) {
+                // have to deconst because it may be a Class[T].
+                pre.baseType(symclazz).deconst match {
+                  case TypeRef(_, basesym, baseargs) =>
+
+                   def instParam(ps: List[Symbol], as: List[Type]): Type =
+                      if (ps.isEmpty) {
+                        if (forInteractive) {
+                          val saved = settings.uniqid.value
+                          try {
+                            settings.uniqid.value = true
+                            println("*** stale type parameter: " + tp + sym.locationString + " cannot be instantiated from " + pre.widen)
+                            println("*** confused with params: " + sym + " in " + sym.owner + " not in " + ps + " of " + basesym)
+                            println("*** stacktrace = ")
+                            new Error().printStackTrace()
+                          } finally settings.uniqid.value = saved
+                          instParamRelaxed(basesym.typeParams, baseargs)
+                        } else throwError
+                      } else if (sym eq ps.head)
+                        // @M! don't just replace the whole thing, might be followed by type application
+                        appliedType(as.head, args mapConserve (this)) // @M: was as.head
+                      else instParam(ps.tail, as.tail)
+
+                    /** Relaxed version of instParams which matches on names not symbols.
+                     *  This is a last fallback in interactive mode because races in calls
+                     *  from the IDE to the compiler may in rare cases lead to symbols referring
+                     *  to type parameters that are no longer current.
+                     */
+                    def instParamRelaxed(ps: List[Symbol], as: List[Type]): Type =
+                      if (ps.isEmpty) throwError
+                      else if (sym.name == ps.head.name)
+                        // @M! don't just replace the whole thing, might be followed by type application
+                        appliedType(as.head, args mapConserve (this)) // @M: was as.head
+                      else instParamRelaxed(ps.tail, as.tail)
+
+                    //Console.println("instantiating " + sym + " from " + basesym + " with " + basesym.typeParams + " and " + baseargs+", pre = "+pre+", symclazz = "+symclazz);//DEBUG
+                    if (sameLength(basesym.typeParams, baseargs))
+                      instParam(basesym.typeParams, baseargs)
+                    else
+                      if (symclazz.tpe.parents exists typeIsErroneous)
+                        ErrorType // don't be to overzealous with throwing exceptions, see #2641
+                      else
+                        throw new Error(
+                          "something is wrong (wrong class file?): "+basesym+
+                          " with type parameters "+
+                          basesym.typeParams.map(_.name).mkString("[",",","]")+
+                          " gets applied to arguments "+baseargs.mkString("[",",","]")+", phase = "+phase)
+                  case ExistentialType(tparams, qtpe) =>
+                    capturedSkolems = capturedSkolems union tparams
+                    toInstance(qtpe, clazz)
+                  case t =>
+                    throwError
+                }
+              } else toInstance(pre.baseType(clazz).prefix, clazz.owner)
+            }
+          toInstance(pre, clazz)
+        case _ =>
+          mapOver(tp)
+      }
+  }
+
+
   /** A map to compute the asSeenFrom method.
     */
   class AsSeenFromMap(seenFromPrefix: Type, seenFromClass: Symbol) extends TypeMap with KeepOnlyTypeConstraints {
