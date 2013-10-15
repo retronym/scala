@@ -593,10 +593,10 @@ private[internal] trait TypeMaps {
     // Since pre may be something like ThisType(A) where trait A { self: B => },
     // we have to test the typeSymbol of the widened type, not pre.typeSymbol, or
     // B will not be considered.
-    private def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = pre.widen match {
-      case _: TypeVar => false
-      case wide       => (clazz == candidate) && (wide.typeSymbol isSubClass clazz)
-    }
+    private def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = (clazz == candidate) && (pre.widen match {
+      case tv: TypeVar => tv.constr.hiBounds.exists(_.typeSymbol isSubClass clazz)
+      case wide        => (wide.typeSymbol isSubClass clazz)
+    })
 
     // Whether the annotation tree currently being mapped over has had a This(_) node rewritten.
     private[this] var wroteAnnotation = false
