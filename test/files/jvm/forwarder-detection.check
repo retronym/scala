@@ -1,0 +1,44 @@
+========================================
+               Forwarder | Is Forwarder?
+========================================
+                  <init> | -
+                       t | x
+                       u | x
+========================================
+              Forwarder$ | Is Forwarder?
+========================================
+                <clinit> | -
+                  <init> | -
+                       u | x
+========================================
+              ValueClass | Is Forwarder?
+========================================
+                  <init> | -
+                       a | -
+                  equals | x
+        equals$extension | x
+                hashCode | x
+      hashCode$extension | x
+                      vc | x
+            vc$extension | x
+========================================
+             ValueClass$ | Is Forwarder?
+========================================
+                <clinit> | -
+                  <init> | -
+        equals$extension | -
+      hashCode$extension | -
+            vc$extension | -
+========================================
+           ImplicitClass | Is Forwarder?
+========================================
+                  <init> | -
+                       C | x
+                       D | x
+                       E | x
+========================================
+          ImplicitClass$ | Is Forwarder?
+========================================
+                <clinit> | -
+                  <init> | -
+                       E | -
