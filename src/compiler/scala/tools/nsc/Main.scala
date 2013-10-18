@@ -11,10 +11,19 @@ import scala.language.postfixOps
  *  language Scala.
  */
 class MainClass extends Driver with EvalLoop {
-  def resident(compiler: Global): Unit = loop { line =>
-    val command = new CompilerCommand(line split "\\s+" toList, new Settings(scalacError))
-    compiler.reporter.reset()
-    new compiler.Run() compile command.files
+  def resident(compiler: Global): Unit = {
+    var currentCompiler = compiler
+    loop { line =>
+      if (line.trim() == ":reset") {
+        println("Creating a new compiler instance.")
+        currentCompiler = newCompiler()
+      } else {
+        val compiler = currentCompiler
+        val command = new CompilerCommand(line split "\\s+" toList, new Settings(scalacError))
+        compiler.reporter.reset()
+        new compiler.Run() compile command.files
+      }
+    }
   }
 
   override def newCompiler(): Global = Global(settings, reporter)
