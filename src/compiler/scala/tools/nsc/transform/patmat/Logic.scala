@@ -86,7 +86,7 @@ trait Logic extends Debugging  {
       def mayBeNull: Boolean
 
       // compute the domain and return it (call registerNull first!)
-      def domainSyms: Option[Set[Sym]]
+      def domainSyms: Option[collection.Set[Sym]]
 
       // the symbol for this variable being equal to its statically known type
       // (only available if registerEquality has been called for that type before)
@@ -142,12 +142,12 @@ trait Logic extends Debugging  {
       def applyConst(x: Const): Unit = {}
     }
 
-    def gatherVariables(p: Prop): Set[Var] = {
-      val vars = new mutable.HashSet[Var]()
+    def gatherVariables(p: Prop): collection.Set[Var] = {
+      val vars = new mutable.LinkedHashSet[Var]()
       (new PropTraverser {
         override def applyVar(v: Var) = vars += v
       })(p)
-      vars.toSet
+      vars
     }
 
     trait PropMap {
@@ -192,7 +192,7 @@ trait Logic extends Debugging  {
     def removeVarEq(props: List[Prop], modelNull: Boolean = false): (Formula, List[Formula]) = {
       val start = if (Statistics.canEnable) Statistics.startTimer(patmatAnaVarEq) else null
 
-      val vars = new scala.collection.mutable.HashSet[Var]
+      val vars = new scala.collection.mutable.LinkedHashSet[Var]
 
       object gatherEqualities extends PropTraverser {
         override def apply(p: Prop) = p match {
@@ -279,7 +279,7 @@ trait Logic extends Debugging  {
     def eqFreePropToSolvable(p: Prop): Formula
     def cnfString(f: Formula): String
 
-    type Model = Map[Sym, Boolean]
+    type Model = collection.Map[Sym, Boolean]
     val EmptyModel: Model
     val NoModel: Model
 
@@ -315,7 +315,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       private[this] def observed() = {} //canModify = Some(Thread.currentThread.getStackTrace)
 
       // don't access until all potential equalities have been registered using registerEquality
-      private[this] val symForEqualsTo = new mutable.HashMap[Const, Sym]
+      private[this] val symForEqualsTo = new mutable.LinkedHashMap[Const, Sym]
 
       // when looking at the domain, we only care about types we can check at run time
       val staticTpCheckable: Type = checkableType(staticTp)
@@ -329,9 +329,9 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       // we enumerate the subtypes of the full type, as that allows us to filter out more types statically,
       // once we go to run-time checks (on Const's), convert them to checkable types
       // TODO: there seems to be bug for singleton domains (variable does not show up in model)
-      lazy val domain: Option[Set[Const]] = {
+      lazy val domain: Option[collection.Set[Const]] = {
         val subConsts = enumerateSubtypes(staticTp).map{ tps =>
-          tps.toSet[Type].map{ tp =>
+          mutable.LinkedHashSet(tps: _*).map { tp =>
             val domainC = TypeConst(tp)
             registerEquality(domainC)
             domainC
@@ -474,7 +474,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       }
 
       // accessing after calling registerNull will result in inconsistencies
-      lazy val domainSyms: Option[Set[Sym]] = domain map { _ map symForEqualsTo }
+      lazy val domainSyms: Option[collection.Set[Sym]] = domain map { _ map symForEqualsTo }
 
       lazy val symForStaticTp: Option[Sym]  = symForEqualsTo.get(TypeConst(staticTpCheckable))
 
@@ -509,7 +509,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       private var _nextValueId = 0
       def nextValueId = {_nextValueId += 1; _nextValueId}
 
-      private val uniques = new mutable.HashMap[Type, Const]
+      private val uniques = new mutable.LinkedHashMap[Type, Const]
       private[TreesAndTypesDomain] def unique(tp: Type, mkFresh: => Const): Const =
         uniques.get(tp).getOrElse(
           uniques.find {case (oldTp, oldC) => oldTp =:= tp} match {
@@ -523,7 +523,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
               fresh
           })
 
-      private val trees = mutable.HashSet.empty[Tree]
+      private val trees = mutable.LinkedHashSet.empty[Tree]
 
       // hashconsing trees (modulo value-equality)
       private[TreesAndTypesDomain] def uniqueTpForTree(t: Tree): Type =

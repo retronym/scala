@@ -154,9 +154,9 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
     class TreeMakersToProps(val root: Symbol) {
       prepareNewAnalysis() // reset hash consing for Var and Const
 
-      private[this] val uniqueEqualityProps = new mutable.HashMap[(Tree, Tree), Eq]
-      private[this] val uniqueNonNullProps  = new mutable.HashMap[Tree, Not]
-      private[this] val uniqueTypeProps     = new mutable.HashMap[(Tree, Type), Eq]
+      private[this] val uniqueEqualityProps = new mutable.LinkedHashMap[(Tree, Tree), Eq]
+      private[this] val uniqueNonNullProps  = new mutable.LinkedHashMap[Tree, Not]
+      private[this] val uniqueTypeProps     = new mutable.LinkedHashMap[(Tree, Type), Eq]
 
       def uniqueEqualityProp(testedPath: Tree, rhs: Tree): Prop =
         uniqueEqualityProps getOrElseUpdate((testedPath, rhs), Eq(Var(testedPath), ValueConst(rhs)))
@@ -169,8 +169,8 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
         uniqueTypeProps getOrElseUpdate((testedPath, pt), Eq(Var(testedPath), TypeConst(checkableType(pt))))
 
       // a variable in this set should never be replaced by a tree that "does not consist of a selection on a variable in this set" (intuitively)
-      private val pointsToBound = mutable.HashSet(root)
-      private val trees         = mutable.HashSet.empty[Tree]
+      private val pointsToBound = mutable.LinkedHashSet(root)
+      private val trees         = mutable.LinkedHashSet.empty[Tree]
 
       // the substitution that renames variables to variables in pointsToBound
       private var normalize: Substitution  = EmptySubstitution
@@ -459,7 +459,7 @@ trait MatchAnalysis extends MatchApproximation {
 
         try {
           // find the models (under which the match fails)
-          val matchFailModels = findAllModelsFor(propToSolvable(matchFails))
+          val matchFailModels: List[Model] = findAllModelsFor(propToSolvable(matchFails))
 
           val scrutVar = Var(prevBinderTree)
           val counterExamples = matchFailModels.map(modelToCounterExample(scrutVar))
@@ -538,7 +538,7 @@ trait MatchAnalysis extends MatchApproximation {
     case object NoExample extends CounterExample { override def toString = "??" }
 
     def modelToVarAssignment(model: Model): Map[Var, (Seq[Const], Seq[Const])] =
-      model.toSeq.groupBy{f => f match {case (sym, value) => sym.variable} }.mapValues{ xs =>
+      model.toSeq.sortBy(_._1.toString).groupBy{f => f match {case (sym, value) => sym.variable} }.mapValues{ xs =>
         val (trues, falses) = xs.partition(_._2)
         (trues map (_._1.const), falses map (_._1.const))
         // should never be more than one value in trues...
@@ -582,7 +582,7 @@ trait MatchAnalysis extends MatchApproximation {
           case _ => varAssignment.find{case (v, a) => chop(v.path) == path}.map(_._1)
         }
 
-        private val uniques = new mutable.HashMap[Var, VariableAssignment]
+        private val uniques = new mutable.LinkedHashMap[Var, VariableAssignment]
         private def unique(variable: Var): VariableAssignment =
           uniques.getOrElseUpdate(variable, {
             val (eqTo, neqTo) = varAssignment.getOrElse(variable, (Nil, Nil)) // TODO
@@ -609,7 +609,7 @@ trait MatchAnalysis extends MatchApproximation {
 
       // node in the tree that describes how to construct a counter-example
       case class VariableAssignment(variable: Var, equalTo: List[Const], notEqualTo: List[Const]) {
-        private val fields: mutable.Map[Symbol, VariableAssignment] = mutable.HashMap.empty
+        private val fields: mutable.Map[Symbol, VariableAssignment] = mutable.LinkedHashMap.empty
         // need to prune since the model now incorporates all super types of a constant (needed for reachability)
         private lazy val uniqueEqualTo = equalTo filterNot (subsumed => equalTo.exists(better => (better ne subsumed) && instanceOfTpImplies(better.tp, subsumed.tp)))
         private lazy val prunedEqualTo = uniqueEqualTo filterNot (subsumed => variable.staticTpCheckable <:< subsumed.tp)

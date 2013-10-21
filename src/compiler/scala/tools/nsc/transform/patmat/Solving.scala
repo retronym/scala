@@ -26,9 +26,9 @@ trait Solving extends Logic {
     type Formula = FormulaBuilder
     def formula(c: Clause*): Formula = ArrayBuffer(c: _*)
 
-    type Clause  = Set[Lit]
+    type Clause  = collection.Set[Lit]
     // a clause is a disjunction of distinct literals
-    def clause(l: Lit*): Clause = l.toSet
+    def clause(l: Lit*): Clause = mutable.LinkedHashSet(l: _*)
 
     type Lit
     def Lit(sym: Sym, pos: Boolean = true): Lit
@@ -139,7 +139,7 @@ trait Solving extends Logic {
 
     // returns all solutions, if any (TODO: better infinite recursion backstop -- detect fixpoint??)
     def findAllModelsFor(f: Formula): List[Model] = {
-      val vars: Set[Sym] = f.flatMap(_ collect {case l: Lit => l.sym}).toSet
+      val vars: collection.Set[Sym] = mutable.LinkedHashSet(f.flatMap(_ collect {case l: Lit => l.sym}): _*)
       // debug.patmat("vars "+ vars)
       // the negation of a model -(S1=True/False /\ ... /\ SN=True/False) = clause(S1=False/True, ...., SN=False/True)
       def negateModel(m: Model) = clause(m.toSeq.map{ case (sym, pos) => Lit(sym, !pos) } : _*)
@@ -151,7 +151,7 @@ trait Solving extends Logic {
           val model = findModelFor(f)
           // if we found a solution, conjunct the formula with the model's negation and recurse
           if (model ne NoModel) {
-            val unassigned = (vars -- model.keySet).toList
+            val unassigned: List[Sym] = (vars -- model.keySet).toList.sortBy(_.toString)
             debug.patmat("unassigned "+ unassigned +" in "+ model)
             def force(lit: Lit) = {
               val model = withLit(findModelFor(dropUnit(f, lit)), lit)
@@ -231,7 +231,7 @@ trait Solving extends Logic {
 
         if (Statistics.canEnable) Statistics.stopTimer(patmatAnaDPLL, start)
 
-        satisfiableWithModel
+        if (satisfiableWithModel != NoModel) mutable.LinkedHashMap(satisfiableWithModel.toSeq.sortBy(_._1.toString): _*) else NoModel
     }
   }
 }

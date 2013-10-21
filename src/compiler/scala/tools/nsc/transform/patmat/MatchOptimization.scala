@@ -38,8 +38,8 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
       val testss = approximateMatchConservative(prevBinder, cases)
 
       // interpret:
-      val dependencies = new mutable.LinkedHashMap[Test, Set[Prop]]
-      val tested = new mutable.HashSet[Prop]
+      val dependencies = new mutable.LinkedHashMap[Test, collection.Set[Prop]]
+      val tested = new mutable.LinkedHashSet[Prop]
 
       // TODO: use SAT solver instead of hashconsing props and approximating implication by subset/equality
       def storeDependencies(test: Test) = {
@@ -71,7 +71,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
                 priorTest registerReuseBy test
             }
 
-            dependencies(test) = tested.toSet // copies
+            dependencies(test) = mutable.LinkedHashSet(tested.toSeq: _*) // copies
           }
           true
         }
@@ -88,7 +88,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
       // then, collapse these contiguous sequences of reusing tests
       // store the result of the final test and the intermediate results in hoisted mutable variables (TODO: optimize: don't store intermediate results that aren't used)
       // replace each reference to a variable originally bound by a collapsed test by a reference to the hoisted variable
-      val reused = new mutable.HashMap[TreeMaker, ReusedCondTreeMaker]
+      val reused = new mutable.LinkedHashMap[TreeMaker, ReusedCondTreeMaker]
       var okToCall = false
       val reusedOrOrig = (tm: TreeMaker) => {assert(okToCall); reused.getOrElse(tm, tm)}
 
@@ -98,7 +98,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchAnalysis {
       val collapsed = testss map { tests =>
         // map tests to the equivalent list of treemakers, replacing shared prefixes by a reusing treemaker
         // if there's no sharing, simply map to the tree makers corresponding to the tests
-        var currDeps = Set[Prop]()
+        var currDeps = collection.Set[Prop]()
         val (sharedPrefix, suffix) = tests span { test =>
           (test.prop == True) || (for(
               reusedTest <- test.reuses;

@@ -163,7 +163,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         if (!emitVars) in
         else {
           // binders in `subPatBindersStored` that are referenced by tree `in`
-          val usedBinders = new mutable.HashSet[Symbol]()
+          val usedBinders = new mutable.LinkedHashSet[Symbol]()
           // all potentially stored subpat binders
           val potentiallyStoredBinders = stored.unzip._1.toSet
           // compute intersection of all symbols in the tree `in` and all potentially stored subpat binders
