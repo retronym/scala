@@ -68,7 +68,7 @@ trait Extractors {
       val universeAlias = ValDef(NoMods, nme.UNIVERSE_SHORT, Ident(tparamu), Select(Ident(nme.MIRROR_UNTYPED), nme.universe))
       val mirrorAlias = ValDef(NoMods, nme.MIRROR_SHORT, Select(Ident(nme.UNIVERSE_SHORT), tpnme.Mirror), TypeApply(Select(Ident(nme.MIRROR_UNTYPED), nme.asInstanceOf_), List(Select(Ident(nme.UNIVERSE_SHORT), tpnme.Mirror))))
       val trimmedSymtab = if (hasReifier) gc(symtab) else symtab
-      Block(universeAlias :: mirrorAlias :: trimmedSymtab.encode, rtree)
+      Block(universeAlias, Apply(Select(Ident(nme.UNIVERSE_SHORT), TermName("gilSynchronized")), Block(universeAlias :: mirrorAlias :: trimmedSymtab.encode, rtree) :: Nil))
     }
     val tpec = ClassDef(
       Modifiers(FINAL),

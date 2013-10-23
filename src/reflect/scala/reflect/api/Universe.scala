@@ -97,4 +97,7 @@ abstract class Universe extends Symbols
   // implementation is hardwired to `scala.reflect.reify.Taggers`
   // using the mechanism implemented in `scala.tools.reflect.FastTrack`
   def reify[T](expr: T): Expr[T] = macro ???
+
+   // Internal use only
+   def gilSynchronized[T](body: => T): T = body
 }

@@ -1,7 +1,7 @@
 package scala.reflect
 package runtime
 
-private[reflect] trait Gil {
+trait Gil {
   self: SymbolTable =>
 
   // fixme... please...
@@ -11,7 +11,7 @@ private[reflect] trait Gil {
   // 3) remove the necessity in global state for isSubType
   private lazy val gil = new java.util.concurrent.locks.ReentrantLock
 
-  @inline final def gilSynchronized[T](body: => T): T = {
+  @inline override final def gilSynchronized[T](body: => T): T = {
     if (isCompilerUniverse) body
     else {
       try {
