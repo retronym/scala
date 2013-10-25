@@ -260,8 +260,10 @@ trait Erasure {
    *  are then later converted to the underlying parameter type in phase posterasure.
    */
   object specialScalaErasure extends ScalaErasureMap {
-    override def eraseDerivedValueClassRef(tref: TypeRef): Type =
-      ErasedValueType(tref)
+    override def eraseDerivedValueClassRef(tref: TypeRef): Type = {
+      val TypeRef(pre, sym, args) = tref
+      ErasedValueType(TypeRef(pre, sym, args map this).asInstanceOf[TypeRef])
+    }
   }
 
   object javaErasure extends JavaErasureMap
