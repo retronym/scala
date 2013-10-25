@@ -1,13 +1,7 @@
-t6260.scala:3: error: bridge generated for member method apply: (bx: Box[X])Box[Y] in <$anon: Box[X] => Box[Y]>
-which overrides method apply: (v1: T1)R in trait Function1
+t6260.scala:4: error: bridge generated for member method f: ()Option[A] in class Bar1
+which overrides method f: ()A in class Foo1
 clashes with definition of the member itself;
-both have erased type (v1: Object)Object
-    ((bx: Box[X]) => new Box(f(bx.x)))(this)
-                  ^
-t6260.scala:8: error: bridge generated for member method apply: (bx: Box[X])Box[Y] in <$anon: Box[X] => Box[Y]>
-which overrides method apply: (v1: T1)R in trait Function1
-clashes with definition of the member itself;
-both have erased type (v1: Object)Object
-    ((bx: Box[X]) => new Box(f(bx.x)))(self)
-                  ^
-two errors found
+both have erased type ()Object
+         class Bar1[A] extends Foo1[Option[A]] { def f(): Option[A] = ??? }
+                                                     ^
+one error found

@@ -1,17 +1,4 @@
-class Box[X](val x: X) extends AnyVal {
-  def map[Y](f: X => Y): Box[Y] =
-    ((bx: Box[X]) => new Box(f(bx.x)))(this)
-}
+final class Option[+A](val value: A) extends AnyVal
 
-object Test {
-  def map2[X, Y](self: Box[X], f: X => Y): Box[Y] =
-    ((bx: Box[X]) => new Box(f(bx.x)))(self)
-
-  def main(args: Array[String]) {
-    val f = (x: Int) => x + 1
-    val g = (x: String) => x + x
-
-    map2(new Box(42), f)
-    new Box("abc") map g
-  }
-}
+abstract class Foo1[A]                         { def f(): A }
+         class Bar1[A] extends Foo1[Option[A]] { def f(): Option[A] = ??? }

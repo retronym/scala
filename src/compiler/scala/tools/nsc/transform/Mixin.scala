@@ -163,42 +163,35 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     clazz.info.decls enter member setFlag MIXEDIN
   }
 
-  def cloneAndAddMember(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol =
-    addMember(clazz, cloneBeforeErasure(mixinClass, mixinMember, clazz))
-
   private val bridgeTo = perRunCaches.newMap[Symbol, SymbolPair]()
 
-  def cloneBeforeErasure(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol = {
-    val newSym = enteringErasure {
-      // since we used `mixinMember` from the interface that represents the trait that's
-      // being mixed in, have to instantiate the interface type params (that may occur in mixinMember's
-      // info) as they are seen from the class.  We can't use the member that we get from the
-      // implementation class, as it's a clone that was made after erasure, and thus it does not
-      // know its info at the beginning of erasure anymore.
+  def cloneAndAddMember(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol = enteringErasure {
+    // since we used `mixinMember` from the interface that represents the trait that's
+    // being mixed in, have to instantiate the interface type params (that may occur in mixinMember's
+    // info) as they are seen from the class.  We can't use the member that we get from the
+    // implementation class, as it's a clone that was made after erasure, and thus it does not
+    // know its info at the beginning of erasure anymore.
       val sym = mixinMember cloneSymbol clazz
 
-      def forwarderInfo(forwardee: Type): Type =
-        (clazz.thisType baseType mixinClass) memberInfo mixinMember
-      // Optimize: no need if mixinClass has no typeparams.
-      val result =
-        if (mixinClass.typeParams.isEmpty) sym
-        else sym modifyInfo (info => forwarderInfo(info))
+    // Optimize: no need if mixinClass has no typeparams.
+    if (mixinClass.typeParams.nonEmpty)
+      sym setInfo ((clazz.thisType baseType mixinClass) memberInfo mixinMember)
 
-      // Add a bridge, if needed.
-      val root = sym.owner
-      val pair = new SymbolPair(root, sym, mixinMember)
-      if (erasure.isBridgeNeeded(pair)) {
-        log("bridge needed for: " + pair)
-        val bridgeSym = erasure.makeBridgeSymbol(root, pair)
-        enteringMixin {
-          addMember(clazz, bridgeSym)
-        }
-        bridgeTo(bridgeSym) = pair
-      }
+    enteringMixin(addMember(clazz, sym))
+    addBridge(sym, mixinMember, clazz)
+    sym
+  }
 
-      result
+  private def addBridge(sym: Symbol, mixinMember: Symbol, clazz: Symbol) {
+    // Add a bridge, if needed.
+    val root = sym.owner
+    val pair = new SymbolPair(root, sym, mixinMember)
+    if (erasure.isBridgeNeeded(pair)) {
+      log("bridge needed for: " + pair)
+      val bridgeSym = erasure.makeBridgeSymbol(root, pair)
+      enteringMixin(addMember(clazz, bridgeSym))
+      bridgeTo(bridgeSym) = pair
     }
-    newSym
   }
 
   /** Add getters and setters for all non-module fields of an implementation
