@@ -324,6 +324,13 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       e
     }
 
+    def exists(name: Name)(f: Symbol => Boolean): Boolean = {
+      var e = lookupEntry(name)
+      while ((e ne null) && !(f(e.sym)))
+        e = lookupNextEntry(e)
+      (e ne null)
+    }
+
     /** TODO - we can test this more efficiently than checking isSubScope
      *  in both directions. However the size test might be enough to quickly
      *  rule out most failures.

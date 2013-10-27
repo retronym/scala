@@ -771,6 +771,7 @@ trait Namers extends MethodSynthesis {
                    else NullaryMethodType(typeSig(tree))
           pluginsTypeSigAccessor(tp, typer, tree, sym)
         }
+        sym.setAnnotations(tree.symbol.annotations)
       }
     }
 

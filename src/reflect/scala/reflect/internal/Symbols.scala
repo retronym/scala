@@ -1695,6 +1695,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       this
     }
 
+//    val origin0 = Thread.currentThread.getStackTrace.take(50)
+
     def withAnnotations(annots: List[AnnotationInfo]): this.type =
       setAnnotations(annots ::: annotations)
 

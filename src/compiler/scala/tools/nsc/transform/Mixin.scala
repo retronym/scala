@@ -186,7 +186,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     // Add a bridge, if needed.
     val root = sym.owner
     val pair = new SymbolPair(root, sym, mixinMember)
-    if (erasure.isBridgeNeeded(pair)) {
+    if (erasure.isBridgeNeeded(root.info.decls, pair)) {
       log("bridge needed for: " + pair)
       val bridgeSym = erasure.makeBridgeSymbol(root, pair)
       enteringMixin(addMember(clazz, bridgeSym))

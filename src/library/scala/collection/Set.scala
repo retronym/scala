@@ -44,4 +44,6 @@ object Set extends SetFactory[Set] {
 }
 
 /** Explicit instantiation of the `Set` trait to reduce class file size in subclasses. */
-private[scala] abstract class AbstractSet[A] extends AbstractIterable[A] with Set[A]
+private[scala] abstract class AbstractSet[A] extends AbstractIterable[A] with Set[A] {
+empty
+}

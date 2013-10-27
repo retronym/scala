@@ -329,14 +329,15 @@ trait Erasure {
    *   - For Array[T].<init>    : {scala#Int)Array[T]
    *   - For a type parameter   : A type bounds type consisting of the erasures of its bounds.
    */
-  def transformInfo(sym: Symbol, tp: Type): Type = {
+  def transformInfo(sym: Symbol, tp: Type): Type = logResultIf(s"transformInfo($sym, $tp)", (_: Type) => sym.name == TypeName("I")){
     if (sym == Object_asInstanceOf)
       sym.info
     else if (sym == Object_isInstanceOf || sym == ArrayClass)
       PolyType(sym.info.typeParams, specialErasure(sym)(sym.info.resultType))
-    else if (sym.isAbstractType)
+    else if (sym.isAbstractType) {
+      println(s"transformed info of $sym to `>: ? <: ?`")
       TypeBounds(WildcardType, WildcardType)
-    else if (sym.isTerm && sym.owner == ArrayClass) {
+    } else if (sym.isTerm && sym.owner == ArrayClass) {
       if (sym.isClassConstructor)
         tp match {
           case MethodType(params, TypeRef(pre, sym1, args)) =>

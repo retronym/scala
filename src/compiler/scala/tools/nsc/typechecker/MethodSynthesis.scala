@@ -180,8 +180,9 @@ trait MethodSynthesis {
         // If we don't save the annotations, they seem to wander off.
         val annotations = stat.symbol.initialize.annotations
         val trees = (
-          allValDefDerived(vd)
-                map (acc => atPos(vd.pos.focus)(acc derive annotations))
+          allValDefDerived(vd) map (acc =>
+            atPos(vd.pos.focus)(acc derive annotations)
+          )
           filterNot (_ eq EmptyTree)
         )
         // Verify each annotation landed safely somewhere, else warn.

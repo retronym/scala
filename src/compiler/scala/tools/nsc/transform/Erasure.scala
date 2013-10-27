@@ -338,8 +338,6 @@ abstract class Erasure extends AddInterfaces
       case PolyType(_, _)                  => mapOver(tp)
       case MethodType(_, _)                => mapOver(tp)     // nullarymethod was eliminated during uncurry
       case ConstantType(Constant(_: Type)) => ClassClass.tpe  // all classOfs erase to Class
-//      case ErasedValueType(TypeRef(pre, sym, args)) =>
-//        ErasedValueType(TypeRef(mapOver(pre), sym, args map scalaErasure).asInstanceOf[TypeRef])
       case _                               => tp.deconst
     }
   }
@@ -361,13 +359,14 @@ abstract class Erasure extends AddInterfaces
     }
   }
 
+  val bridgeTarget = perRunCaches.newMap[Symbol, Symbol]()
+
   class ComputeBridges(unit: CompilationUnit, root: Symbol) {
     assert(phase == currentRun.erasurePhase, phase)
 
     var toBeRemoved  = immutable.Set[Symbol]()
     val site         = root.thisType
     val bridgesScope = newScope
-    val bridgeTarget = mutable.HashMap[Symbol, Symbol]()
     var bridges      = List[Tree]()
 
     val opc = enteringExplicitOuter {
@@ -446,12 +445,7 @@ abstract class Erasure extends AddInterfaces
       val other  = high
       val otpe   = highErased
 
-      val bridgeNeeded = isBridgeNeeded(pair) && {
-        var e = bridgesScope.lookupEntry(member.name)
-        while ((e ne null) && !((e.sym.tpe =:= otpe) && (bridgeTarget(e.sym) == member)))
-          e = bridgesScope.lookupNextEntry(e)
-        (e eq null)
-      }
+      val bridgeNeeded = isBridgeNeeded(bridgesScope, pair)
 
       if (!bridgeNeeded)
         return
@@ -477,12 +471,36 @@ abstract class Erasure extends AddInterfaces
       Erasure.this.makeBridgeDefDef(root, bridge, pair)
   }
 
-  final def isBridgeNeeded(pair: SymbolPair): Boolean = {
+  final def isBridgeNeeded(bridgesScope: Scope, pair: SymbolPair): Boolean = {
     val member = pair.low
     val other = pair.high
-    ! exitingErasure(
+    val erasureDiffers = ! exitingErasure(
        member.isMacro || other.tpe =:= member.tpe || deconstMap(other.tpe) =:= deconstMap(member.tpe)
     )
+    val bridgeRedundantAfterMixin = exitingErasure{
+      def check(a: Symbol, b: Symbol) = {
+        val erasedSignatureOfMixin = specialScalaErasure(enteringErasure(pair.rootType baseType a.owner memberInfo a))
+        if (erasedSignatureOfMixin.exists(_ == WildcardType))
+          println(sm"""
+          |0. ${a.owner} ${b.owner}
+          |1. enteringErasure(pair.rootType baseType a.owner) = ${enteringErasure(pair.rootType baseType a.owner)}
+          |2. pair.rootType baseType a.owner memberInfo a = ${enteringErasure(pair.rootType baseType a.owner memberInfo a)}
+          |3. scalaErasure($$3) = ${specialScalaErasure(enteringErasure(pair.rootType baseType a.owner memberInfo a))}
+          |""")
+        a.owner.isTrait && !a.isDeferred && erasedSignatureOfMixin =:= b.tpe
+      }
+      val a = check(member, other)
+      val b = check(other, member)
+      (a || b) && member.owner != pair.base
+    }
+    def alreadyBridged = bridgesScope.exists(member.name)(sym =>
+         (sym.tpe =:= pair.highErased)
+      && (bridgeTarget(sym) == member)
+    )
+    if (bridgeRedundantAfterMixin)
+      ""
+    erasureDiffers && !alreadyBridged && !bridgeRedundantAfterMixin
+
   }
 
   final def makeBridgeSymbol(root: Symbol, pair: SymbolPair): Symbol = {
