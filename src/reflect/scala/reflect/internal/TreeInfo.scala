@@ -79,16 +79,20 @@ abstract class TreeInfo {
    * Path ::= StableId | [id ‘.’] this
    *
    */
-  def isPath(tree: Tree, allowVolatile: Boolean): Boolean =
-    tree match {
-      // Super is not technically a path.
-      // However, syntactically, it can only occur nested in a Select.
-      // This gives a nicer definition of isStableIdentifier that's equivalent to the spec's.
-      // must consider Literal(_) a path for typedSingletonTypeTree
-      case EmptyTree | Literal(_) => true
-      case This(_) | Super(_, _)  => symOk(tree.symbol)
-      case _                      => isStableIdentifier(tree, allowVolatile)
+  final def isPath(tree: Tree, allowVolatile: Boolean): Boolean = {
+    // Super is not technically a path.
+    // However, syntactically, it can only occur nested in a Select.
+    // This gives a nicer definition of isStableIdentifier that's equivalent to the spec's.
+    // must consider Literal(_) a path for typedSingletonTypeTree
+
+    if (tree eq EmptyTree) true
+    else tree match {
+      case _: Literal => true
+      case _: This    => symOk(tree.symbol)
+      case _: Super   => symOk(tree.symbol)
+      case _          => isStableIdentifier(tree, allowVolatile)
     }
+  }
 
   /** Is `tree` a stable identifier, a path which ends in an identifier?
    *
@@ -96,7 +100,7 @@ abstract class TreeInfo {
    *           | Path ‘.’ id
    *           | [id ’.’] ‘super’ [‘[’ id ‘]’] ‘.’ id
    */
-  def isStableIdentifier(tree: Tree, allowVolatile: Boolean): Boolean =
+  final def isStableIdentifier(tree: Tree, allowVolatile: Boolean): Boolean =
     tree match {
       case i @ Ident(_)    => isStableIdent(i)
       case Select(qual, _) => isStableMemberOf(tree.symbol, qual, allowVolatile) && isPath(qual, allowVolatile)

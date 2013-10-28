@@ -3825,7 +3825,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     // lifted out of typed1 because it's needed in typedImplicit0
     protected def typedTypeApply(tree: Tree, mode: Mode, fun: Tree, args: List[Tree]): Tree = fun.tpe match {
       case OverloadedType(pre, alts) =>
-        inferPolyAlternatives(fun, args map (_.tpe))
+        inferPolyAlternatives(fun, mapList(args)(_.tpe))
         val tparams = fun.symbol.typeParams //@M TODO: fun.symbol.info.typeParams ? (as in typedAppliedTypeTree)
         val args1 = if (sameLength(args, tparams)) {
           //@M: in case TypeApply we can't check the kind-arities of the type arguments,
@@ -4874,7 +4874,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 //@M! the polytype denotes the expected kind
                 typedHigherKindedType(arg, mode, GenPolyType(tparam.typeParams, AnyTpe))
               }
-            val argtypes = args1 map (_.tpe)
+            val argtypes = mapList(args1)(_.tpe)
 
             foreach2(args, tparams) { (arg, tparam) =>
               // note: can't use args1 in selector, because Binds got replaced

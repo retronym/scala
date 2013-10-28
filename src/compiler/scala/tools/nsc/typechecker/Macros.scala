@@ -460,7 +460,7 @@ trait Macros extends FastTrack with MacroRuntimes with Traces with Helpers {
   def openMacros = _openMacros
   private def pushMacroContext(c: MacroContext) = _openMacros ::= c
   private def popMacroContext() = _openMacros = _openMacros.tail
-  def enclosingMacroPosition = openMacros map (_.macroApplication.pos) find (_ ne NoPosition) getOrElse NoPosition
+  def enclosingMacroPosition = openMacros collectFirst { case x if x.macroApplication.pos != NoPosition => x.macroApplication.pos } getOrElse NoPosition
 
   /** Describes the role that the macro expandee is performing.
    */
@@ -732,8 +732,10 @@ trait Macros extends FastTrack with MacroRuntimes with Traces with Helpers {
           def validateResultingTree(expanded: Tree) = {
             macroLogVerbose("original:")
             macroLogLite("" + expanded + "\n" + showRaw(expanded))
-            val freeSyms = expanded.freeTerms ++ expanded.freeTypes
-            freeSyms foreach (sym => MacroFreeSymbolError(expandee, sym))
+            def issueFreeSymErrors(freeSyms: List[FreeSymbol]): Unit =
+              freeSyms foreach (sym => MacroFreeSymbolError(expandee, sym))
+            issueFreeSymErrors(expanded.freeTerms)
+            issueFreeSymErrors(expanded.freeTypes)
             Success(atPos(enclosingMacroPosition.focus)(expanded))
           }
           expanded match {

@@ -1095,12 +1095,12 @@ trait Implicits {
       }
     }
 
-    private def TagSymbols =  TagMaterializers.keySet
     private val TagMaterializers = Map[Symbol, Symbol](
       ClassTagClass    -> materializeClassTag,
       WeakTypeTagClass -> materializeWeakTypeTag,
       TypeTagClass     -> materializeTypeTag
     )
+    private val TagSymbols = TagMaterializers.keySet
 
     /** Creates a tree will produce a tag of the requested flavor.
       * An EmptyTree is returned if materialization fails.

@@ -903,7 +903,7 @@ trait Definitions extends api.StandardDefinitions {
       }
     }
 
-    def ClassType(arg: Type) = if (phase.erasedTypes) ClassClass.tpe else appliedType(ClassClass, arg)
+    def ClassType(arg: Type) = if (phase.erasedTypes) ClassClass.tpe else appliedType(ClassClass.typeConstructor, arg :: Nil) // OPT avoiding varargs appliedType
 
     /** Can we tell by inspecting the symbol that it will never
      *  at any phase have type parameters?

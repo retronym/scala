@@ -277,7 +277,7 @@ trait TraversableOnce[+A] extends Any with GenTraversableOnce[A] {
 
   def toTraversable: Traversable[A]
 
-  def toList: List[A] = to[List]
+  def toList: List[A] = if (isEmpty) Nil else to[List] // OPT special case empty collection.
 
   def toIterable: Iterable[A] = toStream
 

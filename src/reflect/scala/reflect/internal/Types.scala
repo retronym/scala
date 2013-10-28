@@ -2492,7 +2492,7 @@ trait Types
 
     override def paramss: List[List[Symbol]] = params :: resultType.paramss
 
-    override def paramTypes = params map (_.tpe)
+    override def paramTypes = mapList(params)(_.tpe) // OPT use mapList rather than .map
 
     override def boundSyms = resultType.boundSyms ++ params
 
@@ -3677,7 +3677,9 @@ trait Types
 
   def elementExtract(container: Symbol, tp: Type): Type = {
     assert(!container.isAliasType, container)
-    unwrapWrapperTypes(tp baseType container).dealiasWiden match {
+    val hasBaseType = tp.baseClasses contains container
+    if (!hasBaseType) NoType // OPT
+    else unwrapWrapperTypes(tp baseType container).dealiasWiden match {
       case TypeRef(_, `container`, arg :: Nil)  => arg
       case _                                    => NoType
     }
@@ -4108,7 +4110,7 @@ trait Types
       && (variance.isCovariant || isSubType(t2, t1, depth))
     )
 
-    corresponds3(tps1, tps2, tparams map (_.variance))(isSubArg)
+    corresponds3(tps1, tps2, mapList(tparams)(_.variance))(isSubArg)
   }
 
   def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
@@ -4292,7 +4294,7 @@ trait Types
   }
 
   def instantiatedBounds(pre: Type, owner: Symbol, tparams: List[Symbol], targs: List[Type]): List[TypeBounds] =
-    tparams map (_.info.asSeenFrom(pre, owner).instantiateTypeParams(tparams, targs).bounds)
+    mapList(tparams)(_.info.asSeenFrom(pre, owner).instantiateTypeParams(tparams, targs).bounds)
 
   def elimAnonymousClass(t: Type) = t match {
     case TypeRef(pre, clazz, Nil) if clazz.isAnonymousClass =>

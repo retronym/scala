@@ -1025,8 +1025,11 @@ trait Contexts { self: Analyzer =>
         found1
       }
 
-      def lookupInScope(scope: Scope) =
-        (scope lookupUnshadowedEntries name filter (e => qualifies(e.sym))).toList
+      def lookupInScope(scope: Scope): List[ScopeEntry] =
+        lookupInScopeIterator(scope).toList
+
+      def lookupInScopeIterator(scope: Scope): Iterator[ScopeEntry] =
+        (scope lookupUnshadowedEntries name filter (e => qualifies(e.sym)))
 
       def newOverloaded(owner: Symbol, pre: Type, entries: List[ScopeEntry]) =
         logResult(s"overloaded symbol in $pre")(owner.newOverloaded(pre, entries map (_.sym)))
@@ -1036,8 +1039,9 @@ trait Contexts { self: Analyzer =>
       if (name == nme.CONSTRUCTOR) return {
         val enclClassSym = cx.enclClass.owner
         val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
-        val constructorSym = lookupInScope(scope) match {
-          case Nil       => NoSymbol
+        val iterator = lookupInScopeIterator(scope)
+        // OPT avoid `toList` call
+        val constructorSym = if (iterator.isEmpty) NoSymbol else (iterator.toList: @unchecked) match {
           case hd :: Nil => hd.sym
           case entries   => newOverloaded(enclClassSym, cx.enclClass.prefix, entries)
         }
@@ -1206,11 +1210,11 @@ trait Contexts { self: Analyzer =>
     // is replicated here out of conservatism.
     private var _errorBuffer: mutable.LinkedHashSet[Error] = _
     private def errorBuffer = {if (_errorBuffer == null) _errorBuffer = newBuffer; _errorBuffer}
-    def errors: immutable.Seq[Error] = errorBuffer.toVector
+    def errors: immutable.Seq[Error] = if (_errorBuffer == null) Nil else errorBuffer.toVector
 
     private var _warningBuffer: mutable.LinkedHashSet[Warning] = _
     private def warningBuffer = {if (_warningBuffer == null) _warningBuffer = newBuffer; _warningBuffer}
-    def warnings: immutable.Seq[Warning] = warningBuffer.toVector
+    def warnings: immutable.Seq[Warning] = if (_warningBuffer == null) Nil else warningBuffer.toVector
 
     def +=(error: AbsTypeError): this.type = {
       errorBuffer += error
@@ -1230,11 +1234,13 @@ trait Contexts { self: Analyzer =>
     }
 
     def clearAllErrors(): this.type = {
-      errorBuffer.clear()
+      if (_errorBuffer != null)
+        errorBuffer.clear()
       this
     }
     def clearErrors(removeF: PartialFunction[AbsTypeError, Boolean]): this.type = {
-      errorBuffer.retain(!PartialFunction.cond(_)(removeF))
+      if (_errorBuffer != null)
+        errorBuffer.retain(!PartialFunction.cond(_)(removeF))
       this
     }
     def retainErrors(leaveF: PartialFunction[AbsTypeError, Boolean]): this.type = {
@@ -1242,11 +1248,11 @@ trait Contexts { self: Analyzer =>
       this
     }
     def clearAllWarnings(): this.type = {
-      warningBuffer.clear()
+      if (_warningBuffer != null) warningBuffer.clear()
       this
     }
 
-    def hasErrors     = errorBuffer.nonEmpty
+    def hasErrors     = _errorBuffer != null && _errorBuffer.nonEmpty
     def firstError    = errorBuffer.headOption
   }
 

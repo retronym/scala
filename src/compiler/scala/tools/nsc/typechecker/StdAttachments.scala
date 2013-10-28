@@ -146,5 +146,5 @@ trait StdAttachments {
   /** Determines whether a tree should or should not be adapted,
    *  because someone has put MacroImplRefAttachment on it.
    */
-  def isMacroImplRef(tree: Tree): Boolean = tree.attachments.get[MacroImplRefAttachment.type].isDefined
+  def isMacroImplRef(tree: Tree): Boolean = tree.attachments.contains[MacroImplRefAttachment.type]
 }

@@ -47,6 +47,19 @@ trait Collections {
   final def mforeach[A](xss: List[List[A]])(f: A => Unit) = xss foreach (_ foreach f)
   final def mforeach[A](xss: Traversable[Traversable[A]])(f: A => Unit) = xss foreach (_ foreach f)
 
+  /** A version of List#map, specialized for List, and optimized to avoid allocation if `as` is empty */
+  final def mapList[A, B](as: List[A])(f: A => B): List[B] = if (as eq Nil) Nil else {
+    val builder = ListBuffer.newBuilder[B]
+    def loop(as: List[A]): Unit = as match {
+      case head :: tail =>
+        builder += f(head)
+        loop(tail)
+      case _ =>
+    }
+    loop(as)
+    builder.result().toList
+  }
+
   final def map2[A, B, C](xs1: List[A], xs2: List[B])(f: (A, B) => C): List[C] = {
     val lb = new ListBuffer[C]
     var ys1 = xs1

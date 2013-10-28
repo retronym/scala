@@ -869,9 +869,16 @@ trait Infer extends Checkable {
       //@M validate variances & bounds of targs wrt variances & bounds of tparams
       //@M TODO: better place to check this?
       //@M TODO: errors for getters & setters are reported separately
-      def check() = checkKindBounds(tparams, targs, pre, owner) match {
-        case Nil  => isWithinBounds(pre, owner, tparams, targs) || issueBoundsError()
-        case errs => (targs contains WildcardType) || issueKindBoundErrors(errs)
+
+
+      def check() = checkKindBounds0(tparams, targs, pre, owner, explainErrors = true) match {
+        case Nil => isWithinBounds(pre, owner, tparams, targs) || issueBoundsError()
+        case errors =>
+          (targs contains WildcardType) || {
+            // OPT manually inlined checkKindBounds
+            val errs = for ((targ, tparam, kindErrors) <- errors) yield kindErrors.errorMessage(targ, tparam)
+            issueKindBoundErrors(errs)  
+          }
       }
 
       targs.exists(_.isErroneous) || tparams.exists(_.isErroneous) || check()
