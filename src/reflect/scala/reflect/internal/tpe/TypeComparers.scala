@@ -394,7 +394,7 @@ trait TypeComparers {
                 sym2.isAbstractType && isSubPre(pre1, pre2, sym2)))) &&
               isSubArgs(tr1.args, tr2.args, sym1.typeParams, depth))
               ||
-              sym2.isClass && {
+              sym2.isClass && (tr1.sym ne AnyClass) && { // OPT don't inspect base types of Any
                 val base = tr1 baseType sym2
                 (base ne tr1) && isSubType(base, tr2, depth)
               }

@@ -122,10 +122,16 @@ trait AnnotationCheckers {
 
   /* The following methods will be removed with the deprecated methods is AnnotationChecker. */
 
-  def addAnnotations(tree: Tree, tpe: Type): Type =
-    if (annotationCheckers.isEmpty) tpe
-    else annotationCheckers.foldLeft(tpe)((tpe, checker) =>
-      if (!checker.isActive()) tpe else checker.addAnnotations(tree, tpe))
+  def addAnnotations(tree: Tree, tpe: Type): Type = {
+    // OPT inlined fold
+    @annotation.tailrec
+    def loop(acc: Type, checkers: List[AnnotationChecker]): Type = checkers match {
+      case Nil => acc
+      case checker :: tail if !checker.isActive() => loop(acc, tail)
+      case checker :: tail => loop(checker.addAnnotations(tree, tpe), tail)
+    }
+    loop(tpe, annotationCheckers)
+  }
 
   def canAdaptAnnotations(tree: Tree, mode: Mode, pt: Type): Boolean =
     if (annotationCheckers.isEmpty) false

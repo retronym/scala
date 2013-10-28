@@ -178,17 +178,16 @@ trait AnalyzerPlugins { self: Analyzer =>
   def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
     // support deprecated methods in annotation checkers
     val annotCheckersTpe = addAnnotations(tree, tpe)
-    if (analyzerPlugins.isEmpty) annotCheckersTpe
-    else {
-      // OPT inlined fold
-      @annotation.tailrec
-      def loop(acc: Type, plugins: List[AnalyzerPlugin]): Type = plugins match {
-        case Nil => acc
-        case plugin :: tail if !plugin.isActive() => loop(acc, tail)
-        case plugin :: tail => loop(plugin.pluginsTyped(acc, typer, tree, mode, pt), tail)
-      }
-      loop(annotCheckersTpe, analyzerPlugins)
+
+    // OPT inlined fold
+    @annotation.tailrec
+    def loop(acc: Type, plugins: List[AnalyzerPlugin]): Type = plugins match {
+      case Nil => acc
+      case plugin :: tail if !plugin.isActive() => loop(acc, tail)
+      case plugin :: tail => loop(plugin.pluginsTyped(acc, typer, tree, mode, pt), tail)
     }
+    loop(annotCheckersTpe, analyzerPlugins)
+
   }
 
   /** @see AnalyzerPlugin.pluginsTypeSig */

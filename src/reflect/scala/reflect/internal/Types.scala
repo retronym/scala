@@ -2492,7 +2492,7 @@ trait Types
 
     override def paramss: List[List[Symbol]] = params :: resultType.paramss
 
-    override def paramTypes = mapList(params)(_.tpe) // OPT use mapList rather than .map
+    override def paramTypes = mapList(params)(symType) // OPT use mapList rather than .map
 
     override def boundSyms = resultType.boundSyms ++ params
 
@@ -4543,6 +4543,7 @@ trait Types
   private[scala] val typeIsExistentiallyBound = (tp: Type) => tp.typeSymbol.isExistentiallyBound
   private[scala] val typeIsErroneous = (tp: Type) => tp.isErroneous
   private[scala] val symTypeIsError = (sym: Symbol) => sym.tpe.isError
+  private[scala] val symType = (sym: Symbol) => sym.tpe
   private[scala] val typeHasAnnotations = (tp: Type) => tp.annotations.nonEmpty
   private[scala] val boundsContainType = (bounds: TypeBounds, tp: Type) => bounds containsType tp
   private[scala] val typeListIsEmpty = (ts: List[Type]) => ts.isEmpty

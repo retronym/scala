@@ -543,9 +543,9 @@ trait TypeDiagnostics {
     }
 
     object checkDead {
-      private val exprStack: mutable.Stack[Symbol] = mutable.Stack(NoSymbol)
+      private var exprStack: List[Symbol] = NoSymbol :: Nil
       // The method being applied to `tree` when `apply` is called.
-      private def expr = exprStack.top
+      private def expr = exprStack.head
 
       private def exprOK =
         (expr != Object_synchronized) &&
@@ -558,8 +558,8 @@ trait TypeDiagnostics {
 
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
         if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
-          exprStack push fn.symbol
-          try f finally exprStack.pop()
+          exprStack ::= fn.symbol
+          try f finally exprStack = exprStack.tail
         } else f
       }
       def apply(tree: Tree): Tree = {

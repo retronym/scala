@@ -664,7 +664,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     final def flags: Long = {
       if (Statistics.hotEnabled) Statistics.incCounter(flagsCount)
-      val fs = _rawflags & phase.flagMask
+      val fs = _rawflags & currentFlagMask
       (fs | ((fs & LateFlags) >>> LateShift)) & ~(fs >>> AntiShift)
     }
     def flags_=(fs: Long) = _rawflags = fs

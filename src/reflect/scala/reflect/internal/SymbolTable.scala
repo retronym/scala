@@ -181,6 +181,9 @@ abstract class SymbolTable extends macros.Universe
   private[this] var ph: Phase = NoPhase
   private[this] var per = NoPeriod
 
+  private[this] var _currentFlagMask = ph.flagMask
+  final def currentFlagMask: Long = _currentFlagMask // OPT cached on phase change to avoid a virtual call in Symbol#flags
+
   final def atPhaseStack: List[Phase] = phStack
   final def phase: Phase = {
     if (Statistics.hotEnabled)
@@ -198,6 +201,7 @@ abstract class SymbolTable extends macros.Universe
     assert((p ne null) && p != NoPhase, p)
     ph = p
     per = period(currentRunId, p.id)
+    _currentFlagMask = p.flagMask
   }
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
