@@ -1551,6 +1551,17 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       }
     }
 
+    /** Caching member symbols that are def-s in Defintions because they might change from Run to Run. */
+    object runDefinitions {
+      import definitions._
+      val TagMaterializers = Map[Symbol, Symbol](
+        ClassTagClass    -> materializeClassTag,
+        WeakTypeTagClass -> materializeWeakTypeTag,
+        TypeTagClass     -> materializeTypeTag
+      )
+      val TagSymbols = TagMaterializers.keySet
+    }
+
     /** Compile list of source files,
      *  unless there is a problem already,
      *  such as a plugin was passed a bad option.

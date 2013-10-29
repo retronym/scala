@@ -317,6 +317,9 @@ trait Implicits {
    */
   class ImplicitSearch(tree: Tree, pt: Type, isView: Boolean, context0: Context, pos0: Position = NoPosition) extends Typer(context0) with ImplicitsContextErrors {
     val searchId = implicitSearchId()
+    private val run = currentRun
+    import run.runDefinitions.{TagMaterializers, TagSymbols}
+
     private def typingLog(what: String, msg: => String) =
       typingStack.printTyping(tree, f"[search #$searchId] $what $msg")
 
@@ -1094,13 +1097,6 @@ trait Implicits {
           implicitInfoss1
       }
     }
-
-    private val TagMaterializers = Map[Symbol, Symbol](
-      ClassTagClass    -> materializeClassTag,
-      WeakTypeTagClass -> materializeWeakTypeTag,
-      TypeTagClass     -> materializeTypeTag
-    )
-    private val TagSymbols = TagMaterializers.keySet
 
     /** Creates a tree will produce a tag of the requested flavor.
       * An EmptyTree is returned if materialization fails.
