@@ -460,7 +460,7 @@ trait Macros extends FastTrack with MacroRuntimes with Traces with Helpers {
   def openMacros = _openMacros
   private def pushMacroContext(c: MacroContext) = _openMacros ::= c
   private def popMacroContext() = _openMacros = _openMacros.tail
-  def enclosingMacroPosition = openMacros collectFirst { case x if x.macroApplication.pos != NoPosition => x.macroApplication.pos } getOrElse NoPosition
+  def enclosingMacroPosition = collectFirst(openMacros) { case x if x.macroApplication.pos != NoPosition => x.macroApplication.pos } getOrElse NoPosition
 
   /** Describes the role that the macro expandee is performing.
    */
@@ -791,19 +791,22 @@ trait Macros extends FastTrack with MacroRuntimes with Traces with Helpers {
   var hasPendingMacroExpansions = false
   private val forced = perRunCaches.newWeakSet[Tree]
   private val delayed = perRunCaches.newWeakMap[Tree, scala.collection.mutable.Set[Int]]()
-  private def isDelayed(expandee: Tree) = delayed contains expandee
+  private def isDelayed(expandee: Tree) = delayed.nonEmpty && (delayed contains expandee)
   private def calculateUndetparams(expandee: Tree): scala.collection.mutable.Set[Int] =
-    if (forced(expandee)) scala.collection.mutable.Set[Int]()
-    else delayed.getOrElse(expandee, {
-      val calculated = scala.collection.mutable.Set[Symbol]()
-      expandee foreach (sub => {
-        def traverse(sym: Symbol) = if (sym != null && (undetparams contains sym.id)) calculated += sym
-        if (sub.symbol != null) traverse(sub.symbol)
-        if (sub.tpe != null) sub.tpe foreach (sub => traverse(sub.typeSymbol))
-      })
-      macroLogVerbose("calculateUndetparams: %s".format(calculated))
-      calculated map (_.id)
-    })
+    if (forced.nonEmpty && forced(expandee)) scala.collection.mutable.Set[Int]()
+    else {
+      def calculate = {
+        val calculated = scala.collection.mutable.Set[Int]()
+        expandee foreach (sub => {
+          def traverse(sym: Symbol) = if (sym != null && (undetparams contains sym.id)) calculated += sym.id
+          if (sub.symbol != null) traverse(sub.symbol)
+          if (sub.tpe != null) sub.tpe foreach (sub => traverse(sub.typeSymbol))
+        })
+        macroLogVerbose("calculateUndetparams: %s".format(calculated))
+        calculated
+      }
+      if (delayed.isEmpty) calculate else delayed.getOrElse(expandee, calculate)
+    }
   private val undetparams = perRunCaches.newSet[Int]()
   def notifyUndetparamsAdded(newUndets: List[Symbol]): Unit = {
     undetparams ++= newUndets map (_.id)

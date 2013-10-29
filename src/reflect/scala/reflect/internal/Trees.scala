@@ -161,14 +161,16 @@ trait Trees extends api.Trees {
     override def freeTerms: List[FreeTermSymbol] = freeSymbols collect { case s: FreeTermSymbol => s}
     override def freeTypes: List[FreeTypeSymbol] = freeSymbols collect { case s: FreeTypeSymbol => s}
 
-    private[scala] override def freeSymbols: List[Symbol] = {
-      val s = mutable.LinkedHashSet[Symbol]()
+    private[scala] override def freeSymbols: List[FreeSymbol] = {
+      val s = mutable.LinkedHashSet[FreeSymbol]()
       for (t <- this) {
+        def addIfFree(sym: Symbol) = if (sym != null && (sym.isFreeType || sym.isFreeTerm)) s += sym.asInstanceOf[FreeSymbol]
+
         addIfFree(t.symbol)
         if (t.tpe != null) {
           for (tp <- t.tpe) {
-            if (tp.typeSymbol.isFreeType) s += tp.typeSymbol
-            else if (tp.termSymbol.isFreeTerm) s += tp.termSymbol
+            addIfFree(tp.typeSymbol)
+            addIfFree(tp.termSymbol)
           }
         }
       }
@@ -490,7 +492,7 @@ trait Trees extends api.Trees {
 
   case class Ident(name: Name) extends RefTree with IdentContextApi {
     def qualifier: Tree = EmptyTree
-    def isBackquoted = this.attachments.get[BackquotedIdentifierAttachment.type].isDefined
+    def isBackquoted = this.attachments.contains[BackquotedIdentifierAttachment.type]
   }
   object Ident extends IdentExtractor
 

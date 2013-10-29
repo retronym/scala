@@ -667,7 +667,7 @@ private[internal] trait TypeMaps {
 
   /** A base class to compute all substitutions */
   abstract class SubstMap[T](from: List[Symbol], to: List[T]) extends TypeMap {
-    assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
+    // assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
 
     /** Are `sym` and `sym1` the same? Can be tuned by subclasses. */
     protected def matches(sym: Symbol, sym1: Symbol): Boolean = sym eq sym1

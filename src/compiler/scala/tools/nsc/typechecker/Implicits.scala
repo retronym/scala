@@ -780,7 +780,7 @@ trait Implicits {
         final class LocalShadower extends Shadower {
           val shadowed = util.HashSet[Name](512)
           def addInfos(infos: Infos) {
-            shadowed addEntries infos.map(_.name)
+            infos.foreach(i => shadowed.addEntry(i.name))
           }
           def isShadowed(name: Name) = shadowed(name)
         }

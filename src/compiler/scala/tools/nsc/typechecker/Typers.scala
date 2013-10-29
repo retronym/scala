@@ -1000,7 +1000,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def adaptMismatchedSkolems() = {
         def canIgnoreMismatch = (
              !context.reportErrors && isPastTyper
-          || tree.attachments.get[MacroExpansionAttachment].isDefined
+          || tree.attachments.contains[MacroExpansionAttachment]
         )
         def bound = pt match {
           case ExistentialType(qs, _) => qs
@@ -3388,7 +3388,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 // instantiate dependent method types, must preserve singleton types where possible (stableTypeFor) -- example use case:
                 // val foo = "foo"; def precise(x: String)(y: x.type): x.type = {...}; val bar : foo.type = precise(foo)(foo)
                 // precise(foo) : foo.type => foo.type
-                val restpe = mt.resultType(args1 map (arg => gen stableTypeFor arg orElse arg.tpe))
+                val restpe = mt.resultType(mapList(args1)(arg => gen stableTypeFor arg orElse arg.tpe))
                 def ifPatternSkipFormals(tp: Type) = tp match {
                   case MethodType(_, rtp) if (mode.inPatternMode) => rtp
                   case _ => tp
@@ -3845,7 +3845,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         typedTypeApply(tree, mode, fun setType fun.tpe.widen, args)
       case PolyType(tparams, restpe) if tparams.nonEmpty =>
         if (sameLength(tparams, args)) {
-          val targs = args map (_.tpe)
+          val targs = mapList(args)(_.tpe)
           checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
           if (fun.symbol == Predef_classOf)
             typedClassOf(tree, args.head, noGen = true)

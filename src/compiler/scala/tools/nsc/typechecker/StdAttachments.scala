@@ -46,7 +46,7 @@ trait StdAttachments {
    *  The parameter is of type `Any`, because macros can expand both into trees and into annotations.
    */
   def hasMacroExpansionAttachment(any: Any): Boolean = any match {
-    case tree: Tree => tree.attachments.get[MacroExpansionAttachment].isDefined
+    case tree: Tree => tree.attachments.contains[MacroExpansionAttachment]
     case _ => false
   }
 
@@ -92,7 +92,7 @@ trait StdAttachments {
    */
   def isMacroExpansionSuppressed(tree: Tree): Boolean =
     (  settings.Ymacronoexpand.value // SI-6812
-    || tree.attachments.get[SuppressMacroExpansionAttachment.type].isDefined
+    || tree.attachments.contains[SuppressMacroExpansionAttachment.type]
     || (tree match {
         // we have to account for the fact that during typechecking an expandee might become wrapped,
         // i.e. surrounded by an inferred implicit argument application or by an inferred type argument application.

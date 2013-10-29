@@ -293,7 +293,7 @@ trait Types
     def isWildcard = false
 
     /** Is this type produced as a repair for an error? */
-    def isError: Boolean = typeSymbol.isError || termSymbol.isError
+    def isError: Boolean = typeSymbolDirect.isError || typeSymbolDirect.isError
 
     /** Is this type produced as a repair for an error? */
     def isErroneous: Boolean = ErroneousCollector.collect(this)
@@ -2227,7 +2227,7 @@ trait Types
     //OPT specialize hashCode
     override final def computeHashCode = {
       import scala.util.hashing.MurmurHash3._
-      val hasArgs = args.nonEmpty
+      val hasArgs = args ne Nil
       var h = productSeed
       h = mix(h, pre.hashCode)
       h = mix(h, sym.hashCode)
@@ -2411,7 +2411,7 @@ trait Types
 
   object TypeRef extends TypeRefExtractor {
     def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
-      if (args.nonEmpty) {
+      if (args ne Nil) {
         if (sym.isAliasType)              new AliasArgsTypeRef(pre, sym, args)
         else if (sym.isAbstractType)      new AbstractArgsTypeRef(pre, sym, args)
         else                              new ClassArgsTypeRef(pre, sym, args)
@@ -2492,7 +2492,14 @@ trait Types
 
     override def paramss: List[List[Symbol]] = params :: resultType.paramss
 
-    override def paramTypes = mapList(params)(symType) // OPT use mapList rather than .map
+    private[this] var lastParamTypes: List[Type] = null
+    override def paramTypes = {
+      val nextParamTypes =
+        if (lastParamTypes == null) mapList(params)(symType)
+        else map2Conserve(lastParamTypes, params)(anySymType)
+      lastParamTypes = nextParamTypes
+      nextParamTypes
+    }
 
     override def boundSyms = resultType.boundSyms ++ params
 
@@ -4544,6 +4551,7 @@ trait Types
   private[scala] val typeIsErroneous = (tp: Type) => tp.isErroneous
   private[scala] val symTypeIsError = (sym: Symbol) => sym.tpe.isError
   private[scala] val symType = (sym: Symbol) => sym.tpe
+  private[scala] val anySymType = (a: Any, sym: Symbol) => sym.tpe
   private[scala] val typeHasAnnotations = (tp: Type) => tp.annotations.nonEmpty
   private[scala] val boundsContainType = (bounds: TypeBounds, tp: Type) => bounds containsType tp
   private[scala] val typeListIsEmpty = (ts: List[Type]) => ts.isEmpty

@@ -50,6 +50,7 @@ trait Collections {
   /** A version of List#map, specialized for List, and optimized to avoid allocation if `as` is empty */
   final def mapList[A, B](as: List[A])(f: A => B): List[B] = if (as eq Nil) Nil else {
     val builder = ListBuffer.newBuilder[B]
+    @tailrec
     def loop(as: List[A]): Unit = as match {
       case head :: tail =>
         builder += f(head)
@@ -58,6 +59,16 @@ trait Collections {
     }
     loop(as)
     builder.result().toList
+  }
+
+  final def collectFirst[A, B](as: List[A])(pf: PartialFunction[A, B]): Option[B] = {
+    @tailrec
+    def loop(rest: List[A]): Option[B] = rest match {
+      case Nil => None
+      case a :: as if pf.isDefinedAt(a) => Some(pf(a))
+      case a :: as => loop(as)
+    }
+    loop(as)
   }
 
   final def map2[A, B, C](xs1: List[A], xs2: List[B])(f: (A, B) => C): List[C] = {
@@ -112,15 +123,19 @@ trait Collections {
     else f(xs1.head, xs2.head, xs3.head) :: map3(xs1.tail, xs2.tail, xs3.tail)(f)
   }
   final def flatMap2[A, B, C](xs1: List[A], xs2: List[B])(f: (A, B) => List[C]): List[C] = {
-    val lb = new ListBuffer[C]
+    var lb: ListBuffer[C] = null
     var ys1 = xs1
     var ys2 = xs2
     while (!ys1.isEmpty && !ys2.isEmpty) {
-      lb ++= f(ys1.head, ys2.head)
+      val cs = f(ys1.head, ys2.head)
+      if (cs ne Nil) {
+        if (lb eq null) lb = new ListBuffer[C]
+        lb ++= cs
+      }
       ys1 = ys1.tail
       ys2 = ys2.tail
     }
-    lb.toList
+    if (lb eq null) Nil else lb.result
   }
 
   final def flatCollect[A, B](elems: List[A])(pf: PartialFunction[A, Traversable[B]]): List[B] = {

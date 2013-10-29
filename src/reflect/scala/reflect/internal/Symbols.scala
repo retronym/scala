@@ -9,7 +9,7 @@ package internal
 
 import scala.collection.{ mutable, immutable }
 import scala.collection.mutable.ListBuffer
-import util.{ Statistics, shortClassOfInstance }
+import scala.reflect.internal.util.{TriState, Statistics, shortClassOfInstance}
 import Flags._
 import scala.annotation.tailrec
 import scala.reflect.io.{ AbstractFile, NoAbstractFile }
@@ -704,16 +704,24 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // class C extends D( { class E { ... } ... } ). Here, E is a class local to a constructor
     def isClassLocalToConstructor = false
 
-    final def isDerivedValueClass =
-      isClass && !hasFlag(PACKAGE | TRAIT) &&
-      info.firstParent.typeSymbol == AnyValClass && !isPrimitiveValueClass
+    private var _isDerivedValueClass: TriState = TriState.Unknown
+    final def isDerivedValueClass: Boolean = {
+      if (!_isDerivedValueClass.isKnown) _isDerivedValueClass = computeIsDerivedValueClass
+      _isDerivedValueClass.booleanValue
+    }
+    private def computeIsDerivedValueClass: Boolean = (
+         isClass
+      && !hasFlag(PACKAGE | TRAIT)
+      && info.firstParent.typeSymbol == AnyValClass
+      && !isPrimitiveValueClass
+    )
 
     final def isMethodWithExtension =
       isMethod && owner.isDerivedValueClass && !isParamAccessor && !isConstructor && !hasFlag(SUPERACCESSOR) && !isMacro
 
     final def isAnonymousFunction = isSynthetic && (name containsName tpnme.ANON_FUN_NAME)
     final def isDefinedInPackage  = effectiveOwner.isPackageClass
-    final def needsFlatClasses    = phase.flatClasses && rawowner != NoSymbol && !rawowner.isPackageClass
+    final def needsFlatClasses    = phase.flatClasses && (rawowner ne NoSymbol) && !rawowner.isPackageClass
 
     /** change name by appending $$<fully-qualified-name-of-class `base`>
      *  Do the same for any accessed symbols or setters/getters.
@@ -3408,7 +3416,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    */
   def deriveSymbols(syms: List[Symbol], symFn: Symbol => Symbol): List[Symbol] = {
     val syms1 = mapList(syms)(symFn)
-    syms1 map (_ substInfo (syms, syms1))
+    mapList(syms1)(_ substInfo (syms, syms1))
   }
 
   /** Derives a new Type by first deriving new symbols as in deriveSymbols,
