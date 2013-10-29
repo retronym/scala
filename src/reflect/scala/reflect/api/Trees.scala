@@ -176,6 +176,8 @@ trait Trees { self: Universe =>
      */
     def freeTypes: List[FreeTypeSymbol]
 
+    private[reflect] def freeSymbols: List[Symbol]
+
     /** Substitute symbols in `to` for corresponding occurrences of references to
      *  symbols `from` in this type.
      */

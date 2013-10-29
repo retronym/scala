@@ -158,17 +158,17 @@ trait Trees extends api.Trees {
       productIterator.toList flatMap subtrees
     }
 
-    override def freeTerms: List[FreeTermSymbol] = freeSyms[FreeTermSymbol](_.isFreeTerm, _.termSymbol)
-    override def freeTypes: List[FreeTypeSymbol] = freeSyms[FreeTypeSymbol](_.isFreeType, _.typeSymbol)
+    override def freeTerms: List[FreeTermSymbol] = freeSymbols collect { case s: FreeTermSymbol => s}
+    override def freeTypes: List[FreeTypeSymbol] = freeSymbols collect { case s: FreeTypeSymbol => s}
 
-    private def freeSyms[S <: Symbol](isFree: Symbol => Boolean, symOfType: Type => Symbol): List[S] = {
-      val s = mutable.LinkedHashSet[S]()
-      def addIfFree(sym: Symbol): Unit = if (sym != null && isFree(sym)) s += sym.asInstanceOf[S]
+    private[scala] override def freeSymbols: List[Symbol] = {
+      val s = mutable.LinkedHashSet[Symbol]()
       for (t <- this) {
         addIfFree(t.symbol)
         if (t.tpe != null) {
           for (tp <- t.tpe) {
-            addIfFree(symOfType(tp))
+            if (tp.typeSymbol.isFreeType) s += tp.typeSymbol
+            else if (tp.termSymbol.isFreeTerm) s += tp.termSymbol
           }
         }
       }

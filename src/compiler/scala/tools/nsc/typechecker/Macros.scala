@@ -734,8 +734,7 @@ trait Macros extends FastTrack with MacroRuntimes with Traces with Helpers {
             macroLogLite("" + expanded + "\n" + showRaw(expanded))
             def issueFreeSymErrors(freeSyms: List[FreeSymbol]): Unit =
               freeSyms foreach (sym => MacroFreeSymbolError(expandee, sym))
-            issueFreeSymErrors(expanded.freeTerms)
-            issueFreeSymErrors(expanded.freeTypes)
+            issueFreeSymErrors(expanded.freeSymbols)
             Success(atPos(enclosingMacroPosition.focus)(expanded))
           }
           expanded match {
