@@ -961,7 +961,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     final def isInitialized: Boolean =
-      validTo != NoPeriod
+      _validTo != NoPeriod
 
     /** Some completers call sym.setInfo when still in-flight and then proceed with initialization (e.g. see LazyPackageType)
      *  setInfo sets _validTo to current period, which means that after a call to setInfo isInitialized will start returning true.
@@ -1327,7 +1327,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def info: Type = try {
       var cnt = 0
-      while (validTo == NoPeriod) {
+      while (_validTo == NoPeriod) {
         //if (settings.debug.value) System.out.println("completing " + this);//DEBUG
         assert(infos ne null, this.name)
         assert(infos.prev eq null, this.name)
@@ -1411,12 +1411,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val curPeriod = currentPeriod
       val curPid = phaseId(curPeriod)
 
-      if (validTo != NoPeriod) {
+      if (_validTo != NoPeriod) {
         // skip any infos that concern later phases
         while (curPid < phaseId(infos.validFrom) && infos.prev != null)
           infos = infos.prev
 
-        if (validTo < curPeriod) {
+        if (_validTo < curPeriod) {
           assertCorrectThread()
           // adapt any infos that come from previous runs
           val current = phase
@@ -1426,8 +1426,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             //assert(runId(validTo) == currentRunId, name)
             //assert(runId(infos.validFrom) == currentRunId, name)
 
-            if (validTo < curPeriod) {
-              var itr = infoTransformers.nextFrom(phaseId(validTo))
+            if (_validTo < curPeriod) {
+              var itr = infoTransformers.nextFrom(phaseId(_validTo))
               infoTransformers = itr; // caching optimization
               while (itr.pid != NoPhase.id && itr.pid < current.id) {
                 phase = phaseWithId(itr.pid)
@@ -1459,7 +1459,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         // SI-7801 early phase package scopes are mutated in new runs (Namers#enterPackage), so we have to
         //         discard transformed infos, rather than just marking them as from this run.
         val oldest = infos.oldest
-        oldest.validFrom = validTo
+        oldest.validFrom = _validTo
         this.infos = oldest
         oldest
       } else {
@@ -1473,10 +1473,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
           val info1 = adaptToNewRunMap(infos.info)
           if (info1 eq infos.info) {
-            infos.validFrom = validTo
+            infos.validFrom = _validTo
             infos
           } else {
-            this.infos = TypeHistory(validTo, info1, prev1)
+            this.infos = TypeHistory(_validTo, info1, prev1)
             this.infos
           }
         }
@@ -1601,9 +1601,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else {
         // analogously to the "info" getter, here we allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        if (validTo == NoPeriod)
+        if (_validTo == NoPeriod)
           enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
-        if (validTo == NoPeriod)
+        if (_validTo == NoPeriod)
           enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
 
         rawInfo.typeParams
