@@ -49,7 +49,7 @@ trait Collections {
 
   /** A version of List#map, specialized for List, and optimized to avoid allocation if `as` is empty */
   final def mapList[A, B](as: List[A])(f: A => B): List[B] = if (as eq Nil) Nil else {
-    val builder = ListBuffer.newBuilder[B]
+    val builder = new FastListBuffer[B]()
     @tailrec
     def loop(as: List[A]): Unit = as match {
       case head :: tail =>
@@ -58,7 +58,7 @@ trait Collections {
       case _ =>
     }
     loop(as)
-    builder.result().toList
+    builder.toList
   }
 
   final def collectFirst[A, B](as: List[A])(pf: PartialFunction[A, B]): Option[B] = {
