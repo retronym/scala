@@ -169,10 +169,16 @@ trait AnalyzerPlugins { self: Analyzer =>
 
 
   /** @see AnalyzerPlugin.pluginsPt */
-  def pluginsPt(pt: Type, typer: Typer, tree: Tree, mode: Mode): Type =
-    if (analyzerPlugins.isEmpty) pt
-    else analyzerPlugins.foldLeft(pt)((pt, plugin) =>
-      if (!plugin.isActive()) pt else plugin.pluginsPt(pt, typer, tree, mode))
+  def pluginsPt(pt: Type, typer: Typer, tree: Tree, mode: Mode): Type = {
+    // OPT inlined fold
+    @annotation.tailrec
+    def loop(acc: Type, plugins: List[AnalyzerPlugin]): Type = plugins match {
+      case Nil => acc
+      case plugin :: tail if !plugin.isActive() => loop(acc, tail)
+      case plugin :: tail => loop(plugin.pluginsPt(acc, typer, tree, mode), tail)
+    }
+    loop(pt, analyzerPlugins)
+  }
 
   /** @see AnalyzerPlugin.pluginsTyped */
   def pluginsTyped(tpe: Type, typer: Typer, tree: Tree, mode: Mode, pt: Type): Type = {
