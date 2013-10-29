@@ -122,6 +122,8 @@ abstract class CPSAnnotationChecker extends CPSUtils {
 
     import checker._
 
+    override val isActive = true
+
     override def canAdaptAnnotations(tree: Tree, typer: Typer, mode: Mode, pt: Type): Boolean = {
       if (!cpsEnabled) return false
       vprintln("can adapt annotations? " + tree + " / " + tree.tpe + " / " + mode + " / " + pt)
