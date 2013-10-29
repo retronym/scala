@@ -30,7 +30,7 @@ abstract class Taggers {
     val tagModule = ClassTagModule
     materializeTag(EmptyTree, tpe, tagModule, {
       val erasure = c.reifyRuntimeClass(tpe, concrete = true)
-      val factory = TypeApply(Select(Ident(tagModule), nme.apply), List(TypeTree(tpe)))
+      val factory = TypeApply(Select(Ident(tagModule), nme.apply), TypeTree(tpe) :: Nil)
       Apply(factory, List(erasure))
     })
   }

@@ -1150,7 +1150,7 @@ trait Implicits {
         }
       )
       // todo. migrate hardcoded materialization in Implicits to corresponding implicit macros
-      val materializer = atPos(pos.focus)(gen.mkMethodCall(TagMaterializers(tagClass), List(tp), if (prefix != EmptyTree) List(prefix) else List()))
+      val materializer = atPos(pos.focus)(gen.mkMethodCall(TagMaterializers(tagClass), tp :: Nil, if (prefix != EmptyTree) prefix :: Nil else Nil))
       if (settings.XlogImplicits) reporter.echo(pos, "materializing requested %s.%s[%s] using %s".format(pre, tagClass.name, tp, materializer))
       if (context.macrosEnabled) success(materializer)
       // don't call `failure` here. if macros are disabled, we just fail silently
