@@ -293,7 +293,7 @@ trait Types
     def isWildcard = false
 
     /** Is this type produced as a repair for an error? */
-    def isError: Boolean = typeSymbolDirect.isError || termSymbolDirect.isError
+    def isError: Boolean = (this eq ErrorType) || typeSymbolDirect.isError || termSymbolDirect.isError // OPT check ErrorType here to keep this method bimorphic
 
     /** Is this type produced as a repair for an error? */
     def isErroneous: Boolean = ErroneousCollector.collect(this)
@@ -1255,8 +1255,6 @@ trait Types
 
   /** An object representing an erroneous type */
   case object ErrorType extends Type {
-    // todo see whether we can do without
-    override def isError: Boolean = true
     override def decls: Scope = new ErrorScope(NoSymbol)
     override def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
       var sym = decls lookup name
@@ -2727,6 +2725,7 @@ trait Types
       val quantifiedFresh = cloneSymbols(quantified)
       val tvars = quantifiedFresh map (tparam => TypeVar(tparam))
       val underlying1 = underlying.instantiateTypeParams(quantified, tvars) // fuse subst quantified -> quantifiedFresh -> tvars
+      // OPT maybe pass null as a marker for quantifiedFresh map (_ => Invariant)?
       op(underlying1) && {
         solve(tvars, quantifiedFresh, quantifiedFresh map (_ => Invariant), upper = false, depth) &&
         isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, tvars map (_.inst))
