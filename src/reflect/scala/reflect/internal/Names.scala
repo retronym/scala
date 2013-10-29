@@ -446,6 +446,7 @@ trait Names extends api.Names {
     def append(ch: Char)        = newName("" + this + ch)
     def append(suffix: String)  = newName("" + this + suffix)
     def append(suffix: Name)    = newName("" + this + suffix)
+    def append(separator: Char, suffix: Name) = newName("" + this + separator + suffix)
     def prepend(prefix: String) = newName("" + prefix + this)
 
     def decodedName: ThisNameType = newName(decode)
@@ -500,21 +501,21 @@ trait Names extends api.Names {
   /** TermName_S and TypeName_S have fields containing the string version of the name.
    *  TermName_R and TypeName_R recreate it each time toString is called.
    */
-  private class TermName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TermName(index0, len0, hash) {
+  private final class TermName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TermName(index0, len0, hash) {
     protected def createCompanionName(h: Int): TypeName = new TypeName_S(index, len, h, toString)
     override def newName(str: String): TermName = newTermNameCached(str)
   }
-  private class TypeName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TypeName(index0, len0, hash) {
+  private final class TypeName_S(index0: Int, len0: Int, hash: Int, override val toString: String) extends TypeName(index0, len0, hash) {
     protected def createCompanionName(h: Int): TermName = new TermName_S(index, len, h, toString)
     override def newName(str: String): TypeName = newTypeNameCached(str)
   }
 
-  private class TermName_R(index0: Int, len0: Int, hash: Int) extends TermName(index0, len0, hash) {
+  private final class TermName_R(index0: Int, len0: Int, hash: Int) extends TermName(index0, len0, hash) {
     protected def createCompanionName(h: Int): TypeName = new TypeName_R(index, len, h)
     override def toString = new String(chrs, index, len)
   }
 
-  private class TypeName_R(index0: Int, len0: Int, hash: Int) extends TypeName(index0, len0, hash) {
+  private final class TypeName_R(index0: Int, len0: Int, hash: Int) extends TypeName(index0, len0, hash) {
     protected def createCompanionName(h: Int): TermName = new TermName_R(index, len, h)
     override def toString = new String(chrs, index, len)
   }
