@@ -1686,7 +1686,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             tree
 
           case TypeApply(fn, args) =>
-            checkBounds(tree, NoPrefix, NoSymbol, fn.tpe.typeParams, args map (_.tpe))
+            checkBounds(tree, NoPrefix, NoSymbol, fn.tpe.typeParams, mapList(args)(_.tpe))
             transformCaseApply(tree, ())
 
           case x @ Apply(_, _)  =>
