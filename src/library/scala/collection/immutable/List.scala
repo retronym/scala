@@ -14,6 +14,7 @@ import generic._
 import mutable.{Builder, ListBuffer}
 import scala.annotation.tailrec
 import java.io._
+import scala.util.hashing.MurmurHash3
 
 /** A class for immutable linked lists representing ordered collections
  *  of elements of type.
@@ -322,6 +323,8 @@ sealed abstract class List[+A] extends AbstractSeq[A]
   override def toStream : Stream[A] =
     if (isEmpty) Stream.Empty
     else new Stream.Cons(head, tail.toStream)
+
+  override def hashCode() = scala.util.hashing.MurmurHash3.listHash(this, MurmurHash3.seqSeed)
 }
 
 /** The empty list.
