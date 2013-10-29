@@ -293,7 +293,7 @@ trait Types
     def isWildcard = false
 
     /** Is this type produced as a repair for an error? */
-    def isError: Boolean = typeSymbolDirect.isError || typeSymbolDirect.isError
+    def isError: Boolean = typeSymbolDirect.isError || termSymbolDirect.isError
 
     /** Is this type produced as a repair for an error? */
     def isErroneous: Boolean = ErroneousCollector.collect(this)
