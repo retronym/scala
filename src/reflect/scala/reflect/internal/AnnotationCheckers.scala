@@ -126,9 +126,9 @@ trait AnnotationCheckers {
     // OPT inlined fold
     @annotation.tailrec
     def loop(acc: Type, checkers: List[AnnotationChecker]): Type = checkers match {
-      case Nil => acc
       case checker :: tail if !checker.isActive() => loop(acc, tail)
       case checker :: tail => loop(checker.addAnnotations(tree, tpe), tail)
+      case _ => acc
     }
     loop(tpe, annotationCheckers)
   }
