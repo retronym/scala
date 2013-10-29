@@ -193,6 +193,7 @@ trait Implicits {
    *  @param   sym    The symbol of the implicit
    */
   class ImplicitInfo(val name: Name, val pre: Type, val sym: Symbol) {
+    assert(!sym.isClass, sym)
     private var tpeCache: Type = null
     private var isCyclicOrErroneousCache: TriState = TriState.Unknown
 
@@ -997,7 +998,7 @@ trait Implicits {
                 companion.moduleClass match {
                   case mc: ModuleClassSymbol =>
                     val infos =
-                      for (im <- mc.implicitMembers.toList) yield new ImplicitInfo(im.name, singleType(pre, companion), im)
+                      for (im <- mc.implicitMembers.toList if !im.isClass) yield new ImplicitInfo(im.name, singleType(pre, companion), im)
                     if (infos.nonEmpty)
                       infoMap += (sym -> infos)
                   case _ =>

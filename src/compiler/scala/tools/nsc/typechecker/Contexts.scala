@@ -785,6 +785,7 @@ trait Contexts { self: Analyzer =>
      */
     private def isQualifyingImplicit(name: Name, sym: Symbol, pre: Type, imported: Boolean) =
       sym.isImplicit &&
+      !sym.isClass &&
       isAccessible(sym, pre) &&
       !(imported && {
         val e = scope.lookupEntry(name)
