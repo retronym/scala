@@ -803,10 +803,11 @@ trait Implicits {
       }
 
       private var best: SearchResult = SearchFailure
+      private[this] val Predef_conforms = run.runDefinitions.Predef_conforms
 
       private def isIneligible(info: ImplicitInfo) = (
            info.isCyclicOrErroneous
-        || isView && isPredefMemberNamed(info.sym, nme.conforms)
+        || isView && (info.sym eq Predef_conforms)
         || shadower.isShadowed(info.name)
         || (!context.macrosEnabled && info.sym.isTermMacro)
       )

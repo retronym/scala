@@ -1552,6 +1552,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     }
 
     /** Caching member symbols that are def-s in Defintions because they might change from Run to Run. */
+    // OPT used for member symbols used on hot-paths
     object runDefinitions {
       import definitions._
       val TagMaterializers = Map[Symbol, Symbol](
@@ -1560,6 +1561,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
         TypeTagClass     -> materializeTypeTag
       )
       val TagSymbols = TagMaterializers.keySet
+      val Predef_conforms = getMemberMethod(PredefModule, nme.conforms)
     }
 
     /** Compile list of source files,
