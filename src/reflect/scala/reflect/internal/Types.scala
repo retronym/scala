@@ -1335,6 +1335,14 @@ trait Types
       else super.safeToString
     override def narrow: Type = this
     override def kind = "ThisType"
+
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 1)
+    }
   }
 
   final class UniqueThisType(sym: Symbol) extends ThisType(sym) { }
@@ -1394,6 +1402,15 @@ trait Types
       else pre.prefixString + sym.nameString + "."
     )
     override def kind = "SingleType"
+
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, pre.hashCode)
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 2)
+    }
   }
 
   final class UniqueSingleType(pre: Type, sym: Symbol) extends SingleType(pre, sym)
@@ -1471,6 +1488,15 @@ trait Types
       else "(%s, %s)" format (typeString(lo), typeString(hi))
     }
     override def kind = "TypeBoundsType"
+
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, lo.hashCode)
+      h = mix(h, hi.hashCode)
+      finalizeHash(h, 2)
+    }
   }
 
   final class UniqueTypeBounds(lo: Type, hi: Type) extends TypeBounds(lo, hi)
@@ -2209,7 +2235,7 @@ trait Types
    *
    * @M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
-  abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
+  abstract case class TypeRef(pre: Type, sym: Symbol, final val args: List[Type]) extends UniqueType with TypeRefApi {
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2227,7 +2253,7 @@ trait Types
       import scala.util.hashing.MurmurHash3._
       val hasArgs = args ne Nil
       var h = productSeed
-      h = mix(h, pre.hashCode)
+      h = mix(h, pre match { case ut: UniqueType => ut.hashCode; case _ => pre.hashCode})
       h = mix(h, sym.hashCode)
       if (hasArgs)
         finalizeHash(mix(h, args.hashCode()), 3)
