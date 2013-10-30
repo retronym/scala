@@ -2601,9 +2601,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private[this] var _rawname: TermName = initName
     def rawname = _rawname
-    def name = {
+    final def name = {
       if (Statistics.hotEnabled) Statistics.incCounter(nameCount)
-      _rawname
+      this match {
+        case ms: ModuleSymbol => ms.moduleName // OPT trying to keep `name` bimorphic
+        case _ =>  _rawname
+      }
     }
     override def name_=(name: Name) {
       if (name != rawname) {
@@ -2751,7 +2754,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (!isMethod && needsFlatClasses) rawowner.owner
       else rawowner
     }
-    override def name: TermName = {
+    final def moduleName: TermName = {
       if (Statistics.hotEnabled) Statistics.incCounter(nameCount)
       if (!isMethod && needsFlatClasses) {
         if (flatname eq null)
