@@ -1655,6 +1655,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
       // Clear any sets or maps created via perRunCaches.
       perRunCaches.clearAll()
+      units.foreach(_.clear()) // workaround a leak seemingly related to ConstructorDefaultsAttachment
 
       // Reset project
       if (!stopPhase("namer")) {
