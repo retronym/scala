@@ -557,8 +557,9 @@ trait TypeDiagnostics {
       }
 
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
-        if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
-          exprStack ::= fn.symbol
+        val sym = fn.symbol // OPT just call .symbol once
+        if (sym != null && sym.isMethod && !sym.isConstructor) {
+          exprStack ::= sym
           try f finally exprStack = exprStack.tail
         } else f
       }
