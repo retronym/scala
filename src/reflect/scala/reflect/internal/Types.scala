@@ -950,7 +950,7 @@ trait Types
      *  Overridden with custom logic except where trivially true.
      */
     def isGround: Boolean = this match {
-      case ThisType(_) | NoPrefix | WildcardType | NoType | ErrorType | ConstantType(_) =>
+      case ThisType(_) | NoPrefix | WildcardType | NoType | ErrorType | ConstantType(_) | _: ClassInfoType =>
         true
       case _ =>
         typeVarToOriginMap(this) eq this
