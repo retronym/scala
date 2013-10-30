@@ -140,7 +140,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     }
   }
 
-  class Transformer extends super.Transformer {
+  class Transformer extends super.FastTransformer {
     def transformUnit(unit: CompilationUnit) {
       try unit.body = transform(unit.body)
       catch {
