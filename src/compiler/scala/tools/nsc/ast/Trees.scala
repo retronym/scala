@@ -82,7 +82,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
 
   // --- additional cases in operations ----------------------------------
 
-  override protected def xtraverse(traverser: Traverser, tree: Tree): Unit = tree match {
+  override protected def xtraverse(traverser: super.Traverser, tree: Tree): Unit = tree match {
     case Parens(ts) =>
       traverser.traverseTrees(ts)
     case DocDef(comment, definition) =>
@@ -151,6 +151,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     }
   }
 
+  trait Traverser extends super.FastTraverser
+
   // used when a phase is disabled
   object noopTransformer extends Transformer {
     override def transformUnit(unit: CompilationUnit): Unit = {}
@@ -169,7 +171,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(tree)
   }
 
-  object resetPos extends Traverser {
+  object resetPos extends FastTraverser {
     override def traverse(t: Tree) {
       if (t != EmptyTree) t.setPos(NoPosition)
       super.traverse(t)

@@ -1165,7 +1165,7 @@ trait Trees extends api.Trees {
 
   // --- generic traversers and transformers
 
-  override protected def itraverse(traverser: Traverser, tree: Tree): Unit = {
+  override protected def itraverse(traverser: super.Traverser, tree: Tree): Unit = {
     import traverser._
 
     def traverseMemberDef(md: MemberDef, owner: Symbol): Unit = atOwner(owner) {
@@ -1298,6 +1298,143 @@ trait Trees extends api.Trees {
         case _                       => traverseComponents()
       }
     }
+  }
+
+  // !!! DUPLICATION with itraverse !!
+  trait FastTraverser extends super.Traverser {
+    override def traverse(tree: Tree): Unit = {
+      def traverseMemberDef(md: MemberDef, owner: Symbol): Unit = atOwner(owner) {
+        traverseModifiers(md.mods)
+        traverseName(md.name)
+        md match {
+          case ClassDef(_, _, tparams, impl)             => traverseParams(tparams) ; traverse(impl)
+          case ModuleDef(_, _, impl)                     => traverse(impl)
+          case ValDef(_, _, tpt, rhs)                    => traverseTypeAscription(tpt) ; traverse(rhs)
+          case TypeDef(_, _, tparams, rhs)               => traverseParams(tparams) ; traverse(rhs)
+          case DefDef(_, _, tparams, vparamss, tpt, rhs) =>
+            traverseParams(tparams)
+            traverseParamss(vparamss)
+            traverseTypeAscription(tpt)
+            traverse(rhs)
+        }
+      }
+      def traverseComponents(): Unit = tree match {
+        case LabelDef(name, params, rhs) =>
+          traverseName(name)
+          traverseParams(params)
+          traverse(rhs)
+        case Import(expr, selectors) =>
+          traverse(expr)
+          selectors foreach traverseImportSelector
+        case Annotated(annot, arg) =>
+          traverse(annot)
+          traverse(arg)
+        case Template(parents, self, body) =>
+          traverseParents(parents)
+          traverseSelfType(self)
+          traverseStats(body, tree.symbol)
+        case Block(stats, expr) =>
+          traverseTrees(stats)
+          traverse(expr)
+        case CaseDef(pat, guard, body) =>
+          traversePattern(pat)
+          traverseGuard(guard)
+          traverse(body)
+        case Alternative(trees) =>
+          traverseTrees(trees)
+        case Star(elem) =>
+          traverse(elem)
+        case Bind(name, body) =>
+          traverseName(name)
+          traverse(body)
+        case UnApply(fun, args) =>
+          traverse(fun)
+          traverseTrees(args)
+        case ArrayValue(elemtpt, trees) =>
+          traverse(elemtpt)
+          traverseTrees(trees)
+        case Assign(lhs, rhs) =>
+          traverse(lhs)
+          traverse(rhs)
+        case AssignOrNamedArg(lhs, rhs) =>
+          traverse(lhs)
+          traverse(rhs)
+        case If(cond, thenp, elsep) =>
+          traverse(cond)
+          traverse(thenp)
+          traverse(elsep)
+        case Match(selector, cases) =>
+          traverse(selector)
+          traverseCases(cases)
+        case Return(expr) =>
+          traverse(expr)
+        case Try(block, catches, finalizer) =>
+          traverse(block)
+          traverseCases(catches)
+          traverse(finalizer)
+        case Throw(expr) =>
+          traverse(expr)
+        case New(tpt) =>
+          traverse(tpt)
+        case Typed(expr, tpt) =>
+          traverse(expr)
+          traverseTypeAscription(tpt)
+        case TypeApply(fun, args) =>
+          traverse(fun)
+          traverseTypeArgs(args)
+        case Apply(fun, args) =>
+          traverse(fun)
+          traverseTrees(args)
+        case ApplyDynamic(qual, args) =>
+          traverse(qual)
+          traverseTrees(args)
+        case Super(qual, mix) =>
+          traverse(qual)
+          traverseName(mix)
+        case This(qual) =>
+          traverseName(qual)
+        case Select(qualifier, selector) =>
+          traverse(qualifier)
+          traverseName(selector)
+        case Ident(name) =>
+          traverseName(name)
+        case ReferenceToBoxed(idt) =>
+          traverse(idt)
+        case Literal(const) =>
+          traverseConstant(const)
+        case TypeTree() =>
+          ;
+        case SingletonTypeTree(ref) =>
+          traverse(ref)
+        case SelectFromTypeTree(qualifier, selector) =>
+          traverse(qualifier)
+          traverseName(selector)
+        case CompoundTypeTree(templ) =>
+          traverse(templ)
+        case AppliedTypeTree(tpt, args) =>
+          traverse(tpt)
+          traverseTypeArgs(args)
+        case TypeBoundsTree(lo, hi) =>
+          traverse(lo)
+          traverse(hi)
+        case ExistentialTypeTree(tpt, whereClauses) =>
+          traverse(tpt)
+          traverseTrees(whereClauses)
+        case _ =>
+          xtraverse(this, tree)
+      }
+
+      if (tree.canHaveAttrs) {
+        tree match {
+          case PackageDef(pid, stats)  => traverse(pid) ; traverseStats(stats, mclass(tree.symbol))
+          case md: ModuleDef           => traverseMemberDef(md, mclass(tree.symbol))
+          case md: MemberDef           => traverseMemberDef(md, tree.symbol)
+          case Function(vparams, body) => atOwner(tree.symbol) { traverseParams(vparams) ; traverse(body) }
+          case _                       => traverseComponents()
+        }
+      }
+    }
+
   }
 
   //OPT ordered according to frequency to speed it up.
