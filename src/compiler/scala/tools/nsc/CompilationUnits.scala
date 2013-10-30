@@ -23,7 +23,7 @@ trait CompilationUnits { global: Global =>
   /** One unit of compilation that has been submitted to the compiler.
     * It typically corresponds to a single file of source code.  It includes
     * error-reporting hooks.  */
-  class CompilationUnit(val source: SourceFile) extends CompilationUnitContextApi { self =>
+  class CompilationUnit(var source: SourceFile) extends CompilationUnitContextApi { self =>
 
     /** the fresh name creator */
     implicit val fresh: FreshNameCreator     = new FreshNameCreator
@@ -32,6 +32,11 @@ trait CompilationUnits { global: Global =>
 
     /** the content of the compilation unit in tree form */
     var body: Tree = EmptyTree
+
+    def clear() {
+      body = EmptyTree
+      source = NoSourceFile
+    }
 
     /** The position of the first xml literal encountered while parsing this compilation unit.
      * NoPosition if there were none. Write-once.
