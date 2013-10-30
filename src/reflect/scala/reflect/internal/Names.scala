@@ -443,10 +443,10 @@ trait Names extends api.Names {
     }
 
     /** TODO - find some efficiency. */
-    def append(ch: Char)        = newName("" + this + ch)
-    def append(suffix: String)  = newName("" + this + suffix)
-    def append(suffix: Name)    = newName("" + this + suffix)
-    def append(separator: Char, suffix: Name) = newName("" + this + separator + suffix)
+    def append(ch: Char)        = newName(toString + ch)
+    def append(suffix: String)  = newName(toString + suffix)
+    def append(suffix: Name)    = newName(toString + suffix)
+    def append(separator: Char, suffix: Name) = newName(toString + separator + suffix)
     def prepend(prefix: String) = newName("" + prefix + this)
 
     def decodedName: ThisNameType = newName(decode)
