@@ -111,10 +111,10 @@ trait Definitions extends api.StandardDefinitions {
     /** Is symbol a numeric value class? */
     def isNumericValueClass(sym: Symbol) = ScalaNumericValueClasses contains sym
 
-    def isGetClass(sym: Symbol) = (
-         sym.name == nme.getClass_ // this condition is for performance only, this is called from `Typer#stabliize`.
-      && getClassMethods(sym)
-    )
+    def isGetClass(sym: Symbol) = sym match {
+      case ts: MethodSymbol => (ts.rawname == nme.getClass_) && getClassMethods(sym) // OPT check name first, and avoid megamorphic, bridged call to Symbol#name
+      case _                => false
+    }
 
     lazy val UnitClass    = valueClassSymbol(tpnme.Unit)
     lazy val ByteClass    = valueClassSymbol(tpnme.Byte)
