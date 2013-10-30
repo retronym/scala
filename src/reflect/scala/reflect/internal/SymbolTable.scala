@@ -362,6 +362,12 @@ abstract class SymbolTable extends macros.Universe
     def newMap[K, V]()            = recordCache(mutable.HashMap[K, V]())
     def newSet[K]()               = recordCache(mutable.HashSet[K]())
     def newWeakSet[K <: AnyRef]() = recordCache(new WeakHashSet[K]())
+    def newJavaMap[K, V]()        = {
+      val map = new java.util.HashMap[K, V]()
+      caches += new Clearable { def clear() = map.clear() }
+      import scala.collection.JavaConverters._
+      map.asScala
+    }
   }
 
   /** The set of all installed infotransformers. */
