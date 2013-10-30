@@ -106,80 +106,123 @@ private[internal] trait TypeMaps {
 
     /** Map this function over given type */
     def mapOver(tp: Type): Type = tp match {
-      case tr @ TypeRef(pre, sym, args) =>
-        val pre1 = this(pre)
-        val args1 = (
-          if (trackVariance && args.nonEmpty && !variance.isInvariant && sym.typeParams.nonEmpty)
-            mapOverArgs(args, sym.typeParams)
-          else
-            args mapConserve this
-          )
-        if ((pre1 eq pre) && (args1 eq args)) tp
-        else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
+      case tr: TypeRef =>
+        def mapOverTypeRef = {
+          import tr.{pre, sym, args}
+          val pre1 = this(pre)
+          val args1 = (
+            if (trackVariance && args.nonEmpty && !variance.isInvariant && sym.typeParams.nonEmpty)
+              mapOverArgs(args, sym.typeParams)
+            else
+              args mapConserve this
+            )
+          if ((pre1 eq pre) && (args1 eq args)) tp
+          else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
+        }
+        mapOverTypeRef
       case ThisType(_) => tp
       case SingleType(pre, sym) =>
-        if (sym.isPackageClass) tp // short path
-        else {
-          val pre1 = this(pre)
-          if (pre1 eq pre) tp
-          else singleType(pre1, sym)
+        def mapOverSingleType = {
+          if (sym.isPackageClass) tp // short path
+          else {
+            val pre1 = this(pre)
+            if (pre1 eq pre) tp
+            else singleType(pre1, sym)
+          }
         }
+        mapOverSingleType
       case MethodType(params, result) =>
-        val params1 = flipped(mapOver(params))
-        val result1 = this(result)
-        if ((params1 eq params) && (result1 eq result)) tp
-        else copyMethodType(tp, params1, result1.substSym(params, params1))
+        def mapOverMethodType = {
+          val params1 = flipped(mapOver(params))
+          val result1 = this(result)
+          if ((params1 eq params) && (result1 eq result)) tp
+          else copyMethodType(tp, params1, result1.substSym(params, params1))
+        }
+        mapOverMethodType
       case PolyType(tparams, result) =>
-        val tparams1 = flipped(mapOver(tparams))
-        val result1 = this(result)
-        if ((tparams1 eq tparams) && (result1 eq result)) tp
-        else PolyType(tparams1, result1.substSym(tparams, tparams1))
+        def mapOverPolyType = {
+          val tparams1 = flipped(mapOver(tparams))
+          val result1 = this(result)
+          if ((tparams1 eq tparams) && (result1 eq result)) tp
+          else PolyType(tparams1, result1.substSym(tparams, tparams1))
+        }
+        mapOverPolyType
       case NullaryMethodType(result) =>
-        val result1 = this(result)
-        if (result1 eq result) tp
-        else NullaryMethodType(result1)
+        def mapOverNullaryMethodType = {
+          val result1 = this(result)
+          if (result1 eq result) tp
+          else NullaryMethodType(result1)
+        }
+        mapOverNullaryMethodType
       case ConstantType(_) => tp
       case SuperType(thistp, supertp) =>
-        val thistp1 = this(thistp)
-        val supertp1 = this(supertp)
-        if ((thistp1 eq thistp) && (supertp1 eq supertp)) tp
-        else SuperType(thistp1, supertp1)
+        def mapOverSuperType = {
+          val thistp1 = this(thistp)
+          val supertp1 = this(supertp)
+          if ((thistp1 eq thistp) && (supertp1 eq supertp)) tp
+          else SuperType(thistp1, supertp1)
+        }
+        mapOverSuperType
       case TypeBounds(lo, hi) =>
-        val lo1 = flipped(this(lo))
-        val hi1 = this(hi)
-        if ((lo1 eq lo) && (hi1 eq hi)) tp
-        else TypeBounds(lo1, hi1)
+        def mapOverTypeBounds = {
+          val lo1 = flipped(this(lo))
+          val hi1 = this(hi)
+          if ((lo1 eq lo) && (hi1 eq hi)) tp
+          else TypeBounds(lo1, hi1)
+        }
+        mapOverTypeBounds
       case BoundedWildcardType(bounds) =>
-        val bounds1 = this(bounds)
-        if (bounds1 eq bounds) tp
-        else BoundedWildcardType(bounds1.asInstanceOf[TypeBounds])
+        def mapOverBoundedWildcardType = {
+          val bounds1 = this(bounds)
+          if (bounds1 eq bounds) tp
+          else BoundedWildcardType(bounds1.asInstanceOf[TypeBounds])
+        }
+        mapOverBoundedWildcardType
       case rtp @ RefinedType(parents, decls) =>
-        val parents1 = parents mapConserve this
-        val decls1 = mapOver(decls)
-        copyRefinedType(rtp, parents1, decls1)
+        def mapOverRefinedType = {
+          val parents1 = parents mapConserve this
+          val decls1 = mapOver(decls)
+          copyRefinedType(rtp, parents1, decls1)
+        }
+        mapOverRefinedType
       case ExistentialType(tparams, result) =>
-        val tparams1 = mapOver(tparams)
-        val result1 = this(result)
-        if ((tparams1 eq tparams) && (result1 eq result)) tp
-        else newExistentialType(tparams1, result1.substSym(tparams, tparams1))
+        def mapOverExistentialType = {
+          val tparams1 = mapOver(tparams)
+          val result1 = this(result)
+          if ((tparams1 eq tparams) && (result1 eq result)) tp
+          else newExistentialType(tparams1, result1.substSym(tparams, tparams1))
+        }
+        mapOverExistentialType
       case OverloadedType(pre, alts) =>
-        val pre1 = if (pre.isInstanceOf[ClassInfoType]) pre else this(pre)
-        if (pre1 eq pre) tp
-        else OverloadedType(pre1, alts)
+        def mapOverOverloadedType = {
+          val pre1 = if (pre.isInstanceOf[ClassInfoType]) pre else this(pre)
+          if (pre1 eq pre) tp
+          else OverloadedType(pre1, alts)
+        }
+        mapOverOverloadedType
       case AntiPolyType(pre, args) =>
-        val pre1 = this(pre)
-        val args1 = args mapConserve this
-        if ((pre1 eq pre) && (args1 eq args)) tp
-        else AntiPolyType(pre1, args1)
+        def mapOverAntiPolyType = {
+          val pre1 = this(pre)
+          val args1 = args mapConserve this
+          if ((pre1 eq pre) && (args1 eq args)) tp
+          else AntiPolyType(pre1, args1)
+        }
+        mapOverAntiPolyType
       case tv@TypeVar(_, constr) =>
-        if (constr.instValid) this(constr.inst)
-        else tv.applyArgs(mapOverArgs(tv.typeArgs, tv.params))  //@M !args.isEmpty implies !typeParams.isEmpty
+        def mapOverTypeVar = {
+          if (constr.instValid) this(constr.inst)
+          else tv.applyArgs(mapOverArgs(tv.typeArgs, tv.params))  //@M !args.isEmpty implies !typeParams.isEmpty
+        }
+        mapOverTypeVar
       case AnnotatedType(annots, atp, selfsym) =>
-        val annots1 = mapOverAnnotations(annots)
-        val atp1 = this(atp)
-        if ((annots1 eq annots) && (atp1 eq atp)) tp
-        else if (annots1.isEmpty) atp1
-        else AnnotatedType(annots1, atp1, selfsym)
+        def mapOverAnnotatedType = {
+          val annots1 = mapOverAnnotations(annots)
+          val atp1 = this(atp)
+          if ((annots1 eq annots) && (atp1 eq atp)) tp
+          else if (annots1.isEmpty) atp1
+          else AnnotatedType(annots1, atp1, selfsym)
+        }
+        mapOverAnnotatedType
       /*
             case ErrorType => tp
             case WildcardType => tp
