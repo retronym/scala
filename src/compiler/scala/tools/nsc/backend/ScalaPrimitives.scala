@@ -8,6 +8,8 @@ package tools.nsc
 package backend
 
 import scala.collection.{ mutable, immutable }
+import scala.collection.JavaConverters._
+
 
 /** Scala primitive operations are represented as methods in `Any` and
  *  `AnyVal` subclasses. Here we demultiplex them by providing a mapping
@@ -190,7 +192,7 @@ abstract class ScalaPrimitives {
   final val D2F = 265                          // RunTime.d2f(x)
   final val D2D = 266                          // RunTime.d2d(x)
 
-  private val primitives: mutable.Map[Symbol, Int] = new mutable.HashMap()
+  private val primitives: mutable.Map[Symbol, Int] = (new java.util.HashMap[Symbol, Int]).asScala
 
   /** Initialize the primitive map */
   def init() {
