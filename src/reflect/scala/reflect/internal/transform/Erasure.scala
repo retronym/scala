@@ -73,9 +73,8 @@ trait Erasure {
   // included (use pre.baseType(cls.owner)).
   //
   // This requires that cls.isClass.
-  protected def rebindInnerClass(pre: Type, cls: Symbol): Type = {
-    if (!cls.isTopLevel) cls.owner.tpe_* else pre
-  }
+  protected def rebindInnerClass(pre: Type, cls: Symbol): Type =
+    if (!cls.isTopLevel && !cls.isLocal) cls.owner.tpe_* else pre
 
   def underlyingOfValueClass(clazz: Symbol): Type =
     clazz.derivedValueClassUnbox.tpe.resultType
