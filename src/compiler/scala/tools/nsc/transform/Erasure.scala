@@ -353,7 +353,7 @@ abstract class Erasure extends AddInterfaces
   override def newTyper(context: Context) = new Eraser(context)
 
   private def isSafelyRemovableUnbox(fn: Tree, arg: Tree): Boolean = {
-    isUnbox(fn.symbol) && {
+    currentRun.runDefinitions.isUnbox(fn.symbol) && {
       val cls = arg.tpe.typeSymbol
       (cls == definitions.NullClass) || isBoxedValueClass(cls)
     }
@@ -566,7 +566,7 @@ abstract class Erasure extends AddInterfaces
                 log(s"boxing an unbox: ${tree.symbol} -> ${arg.tpe}")
                 arg
               case _ =>
-                (REF(boxMethod(x)) APPLY tree) setPos (tree.pos) setType ObjectTpe
+                (REF(currentRun.runDefinitions.boxMethod(x)) APPLY tree) setPos (tree.pos) setType ObjectTpe
             }
             }
         }
@@ -614,7 +614,7 @@ abstract class Erasure extends AddInterfaces
               case x          =>
                 assert(x != ArrayClass)
                 // don't `setType pt` the Apply tree, as the Apply's fun won't be typechecked if the Apply tree already has a type
-                Apply(unboxMethod(pt.typeSymbol), tree)
+                Apply(currentRun.runDefinitions.unboxMethod(pt.typeSymbol), tree)
             }
         }
         typedPos(tree.pos)(tree1)
