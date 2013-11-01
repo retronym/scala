@@ -505,7 +505,7 @@ private[internal] trait TypeMaps {
     def capturedSkolems: List[Symbol] = _capturedSkolems
 
     def apply(tp: Type): Type = tp match {
-      case tp @ ThisType(_)                                            => thisTypeAsSeen(tp)
+      case tp @ ThisType(sym)                                          => if (sym.isPackageObjectClass) tp else thisTypeAsSeen(tp)
       case tp @ SingleType(_, sym)                                     => if (sym.isPackageClass) tp else singleTypeAsSeen(tp)
       case tp @ TypeRef(_, sym, _) if isTypeParamOfEnclosingClass(sym) => classParameterAsSeen(tp)
       case _                                                           => mapOver(tp)
