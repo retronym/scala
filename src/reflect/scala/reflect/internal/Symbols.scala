@@ -2955,12 +2955,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isInitialized)
         tpePeriod = currentPeriod
 
+      val old = tpeCache
+
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
-      tpeCache = newTypeRef(
-        if (noTypeParams) Nil
-        else unsafeTypeParams map (_.typeConstructor)
-      )
+      val newPre = newPrefix
+      def newArgs = unsafeTypeParams map (_.typeConstructor)
+      // OPT try to reuse the existing cached type.
+      tpeCache = old match {
+        case TypeRef(pre, sym, args) if (pre eq newPre) && (sym eq this) && noTypeParams =>
+          if (noTypeParams && (args eq Nil))
+            old
+          else {
+            val newArgs0 = newArgs
+            if (newArgs0 == args) old
+            else typeRef(newPre, this, newArgs)
+          }
+        case _ =>
+          typeRef(newPre, this, newArgs)
+      }
       // Avoid carrying around different types in tyconCache and tpeCache
       // for monomorphic types.
       if (noTypeParams && tyconCacheNeedsUpdate)
@@ -3151,7 +3164,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def thisType: Type = {
       val period = thisTypePeriod
       if (period != currentPeriod) {
-        if (!isValid(period)) thisTypeCache = ThisType(this)
+        if (!isValid(period)) {
+          // OPT we can reuse previous ThisType if current and cached period are pre-erasure
+          if (thisTypeCache == null || phaseOf(thisTypePeriod).erasedTypes || phase.erasedTypes)
+            thisTypeCache = ThisType(this)
+        }
         thisTypePeriod = currentPeriod
       }
       thisTypeCache
