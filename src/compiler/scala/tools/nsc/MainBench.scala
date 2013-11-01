@@ -16,8 +16,8 @@ object MainBench extends Driver with EvalLoop {
 
   override def newCompiler() = theCompiler
 
-  val NIter = 50
-  val NBest = 10
+  val NIter = sys.Prop[Int]("scala.bench.iterations").option.getOrElse(50)
+  val NBest = sys.Prop[Int]("scala.bench.nbest").option.getOrElse(10)
 
   override def main(args: Array[String]) = {
     val times = new Array[Long](NIter)
