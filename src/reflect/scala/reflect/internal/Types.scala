@@ -2256,7 +2256,7 @@ trait Types
       h = mix(h, pre match { case ut: UniqueType => ut.hashCode; case _ => pre.hashCode})
       h = mix(h, sym.hashCode)
       if (hasArgs)
-        finalizeHash(mix(h, args.hashCode()), 3)
+        finalizeHash(mix(h, args.hashCode()), 3) // OPT IDEA: special case 1 type arg?
       else
         finalizeHash(h, 2)
     }
@@ -3507,7 +3507,7 @@ trait Types
 
   // Optimization to avoid creating unnecessary new typerefs.
   def copyTypeRef(tp: Type, pre: Type, sym: Symbol, args: List[Type]): Type = tp match {
-    case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.name == sym.name =>
+    case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.rawname == sym.rawname => // OPT use rawname
       if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
         throw new RecoverableCyclicReference(sym)
 
