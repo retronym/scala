@@ -2960,7 +2960,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
       val newPre = newPrefix
-      def newArgs = unsafeTypeParams map (_.typeConstructor)
+      def newArgs = if (noTypeParams) Nil else unsafeTypeParams map (_.typeConstructor)
       // OPT try to reuse the existing cached type.
       tpeCache = old match {
         case TypeRef(pre, sym, args) if (pre eq newPre) && (sym eq this) && noTypeParams =>
