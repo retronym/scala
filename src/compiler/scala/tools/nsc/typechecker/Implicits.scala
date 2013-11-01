@@ -808,7 +808,6 @@ trait Implicits {
       private def isIneligible(info: ImplicitInfo) = (
            info.isCyclicOrErroneous
         || isView && (info.sym eq Predef_conforms)
-        || shadower.isShadowed(info.name)
         || (!context.macrosEnabled && info.sym.isTermMacro)
       )
 
@@ -817,6 +816,7 @@ trait Implicits {
       def survives(info: ImplicitInfo) = (
            !isIneligible(info)                      // cyclic, erroneous, shadowed, or specially excluded
         && isPlausiblyCompatible(info.tpe, wildPt)  // optimization to avoid matchesPt
+        && !shadower.isShadowed(info.name)          // rare, only check for plausibly compatible
         && matchesPt(info)                          // stable and matches expected type
       )
       /** The implicits that are not valid because they come later in the source and
