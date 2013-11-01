@@ -550,10 +550,10 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         val internalName = cachedJN.toString()
         val trackedSym = jsymbol(sym)
         reverseJavaName.get(internalName) match {
-          case Some(oldsym) if oldsym.exists && trackedSym.exists =>
+          case Some(oldsym) if oldsym != trackedSym && oldsym.exists && trackedSym.exists => // OPT only call .exists if the symbols differ.
             assert(
               // In contrast, neither NothingClass nor NullClass show up bytecode-level.
-              (oldsym == trackedSym) || (oldsym == RuntimeNothingClass) || (oldsym == RuntimeNullClass) || (oldsym.isModuleClass && (oldsym.sourceModule == trackedSym.sourceModule)),
+              (oldsym == RuntimeNothingClass) || (oldsym == RuntimeNullClass) || (oldsym.isModuleClass && (oldsym.sourceModule == trackedSym.sourceModule)),
               s"""|Different class symbols have the same bytecode-level internal name:
                   |     name: $internalName
                   |   oldsym: ${oldsym.fullNameString}
