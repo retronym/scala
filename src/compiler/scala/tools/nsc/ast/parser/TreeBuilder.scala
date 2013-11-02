@@ -435,9 +435,9 @@ abstract class TreeBuilder {
   /** Create tree for pattern definition <mods val pat0 = rhs> */
   def makePatDef(mods: Modifiers, pat: Tree, rhs: Tree): List[Tree] = matchVarPattern(pat) match {
     case Some((name, tpt)) =>
-      List(atPos(pat.pos union rhs.pos) {
+      atPos(pat.pos union rhs.pos)(
         ValDef(mods, name.toTermName, tpt, rhs)
-      })
+      ) :: Nil
 
     case None =>
       //  in case there is exactly one variable x_1 in pattern
@@ -471,17 +471,16 @@ abstract class TreeBuilder {
       val matchExpr = atPos((pat1.pos union rhs.pos).makeTransparent) {
         Match(
           rhs1,
-          List(
-            atPos(pat1.pos) {
+            atPos(pat1.pos)(
               CaseDef(pat1, EmptyTree, makeTupleTerm(vars map (_._1) map Ident.apply, flattenUnary = true))
-            }
-          ))
+            ) :: Nil
+          )
       }
       vars match {
         case List((vname, tpt, pos)) =>
-          List(atPos(pat.pos union pos union rhs.pos) {
+          atPos(pat.pos union pos union rhs.pos)(
             ValDef(mods, vname.toTermName, tpt, matchExpr)
-          })
+          ) :: Nil
         case _ =>
           val tmp = freshTermName()
           val firstDef =
