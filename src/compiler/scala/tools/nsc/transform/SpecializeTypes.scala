@@ -402,15 +402,19 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     case NormalizedMember(_)  => true
     case _                    => false
   })
+
+  private val EmptySet = immutable.Set.empty[Symbol]
+
   def specializedTypeVars(tpes: List[Type]): immutable.Set[Symbol] = {
+    def fastAppend(as: Set[Symbol], bs: Set[Symbol]) = if (as eq EmptySet) bs else if (bs eq EmptySet) as else as ++ bs
     @tailrec def loop(result: immutable.Set[Symbol], xs: List[Type]): immutable.Set[Symbol] = {
       if (xs.isEmpty) result
-      else loop(result ++ specializedTypeVars(xs.head), xs.tail)
+      else loop(fastAppend(result, specializedTypeVars(xs.head)), xs.tail)
     }
-    loop(immutable.Set.empty, tpes)
+    loop(EmptySet, tpes)
   }
   def specializedTypeVars(sym: Symbol): immutable.Set[Symbol] = (
-    if (neverHasTypeParameters(sym)) immutable.Set.empty
+    if (neverHasTypeParameters(sym)) EmptySet
     else enteringTyper(specializedTypeVars(sym.info))
   )
 
@@ -429,9 +433,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       else if (sym == ArrayClass)
         specializedTypeVars(args)
       else if (args.isEmpty)
-        Set()
+        EmptySet
       else
-        specializedTypeVars(sym.typeParams zip args collect { case (tp, arg) if tp.isSpecialized => arg })
+        specializedTypeVars(flatMap2(sym.typeParams, args) { case (tp, arg) if tp.isSpecialized => arg :: Nil; case _ => Nil })
 
     case PolyType(tparams, resTpe)   => specializedTypeVars(resTpe :: mapList(tparams)(symInfo)) // OPT
     // since this method may be run at phase typer (before uncurry, where NMTs are eliminated)
@@ -441,7 +445,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     case AnnotatedType(_, tp, _)     => specializedTypeVars(tp)
     case TypeBounds(lo, hi)          => specializedTypeVars(lo :: hi :: Nil)
     case RefinedType(parents, _)     => parents flatMap specializedTypeVars toSet
-    case _                           => immutable.Set.empty
+    case _                           => EmptySet
   }
 
   /** Returns the type parameter in the specialized class `sClass` that corresponds to type parameter
