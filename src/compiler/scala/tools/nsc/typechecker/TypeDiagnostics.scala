@@ -543,6 +543,7 @@ trait TypeDiagnostics {
     }
 
     object checkDead {
+      val enabled: Boolean = settings.warnDeadCode.value
       private var exprStack: List[Symbol] = NoSymbol :: Nil
       // The method being applied to `tree` when `apply` is called.
       private def expr = exprStack.head
@@ -556,10 +557,14 @@ trait TypeDiagnostics {
         tree.tpe != null && tree.tpe.typeSymbol == NothingClass && !isLabelDef
       }
 
+      private def shouldUpdate(fn: Tree) = {
+        val sym = fn.symbol
+        sym != null && sym.isMethod && !sym.isConstructor
+      }
+
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
-        val sym = fn.symbol // OPT just call .symbol once
-        if (sym != null && sym.isMethod && !sym.isConstructor) {
-          exprStack ::= sym
+        if (enabled && shouldUpdate(fn)) {
+          exprStack ::= fn.symbol
           try f finally exprStack = exprStack.tail
         } else f
       }
