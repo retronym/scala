@@ -3361,7 +3361,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             }
           }
 
-          if (!sameLength(formals, args) ||   // wrong nb of arguments
+          if (!hasLength(formals, argslen) || // wrong nb of arguments
               (args exists isNamedArg) ||     // uses a named argument
               isNamedApplyBlock(fun)) {       // fun was transformed to a named apply block =>
                                               // integrate this application into the block
