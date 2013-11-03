@@ -2674,11 +2674,10 @@ trait Trees { self: Universe =>
 
     /** Transforms a tree with a given owner symbol. */
     def atOwner[A](owner: Symbol)(trans: => A): A = {
-      val prevOwner = currentOwner
+      val saved = currentOwner
       currentOwner = owner
-      val result = trans
-      currentOwner = prevOwner
-      result
+      try trans
+      finally currentOwner = saved // !!! OPT this logic is manually inlined into TypingTransformers.atOwner
     }
   }
 
