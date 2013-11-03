@@ -159,7 +159,7 @@ sealed abstract class List[+A] extends AbstractSeq[A]
    *  @usecase def mapConserve(f: A => A): List[A]
    *    @inheritdoc
    */
-  @inline final def mapConserve[B >: A <: AnyRef](f: A => B): List[B] = {
+  final def mapConserve[B >: A <: AnyRef](f: A => B): List[B] = {
     // Note to developers: there exists a duplication between this function and `reflect.internal.util.Collections#map2Conserve`.
     // If any successful optimization attempts or other changes are made, please rehash them there too.
     @tailrec
