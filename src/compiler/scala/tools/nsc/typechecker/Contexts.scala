@@ -175,8 +175,8 @@ trait Contexts { self: Analyzer =>
    * @param scope The current scope
    * @param _outer The next outer context.
    */
-  class Context private[typechecker](val tree: Tree, val owner: Symbol, val scope: Scope,
-                                     val unit: CompilationUnit, _outer: Context) {
+  sealed class Context private[typechecker](val tree: Tree, val owner: Symbol, val scope: Scope,
+                                            val unit: CompilationUnit, _outer: Context) {
     private def outerIsNoContext = _outer eq null
     final def outer: Context = if (outerIsNoContext) NoContext else _outer
 
@@ -366,7 +366,7 @@ trait Contexts { self: Analyzer =>
     // Temporary mode adjustment
     //
 
-    @inline def withMode[T](enabled: ContextMode = NOmode, disabled: ContextMode = NOmode)(op: => T): T = {
+    @inline final def withMode[T](enabled: ContextMode = NOmode, disabled: ContextMode = NOmode)(op: => T): T = {
       val saved = contextMode
       set(enabled, disabled)
       try op
