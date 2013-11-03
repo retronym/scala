@@ -543,9 +543,10 @@ trait TypeDiagnostics {
     }
 
     object checkDead {
-      private val exprStack: mutable.Stack[Symbol] = mutable.Stack(NoSymbol)
+      val enabled: Boolean = settings.warnDeadCode.value
+      private var exprStack: List[Symbol] = NoSymbol :: Nil
       // The method being applied to `tree` when `apply` is called.
-      private def expr = exprStack.top
+      private def expr = exprStack.head
 
       private def exprOK =
         (expr != Object_synchronized) &&
@@ -556,17 +557,22 @@ trait TypeDiagnostics {
         tree.tpe != null && tree.tpe.typeSymbol == NothingClass && !isLabelDef
       }
 
+      private def shouldUpdate(fn: Tree) = {
+        val sym = fn.symbol
+        sym != null && sym.isMethod && !sym.isConstructor
+      }
+
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
-        if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
-          exprStack push fn.symbol
-          try f finally exprStack.pop()
+        if (enabled && shouldUpdate(fn)) {
+          exprStack ::= fn.symbol
+          try f finally exprStack = exprStack.tail
         } else f
       }
       def apply(tree: Tree): Tree = {
         // Error suppression will squash some of these warnings unless we circumvent it.
         // It is presumed if you are using a -Y option you would really like to hear
         // the warnings you've requested.
-        if (settings.warnDeadCode && context.unit.exists && treeOK(tree) && exprOK)
+        if (enabled && context.unit.exists && treeOK(tree) && exprOK)
           context.warning(tree.pos, "dead code following this construct", force = true)
         tree
       }
