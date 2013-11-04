@@ -3,10 +3,16 @@
  [ ] why does `Tree#symbol` show up so prominently in profiles? Can we route the common
      cases through a monomorphic call?
  [x] TailCalls takes 2%, half that time is in `failHere`, updating a hash map from Context => Position.
- [x] @inline Transformer.atOwner,  (?)
+ [ ] @inline Transformer.atOwner, merge with SuperAccessors.atOwner
  [x] check inlining in Typers, etc.
-
-
+       - important to benchmark after clean builds as inlining seems more reliable compiling from source
+       - this might mean that we are missing inlining opportunities between scala-reflect / scala-compiler
+         e.g. Type#orElse
+ [x] We have a lot of inefficient convenience methods in Name/NameOps that convert Strings to names, e.g.
+     `def startsWith(s: String) = startsWith(s: TermName)`. These are used by `isLocalDummyName`,
+     `dropLocal`, `dropSetter`, `isLoopHeaderLabel`,
+     [ ] do another sweep for residual inefficiencies
+ [x] hoist needsFlatClasses checks in Scope creation
 ================
 Implicit Search:     9%
 
