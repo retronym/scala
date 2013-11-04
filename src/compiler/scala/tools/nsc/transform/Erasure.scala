@@ -847,7 +847,7 @@ abstract class Erasure extends AddInterfaces
                     Select(q(), Object_isInstanceOf) setPos sel.pos,
                     List(TypeTree(tp) setPos targ.pos)) setPos fn.pos,
                   List()) setPos tree.pos
-              targ.tpe match {
+              targ.tpe.flattenRefined match { // flattenRefined needed for run/t5688.scala. Previously, Uncurry's info transformer would call normalize
                 case SingleType(_, _) | ThisType(_) | SuperType(_, _) =>
                   val cmpOp = if (targ.tpe <:< AnyValTpe) Any_equals else Object_eq
                   atPos(tree.pos) {
