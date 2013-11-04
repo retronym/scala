@@ -498,7 +498,7 @@ abstract class BCodeHelpers extends BCodeTypes with BytecodeWriters {
       import definitions.ArrayClass
 
       // Call to .normalize fixes #3003 (follow type aliases). Otherwise, primitiveOrArrayOrRefType() would return ObjectReference.
-      t.normalize match {
+      t.dealiasWiden match {
 
         case ThisType(sym) =>
           if (sym == ArrayClass) ObjectReference
