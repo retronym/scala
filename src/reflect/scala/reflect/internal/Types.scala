@@ -513,6 +513,9 @@ trait Types
     /** Expands type aliases. */
     def dealias = this
 
+    /** If this is a refined type of the form `A with (B with C)`, flatten to `A with B with C`. */
+    def flattenRefined: Type = this
+
     /** Repeatedly apply widen and dealias until they have no effect.
      *  This compensates for the fact that type aliases can hide beneath
      *  singleton types and singleton types can hide inside type aliases.
@@ -1776,16 +1779,25 @@ trait Types
         normalized
       }
 
-    private var normalized: Type = _
-    private def normalizeImpl = {
+    override def flattenRefined: Type = {
       // TODO see comments around def intersectionType and def merge
-      def flatten(tps: List[Type]): List[Type] = tps flatMap { case RefinedType(parents, ds) if ds.isEmpty => flatten(parents) case tp => List(tp) }
+      def flatten(tps: List[Type]): List[Type] = tps flatMap {
+        case RefinedType(parents, ds) if ds.isEmpty => flatten(parents) case tp => List(tp)
+      }
       val flattened = flatten(parents).distinct
       if (decls.isEmpty && hasLength(flattened, 1)) {
         flattened.head
       } else if (flattened != parents) {
         refinedType(flattened, if (typeSymbol eq NoSymbol) NoSymbol else typeSymbol.owner, decls, NoPosition)
-      } else if (isHigherKinded) {
+      }
+      else this
+    }
+
+    private var normalized: Type = _
+    private def normalizeImpl = {
+      val flat = flattenRefined
+      if (flat ne this) flat
+      else if (isHigherKinded) {
         // MO to AM: This is probably not correct
         // If they are several higher-kinded parents with different bounds we need
         // to take the intersection of their bounds
