@@ -114,13 +114,14 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     protected def enterEntry(e: ScopeEntry) {
       flushElemsCache()
       if (hashtable ne null)
-        enterInHash(e)
+        enterInHash(e, useRawName = false)
       else if (size >= MIN_HASH)
         createHash()
     }
 
-    private def enterInHash(e: ScopeEntry): Unit = {
-      val i = e.sym.name.start & HASHMASK
+    private def enterInHash(e: ScopeEntry, useRawName: Boolean): Unit = {
+      val name = if (useRawName) e.sym.rawname else e.sym.name // OPT
+      val i = name.start & HASHMASK
       e.tail = hashtable(i)
       hashtable(i) = e
     }
@@ -147,14 +148,14 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     private def createHash() {
       hashtable = new Array[ScopeEntry](HASHSIZE)
-      enterAllInHash(elems)
+      enterAllInHash(elems, useRawName = !phase.flatClasses)
     }
 
-    private def enterAllInHash(e: ScopeEntry, n: Int = 0) {
+    private def enterAllInHash(e: ScopeEntry, n: Int = 0, useRawName: Boolean = false) {
       if (e ne null) {
         if (n < maxRecursions) {
-          enterAllInHash(e.next, n + 1)
-          enterInHash(e)
+          enterAllInHash(e.next, n + 1, useRawName)
+          enterInHash(e, useRawName)
         } else {
           var entries: List[ScopeEntry] = List()
           var ee = e
@@ -162,7 +163,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
             entries = ee :: entries
             ee = ee.next
           }
-          entries foreach enterInHash
+          entries foreach (e => enterInHash(e, useRawName))
         }
       }
     }
