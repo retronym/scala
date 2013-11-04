@@ -158,6 +158,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
     def asNameType(n: Name): NameType
+    /* More efficient version of `this.name == other.name` */
+    final def hasSameName(other: Symbol): Boolean = rawname == other.rawname && name == other.name
 
     // Syncnote: need not be protected, as only assignment happens in owner_=, which is not exposed to api
     // The null check is for NoSymbol, which can't pass a reference to itself to the constructor and also
@@ -2636,13 +2638,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def isSetterParameter  = isValueParameter && owner.isSetter
     override def isAccessor         = this hasFlag ACCESSOR
     override def isGetter           = isAccessor && !isSetter
-    override def isSetter           = isAccessor && nme.isSetterName(name)  // todo: make independent of name, as this can be forged.
-    override def isLocalDummy       = nme.isLocalDummyName(name)
-    override def isClassConstructor = name == nme.CONSTRUCTOR
-    override def isMixinConstructor = name == nme.MIXIN_CONSTRUCTOR
-    override def isConstructor      = nme.isConstructorName(name)
+    override def isSetter           = isAccessor && nme.isSetterName(rawname)  // todo: make independent of name, as this can be forged.
+    override def isLocalDummy       = nme.isLocalDummyName(rawname)
+    override def isClassConstructor = rawname == nme.CONSTRUCTOR
+    override def isMixinConstructor = rawname == nme.MIXIN_CONSTRUCTOR
+    override def isConstructor      = nme.isConstructorName(rawname)
 
-    override def isPackageObject = isModule && (name == nme.PACKAGE)
+    override def isPackageObject = isModule && (rawname == nme.PACKAGE)
 
     // The name in comments is what it is being disambiguated from.
     // TODO - rescue CAPTURED from BYNAMEPARAM so we can see all the names.
@@ -2744,13 +2746,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     override def name: TermName = {
       if (Statistics.hotEnabled) Statistics.incCounter(nameCount)
-      if (!isMethod && needsFlatClasses) {
+      def flattenedName: TermName = {
         if (flatname eq null)
           flatname = nme.flattenedName(rawowner.name, rawname)
-
         flatname
       }
-      else rawname
+      if (!isMethod && needsFlatClasses) flattenedName else rawname
     }
   }
   implicit val ModuleSymbolTag = ClassTag[ModuleSymbol](classOf[ModuleSymbol])
@@ -3152,13 +3153,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     override def name: TypeName = {
       if (Statistics.canEnable) Statistics.incCounter(nameCount)
-      if (needsFlatClasses) {
+      def flattenedName: TypeName = {
         if (flatname eq null)
-          flatname = tpnme.flattenedName(rawowner.name, rawname)
-
-        flatname
+            flatname = tpnme.flattenedName(rawowner.name, rawname)
+          flatname
       }
-      else rawname
+      if (needsFlatClasses) flattenedName else rawname
     }
 
     /** A symbol carrying the self type of the class as its type */
