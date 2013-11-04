@@ -39,7 +39,7 @@ abstract class Attachments { self =>
 
   /** An underlying payload of the given class type `T`. */
   def get[T: ClassTag]: Option[T] =
-    (all filter matchesTag[T]).headOption.asInstanceOf[Option[T]]
+    if (isEmpty) None else (all find matchesTag[T]).asInstanceOf[Option[T]]
 
   /** Creates a copy of this attachment with the payload slot of T added/updated with the provided value.
    *  Replaces an existing payload of the same type, if exists.
