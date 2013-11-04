@@ -459,21 +459,31 @@ trait Names extends api.Names {
   implicit def TermNameOps(name: TermName): NameOps[TermName] = new NameOps(name)
   implicit def TypeNameOps(name: TypeName): NameOps[TypeName] = new NameOps(name)
 
+  object NameOps {
+    import NameTransformer._
+    // Note: these can't be members of the enclosing trait, as the compiler
+    //       expects keywords to the first names in the name table. being lazy
+    //       by putting them here avoids that crash.
+    private val LOCAL_SUFFIX_NAME:  TermName = LOCAL_SUFFIX_STRING
+    private val SETTER_SUFFIX_NAME: TermName = SETTER_SUFFIX_STRING
+    private val MODULE_SUFFIX_NAME: TermName = MODULE_SUFFIX_STRING
+  }
+
   /** FIXME: This is a good example of something which is pure "value class" but cannot
    *  reap the benefits because an (unused) $outer pointer so it is not single-field.
    */
   final class NameOps[T <: Name](name: T) {
-    import NameTransformer._
+    import NameOps._, NameTransformer._
     def stripSuffix(suffix: String): T = stripSuffix(suffix: TermName)
     def stripSuffix(suffix: Name): T   = if (name endsWith suffix) dropRight(suffix.length) else name
     def take(n: Int): T                = name.subName(0, n).asInstanceOf[T]
     def drop(n: Int): T                = name.subName(n, name.length).asInstanceOf[T]
     def dropRight(n: Int): T           = name.subName(0, name.length - n).asInstanceOf[T]
-    def dropLocal: TermName            = name.toTermName stripSuffix LOCAL_SUFFIX_STRING
-    def dropSetter: TermName           = name.toTermName stripSuffix SETTER_SUFFIX_STRING
-    def dropModule: T                  = this stripSuffix MODULE_SUFFIX_STRING
-    def localName: TermName            = getterName append LOCAL_SUFFIX_STRING
-    def setterName: TermName           = getterName append SETTER_SUFFIX_STRING
+    def dropLocal: TermName            = name.toTermName stripSuffix LOCAL_SUFFIX_NAME
+    def dropSetter: TermName           = name.toTermName stripSuffix SETTER_SUFFIX_NAME
+    def dropModule: T                  = this stripSuffix MODULE_SUFFIX_NAME
+    def localName: TermName            = getterName append LOCAL_SUFFIX_NAME
+    def setterName: TermName           = getterName append SETTER_SUFFIX_NAME
     def getterName: TermName           = dropTraitSetterSeparator.dropSetter.dropLocal
 
     private def dropTraitSetterSeparator: TermName =
