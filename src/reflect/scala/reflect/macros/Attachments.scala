@@ -39,7 +39,7 @@ abstract class Attachments { self =>
 
   /** An underlying payload of the given class type `T`. */
   def get[T: ClassTag]: Option[T] =
-    (all filter matchesTag[T]).headOption.asInstanceOf[Option[T]]
+    if (isEmpty) None else (all find matchesTag[T]).asInstanceOf[Option[T]]
 
   def contains[T: ClassTag]: Boolean =
     !isEmpty && (all exists matchesTag[T]) // OPT hot method, optimize the common case of empty attachments.

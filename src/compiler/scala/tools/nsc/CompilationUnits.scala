@@ -107,13 +107,20 @@ trait CompilationUnits { global: Global =>
     // is cached here and re-used in typedDefDef / typedValDef
     // Also used to cache imports type-checked by namer.
     object transformed {
-      private val map = new java.util.IdentityHashMap[Tree, Tree]
-      def update(t1: Tree, t2: Tree): Unit = map.put(t1, t2)
-      def remove(t: Tree): Option[Tree] = Option(map remove t)
-      def apply(t: Tree): Tree = map.get(t)
-      def contains(t: Tree): Boolean = map.containsKey(t)
-      def getOrElse(t: Tree, default: => Tree): Tree = Option(map.get(t)).getOrElse(default)
-      def clear(): Unit = map.clear()
+      def update(t1: Tree, t2: Tree): Unit = {
+        if (t1 ne t2)
+          t1.updateAttachment(TransformedTreeAttachment(t2))
+      }
+      def remove(t: Tree): Option[Tree] = {
+        val result = get(t)
+        if (result.isDefined) t.removeAttachment[TransformedTreeAttachment]
+        result
+      }
+      def get(t: Tree): Option[Tree] = t.attachments.get[TransformedTreeAttachment].map(_.newTree)
+      def getOrElse(t: Tree, default: => Tree): Tree = apply(t).orElse(default)
+      def apply(t: Tree): Tree = get(t).getOrElse(EmptyTree)
+      def contains(t: Tree): Boolean = t.attachments.contains[TransformedTreeAttachment]
+      def clear(): Unit = ()
     }
 
 

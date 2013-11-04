@@ -30,4 +30,7 @@ trait StdAttachments {
    *  Therefore we need this hack (see `Reshape.toPreTyperTypeTree` for a detailed explanation).
    */
   case class CompoundTypeTreeOriginalAttachment(parents: List[Tree], stats: List[Tree])
+
+  /** Stores typechecked trees created by the Namer when computing signature types. The typer reuses these to avoid repeating work. */
+  final case class TransformedTreeAttachment(newTree: Tree)
 }
