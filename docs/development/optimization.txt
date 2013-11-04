@@ -13,8 +13,26 @@
      `dropLocal`, `dropSetter`, `isLoopHeaderLabel`,
      [ ] do another sweep for residual inefficiencies
  [x] hoist needsFlatClasses checks in Scope creation
+ [ ] the unique type internally uses .equals to find entries in the bucket; it could just use eq.
+     0.4% potential saving
+
+ [x] !!! Intermittent NPE:
+
+        1966ms
+        2119ms
+        error: java.lang.NullPointerException
+            at scala.reflect.internal.Types$$anonfun$45.apply(Types.scala:4590)
+            at scala.reflect.internal.util.Collections$class.loop$1(Collections.scala:56)
+            at scala.reflect.internal.util.Collections$class.mapList(Collections.scala:60)
+            at scala.reflect.internal.SymbolTable.mapList(SymbolTable.scala:14)
+            at scala.reflect.internal.Types$MethodType.paramTypes(Types.scala:2534)
+            at scala.tools.nsc.transform.UnCurry$UnCurryTransformer.mainTransform(UnCurry.scala:468)
+            at scala.tools.nsc.transform.UnCurry$UnCurryTransformer.transform(UnCurry.scala:93)
+
 ================
 Implicit Search:     9%
 
 Overload Resolution:  5%
    - 64% of which is inferring implicits to adapt arguments
+
+================

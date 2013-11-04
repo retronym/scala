@@ -103,6 +103,20 @@ trait CompilationUnits { global: Global =>
       override def toString = map.toString
     }
 
+    // namer calls typer.computeType(rhs) on DefDef / ValDef when tpt is empty. the result
+    // is cached here and re-used in typedDefDef / typedValDef
+    // Also used to cache imports type-checked by namer.
+    object transformed {
+      private val map = new java.util.IdentityHashMap[Tree, Tree]
+      def update(t1: Tree, t2: Tree): Unit = map.put(t1, t2)
+      def remove(t: Tree): Option[Tree] = Option(map remove t)
+      def apply(t: Tree): Tree = map.get(t)
+      def contains(t: Tree): Boolean = map.containsKey(t)
+      def getOrElse(t: Tree, default: => Tree): Tree = Option(map.get(t)).getOrElse(default)
+      def clear(): Unit = map.clear()
+    }
+
+
     /** things to check at end of compilation unit */
     val toCheck = new ListBuffer[() => Unit]
 
