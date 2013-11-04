@@ -537,7 +537,7 @@ abstract class CleanUp extends Transform with ast.TreeDSL {
         val consed = rest.elems.reverse.foldLeft(gen.mkAttributedRef(NilModule): Tree)(
           (acc, elem) => New(ConsClass, elem, acc)
         )
-        // Limiting extra stack frames consumed by generated code
+        // Limiting extra stack space consumed by generated code
         reducingTransformListApply(rest.elems.length) {
           super.transform(localTyper.typedPos(tree.pos)(consed))
         }
