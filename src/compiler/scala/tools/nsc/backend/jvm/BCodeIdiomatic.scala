@@ -683,8 +683,9 @@ abstract class BCodeIdiomatic extends BCodeGlue {
    * The entry-value for a LabelDef entry-key always contains the entry-key.
    *
    */
-  class LabelDefsFinder extends Traverser {
+  class LabelDefsFinder(root: Tree) extends Traverser {
     val result = mutable.Map.empty[Tree, List[LabelDef]]
+    var rootResult: List[LabelDef] = Nil // OPT always lookuped up from resetMethodBookeeping, avoid map access
     var acc: List[LabelDef] = Nil
 
     /*
@@ -702,6 +703,7 @@ abstract class BCodeIdiomatic extends BCodeGlue {
       if (acc.isEmpty) {
         acc = saved
       } else {
+        if (tree == root) rootResult = acc
         result += (tree -> acc)
         acc = acc ::: saved
       }
