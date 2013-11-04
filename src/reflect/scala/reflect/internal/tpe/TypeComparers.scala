@@ -66,7 +66,7 @@ trait TypeComparers {
     if (sym1 == sym2)
       sym1.hasPackageFlag || sym1.owner.hasPackageFlag || phase.erasedTypes || pre1 =:= pre2
     else
-      (sym1.name == sym2.name) && isUnifiable(pre1, pre2)
+      (sym1.rawname == sym2.rawname /*OPT*/) && (sym1.name == sym2.name) && isUnifiable(pre1, pre2)
   )
 
   def isDifferentType(tp1: Type, tp2: Type): Boolean = try {
