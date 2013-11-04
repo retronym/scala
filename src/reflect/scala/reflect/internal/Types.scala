@@ -2021,7 +2021,7 @@ trait Types
   def pendingVolatiles = _pendingVolatiles
 
   class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
-    require(args0.nonEmpty, this)
+    require(args0 ne Nil, this)
 
     /** No unapplied type params size it has (should have) equally as many args. */
     override def isHigherKinded = false
@@ -2077,7 +2077,7 @@ trait Types
     // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
     // TypeRefs w/o type params that occur in java signatures/code are considered raw types, and are
     // represented as existential types.
-    override def isHigherKinded = typeParams.nonEmpty
+    override def isHigherKinded = (typeParams ne Nil)
     override def typeParams     = if (isDefinitionsInitialized) sym.typeParams else sym.unsafeTypeParams
     private def isRaw           = !phase.erasedTypes && isRawIfWithoutArgs(sym)
 
@@ -2520,7 +2520,7 @@ trait Types
         true
     }
 
-    def isImplicit = params.nonEmpty && params.head.isImplicit
+    def isImplicit = (params ne Nil) && params.head.isImplicit
     def isJava = false // can we do something like for implicits? I.e. do Java methods without parameters need to be recognized?
 
     //assert(paramTypes forall (pt => !pt.typeSymbol.isImplClass))//DEBUG
@@ -4589,7 +4589,7 @@ trait Types
   private[scala] val symTypeIsError = (sym: Symbol) => sym.tpe.isError
   private[scala] val symType = (sym: Symbol) => sym.tpe
   private[scala] val anySymType = (a: Any, sym: Symbol) => sym.tpe
-  private[scala] val typeHasAnnotations = (tp: Type) => tp.annotations.nonEmpty
+  private[scala] val typeHasAnnotations = (tp: Type) => tp.annotations ne Nil
   private[scala] val boundsContainType = (bounds: TypeBounds, tp: Type) => bounds containsType tp
   private[scala] val typeListIsEmpty = (ts: List[Type]) => ts.isEmpty
   private[scala] val typeIsSubTypeOfSerializable = (tp: Type) => tp <:< SerializableTpe
