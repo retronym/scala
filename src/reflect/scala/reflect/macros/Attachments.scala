@@ -42,7 +42,9 @@ abstract class Attachments { self =>
     (all filter matchesTag[T]).headOption.asInstanceOf[Option[T]]
 
   def contains[T: ClassTag]: Boolean =
-    (all exists matchesTag[T])
+    !isEmpty && (all exists matchesTag[T]) // OPT hot method, optimize the common case of empty attachments.
+
+  protected def isEmpty: Boolean = true
 
   /** Creates a copy of this attachment with the payload slot of T added/updated with the provided value.
    *  Replaces an existing payload of the same type, if exists.
@@ -63,4 +65,5 @@ abstract class Attachments { self =>
 private final class NonemptyAttachments[P >: Null](override val pos: P, override val all: Set[Any]) extends Attachments {
   type Pos = P
   def withPos(newPos: Pos) = new NonemptyAttachments(newPos, all)
+  override protected def isEmpty: Boolean = false
 }
