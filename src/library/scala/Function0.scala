@@ -33,7 +33,7 @@ package scala
  *  latter can specify inputs which it will not handle.
 
  */
-trait Function0[@specialized(Specializable.Primitives) +R] extends AnyRef { self =>
+trait Function0[@specialized(Byte, Short, Int, Long, Char, Float, Double, Boolean, Unit) +R] extends AnyRef { self =>
   /** Apply the body of this function to the arguments.
    *  @return   the result of function application.
    */
