@@ -345,6 +345,13 @@ trait Names extends api.Names {
         i += 1
       i == prefix.length
     }
+    final def startsWith(prefix: String, start: Int): Boolean = {
+      var i = 0
+      while (i < prefix.length && start + i < len &&
+             chrs(index + start + i) == prefix.charAt(i))
+        i += 1
+      i == prefix.length
+    }
 
     /** Does this name end with suffix? */
     final def endsWith(suffix: Name): Boolean = endsWith(suffix, len)
@@ -354,6 +361,13 @@ trait Names extends api.Names {
       var i = 1
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == chrs(suffix.start + suffix.length - i))
+        i += 1
+      i > suffix.length
+    }
+    final def endsWith(suffix: String, end: Int): Boolean = {
+      var i = 1
+      while (i <= suffix.length && i <= end &&
+             chrs(index + end - i) == suffix.charAt(suffix.length - i))
         i += 1
       i > suffix.length
     }
@@ -382,9 +396,9 @@ trait Names extends api.Names {
     final def startChar: Char                   = this charAt 0
     final def endChar: Char                     = this charAt len - 1
     final def startsWith(char: Char): Boolean   = len > 0 && startChar == char
-    final def startsWith(name: String): Boolean = startsWith(newTermName(name))
+    final def startsWith(name: String): Boolean = startsWith(name, 0)
     final def endsWith(char: Char): Boolean     = len > 0 && endChar == char
-    final def endsWith(name: String): Boolean   = endsWith(newTermName(name))
+    final def endsWith(name: String): Boolean   = endsWith(name, len)
 
     /** Rewrite the confusing failure indication via result == length to
      *  the normal failure indication via result == -1.
