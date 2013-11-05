@@ -571,7 +571,7 @@ trait Implicits {
       case tr1 @ TypeRef(_, sym1, _) if sym1.isClass =>
         tp2.dealiasWiden match {
           case TypeRef(_, sym2, _)         => ((sym1 eq ByNameParamClass) != (sym2 eq ByNameParamClass)) || (sym2.isClass && !(sym1 isWeakSubClass sym2))
-          case RefinedType(parents, decls) => decls.nonEmpty && tr1.member(decls.head.name) == NoSymbol
+          case RefinedType(parents, decls) => decls.nonEmpty && !tr1.hasNonPrivateMember(decls.head.name)
           case _                           => false
         }
       case _ => false

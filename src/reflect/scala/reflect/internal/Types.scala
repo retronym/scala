@@ -600,6 +600,10 @@ trait Types
     def member(name: Name): Symbol =
       memberBasedOnName(name, BridgeFlags)
 
+    def hasNonPrivateMember(name: Name): Boolean = {
+      baseClasses.exists(_.info.nonPrivateDecl(name) != NoSymbol)
+    }
+
     /** The non-private member with given name,
      *  an OverloadedSymbol if several exist, NoSymbol if none exist.
      *  Bridges are excluded from the result
