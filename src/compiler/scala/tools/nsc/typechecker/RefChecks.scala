@@ -1607,6 +1607,10 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       }
     }
 
+    private def checkUnexpandedMacro(t: Tree) =
+      if (!t.isDef && t.hasSymbolField && t.symbol.isTermMacro)
+        unit.error(t.pos, "macro has not been expanded")
+
     override def transform(tree: Tree): Tree = {
       val savedLocalTyper = localTyper
       val savedCurrentApplication = currentApplication
@@ -1764,6 +1768,9 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
               varianceValidator.traverse(result)
           case _ =>
         }
+
+        checkUnexpandedMacro(result)
+
         result
       } catch {
         case ex: TypeError =>
