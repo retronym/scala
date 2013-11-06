@@ -9,7 +9,7 @@ package internal
 
 import scala.collection.{ mutable, immutable }
 import scala.collection.mutable.ListBuffer
-import util.{ Statistics, shortClassOfInstance }
+import scala.reflect.internal.util.{TriState, Statistics, shortClassOfInstance}
 import Flags._
 import scala.annotation.tailrec
 import scala.reflect.io.{ AbstractFile, NoAbstractFile }
@@ -704,9 +704,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // class C extends D( { class E { ... } ... } ). Here, E is a class local to a constructor
     def isClassLocalToConstructor = false
 
-    final def isDerivedValueClass =
-      isClass && !hasFlag(PACKAGE | TRAIT) &&
-      info.firstParent.typeSymbol == AnyValClass && !isPrimitiveValueClass
+    // overridden and cached in ClassSymbol
+    def isDerivedValueClass = false
 
     final def isMethodWithExtension =
       isMethod && owner.isDerivedValueClass && !isParamAccessor && !isConstructor && !hasFlag(SUPERACCESSOR) && !isMacro
@@ -3169,6 +3168,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def typeOfThis_=(tp: Type) {
       thissym = newThisSym(nme.this_, pos).setInfo(tp)
     }
+
+    // OPT: this was reporting 1-2% compile times, so cache per-run.
+    // Assumption: no class has `AnyVal` added as a parent after creation.
+    private var isDerivedValueClassCache: TriState = TriState.Unknown
+    private var isDerivedValueClassRun: Int = NoRunId
+    override final def isDerivedValueClass: Boolean = {
+      if (!isDerivedValueClassCache.isKnown || currentRunId != isDerivedValueClassRun) {
+        isDerivedValueClassCache = computeIsDerivedValueClass
+        isDerivedValueClassRun = currentRunId
+      }
+      isDerivedValueClassCache.booleanValue
+    }
+
+    private def computeIsDerivedValueClass: Boolean = (
+         isClass
+      && !hasFlag(PACKAGE | TRAIT)
+      && info.firstParent.typeSymbol == AnyValClass
+      && !isPrimitiveValueClass
+    )
 
     override def cloneSymbolImpl(owner: Symbol, newFlags: Long): ClassSymbol = {
       val clone = owner.newClassSymbol(name, pos, newFlags)
