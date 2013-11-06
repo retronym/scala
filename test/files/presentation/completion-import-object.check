@@ -1,0 +1,33 @@
+reload: Completions.scala
+
+askScopeCompletion at Completions.scala(17,4)
+================================================================================
+[response] askScopeCompletion at (17,4)
+retrieved 5 members
+[accessible:  true] `class Ctest.C`
+[accessible:  true] `class Footest.Foo`
+[accessible:  true] `constructor Foo()test.Foo`
+[accessible:  true] `object Otest.O.type`
+[accessible:  true] `value otest.O.type`
+================================================================================
+
+askScopeCompletion at Completions.scala(21,4)
+================================================================================
+[response] askScopeCompletion at (21,4)
+retrieved 4 members
+[accessible:  true] `class Ctest.C`
+[accessible:  true] `class Footest.Foo`
+[accessible:  true] `constructor Foo()test.Foo`
+[accessible:  true] `object Otest.O.type`
+================================================================================
+
+askScopeCompletion at Completions.scala(26,4)
+================================================================================
+[response] askScopeCompletion at (26,4)
+retrieved 5 members
+[accessible:  true] `class Ctest.C`
+[accessible:  true] `class Footest.Foo`
+[accessible:  true] `constructor Foo()test.Foo`
+[accessible:  true] `object Otest.O.type`
+[accessible:  true] `value ctest.C`
+================================================================================
