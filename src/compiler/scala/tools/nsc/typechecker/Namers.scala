@@ -1040,8 +1040,9 @@ trait Namers extends MethodSynthesis {
       }
 
       def overriddenSymbol(resTp: Type) = {
+        val schema = methodTypeSchema(resTp)
         intersectionType(methOwner.info.parents).nonPrivateMember(meth.name).filter { sym =>
-          sym != NoSymbol && (site.memberType(sym) matches methodTypeSchema(resTp))
+          sym != NoSymbol && (site.memberType(sym) matches schema)
         }
       }
       // TODO: see whether this or something similar would work instead:
