@@ -47,4 +47,15 @@ trait FastTrack {
     make(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
     make(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
   )
+
+  private val (fastTrackKeys, fastTrackValues) = fastTrack.toArray.unzip
+
+  def fastTrackEntry(s: Symbol): Option[FastTrackEntry] = {
+    var i = 0
+    while (i < fastTrackKeys.length) {
+      if (fastTrackKeys(i) eq s) return Some(fastTrackValues(i))
+      i += 1
+    }
+    None
+  }
 }
