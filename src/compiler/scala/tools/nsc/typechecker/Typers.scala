@@ -1003,7 +1003,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def adaptMismatchedSkolems() = {
         def canIgnoreMismatch = (
              !context.reportErrors && isPastTyper
-          || tree.attachments.get[MacroExpansionAttachment].isDefined
+          || tree.attachments.hasAttachment[MacroExpansionAttachment]
         )
         def bound = pt match {
           case ExistentialType(qs, _) => qs

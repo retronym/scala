@@ -53,6 +53,10 @@ abstract class Attachments { self =>
     if (newAll.isEmpty) pos.asInstanceOf[Attachments { type Pos = self.Pos }]
     else new NonemptyAttachments[Pos](this.pos, newAll)
   }
+  def hasAttachment[T: ClassTag]: Boolean = {
+    !isEmpty && (all exists matchesTag[T])
+  }
+  def isEmpty: Boolean = true
 }
 
 // SI-7018: This used to be an inner class of `Attachments`, but that led to a memory leak in the
@@ -60,4 +64,5 @@ abstract class Attachments { self =>
 private final class NonemptyAttachments[P >: Null](override val pos: P, override val all: Set[Any]) extends Attachments {
   type Pos = P
   def withPos(newPos: Pos) = new NonemptyAttachments(newPos, all)
+  override def isEmpty: Boolean = false
 }
