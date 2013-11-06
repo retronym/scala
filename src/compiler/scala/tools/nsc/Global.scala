@@ -1101,7 +1101,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     else try {
       currentRun.supplementedError = true
       val tree      = analyzer.lastTreeToTyper
-      val sym       = tree.symbol
+      val sym       = Option(tree.symbol).getOrElse(NoSymbol)
       val tpe       = tree.tpe
       val site      = lastSeenContext.enclClassOrMethod.owner
       val pos_s     = if (tree.pos.isDefined) s"line ${tree.pos.line} of ${tree.pos.source.file}" else "<unknown>"
