@@ -15,6 +15,11 @@
  [x] hoist needsFlatClasses checks in Scope creation
  [ ] the unique type internally uses .equals to find entries in the bucket; it could just use eq.
      0.4% potential saving
+ [x] BCodeSkelBuilder: labelDefsAtOrUnder(dd.rhs) avoid map lookup on common case of empty map
+ [ ] fullNameInternal avoid intermediate names
+ [ ] Plug the leak, and seek a better design, for ConstructorDefaultsAttachment
+ [ ] Try to speed up fasttrack access in methodSig. Array[Symbol] with linear search?
+ [ ] kill Symbol#reallyExists
 
  [x] !!! Intermittent NPE:
 
