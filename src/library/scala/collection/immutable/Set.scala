@@ -74,6 +74,16 @@ object Set extends ImmutableSetFactory[Set] {
     override def foreach[U](f: A =>  U): Unit = {
       f(elem1)
     }
+    override def exists(f: A => Boolean): Boolean = {
+      f(elem1)
+    }
+    override def forall(f: A => Boolean): Boolean = {
+      f(elem1)
+    }
+    override def find(f: A => Boolean): Option[A] = {
+      if (f(elem1)) Some(elem1)
+      else None
+    }
   }
 
   /** An optimized representation for immutable sets of size 2 */
@@ -93,6 +103,17 @@ object Set extends ImmutableSetFactory[Set] {
       Iterator(elem1, elem2)
     override def foreach[U](f: A =>  U): Unit = {
       f(elem1); f(elem2)
+    }
+    override def exists(f: A => Boolean): Boolean = {
+      f(elem1) || f(elem2)
+    }
+    override def forall(f: A => Boolean): Boolean = {
+      f(elem1) && f(elem2)
+    }
+    override def find(f: A => Boolean): Option[A] = {
+      if (f(elem1)) Some(elem1)
+      else if (f(elem2)) Some(elem2)
+      else None
     }
   }
 
@@ -115,6 +136,18 @@ object Set extends ImmutableSetFactory[Set] {
     override def foreach[U](f: A =>  U): Unit = {
       f(elem1); f(elem2); f(elem3)
     }
+    override def exists(f: A => Boolean): Boolean = {
+      f(elem1) || f(elem2) || f(elem3)
+    }
+    override def forall(f: A => Boolean): Boolean = {
+      f(elem1) && f(elem2) && f(elem3)
+    }
+    override def find(f: A => Boolean): Option[A] = {
+      if (f(elem1)) Some(elem1)
+      else if (f(elem2)) Some(elem2)
+      else if (f(elem3)) Some(elem3)
+      else None
+    }
   }
 
   /** An optimized representation for immutable sets of size 4 */
@@ -136,6 +169,19 @@ object Set extends ImmutableSetFactory[Set] {
       Iterator(elem1, elem2, elem3, elem4)
     override def foreach[U](f: A =>  U): Unit = {
       f(elem1); f(elem2); f(elem3); f(elem4)
+    }
+    override def exists(f: A => Boolean): Boolean = {
+      f(elem1) || f(elem2) || f(elem3) || f(elem4)
+    }
+    override def forall(f: A => Boolean): Boolean = {
+      f(elem1) && f(elem2) && f(elem3) && f(elem4)
+    }
+    override def find(f: A => Boolean): Option[A] = {
+      if (f(elem1)) Some(elem1)
+      else if (f(elem2)) Some(elem2)
+      else if (f(elem3)) Some(elem3)
+      else if (f(elem4)) Some(elem4)
+      else None
     }
   }
 }
