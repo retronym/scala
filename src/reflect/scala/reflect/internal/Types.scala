@@ -894,17 +894,33 @@ trait Types
      */
     def baseTypeIndex(sym: Symbol): Int = {
       val bts = baseTypeSeq
-      var lo = 0
-      var hi = bts.length - 1
-      while (lo <= hi) {
-        val mid = (lo + hi) / 2
-        val btssym = bts.typeSymbol(mid)
-        if (sym == btssym) return mid
-        else if (sym isLess btssym) hi = mid - 1
-        else if (btssym isLess sym) lo = mid + 1
-        else abort()
+      def baseTypeIndexSearch: Int = {
+        def binarySearch: Int = {
+          var lo = 0
+          var hi = bts.length - 1
+          while (lo <= hi) {
+            val mid = (lo + hi) / 2
+            val btssym = bts.typeSymbol(mid)
+            if (sym == btssym) return mid
+            else if (sym isLess btssym) hi = mid - 1
+            else if (btssym isLess sym) lo = mid + 1
+            else abort()
+          }
+          -1
+        }
+        def linearSearch: Int = {
+          var i = 0
+          val hi = bts.length - 1
+          while (i <= hi) {
+            val btssym = bts.typeSymbol(i)
+            if (sym eq btssym) return i
+            i += 1
+          }
+          -1
+        }
+        if (bts.length < 16) linearSearch else binarySearch
       }
-      -1
+      baseTypeIndexSearch
     }
 
     /** If this is a poly- or methodtype, a copy with cloned type / value parameters
