@@ -299,12 +299,12 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       var e: ScopeEntry = null
       if (hashtable ne null) {
         e = hashtable(name.start & HASHMASK)
-        while ((e ne null) && e.sym.name != name) {
+        while ((e ne null) && !e.sym.hasName(name)) {
           e = e.tail
         }
       } else {
         e = elems
-        while ((e ne null) && e.sym.name != name) {
+        while ((e ne null) && !e.sym.hasName(name)) {
           e = e.next
         }
       }
@@ -319,9 +319,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
       var e = entry
       if (hashtable ne null)
-        do { e = e.tail } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.tail } while ((e ne null) && !e.sym.hasSameName(entry.sym))
       else
-        do { e = e.next } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.next } while ((e ne null) && !e.sym.hasSameName(entry.sym))
       e
     }
 
