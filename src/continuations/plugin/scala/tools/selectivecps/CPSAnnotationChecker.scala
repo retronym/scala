@@ -17,7 +17,7 @@ abstract class CPSAnnotationChecker extends CPSUtils {
   /**
    *  Checks whether @cps annotations conform
    */
-  object checker extends AnnotationChecker {
+  object checker extends AnalyzerPluginAnnotationChecker {
     private[CPSAnnotationChecker] def addPlusMarker(tp: Type)  = tp withAnnotation newPlusMarker()
     private[CPSAnnotationChecker] def addMinusMarker(tp: Type) = tp withAnnotation newMinusMarker()
 

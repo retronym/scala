@@ -13,12 +13,10 @@ package internal
 trait AnnotationCheckers {
   self: SymbolTable =>
 
-
   /** An additional checker for annotations on types.
    *  Typically these are registered by compiler plugins
    *  with the addAnnotationChecker method. */
   trait AnnotationChecker {
-
     /**
      * Selectively activate this annotation checker. When using both an annotation checker
      * and an analyzer plugin, it is common to run both of them only during selected
@@ -72,25 +70,46 @@ trait AnnotationCheckers {
      *
      * By default, this method simply returns the passed `default` type.
      */
-    @deprecated("Create an AnalyzerPlugin and use pluginsTypedReturn. Note: the 'tree' argument here is\n"+
-                "the 'expr' of a Return tree; 'pluginsTypedReturn' takes the Return tree itself as argument", "2.10.1")
+    @deprecated("Create an AnalyzerPlugin and use pluginsTypedReturn. Note: the 'tree' argument here is the 'expr ' of a Return tree; 'pluginsTypedReturn' takes the Return tree itself as argument", "2.10.1")
     def adaptTypeOfReturn(tree: Tree, pt: Type, default: => Type): Type = default
+  }
+
+  trait AnalyzerPluginAnnotationChecker extends AnnotationChecker {
+    @deprecated("Create an AnalyzerPlugin and use pluginsTyped", "2.10.1")
+    override final def addAnnotations(tree: Tree, tpe: Type): Type = tpe
+
+    @deprecated("Create an AnalyzerPlugin and use canAdaptAnnotations", "2.10.1")
+    override final def canAdaptAnnotations(tree: Tree, mode: Mode, pt: Type): Boolean = false
+
+    @deprecated("Create an AnalyzerPlugin and use adaptAnnotations", "2.10.1")
+    override final def adaptAnnotations(tree: Tree, mode: Mode, pt: Type): Tree = tree
+
+    @deprecated("Create an AnalyzerPlugin and use pluginsTypedReturn. Note: the 'tree' argument here is  the 'expr ' of a Return tree; 'pluginsTypedReturn' takes the Return tree itself as argument", "2.10.1")
+    override final def adaptTypeOfReturn(tree: Tree, pt: Type, default: => Type): Type = default
   }
 
   // Syncnote: Annotation checkers inaccessible to reflection, so no sync in var necessary.
 
   /** The list of annotation checkers that have been registered */
   private var annotationCheckers: List[AnnotationChecker] = Nil
+  /** The list of annotation checkers that still rely on deprecated `addAnnotations`, `canAdaptAnnotations`, and `adaptAnnotations` */
+  private var oldAnnotationCheckers: List[AnnotationChecker] = Nil
 
   /** Register an annotation checker.  Typically these are added by compiler plugins. */
   def addAnnotationChecker(checker: AnnotationChecker) {
-    if (!(annotationCheckers contains checker))
+    if (!(annotationCheckers contains checker)) {
       annotationCheckers = checker :: annotationCheckers
+      checker match {
+        case _: AnalyzerPluginAnnotationChecker =>
+        case _ => oldAnnotationCheckers = checker :: oldAnnotationCheckers
+      }
+    }
   }
 
   /** Remove all annotation checkers */
   def removeAllAnnotationCheckers() {
     annotationCheckers = Nil
+    oldAnnotationCheckers = Nil
   }
 
   /** @see AnnotationChecker.annotationsConform */
@@ -122,24 +141,31 @@ trait AnnotationCheckers {
 
   /* The following methods will be removed with the deprecated methods is AnnotationChecker. */
 
-  def addAnnotations(tree: Tree, tpe: Type): Type =
-    if (annotationCheckers.isEmpty) tpe
-    else annotationCheckers.foldLeft(tpe)((tpe, checker) =>
-      if (!checker.isActive()) tpe else checker.addAnnotations(tree, tpe))
+  def addAnnotations(tree: Tree, tpe: Type): Type = {
+    // OPT inlined fold, and exclude the CPS plugin's annotation checker, which uses the new, non-deprecated
+    //     means (`pluginsTyped`).
+    @annotation.tailrec
+    def loop(acc: Type, checkers: List[AnnotationChecker]): Type = checkers match {
+      case checker :: tail if !checker.isActive() => loop(acc, tail)
+      case checker :: tail => loop(checker.addAnnotations(tree, tpe), tail)
+      case _ => acc
+    }
+    loop(tpe, oldAnnotationCheckers)
+  }
 
   def canAdaptAnnotations(tree: Tree, mode: Mode, pt: Type): Boolean =
-    if (annotationCheckers.isEmpty) false
-    else annotationCheckers.exists(checker => {
+    if (oldAnnotationCheckers.isEmpty) false
+    else oldAnnotationCheckers.exists(checker => {
       checker.isActive() && checker.canAdaptAnnotations(tree, mode, pt)
     })
 
   def adaptAnnotations(tree: Tree, mode: Mode, pt: Type): Tree =
-    if (annotationCheckers.isEmpty) tree
-    else annotationCheckers.foldLeft(tree)((tree, checker) =>
+    if (oldAnnotationCheckers.isEmpty) tree
+    else oldAnnotationCheckers.foldLeft(tree)((tree, checker) =>
       if (!checker.isActive()) tree else checker.adaptAnnotations(tree, mode, pt))
 
   def adaptTypeOfReturn(tree: Tree, pt: Type, default: => Type): Type =
-    if (annotationCheckers.isEmpty) default
-    else annotationCheckers.foldLeft(default)((tpe, checker) =>
+    if (oldAnnotationCheckers.isEmpty) default
+    else oldAnnotationCheckers.foldLeft(default)((tpe, checker) =>
       if (!checker.isActive()) tpe else checker.adaptTypeOfReturn(tree, pt, tpe))
 }

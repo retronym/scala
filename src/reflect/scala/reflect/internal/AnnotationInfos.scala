@@ -45,11 +45,18 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
       this withAnnotation AnnotationInfo(appliedType(ThrowsClass, throwableTpe), List(Literal(Constant(throwableTpe))), Nil)
     }
 
-    /** Tests for, get, or remove an annotation */
-    def hasAnnotation(cls: Symbol): Boolean =
-      //OPT inlined from exists to save on #closures; was:  annotations exists (_ matches cls)
-      dropOtherAnnotations(annotations, cls) ne Nil
+    /** Tests for an annotation */
+    def hasAnnotation(cls: Symbol): Boolean = {
+      // OPT inlined exists
+      def loop(rest: List[AnnotationInfo]): Boolean = rest match {
+        case head :: tail if head matches cls => true
+        case head :: tail => loop(tail)
+        case Nil => false
+      }
+      loop(annotations)
+    }
 
+    /** Gets an annotation */
     def getAnnotation(cls: Symbol): Option[AnnotationInfo] =
       //OPT inlined from exists to save on #closures; was:  annotations find (_ matches cls)
       dropOtherAnnotations(annotations, cls) match {
@@ -57,6 +64,7 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
         case _ => None
       }
 
+    /** Removes annotations of the given `cls` */
     def removeAnnotation(cls: Symbol): Self = filterAnnotations(ann => !(ann matches cls))
 
     final def withAnnotation(annot: AnnotationInfo): Self = withAnnotations(List(annot))
