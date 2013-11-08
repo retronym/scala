@@ -1239,6 +1239,7 @@ trait Namers extends MethodSynthesis {
                       return
                     }
                     val p = (cda.classWithDefault, cda.companionModuleClassNamer)
+                    cda.companionModuleClassNamer = null // avoid a memory leak
                     moduleNamer = Some(p)
                     p
                   case _ =>
