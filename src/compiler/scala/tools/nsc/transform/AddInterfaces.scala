@@ -97,6 +97,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
       impl.sourceFile = iface.sourceFile
       if (inClass)
         iface.owner.info.decls enter impl
+      iface.getAnnotation(ScalaStrictFPAttr).foreach(impl.addAnnotation) // SI-7954
 
       impl
     }

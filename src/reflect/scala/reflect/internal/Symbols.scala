@@ -712,7 +712,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         info.isComplete && !info.isHigherKinded
       }
 
-    def isStrictFP          = hasAnnotation(ScalaStrictFPAttr) || (enclClass hasAnnotation ScalaStrictFPAttr)
+    def isStrictFP = (
+      (
+           hasAnnotation(ScalaStrictFPAttr)
+        || originalOwnerChain.exists(sym => sym != null && sym.hasAnnotation(ScalaStrictFPAttr))
+      ) && !isDeferred
+    )
     def isSerializable      = (
          info.baseClasses.exists(p => p == SerializableClass || p == JavaSerializableClass)
       || hasAnnotation(SerializableAttr) // last part can be removed, @serializable annotation is deprecated
@@ -969,7 +974,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def ownerChain: List[Symbol] = this :: owner.ownerChain
-    def originalOwnerChain: List[Symbol] = this :: originalOwner.getOrElse(this, rawowner).originalOwnerChain
+    def originalOwnerChain: List[Symbol] = this :: {
+      val o = originalOwner.getOrElse(this, rawowner)
+      if (o == null) Nil else o.originalOwnerChain
+    }
 
     // Non-classes skip self and return rest of owner chain; overridden in ClassSymbol.
     def enclClassChain: List[Symbol] = owner.enclClassChain
