@@ -13,6 +13,9 @@ import scala.collection.mutable.{Set => MSet}
  *
  * This Set implementation cannot hold null. Any attempt to put a null in it will result in a NullPointerException
  *
+ * For optimal performance, this set uses `hashCode` / `equals`, rather than `##` / `==`. This shouldn't cause
+ * any correctness problmes as we only admit reference types as elements.
+ *
  * This set implmeentation is not in general thread safe without external concurrency control. However it behaves
  * properly when GC concurrently collects elements in this set.
  */
@@ -157,7 +160,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
         case null                    => null.asInstanceOf[A]
         case _                       => {
           val entryElem = entry.get
-          if (elem == entryElem) entryElem
+          if (elem.equals(entryElem)) entryElem
           else linkedListLoop(entry.tail)
         }
       }
@@ -186,7 +189,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
         case null                    => add()
         case _                       => {
           val entryElem = entry.get
-          if (elem == entryElem) entryElem
+          if (elem.equals(entryElem)) entryElem
           else linkedListLoop(entry.tail)
         }
       }
@@ -212,9 +215,9 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
 
       @tailrec
       def linkedListLoop(entry: Entry[A]): Unit = entry match {
-        case null                      => add()
-        case _ if (elem == entry.get) => ()
-        case _                         => linkedListLoop(entry.tail)
+        case null                          => add()
+        case _ if (elem.equals(entry.get)) => ()
+        case _                             => linkedListLoop(entry.tail)
       }
 
       linkedListLoop(oldHead)
@@ -239,7 +242,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
       @tailrec
       def linkedListLoop(prevEntry: Entry[A], entry: Entry[A]): Unit = entry match {
         case null => ()
-        case _ if (elem == entry.get) => remove(bucket, prevEntry, entry)
+        case _ if elem.equals(entry.get) => remove(bucket, prevEntry, entry)
         case _ => linkedListLoop(entry, entry.tail)
       }
 
