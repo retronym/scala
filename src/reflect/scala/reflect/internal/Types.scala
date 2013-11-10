@@ -2271,6 +2271,26 @@ trait Types
       }
       finalizeHash(h, 2 + i)
     }
+    override final def equals(other: Any): Boolean = other match {
+      case tr: TypeRef =>
+        // OPT copy/pasted from LinearSeqOptimized#sameElements, only difference is use of .equals rather than ==
+        def sameElementsEquals[A](as: List[A], bs: List[A]): Boolean = {
+          var these = as
+          var those = bs
+          while (!these.isEmpty && !those.isEmpty && these.head.equals(those.head)) {
+            these = these.tail
+            those = those.tail
+          }
+          these.isEmpty && those.isEmpty
+        }
+
+        (this eq tr) || (
+          pre == tr.pre
+          && sym == tr.sym
+          && ((args eq tr.args) || sameElementsEquals(args, tr.args)) // OPT avoiding generic call to Any#== in List#equals that routes through BoxesRunTime
+        )
+      case _ => false
+    }
 
     // @M: propagate actual type params (args) to `tp`, by replacing
     // formal type parameters with actual ones. If tp is higher kinded,
