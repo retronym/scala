@@ -37,11 +37,21 @@ trait FastTrack {
   }
 
   /** A map from a set of pre-established macro symbols to their implementations. */
-  def fastTrack: Map[Symbol, FastTrackEntry] = fastTrackCache()
-  private val fastTrackCache = perRunCaches.newGeneric[Map[Symbol, FastTrackEntry]] {
+  final def fastTrack: Map[Symbol, FastTrackEntry] = fastTrackCache()._1
+  // OPT hot method
+  final def isFastTrackMacro(sym: Symbol): Boolean = {
+    val array = fastTrackCache()._2
+    var i = 0
+    while (i < array.length) {
+      if (array(i) eq sym) return true
+      i += 1
+    }
+    false
+  }
+  private val fastTrackCache = perRunCaches.newGeneric[(Map[Symbol, FastTrackEntry], Array[Symbol])] {
     val runDefinitions = currentRun.runDefinitions
     import runDefinitions._
-    Map[Symbol, FastTrackEntry](
+    val map = Map[Symbol, FastTrackEntry](
       make(        materializeClassTag) { case Applied(_, ttag :: Nil, _)                 => _.materializeClassTag(ttag.tpe) },
       make(     materializeWeakTypeTag) { case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = false) },
       make(         materializeTypeTag) { case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = true) },
@@ -51,5 +61,6 @@ trait FastTrack {
       make(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
       make(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
     )
+    (map, map.keys.toArray)
   }
 }
