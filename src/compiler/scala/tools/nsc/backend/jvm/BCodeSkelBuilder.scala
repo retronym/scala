@@ -355,7 +355,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
      */
     object locals {
 
-      private val slots = mutable.Map.empty[Symbol, Local] // (local-or-param-sym -> Local(BType, name, idx, isSynth))
+      private val slots = new java.util.HashMap[Symbol, Local] // (local-or-param-sym -> Local(BType, name, idx, isSynth))
 
       private var nxtIdx = -1 // next available index for local-var
 
@@ -364,9 +364,9 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         nxtIdx = if (isStaticMethod) 0 else 1
       }
 
-      def contains(locSym: Symbol): Boolean = { slots.contains(locSym) }
+      def contains(locSym: Symbol): Boolean = { slots.containsKey(locSym) }
 
-      def apply(locSym: Symbol): Local = { slots.apply(locSym) }
+      def apply(locSym: Symbol): Local = { slots.get(locSym) }
 
       /* Make a fresh local variable, ensuring a unique name.
        * The invoker must make sure inner classes are tracked for the sym's tpe.
@@ -383,14 +383,16 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
       def getOrMakeLocal(locSym: Symbol): Local = {
         // `getOrElse` below has the same effect as `getOrElseUpdate` because `makeLocal()` adds an entry to the `locals` map.
-        slots.getOrElse(locSym, makeLocal(locSym))
+        Option(slots.get(locSym)).getOrElse(makeLocal(locSym))
       }
 
       private def makeLocal(sym: Symbol, tk: BType): Local = {
-        assert(!slots.contains(sym), "attempt to create duplicate local var.")
         assert(nxtIdx != -1, "not a valid start index")
         val loc = Local(tk, sym.javaSimpleName.toString, nxtIdx, sym.isSynthetic)
-        slots += (sym -> loc)
+        slots.put(sym, loc) match {
+          case null =>
+          case _    =>  abort("attempt to create duplicate local var: " + sym)
+        }
         assert(tk.getSize > 0, "makeLocal called for a symbol whose type is Unit.")
         nxtIdx += tk.getSize
         loc
@@ -398,12 +400,12 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
       // not to be confused with `fieldStore` and `fieldLoad` which also take a symbol but a field-symbol.
       def store(locSym: Symbol) {
-        val Local(tk, _, idx, _) = slots(locSym)
+        val Local(tk, _, idx, _) = apply(locSym)
         bc.store(idx, tk)
       }
 
       def load(locSym: Symbol) {
-        val Local(tk, _, idx, _) = slots(locSym)
+        val Local(tk, _, idx, _) = apply(locSym)
         bc.load(idx, tk)
       }
 
