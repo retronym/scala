@@ -1344,6 +1344,14 @@ trait Types
       else super.safeToString
     override def narrow: Type = this
     override def kind = "ThisType"
+
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 1)
+    }
   }
 
   final class UniqueThisType(sym: Symbol) extends ThisType(sym) { }
@@ -1403,6 +1411,14 @@ trait Types
       else pre.prefixString + sym.nameString + "."
     )
     override def kind = "SingleType"
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, pre.hashCode)
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 2)
+    }
   }
 
   final class UniqueSingleType(pre: Type, sym: Symbol) extends SingleType(pre, sym)
@@ -2243,14 +2259,17 @@ trait Types
     //OPT specialize hashCode
     override final def computeHashCode = {
       import scala.util.hashing.MurmurHash3._
-      val hasArgs = args ne Nil
       var h = productSeed
       h = mix(h, pre.hashCode)
       h = mix(h, sym.hashCode)
-      if (hasArgs)
-        finalizeHash(mix(h, args.hashCode()), 3)
-      else
-        finalizeHash(h, 2)
+      var i = 0
+      var args0 = args
+      while (!args0.isEmpty) {
+        h = mix(h, args0.head.hashCode)
+        i += 1
+        args0 = args0.tail
+      }
+      finalizeHash(h, 2 + i)
     }
 
     // @M: propagate actual type params (args) to `tp`, by replacing
