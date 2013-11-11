@@ -136,8 +136,10 @@ trait TreeDSL {
 
     def IF(tree: Tree)    = new IfStart(tree, EmptyTree)
     def TRY(tree: Tree)   = new TryStart(tree, Nil, EmptyTree)
-    def BLOCK(xs: Tree*)  = Block(xs.init.toList, xs.last)
     def SOME(xs: Tree*)   = Apply(SomeClass.companionSymbol, treeBuilder.makeTupleTerm(xs.toList, flattenUnary = true))
+
+    def BLOCK(x1: Tree, x2: Tree)  = Block(x1 :: Nil, x2) // OPT
+    def BLOCK(xs: Tree*)           = Block(xs.init.toList, xs.last)
 
     /** Typed trees from symbols. */
     def REF(sym: Symbol)            = gen.mkAttributedRef(sym)
