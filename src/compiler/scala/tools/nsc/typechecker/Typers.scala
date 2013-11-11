@@ -4814,7 +4814,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               val (tree2, pre2) = makeAccessible(tree1, sym, pre1, qual)
             // SI-5967 Important to replace param type A* with Seq[A] when seen from from a reference, to avoid
             //         inference errors in pattern matching.
-              stabilize(tree2, pre2, mode, pt) modifyType dropIllegalStarTypes
+              val stable = stabilize(tree2, pre2, mode, pt)
+              if (isPastTyper) stable else stable modifyType dropIllegalStarTypes
             }) setAttachments tree.attachments
           }
         }

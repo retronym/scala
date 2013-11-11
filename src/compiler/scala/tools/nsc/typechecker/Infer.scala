@@ -36,7 +36,7 @@ trait Infer extends Checkable {
    */
   def formalTypes(formals: List[Type], numArgs: Int, removeByName: Boolean = true, removeRepeated: Boolean = true): List[Type] = {
     val numFormals = formals.length
-    val formals1   = if (removeByName) formals mapConserve dropByName else formals
+    val formals1   = if (removeByName && !phase.erasedTypes /*OPT*/) formals mapConserve dropByName else formals
     val expandLast = (
          (removeRepeated || numFormals != numArgs)
       && isVarArgTypes(formals1)
