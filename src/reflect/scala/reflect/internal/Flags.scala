@@ -8,6 +8,7 @@ package reflect
 package internal
 
 import scala.collection.{ mutable, immutable }
+import scala.reflect.internal.Flags._
 
 // Flags at each index of a flags Long.  Those marked with /M are used in
 // Parsers/JavaParsers and therefore definitely appear on Modifiers; but the
@@ -322,6 +323,8 @@ class Flags extends ModifierFlags {
    *  then we don't need unpickling to give a definite answer.
    */
   final val TopLevelPickledFlags = PickledFlags & ~(MODULE | METHOD | PACKAGE | PARAM | EXISTENTIAL)
+
+  final val ValidAliasFlags = SUPERACCESSOR | PARAMACCESSOR | MIXEDIN | SPECIALIZED
 
   def paramFlagsToDefaultGetter(paramFlags: Long): Long =
     (paramFlags & DefaultGetterFlags) | SYNTHETIC | METHOD | DEFAULTPARAM
