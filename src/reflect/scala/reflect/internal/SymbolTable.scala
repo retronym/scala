@@ -170,7 +170,7 @@ abstract class SymbolTable extends macros.Universe
    *  Later phases have higher periods than earlier phases in the same run.
    */
   type Period = Int
-  final val NoPeriod = 0
+  final val NoPeriod = SymbolTable.NoPeriod
 
   /** An ordinal number for compiler runs. First run has number 1. */
   type RunId = Int
@@ -405,6 +405,15 @@ abstract class SymbolTable extends macros.Universe
   def currentFreshNameCreator: FreshNameCreator
   def freshTermName(prefix: String = "x$")(implicit creator: FreshNameCreator): TermName = newTermName(creator.newName(prefix))
   def freshTypeName(prefix: String)(implicit creator: FreshNameCreator): TypeName        = newTypeName(creator.newName(prefix))
+}
+
+object SymbolTable {
+  final val NoPeriod = 0
+  /** The run identifier of the given period. */
+  final def runId(period: SymbolTable#Period): SymbolTable#RunId = period >> 8
+
+  /** The phase identifier of the given period. */
+  final def phaseId(period: SymbolTable#Period): Phase#Id = period & 0xFF
 }
 
 object SymbolTableStats {

@@ -1410,7 +1410,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         val curPeriod = currentPeriod
         val curPid = phaseId(curPeriod)
         // skip any infos that concern later phases
-        infos = infos.dropLaterInfos(curPid)
+        infos = infos.dropLaterInfos(self, curPid)
 
         if (validTo < curPeriod) {
           infos = transformInfos(infos, curPeriod)
@@ -2555,7 +2555,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
 
-    def infosString = infos.toString
+    def infosString = infos.toString(self)
     def debugLocationString = {
       val pre = flagString match {
         case ""                  => ""
@@ -3513,25 +3513,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (settings.debug.value) printStackTrace()
   }
 
-  /** A class for type histories */
-  private final case class TypeHistory(var validFrom: Period, info: Type, prev: TypeHistory) {
-    assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
-    assert(validFrom != NoPeriod, this)
-
-    private def phaseString = "%s: %s".format(phaseOf(validFrom), info)
-    override def toString = toList reverseMap (_.phaseString) mkString ", "
-
-    def toList: List[TypeHistory] = this :: ( if (prev eq null) Nil else prev.toList )
-
-    def oldest: TypeHistory = if (prev == null) this else prev.oldest
-    
-    def dropLaterInfos(curPid: Phase#Id): TypeHistory = {
-      var infos = this
-      while (curPid < phaseId(infos.validFrom) && infos.prev != null)
-        infos = infos.prev
-      infos
-    }
-  }
+  private type TypeHistory = reflect.internal.TypeHistory[this.type]
+  private final def TypeHistory(validFrom: Period, info: Type, prev: TypeHistory): TypeHistory =
+    new reflect.internal.TypeHistory[this.type](validFrom, info, prev)
 
 // ----- Hoisted closures and convenience methods, for compile time reductions -------
 
@@ -3556,4 +3540,28 @@ object SymbolsStats {
   val flagsCount          = Statistics.newCounter("#flags ops")
   val ownerCount          = Statistics.newCounter("#owner ops")
   val nameCount           = Statistics.newCounter("#name ops")
+}
+
+/** A class for type histories */
+private final case class TypeHistory[S <: SymbolTable](var validFrom: S#Period, info: S#Type, prev: TypeHistory[S]) {
+  import SymbolTable._
+  assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
+  assert(validFrom != NoPeriod, this)
+
+  private def phaseString = "%s: %s".format(phaseId(validFrom), info)
+  override def toString = toList reverseMap (_.phaseString) mkString ", "
+
+  private def phaseString(s: SymbolTable) = "%s: %s".format(s.phaseOf(validFrom), info)
+  def toString(s: SymbolTable) = toList reverseMap (_.phaseString(s)) mkString ", "
+
+  def toList: List[TypeHistory[S]] = this :: ( if (prev eq null) Nil else prev.toList )
+
+  def oldest: TypeHistory[S] = if (prev == null) this else prev.oldest
+
+  def dropLaterInfos(s: S, curPid: Phase#Id): TypeHistory[S] = {
+    var infos = this
+    while (curPid < s.phaseId(infos.validFrom) && infos.prev != null)
+      infos = infos.prev
+    infos
+  }
 }
