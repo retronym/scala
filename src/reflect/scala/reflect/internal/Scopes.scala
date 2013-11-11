@@ -19,6 +19,8 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   case class LookupInaccessible(symbol: Symbol, msg: String) extends NameLookup
   case object LookupNotFound extends NameLookup { def symbol = NoSymbol }
 
+  // OPT: JZ I tried moving this out of the cake to save the field containing the outer pointer, but
+  //      it still ends up consuming 32 bytes due to padding.
   class ScopeEntry(val sym: Symbol, val owner: Scope) {
     /** the next entry in the hash bucket
      */
