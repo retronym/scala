@@ -759,7 +759,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  assumption: if a type starts out as monomorphic, it will not acquire
      *  type parameters in later phases.
      */
-    final def isMonomorphicType =
+    def isMonomorphicType =
       isType && {
         val info = originalInfo
         (    (info eq null)
@@ -879,10 +879,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     )
 
     /** Is this symbol owned by a package? */
-    final def isTopLevel = owner.isPackageClass
+    def isTopLevel = owner.isPackageClass
 
     /** Is this symbol locally defined? I.e. not accessed from outside `this` instance */
-    final def isLocal: Boolean = owner.isTerm
+    def isLocal: Boolean = owner.isTerm
 
     /** Is this symbol a constant? */
     final def isConstant: Boolean = isStable && isConstantType(tpe.resultType)
@@ -1139,11 +1139,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     protected def createTypeSkolemSymbol(name: TypeName, origin: AnyRef, pos: Position, newFlags: Long): TypeSkolem =
       new TypeSkolem(this, pos, name, origin) initFlags newFlags
 
-    protected def createClassSymbol(name: TypeName, pos: Position, newFlags: Long): ClassSymbol =
-      new ClassSymbol(this, pos, name) initFlags newFlags
+    protected def createClassSymbol(name: TypeName, pos: Position, newFlags: Long): ClassSymbol = {
+      val sym = if (isPackageClass) (new ClassSymbol(this, pos, name) with TopLevelSymbol) else new ClassSymbol(this, pos, name)
+      sym initFlags newFlags
+    }
 
-    protected def createModuleClassSymbol(name: TypeName, pos: Position, newFlags: Long): ModuleClassSymbol =
-      new ModuleClassSymbol(this, pos, name) initFlags newFlags
+    protected def createModuleClassSymbol(name: TypeName, pos: Position, newFlags: Long): ModuleClassSymbol = {
+      val sym = if (isPackageClass) new ModuleClassSymbol(this, pos, name) with TopLevelSymbol else new ModuleClassSymbol(this, pos, name)
+      sym initFlags newFlags
+    }
 
     protected def createPackageClassSymbol(name: TypeName, pos: Position, newFlags: Long): PackageClassSymbol =
       new PackageClassSymbol(this, pos, name) initFlags newFlags
@@ -1160,11 +1164,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     protected def createMethodSymbol(name: TermName, pos: Position, newFlags: Long): MethodSymbol =
       new MethodSymbol(this, pos, name) initFlags newFlags
 
-    protected def createModuleSymbol(name: TermName, pos: Position, newFlags: Long): ModuleSymbol =
-      new ModuleSymbol(this, pos, name) initFlags newFlags
+    protected def createModuleSymbol(name: TermName, pos: Position, newFlags: Long): ModuleSymbol = {
+      val sym = if (isPackageClass) (new ModuleSymbol(this, pos, name) with TopLevelSymbol) else new ModuleSymbol(this, pos, name)
+      sym initFlags newFlags
+    }
 
     protected def createPackageSymbol(name: TermName, pos: Position, newFlags: Long): ModuleSymbol =
-      new ModuleSymbol(this, pos, name) initFlags newFlags
+      (new ModuleSymbol(this, pos, name) with TopLevelSymbol) initFlags newFlags
 
     protected def createValueParameterSymbol(name: TermName, pos: Position, newFlags: Long): TermSymbol =
       new TermSymbol(this, pos, name) initFlags newFlags
@@ -1604,11 +1610,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else {
         // analogously to the "info" getter, here we allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        if (validTo == NoPeriod)
-          enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
-        if (validTo == NoPeriod)
-          enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
-
+        def rawInfoLoad: Unit = enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+        if (validTo == NoPeriod) rawInfoLoad
+        if (validTo == NoPeriod) rawInfoLoad
         rawInfo.typeParams
       }
 
@@ -2147,7 +2151,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      * symbol B in the decls of p. So to find a linked symbol ("object B" or "class B")
      * we need to apply flatten to B first. Fixes #2470.
      */
-    protected final def flatOwnerInfo: Type = {
+    protected def flatOwnerInfo: Type = {
       if (needsFlatClasses)
         info
       owner.rawInfo
@@ -3043,6 +3047,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else super.nameString
   }
 
+  // Optimization: fast versions of these methods. Assumption: if a symbol starts life at the top
+  // level, it will stay there forever.
+  trait TopLevelSymbol extends Symbol {
+    override final def name = rawname
+    override def owner = rawowner
+    override final def isTopLevel = true
+    override final def isLocal = false
+    override protected final def flatOwnerInfo: Type = owner.info
+  }
+
   /** A class for class symbols */
   class ClassSymbol protected[Symbols] (initOwner: Symbol, initPos: Position, initName: TypeName)
   extends TypeSymbol(initOwner, initPos, initName) with ClassSymbolApi {
@@ -3282,7 +3296,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
 
   class PackageObjectClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)
-  extends ModuleClassSymbol(owner0, pos0, tpnme.PACKAGE) {
+  extends ModuleClassSymbol(owner0, pos0, tpnme.PACKAGE) with TopLevelSymbol {
     final override def isPackageObjectClass   = true
     final override def isPackageObjectOrClass = true
     final override def skipPackageObject      = owner
@@ -3298,7 +3312,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
 
   class PackageClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position, name0: TypeName)
-  extends ModuleClassSymbol(owner0, pos0, name0) {
+  extends ModuleClassSymbol(owner0, pos0, name0) with TopLevelSymbol {
     override def sourceModule = companionModule
     override def enclClassChain = Nil
     override def isPackageClass = true
@@ -3543,7 +3557,7 @@ object SymbolsStats {
 
 /** A class for type histories */
 private final case class TypeHistory[S <: SymbolTable](var validFrom: S#Period, info: S#Type, prev: TypeHistory[S]) {
-  import SymbolTable._
+  import SymbolTable.{ phaseId, NoPeriod }
   assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
   assert(validFrom != NoPeriod, this)
 
