@@ -1193,6 +1193,7 @@ trait Types
     // Implementation of Annotatable for all types but AnnotatedType, which
     // overrides these.
     def annotations: List[AnnotationInfo] = Nil
+    def hasAnnotations: Boolean = false
     def withoutAnnotations: Type = this
     def filterAnnotations(p: AnnotationInfo => Boolean): Type = this
     def setAnnotations(annots: List[AnnotationInfo]): Type  = annotatedType(annots, this)
@@ -3300,6 +3301,7 @@ trait Types
   extends RewrappingTypeProxy with AnnotatedTypeApi {
 
     assert(!annotations.isEmpty, "" + underlying)
+    override def hasAnnotations = annotations ne Nil
 
     override protected def rewrap(tp: Type) = copy(underlying = tp)
 
@@ -4606,7 +4608,7 @@ trait Types
   private[scala] val treeTpe = (t: Tree) => t.tpe
   private[scala] val symTpe = (sym: Symbol) => sym.tpe
   private[scala] val symInfo = (sym: Symbol) => sym.info
-  private[scala] val typeHasAnnotations = (tp: Type) => tp.annotations ne Nil
+  private[scala] val typeHasAnnotations = (tp: Type) => tp.hasAnnotations
   private[scala] val boundsContainType = (bounds: TypeBounds, tp: Type) => bounds containsType tp
   private[scala] val typeListIsEmpty = (ts: List[Type]) => ts.isEmpty
   private[scala] val typeIsSubTypeOfSerializable = (tp: Type) => tp <:< SerializableTpe

@@ -277,6 +277,15 @@ trait Collections {
   } catch {
     case _: IllegalArgumentException => None
   }
+
+  final def containsEq[A <: AnyRef](as: Array[A], a: A): Boolean = {
+    var i = 0
+    while (i < as.length) {
+      if (as(i) eq a) return true
+      i += 1
+    }
+    false
+  }
 }
 
 object Collections extends Collections

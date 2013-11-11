@@ -41,12 +41,7 @@ trait FastTrack {
   // OPT hot method
   final def isFastTrackMacro(sym: Symbol): Boolean = {
     val array = fastTrackCache()._2
-    var i = 0
-    while (i < array.length) {
-      if (array(i) eq sym) return true
-      i += 1
-    }
-    false
+    containsEq(array, sym)
   }
   private val fastTrackCache = perRunCaches.newGeneric[(Map[Symbol, FastTrackEntry], Array[Symbol])] {
     val runDefinitions = currentRun.runDefinitions
