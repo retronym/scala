@@ -39,6 +39,22 @@ trait Logic extends Debugging  {
     padded.transpose.map(alignedColumns).transpose map (_.mkString(sep)) mkString(lineSep)
   }
 
+  // to govern how much time we spend analyzing matches for unreachability/exhaustivity
+  object AnalysisBudget {
+    private val budgetProp = scala.sys.Prop[Int]("scalac.patmat.analysisBudget")
+    private val budgetOff = "off"
+    val max: Int = {
+      val DefaultBudget = 256
+      budgetProp.option.getOrElse(if (budgetProp.get.equalsIgnoreCase("off")) Integer.MAX_VALUE else DefaultBudget)
+    }
+
+    abstract class Exception(val advice: String) extends RuntimeException("CNF budget exceeded")
+
+    object exceeded extends Exception(
+        s"(The analysis required more space than allowed. Please try with scalac -D${budgetProp.key}=${AnalysisBudget.max*2} or -D${budgetProp.key}=${budgetOff}.)")
+
+  }
+
   // http://www.cis.upenn.edu/~cis510/tcl/chap3.pdf
   // http://users.encs.concordia.ca/~ta_ahmed/ms_thesis.pdf
   // propositional logic with constants and equality
@@ -158,22 +174,6 @@ trait Logic extends Debugging  {
         case Not(a) => Not(apply(a))
         case p => p
       }
-    }
-
-    // to govern how much time we spend analyzing matches for unreachability/exhaustivity
-    object AnalysisBudget {
-      private val budgetProp = scala.sys.Prop[Int]("scalac.patmat.analysisBudget")
-      private val budgetOff = "off"
-      val max: Int = {
-        val DefaultBudget = 256
-        budgetProp.option.getOrElse(if (budgetProp.get.equalsIgnoreCase("off")) Integer.MAX_VALUE else DefaultBudget)
-      }
-
-      abstract class Exception(val advice: String) extends RuntimeException("CNF budget exceeded")
-
-      object exceeded extends Exception(
-          s"(The analysis required more space than allowed. Please try with scalac -D${budgetProp.key}=${AnalysisBudget.max*2} or -D${budgetProp.key}=${budgetOff}.)")
-
     }
 
     // convert finite domain propositional logic with subtyping to pure boolean propositional logic
