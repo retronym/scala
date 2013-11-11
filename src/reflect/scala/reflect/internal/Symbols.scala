@@ -159,8 +159,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     def asNameType(n: Name): NameType
     /* More efficient version of `this.name == other.name` */
-    final def hasSameName(other: Symbol): Boolean = name == other.name
-    final def hasName(other: Name): Boolean = (name == other) // OPT find some more efficiency
+    final def hasSameName(other: Symbol): Boolean = name eq other.name
+    final def hasName(other: Name): Boolean = (name eq other) // OPT find some more efficiency
 
     // Syncnote: need not be protected, as only assignment happens in owner_=, which is not exposed to api
     // The null check is for NoSymbol, which can't pass a reference to itself to the constructor and also
@@ -2221,6 +2221,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
          owner.isClass
       && !this.isClass
       && !this.isConstructor
+      && !this.isPrivate
     )
 
     // All the symbols overridden by this symbol and this symbol at the head,
