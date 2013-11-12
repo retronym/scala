@@ -2316,74 +2316,76 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
 
     def typedBlock(block: Block, mode: Mode, pt: Type): Block = {
-      val syntheticPrivates = new ListBuffer[Symbol]
-      try {
-        namer.enterSyms(block.stats)
-        for (stat <- block.stats) enterLabelDef(stat)
-
-        if (phaseId(currentPeriod) <= currentRun.typerPhase.id) {
-          // This is very tricky stuff, because we are navigating the Skylla and Charybdis of
-          // anonymous classes and what to return from them here. On the one hand, we cannot admit
-          // every non-private member of an anonymous class as a part of the structural type of the
-          // enclosing block. This runs afoul of the restriction that a structural type may not
-          // refer to an enclosing type parameter or abstract types (which in turn is necessitated
-          // by what can be done in Java reflection). On the other hand, making every term member
-          // private conflicts with private escape checking - see ticket #3174 for an example.
-          //
-          // The cleanest way forward is if we would find a way to suppress structural type checking
-          // for these members and maybe defer type errors to the places where members are called.
-          // But that would be a big refactoring and also a big departure from existing code. The
-          // probably safest fix for 2.8 is to keep members of an anonymous class that are not
-          // mentioned in a parent type private (as before) but to disable escape checking for code
-          // that's in the same anonymous class. That's what's done here.
-          //
-          // We really should go back and think hard whether we find a better way to address the
-          // problem of escaping idents on the one hand and well-formed structural types on the
-          // other.
-          block match {
-            case Block(List(classDef @ ClassDef(_, _, _, _)), Apply(Select(New(_), _), _)) =>
-              val classDecls = classDef.symbol.info.decls
-              val visibleMembers = pt match {
-                case WildcardType                           => classDecls.toList
-                case BoundedWildcardType(TypeBounds(lo, _)) => lo.members
-                case _                                      => pt.members
-              }
-              def matchesVisibleMember(member: Symbol) = visibleMembers exists { vis =>
-                (member.name == vis.name) &&
-                (member.tpe <:< vis.tpe.substThis(vis.owner, classDef.symbol))
-              }
-              // The block is an anonymous class definitions/instantiation pair
-              //   -> members that are hidden by the type of the block are made private
-              val toHide = (
-                classDecls filter (member =>
-                     member.isTerm
-                  && member.isPossibleInRefinement
-                  && member.isPublic
-                  && !matchesVisibleMember(member)
-                ) map (member => member
-                  resetFlag (PROTECTED | LOCAL)
-                  setFlag (PRIVATE | SYNTHETIC_PRIVATE)
-                  setPrivateWithin NoSymbol
-                )
-              )
-              syntheticPrivates ++= toHide
-            case _ =>
-          }
-        }
-        val stats1 = if (isPastTyper) block.stats else
-          block.stats.flatMap(stat => stat match {
-            case vd@ValDef(_, _, _, _) if vd.symbol.isLazy =>
-              namer.addDerivedTrees(Typer.this, vd)
-            case _ => stat::Nil
-            })
-        val stats2 = typedStats(stats1, context.owner)
+      def finish(stats: List[Tree]) = {
+        val stats1 = typedStats(stats, context.owner)
         val expr1 = typed(block.expr, mode &~ (FUNmode | QUALmode), pt)
-        treeCopy.Block(block, stats2, expr1)
-          .setType(if (treeInfo.isExprSafeToInline(block)) expr1.tpe else expr1.tpe.deconst)
-      } finally {
-        // enable escaping privates checking from the outside and recycle
-        // transient flag
-        syntheticPrivates foreach (_ resetFlag SYNTHETIC_PRIVATE)
+        val tpe = if (treeInfo.isExprSafeToInline(block)) expr1.tpe else expr1.tpe.deconst
+        treeCopy.Block(block, stats1, expr1).setType(tpe)
+      }
+      namer.enterSyms(block.stats)
+      for (stat <- block.stats) enterLabelDef(stat)
+      if (isPastTyper) {
+        finish(block.stats)
+      } else {
+        val synthPrivateSyms = syntheticPrivates(block, pt)
+        try {
+          val statsWithDerived = block.stats flatMap {
+            case vd: ValDef if vd.symbol.isLazy => namer.addDerivedTrees(Typer.this, vd)
+            case stat                           => stat :: Nil
+          }
+          finish(statsWithDerived)
+        } finally {
+          // enable escaping privates checking from the outside and recycle
+          // transient flag
+          synthPrivateSyms foreach (_ resetFlag SYNTHETIC_PRIVATE)
+        }
+      }
+    }
+    
+    // This is very tricky stuff, because we are navigating the Skylla and Charybdis of
+    // anonymous classes and what to return from them here. On the one hand, we cannot admit
+    // every non-private member of an anonymous class as a part of the structural type of the
+    // enclosing block. This runs afoul of the restriction that a structural type may not
+    // refer to an enclosing type parameter or abstract types (which in turn is necessitated
+    // by what can be done in Java reflection). On the other hand, making every term member
+    // private conflicts with private escape checking - see ticket #3174 for an example.
+    //
+    // The cleanest way forward is if we would find a way to suppress structural type checking
+    // for these members and maybe defer type errors to the places where members are called.
+    // But that would be a big refactoring and also a big departure from existing code. The
+    // probably safest fix for 2.8 is to keep members of an anonymous class that are not
+    // mentioned in a parent type private (as before) but to disable escape checking for code
+    // that's in the same anonymous class. That's what's done here.
+    //
+    // We really should go back and think hard whether we find a better way to address the
+    // problem of escaping idents on the one hand and well-formed structural types on the
+    // other.
+    private def syntheticPrivates(block: Block, pt: Type): Iterable[Symbol] = {
+      block match {
+        case Block(List(classDef @ ClassDef(_, _, _, _)), Apply(Select(New(_), _), _)) =>
+          val classDecls = classDef.symbol.info.decls
+          val visibleMembers = pt match {
+            case WildcardType                           => classDecls.toList
+            case BoundedWildcardType(TypeBounds(lo, _)) => lo.members
+            case _                                      => pt.members
+          }
+          def matchesVisibleMember(member: Symbol) = visibleMembers exists { vis =>
+            (member.name == vis.name) &&
+            (member.tpe <:< vis.tpe.substThis(vis.owner, classDef.symbol))
+          }
+          // The block is an anonymous class definitions/instantiation pair
+          //   -> members that are hidden by the type of the block are made private
+          classDecls filter (member =>
+               member.isTerm
+            && member.isPossibleInRefinement
+            && member.isPublic
+            && !matchesVisibleMember(member)
+          ) map (member => member
+            resetFlag (PROTECTED | LOCAL)
+            setFlag (PRIVATE | SYNTHETIC_PRIVATE)
+            setPrivateWithin NoSymbol
+          )
+        case _ => Nil
       }
     }
 
