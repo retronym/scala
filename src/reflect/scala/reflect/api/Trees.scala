@@ -2660,10 +2660,13 @@ trait Trees { self: Universe =>
     def transformIdents(trees: List[Ident]): List[Ident] =
       trees mapConserve (tree => transform(tree).asInstanceOf[Ident])
     /** Traverses a list of trees with a given owner symbol. */
-    def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
-      stats mapConserve (stat =>
+    def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
+      val transformed = stats mapConserve (stat =>
         if (exprOwner != currentOwner && stat.isTerm) atOwner(exprOwner)(transform(stat))
-        else transform(stat)) filter (EmptyTree != _)
+        else transform(stat))
+      if (!transformed.contains(EmptyTree)) transformed // OPT avoid allocating a new list
+      else transformed filter (EmptyTree != _)
+    }
     /** Transforms `Modifiers`. */
     def transformModifiers(mods: Modifiers): Modifiers = {
       if (mods.annotations.isEmpty) mods
