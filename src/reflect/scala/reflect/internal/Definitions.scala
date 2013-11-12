@@ -1374,6 +1374,10 @@ trait Definitions extends api.StandardDefinitions {
       lazy val Boxes_isNumberOrBool  = getDecl(BoxesRunTimeClass, nme.isBoxedNumberOrBoolean)
       lazy val Boxes_isNumber        = getDecl(BoxesRunTimeClass, nme.isBoxedNumber)
 
+      lazy val Boolean_and = definitions.Boolean_and
+      lazy val Boolean_or  = definitions.Boolean_or
+      lazy val Boolean_not = definitions.Boolean_not
+
       private def valueClassCompanion(name: TermName): ModuleSymbol = {
         getMember(ScalaPackageClass, name) match {
           case x: ModuleSymbol => x

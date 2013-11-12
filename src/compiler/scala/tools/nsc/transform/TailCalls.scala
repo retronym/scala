@@ -362,7 +362,7 @@ abstract class TailCalls extends Transform {
         case Apply(tapply @ TypeApply(fun, targs), vargs) =>
           rewriteApply(tapply, fun, targs, vargs)
 
-        case Apply(fun, args) if fun.symbol == Boolean_or || fun.symbol == Boolean_and =>
+        case Apply(fun, args) if fun.symbol == currentRun.runDefinitions.Boolean_or || fun.symbol == currentRun.runDefinitions.Boolean_and =>
           treeCopy.Apply(tree, fun, transformTrees(args))
 
         // this is to detect tailcalls in translated matches
@@ -428,7 +428,7 @@ abstract class TailCalls extends Transform {
       case Apply(fun, arg :: Nil) if hasSynthCaseSymbol(fun) && tailLabels(fun.symbol) =>
         traverse(arg)
 
-      case Apply(fun, args) if (fun.symbol == Boolean_or || fun.symbol == Boolean_and) =>
+      case Apply(fun, args) if (fun.symbol == currentRun.runDefinitions.Boolean_or || fun.symbol == currentRun.runDefinitions.Boolean_and) =>
         traverseTrees(args)
 
       // a translated casedef
