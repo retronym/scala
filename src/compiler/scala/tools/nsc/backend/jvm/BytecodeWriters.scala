@@ -10,6 +10,7 @@ import java.io.{ DataOutputStream, FileOutputStream, IOException, OutputStream, 
 import scala.tools.nsc.io._
 import java.util.jar.Attributes.Name
 import scala.language.postfixOps
+import scala.reflect.io.NoAbstractFile
 
 /** Can't output a file due to the state of the file system. */
 class FileConflictException(msg: String, val file: AbstractFile) extends IOException(msg)
@@ -29,13 +30,23 @@ trait BytecodeWriters {
    * @param clsName cls.getName
    */
   def getFile(base: AbstractFile, clsName: String, suffix: String): AbstractFile = {
-    def ensureDirectory(dir: AbstractFile): AbstractFile =
-      if (dir.isDirectory) dir
-      else throw new FileConflictException(s"${base.path}/$clsName$suffix: ${dir.path} is not a directory", dir)
     var dir = base
     val pathParts = clsName.split("[./]").toList
-    for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
-    ensureDirectory(dir) fileNamed pathParts.last + suffix
+    try {
+      for (part <- pathParts.init) dir = dir subdirectoryNamedFast part
+      dir fileNamedFast pathParts.last + suffix
+    } catch {
+      case io: IOException =>
+        // SI-5717 Find if the inability to create a .class file was due to the existence of a file where we need a directory.
+        // OPT only do this on error rather than proactively checking `File#isDirectory` in `getFile`.
+        def ensureDirectory(dir: AbstractFile): AbstractFile =
+          if (dir.isDirectory) dir
+          else throw new FileConflictException(s"${base.path}/$clsName$suffix: ${dir.path} is not a directory", dir)
+        var dir = base
+        for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
+        ensureDirectory(dir)
+        throw io
+    }
   }
   def getFile(sym: Symbol, clsName: String, suffix: String): AbstractFile =
     getFile(outputDirectory(sym), clsName, suffix)
