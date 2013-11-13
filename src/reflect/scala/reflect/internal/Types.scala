@@ -1084,9 +1084,10 @@ trait Types
         var continue = true
         var self: Type = null
 
+        val bcs0 = baseClasses
+
         while (continue) {
           continue = false
-          val bcs0 = baseClasses
           var bcs = bcs0
           // omit PRIVATE LOCALS unless selector class is contained in class owning the def.
           def admitPrivateLocal(owner: Symbol): Boolean = {
