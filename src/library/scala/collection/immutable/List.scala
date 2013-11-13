@@ -339,6 +339,7 @@ case object Nil extends List[Nothing] {
     throw new UnsupportedOperationException("tail of empty list")
   // Removal of equals method here might lead to an infinite recursion similar to IntMap.equals.
   override def equals(that: Any) = that match {
+    case _ if this.eq(that.asInstanceOf[AnyRef]) => true // OPT avoid instanceOf
     case that1: scala.collection.GenSeq[_] => that1.isEmpty
     case _ => false
   }

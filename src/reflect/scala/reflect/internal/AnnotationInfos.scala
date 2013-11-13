@@ -51,7 +51,7 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
       def loop(rest: List[AnnotationInfo]): Boolean = rest match {
         case head :: tail if head matches cls => true
         case head :: tail => loop(tail)
-        case Nil => false
+        case _ => false
       }
       loop(annotations)
     }

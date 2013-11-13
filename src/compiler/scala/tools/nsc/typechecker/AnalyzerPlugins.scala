@@ -173,9 +173,9 @@ trait AnalyzerPlugins { self: Analyzer =>
     // OPT inlined fold
     @annotation.tailrec
     def loop(acc: Type, plugins: List[AnalyzerPlugin]): Type = plugins match {
-      case Nil => acc
       case plugin :: tail if !plugin.isActive() => loop(acc, tail)
       case plugin :: tail => loop(plugin.pluginsPt(acc, typer, tree, mode), tail)
+      case _ => acc
     }
     loop(pt, analyzerPlugins)
   }
@@ -188,9 +188,9 @@ trait AnalyzerPlugins { self: Analyzer =>
     // OPT inlined fold
     @annotation.tailrec
     def loop(acc: Type, plugins: List[AnalyzerPlugin]): Type = plugins match {
-      case Nil => acc
       case plugin :: tail if !plugin.isActive() => loop(acc, tail)
       case plugin :: tail => loop(plugin.pluginsTyped(acc, typer, tree, mode, pt), tail)
+      case _ => acc
     }
     loop(annotCheckersTpe, analyzerPlugins)
   }
