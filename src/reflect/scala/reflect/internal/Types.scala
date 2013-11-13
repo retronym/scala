@@ -2029,7 +2029,7 @@ trait Types
       // too little information is known to determine its kind, and
       // it later turns out not to have kind *. See SI-4070.  Only
       // logging it for now.
-      if (sym.typeParams.size != args.size)
+      if (!sameLength(sym.typeParams, args))
         devWarning(s"$this.transform($tp), but tparams.isEmpty and args=$args")
 
       asSeenFromOwner(tp).instantiateTypeParams(sym.typeParams, args)
