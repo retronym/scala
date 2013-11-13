@@ -68,7 +68,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       nestinglevel = base.nestinglevel + 1
     }
 
-    private[scala] var elems: ScopeEntry = initElems
+    private[this] var _elems: ScopeEntry = initElems
+    private[scala] def elems: ScopeEntry = _elems
+    private[scala] def elems_=(other: ScopeEntry): Unit = _elems = other
 
     /** The number of times this scope is nested in another
      */
@@ -76,12 +78,12 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** the hash table
      */
-    private var hashtable: Array[ScopeEntry] = null
+    private[this] var hashtable: Array[ScopeEntry] = null
 
     /** a cache for all elements, to be used by symbol iterator.
      */
-    private var elemsCache: List[Symbol] = null
-    private var cachedSize = -1
+    private[this] var elemsCache: List[Symbol] = null
+    private[this] var cachedSize = -1
     private def flushElemsCache() {
       elemsCache = null
       cachedSize = -1
@@ -104,7 +106,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
     private def directSize: Int = {
       var s = 0
-      var e = elems
+      var e = _elems
       while (e ne null) {
         s += 1
         e = e.next
@@ -200,7 +202,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def unlink(e: ScopeEntry) {
       if (elems == e) {
-        elems = e.next
+        _elems = e.next
       } else {
         var e1 = elems
         while (e1.next != e) e1 = e1.next

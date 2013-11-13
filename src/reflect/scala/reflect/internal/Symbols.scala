@@ -1412,13 +1412,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def rawInfo: Type = {
       var infos = this.infos
       assert(infos != null)
-      if (validTo != NoPeriod) {
+      if (_validTo != NoPeriod) {
         val curPeriod = currentPeriod
         val curPid = phaseId(curPeriod)
         // skip any infos that concern later phases
         infos = infos.dropLaterInfos(self, curPid)
 
-        if (validTo < curPeriod) {
+        if (_validTo < curPeriod) {
           infos = transformInfos(infos, curPeriod)
         }
       }

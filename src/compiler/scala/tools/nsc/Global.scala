@@ -377,11 +377,14 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
 // ------------ Phases -------------------------------------------}
 
-  var globalPhase: Phase = NoPhase
+  private[this] var _globalPhase: Phase = NoPhase
+  final def globalPhase: Phase = _globalPhase
+  final def globalPhase_=(other: Phase) = _globalPhase = other
 
-  val MaxPhases = 64
-
-  val phaseWithId: Array[Phase] = Array.fill(MaxPhases)(NoPhase)
+  final val phaseWithId: Array[Phase] = {
+    val MaxPhases = 64
+    Array.fill(MaxPhases)(NoPhase)
+  }
 
   abstract class GlobalPhase(prev: Phase) extends Phase(prev) {
     phaseWithId(id) = this
@@ -1589,29 +1592,30 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
     private def compileUnitsInternal(units: List[CompilationUnit], fromPhase: Phase) {
       doInvalidation()
+      def now = if (settings.verbose) currentTime else 0L
 
       units foreach addUnit
-      val startTime = currentTime
+      val startTime = now
 
       reporter.reset()
       checkDeprecatedSettings(unitbuf.head)
-      globalPhase = fromPhase
+      _globalPhase = fromPhase
 
-     while (globalPhase.hasNext && !reporter.hasErrors) {
-        val startTime = currentTime
-        phase = globalPhase
-        globalPhase.run()
+     while (_globalPhase.hasNext && !reporter.hasErrors) {
+        val startTime = now
+        phase = _globalPhase
+       _globalPhase.run()
 
         // progress update
-        informTime(globalPhase.description, startTime)
+        informTime(_globalPhase.description, startTime)
         val shouldWriteIcode = (
-             (settings.writeICode.isSetByUser && (settings.writeICode containsPhase globalPhase))
-          || (!settings.Xprint.doAllPhases && (settings.Xprint containsPhase globalPhase) && runIsAtOptimiz)
+             (settings.writeICode.isSetByUser && (settings.writeICode containsPhase _globalPhase))
+          || (!settings.Xprint.doAllPhases && (settings.Xprint containsPhase _globalPhase) && runIsAtOptimiz)
         )
         if (shouldWriteIcode) {
           // Write *.icode files when -Xprint-icode or -Xprint:<some-optimiz-phase> was given.
           writeICode()
-        } else if ((settings.Xprint containsPhase globalPhase) || settings.printLate && runIsAt(cleanupPhase)) {
+        } else if ((settings.Xprint containsPhase _globalPhase) || settings.printLate && runIsAt(cleanupPhase)) {
           // print trees
           if (settings.Xshowtrees || settings.XshowtreesCompact || settings.XshowtreesStringified) nodePrinters.printAll()
           else printAllUnits()
@@ -1622,18 +1626,18 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
           trackerFactory.snapshot()
 
         // print members
-        if (settings.Yshow containsPhase globalPhase)
+        if (settings.Yshow containsPhase _globalPhase)
           showMembers()
 
         // browse trees with swing tree viewer
-        if (settings.browse containsPhase globalPhase)
+        if (settings.browse containsPhase _globalPhase)
           treeBrowser browse (phase.name, units)
 
         // move the pointer
-        globalPhase = globalPhase.next
+       _globalPhase = _globalPhase.next
 
         // run tree/icode checkers
-        if (settings.check containsPhase globalPhase.prev)
+        if (settings.check containsPhase _globalPhase.prev)
           runCheckers()
 
         // output collected statistics
