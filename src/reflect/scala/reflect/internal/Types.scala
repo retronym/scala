@@ -1088,7 +1088,7 @@ trait Types
 
         while (continue) {
           continue = false
-          var bcs = bcs0
+          var bcs: List[Symbol] = bcs0
           // omit PRIVATE LOCALS unless selector class is contained in class owning the def.
           def admitPrivateLocal(owner: Symbol): Boolean = {
             val selectorClass = this match {
@@ -1097,7 +1097,7 @@ trait Types
             }
             selectorClass.hasTransOwner(owner)
           }
-          while (!bcs.isEmpty) {
+          while (bcs ne Nil) {
             val decls = bcs.head.info.decls
             var entry = decls.lookupEntry(name)
             while (entry ne null) {
