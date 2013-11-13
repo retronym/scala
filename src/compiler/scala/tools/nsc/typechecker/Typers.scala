@@ -1689,8 +1689,9 @@ trait Typers extends Modes with Adaptations with Tags {
               psym addChild context.owner
             else
               pending += ParentSealedInheritanceError(parent, psym)
+          val parentTypeOfThis = parent.tpe.dealias.typeOfThis
 
-          if (!(selfType <:< parent.tpe.typeOfThis) &&
+          if (!(selfType <:< parentTypeOfThis) &&
               !phase.erasedTypes &&
               !context.owner.isSynthetic &&   // don't check synthetic concrete classes for virtuals (part of DEVIRTUALIZE)
               !settings.noSelfCheck.value &&  // setting to suppress this very check
@@ -1701,7 +1702,7 @@ trait Typers extends Modes with Adaptations with Tags {
             //Console.println(context.owner.unsafeTypeParams);//DEBUG
             //Console.println(List.fromArray(context.owner.info.closure));//DEBUG
             pending += ParentSelfTypeConformanceError(parent, selfType)
-            if (settings.explaintypes.value) explainTypes(selfType, parent.tpe.typeOfThis)
+            if (settings.explaintypes.value) explainTypes(selfType, parentTypeOfThis)
           }
 
           if (parents exists (p => p != parent && p.tpe.typeSymbol == psym && !psym.isError))
