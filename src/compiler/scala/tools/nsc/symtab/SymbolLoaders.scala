@@ -206,11 +206,14 @@ abstract class SymbolLoaders {
 
     override def complete(root: Symbol) {
       try {
-        val start = currentTime
         val currentphase = phase
-        doComplete(root)
+        if (settings.verbose) {
+          val start = currentTime
+          doComplete(root)
+          informTime("loaded " + description, start)
+        } else
+          doComplete(root)
         phase = currentphase
-        informTime("loaded " + description, start)
         ok = true
         setSource(root)
         setSource(root.companionSymbol) // module -> class, class -> module

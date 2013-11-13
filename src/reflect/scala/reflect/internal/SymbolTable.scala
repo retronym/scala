@@ -57,7 +57,7 @@ abstract class SymbolTable extends macros.Universe
     msg + " in " + (System.currentTimeMillis() - start) + "ms"
 
   def informProgress(msg: String)          = if (settings.verbose) inform("[" + msg + "]")
-  def informTime(msg: String, start: Long) = informProgress(elapsedMessage(msg, start))
+  def informTime(msg: String, start: Long) = if (settings.verbose) informProgress(elapsedMessage(msg, start))
 
   def shouldLogAtThisPhase = false
   def isPastTyper = false
