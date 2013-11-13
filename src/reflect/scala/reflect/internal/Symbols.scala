@@ -1410,13 +1410,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
+      val s: self.type = self // OPT hoist $outer() access
+
       var infos = this.infos
       assert(infos != null)
-      if (_validTo != NoPeriod) {
-        val curPeriod = currentPeriod
-        val curPid = phaseId(curPeriod)
+      if (_validTo != SymbolTable.NoPeriod) {
+        val curPeriod = s.currentPeriod
+        val curPid = s.phaseId(curPeriod)
         // skip any infos that concern later phases
-        infos = infos.dropLaterInfos(self, curPid)
+        infos = infos.dropLaterInfos(s, curPid)
 
         if (_validTo < curPeriod) {
           infos = transformInfos(infos, curPeriod)
