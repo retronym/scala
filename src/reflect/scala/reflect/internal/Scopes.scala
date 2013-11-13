@@ -21,7 +21,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
   // OPT: JZ I tried moving this out of the cake to save the field containing the outer pointer, but
   //      it still ends up consuming 32 bytes due to padding.
-  class ScopeEntry(val sym: Symbol, val owner: Scope) {
+  final class ScopeEntry(val sym: Symbol, val owner: Scope) {
     /** the next entry in the hash bucket
      */
     var tail: ScopeEntry = null
@@ -43,6 +43,16 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   }
 
   object Scope {
+    /** size and mask of hash tables
+     *  todo: make hashtables grow?
+     */
+    private final val HASHSIZE = 0x80
+    private final val HASHMASK = 0x7f
+
+    /** the threshold number of entries from which a hashtable is constructed.
+     */
+    private final val MIN_HASH = 8
+
     def unapplySeq(decls: Scope): Some[Seq[Symbol]] = Some(decls.toList)
   }
 
@@ -51,6 +61,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
    *  SynchronizedScope as mixin.
    */
   class Scope protected[Scopes] (initElems: ScopeEntry = null, initFingerPrints: Long = 0L) extends ScopeApi with MemberScopeApi {
+    import Scope._
 
     protected[Scopes] def this(base: Scope) = {
       this(base.elems)
@@ -75,16 +86,6 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       elemsCache = null
       cachedSize = -1
     }
-
-    /** size and mask of hash tables
-     *  todo: make hashtables grow?
-     */
-    private val HASHSIZE = 0x80
-    private val HASHMASK = 0x7f
-
-    /** the threshold number of entries from which a hashtable is constructed.
-     */
-    private val MIN_HASH = 8
 
     if (size >= MIN_HASH) createHash()
 
