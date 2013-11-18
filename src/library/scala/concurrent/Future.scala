@@ -398,8 +398,15 @@ trait Future[+T] extends Awaitable[T] {
       val c = tag.runtimeClass
       if (c.isPrimitive) Future.toBoxed(c) else c
     }
-    require(boxedClass ne null)
-    map(s => boxedClass.cast(s).asInstanceOf[S])
+    def informativeCast(s: T): S = try {
+      require(boxedClass ne null)
+      boxedClass.cast(s).asInstanceOf[S]
+    } catch {
+      case _: ClassCastException =>
+        val valueOfClass = new MatchError(s).getMessage // SI-7977
+        throw new ClassCastException(s"Unable to cast $valueOfClass to $boxedClass")
+    }
+    map(informativeCast)
   }
 
   /** Applies the side-effecting function to the result of this future, and returns
