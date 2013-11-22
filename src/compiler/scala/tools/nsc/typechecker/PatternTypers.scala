@@ -268,8 +268,7 @@ trait PatternTypers {
       // Test case which presently requires the exclusion is run/gadts.scala.
       def eligible(tparam: Symbol) = (
            tparam.isTypeParameterOrSkolem
-        && tparam.owner.isTerm
-        && (settings.strictInference || !variance.isInvariant)
+        && (settings.strictInference || (tparam.owner.isTerm && !variance.isInvariant))
       )
 
       def skolems = try skolemBuffer.toList finally skolemBuffer.clear()
@@ -322,7 +321,7 @@ trait PatternTypers {
         || settings.strictInference && ptIn.typeSymbol != caseClass
       )
       val variantToSkolem     = new VariantToSkolemMap
-      val caseClassType       = tree.tpe.prefix memberType caseClass
+      val caseClassType       = caseClass.tpe_* asSeenFrom (tree.tpe.prefix, caseClass.owner)
       val caseConstructorType = caseClassType memberType caseClass.primaryConstructor
       val tree1               = TypeTree(caseConstructorType) setOriginal tree
       val pt                  = if (untrustworthyPt) caseClassType else ptIn
