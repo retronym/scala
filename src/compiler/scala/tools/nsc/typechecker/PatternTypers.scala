@@ -340,14 +340,17 @@ trait PatternTypers {
 
       // simplify types without losing safety,
       // so that we get rid of unnecessary type slack, and so that error messages don't unnecessarily refer to skolems
-      val extrapolator = new ExistentialExtrapolation(freeVars)
+      val extrapolator = new ExistentialExtrapolation(freeVars ::: caseClass.typeParams)
       def extrapolate(tp: Type) = extrapolator extrapolate tp
 
       // once the containing CaseDef has been type checked (see typedCase),
       // tree1's remaining type-slack skolems will be deskolemized (to the method type parameter skolems)
       tree1 modifyType {
         case MethodType(ctorArgs, restpe) => // ctorArgs are actually in a covariant position, since this is the type of the subpatterns of the pattern represented by this Apply node
-          copyMethodType(tree1.tpe, ctorArgs map (_ modifyInfo extrapolate), extrapolate(restpe)) // no need to clone ctorArgs, this is OUR method type
+          createFromClonedSymbols(ctorArgs, tree1.tpe) {
+            (syms, tp) =>
+              copyMethodType(tree1.tpe, syms map (_ modifyInfo extrapolate), extrapolate(restpe))
+          }
         case tp => tp
       }
     }
