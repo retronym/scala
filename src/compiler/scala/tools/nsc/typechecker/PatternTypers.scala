@@ -342,6 +342,8 @@ trait PatternTypers {
       // so that we get rid of unnecessary type slack, and so that error messages don't unnecessarily refer to skolems
       val extrapolator = new ExistentialExtrapolation(freeVars)
       def extrapolate(tp: Type) = extrapolator extrapolate tp
+      if (settings.lint && caseClass == ConsClass && ptIn.typeSymbol == SeqClass)
+        unit.warning(tree.pos, s"Pattern matching using :: on values of type ${ptIn} may indicate a programming error, consider using +:")
 
       // once the containing CaseDef has been type checked (see typedCase),
       // tree1's remaining type-slack skolems will be deskolemized (to the method type parameter skolems)

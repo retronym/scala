@@ -1,0 +1,4 @@
+warn-match-seq-list.scala:6: warning: Pattern matching using :: on values of type Seq[Int] may indicate a programming error, consider using `+:`
+      case x :: Nil => x
+             ^
+()
