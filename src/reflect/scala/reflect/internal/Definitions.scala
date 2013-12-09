@@ -831,8 +831,14 @@ trait Definitions extends api.StandardDefinitions {
      *  Otherwise, if there are any product selectors, that list.
      *  Otherwise, a list containing only the type itself.
      */
-    def typesOfSelectorsOrSelf(tp: Type): List[Type] = (
-      if (tp.typeSymbol.isCase)
+    def typesOfSelectorsOrSelf(tp: Type): List[Type] = typesOfSelectorsOrSelf0(tp, unwrapCase = true)
+
+    /** If this is a case class, the case field accessors (which may be an empty list.)
+     *  Otherwise, if there are any product selectors, that list.
+     *  Otherwise, a list containing only the type itself.
+     */
+    def typesOfSelectorsOrSelf0(tp: Type, unwrapCase: Boolean): List[Type] = (
+      if (tp.typeSymbol.isCase && unwrapCase)
         typesOfCaseAccessors(tp)
       else typesOfSelectors(tp) match {
         case Nil => tp :: Nil

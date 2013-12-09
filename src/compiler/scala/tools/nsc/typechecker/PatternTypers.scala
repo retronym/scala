@@ -170,7 +170,7 @@ trait PatternTypers {
       override def toString = "NoCaseClassInfo"
     }
 
-    case class UnapplyMethodInfo(unapply: Symbol, tpe: Type) {
+    case class UnapplyMethodInfo(unapply: Symbol, tpe: Type, caseClassInfo: CaseClassInfo) {
       def name         = unapply.name
       def isUnapplySeq = name == nme.unapplySeq
       def unapplyType  = tpe memberType method
@@ -178,11 +178,12 @@ trait PatternTypers {
       def method       = unapplyMember(tpe)
       def paramType    = firstParamType(unapplyType)
       def rawGet       = if (isBool) UnitTpe else typeOfMemberNamedGetOrSelf(resultType)
-      def rawTypes     = if (isBool) Nil else typesOfSelectorsOrSelf(rawGet)
+      def isCase       = caseClassInfo != NoCaseClassInfo
+      def rawTypes     = if (isBool) Nil else typesOfSelectorsOrSelf0(rawGet, unwrapCase = isCase)
       def isBool       = resultType =:= BooleanTpe   // aka "Tuple0" or "Option[Unit]"
     }
 
-    object NoUnapplyMethodInfo extends UnapplyMethodInfo(NoSymbol, NoType) {
+    object NoUnapplyMethodInfo extends UnapplyMethodInfo(NoSymbol, NoType, NoCaseClassInfo) {
       override def toString = "NoUnapplyMethodInfo"
     }
 
@@ -195,7 +196,7 @@ trait PatternTypers {
         case clazz if clazz.isCase => CaseClassInfo(clazz, tpe)
         case _                     => NoCaseClassInfo
       }
-      val exInfo = UnapplyMethodInfo(symbol, tpe)
+      val exInfo = UnapplyMethodInfo(symbol, tpe, ccInfo)
       import exInfo.{ rawGet, rawTypes, isUnapplySeq }
 
       override def toString = s"ExtractorShape($fun, $args)"
