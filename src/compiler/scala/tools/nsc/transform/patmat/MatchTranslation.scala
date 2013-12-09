@@ -612,7 +612,7 @@ trait MatchTranslation {
       protected lazy val rawSubPatTypes = (
         if (isBool) Nil
         else if (isSingle) resultInMonad :: Nil     // don't go looking for selectors if we only expect one pattern
-        else typesOfSelectorsOrSelf(resultInMonad)
+        else typesOfSelectorsOrSelf0(resultInMonad, unwrapCase = false)
       )
 
       override def toString() = s"ExtractorCallRegular($fun: $tpe / ${fun.symbol})"
