@@ -908,7 +908,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         // (or in the case of an error type) -- this is indicated by pt == WildcardType (see case TypeApply in typed1).
         def kindArityMismatchOk = tree.tpe.typeSymbol match {
           case NothingClass | AnyClass => true
-          case _                       => pt == WildcardType
+          case _ if pt == WildcardType => true
+          case _ =>
+            tree match {
+              case Ident(_) if tree.symbol.isSynthetic && tree.symbol.isExistential => true
+              case _ => false
+            }
         }
 
         // todo. It would make sense when mode.inFunMode to instead use
