@@ -35,4 +35,7 @@ trait StdAttachments {
   /** Identifies trees are either result or intermidiate value of for loop desugaring.
    */
   case object ForAttachment extends PlainAttachment
+
+  /** Identifies `Apply` nodes that resulted from an parsing an infix binary operation */
+  case object BinaryOpAttachment extends PlainAttachment
 }

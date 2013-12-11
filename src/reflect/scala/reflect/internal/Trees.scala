@@ -443,6 +443,7 @@ trait Trees extends api.Trees {
 
   case class Apply(fun: Tree, args: List[Tree])
        extends GenericApply with ApplyApi {
+    "".reverse
     override def symbol: Symbol = fun.symbol
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
   }

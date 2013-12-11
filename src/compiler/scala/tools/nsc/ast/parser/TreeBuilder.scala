@@ -61,17 +61,18 @@ abstract class TreeBuilder {
       case Parens(args) => mkNamed(args)
       case _            => List(right)
     }
+    def mkApply(fun: Tree, args: List[Tree]) = Apply(fun, args) updateAttachment BinaryOpAttachment
     if (isExpr) {
       if (treeInfo.isLeftAssoc(op)) {
-        Apply(atPos(opPos union left.pos) { Select(stripParens(left), op.encode) }, arguments)
+        mkApply(atPos(opPos union left.pos) { Select(stripParens(left), op.encode) }, arguments)
       } else {
         val x = freshTermName()
         Block(
           List(ValDef(Modifiers(SYNTHETIC | ARTIFACT), x, TypeTree(), stripParens(left))),
-          Apply(atPos(opPos union right.pos) { Select(stripParens(right), op.encode) }, List(Ident(x))))
+          mkApply(atPos(opPos union right.pos) { Select(stripParens(right), op.encode) }, List(Ident(x))))
       }
     } else {
-      Apply(Ident(op.encode), stripParens(left) :: arguments)
+      mkApply(Ident(op.encode), stripParens(left) :: arguments)
     }
   }
 
