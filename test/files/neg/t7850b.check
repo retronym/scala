@@ -1,0 +1,7 @@
+t7850b.scala:7: error: error during expansion of this match (this is a scalac bug).
+The underlying error was: type mismatch;
+ found   : Int
+ required: <notype>
+    val Casey2(a3) = new Casey2(1)
+              ^
+one error found
