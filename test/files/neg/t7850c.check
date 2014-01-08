@@ -1,0 +1,4 @@
+t7850c.scala:6: error: erroneous or inaccessible type
+    val Casey2(a3) = new Casey2(1)
+               ^
+one error found
