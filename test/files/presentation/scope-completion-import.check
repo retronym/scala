@@ -21,7 +21,7 @@ private[this] val vCCC: Int
 private[this] val vOOO: Int
 private[this] var rCCC: Int
 private[this] var rOOO: Int
-val o: test.O.type
+val o: O.type
 ================================================================================
 
 askScopeCompletion at Completions.scala(27,4)
@@ -165,7 +165,7 @@ def bar: Unit
 def fCCC: Int
 def fOOO: Int
 object O
-private[this] val o: test.O.type
+private[this] val o: O.type
 private[this] val vCCC: Int
 private[this] val vOOO: Int
 private[this] var rCCC: Int

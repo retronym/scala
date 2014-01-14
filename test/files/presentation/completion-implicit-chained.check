@@ -8,7 +8,7 @@ retrieved 24 members
 [inaccessible] protected[package lang] def finalize(): Unit
 def equals(x$1: Any): Boolean
 def hashCode(): Int
-def map(x: Int => Int)(implicit a: DummyImplicit): test.O.type
+def map(x: Int => Int)(implicit a: DummyImplicit): O.type
 def toString(): String
 final def !=(x$1: Any): Boolean
 final def !=(x$1: AnyRef): Boolean
