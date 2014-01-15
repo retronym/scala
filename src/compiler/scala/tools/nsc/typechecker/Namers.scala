@@ -391,7 +391,7 @@ trait Namers extends MethodSynthesis {
       }
       clazz match {
         case csym: ClassSymbol if csym.isTopLevel => enterClassSymbol(tree, csym)
-        case _                                    => clazz
+        case _                 => clazz
       }
     }
 
@@ -436,6 +436,13 @@ trait Namers extends MethodSynthesis {
       var m: Symbol = context.scope lookupModule tree.name
       val moduleFlags = tree.mods.flags | MODULE
       if (m.isModule && !m.isPackage && inCurrentScope(m) && (currentRun.canRedefine(m) || m.isSynthetic)) {
+        val scope = m.info.decls
+        if (m.isPackageObject) {
+          val packageScope = m.enclosingPackageClass.rawInfo.decls
+          scope.toList.foreach { sym =>
+            packageScope unlink sym
+          }
+        }
         updatePosFlags(m, tree.pos, moduleFlags)
         setPrivateWithin(tree, m)
         m.moduleClass andAlso (setPrivateWithin(tree, _))
@@ -1725,7 +1732,8 @@ trait Namers extends MethodSynthesis {
     // SI-7264 Force the info of owners from previous compilation runs.
     //         Doing this generally would trigger cycles; that's what we also
     //         use the lower-level scan through the current Context as a fall back.
-    if (!currentRun.compiles(owner)) owner.initialize
+    if (!currentRun.compiles(owner))
+      owner.initialize
     original.companionSymbol orElse {
       ctx.lookup(original.name.companionName, owner).suchThat(sym =>
         (original.isTerm || sym.hasModuleFlag) &&

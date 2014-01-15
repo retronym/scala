@@ -1215,7 +1215,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     private val unitbuf = new mutable.ListBuffer[CompilationUnit]
     val compiledFiles   = new mutable.HashSet[String]
 
-    /** A map from compiled top-level symbols to their source files */
+    /** A map from compiled top-level symbols (and all class symbols defined in package objects) to their source files */
     val symSource = new mutable.HashMap[Symbol, AbstractFile]
 
     /** A map from compiled top-level symbols to their picklers */

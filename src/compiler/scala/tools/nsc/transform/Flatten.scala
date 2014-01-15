@@ -71,9 +71,9 @@ abstract class Flatten extends InfoTransform {
 
             for (sym <- decls) {
               if (sym.isTerm && !sym.isStaticModule) {
-                decls1 enter sym
-                if (sym.isModule)
-                  sym.moduleClass setFlag LIFTED
+                  decls1 enter sym
+                  if (sym.isModule)
+                    sym.moduleClass setFlag LIFTED
               } else if (sym.isClass)
                 liftSymbol(sym)
             }
