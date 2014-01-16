@@ -98,16 +98,10 @@ abstract class Flatten extends InfoTransform {
 
   class Flattener extends Transformer {
     /** Buffers for lifted out classes */
-    private val liftedDefs = perRunCaches.newMap[Symbol, ListBuffer[Tree]]()
+    private val liftedDefs = perRunCaches.newMap[Symbol, ListBuffer[Tree]]() withDefault (_ => new ListBuffer)
 
     override def transform(tree: Tree): Tree = postTransform {
       tree match {
-        case PackageDef(_, _) =>
-          liftedDefs(tree.symbol.moduleClass) = new ListBuffer
-          super.transform(tree)
-        case Template(_, _, _) if tree.symbol.isDefinedInPackage =>
-          liftedDefs(tree.symbol.owner) = new ListBuffer
-          super.transform(tree)
         case ClassDef(_, _, _, _) if tree.symbol.isNestedClass =>
           // SI-5508 Ordering important. In `object O { trait A { trait B } }`, we want `B` to appear after `A` in
           //         the sequence of lifted trees in the enclosing package. Why does this matter? Currently, mixin
