@@ -439,25 +439,30 @@ trait NamesDefaults { self: Analyzer =>
    * the default getter.
    */
   def defaultGetter(param: Symbol, context: Context): Symbol = {
-    val i = param.owner.paramss.flatten.indexWhere(p => p.name == param.name) + 1
-    if (i > 0) {
-      val defGetterName = nme.defaultGetterName(param.owner.name, i)
-      if (param.owner.isConstructor) {
-        val mod = companionSymbolOf(param.owner.owner, context)
-        mod.info.member(defGetterName)
-      }
-      else {
-        // isClass also works for methods in objects, owner is the ModuleClassSymbol
-        if (param.owner.owner.isClass) {
-          // .toInterface: otherwise we get the method symbol of the impl class
-          param.owner.owner.toInterface.info.member(defGetterName)
-        } else {
-          // the owner of the method is another method. find the default
-          // getter in the context.
-          context.lookup(defGetterName, param.owner.owner)
+    val flatParams = param.owner.paramss.flatten
+    val i = flatParams.indexWhere(p => p.name == param.name) + 1
+    def lookup(defGetterName: TermName): Symbol = {
+      if (i > 0) {
+        if (param.owner.isConstructor) {
+          val mod = companionSymbolOf(param.owner.owner, context)
+          mod.info.member(defGetterName)
         }
-      }
-    } else NoSymbol
+        else {
+          // isClass also works for methods in objects, owner is the ModuleClassSymbol
+          if (param.owner.owner.isClass) {
+            // .toInterface: otherwise we get the method symbol of the impl class
+            param.owner.owner.toInterface.info.member(defGetterName)
+          } else {
+            // the owner of the method is another method. find the default
+            // getter in the context.
+            context.lookup(defGetterName, param.owner.owner)
+          }
+        }
+      } else NoSymbol
+    }
+    def newName = nme.defaultGetterName(param.owner.name, flatParams.length, i)
+    def oldName = nme.defaultGetterNameOld(param.owner.name, i) // TODO remove this fall back after a milestone release of all the modules.
+    if (i <= 0) NoSymbol else lookup(newName) orElse lookup(oldName)
   }
 
   /** A full type check is very expensive; let's make sure there's a name

@@ -445,13 +445,21 @@ trait StdNames {
     } else
     (name, "", "")
 
-    // Nominally, name$default$N, encoded for <init>
-    def defaultGetterName(name: Name, pos: Int): TermName = (
+    // Nominally, name$default${numvparams}${pos}, encoded for <init>
+    def defaultGetterName(name: Name, numVparamss: Int, pos: Int): TermName = {
+      val suffix = numVparamss + "$" + pos
       if (isConstructorName(name))
-        DEFAULT_GETTER_INIT_STRING + pos
+        DEFAULT_GETTER_INIT_STRING + suffix
       else
-        name + DEFAULT_GETTER_STRING + pos
-    )
+        name + DEFAULT_GETTER_STRING + suffix
+    }
+    def defaultGetterNameOld(name: Name, pos: Int): TermName = {
+      val suffix = pos
+      if (isConstructorName(name))
+        DEFAULT_GETTER_INIT_STRING + suffix
+      else
+        name + DEFAULT_GETTER_STRING + suffix
+    }
     // Nominally, name from name$default$N, CONSTRUCTOR for <init>
     def defaultGetterToMethod(name: Name): TermName = (
       if (name startsWith DEFAULT_GETTER_INIT_STRING)

@@ -138,20 +138,24 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
         }
         val haveDefaults = methods filter (sym => hasDefaultParam(sym.info) && !nme.isProtectedAccessorName(sym.name))
 
-        if (haveDefaults.lengthCompare(1) > 0) {
-          val owners = haveDefaults map (_.owner)
-           // constructors of different classes are allowed to have defaults
-          if (haveDefaults.exists(x => !x.isConstructor) || owners.distinct.size < haveDefaults.size) {
-            unit.error(clazz.pos,
-              "in "+ clazz +
-              ", multiple overloaded alternatives of "+ haveDefaults.head +
-              " define default arguments" + (
-                if (owners.forall(_ == clazz)) "."
-                else ".\nThe members with defaults are defined in "+owners.map(_.fullLocationString).mkString("", " and ", ".")
+        def check(syms: List[Symbol]) {
+          if (haveDefaults.lengthCompare(1) > 0) {
+            val owners = haveDefaults map (_.owner)
+             // constructors of different classes are allowed to have defaults
+            if (haveDefaults.exists(x => !x.isConstructor) || owners.distinct.size < haveDefaults.size) {
+              unit.error(clazz.pos,
+                "in "+ clazz +
+                ", multiple overloaded alternatives of "+ haveDefaults.head +
+                " define default arguments" + (
+                  if (owners.forall(_ == clazz)) "."
+                  else ".\nThe members with defaults are defined in "+owners.map(_.fullLocationString).mkString("", " and ", ".")
+                )
               )
-            )
+            }
           }
         }
+        for ((_, methodsOfSameArity) <- haveDefaults.groupBy(_.paramss.map(_.length).sum))
+          check(methodsOfSameArity)
       }
 
       // Check for doomed attempt to overload applyDynamic

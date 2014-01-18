@@ -1229,6 +1229,7 @@ trait Namers extends MethodSynthesis {
       var ownerNamer: Option[Namer] = None
       var moduleNamer: Option[(ClassDef, Namer)] = None
       var posCounter = 1
+      val totalArity = vparamss.map(_.length).sum
 
       // For each value parameter, create the getter method if it has a
       // default argument. previous denotes the parameter lists which
@@ -1265,7 +1266,7 @@ trait Namers extends MethodSynthesis {
             //    Still far from ideal, but at least enables things like run/macro-default-params that were previously impossible.
 
             val oflag = if (baseHasDefault) OVERRIDE else 0
-            val name = nme.defaultGetterName(meth.name, posCounter)
+            val name = nme.defaultGetterName(meth.name, totalArity, posCounter)
 
             var defTparams = rtparams
             val defVparamss = mmap(rvparamss.take(previous.length)){ rvp =>

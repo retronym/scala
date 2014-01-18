@@ -11,8 +11,8 @@ C(2,3)
       ()
     };
     <synthetic> def copy(x: Int = x, y: Int = y): C = new C(x, y);
-    <synthetic> def copy$default$1: Int = C.this.x;
-    <synthetic> def copy$default$2: Int = C.this.y;
+    <synthetic> def copy$default$2$1: Int = C.this.x;
+    <synthetic> def copy$default$2$2: Int = C.this.y;
     override <synthetic> def productPrefix: String = "C";
     <synthetic> def productArity: Int = 2;
     <synthetic> def productElement(x$1: Int): Any = x$1 match {
