@@ -3979,7 +3979,7 @@ trait Types
    *  considered equal in regard to `=:=`.
    */
   def isEligibleForPrefixUnification(tp: Type): Boolean = tp match {
-    case SingleType(pre, sym)  => !(sym hasFlag PACKAGE) && isEligibleForPrefixUnification(pre)
+    case SingleType(pre, sym)  => !(sym hasFlag PACKAGE) && (isEligibleForPrefixUnification(pre) || isEligibleForPrefixUnification(tp.underlying))
     case tv@TypeVar(_, constr) => !tv.instValid || isEligibleForPrefixUnification(constr.inst)
     case RefinedType(_, _)     => true
     case _                     => false
