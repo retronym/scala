@@ -578,9 +578,12 @@ private[internal] trait TypeMaps {
         //@M! see test pos/tcpoly_return_overriding.scala why mapOver is necessary
         if (skipPrefixOf(pre, clazz))
           mapOver(classParam)
-        else if (!matchesPrefixAndClass(pre, clazz)(tparam.owner))
-          loop(nextBase.prefix, clazz.owner)
-        else nextBase match {
+        else if (!matchesPrefixAndClass(pre, clazz)(tparam.owner)) {
+          nextBase match {
+            case NoType if clazz.isRefinementClass => loop(pre.prefix, clazz.owner) // see pos/t8177d.scala
+            case tp                                => loop(tp.prefix, clazz.owner)
+          }
+        } else nextBase match {
           case NoType                         => loop(NoType, clazz.owner) // backstop for SI-2797, must remove `SingletonType#isHigherKinded` and run pos/t2797.scala to get here.
           case applied @ TypeRef(_, _, _)     => correspondingTypeArgument(classParam, applied)
           case ExistentialType(eparams, qtpe) => captureSkolems(eparams) ; loop(qtpe, clazz)
