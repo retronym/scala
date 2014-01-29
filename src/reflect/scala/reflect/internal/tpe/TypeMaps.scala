@@ -481,7 +481,7 @@ private[internal] trait TypeMaps {
         )
       // The hasCompleteInfo guard is necessary to avoid cycles during the typing
       // of certain classes, notably ones defined inside package objects.
-      !base.hasCompleteInfo || loop(seenFromClass)
+      !base.hasCompleteInfo || loop(seenFromClass) || seenFromClass.isRefinementClass
     }
 
     /** Is the symbol a class type parameter from one of the enclosing
@@ -574,17 +574,27 @@ private[internal] trait TypeMaps {
 
       def loop(pre: Type, clazz: Symbol): Type = {
         // have to deconst because it may be a Class[T]
-        def nextBase = (pre baseType clazz).deconst
+        def nextBase = {
+          val result = (pre baseType clazz).deconst
+          if (clazz.isRefinementClass)
+            println("here")
+          result
+        }
         //@M! see test pos/tcpoly_return_overriding.scala why mapOver is necessary
         if (skipPrefixOf(pre, clazz))
           mapOver(classParam)
         else if (!matchesPrefixAndClass(pre, clazz)(tparam.owner)) {
           nextBase match {
             case NoType if clazz.isRefinementClass => loop(pre.prefix, clazz.owner) // see pos/t8177d.scala
-            case tp                                => loop(tp.prefix, clazz.owner)
+            case tp => loop(tp.prefix, clazz.owner) match {
+              case `classParam` if clazz.isRefinementClass =>
+                loop(pre.prefix, clazz.owner) // see run/t8177f.scala. refinement types in constructor param types are owned by the enclosing class
+              case x => x
+            }
           }
         } else nextBase match {
-          case NoType                         => loop(NoType, clazz.owner) // backstop for SI-2797, must remove `SingletonType#isHigherKinded` and run pos/t2797.scala to get here.
+          case NoType                         =>
+            loop(pre.prefix, clazz.owner) // backstop for SI-2797, must remove `SingletonType#isHigherKinded` and run pos/t2797.scala to get here.
           case applied @ TypeRef(_, _, _)     => correspondingTypeArgument(classParam, applied)
           case ExistentialType(eparams, qtpe) => captureSkolems(eparams) ; loop(qtpe, clazz)
           case t                              => abort(s"$tparam in ${tparam.owner} cannot be instantiated from ${seenFromPrefix.widen}")

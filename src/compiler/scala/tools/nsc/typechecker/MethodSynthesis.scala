@@ -397,6 +397,7 @@ trait MethodSynthesis {
           // circumstances (at least: concrete vals with existential types.)
           case ExistentialType(_, _)  => TypeTree() setOriginal (tree.tpt.duplicate setPos tree.tpt.pos.focus)
           case _ if mods.isDeferred   => TypeTree() setOriginal tree.tpt // keep type tree of original abstract field
+          case _: RefinedType         => TypeTree() setOriginal tree.tpt // SI-8177 refinement class symbols in contructor params have the wrong owner for use as type of members!
           case tp                     => TypeTree(tp)
         }
         tpt setPos tree.tpt.pos.focus

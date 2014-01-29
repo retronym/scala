@@ -50,7 +50,13 @@ trait Namers extends MethodSynthesis {
   private class NormalNamer(context: Context) extends Namer(context)
   def newNamer(context: Context): Namer = new NormalNamer(context)
 
+  private var namerId = 0
+  private def nextNamerId(): Int = try namerId finally namerId += 1
   abstract class Namer(val context: Context) extends MethodSynth with NamerContextErrors { thisNamer =>
+    val id = nextNamerId()
+
+    override def toString: String = super.toString + "#" + id
+
     // overridden by the presentation compiler
     def saveDefaultGetter(meth: Symbol, default: Symbol) { }
 
