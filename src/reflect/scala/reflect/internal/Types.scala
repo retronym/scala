@@ -1202,7 +1202,7 @@ trait Types
             || refinementParents.contains(baseClass) // refinements inherit privates of direct parents
             || selectorClass == baseClass
           )
-        (sym.flags & PRIVATE) != PRIVATE || admitPrivate(sym)
+        !sym.isPrivate || admitPrivate(sym)
       }
 
 
