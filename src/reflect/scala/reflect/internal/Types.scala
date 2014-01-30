@@ -1030,7 +1030,6 @@ trait Types
      *  @param requiredFlags  Returned members do have these flags
      *  @param stableOnly     If set, return only members that are types or stable values
      */
-    //TODO: use narrow only for modules? (correct? efficiency gain?)
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
       def findMemberSymbolInternal: Symbol = {
         findMemberInternal(name, excludedFlags, requiredFlags, stableOnly) match {
@@ -1047,12 +1046,14 @@ trait Types
     private final class FindMemberInternal(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean) {
       // Gathering the results into a hand rolled ListBuffer
       // TODO Try just using a ListBuffer to see if this low-level-ness is worth it.
-      private[this] var member: Symbol        = NoSymbol
+      private[this] var member0: Symbol       = NoSymbol
       private[this] var members: List[Symbol] = null
       private[this] var lastM: ::[Symbol]     = null
 
       private[this] val initBaseClasses = baseClasses
 
+      // The first base class, or the symbol of the ThisType
+      // private symbols are 
       private[this] var _selectorClass: Symbol = null
       private def selectorClass: Symbol = {
         if (_selectorClass eq null) {
@@ -1065,25 +1066,21 @@ trait Types
       }
 
       // Cache for the member type of the first member we find.
-      private[this] var _membertpe: Type = null
-      private[this] def membertpe: Type = {
-        assert(member != null)
-        if (_membertpe eq null) _membertpe = self.memberType(member)
-        _membertpe
+      private[this] var _member0Tpe: Type = null
+      private[this] def member0Tpe: Type = {
+        assert(member0 != null)
+        if (_member0Tpe eq null) _member0Tpe = self.memberType(member0)
+        _member0Tpe
       }
 
-      // Cache for the narrowed type of `tp` (in `tp.findMember`)
+      // Cache for the narrowed type of `tp` (in `tp.findMember`).
+      // This is needed to avoid mismatched existential types are reported in SI-5330.
       private[this] var _self: Type = null
       private[this] def self: Type = {
+        // TODO: use narrow only for modules? (correct? efficiency gain?) (<-- Note: this comment predates SI-5330)
         if (_self eq null) _self = narrowForFindMember(Type.this)
         _self
       }
-
-      // Has the current `walkBaseClasses` encountered a non-refinement class?
-      private[this] var seenFirstNonRefinementClass: Boolean = false
-      // All direct parents of refinement classes in the base class sequence
-      // from the current `walkBaseClasses`
-      private[this] var refinementParents: List[Symbol] = Nil
 
       // Main entry point
       def apply(): List[Symbol] = {
@@ -1101,22 +1098,26 @@ trait Types
         memberList
       }
 
-      /**
+      /*
        * Walk up through the decls of each base class.
        *
        * Called in two passes: first excluding deferred, then mandating it.
-       *
-       * Side effects:
-       *    `member`, `memberList`, `lastM` : found members
-       *    `symtpe`                        : cache of the memberType of candidates
        *
        * @return true, if a potential deferred member was seen on the first pass that calls for a second pass.
        */
       private def walkBaseClasses(required: Long, excluded: Long): Boolean = {
         var bcs = initBaseClasses
+
+        // Has we seen a candidate deferred member?
         var deferredSeen = false
-        refinementParents = Nil
-        seenFirstNonRefinementClass = false
+
+        // All direct parents of refinement classes in the base class sequence
+        // from the current `walkBaseClasses`
+        var refinementParents: List[Symbol] = Nil
+
+        // Has the current `walkBaseClasses` encountered a non-refinement class?
+        var seenFirstNonRefinementClass = false
+
         while (!bcs.isEmpty) {
           val currentBaseClass = bcs.head
           val decls = currentBaseClass.info.decls
@@ -1127,10 +1128,12 @@ trait Types
             val meetsRequirements = (flags & required) == required
             if (meetsRequirements) {
               val excl: Long = flags & excluded
-              val isExcluded: Boolean = excl != 0
-              if (!isExcluded && isPotentialMember(sym, currentBaseClass)) {
-                val continue = addMemberIfNew(sym)
-                if (!continue) return false // found a stable non-volatile type member, we can break out of the search.
+              val isExcluded: Boolean = excl != 0L
+              if (!isExcluded && isPotentialMember(sym, currentBaseClass, seenFirstNonRefinementClass, refinementParents)) {
+                if (name.isTypeName || (stableOnly && sym.isStable && !sym.hasVolatileType)) {
+                  member0 = sym
+                  return false // found a stable non-volatile type member, we can break out of the search.
+                } else addMemberIfNew(sym)
               } else if (excl == DEFERRED) {
                 deferredSeen = true
               }
@@ -1151,60 +1154,62 @@ trait Types
         }
         deferredSeen
       }
-      
-      def addMemberIfNew(sym: Symbol): Boolean = {
-        if (name.isTypeName || (stableOnly && sym.isStable && !sym.hasVolatileType)) {
-          member = sym
-          return false
-        } else if (member eq NoSymbol) {
-          member = sym // The first found member
+
+      // Conceptually:
+      //
+      // val isNew = memberList forall (member => isNewMember(member, self.memberType(member), sym))
+      // if (isNew) memberList += sym
+      //
+      // Other than an special case for type members, and performance driven boilerplate
+      // to work with hand-rolled ListBuffer and to use a cache of the member type of the
+      // first member.
+      //
+      def addMemberIfNew(sym: Symbol): Unit =
+        if (member0 eq NoSymbol) {
+          member0 = sym // The first found member
         } else if (members eq null) {
           // We've found exactly one member so far... 
-          if (isNewMember(member, membertpe, sym)) {
+          if (isNewMember(member0, member0Tpe, sym)) {
             // ... make that two.
             lastM = new ::(sym, null)
-            members = member :: lastM
+            members = member0 :: lastM
           }
         } else {
           // Already found 2 or more members
-          var members0: List[Symbol] = members
+          var ms: List[Symbol] = members
 
-          // Hand rolled version of:
-          // val isNew = memberList forall (member => isNewMember(member, self.memberType(member), sym))
           var isNew = true
-          while ((members0 ne null) && isNew) {
-            val member = members0.head
+          while ((ms ne null) && isNew) {
+            val member = ms.head
             val memberType = self.memberType(member)
             if (!isNewMember(member, memberType, sym))
               isNew = false
-            members0 = members0.tail
+            ms = ms.tail
           }
           if (isNew) {
-            // no already-found member matches `sym`, (sneakily) append it to `members`.
             val lastM1 = new ::(sym, null)
             lastM.tl = lastM1
             lastM = lastM1
           }
         }
-        true
-      }
 
       // Is `sym` a potentially member of `baseClass`?
       //
       // Q. When does a potential member fail to be a an actual member?
       // A. if it is subsumed by an member in a subclass.
-      private def isPotentialMember(sym: Symbol, baseClass: Symbol): Boolean = {
+      private def isPotentialMember(sym: Symbol, owner: Symbol,
+                                    seenFirstNonRefinementClass: Boolean, refinementParents: List[Symbol]): Boolean = {
         def admitPrivate(sym: Symbol): Boolean =
-          if (sym.isPrivateLocal)
-            selectorClass == baseClass
-          else (
-               !seenFirstNonRefinementClass          // classes don't inherit privates
-            || refinementParents.contains(baseClass) // refinements inherit privates of direct parents
-            || selectorClass == baseClass
+          (selectorClass == owner) || (
+               !sym.isPrivateLocal                    // private[this] only a member from within the class
+            && (
+                    !seenFirstNonRefinementClass      // classes don't inherit privates
+                 || refinementParents.contains(owner) // but refinements *do* inherit privates of direct parents
+               )
           )
+
         !sym.isPrivate || admitPrivate(sym)
       }
-
 
       // TODO this cache is probably unnecessary, `tp.memberType(sym: MethodSymbol)` is already cached internally.
       private[this] var _memberTypeCache: Type = null
@@ -1228,10 +1233,10 @@ trait Types
 
       // Assemble the result from the hand-rolled ListBuffer
       private def memberList: List[Symbol] = if (members eq null) {
-        if (member == NoSymbol) {
+        if (member0 == NoSymbol) {
           if (Statistics.canEnable) Statistics.incCounter(noMemberCount)
           Nil
-        } else member :: Nil
+        } else member0 :: Nil
       } else {
         if (Statistics.canEnable) Statistics.incCounter(multMemberCount)
         lastM.tl = Nil
