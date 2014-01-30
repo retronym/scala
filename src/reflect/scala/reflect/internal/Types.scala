@@ -1053,6 +1053,17 @@ trait Types
 
       private[this] val initBaseClasses = baseClasses
 
+      private[this] var _selectorClass: Symbol = null
+      private def selectorClass: Symbol = {
+        if (_selectorClass eq null) {
+          _selectorClass = Type.this match {
+            case tt: ThisType => tt.sym // SI-7507 the first base class is not necessarily the selector class.
+            case _            => initBaseClasses.head
+          }
+        }
+        _selectorClass
+      }
+
       // Cache for the member type of the first member we find.
       private[this] var _membertpe: Type = null
       private[this] def membertpe: Type = {
@@ -1182,17 +1193,18 @@ trait Types
       //
       // Q. When does a potential member fail to be a an actual member?
       // A. if it is subsumed by an member in a subclass.
-      private def isPotentialMember(sym: Symbol, baseClass: Symbol): Boolean = (
-           (sym.flags & PRIVATE) != PRIVATE           // non-privates are always members
-        || (
-                !seenFirstNonRefinementClass          // classes don't inherit privates
-             || refinementParents.contains(baseClass) // refinements inherit privates of direct parents
-           )
-        || (
-                (sym.flags & PrivateLocal) == PrivateLocal
-             && admitPrivateLocal(baseClass)
-           )
-      )
+      private def isPotentialMember(sym: Symbol, baseClass: Symbol): Boolean = {
+        def admitPrivate(sym: Symbol): Boolean =
+          if (sym.isPrivateLocal)
+            selectorClass == baseClass
+          else (
+               !seenFirstNonRefinementClass          // classes don't inherit privates
+            || refinementParents.contains(baseClass) // refinements inherit privates of direct parents
+            || selectorClass == baseClass
+          )
+        (sym.flags & PRIVATE) != PRIVATE || admitPrivate(sym)
+      }
+
 
       // TODO this cache is probably unnecessary, `tp.memberType(sym: MethodSymbol)` is already cached internally.
       private[this] var _memberTypeCache: Type = null
@@ -1214,14 +1226,6 @@ trait Types
              )
         )
 
-      private def admitPrivateLocal(owner: Symbol): Boolean = {
-        val selectorClass = Type.this match {
-          case tt: ThisType => tt.sym // SI-7507 the first base class is not necessarily the selector class.
-          case _            => initBaseClasses.head
-        }
-        selectorClass == owner
-      }
-      
       // Assemble the result from the hand-rolled ListBuffer
       private def memberList: List[Symbol] = if (members eq null) {
         if (member == NoSymbol) {
