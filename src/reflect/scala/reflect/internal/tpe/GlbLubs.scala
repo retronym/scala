@@ -88,7 +88,8 @@ private[internal] trait GlbLubs {
       case _ => tp
     }
     // pretypes is a tail-recursion-preserving accumulator.
-    @tailrec def loop(pretypes: List[Type], tsBts: List[List[Type]]): List[Type] = {
+    @tailrec
+    def loop(pretypes: List[Type], tsBts: List[List[Type]]): List[Type] = {
       lubListDepth = lubListDepth.incr
 
       if (tsBts.isEmpty || (tsBts exists typeListIsEmpty)) pretypes.reverse
@@ -110,23 +111,36 @@ private[internal] trait GlbLubs {
         // merging, strip targs that refer to bound tparams (when we're computing the lub of type
         // constructors.) Also filter out all types that are a subtype of some other type.
         if (isUniformFrontier) {
+          val tails       = tsBts map (_.tail)
+          val typeSym     = ts0.head.typeSymbol // we're uniform, the `.head` is as good as any.
           val fbounds     = findRecursiveBounds(ts0) map (_._2)
-          val tcLubList   = typeConstructorLubList(ts0)
-          def isRecursive(tp: Type) = tp.typeSymbol.typeParams exists fbounds.contains
+          def isRecursive = typeSym.typeParams exists fbounds.contains
 
-          val ts1 = ts0 map { t =>
-            if (isRecursive(t)) {
-              tcLubList map (t baseType _.typeSymbol) find (t => !isRecursive(t)) match {
-                case Some(tp) => logResult(s"Breaking recursion in lublist, substituting weaker type.\n  Was: $t\n  Now")(tp)
-                case _        => t
-              }
-            }
-            else t
-          }
-          val tails = tsBts map (_.tail)
-          mergePrefixAndArgs(elimSub(ts1, depth) map elimHigherOrderTypeParam, Covariant, depth) match {
+          val ts1 = elimSub(ts0, depth) map elimHigherOrderTypeParam
+          mergePrefixAndArgs(ts1, Covariant, depth) match {
             case NoType => loop(pretypes, tails)
-            case tp     => loop(tp :: pretypes, tails)
+            case tp     =>
+              if (isRecursive) {
+                val argss = ts1 map (_.normalize.typeArgs)
+                val skip = transposeSafe(argss) match {
+                  case Some(arggsTransposed) =>
+                    val mergedTypeArgs = (tp match { case et: ExistentialType => et.underlying; case _ => tp}).typeArgs
+                    val willViolateBounds = exists3(typeSym.typeParams, mergedTypeArgs, arggsTransposed) {
+                      (param, arg, lubbedArgs) =>
+                        val isExistential = arg.typeSymbol.isExistentiallyBound
+                        val isInFBound    = fbounds contains param
+                        val wasLubbed     = !lubbedArgs.exists(_ =:= arg)
+                        (!isExistential && isInFBound && wasLubbed)
+                    }
+                    willViolateBounds
+                  case None => false
+                }
+                if (skip) {
+                  log(s"Breaking recursion in lublist, advancing frontier and discaring merged prefix/args from $tp")
+                  loop(pretypes, tails)
+                } else loop(tp :: pretypes, tails)
+              } else
+                loop(tp :: pretypes, tails)
           }
         }
         else {
@@ -256,23 +270,6 @@ private[internal] trait GlbLubs {
 
   private val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
   def glbResults = _glbResults
-
-  /** Given a list of types, finds all the base classes they have in
-    *  common, then returns a list of type constructors derived directly
-    *  from the symbols (so any more specific type information is ignored.)
-    *  The list is filtered such that every type constructor in the list
-    *  expects the same number of type arguments, which is chosen based
-    *  on the deepest class among the common baseclasses.
-    */
-  def typeConstructorLubList(ts: List[Type]): List[Type] = {
-    val bcs   = ts.flatMap(_.baseClasses).distinct sortWith (_ isLess _)
-    val tcons = bcs filter (clazz => ts forall (_.typeSymbol isSubClass clazz))
-
-    tcons map (_.typeConstructor) match {
-      case Nil      => Nil
-      case t :: ts  => t :: ts.filter(_.typeParams.size == t.typeParams.size)
-    }
-  }
 
   def lub(ts: List[Type]): Type = ts match {
     case Nil      => NothingTpe
