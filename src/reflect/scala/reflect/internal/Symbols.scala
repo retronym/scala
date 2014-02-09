@@ -1557,7 +1557,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *
      *    - packageobjects (follows namer)
      *    - superaccessors (follows typer)
-     *    - lazyvals       (follows erasure)
+     *    - posterasure    (follows erasure)
      *    - null
      */
     private def unsafeTypeParamPhase = {
@@ -1575,7 +1575,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // don't forget to modify the code over there if you modify this method
     def unsafeTypeParams: List[Symbol] =
       if (isMonomorphicType) Nil
-      else enteringPhase(unsafeTypeParamPhase)(rawInfo.typeParams)
+      else {
+        val ph = unsafeTypeParamPhase
+        if (this == ArrayClass || !ph.erasedTypes) ph
+        else typerP.
+        enteringPhase(ph)(rawInfo.typeParams)
+      }
 
     /** The type parameters of this symbol.
      *  assumption: if a type starts out as monomorphic, it will not acquire
