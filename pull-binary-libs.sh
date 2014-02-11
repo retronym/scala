@@ -16,7 +16,7 @@ fi
 
 base=$(dirname $0)
 
-. ${base}/tools/binary-repo-lib.sh
+. "${base}"/tools/binary-repo-lib.sh
 
 # TODO - argument parsing...
-pullJarFiles ${base}
+pullJarFiles "${base}"
