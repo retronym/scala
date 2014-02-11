@@ -14,7 +14,9 @@ then
   exit 1
 fi
 
-. $(dirname $0)/tools/binary-repo-lib.sh
+base=$(dirname $0)
+
+. ${base}/tools/binary-repo-lib.sh
 
 # TODO - argument parsing...
-pullJarFiles $(pwd)
+pullJarFiles ${base}
