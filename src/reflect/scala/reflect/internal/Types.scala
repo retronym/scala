@@ -2055,7 +2055,10 @@ trait Types
     // normalize to flatten nested RefinedTypes
     // don't check whether tp is a RefinedType -- it may be a ThisType of one, for example
     // TODO: check the resulting symbol is owned by the refinement class? likely an invariant...
-    if (tp.typeSymbol.isRefinementClass) tp.normalize.decls lookup name
+    if (tp.typeSymbol.isRefinementClass) {
+      val sym = tp.normalize.decls lookup name
+      sym
+    }
     else {
       debuglog(s"no embedded symbol $name found in ${showRaw(tp)} --> ${tp.normalize.decls lookup name}")
       NoSymbol
@@ -4115,7 +4118,16 @@ trait Types
             info2.bounds.containsType(memberTp1) &&
             kindsConform(List(sym2), List(memberTp1), tp1, sym1.owner)
         }
-      || sym2.isAliasType && tp2.memberType(sym2).substThis(tp2.typeSymbol, tp1) =:= tp1.memberType(sym1) //@MAT ok
+      || sym2.isAliasType && {
+        if (sym1.isAliasType)
+          info1 =:= info2
+        else {
+          val mt2 = tp2.memberType(sym2)
+          val mt2Subst = mt2.substThis(tp2.typeSymbol, tp1)
+          val mt1 = tp1.memberType(sym1)
+          mt2Subst =:= mt1
+        }
+      } //@MAT ok
     )
   }
 
