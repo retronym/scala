@@ -1131,12 +1131,19 @@ trait Infer extends Checkable {
      *  The result eliminates some redundancies.
      */
     def intersect(tp1: Type, tp2: Type): Type = {
-      if (tp1 <:< tp2) tp1
-      else if (tp2 <:< tp1) tp2
+      // Don't eliminate `hi` if we are nested in it, otherwise we lose private members which are not inherited.
+      // TODO factor out `isPrivateAccessible` to avoid the need for a dummy symbol and prefix here.
+      def subsumes(lo: Type, hi: Type) = (
+           lo <:< hi
+        && !context.isAccessible(hi.typeSymbol.newTermSymbol(nme.EMPTY, newFlags = PRIVATE), pre = NoType)
+      )
+
+      if (subsumes(tp1, tp2)) tp1
+      else if (subsumes(tp2, tp1)) tp2
       else {
         val reduced2 = tp2 match {
           case rtp @ RefinedType(parents2, decls2) =>
-            copyRefinedType(rtp, parents2 filterNot (tp1 <:< _), decls2)
+            copyRefinedType(rtp, parents2 filterNot (subsumes(tp1, _)), decls2)
           case _ =>
             tp2
         }
