@@ -2564,43 +2564,37 @@ trait Types
      *
      * TODO: figure out how to do this earlier without running into cycles, so this can subsume the fix for SI-1786
      */
-    private def sharpenQuantifierBounds(): Unit = {
-      /* Check that we're looking at rawToExistential's handiwork
-       * (`existentialAbstraction(eparams, typeRef(apply(pre), sym, eparams map (_.tpe)))`).
-       * We can't do this sharpening there because we'll run into cycles.
-       */
-      def rawToExistentialCreatedMe = (quantified corresponds underlying.typeArgs){ (q, a) => q.tpe =:= a }
-
-      if (underlying.typeSymbol.isJavaDefined && rawToExistentialCreatedMe) {
-        val tpars = underlying.typeSymbol.initialize.typeParams // TODO: is initialize needed?
-        debuglog(s"sharpen bounds: $this | ${underlying.typeArgs.map(_.typeSymbol)} <-- ${tpars.map(_.info)}")
-
-        foreach2(quantified, tpars) { (quant, tparam) =>
-          // TODO: check `tparam.info.substSym(tpars, quantified) <:< quant.info` instead (for some weird reason not working for test/t6169/ExistF)
-          // for now, crude approximation for the common case
-          if (quant.info.bounds.isEmptyBounds && !tparam.info.bounds.isEmptyBounds) {
-            // avoid creating cycles [pos/t2940] that consist of an existential quantifier's
-            // bounded by an existential type that unhygienically has that quantifier as its own quantifier
-            // (TODO: clone latter existential with fresh quantifiers -- not covering this case for now)
-            if ((existentialsInType(tparam.info) intersect quantified).isEmpty)
-              quant setInfo tparam.info.substSym(tpars, quantified)
-          }
-        }
-      }
-
-      _sharpenQuantifierBounds = false
-    }
-    private[this] var _sharpenQuantifierBounds = true
-
     override def skolemizeExistential(owner: Symbol, origin: AnyRef) = {
       // do this here because it's quite close to what Java does:
       // when checking subtyping/type equality, enter constraints
       // derived from the existentially quantified type into the typing environment
       // (aka \Gamma, which tracks types for variables and constraints/kinds for types)
       // as a nice bonus, delaying this until we need it avoids cyclic errors
-      if (_sharpenQuantifierBounds) sharpenQuantifierBounds
+      val tpars = underlying.typeSymbol.initialize.typeParams
 
-      deriveType(quantified, tparam => (owner orElse tparam.owner).newExistentialSkolem(tparam, origin))(underlying)
+      // Is this existential of the form: T[Q1, ..., QN] forSome { type Q1 >: L1 <: U1, ..., QN >: LN <: UN}
+      val isExactApplication = (quantified corresponds underlying.typeArgs){ (q, a) => q.tpe =:= a }
+
+      def newSkolem(basis: Symbol) = (owner orElse basis.owner).newExistentialSkolem(basis, origin)
+      def newSharpenedSkolem(quant: Symbol, tparam: Symbol): Symbol = {
+        def emptyBounds(sym: Symbol) = sym.info.bounds.isEmptyBounds
+        // avoid creating cycles [pos/t2940] that consist of an existential quantifier's
+        // bounded by an existential type that unhygienically has that quantifier as its own quantifier
+        // (TODO: clone latter existential with fresh quantifiers -- not covering this case for now)
+        val canSharpen = (
+             emptyBounds(quant)
+          && !emptyBounds(tparam)
+          && (existentialsInType(tparam.info) intersect quantified).isEmpty
+        )
+        val basis =
+          if (canSharpen)
+            quant.cloneSymbol(quant.owner) setInfo tparam.info.substSym(tpars, quantified)
+          else
+            quant
+        newSkolem(basis)
+      }
+      if (isExactApplication) deriveType2(quantified, tpars, newSharpenedSkolem)(underlying)
+      else deriveType(quantified, newSkolem)(underlying)
     }
 
     private def wildcardArgsString(qset: Set[Symbol], args: List[Type]): List[String] = args map {

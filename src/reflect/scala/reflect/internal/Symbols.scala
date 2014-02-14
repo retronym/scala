@@ -3418,6 +3418,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     val syms1 = mapList(syms)(symFn)
     mapList(syms1)(_ substInfo (syms, syms1))
   }
+  def deriveSymbols2[A](syms: List[Symbol], as: List[A], symFn: (Symbol, A) => Symbol): List[Symbol] = {
+    val syms1 = map2(syms, as)(symFn)
+    mapList(syms1)(_ substInfo (syms, syms1))
+  }
 
   /** Derives a new Type by first deriving new symbols as in deriveSymbols,
    *  then performing the same oldSyms => newSyms substitution on `tpe` as is
@@ -3430,6 +3434,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    */
   def deriveType(syms: List[Symbol], symFn: Symbol => Symbol)(tpe: Type): Type = {
     val syms1 = deriveSymbols(syms, symFn)
+    tpe.substSym(syms, syms1)
+  }
+  def deriveType2[A](syms: List[Symbol], as: List[A], symFn: (Symbol, A) => Symbol)(tpe: Type): Type = {
+    val syms1 = deriveSymbols2(syms, as, symFn)
     tpe.substSym(syms, syms1)
   }
   /** Derives a new Type by instantiating the given list of symbols as
