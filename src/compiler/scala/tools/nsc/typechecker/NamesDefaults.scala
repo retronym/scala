@@ -567,7 +567,7 @@ trait NamesDefaults { self: Analyzer =>
             if (argIndex != paramPos)
               positionalAllowed = false
             argPos(argIndex) = paramPos
-            rhs
+            rhs.updateAttachment(OriginalNamedArg(arg, paramPos, params(paramPos).name))
           }
         case _ =>
           argPos(argIndex) = argIndex
@@ -578,4 +578,6 @@ trait NamesDefaults { self: Analyzer =>
 
     (namelessArgs, argPos)
   }
+
+  final case class OriginalNamedArg(tree: AssignOrNamedArg, paramPos: Int, paramName: Symbol)
 }
