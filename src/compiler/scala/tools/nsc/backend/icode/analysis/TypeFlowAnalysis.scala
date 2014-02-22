@@ -415,7 +415,7 @@ abstract class TypeFlowAnalysis {
           }
           val concreteMethod = inliner.lookupImplFor(msym, receiver)
           val isCandidate = {
-            ( inliner.isClosureClass(receiver) || concreteMethod.isEffectivelyFinal || receiver.isEffectivelyFinal ) &&
+            ( inliner.isClosureClass(receiver) || concreteMethod.isEffectivelyFinalOrNotOverriden || receiver.isEffectivelyFinalOrNotOverriden ) &&
             !blackballed(concreteMethod)
           }
           if(isCandidate) {
@@ -501,7 +501,7 @@ abstract class TypeFlowAnalysis {
     }
 
     private def isReceiverKnown(cm: opcodes.CALL_METHOD): Boolean = {
-      cm.method.isEffectivelyFinal && cm.method.owner.isEffectivelyFinal
+      cm.method.isEffectivelyFinalOrNotOverriden && cm.method.owner.isEffectivelyFinalOrNotOverriden
     }
 
     private def putOnRadar(blocks: Traversable[BasicBlock]) {

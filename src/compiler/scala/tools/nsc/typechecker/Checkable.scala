@@ -203,7 +203,7 @@ trait Checkable {
     private def isSealedOrFinal(sym: Symbol) = sym.isSealed || sym.isFinal
     private def isEffectivelyFinal(sym: Symbol): Boolean = (
       // initialization important
-      sym.initialize.isEffectivelyFinal || (
+      sym.initialize.isEffectivelyFinalOrNotOverriden || (
         settings.future && isTupleSymbol(sym) // SI-7294 step into the future and treat TupleN as final.
       )
     )
