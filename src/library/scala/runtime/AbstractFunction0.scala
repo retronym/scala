@@ -11,4 +11,6 @@ package scala.runtime
 
 abstract class AbstractFunction0[@specialized(Specializable.Primitives) +R] extends Function0[R] {
 
+
+  override def toString() = "<function0>"
 }

@@ -11,4 +11,6 @@ package scala.runtime
 
 abstract class AbstractFunction5[-T1, -T2, -T3, -T4, -T5, +R] extends Function5[T1, T2, T3, T4, T5, R] {
 
+
+  override def toString() = "<function5>"
 }

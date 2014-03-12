@@ -186,7 +186,6 @@ class Function(val i: Int) extends Group("Function") with Arity {
  *  latter can specify inputs which it will not handle.
 """
 
-  def toStr() = "\"" + ("<function%d>" format i) + "\""
   def apply() = {
 <file name={fileName}>{header}
 
@@ -199,7 +198,6 @@ class Function(val i: Int) extends Group("Function") with Arity {
    */
   def apply({funArgs}): R
 {moreMethods}
-  override def toString() = {toStr}
 }}
 </file>
 }
@@ -429,10 +427,14 @@ class AbstractFunction(val i: Int) extends Group("AbstractFunction") with Arity
 
   val superTypeArgs = typeArgsString(targs ::: List("R"))
 
+  def toStr() = "\"" + ("<function%d>" format i) + "\""
+
   def apply() = {
 <file name={"runtime/" + fileName}>{header}
 abstract class {className}{contraCoArgs} extends Function{i}{superTypeArgs} {{
 {moreMethods}
+
+  override def toString() = {toStr}
 }}
 </file>}
 

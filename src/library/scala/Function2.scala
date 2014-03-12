@@ -53,5 +53,4 @@ trait Function2[@specialized(scala.Int, scala.Long, scala.Double) -T1, @speciali
   @annotation.unspecialized def tupled: Tuple2[T1, T2] => R = {
     case Tuple2(x1, x2) => apply(x1, x2)
   }
-  override def toString() = "<function2>"
 }

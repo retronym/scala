@@ -54,5 +54,4 @@ trait Function1[@specialized(scala.Int, scala.Long, scala.Float, scala.Double) -
    */
   @annotation.unspecialized def andThen[A](g: R => A): T1 => A = { x => g(apply(x)) }
 
-  override def toString() = "<function1>"
 }
