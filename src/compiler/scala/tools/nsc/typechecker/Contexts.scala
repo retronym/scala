@@ -128,6 +128,9 @@ trait Contexts { self: Analyzer =>
     }
   }
 
+  private var contextId = 0
+  private def nextContextId = try contextId finally contextId += 1
+
   /**
    * A motley collection of the state and loosely associated behaviour of the type checker.
    * Each `Typer` has an associated context, and as it descends into the tree new `(Typer, Context)`
@@ -181,6 +184,7 @@ trait Contexts { self: Analyzer =>
                                      val unit: CompilationUnit, _outer: Context) {
     private def outerIsNoContext = _outer eq null
     final def outer: Context = if (outerIsNoContext) NoContext else _outer
+    val id: Int = nextContextId
 
     /** The next outer context whose tree is a template or package definition */
     var enclClass: Context = _
@@ -1057,6 +1061,15 @@ trait Contexts { self: Analyzer =>
       def lookupInScope(scope: Scope) =
         (scope lookupUnshadowedEntries name filter (e => qualifies(e.sym))).toList
 
+      def lookupSymInScope(cx: Context): Symbol = lookupInScope(cx.scope) match {
+        case Nil => NoSymbol
+        case entries @ (hd :: tl) =>
+          // we have a winner: record the symbol depth
+          symbolDepth = (cx.depth - cx.scope.nestingLevel) + hd.depth
+          if (tl.isEmpty) hd.sym
+          else newOverloaded(cx.owner, pre, entries)
+      }
+
       def newOverloaded(owner: Symbol, pre: Type, entries: List[ScopeEntry]) =
         logResult(s"overloaded symbol in $pre")(owner.newOverloaded(pre, entries map (_.sym)))
 
@@ -1076,16 +1089,23 @@ trait Contexts { self: Analyzer =>
       // cx.scope eq null arises during FixInvalidSyms in Duplicators
       while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
         pre    = cx.enclClass.prefix
-        defSym = lookupInScope(cx.scope) match {
-          case Nil                  => searchPrefix
-          case entries @ (hd :: tl) =>
-            // we have a winner: record the symbol depth
-            symbolDepth = (cx.depth - cx.scope.nestingLevel) + hd.depth
-            if (tl.isEmpty) hd.sym
-            else newOverloaded(cx.owner, pre, entries)
+        defSym = lookupSymInScope(cx) match {
+          case NoSymbol =>
+            searchPrefix match {
+              case NoSymbol => NoSymbol
+              case prefixResult =>
+                cx.enclClass.tree match {
+                  case _: Template if name.isTypeName =>
+                    val classDefContext = cx.enclClass.nextEnclosing(c => c.tree.isInstanceOf[ClassDef] && c.owner == cx.owner)
+                    lookupSymInScope(classDefContext) orElse prefixResult
+                  case _ => prefixResult
+                }
+            }
+          case sym => sym
         }
-        if (!defSym.exists)
+        if (!defSym.exists) {
           cx = cx.outer // push further outward
+        }
       }
       if (symbolDepth < 0)
         symbolDepth = cx.depth
