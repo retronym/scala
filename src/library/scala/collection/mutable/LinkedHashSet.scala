@@ -132,6 +132,7 @@ class LinkedHashSet[A] extends AbstractSet[A]
 object LinkedHashSet extends MutableSetFactory[LinkedHashSet] {
   implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, LinkedHashSet[A]] = setCanBuildFrom[A]
   override def empty[A]: LinkedHashSet[A] = new LinkedHashSet[A]
+  override def newBuilder[A]: Builder[A, LinkedHashSet[A]] = new LinkedHashSet
 
   /** Class for the linked hash set entry, used internally.
    *  @since 2.10
