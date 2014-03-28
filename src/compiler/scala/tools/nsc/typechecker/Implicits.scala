@@ -171,6 +171,7 @@ trait Implicits {
     def isFailure          = false
     def isAmbiguousFailure = false
     def isDivergent        = false
+    def explanation: String = ""
     final def isSuccess    = !isFailure
   }
 
@@ -178,7 +179,7 @@ trait Implicits {
     override def isFailure = true
   }
 
-  lazy val DivergentSearchFailure = new SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
+  final class DivergentSearchFailure(override val explanation: String) extends SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
     override def isFailure   = true
     override def isDivergent = true
   }
@@ -443,10 +444,21 @@ trait Implicits {
       // otherwise, the macro writer could check `c.openMacros` and `c.openImplicits` and do `c.abort` when expansions are deemed to be divergent
       // upon receiving `c.abort` the typechecker will decide that the corresponding implicit search has failed
       // which will fail the entire stack of implicit searches, producing a nice error message provided by the programmer
-      (context.openImplicits find { case OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && dominates(pt, tp)}) match {
+      val dominatedOpenImplicit = context.openImplicits find {
+        case OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && dominates(pt, tp)
+      }
+      dominatedOpenImplicit match {
          case Some(pending) =>
+           val next = (OpenImplicit(info, pt, tree) :: context.openImplicits)
+           val msg = next.reverse.zipWithIndex.map {
+            case (OpenImplicit(info, pt, tree), i) =>
+              s"${"  " * i} $tree"
+           }.mkString("\n")
            //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
-           DivergentSearchFailure
+//           context.map {
+//             case OpenImplicit()
+//           }
+           new DivergentSearchFailure(msg)
          case None =>
            try {
              context.openImplicits = OpenImplicit(info, pt, tree) :: context.openImplicits
@@ -837,12 +849,14 @@ trait Implicits {
         // Initially null, will be saved on first diverging expansion.
         private var implicitSym: Symbol    = _
         private var countdown: Int = 1
+        var explanation: String = ""
 
         def sym: Symbol = implicitSym
         def apply(search: SearchResult, i: ImplicitInfo): SearchResult =
           if (search.isDivergent && countdown > 0) {
             countdown -= 1
             implicitSym = i.sym
+            explanation = search.explanation
             log(s"discarding divergent implicit $implicitSym during implicit search")
             SearchFailure
           } else search
@@ -925,7 +939,7 @@ trait Implicits {
            * now we can throw it for the error message.
            */
           if (DivergentImplicitRecovery.sym != null) {
-            DivergingImplicitExpansionError(tree, pt, DivergentImplicitRecovery.sym)(context)
+            DivergingImplicitExpansionError(tree, pt, DivergentImplicitRecovery.sym, DivergentImplicitRecovery.explanation)(context)
           }
 
           if (invalidImplicits.nonEmpty)

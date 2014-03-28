@@ -1,5 +1,8 @@
 t5318b.scala:7: error: diverging implicit expansion for type DivergingImplicitReported.this.TC[F]
-starting with method tc in class DivergingImplicitReported
+starting with method tc in class DivergingImplicitReported.
+ DivergingImplicitReported.this.breakage[F]
+   DivergingImplicitReported.this.tc[M]
+     DivergingImplicitReported.this.tc[M]
   breakage // correct: diverging implicit expansion
   ^
 one error found
