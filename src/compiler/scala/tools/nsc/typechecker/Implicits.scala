@@ -453,10 +453,6 @@ trait Implicits {
             case (OpenImplicit(info, pt, tree), i) =>
               s"${"  " * i} $tree"
            }.mkString("\n")
-           //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
-//           context.map {
-//             case OpenImplicit()
-//           }
            new DivergentSearchFailure(msg)
          case None =>
            try {
