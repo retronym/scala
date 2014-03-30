@@ -165,8 +165,7 @@ trait Implicits {
    *  @param undetparams undeterminted type parameters
    */
   class SearchResult(val tree: Tree, val subst: TreeTypeSubstituter, val undetparams: List[Symbol]) {
-    override def toString = "SearchResult(%s, %s)".format(tree,
-      if (subst.isEmpty) "" else subst)
+    override def toString = "%s(%s, %s)".format(getClass.getName, tree, if (subst.isEmpty) "" else subst)
 
     def isFailure          = false
     def isAmbiguousFailure = false
@@ -175,7 +174,7 @@ trait Implicits {
     final def isSuccess    = !isFailure
   }
 
-  lazy val SearchFailure = new SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
+  object SearchFailure extends SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
     override def isFailure = true
   }
 
@@ -850,13 +849,18 @@ trait Implicits {
         private var implicitSym: Symbol    = _
         private var countdown: Int = 1
         var explanation: String = ""
+        var typeErrors: List[DivergentImplicitTypeError] = Nil
 
         def sym: Symbol = implicitSym
         def apply(search: SearchResult, i: ImplicitInfo): SearchResult =
           if (search.isDivergent && countdown > 0) {
             countdown -= 1
+            if (i.sym == implicitSym)
+              ???
             implicitSym = i.sym
             explanation = search.explanation
+            typeErrors = context.errors.iterator.collect { case dite: DivergentImplicitTypeError => dite }.toList
+            context.flushBuffer()
             log(s"discarding divergent implicit $implicitSym during implicit search")
             SearchFailure
           } else search
@@ -885,15 +889,20 @@ trait Implicits {
       @tailrec private def rankImplicits(pending: Infos, acc: Infos): Infos = pending match {
         case Nil      => acc
         case i :: is  =>
-          DivergentImplicitRecovery(typedImplicit(i, ptChecked = true, isLocalToCallsite), i) match {
+          val typedImplicitResult = typedImplicit(i, ptChecked = true, isLocalToCallsite)
+          val depth = context.openImplicits.length
+          val recoveredResult = DivergentImplicitRecovery(typedImplicitResult , i)
+          recoveredResult match {
             case sr if sr.isDivergent =>
               Nil
             case sr if sr.isFailure =>
               // We don't want errors that occur during checking implicit info
               // to influence the check of further infos.
-              context.reportBuffer.retainErrors {
-                case err: DivergentImplicitTypeError => true
+              val divergents = context.reportBuffer.errors.collect {
+                case err: DivergentImplicitTypeError => err
               }
+              DivergentImplicitRecovery.typeErrors = divergents.toList
+              context.reportBuffer.clearAll()
               rankImplicits(is, acc)
             case newBest        =>
               best = newBest
@@ -921,7 +930,8 @@ trait Implicits {
         // After calling rankImplicits, the least frequent matching one is first and
         // earlier elems may improve on later ones, but not the other way.
         // So if there is any element not improved upon by the first it is an error.
-        rankImplicits(eligible, Nil) match {
+        val ranked: Infos = rankImplicits(eligible, Nil)
+        ranked match {
           case Nil            => ()
           case chosen :: rest =>
             rest find (alt => !improves(chosen, alt)) match {
@@ -938,8 +948,11 @@ trait Implicits {
           /* If there is no winner, and we witnessed and caught divergence,
            * now we can throw it for the error message.
            */
-          if (DivergentImplicitRecovery.sym != null) {
-            DivergingImplicitExpansionError(tree, pt, DivergentImplicitRecovery.sym, DivergentImplicitRecovery.explanation)(context)
+          DivergentImplicitRecovery.typeErrors match {
+            case err :: _ => context.issue(err)
+            case _ if DivergentImplicitRecovery.sym != null =>
+              DivergingImplicitExpansionError(tree, pt, DivergentImplicitRecovery.sym, DivergentImplicitRecovery.explanation)(context)
+            case _ =>
           }
 
           if (invalidImplicits.nonEmpty)

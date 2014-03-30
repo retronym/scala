@@ -3,6 +3,13 @@ divergent-implicit.scala:4: error: type mismatch;
  required: String
   val x1: String = 1
                    ^
+divergent-implicit.scala:5: error: diverging implicit expansion for type Int => String
+starting with method $conforms in object Predef.
+ Test1.this.cast[Int, String](1)
+   Test1.this.cast[Int, Nothing](x)
+     Test1.this.cast[Int, Nothing](x)
+  val x2: String = cast[Int, String](1)
+                                    ^
 divergent-implicit.scala:14: error: type mismatch;
  found   : Test2.Foo
  required: Test2.Bar
@@ -13,4 +20,4 @@ divergent-implicit.scala:15: error: type mismatch;
  required: Test2.Bar
   val y: Bar = new Baz
                ^
-three errors found
+four errors found
