@@ -851,19 +851,18 @@ trait Implicits {
         }
 
         def apply(search: SearchResult, i: ImplicitInfo, errors: Seq[AbsTypeError]): SearchResult = {
-          val firstErr = errors.collectFirst {
-            case err: DivergentImplicitTypeError => err
-          }
-          firstErr foreach saveDivergent
+          // A divergent error from a nested implicit search will be found in `errors`. Stash that
+          // aside to be re-issued if this implicit search fails.
+          errors.collectFirst { case err: DivergentImplicitTypeError => err } foreach saveDivergent
 
           if (search.isDivergent && divergentError.isEmpty) {
+            // Divergence triggered by `i` at this level of the implicit serach. We haven't
+            // seen divergence so far, we won't issue this error just yet, and instead temporarily
+            // treat `i` as a failed candidate.
             saveDivergent(DivergentImplicitTypeError(tree, pt, i.sym, search.explanation))
             log(s"discarding divergent implicit ${i.sym} during implicit search")
             SearchFailure
-          } else {
-            context.flushBuffer()
-            search
-          }
+          } else search
         }
       }
 
