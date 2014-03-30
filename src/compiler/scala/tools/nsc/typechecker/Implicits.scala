@@ -165,20 +165,20 @@ trait Implicits {
    *  @param undetparams undeterminted type parameters
    */
   class SearchResult(val tree: Tree, val subst: TreeTypeSubstituter, val undetparams: List[Symbol]) {
-    override def toString = "SearchResult(%s, %s)".format(tree,
-      if (subst.isEmpty) "" else subst)
+    override def toString = "%s(%s, %s)".format(getClass.getName, tree, if (subst.isEmpty) "" else subst)
 
     def isFailure          = false
     def isAmbiguousFailure = false
     def isDivergent        = false
+    def explanation: String = ""
     final def isSuccess    = !isFailure
   }
 
-  lazy val SearchFailure = new SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
+  object SearchFailure extends SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
     override def isFailure = true
   }
 
-  lazy val DivergentSearchFailure = new SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
+  final class DivergentSearchFailure(override val explanation: String) extends SearchResult(EmptyTree, EmptyTreeTypeSubstituter, Nil) {
     override def isFailure   = true
     override def isDivergent = true
   }
@@ -443,10 +443,17 @@ trait Implicits {
       // otherwise, the macro writer could check `c.openMacros` and `c.openImplicits` and do `c.abort` when expansions are deemed to be divergent
       // upon receiving `c.abort` the typechecker will decide that the corresponding implicit search has failed
       // which will fail the entire stack of implicit searches, producing a nice error message provided by the programmer
-      (context.openImplicits find { case OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && dominates(pt, tp)}) match {
+      val dominatedOpenImplicit = context.openImplicits find {
+        case OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && dominates(pt, tp)
+      }
+      dominatedOpenImplicit match {
          case Some(pending) =>
-           //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
-           DivergentSearchFailure
+           val next = (OpenImplicit(info, pt, tree) :: context.openImplicits)
+           val msg = next.reverse.zipWithIndex.map {
+            case (OpenImplicit(info, pt, tree), i) =>
+              s"${"  " * i} $tree"
+           }.mkString("\n")
+           new DivergentSearchFailure(msg)
          case None =>
            try {
              context.openImplicits = OpenImplicit(info, pt, tree) :: context.openImplicits
@@ -833,19 +840,30 @@ trait Implicits {
        *  so that if there is a best candidate it can still be selected.
        */
       object DivergentImplicitRecovery {
-        // symbol of the implicit that caused the divergence.
-        // Initially null, will be saved on first diverging expansion.
-        private var implicitSym: Symbol    = _
-        private var countdown: Int = 1
+        private var divergentError: Option[DivergentImplicitTypeError] = None
 
-        def sym: Symbol = implicitSym
-        def apply(search: SearchResult, i: ImplicitInfo): SearchResult =
-          if (search.isDivergent && countdown > 0) {
-            countdown -= 1
-            implicitSym = i.sym
-            log(s"discarding divergent implicit $implicitSym during implicit search")
+        private def saveDivergent(err: DivergentImplicitTypeError) {
+          if (divergentError.isEmpty) divergentError = Some(err)
+        }
+
+        def issueSavedDivergentError() {
+          divergentError foreach (err => context.issue(err))
+        }
+
+        def apply(search: SearchResult, i: ImplicitInfo, errors: Seq[AbsTypeError]): SearchResult = {
+          // A divergent error from a nested implicit search will be found in `errors`. Stash that
+          // aside to be re-issued if this implicit search fails.
+          errors.collectFirst { case err: DivergentImplicitTypeError => err } foreach saveDivergent
+
+          if (search.isDivergent && divergentError.isEmpty) {
+            // Divergence triggered by `i` at this level of the implicit serach. We haven't
+            // seen divergence so far, we won't issue this error just yet, and instead temporarily
+            // treat `i` as a failed candidate.
+            saveDivergent(DivergentImplicitTypeError(tree, pt, i.sym, search.explanation))
+            log(s"discarding divergent implicit ${i.sym} during implicit search")
             SearchFailure
           } else search
+        }
       }
 
       /** Sorted list of eligible implicits.
@@ -871,15 +889,17 @@ trait Implicits {
       @tailrec private def rankImplicits(pending: Infos, acc: Infos): Infos = pending match {
         case Nil      => acc
         case i :: is  =>
-          DivergentImplicitRecovery(typedImplicit(i, ptChecked = true, isLocalToCallsite), i) match {
+          val typedImplicitResult = typedImplicit(i, ptChecked = true, isLocalToCallsite)
+          // We don't want errors that occur during checking implicit info
+          // to influence the check of further infos. But we do need to pass the errors
+          // to `DivergentImplicitRecovery` so that it can note `DivergentImplicitTypeError` that is
+          // being propagated from a nested implicit search; this will be re-issued if this level
+          // of the search fails.
+          val recoveredResult = DivergentImplicitRecovery(typedImplicitResult, i, context.flushAndReturnBuffer())
+          recoveredResult match {
             case sr if sr.isDivergent =>
               Nil
             case sr if sr.isFailure =>
-              // We don't want errors that occur during checking implicit info
-              // to influence the check of further infos.
-              context.reportBuffer.retainErrors {
-                case err: DivergentImplicitTypeError => true
-              }
               rankImplicits(is, acc)
             case newBest        =>
               best = newBest
@@ -907,7 +927,8 @@ trait Implicits {
         // After calling rankImplicits, the least frequent matching one is first and
         // earlier elems may improve on later ones, but not the other way.
         // So if there is any element not improved upon by the first it is an error.
-        rankImplicits(eligible, Nil) match {
+        val ranked: Infos = rankImplicits(eligible, Nil)
+        ranked match {
           case Nil            => ()
           case chosen :: rest =>
             rest find (alt => !improves(chosen, alt)) match {
@@ -921,12 +942,9 @@ trait Implicits {
         }
 
         if (best.isFailure) {
-          /* If there is no winner, and we witnessed and caught divergence,
-           * now we can throw it for the error message.
-           */
-          if (DivergentImplicitRecovery.sym != null) {
-            DivergingImplicitExpansionError(tree, pt, DivergentImplicitRecovery.sym)(context)
-          }
+          // If there is no winner, and we witnessed and recoreded a divergence error,
+          // our recovery attempt has failed, so we must now issue it.
+          DivergentImplicitRecovery.issueSavedDivergentError()
 
           if (invalidImplicits.nonEmpty)
             setAddendum(pos, () =>

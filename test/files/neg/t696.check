@@ -1,9 +1,15 @@
 t696.scala:5: error: diverging implicit expansion for type TypeUtil0.Type[Any]
-starting with method WithType in object TypeUtil0
+starting with method WithType in object TypeUtil0.
+ TypeUtil0.this.as[Any](null)
+   TypeUtil0.WithType[Any, Any]
+     TypeUtil0.WithType[Any, Any]
   as[Any](null)
          ^
 t696.scala:6: error: diverging implicit expansion for type TypeUtil0.Type[X]
-starting with method WithType in object TypeUtil0
+starting with method WithType in object TypeUtil0.
+ TypeUtil0.this.as[X](null)
+   TypeUtil0.WithType[S, Any]
+     TypeUtil0.WithType[S, T]
   def foo[X]() = as[X](null)
                       ^
 two errors found
