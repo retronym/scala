@@ -841,29 +841,30 @@ trait Implicits {
        */
       object DivergentImplicitRecovery {
         private var divergentError: Option[DivergentImplicitTypeError] = None
+
         private def saveDivergent(err: DivergentImplicitTypeError) {
           if (divergentError.isEmpty) divergentError = Some(err)
-        }
-
-        def flushErrorsSavingDivergent() {
-          val firstErr = context.reportBuffer.errors.collectFirst {
-            case err: DivergentImplicitTypeError => err
-          }
-          firstErr foreach saveDivergent
-          context.flushBuffer()
         }
 
         def issueSavedDivergentError() {
           divergentError foreach (err => context.issue(err))
         }
 
-        def apply(search: SearchResult, i: ImplicitInfo): SearchResult =
+        def apply(search: SearchResult, i: ImplicitInfo, errors: Seq[AbsTypeError]): SearchResult = {
+          val firstErr = errors.collectFirst {
+            case err: DivergentImplicitTypeError => err
+          }
+          firstErr foreach saveDivergent
+
           if (search.isDivergent && divergentError.isEmpty) {
-            flushErrorsSavingDivergent()
             saveDivergent(DivergentImplicitTypeError(tree, pt, i.sym, search.explanation))
             log(s"discarding divergent implicit ${i.sym} during implicit search")
             SearchFailure
-          } else search
+          } else {
+            context.flushBuffer()
+            search
+          }
+        }
       }
 
       /** Sorted list of eligible implicits.
@@ -890,15 +891,16 @@ trait Implicits {
         case Nil      => acc
         case i :: is  =>
           val typedImplicitResult = typedImplicit(i, ptChecked = true, isLocalToCallsite)
-          val depth = context.openImplicits.length
-          val recoveredResult = DivergentImplicitRecovery(typedImplicitResult , i)
+          // We don't want errors that occur during checking implicit info
+          // to influence the check of further infos. But we do need to pass the errors
+          // to `DivergentImplicitRecovery` so that it can note `DivergentImplicitTypeError` that is
+          // being propagated from a nested implicit search; this will be re-issued if this level
+          // of the search fails.
+          val recoveredResult = DivergentImplicitRecovery(typedImplicitResult, i, context.flushAndReturnBuffer())
           recoveredResult match {
             case sr if sr.isDivergent =>
               Nil
             case sr if sr.isFailure =>
-              // We don't want errors that occur during checking implicit info
-              // to influence the check of further infos.
-              DivergentImplicitRecovery.flushErrorsSavingDivergent()
               rankImplicits(is, acc)
             case newBest        =>
               best = newBest
