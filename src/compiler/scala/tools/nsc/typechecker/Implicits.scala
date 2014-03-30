@@ -852,7 +852,7 @@ trait Implicits {
           firstErr foreach saveDivergent
           context.flushBuffer()
         }
-        
+
         def issueSavedDivergentError() {
           divergentError foreach (err => context.issue(err))
         }
