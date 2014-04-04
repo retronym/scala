@@ -854,8 +854,9 @@ trait Implicits {
             // Divergence triggered by `i` at this level of the implicit serach. We haven't
             // seen divergence so far, we won't issue this error just yet, and instead temporarily
             // treat `i` as a failed candidate.
-            saveDivergent(DivergentImplicitTypeError(tree, context.openImplicits))
-            log(s"discarding divergent implicit ${i.sym} during implicit search")
+            val deferredError = DivergentImplicitTypeError(tree, context.openImplicits)
+            saveDivergent(deferredError)
+            log(s"deferring divergence error: ${deferredError.errMsg}")
             SearchFailure
           } else {
             if (search.isFailure) {
@@ -866,8 +867,8 @@ trait Implicits {
               context.reportBuffer.retainErrors {
                 case err: DivergentImplicitTypeError => err ne saved
               }
-//              if (search.isDivergent)
-//                println((search, open))
+              if (search.isDivergent)
+                log(s"A subsequent divergent error occured, we can no longer ignore: ${DivergentImplicitTypeError(tree, context.openImplicits).errMsg}")
             }
             search
           }
