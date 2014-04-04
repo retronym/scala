@@ -67,12 +67,11 @@ trait ContextErrors {
   //    (pt at the point of divergence gives less information to the user)
   // Note: it is safe to delay error message generation in this case
   // becasue we don't modify implicits' infos.
-  case class DivergentImplicitTypeError(underlyingTree: Tree, pt0: Type, sym: Symbol)
+  case class DivergentImplicitTypeError(underlyingTree: Tree, openImplicits: List[OpenImplicit])
     extends TreeTypeError {
-    def errMsg: String   = errMsgForPt(pt0)
-    def withPt(pt: Type): AbsTypeError = this.copy(pt0 = pt)
-    private def errMsgForPt(pt: Type) =
-      s"diverging implicit expansion for type ${pt}\nstarting with ${sym.fullLocationString}"
+    def errMsg: String   = s"diverging implicit expansion for type ${pt}\nstarting with ${sym.fullLocationString}"
+    private def pt = openImplicits.last.pt
+    private def sym = openImplicits.head.info.sym
   }
 
   case class AmbiguousImplicitTypeError(underlyingTree: Tree, errMsg: String)
@@ -1236,8 +1235,8 @@ trait ContextErrors {
       }
     }
 
-    def DivergingImplicitExpansionError(tree: Tree, pt: Type, sym: Symbol)(implicit context0: Context) =
-      issueTypeError(DivergentImplicitTypeError(tree, pt, sym))
+    def DivergingImplicitExpansionError(tree: Tree)(implicit context0: Context) =
+      issueTypeError(DivergentImplicitTypeError(tree, context0.openImplicits))
   }
 
   object NamesDefaultsErrorsGen {

@@ -162,7 +162,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   // DivergentImplicit error has higher priority than "no implicit found"
                   // no need to issue the problem again if we are still in silent mode
                   if (context.reportErrors) {
-                    context.issue(divergent.withPt(paramTp))
+                    context.issue(divergent)
                     context.reportBuffer.clearErrors {
                       case dte: DivergentImplicitTypeError => true
                     }

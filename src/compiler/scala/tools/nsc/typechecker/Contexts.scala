@@ -230,8 +230,12 @@ trait Contexts { self: Analyzer =>
     def isRootImport: Boolean = false
 
     /** Types for which implicit arguments are currently searched */
-    var openImplicits: List[OpenImplicit] = List()
-
+    var _openImplicits: List[OpenImplicit] = List()
+    def openImplicits: List[OpenImplicit] = _openImplicits
+    def withOpenImplicit[A](open: OpenImplicit)(body: => A): A = {
+      _openImplicits ::= open
+      try body finally _openImplicits = openImplicits.tail
+    }
     /* For a named application block (`Tree`) the corresponding `NamedApplyInfo`. */
     var namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
     var prefix: Type = NoPrefix
@@ -453,7 +457,7 @@ trait Contexts { self: Analyzer =>
       // Fields that are directly propagated
       c.variance           = variance
       c.diagnostic         = diagnostic
-      c.openImplicits      = openImplicits
+      c._openImplicits     = _openImplicits
       c.contextMode        = contextMode // note: ConstructorSuffix, a bit within `mode`, is conditionally overwritten below.
       c._reportBuffer      = reportBuffer
 
