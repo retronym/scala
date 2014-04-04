@@ -1,5 +1,10 @@
 t5318.scala:7: error: diverging implicit expansion for type CompilerHang.this.TC[F]
-starting with method tc in class CompilerHang
+
+Implicit search stack:
+seeking type `CompilerHang.this.TC[F]` with method tc in class CompilerHang
+  seeking type `CompilerHang.this.TC[M]` with method tc in class CompilerHang
+    seeking type `CompilerHang.this.TC[M]` with method tc in class CompilerHang
+
   breakage  // type checker doesn't terminate, should report inference failure
   ^
 one error found

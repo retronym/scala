@@ -69,9 +69,14 @@ trait ContextErrors {
   // becasue we don't modify implicits' infos.
   case class DivergentImplicitTypeError(underlyingTree: Tree, openImplicits: List[OpenImplicit])
     extends TreeTypeError {
-    def errMsg: String   = s"diverging implicit expansion for type ${pt}\nstarting with ${sym.fullLocationString}"
-    private def pt = openImplicits.last.pt
-    private def sym = openImplicits.head.info.sym
+    def errMsg: String = {
+      val pt = openImplicits.last.pt
+      val stack = mapWithIndex(openImplicits.reverse) {
+        (o, i) =>
+          s"${"  " * i}seeking type `${o.pt}` with ${o.info.sym.fullLocationString}"
+      }.mkString("Implicit search stack:\n", "\n", "\n")
+      s"diverging implicit expansion for type ${pt}\n\n$stack"
+    }
   }
 
   case class AmbiguousImplicitTypeError(underlyingTree: Tree, errMsg: String)
