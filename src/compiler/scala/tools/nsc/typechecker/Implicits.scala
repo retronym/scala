@@ -254,7 +254,62 @@ trait Implicits {
 
   /** A class which is used to track pending implicits to prevent infinite implicit searches.
    */
-  case class OpenImplicit(info: ImplicitInfo, pt: Type, tree: Tree)
+  case class OpenImplicit(info: ImplicitInfo, pt: Type, tree: Tree) {
+    private def core(tp: Type): Type = tp.normalize match {
+      case RefinedType(parents, defs) => intersectionType(parents map core, tp.typeSymbol.owner)
+      case AnnotatedType(annots, tp, selfsym) => core(tp)
+      case ExistentialType(tparams, result) => core(result).subst(tparams, tparams map (t => core(t.info.bounds.hi)))
+      case PolyType(tparams, result) => core(result).subst(tparams, tparams map (t => core(t.info.bounds.hi)))
+      case _ => tp
+    }
+    private def stripped(tp: Type): Type = {
+      // `t.typeSymbol` returns the symbol of the normalized type. If that normalized type
+      // is a `PolyType`, the symbol of the result type is collected. This is precisely
+      // what we require for SI-5318.
+      val syms = for (t <- tp; if t.typeSymbol.isTypeParameter) yield t.typeSymbol
+      deriveTypeWithWildcards(syms.distinct)(tp)
+    }
+    private def sum(xs: List[Int]) = (0 /: xs)(_ + _)
+    private def complexity0(tp: Type): Int = tp.normalize match {
+      case NoPrefix =>
+        0
+      case SingleType(pre, sym) =>
+        if (sym.isPackage) 0 else complexity0(tp.normalize.widen)
+      case TypeRef(pre, sym, args) =>
+        complexity0(pre) + sum(args map complexity0) + 1
+      case RefinedType(parents, _) =>
+        sum(parents map complexity0) + 1
+      case _ =>
+        1
+    }
+
+    private lazy val strippedCore = stripped(core(pt))
+
+    private lazy val complexity = complexity0(strippedCore)
+    
+    /** Does type `this` dominate type `other`?
+     *  This is the case if the stripped cores `this.strippedCore` and `other.strippedCore` of both types are
+     *  the same wrt `=:=`, or if they overlap and the complexity of `this.strippedCore` is higher
+     *  than the complexity of `other.strippedCore`.
+     *  The _stripped core_ of a type is the type where
+     *   - all refinements and annotations are dropped,
+     *   - all universal and existential quantification is eliminated
+     *     by replacing variables by their upper bounds,
+     *   - all remaining free type parameters in the type are replaced by WildcardType.
+     *  The _complexity_ of a stripped core type corresponds roughly to the number of
+     *  nodes in its ast, except that singleton types are widened before taking the complexity.
+     *  Two types overlap if they have the same type symbol, or
+     *  if one or both are intersection types with a pair of overlapping parent types.
+     */
+    final def dominates(other: OpenImplicit): Boolean = {
+      def overlaps(tp1: Type, tp2: Type): Boolean = (tp1, tp2) match {
+        case (RefinedType(parents, _), _) => parents exists (overlaps(_, tp2))
+        case (_, RefinedType(parents, _)) => parents exists (overlaps(tp1, _))
+        case _ => tp1.typeSymbol == tp2.typeSymbol
+      }
+      overlaps(strippedCore, other.strippedCore) && (complexity > other.complexity || (complexity == other.complexity && strippedCore =:= other.strippedCore))
+    }
+  }
 
   /** A sentinel indicating no implicit was found */
   val NoImplicitInfo = new ImplicitInfo(null, NoType, NoSymbol) {
@@ -373,58 +428,6 @@ trait Implicits {
     def isPlausiblyCompatible(tp: Type, pt: Type) = checkCompatibility(fast = true, tp, pt)
     def normSubType(tp: Type, pt: Type) = checkCompatibility(fast = false, tp, pt)
 
-    /** Does type `dtor` dominate type `dted`?
-     *  This is the case if the stripped cores `dtor1` and `dted1` of both types are
-     *  the same wrt `=:=`, or if they overlap and the complexity of `dtor1` is higher
-     *  than the complexity of `dted1`.
-     *  The _stripped core_ of a type is the type where
-     *   - all refinements and annotations are dropped,
-     *   - all universal and existential quantification is eliminated
-     *     by replacing variables by their upper bounds,
-     *   - all remaining free type parameters in the type are replaced by WildcardType.
-     *  The _complexity_ of a stripped core type corresponds roughly to the number of
-     *  nodes in its ast, except that singleton types are widened before taking the complexity.
-     *  Two types overlap if they have the same type symbol, or
-     *  if one or both are intersection types with a pair of overlapping parent types.
-     */
-    private def dominates(dtor: Type, dted: Type): Boolean = {
-      def core(tp: Type): Type = tp.normalize match {
-        case RefinedType(parents, defs) => intersectionType(parents map core, tp.typeSymbol.owner)
-        case AnnotatedType(annots, tp, selfsym) => core(tp)
-        case ExistentialType(tparams, result) => core(result).subst(tparams, tparams map (t => core(t.info.bounds.hi)))
-        case PolyType(tparams, result) => core(result).subst(tparams, tparams map (t => core(t.info.bounds.hi)))
-        case _ => tp
-      }
-      def stripped(tp: Type): Type = {
-        // `t.typeSymbol` returns the symbol of the normalized type. If that normalized type
-        // is a `PolyType`, the symbol of the result type is collected. This is precisely
-        // what we require for SI-5318.
-        val syms = for (t <- tp; if t.typeSymbol.isTypeParameter) yield t.typeSymbol
-        deriveTypeWithWildcards(syms.distinct)(tp)
-      }
-      def sum(xs: List[Int]) = (0 /: xs)(_ + _)
-      def complexity(tp: Type): Int = tp.normalize match {
-        case NoPrefix =>
-          0
-        case SingleType(pre, sym) =>
-          if (sym.isPackage) 0 else complexity(tp.normalize.widen)
-        case TypeRef(pre, sym, args) =>
-          complexity(pre) + sum(args map complexity) + 1
-        case RefinedType(parents, _) =>
-          sum(parents map complexity) + 1
-        case _ =>
-          1
-      }
-      def overlaps(tp1: Type, tp2: Type): Boolean = (tp1, tp2) match {
-        case (RefinedType(parents, _), _) => parents exists (overlaps(_, tp2))
-        case (_, RefinedType(parents, _)) => parents exists (overlaps(tp1, _))
-        case _ => tp1.typeSymbol == tp2.typeSymbol
-      }
-      val dtor1 = stripped(core(dtor))
-      val dted1 = stripped(core(dted))
-      overlaps(dtor1, dted1) && (dtor1 =:= dted1 || complexity(dtor1) > complexity(dted1))
-    }
-
     if (Statistics.canEnable) Statistics.incCounter(implicitSearchCount)
 
     /** The type parameters to instantiate */
@@ -455,7 +458,8 @@ trait Implicits {
       // otherwise, the macro writer could check `c.openMacros` and `c.openImplicits` and do `c.abort` when expansions are deemed to be divergent
       // upon receiving `c.abort` the typechecker will decide that the corresponding implicit search has failed
       // which will fail the entire stack of implicit searches, producing a nice error message provided by the programmer
-      (context.openImplicits find { case OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && dominates(pt, tp)}) match {
+      val nextOpen = OpenImplicit(info, pt, tree)
+      (context.openImplicits find { case o @ OpenImplicit(info, tp, tree1) => !info.sym.isMacro && tree1.symbol == tree.symbol && nextOpen.dominates(o)}) match {
          case Some(pending) =>
            //println("Pending implicit "+pending+" dominates "+pt+"/"+undetParams) //@MDEBUG
            if (settings.Xdivergence211.value) DivergentSearchFailure
@@ -463,7 +467,7 @@ trait Implicits {
          case None =>
            def pre211DivergenceLogic() = {
            try {
-             context.openImplicits = OpenImplicit(info, pt, tree) :: context.openImplicits
+             context.openImplicits = nextOpen :: context.openImplicits
              // println("  "*context.openImplicits.length+"typed implicit "+info+" for "+pt) //@MDEBUG
              typedImplicit0(info, ptChecked, isLocal)
            } catch {
@@ -482,7 +486,7 @@ trait Implicits {
            }
            def post211DivergenceLogic() = {
              try {
-               context.openImplicits = OpenImplicit(info, pt, tree) :: context.openImplicits
+               context.openImplicits = nextOpen :: context.openImplicits
                // println("  "*context.openImplicits.length+"typed implicit "+info+" for "+pt) //@MDEBUG
                val result = typedImplicit0(info, ptChecked, isLocal)
                if (result.isDivergent) {
