@@ -2182,8 +2182,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
 
         // val lastInstr = b.lastInstruction
 
-        for (instr <- b) {
-
+        def emitPos(instr: Instruction) {
           if(instr.pos.isDefined) {
             val iPos = instr.pos
             val currentLineNr = iPos.line
@@ -2195,11 +2194,24 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
               lnEntries ::= LineNumberEntry(iPos.finalPosition.line, lineLab)
             }
           }
-
-          genInstr(instr, b)
-
         }
-
+        def loop(is: List[Instruction]) {
+          is match {
+            case Nil =>
+            case NEW(REFERENCE(cls)) :: DUP(_) :: tail if cls.hasAttachment[delambdafy.LambdaMetaFactoryCapable] =>
+              loop(tail)
+            case (instr @ CALL_METHOD(constr, _)) :: tail if constr.isConstructor && constr.owner.hasAttachment[delambdafy.LambdaMetaFactoryCapable] =>
+              emitPos(instr)
+              val attach = constr.owner.attachments.get[delambdafy.LambdaMetaFactoryCapable].get
+              genInvokeDynamicLambda(constr, attach.accessor, attach.arity, attach.functionalInterface)
+              loop(tail)
+            case instr :: tail =>
+              emitPos(instr)
+              genInstr(instr, b)
+              loop(tail)
+          }
+        }
+        loop(b.toList)
       }
 
       def genInstr(instr: Instruction, b: BasicBlock) {
@@ -2491,6 +2503,38 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
           genRetInstr()
         }
       }
+
+      def genInvokeDynamicLambda(ctor: Symbol, lambdaTarget: Symbol, arity: Int, functionalInterface: Symbol) {
+        val lambdaTargetInternalName = javaType(REFERENCE(lambdaTarget.owner)).getInternalName
+
+        debuglog(s"Using invokedynamic rather than `new ${ctor.owner}`")
+        def asmMethodType(sym: Symbol) =
+          asm.Type.getMethodType(asm.Type.getMethodDescriptor(javaType(sym.tpe.resultType), sym.paramss.head.map(p => javaType(p.tpe)): _*))
+
+        val targetHandle =
+          new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
+            lambdaTargetInternalName,
+            lambdaTarget.name.toString,
+            asmMethodType(lambdaTarget).getDescriptor)
+        val (capturedParams, lambdaParams) = lambdaTarget.paramss.head.splitAt(lambdaTarget.paramss.head.length - arity)
+        // Requires https://github.com/scala/scala-java8-compat on the runtime classpath
+        val returnUnit = lambdaTarget.info.resultType.typeSymbol == UnitClass
+        val functionalInterfaceDesc: String = javaType(functionalInterface).getDescriptor
+        val desc = capturedParams.map(sym => javaType(sym.info).getDescriptor).mkString(("("), "", ")") + functionalInterfaceDesc
+
+        // TODO specialization
+
+        val constrainedType = asm.Type.getMethodType(asm.Type.getMethodDescriptor(javaType(lambdaTarget.tpe.resultType), lambdaParams.map(p => javaType(p.tpe)) : _*))
+        val abstractMethod = functionalInterface.info.decls.find(_.isDeferred).getOrElse(functionalInterface.info.member(nme.apply))
+        val methodName = abstractMethod.name.toString
+        val applyN = asmMethodType(abstractMethod)
+
+        jmethod.visitInvokeDynamicInsn(methodName, desc, genBCode.lambdaMetaFactoryBootstrapHandle,
+            // boostrap args
+          applyN, targetHandle, constrainedType
+        )
+      }
+
 
       /*
        * Emits one or more conversion instructions based on the types given as arguments.
