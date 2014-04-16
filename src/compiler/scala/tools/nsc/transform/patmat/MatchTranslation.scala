@@ -572,10 +572,10 @@ trait MatchTranslation {
           override def transform(t: Tree) = t match {
             // duplicated with the extractor Unapplied
             case Apply(x, List(i @ Ident(nme.SELECTOR_DUMMY))) =>
-              treeCopy.Apply(t, x, binderRef(i.pos) :: Nil)
+              treeCopy.Apply(t, x, binderRef(i.pos) :: Nil).modifyType(_.substSym(i.symbol :: Nil, binder :: Nil))
             // SI-7868 Account for numeric widening, e.g. <unappplySelector>.toInt
             case Apply(x, List(i @ (sel @ Select(Ident(nme.SELECTOR_DUMMY), name)))) =>
-              treeCopy.Apply(t, x, treeCopy.Select(sel, binderRef(i.pos), name) :: Nil)
+              treeCopy.Apply(t, x, treeCopy.Select(sel, binderRef(i.pos), name) :: Nil).modifyType(_.substSym(i.symbol :: Nil, binder :: Nil))
             case _ =>
               super.transform(t)
           }
