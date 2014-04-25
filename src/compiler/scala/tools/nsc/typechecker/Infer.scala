@@ -941,6 +941,7 @@ trait Infer extends Checkable {
         }
         printTyping(tree, s"infer solved $solved_s$undet_s")
         substExpr(tree, okParams, okArgs, pt)
+        checkBounds(tree, NoPrefix, NoSymbol, okParams, okArgs, "inferred ")
         leftUndet
       }
     }
