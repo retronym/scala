@@ -1,0 +1,10 @@
+t8460b.scala:37: error: diverging implicit expansion for type DeepSearchExamples.Searchable[((String,),),String]
+
+Implicit search stack:
+seeking type `DeepSearchExamples.Searchable[((String,),),String]` with method hlistishSearchable in object DeepSearchExamples
+  seeking type `DeepSearchExamples.Searchable[shapeless.::[(String,),shapeless.HNil],String]` with method hlistishSearchable in object DeepSearchExamples
+    seeking type `DeepSearchExamples.Searchable[shapeless.::[(String,),shapeless.HNil],String]` with method hlistishSearchable in object DeepSearchExamples
+
+  implicitly[Searchable[Tuple1[Tuple1[String]], String]]
+            ^
+one error found
