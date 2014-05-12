@@ -389,7 +389,7 @@ trait Infer extends Checkable {
     def protoTypeArgs(tparams: List[Symbol], formals: List[Type], restpe: Type, pt: Type): List[Type] = {
       // Map type variable to its instance, or, if `variance` is variant,
       // to its upper or lower bound
-      def instantiateToBound(tvar: TypeVar, variance: Variance): Type = {
+      def instantiateToBound(tvar: TypeVar, variance: Variance, tparam: Symbol): Type = {
         lazy val hiBounds = tvar.constr.hiBounds
         lazy val loBounds = tvar.constr.loBounds
         lazy val upper    = glb(hiBounds)
@@ -406,13 +406,13 @@ trait Infer extends Checkable {
         else if (hiBounds.nonEmpty && (variance.isPositive || loBounds.nonEmpty && upper <:< lower))
           setInst(upper)
         else
-          WildcardType
+          BoundedWildcardType(tparam.info.bounds)
       }
 
       val tvars = tparams map freshVar
       if (isConservativelyCompatible(restpe.instantiateTypeParams(tparams, tvars), pt))
         map2(tparams, tvars)((tparam, tvar) =>
-          try instantiateToBound(tvar, varianceInTypes(formals)(tparam))
+          try instantiateToBound(tvar, varianceInTypes(formals)(tparam), tparam)
           catch { case ex: NoInstance => WildcardType }
         )
       else
@@ -480,7 +480,7 @@ trait Infer extends Checkable {
             if (targ.typeSymbol == RepeatedParamClass)     targ.baseType(SeqClass)
             else if (targ.typeSymbol == JavaRepeatedParamClass) targ.baseType(ArrayClass)
             // this infers Foo.type instead of "object Foo" (see also widenIfNecessary)
-            else if (targ.typeSymbol.isModuleClass || tvar.constr.avoidWiden) targ
+            else if (targ.typeSymbol.isModuleClass || tvar.constr.avoidWiden || tparam.info.bounds.hi.contains(SingletonClass)) targ
             else targ.widen
           )
         ))
@@ -533,7 +533,7 @@ trait Infer extends Checkable {
 
       // Then define remaining type variables from argument types.
       map2(argtpes, formals) { (argtpe, formal) =>
-        val tp1 = argtpe.deconst.instantiateTypeParams(tparams, tvars)
+        val tp1 = argtpe.instantiateTypeParams(tparams, tvars)
         val pt1 = formal.instantiateTypeParams(tparams, tvars)
 
         // Note that isCompatible side-effects: subtype checks involving typevars
@@ -975,7 +975,7 @@ trait Infer extends Checkable {
         try {
           val pt      = if (pt0.typeSymbol == UnitClass) WildcardType else pt0
           val formals = formalTypes(mt.paramTypes, args.length)
-          val argtpes = tupleIfNecessary(formals, args map (x => elimAnonymousClass(x.tpe.deconst)))
+          val argtpes = tupleIfNecessary(formals, args map (x => elimAnonymousClass(gen.stableTypeFor(x).orElse(x.tpe))))
           val restpe  = fn.tpe.resultType(argtpes)
 
           val AdjustedTypeArgs.AllArgsAndUndets(okparams, okargs, allargs, leftUndet) =

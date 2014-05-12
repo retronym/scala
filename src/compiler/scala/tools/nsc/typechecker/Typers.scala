@@ -528,7 +528,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def expectsStable = (
            pt.isStable
         || mode.inQualMode && !tree.symbol.isConstant
-        || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.bounds.lo.isStable || ptSym.isRefinementClass)
+        || !(tree.tpe <:< pt) && ((ptSym.isAbstractType || pt.isWildcard) && pt.bounds.lo.isStable || ptSym.isRefinementClass)
       )
 
       (    isNarrowable(tree.tpe)
