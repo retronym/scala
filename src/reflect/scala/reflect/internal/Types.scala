@@ -3555,7 +3555,8 @@ trait Types
       case TypeBounds(lo, hi)                             => TypeBounds(appliedType(lo, args), appliedType(hi, args)) // @PP: Can this be right?
       case tv@TypeVar(_, _)                               => tv.applyArgs(args)
       case AnnotatedType(annots, underlying)              => AnnotatedType(annots, appliedType(underlying, args))
-      case ErrorType | WildcardType                       => tycon
+      case ErrorType | BoundedWildcardType(_) |
+           WildcardType                                   => tycon
       case _                                              => abort(debugString(tycon))
     }
   }

@@ -405,8 +405,10 @@ trait Infer extends Checkable {
           setInst(lower)
         else if (hiBounds.nonEmpty && (variance.isPositive || loBounds.nonEmpty && upper <:< lower))
           setInst(upper)
+        else if (!tparam.info.isHigherKinded && tparam.info.bounds.contains(SingletonClass))
+          setInst(SingletonClass.tpe)
         else
-          BoundedWildcardType(tparam.info.bounds)
+          WildcardType
       }
 
       val tvars = tparams map freshVar
