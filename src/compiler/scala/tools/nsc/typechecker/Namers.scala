@@ -1040,13 +1040,13 @@ trait Namers extends MethodSynthesis {
        * so the resulting type is a valid external method type, it does not contain (references to) skolems.
        */
       def thisMethodType(restpe: Type) = {
-        val checkDependencies = new DependentTypeChecker(context)(this)
-        checkDependencies check vparamSymss
-        // DEPMETTODO: check not needed when they become on by default
-        checkDependencies(restpe)
+        if (vparamSymss.lengthCompare(1) > 0) {
+          val checkDependencies = new DependentTypeChecker(context)(this)
+          checkDependencies check vparamSymss
+        }
 
         val makeMethodType = (vparams: List[Symbol], restpe: Type) => {
-          // TODODEPMET: check that we actually don't need to do anything here
+          // TODODEPMET: check newthat we actually don't need to do anything here
           // new dependent method types: probably OK already, since 'enterValueParams' above
           // enters them in scope, and all have a lazy type. so they may depend on other params. but: need to
           // check that params only depend on ones in earlier sections, not the same. (done by checkDependencies,

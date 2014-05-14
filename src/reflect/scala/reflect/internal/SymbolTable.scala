@@ -188,6 +188,8 @@ abstract class SymbolTable extends macros.Universe
       Statistics.incCounter(SymbolTableStats.phaseCounter)
     ph
   }
+  private[this] var flatClassesCache = false
+  def flatClasses: Boolean = flatClassesCache
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
@@ -199,6 +201,7 @@ abstract class SymbolTable extends macros.Universe
     assert((p ne null) && p != NoPhase, p)
     ph = p
     per = period(currentRunId, p.id)
+    flatClassesCache = p.flatClasses
   }
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
