@@ -227,8 +227,6 @@ trait Trees { self: Universe =>
    *  @group API
    */
   trait SymTreeApi extends TreeApi { this: SymTree =>
-    /** @inheritdoc */
-    def symbol: Symbol
   }
 
   /** A tree that carries a name, e.g. by defining it (`DefTree`) or by referring to it (`RefTree`).

@@ -24,8 +24,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** Documented definition, eliminated by analyzer */
   case class DocDef(comment: DocComment, definition: Tree)
        extends Tree {
-    override def symbol: Symbol = definition.symbol
-    override def symbol_=(sym: Symbol) { definition.symbol = sym }
+    delegateSymbolTree = definition
     override def isDef = definition.isDef
     override def isTerm = definition.isTerm
     override def isType = definition.isType

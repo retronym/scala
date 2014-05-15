@@ -49,9 +49,24 @@ trait Trees extends api.Trees {
     def clearType(): this.type = this setType null
     def setType(tp: Type): this.type = { rawtpe = tp; this }
     def defineType(tp: Type): this.type = setType(tp)
+    protected var directSymbol: Symbol = null
+    protected var delegateSymbolTree: Tree = null
+    final def symbol: Symbol = {
+      if (directSymbol != null)
+        directSymbol
+      else if (delegateSymbolTree != null)
+        delegateSymbolTree.symbol
+      else this match {
+        case tt: TypeTree => typeTreeSymbol(tt)
+        case _ => null
+      }
+    }
 
-    def symbol: Symbol = null //!!!OPT!!! symbol is about 3% of hot compile times -- megamorphic dispatch?
-    def symbol_=(sym: Symbol) { throw new UnsupportedOperationException("symbol_= inapplicable for " + this) }
+    final def symbol_=(sym: Symbol) {
+      if (delegateSymbolTree != null) delegateSymbolTree.symbol = sym 
+      else if (this.isInstanceOf[SymTree]) {directSymbol = sym } 
+      else throw new UnsupportedOperationException("symbol_= not supported for " + this.getClass)
+    }
     def setSymbol(sym: Symbol): this.type = { symbol = sym; this }
     def hasSymbolField = false
     @deprecated("Use hasSymbolField", "2.11.0") def hasSymbol = hasSymbolField
@@ -234,10 +249,11 @@ trait Trees extends api.Trees {
   trait TermTree extends Tree with TermTreeApi
 
   trait TypTree extends Tree with TypTreeApi
+  private case object NoTree extends Tree { directSymbol = NoSymbol }
 
   abstract class SymTree extends Tree with SymTreeApi {
+    directSymbol = NoSymbol
     override def hasSymbolField = true
-    override var symbol: Symbol = NoSymbol
   }
 
   trait NameTree extends Tree with NameTreeApi {
@@ -481,16 +497,13 @@ trait Trees extends api.Trees {
        extends GenericApply with TypeApplyApi {
 
     assert(fun.isTerm, fun)
-
-    override def symbol: Symbol = fun.symbol
-    override def symbol_=(sym: Symbol) { fun.symbol = sym }
+    delegateSymbolTree = fun
   }
   object TypeApply extends TypeApplyExtractor
 
   case class Apply(fun: Tree, args: List[Tree])
        extends GenericApply with ApplyApi {
-    override def symbol: Symbol = fun.symbol
-    override def symbol_=(sym: Symbol) { fun.symbol = sym }
+    delegateSymbolTree = fun
   }
   object Apply extends ApplyExtractor
 
@@ -517,8 +530,7 @@ trait Trees extends api.Trees {
   case class ApplyDynamic(qual: Tree, args: List[Tree]) extends SymTree with TermTree
 
   case class Super(qual: Tree, mix: TypeName) extends TermTree with SuperApi {
-    override def symbol: Symbol = qual.symbol
-    override def symbol_=(sym: Symbol) { qual.symbol = sym }
+    delegateSymbolTree = qual
   }
   object Super extends SuperExtractor
 
@@ -541,8 +553,7 @@ trait Trees extends api.Trees {
   object Ident extends IdentExtractor
 
   case class ReferenceToBoxed(ident: Ident) extends TermTree with ReferenceToBoxedApi {
-    override def symbol: Symbol = ident.symbol
-    override def symbol_=(sym: Symbol) { ident.symbol = sym }
+    delegateSymbolTree = ident
   }
   object ReferenceToBoxed extends ReferenceToBoxedExtractor
 
@@ -577,9 +588,7 @@ trait Trees extends api.Trees {
        extends TypTree with AppliedTypeTreeApi {
 
     assert(tpt.isType, tpt)
-
-    override def symbol: Symbol = tpt.symbol
-    override def symbol_=(sym: Symbol) { tpt.symbol = sym }
+    delegateSymbolTree = tpt
   }
   object AppliedTypeTree extends AppliedTypeTreeExtractor
 
@@ -599,7 +608,6 @@ trait Trees extends api.Trees {
       */
     private[scala] var wasEmpty: Boolean = false
 
-    override def symbol = typeTreeSymbol(this) // if (tpe == null) null else tpe.typeSymbol
     override def isEmpty = (tpe eq null) || tpe == NoType
 
     def original: Tree = orig
