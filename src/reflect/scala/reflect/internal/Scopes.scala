@@ -151,19 +151,25 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     private def enterAllInHash(e: ScopeEntry, n: Int = 0) {
+      def enterAllInHashHeap() {
+        var entries: List[ScopeEntry] = List()
+        var ee = e
+        while (ee ne null) {
+          entries = ee :: entries
+          ee = ee.next
+        }
+        var entry = entries
+        while (entry ne Nil) {
+          enterInHash(entry.head)
+          entry = entry.tail
+        }
+      }
+
       if (e ne null) {
         if (n < maxRecursions) {
           enterAllInHash(e.next, n + 1)
           enterInHash(e)
-        } else {
-          var entries: List[ScopeEntry] = List()
-          var ee = e
-          while (ee ne null) {
-            entries = ee :: entries
-            ee = ee.next
-          }
-          entries foreach enterInHash
-        }
+        } else enterAllInHashHeap()
       }
     }
 
@@ -316,12 +322,17 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      *  change to use iterators as too costly.
      */
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
-      var e = entry
-      if (hashtable ne null)
+      def lookupNextEntryHashed: ScopeEntry = {
+        var e = entry
         do { e = e.tail } while ((e ne null) && e.sym.name != entry.sym.name)
-      else
+        e
+      }
+      def lookupNextEntryUnhashed: ScopeEntry = {
+        var e = entry
         do { e = e.next } while ((e ne null) && e.sym.name != entry.sym.name)
-      e
+        e
+      }
+      if (hashtable ne null) lookupNextEntryHashed else lookupNextEntryUnhashed
     }
 
     /** TODO - we can test this more efficiently than checking isSubScope
