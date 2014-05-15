@@ -38,7 +38,11 @@ private[reflect] trait SynchronizedOps extends internal.SymbolTable
 // Scopes
 
   override def newScope = new Scope() with SynchronizedScope
-  override def newNestedScope(outer: Scope): Scope = new Scope(outer) with SynchronizedScope
+  override def newNestedScope(outer: Scope): Scope = {
+    val nested = new Scope with SynchronizedScope
+    initNestedScope(nested, outer)
+    nested
+  }
 
   trait SynchronizedScope extends Scope {
     // we can keep this lock fine-grained, because methods of Scope don't do anything extraordinary, which makes deadlocks impossible

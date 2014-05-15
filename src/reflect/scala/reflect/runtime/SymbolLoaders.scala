@@ -91,7 +91,7 @@ private[reflect] trait SymbolLoaders { self: SymbolTable =>
   //
   // Short of significantly changing SymbolLoaders I see no other way than just
   // to slap a global lock on materialization in runtime reflection.
-  class PackageScope(pkgClass: Symbol) extends Scope(initFingerPrints = -1L) // disable fingerprinting as we do not know entries beforehand
+  class PackageScope(pkgClass: Symbol) extends Scope() // disable fingerprinting as we do not know entries beforehand
       with SynchronizedScope {
     assert(pkgClass.isType)
 

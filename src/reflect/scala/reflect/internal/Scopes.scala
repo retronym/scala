@@ -48,22 +48,17 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
    *  This is necessary because when run from reflection every scope needs to have a
    *  SynchronizedScope as mixin.
    */
-  class Scope protected[Scopes] (initElems: ScopeEntry = null, initFingerPrints: Long = 0L) extends ScopeApi with MemberScopeApi {
+  class Scope protected[Scopes]() extends ScopeApi with MemberScopeApi {
 
-    protected[Scopes] def this(base: Scope) = {
-      this(base.elems)
-      nestinglevel = base.nestinglevel + 1
-    }
-
-    private[scala] var elems: ScopeEntry = initElems
+    private[scala] var elems: ScopeEntry = _
 
     /** The number of times this scope is nested in another
      */
-    private var nestinglevel = 0
+    private[scala] var nestinglevel = 0
 
     /** the hash table
      */
-    private var hashtable: Array[ScopeEntry] = null
+    private[Scopes] var hashtable: Array[ScopeEntry] = null
 
     /** a cache for all elements, to be used by symbol iterator.
      */
@@ -83,8 +78,6 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     /** the threshold number of entries from which a hashtable is constructed.
      */
     private val MIN_HASH = 8
-
-    if (size >= MIN_HASH) createHash()
 
     /** Returns a new scope with the same content as this one. */
     def cloneScope: Scope = newScopeWith(this.toList: _*)
@@ -143,6 +136,10 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       val existing = lookupEntry(sym.name)
       if (existing == null) enter(sym)
       else existing.sym.asInstanceOf[T]
+    }
+
+    protected[scala] def createHashIfRequired() {
+      if (size >= MIN_HASH) createHash()
     }
 
     private def createHash() {
@@ -446,7 +443,17 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   }
 
   /** Create a new scope nested in another one with which it shares its elements */
-  def newNestedScope(outer: Scope): Scope = new Scope(outer)
+  def newNestedScope(outer: Scope): Scope = {
+    val nested = newScope
+    initNestedScope(nested, outer)
+    nested
+  }
+  protected def initNestedScope(nested: Scope, outer: Scope) {
+    nested.elems = outer.elems
+    nested.nestinglevel = outer.nestinglevel + 1
+    if (outer.hashtable ne null)
+      nested.hashtable = java.util.Arrays.copyOf(outer.hashtable, outer.hashtable.length)
+  }
 
   /** Create a new scope with given initial elements */
   def newScopeWith(elems: Symbol*): Scope = {
