@@ -319,14 +319,15 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      *  change to use iterators as too costly.
      */
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
+      val entryName = entry.sym.name
       def lookupNextEntryHashed: ScopeEntry = {
         var e = entry
-        do { e = e.tail } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.tail } while ((e ne null) && e.sym.name != entryName)
         e
       }
       def lookupNextEntryUnhashed: ScopeEntry = {
         var e = entry
-        do { e = e.next } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.next } while ((e ne null) && e.sym.name != entryName)
         e
       }
       if (hashtable ne null) lookupNextEntryHashed else lookupNextEntryUnhashed
