@@ -1750,7 +1750,6 @@ trait Namers extends MethodSynthesis {
         for (p <- vps)
           this(p.info)
         // can only refer to symbols in earlier parameter sections
-        // (if the extension is enabled)
         okParams ++= vps
       }
     }
