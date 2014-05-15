@@ -1040,10 +1040,12 @@ trait Namers extends MethodSynthesis {
        * so the resulting type is a valid external method type, it does not contain (references to) skolems.
        */
       def thisMethodType(restpe: Type) = {
-        val checkDependencies = new DependentTypeChecker(context)(this)
-        checkDependencies check vparamSymss
-        // DEPMETTODO: check not needed when they become on by default
-        checkDependencies(restpe)
+        if (!(flattensToEmpty(vparamSymss) || (vparamSymss.lengthCompare(1) <= 0 && meth.isConstructor))) {
+          val checkDependencies = new DependentTypeChecker(context)(this)
+          checkDependencies check vparamSymss
+          // DEPMETTODO: check not needed when they become on by default
+          checkDependencies(restpe)
+        }
 
         val makeMethodType = (vparams: List[Symbol], restpe: Type) => {
           // TODODEPMET: check that we actually don't need to do anything here
