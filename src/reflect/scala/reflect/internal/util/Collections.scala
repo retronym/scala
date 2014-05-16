@@ -118,6 +118,39 @@ trait Collections {
     loop(null, xs, xs, ys)
   }
 
+
+  @inline final def mapFilterConserve[A, B >: A <: AnyRef](as: List[A], f: A => B, pred: B => Boolean): List[B] = {
+    // Note to developers: there exists a duplication between this function and other variants of map*Conserve
+    // If any successful optimization attempts or other changes are made, please rehash them there too.
+    @tailrec
+    def loop(mapped: ListBuffer[B], unchanged: List[A], pending: List[A]): List[B] =
+      if (pending.isEmpty) {
+        if (mapped eq null) unchanged
+        else mapped.prependToList(unchanged)
+      }
+      else {
+        val head0 = pending.head
+        val head1 = f(head0)
+        val include = pred(head1)
+
+        if (include && (head1 eq head0.asInstanceOf[AnyRef]))
+          loop(mapped, unchanged, pending.tail)
+        else {
+          val b = if (mapped eq null) new ListBuffer[B] else mapped
+          var xc = unchanged
+          while (xc ne pending) {
+            b += xc.head
+            xc = xc.tail
+          }
+          if (include) b += head1
+          val tail0 = pending.tail
+          loop(b, tail0, tail0)
+        }
+      }
+    loop(null, as, as)
+  }
+
+
   final def map3[A, B, C, D](xs1: List[A], xs2: List[B], xs3: List[C])(f: (A, B, C) => D): List[D] = {
     if (xs1.isEmpty || xs2.isEmpty || xs3.isEmpty) Nil
     else f(xs1.head, xs2.head, xs3.head) :: map3(xs1.tail, xs2.tail, xs3.tail)(f)
