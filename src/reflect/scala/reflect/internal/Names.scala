@@ -10,6 +10,7 @@ package internal
 import scala.io.Codec
 import java.security.MessageDigest
 import scala.language.implicitConversions
+import scala.util.hashing.MurmurHash3
 
 trait Names extends api.Names {
   private final val HASH_SIZE  = 0x8000
@@ -41,13 +42,18 @@ trait Names extends api.Names {
   private val typeHashtable = new Array[TypeName](HASH_SIZE)
 
   /** The hashcode of a name. */
-  private def hashValue(cs: Array[Char], offset: Int, len: Int): Int =
-    if (len > 0)
-      (len * (41 * 41 * 41) +
-       cs(offset) * (41 * 41) +
-       cs(offset + len - 1) * 41 +
-       cs(offset + (len >> 1)))
-    else 0
+  private def hashValue(cs: Array[Char], offset: Int, len: Int): Int = {
+    var i = 0
+    var h = 0
+    var off = offset
+    while (i < len) {
+      val lo = h.toByte
+      h = (h << 5) - h + cs(off);
+      i += 1
+      off += 1
+    }
+    h
+  }
 
   /** Is (the ASCII representation of) name at given index equal to
    *  cs[offset..offset+len-1]?
