@@ -3022,7 +3022,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
     private def collapseJumpOnlyBlocks(m: IMethod) {
       assert(m.hasCode, "code-less method")
 
-      def rephraseGotos(detour: mutable.Map[BasicBlock, BasicBlock]) {
+      def rephraseGotos(detour: mutable.AnyRefMap[BasicBlock, BasicBlock]) {
         def lookup(b: BasicBlock) = detour.getOrElse(b, b)
 
         m.code.startBlock = lookup(m.code.startBlock)
@@ -3060,7 +3060,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
        * block or, if it's in a jump-only block cycle, is
        * itself
        */
-      def computeDetour: mutable.Map[BasicBlock, BasicBlock] = {
+      def computeDetour: mutable.AnyRefMap[BasicBlock, BasicBlock] = {
         // fetch the jump only blocks and their immediate destinations
         val pairs = for {
           block <- m.blocks.toIterator
@@ -3070,7 +3070,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
         // mapping from a jump-only block to our current knowledge of its
         // final destination. Initially it's just jump block to immediate jump
         // target
-        val detour = mutable.Map[BasicBlock, BasicBlock](pairs.toSeq:_*)
+        val detour = mutable.AnyRefMap[BasicBlock, BasicBlock](pairs.toSeq:_*)
 
         // for each jump-only block find its final destination
         // taking advantage of the destinations we found for previous

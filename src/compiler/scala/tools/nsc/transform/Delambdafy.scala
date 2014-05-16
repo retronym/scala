@@ -41,7 +41,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     new DelambdafyTransformer(unit)
 
   class DelambdafyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with TypeAdapter {
-    private val lambdaClassDefs = new mutable.LinkedHashMap[Symbol, List[Tree]] withDefaultValue Nil
+    private val lambdaClassDefs = new mutable.AnyRefMap[Symbol, List[Tree]] withDefaultValue Nil
 
 
     val typer = localTyper

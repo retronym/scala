@@ -50,7 +50,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
      *  increases the frequency with which needsProtectedAccessor will be true.
      */
     private var validCurrentOwner = true
-    private val accDefs = mutable.Map[Symbol, ListBuffer[Tree]]()
+    private val accDefs = mutable.AnyRefMap[Symbol, ListBuffer[Tree]]()
 
     private def storeAccessorDefinition(clazz: Symbol, tree: Tree) = {
       val buf = accDefs.getOrElse(clazz, sys.error("no acc def buf for "+clazz))
