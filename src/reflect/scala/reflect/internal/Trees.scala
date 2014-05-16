@@ -1001,7 +1001,7 @@ trait Trees extends api.Trees {
                        privateWithin: Name,
                        annotations: List[Tree]) extends ModifiersApi with HasFlags {
 
-    var positions: Map[Long, Position] = Map()
+    var positions: Map[Long, Position] = Map.empty
 
     def setPositions(poss: Map[Long, Position]): this.type = {
       positions = poss; this
