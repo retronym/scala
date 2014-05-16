@@ -2228,7 +2228,7 @@ trait Trees { self: Universe =>
   /** The standard (lazy) tree copier.
    *  @group Copying
    */
-  val treeCopy: TreeCopier = newLazyTreeCopier
+  final var treeCopy: TreeCopier = newLazyTreeCopier
 
   /** Creates a strict tree copier.
    *  @group Copying
@@ -2528,7 +2528,9 @@ trait Trees { self: Universe =>
    */
   abstract class Transformer {
     /** The underlying tree copier. */
-    val treeCopy: TreeCopier = newLazyTreeCopier
+    final def treeCopy: TreeCopier = _treeCopy
+    private final var _treeCopy: TreeCopier = newLazyTreeCopier
+    protected final def treeCopy_=(treeCopy: TreeCopier): Unit = _treeCopy = treeCopy
 
     /** The current owner symbol. */
     protected[scala] var currentOwner: Symbol = rootMirror.RootClass
