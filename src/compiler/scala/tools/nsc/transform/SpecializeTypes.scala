@@ -762,42 +762,47 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       sClass
     }
 
-    val decls1 = clazz.info.decls.toList flatMap { m: Symbol =>
-      if (m.isAnonymousClass) List(m) else {
-        normalizeMember(m.owner, m, outerEnv) flatMap { normalizedMember =>
-          val ms = specializeMember(m.owner, normalizedMember, outerEnv, clazz.info.typeParams)
-          // interface traits have concrete members now
-          if (ms.nonEmpty && clazz.isTrait && clazz.isInterface)
-            clazz.resetFlag(INTERFACE)
+    if (outerEnv.isEmpty && !clazz.info.decls.exists(hasSpecializedParams) && !hasSpecializedParams(clazz))
+      clazz.info.decls.toList // Fast-ish path for the common case
+    else {
+      val decls1 = clazz.info.decls.toList flatMap { m: Symbol =>
+        if (m.isAnonymousClass) List(m)
+        else {
+          normalizeMember(m.owner, m, outerEnv) flatMap { normalizedMember =>
+            val ms = specializeMember(m.owner, normalizedMember, outerEnv, clazz.info.typeParams)
+            // interface traits have concrete members now
+            if (ms.nonEmpty && clazz.isTrait && clazz.isInterface)
+              clazz.resetFlag(INTERFACE)
 
-          if (normalizedMember.isMethod) {
-            val newTpe = subst(outerEnv, normalizedMember.info)
-            // only do it when necessary, otherwise the method type might be at a later phase already
-            if (newTpe != normalizedMember.info) {
-              normalizedMember updateInfo newTpe
+            if (normalizedMember.isMethod) {
+              val newTpe = subst(outerEnv, normalizedMember.info)
+              // only do it when necessary, otherwise the method type might be at a later phase already
+              if (newTpe != normalizedMember.info) {
+                normalizedMember updateInfo newTpe
+              }
             }
+            normalizedMember :: ms
           }
-          normalizedMember :: ms
         }
       }
+
+      val subclasses = specializations(clazz.info.typeParams) filter satisfiable
+      subclasses foreach {
+        env =>
+          val spc = specializedClass(env, decls1)
+          val existing = clazz.owner.info.decl(spc.name)
+
+          // a symbol for the specialized class already exists if there's a classfile for it.
+          // keeping both crashes the compiler on test/files/pos/spec-Function1.scala
+          if (existing != NoSymbol)
+            clazz.owner.info.decls.unlink(existing)
+
+          exitingSpecialize(clazz.owner.info.decls enter spc) //!!! assumes fully specialized classes
+      }
+      if (subclasses.nonEmpty) clazz.resetFlag(FINAL)
+      cleanAnyRefSpecCache(clazz, decls1)
+      decls1
     }
-
-    val subclasses = specializations(clazz.info.typeParams) filter satisfiable
-    subclasses foreach {
-      env =>
-      val spc      = specializedClass(env, decls1)
-      val existing = clazz.owner.info.decl(spc.name)
-
-      // a symbol for the specialized class already exists if there's a classfile for it.
-      // keeping both crashes the compiler on test/files/pos/spec-Function1.scala
-      if (existing != NoSymbol)
-        clazz.owner.info.decls.unlink(existing)
-
-      exitingSpecialize(clazz.owner.info.decls enter spc) //!!! assumes fully specialized classes
-    }
-    if (subclasses.nonEmpty) clazz.resetFlag(FINAL)
-    cleanAnyRefSpecCache(clazz, decls1)
-    decls1
   }
 
   /** Expand member `sym` to a set of normalized members. Normalized members
