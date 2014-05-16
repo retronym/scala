@@ -739,11 +739,11 @@ abstract class GenASM extends SubComponent with BytecodeWriters with GenJVMASM {
       vp
     }
 
-    def pickleMarkerLocal = {
+    lazy val pickleMarkerLocal = {
       createJAttribute(tpnme.ScalaSignatureATTR.toString, versionPickle.bytes, 0, versionPickle.writeIndex)
     }
 
-    def pickleMarkerForeign = {
+    lazy val pickleMarkerForeign = {
       createJAttribute(tpnme.ScalaATTR.toString, new Array[Byte](0), 0, 0)
     }
 

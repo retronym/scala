@@ -329,14 +329,14 @@ abstract class BCodeHelpers extends BCodeTypes with BytecodeWriters {
     /*
      * can-multi-thread
      */
-    def pickleMarkerLocal = {
+    lazy val pickleMarkerLocal = {
       createJAttribute(tpnme.ScalaSignatureATTR.toString, versionPickle.bytes, 0, versionPickle.writeIndex)
     }
 
     /*
      * can-multi-thread
      */
-    def pickleMarkerForeign = {
+    lazy val pickleMarkerForeign = {
       createJAttribute(tpnme.ScalaATTR.toString, new Array[Byte](0), 0, 0)
     }
 
