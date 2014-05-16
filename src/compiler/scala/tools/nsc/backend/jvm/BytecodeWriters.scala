@@ -32,10 +32,19 @@ trait BytecodeWriters {
     def ensureDirectory(dir: AbstractFile): AbstractFile =
       if (dir.isDirectory) dir
       else throw new FileConflictException(s"${base.path}/$clsName$suffix: ${dir.path} is not a directory", dir)
-    var dir = base
+
     val pathParts = clsName.split("[./]").toList
-    for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
-    ensureDirectory(dir) fileNamed pathParts.last + suffix
+
+    if (base.file != null) {
+      val f = new java.io.File(base.file, (pathParts.init :+ (pathParts.last + suffix)).mkString("/"))
+      f.getParentFile.mkdirs()
+      new PlainFile(new File(f))
+    } else {
+      var dir = base
+      val pathParts = clsName.split("[./]").toList
+      for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
+      ensureDirectory(dir) fileNamed pathParts.last + suffix
+    }
   }
   def getFile(sym: Symbol, clsName: String, suffix: String): AbstractFile =
     getFile(outputDirectory(sym), clsName, suffix)
