@@ -179,6 +179,7 @@ trait Contexts { self: Analyzer =>
    */
   class Context private[typechecker](val tree: Tree, val owner: Symbol, val scope: Scope,
                                      val unit: CompilationUnit, _outer: Context) {
+    private[this] val global: self.global.type = self.global
     private def outerIsNoContext = _outer eq null
     final def outer: Context = if (outerIsNoContext) NoContext else _outer
 
@@ -1023,9 +1024,9 @@ trait Contexts { self: Analyzer =>
       def finish(qual: Tree, sym: Symbol): NameLookup = (
         if (lookupError ne null) lookupError
         else sym match {
-          case NoSymbol if inaccessible ne null => inaccessible
-          case NoSymbol                         => LookupNotFound
-          case _                                => LookupSucceeded(qual, sym)
+          case global.NoSymbol if inaccessible ne null => inaccessible
+          case global.NoSymbol                         => LookupNotFound
+          case _                                       => LookupSucceeded(qual, sym)
         }
       )
       def finishDefSym(sym: Symbol, pre0: Type): NameLookup =

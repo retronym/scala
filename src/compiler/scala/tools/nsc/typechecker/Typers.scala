@@ -105,6 +105,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val InterpolatorIdentRegex = """\$[$\w]+""".r // note that \w doesn't include $
 
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
+    val global: self.global.type = self.global
+
     import context0.unit
     import typeDebug.{ ptTree, ptBlock, ptLine, inGreen, inRed }
     import TyperErrorGen._
@@ -924,7 +926,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           KindArityMismatchError(tree, pt)
         else tree match { // (6)
           case TypeTree() => tree
-          case _          => TypeTree(tree.tpe) setOriginal tree
+          case _          => global.TypeTree(tree.tpe) setOriginal tree
         }
       }
 
