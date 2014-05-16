@@ -3106,7 +3106,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       val stats1 = stats mapConserve typedStat
       if (phase.erasedTypes) stats1
       else {
-        checkNoDoubleDefs(stats1)
+        if (!context.owner.isPackageClass)
+          checkNoDoubleDefs(stats1)
         addSynthetics(stats1)
       }
     }
