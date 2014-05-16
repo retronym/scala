@@ -119,11 +119,11 @@ trait StdAttachments {
    *  so it really benefits from a dedicated extractor.
    */
   def superArgs(tree: Tree): Option[List[List[Tree]]] =
-    tree.attachments.get[SuperArgsAttachment] collect { case SuperArgsAttachment(argss) => argss }
+    tree.attachments.get[SuperArgsAttachment].map(_.argss)
 
   /** Determines whether the given tree has an associated SuperArgsAttachment.
    */
-  def hasSuperArgs(tree: Tree): Boolean = superArgs(tree).nonEmpty
+  def hasSuperArgs(tree: Tree): Boolean = tree.hasAttachment[SuperArgsAttachment]
 
   /** @see markMacroImplRef
    */
