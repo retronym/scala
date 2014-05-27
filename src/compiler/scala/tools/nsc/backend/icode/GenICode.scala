@@ -1426,6 +1426,19 @@ abstract class GenICode extends SubComponent {
 
             val branchesReachable = if (and) genCond(lhs, ctx, ctxInterm, elseCtx)
             else genCond(lhs, ctx, thenCtx, ctxInterm)
+
+
+
+            val willKill = !(branchesReachable || settings.YdisableUnreachablePrevention)
+            if (willKill) {
+              ctx.bb.iterator.foreach {
+                case i @ CZJUMP(success, failure, cond, kind) if success == ctxInterm.bb =>
+                  ctx.bb.replaceInstruction(i, List(DROP(BOOL), JUMP(failure)))
+                case i @ CZJUMP(success, failure, cond, kind) if failure == ctxInterm.bb =>
+                  ctx.bb.replaceInstruction(i, List(DROP(BOOL), JUMP(success)))
+                case i =>
+              }
+            }
             ctxInterm.bb killUnless branchesReachable
 
             genCond(rhs, ctxInterm, thenCtx, elseCtx)
