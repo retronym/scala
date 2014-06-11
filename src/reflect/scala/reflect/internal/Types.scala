@@ -1829,6 +1829,19 @@ trait Types
     def apply(value: Constant) = unique(new UniqueConstantType(value))
   }
 
+  object deconstMap extends TypeMap {
+    // For some reason classOf[Foo] creates ConstantType(Constant(tpe)) with an actual Type for tpe,
+    // which is later translated to a Class. Unfortunately that means we have bugs like the erasure
+    // of Class[Foo] and classOf[Bar] not being seen as equivalent, leading to duplicate method
+    // generation and failing bytecode. See ticket #4753.
+    def apply(tp: Type): Type = tp match {
+      case PolyType(_, _)                  => mapOver(tp)
+      case MethodType(_, _)                => mapOver(tp)     // nullarymethod was eliminated during uncurry
+      case ConstantType(Constant(_: Type)) => ClassClass.tpe  // all classOfs erase to Class
+      case _                               => tp.deconst
+    }
+  }
+
   /* Syncnote: The `volatile` var and `pendingVolatiles` mutable set need not be protected
    * with synchronized, because they are accessed only from isVolatile, which is called only from
    * Typer.
@@ -4177,7 +4190,10 @@ trait Types
     }
 
   /** A function implementing `tp1` matches `tp2`. */
-  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+  final def matchesType(_tp1: Type, _tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+    def deconst(tp: Type) = if (alwaysMatchSimple) tp else deconstMap(tp)
+    val tp1 = deconst(_tp1)
+    val tp2 = deconst(_tp2)
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)
@@ -4193,6 +4209,7 @@ trait Types
         case _ =>
           alwaysMatchSimple || tp1 =:= tp2
       }
+
     tp1 match {
       case mt1 @ MethodType(params1, res1) =>
         tp2 match {
