@@ -339,8 +339,21 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         val isTarget18 = settings.target.value.contains("jvm-1.8")
         isTarget18 && !hasValueClass
       }
+      val functionalInterface: Symbol = {
+        val sym = originalFunction.tpe.typeSymbol
+        val name1 = specializeTypes.specializedFunctionName(sym, originalFunction.tpe.typeArgs)
+        val pack = rootMirror.getPackageIfDefined("scala.compat.java8")
+        if (name1.toTypeName == sym.name) {
+          val returnUnit = restpe.typeSymbol == UnitClass
+          val arity = originalFunction.vparams.length
+          val functionalInterfaceName = (if (returnUnit) "JProcedure" else "JFunction") + arity
+          pack.info.decl(TypeName(functionalInterfaceName))
+        } else
+          pack.info.decl(name1.toTypeName.prepend("J"))
+      }
+
       if (useLambdaMetafactory) {
-        val targetAttachment = LambdaMetaFactoryCapable(targetMethod(originalFunction), accessorMethod.symbol, originalFunction.vparams.length)
+        val targetAttachment = LambdaMetaFactoryCapable(targetMethod(originalFunction), accessorMethod.symbol, originalFunction.vparams.length, functionalInterface)
         anonymousClassDef.symbol.updateAttachment(targetAttachment)
       }
 
@@ -503,5 +516,5 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     }
   }
 
-  final case class LambdaMetaFactoryCapable(symbol: Symbol, accessor: Symbol, arity: Int)
+  final case class LambdaMetaFactoryCapable(symbol: Symbol, accessor: Symbol, arity: Int, functionalInterface: Symbol)
 }
