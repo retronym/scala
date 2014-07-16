@@ -170,7 +170,7 @@ abstract class ICodeReader extends ClassfileParser {
      */
     val owner = (
       if (isScalaModule) staticModule
-      else if (jflags.isStatic) moduleClass
+      else if (jflags.isStatic) moduleClass orElse clazz
       else clazz
     )
     val dummySym = owner.newMethod(name.toTermName, owner.pos, jflags.toScalaFlags)
@@ -603,6 +603,7 @@ abstract class ICodeReader extends ClassfileParser {
           containsInvokeDynamic = true
           val poolEntry = in.nextChar.toInt
           in.skip(2)
+          size += 4
           code.emit(INVOKE_DYNAMIC(poolEntry))
 
         case JVM.new_          =>

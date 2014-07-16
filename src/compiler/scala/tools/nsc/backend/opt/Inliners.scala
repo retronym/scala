@@ -592,7 +592,7 @@ abstract class Inliners extends SubComponent {
     /** Should method 'sym' being called in 'receiver' be loaded from disk? */
     def shouldLoadImplFor(sym: Symbol, receiver: Symbol): Boolean = {
       def alwaysLoad    = (receiver.enclosingPackage == RuntimePackage) || (receiver == PredefModule.moduleClass)
-      def loadCondition = sym.isEffectivelyFinalOrNotOverridden && isMonadicMethod(sym) && isHigherOrderMethod(sym)
+      def loadCondition = sym.isEffectivelyFinalOrNotOverridden && isMonadicMethod(sym) && isHigherOrderMethod(sym) && !sym.owner.hasAttachment[delambdafy.LambdaMetaFactoryCapable]
 
       val res = hasInline(sym) || alwaysLoad || loadCondition
       debuglog("shouldLoadImplFor: " + receiver + "." + sym + ": " + res)

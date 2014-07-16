@@ -169,6 +169,15 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
           icodes.classes -= sym
         }
       }
+      for (sym <- icodes.classes.keys.toList if sym.hasAttachment[delambdafy.LambdaMetaFactoryCapable]) {
+        if (settings.inline) {
+          if (settings.Xdce && deadCode.liveClosures(sym))
+            debuglog(s"Forced to emit $sym as inlining has retained a reference")
+          else
+            icodes.classes -= sym
+        } else
+          icodes.classes -= sym
+      }
 
       // For predictably ordered error messages.
       var sortedClasses = classes.values.toList sortBy (_.symbol.fullName)
@@ -2195,12 +2204,14 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
             }
           }
         }
+        def useIndy(cls: Symbol) =
+          cls.hasAttachment[delambdafy.LambdaMetaFactoryCapable] && !deadCode.liveClosures(cls)
         def loop(is: List[Instruction]) {
           is match {
             case Nil =>
-            case NEW(REFERENCE(cls)) :: DUP(_) :: tail if cls.hasAttachment[delambdafy.LambdaMetaFactoryCapable] =>
+            case NEW(REFERENCE(cls)) :: DUP(_) :: tail if useIndy(cls) =>
               loop(tail)
-            case (instr @ CALL_METHOD(constr, _)) :: tail if constr.isConstructor && constr.owner.hasAttachment[delambdafy.LambdaMetaFactoryCapable] =>
+            case (instr @ CALL_METHOD(constr, _)) :: tail if constr.isConstructor && useIndy(constr.owner) =>
               emitPos(instr)
               val attach = constr.owner.attachments.get[delambdafy.LambdaMetaFactoryCapable].get
               genInvokeDynamicLambda(constr, attach.accessor, attach.arity, attach.functionalInterface)

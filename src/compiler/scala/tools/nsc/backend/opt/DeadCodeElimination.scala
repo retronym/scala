@@ -266,7 +266,7 @@ abstract class DeadCodeElimination extends SubComponent {
             case nw @ NEW(REFERENCE(sym)) =>
               assert(nw.init ne null, "null new.init at: " + bb + ": " + idx + "(" + instr + ")")
               worklist += findInstruction(bb, nw.init)
-              if (inliner.isClosureClass(sym)) {
+              if (inliner.isClosureClass(sym) && !sym.hasAttachment[delambdafy.LambdaMetaFactoryCapable]) {
                 liveClosures += sym
               }
 
