@@ -1,0 +1,399 @@
+reload: Completion.scala
+
+askTypeCompletion at Completion.scala(7,11)
+================================================================================
+[response] askTypeCompletion at (7,11)
+retrieved 197 members
+[inaccessible] implicit private[this] val asGto: Seq[Int] => scala.collection.GenTraversableOnce[Int]
+[inaccessible] override protected[this] def parCombiner: scala.collection.parallel.Combiner[Int,scala.collection.parallel.ParSeq[Int]]
+[inaccessible] override protected[this] def thisCollection: Seq[Int]
+[inaccessible] override protected[this] def toCollection(repr: Seq[Int]): Seq[Int]
+[inaccessible] private[package scala] def sliceWithKnownBound(from: Int,until: Int): Seq[Int]
+[inaccessible] private[package scala] def sliceWithKnownDelta(from: Int,until: Int,delta: Int): Seq[Int]
+[inaccessible] private[this] val c: Seq[Int]
+[inaccessible] private[this] val trav: scala.collection.TraversableOnce[Int]
+[inaccessible] protected[package lang] def clone(): Object
+[inaccessible] protected[package lang] def finalize(): Unit
+[inaccessible] protected[this] def newBuilder: scala.collection.mutable.Builder[Int,Seq[Int]]
+[inaccessible] protected[this] def reversed: List[Int]
+[inaccessible] protected[this] type Self = Completion.list.Self
+class WithFilter extends FilterMonadic[Int,Seq[Int]]
+def +(other: String): String
+def ++:[B >: Int, That](that: Traversable[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ++:[B >: Int, That](that: scala.collection.TraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ++[B >: Int, That](that: scala.collection.GenTraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def +:[B >: Int, That](elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ->[B](y: B): (Seq[Int], B)
+def /:[B](z: B)(op: (B, Int) => B): B
+def :+[B >: Int, That](elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def :\[B](z: B)(op: (Int, B) => B): B
+def addString(b: StringBuilder): StringBuilder
+def addString(b: StringBuilder,sep: String): StringBuilder
+def addString(b: StringBuilder,start: String,sep: String,end: String): StringBuilder
+def aggregate[B](z: => B)(seqop: (B, Int) => B,combop: (B, B) => B): B
+def apply(idx: Int): Int
+def applyOrElse[A1 <: Int, B1 >: Int](x: A1,default: A1 => B1): B1
+def collectFirst[B](pf: PartialFunction[Int,B]): Option[B]
+def collect[B, That](pf: PartialFunction[Int,B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def combinations(n: Int): Iterator[Seq[Int]]
+def compose[A](g: A => Int): A => Int
+def containsSlice[B](that: scala.collection.GenSeq[B]): Boolean
+def contains[A1 >: Int](elem: A1): Boolean
+def copyToArray[B >: Int](xs: Array[B]): Unit
+def copyToArray[B >: Int](xs: Array[B],start: Int): Unit
+def copyToBuffer[B >: Int](dest: scala.collection.mutable.Buffer[B]): Unit
+def corresponds[B](that: scala.collection.GenSeq[B])(p: (Int, B) => Boolean): Boolean
+def count(p: Int => Boolean): Int
+def diff[B >: Int](that: scala.collection.GenSeq[B]): Seq[Int]
+def distinct: Seq[Int]
+def dropRight(n: Int): Seq[Int]
+def dropWhile(p: Int => Boolean): Seq[Int]
+def endsWith[B](that: scala.collection.GenSeq[B]): Boolean
+def ensuring(cond: Boolean): Seq[Int]
+def ensuring(cond: Boolean,msg: => Any): Seq[Int]
+def ensuring(cond: Seq[Int] => Boolean): Seq[Int]
+def ensuring(cond: Seq[Int] => Boolean,msg: => Any): Seq[Int]
+def filter(p: Int => Boolean): Seq[Int]
+def filterNot(p: Int => Boolean): Seq[Int]
+def flatMap[B, That](f: Int => scala.collection.GenTraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def flatMap[B](f: Int => scala.collection.GenTraversableOnce[B]): scala.collection.TraversableOnce[B]
+def flatten[B](implicit asTraversable: Int => scala.collection.GenTraversableOnce[B]): Seq[B]
+def foldLeft[B](z: B)(op: (B, Int) => B): B
+def fold[A1 >: Int](z: A1)(op: (A1, A1) => A1): A1
+def foreach[U](f: Int => U): Unit
+def formatted(fmtstr: String): String
+def genericBuilder[B]: scala.collection.mutable.Builder[B,Seq[B]]
+def groupBy[K](f: Int => K): scala.collection.immutable.Map[K,Seq[Int]]
+def grouped(size: Int): Iterator[Seq[Int]]
+def hasDefiniteSize: Boolean
+def headOption: Option[Int]
+def indexOfSlice[B >: Int](that: scala.collection.GenSeq[B]): Int
+def indexOfSlice[B >: Int](that: scala.collection.GenSeq[B],from: Int): Int
+def indexOf[B >: Int](elem: B): Int
+def indexOf[B >: Int](elem: B,from: Int): Int
+def indexWhere(p: Int => Boolean): Int
+def indexWhere(p: Int => Boolean,from: Int): Int
+def indices: scala.collection.immutable.Range
+def init: Seq[Int]
+def inits: Iterator[Seq[Int]]
+def intersect[B >: Int](that: scala.collection.GenSeq[B]): Seq[Int]
+def isDefinedAt(idx: Int): Boolean
+def iterator: Iterator[Int]
+def last: Int
+def lastIndexOfSlice[B >: Int](that: scala.collection.GenSeq[B]): Int
+def lastIndexOfSlice[B >: Int](that: scala.collection.GenSeq[B],end: Int): Int
+def lastIndexOf[B >: Int](elem: B): Int
+def lastIndexOf[B >: Int](elem: B,end: Int): Int
+def lastIndexWhere(p: Int => Boolean): Int
+def lastIndexWhere(p: Int => Boolean,end: Int): Int
+def lastOption: Option[Int]
+def length: Int
+def lengthCompare(len: Int): Int
+def lift: Int => Option[Int]
+def map[B, That](f: Int => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def map[B](f: Int => B): scala.collection.TraversableOnce[B]
+def maxBy[B](f: Int => B)(implicit cmp: Ordering[B]): Int
+def max[B >: Int](implicit cmp: Ordering[B]): Int
+def minBy[B](f: Int => B)(implicit cmp: Ordering[B]): Int
+def min[B >: Int](implicit cmp: Ordering[B]): Int
+def mkString(sep: String): String
+def mkString(start: String,sep: String,end: String): String
+def mkString: String
+def nonEmpty: Boolean
+def orElse[A1 <: Int, B1 >: Int](that: PartialFunction[A1,B1]): PartialFunction[A1,B1]
+def padTo[B >: Int, That](len: Int,elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def par: scala.collection.parallel.ParSeq[Int]
+def partition(p: Int => Boolean): (Seq[Int], Seq[Int])
+def patch[B >: Int, That](from: Int,patch: scala.collection.GenSeq[B],replaced: Int)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def permutations: Iterator[Seq[Int]]
+def prefixLength(p: Int => Boolean): Int
+def product[B >: Int](implicit num: Numeric[B]): B
+def reduceLeftOption[B >: Int](op: (B, Int) => B): Option[B]
+def reduceLeft[B >: Int](op: (B, Int) => B): B
+def reduceOption[A1 >: Int](op: (A1, A1) => A1): Option[A1]
+def reduceRightOption[B >: Int](op: (Int, B) => B): Option[B]
+def reduce[A1 >: Int](op: (A1, A1) => A1): A1
+def repr: Seq[Int]
+def reverse: Seq[Int]
+def reverseIterator: Iterator[Int]
+def reverseMap[B, That](f: Int => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def runWith[U](action: Int => U): Int => Boolean
+def sameElements[B >: Int](that: scala.collection.GenIterable[B]): Boolean
+def scanLeft[B, That](z: B)(op: (B, Int) => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def scanRight[B, That](z: B)(op: (Int, B) => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def scan[B >: Int, That](z: B)(op: (B, B) => B)(implicit cbf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def segmentLength(p: Int => Boolean,from: Int): Int
+def sliding(size: Int): Iterator[Seq[Int]]
+def sliding(size: Int,step: Int): Iterator[Seq[Int]]
+def sortBy[B](f: Int => B)(implicit ord: scala.math.Ordering[B]): Seq[Int]
+def sortWith(lt: (Int, Int) => Boolean): Seq[Int]
+def sorted[B >: Int](implicit ord: scala.math.Ordering[B]): Seq[Int]
+def span(p: Int => Boolean): (Seq[Int], Seq[Int])
+def splitAt(n: Int): (Seq[Int], Seq[Int])
+def startsWith[B](that: scala.collection.GenSeq[B]): Boolean
+def startsWith[B](that: scala.collection.GenSeq[B],offset: Int): Boolean
+def stringPrefix: String
+def sum[B >: Int](implicit num: Numeric[B]): B
+def tails: Iterator[Seq[Int]]
+def takeRight(n: Int): Seq[Int]
+def toArray[B >: Int](implicit evidence$1: scala.reflect.ClassTag[B]): Array[B]
+def toBuffer[B >: Int]: scala.collection.mutable.Buffer[B]
+def toIndexedSeq: scala.collection.immutable.IndexedSeq[Int]
+def toList: List[Int]
+def toMap[T, U](implicit ev: <:<[Int,(T, U)]): scala.collection.immutable.Map[T,U]
+def toParArray: scala.collection.parallel.mutable.ParArray[Int]
+def toSet[B >: Int]: scala.collection.immutable.Set[B]
+def toTraversable: Traversable[Int]
+def toVector: Vector[Int]
+def transpose[B](implicit asTraversable: Int => scala.collection.GenTraversableOnce[B]): Seq[Seq[B]]
+def unzip3[A1, A2, A3](implicit asTriple: Int => (A1, A2, A3)): (Seq[A1], Seq[A2], Seq[A3])
+def unzip[A1, A2](implicit asPair: Int => (A1, A2)): (Seq[A1], Seq[A2])
+def updated[B >: Int, That](index: Int,elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def withFilter(p: Int => Boolean): scala.collection.generic.FilterMonadic[Int,Seq[Int]]
+def zipAll[B, A1 >: Int, That](that: scala.collection.GenIterable[B],thisElem: A1,thatElem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, B),That]): That
+def zipWithIndex[A1 >: Int, That](implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, Int),That]): That
+def zip[A1 >: Int, B, That](that: scala.collection.GenIterable[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, B),That]): That
+def →[B](y: B): (Seq[Int], B)
+final def !=(x$1: Any): Boolean
+final def ##(): Int
+final def ==(x$1: Any): Boolean
+final def asInstanceOf[T0]: T0
+final def eq(x$1: AnyRef): Boolean
+final def isInstanceOf[T0]: Boolean
+final def isTraversableAgain: Boolean
+final def ne(x$1: AnyRef): Boolean
+final def notify(): Unit
+final def notifyAll(): Unit
+final def synchronized[T0](x$1: T0): T0
+final def wait(): Unit
+final def wait(x$1: Long): Unit
+final def wait(x$1: Long,x$2: Int): Unit
+override def andThen[C](k: Int => C): PartialFunction[Int,C]
+override def canEqual(that: Any): Boolean
+override def companion: scala.collection.generic.GenericCompanion[Seq]
+override def copyToArray[B >: Int](xs: Array[B],start: Int,len: Int): Unit
+override def drop(n: Int): Seq[Int]
+override def equals(that: Any): Boolean
+override def exists(p: Int => Boolean): Boolean
+override def find(p: Int => Boolean): Option[Int]
+override def foldRight[B](z: B)(op: (Int, B) => B): B
+override def forall(p: Int => Boolean): Boolean
+override def hashCode(): Int
+override def head: Int
+override def isEmpty: Boolean
+override def reduceRight[B >: Int](op: (Int, B) => B): B
+override def seq: Seq[Int]
+override def size: Int
+override def slice(from: Int,until: Int): Seq[Int]
+override def tail: Seq[Int]
+override def take(n: Int): Seq[Int]
+override def takeWhile(p: Int => Boolean): Seq[Int]
+override def toIterable: Iterable[Int]
+override def toIterator: Iterator[Int]
+override def toSeq: Seq[Int]
+override def toStream: scala.collection.immutable.Stream[Int]
+override def toString(): String
+override def to[Col[_]](implicit cbf: scala.collection.generic.CanBuildFrom[Nothing,Int,Col[Int]]): Col[Int]
+override def union[B >: Int, That](that: scala.collection.GenSeq[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+override def view(from: Int,until: Int): scala.collection.SeqView[Int,Seq[Int]]
+override def view: scala.collection.SeqView[Int,Seq[Int]]
+================================================================================
+
+askTypeCompletion at Completion.scala(8,16)
+================================================================================
+[response] askTypeCompletion at (8,16)
+retrieved 197 members
+[inaccessible] implicit private[this] val asGto: Seq[Int] => scala.collection.GenTraversableOnce[Int]
+[inaccessible] override protected[this] def parCombiner: scala.collection.parallel.Combiner[Int,scala.collection.parallel.ParSeq[Int]]
+[inaccessible] override protected[this] def thisCollection: Seq[Int]
+[inaccessible] override protected[this] def toCollection(repr: Seq[Int]): Seq[Int]
+[inaccessible] private[package scala] def sliceWithKnownBound(from: Int,until: Int): Seq[Int]
+[inaccessible] private[package scala] def sliceWithKnownDelta(from: Int,until: Int,delta: Int): Seq[Int]
+[inaccessible] private[this] val c: Seq[Int]
+[inaccessible] private[this] val trav: scala.collection.TraversableOnce[Int]
+[inaccessible] protected[package lang] def clone(): Object
+[inaccessible] protected[package lang] def finalize(): Unit
+[inaccessible] protected[this] def newBuilder: scala.collection.mutable.Builder[Int,Seq[Int]]
+[inaccessible] protected[this] def reversed: List[Int]
+[inaccessible] protected[this] type Self = Completion.list.Self
+class WithFilter extends FilterMonadic[Int,Seq[Int]]
+def +(other: String): String
+def ++:[B >: Int, That](that: Traversable[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ++:[B >: Int, That](that: scala.collection.TraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ++[B >: Int, That](that: scala.collection.GenTraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def +:[B >: Int, That](elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def ->[B](y: B): (Seq[Int], B)
+def /:[B](z: B)(op: (B, Int) => B): B
+def :+[B >: Int, That](elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def :\[B](z: B)(op: (Int, B) => B): B
+def addString(b: StringBuilder): StringBuilder
+def addString(b: StringBuilder,sep: String): StringBuilder
+def addString(b: StringBuilder,start: String,sep: String,end: String): StringBuilder
+def aggregate[B](z: => B)(seqop: (B, Int) => B,combop: (B, B) => B): B
+def apply(idx: Int): Int
+def applyOrElse[A1 <: Int, B1 >: Int](x: A1,default: A1 => B1): B1
+def collectFirst[B](pf: PartialFunction[Int,B]): Option[B]
+def collect[B, That](pf: PartialFunction[Int,B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def combinations(n: Int): Iterator[Seq[Int]]
+def compose[A](g: A => Int): A => Int
+def containsSlice[B](that: scala.collection.GenSeq[B]): Boolean
+def contains[A1 >: Int](elem: A1): Boolean
+def copyToArray[B >: Int](xs: Array[B]): Unit
+def copyToArray[B >: Int](xs: Array[B],start: Int): Unit
+def copyToBuffer[B >: Int](dest: scala.collection.mutable.Buffer[B]): Unit
+def corresponds[B](that: scala.collection.GenSeq[B])(p: (Int, B) => Boolean): Boolean
+def count(p: Int => Boolean): Int
+def diff[B >: Int](that: scala.collection.GenSeq[B]): Seq[Int]
+def distinct: Seq[Int]
+def dropRight(n: Int): Seq[Int]
+def dropWhile(p: Int => Boolean): Seq[Int]
+def endsWith[B](that: scala.collection.GenSeq[B]): Boolean
+def ensuring(cond: Boolean): Seq[Int]
+def ensuring(cond: Boolean,msg: => Any): Seq[Int]
+def ensuring(cond: Seq[Int] => Boolean): Seq[Int]
+def ensuring(cond: Seq[Int] => Boolean,msg: => Any): Seq[Int]
+def filter(p: Int => Boolean): Seq[Int]
+def filterNot(p: Int => Boolean): Seq[Int]
+def flatMap[B, That](f: Int => scala.collection.GenTraversableOnce[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def flatMap[B](f: Int => scala.collection.GenTraversableOnce[B]): scala.collection.TraversableOnce[B]
+def flatten[B](implicit asTraversable: Int => scala.collection.GenTraversableOnce[B]): Seq[B]
+def foldLeft[B](z: B)(op: (B, Int) => B): B
+def fold[A1 >: Int](z: A1)(op: (A1, A1) => A1): A1
+def foreach[U](f: Int => U): Unit
+def formatted(fmtstr: String): String
+def genericBuilder[B]: scala.collection.mutable.Builder[B,Seq[B]]
+def groupBy[K](f: Int => K): scala.collection.immutable.Map[K,Seq[Int]]
+def grouped(size: Int): Iterator[Seq[Int]]
+def hasDefiniteSize: Boolean
+def headOption: Option[Int]
+def indexOfSlice[B >: Int](that: scala.collection.GenSeq[B]): Int
+def indexOfSlice[B >: Int](that: scala.collection.GenSeq[B],from: Int): Int
+def indexOf[B >: Int](elem: B): Int
+def indexOf[B >: Int](elem: B,from: Int): Int
+def indexWhere(p: Int => Boolean): Int
+def indexWhere(p: Int => Boolean,from: Int): Int
+def indices: scala.collection.immutable.Range
+def init: Seq[Int]
+def inits: Iterator[Seq[Int]]
+def intersect[B >: Int](that: scala.collection.GenSeq[B]): Seq[Int]
+def isDefinedAt(idx: Int): Boolean
+def iterator: Iterator[Int]
+def last: Int
+def lastIndexOfSlice[B >: Int](that: scala.collection.GenSeq[B]): Int
+def lastIndexOfSlice[B >: Int](that: scala.collection.GenSeq[B],end: Int): Int
+def lastIndexOf[B >: Int](elem: B): Int
+def lastIndexOf[B >: Int](elem: B,end: Int): Int
+def lastIndexWhere(p: Int => Boolean): Int
+def lastIndexWhere(p: Int => Boolean,end: Int): Int
+def lastOption: Option[Int]
+def length: Int
+def lengthCompare(len: Int): Int
+def lift: Int => Option[Int]
+def map[B, That](f: Int => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def map[B](f: Int => B): scala.collection.TraversableOnce[B]
+def maxBy[B](f: Int => B)(implicit cmp: Ordering[B]): Int
+def max[B >: Int](implicit cmp: Ordering[B]): Int
+def minBy[B](f: Int => B)(implicit cmp: Ordering[B]): Int
+def min[B >: Int](implicit cmp: Ordering[B]): Int
+def mkString(sep: String): String
+def mkString(start: String,sep: String,end: String): String
+def mkString: String
+def nonEmpty: Boolean
+def orElse[A1 <: Int, B1 >: Int](that: PartialFunction[A1,B1]): PartialFunction[A1,B1]
+def padTo[B >: Int, That](len: Int,elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def par: scala.collection.parallel.ParSeq[Int]
+def partition(p: Int => Boolean): (Seq[Int], Seq[Int])
+def patch[B >: Int, That](from: Int,patch: scala.collection.GenSeq[B],replaced: Int)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def permutations: Iterator[Seq[Int]]
+def prefixLength(p: Int => Boolean): Int
+def product[B >: Int](implicit num: Numeric[B]): B
+def reduceLeftOption[B >: Int](op: (B, Int) => B): Option[B]
+def reduceLeft[B >: Int](op: (B, Int) => B): B
+def reduceOption[A1 >: Int](op: (A1, A1) => A1): Option[A1]
+def reduceRightOption[B >: Int](op: (Int, B) => B): Option[B]
+def reduce[A1 >: Int](op: (A1, A1) => A1): A1
+def repr: Seq[Int]
+def reverse: Seq[Int]
+def reverseIterator: Iterator[Int]
+def reverseMap[B, That](f: Int => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def runWith[U](action: Int => U): Int => Boolean
+def sameElements[B >: Int](that: scala.collection.GenIterable[B]): Boolean
+def scanLeft[B, That](z: B)(op: (B, Int) => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def scanRight[B, That](z: B)(op: (Int, B) => B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def scan[B >: Int, That](z: B)(op: (B, B) => B)(implicit cbf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def segmentLength(p: Int => Boolean,from: Int): Int
+def sliding(size: Int): Iterator[Seq[Int]]
+def sliding(size: Int,step: Int): Iterator[Seq[Int]]
+def sortBy[B](f: Int => B)(implicit ord: scala.math.Ordering[B]): Seq[Int]
+def sortWith(lt: (Int, Int) => Boolean): Seq[Int]
+def sorted[B >: Int](implicit ord: scala.math.Ordering[B]): Seq[Int]
+def span(p: Int => Boolean): (Seq[Int], Seq[Int])
+def splitAt(n: Int): (Seq[Int], Seq[Int])
+def startsWith[B](that: scala.collection.GenSeq[B]): Boolean
+def startsWith[B](that: scala.collection.GenSeq[B],offset: Int): Boolean
+def stringPrefix: String
+def sum[B >: Int](implicit num: Numeric[B]): B
+def tails: Iterator[Seq[Int]]
+def takeRight(n: Int): Seq[Int]
+def toArray[B >: Int](implicit evidence$1: scala.reflect.ClassTag[B]): Array[B]
+def toBuffer[B >: Int]: scala.collection.mutable.Buffer[B]
+def toIndexedSeq: scala.collection.immutable.IndexedSeq[Int]
+def toList: List[Int]
+def toMap[T, U](implicit ev: <:<[Int,(T, U)]): scala.collection.immutable.Map[T,U]
+def toParArray: scala.collection.parallel.mutable.ParArray[Int]
+def toSet[B >: Int]: scala.collection.immutable.Set[B]
+def toTraversable: Traversable[Int]
+def toVector: Vector[Int]
+def transpose[B](implicit asTraversable: Int => scala.collection.GenTraversableOnce[B]): Seq[Seq[B]]
+def unzip3[A1, A2, A3](implicit asTriple: Int => (A1, A2, A3)): (Seq[A1], Seq[A2], Seq[A3])
+def unzip[A1, A2](implicit asPair: Int => (A1, A2)): (Seq[A1], Seq[A2])
+def updated[B >: Int, That](index: Int,elem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+def withFilter(p: Int => Boolean): scala.collection.generic.FilterMonadic[Int,Seq[Int]]
+def zipAll[B, A1 >: Int, That](that: scala.collection.GenIterable[B],thisElem: A1,thatElem: B)(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, B),That]): That
+def zipWithIndex[A1 >: Int, That](implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, Int),That]): That
+def zip[A1 >: Int, B, That](that: scala.collection.GenIterable[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],(A1, B),That]): That
+def →[B](y: B): (Seq[Int], B)
+final def !=(x$1: Any): Boolean
+final def ##(): Int
+final def ==(x$1: Any): Boolean
+final def asInstanceOf[T0]: T0
+final def eq(x$1: AnyRef): Boolean
+final def isInstanceOf[T0]: Boolean
+final def isTraversableAgain: Boolean
+final def ne(x$1: AnyRef): Boolean
+final def notify(): Unit
+final def notifyAll(): Unit
+final def synchronized[T0](x$1: T0): T0
+final def wait(): Unit
+final def wait(x$1: Long): Unit
+final def wait(x$1: Long,x$2: Int): Unit
+override def andThen[C](k: Int => C): PartialFunction[Int,C]
+override def canEqual(that: Any): Boolean
+override def companion: scala.collection.generic.GenericCompanion[Seq]
+override def copyToArray[B >: Int](xs: Array[B],start: Int,len: Int): Unit
+override def drop(n: Int): Seq[Int]
+override def equals(that: Any): Boolean
+override def exists(p: Int => Boolean): Boolean
+override def find(p: Int => Boolean): Option[Int]
+override def foldRight[B](z: B)(op: (Int, B) => B): B
+override def forall(p: Int => Boolean): Boolean
+override def hashCode(): Int
+override def head: Int
+override def isEmpty: Boolean
+override def reduceRight[B >: Int](op: (Int, B) => B): B
+override def seq: Seq[Int]
+override def size: Int
+override def slice(from: Int,until: Int): Seq[Int]
+override def tail: Seq[Int]
+override def take(n: Int): Seq[Int]
+override def takeWhile(p: Int => Boolean): Seq[Int]
+override def toIterable: Iterable[Int]
+override def toIterator: Iterator[Int]
+override def toSeq: Seq[Int]
+override def toStream: scala.collection.immutable.Stream[Int]
+override def toString(): String
+override def to[Col[_]](implicit cbf: scala.collection.generic.CanBuildFrom[Nothing,Int,Col[Int]]): Col[Int]
+override def union[B >: Int, That](that: scala.collection.GenSeq[B])(implicit bf: scala.collection.generic.CanBuildFrom[Seq[Int],B,That]): That
+override def view(from: Int,until: Int): scala.collection.SeqView[Int,Seq[Int]]
+override def view: scala.collection.SeqView[Int,Seq[Int]]
+================================================================================
