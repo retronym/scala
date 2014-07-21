@@ -1,0 +1,8 @@
+reload: Completion.scala
+
+askTypeCompletion at Completion.scala(7,25)
+================================================================================
+[response] askTypeCompletion at (7,25)
+retrieved 0 members
+
+================================================================================
