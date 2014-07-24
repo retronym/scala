@@ -543,7 +543,9 @@ trait TypeComparers {
             case _: TypeSymbol                    => retry(tp1.normalize, tp2.normalize)
             case _                                => false
           }
-        case RefinedType(parents, _) => parents exists (retry(_, tp2))
+        case RefinedType(parents, _) =>
+          def check(ground: Boolean) = parents exists (tp => tp.isGround == ground && retry(tp, tp2))
+          check(ground = true) || check(ground = false)
         case _: SingletonType        => retry(tp1.underlying, tp2)
         case _                       => false
       }
