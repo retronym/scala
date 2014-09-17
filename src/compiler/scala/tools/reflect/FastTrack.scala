@@ -18,7 +18,7 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
   import scala.language.implicitConversions
   import treeInfo.Applied
 
-  def contains(symbol: Symbol): Boolean = fastTrackCache().contains(symbol)
+  def contains(symbol: Symbol): Boolean = symbol.hasTransOwner(ScalaPackageClass) && fastTrackCache().contains(symbol)
   def apply(symbol: Symbol): FastTrackEntry = fastTrackCache().apply(symbol)
   def get(symbol: Symbol): Option[FastTrackEntry] = fastTrackCache().get(symbol)
 

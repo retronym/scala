@@ -710,8 +710,11 @@ trait Printers extends api.Printers { self: SymbolTable =>
       argss foreach {x: List[Tree] => if (!(x.isEmpty && argss.size == 1)) printRow(x, "(", ", ", ")")}
 
     override def printAnnotations(tree: MemberDef) = {
-      val annots = tree.mods.annotations
-      annots foreach {annot => printAnnot(annot); print(" ")}
+      tree.mods.annotations match {
+        case Nil  => super.printAnnotations(tree)
+        case annots =>
+          annots foreach {annot => printAnnot(annot); print(" ")}
+      }
     }
 
     protected def printAnnot(tree: Tree) = {

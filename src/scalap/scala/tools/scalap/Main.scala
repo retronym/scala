@@ -10,6 +10,9 @@ package tools.scalap
 
 import java.io.{ PrintStream, OutputStreamWriter, ByteArrayOutputStream }
 import scala.reflect.NameTransformer
+import scala.tools.nsc.Settings
+import scala.tools.nsc.backend.JavaPlatform
+import scala.tools.nsc.reporters.ConsoleReporter
 import scalax.rules.scalasig._
 import scala.tools.nsc.util.{ ClassPath, JavaClassPath }
 import scala.tools.util.PathResolver
@@ -112,8 +115,33 @@ class Main {
       if (verbose) {
         Console.println(Console.BOLD + "FILENAME" + Console.RESET + " = " + cfile.path)
       }
+      val settings = new Settings(msg => throw new RuntimeException(msg))
+      class CustomGlobal extends scala.tools.nsc.Global(settings) {
+        override lazy val platform: ThisPlatform = new JavaPlatform {
+          val global: CustomGlobal.this.type = CustomGlobal.this
+
+          override def classPath: PlatformClassPath = path
+        }
+      }
+      val global = new CustomGlobal
+      new global.Run()
       val bytes = cfile.toByteArray
       if (isScalaFile(bytes)) {
+        global.exitingTyper {
+          val sym = global.rootMirror.getClassIfDefined(encName)
+          global.definitions.fullyInitializeSymbol(sym)
+          def symbolToTree(sym: global.Symbol): global.Tree = sym match {
+            case x if x.isMethod => global.DefDef(sym, if (x.isDeferred) global.EmptyTree else global.gen.mkZero(global.definitions.NothingTpe))
+            case x if x.isValue => global.ValDef(sym)
+            case x if x.isAbstractType => global.TypeDef(sym)
+            case x if x.isClass => global.ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
+            case x if x.isModule => global.ModuleDef(sym, global.Template(sym, sym.info.decls.sorted.map(symbolToTree)))
+            case _ => global.EmptyTree
+          }
+          val tree = symbolToTree(sym)
+          println(global.showCode(tree))
+          println("=" * 80)
+        }
         Console.println(decompileScala(bytes, isPackageObjectFile(encName)))
       } else {
         // construct a reader for the classfile content
