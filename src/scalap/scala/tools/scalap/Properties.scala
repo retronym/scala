@@ -12,5 +12,5 @@ package scala.tools.scalap
 object Properties extends scala.util.PropertiesTrait
 {
   protected def propCategory    = "decoder"
-  protected def pickJarBasedOn  = classOf[Classfile]
+  protected def pickJarBasedOn  = classOf[Main]
 }
