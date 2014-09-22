@@ -1060,8 +1060,8 @@ trait Trees extends api.Trees {
   def Template(sym: Symbol, body: List[Tree]): Template = {
     atPos(sym.pos) {
       Template(sym.info.parents map TypeTree,
-               if (sym.thisSym == sym) noSelfType else ValDef(sym),
-               body)
+         if (sym.thisSym == sym) noSelfType else ValDef(sym.thisSym),
+         body)
     }
   }
 

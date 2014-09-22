@@ -304,7 +304,7 @@ trait ReificationSupport { self: SymbolTable =>
             if (!ctorArgsCorrespondToFields) None
             else {
               val vparamss = mmap(vparamssRestoredImplicits) { vd =>
-                val originalMods = modsMap(vd.name) | (vd.mods.flags & DEFAULTPARAM)
+                val originalMods = (modsMap(vd.name) | (vd.mods.flags & DEFAULTPARAM))
                 atPos(vd.pos)(ValDef(originalMods, vd.name, vd.tpt, vd.rhs))
               }
               result(ctorMods, vparamss, edefs, body)

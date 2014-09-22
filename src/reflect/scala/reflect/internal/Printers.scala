@@ -533,6 +533,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
         out.print(if (arg == null) "null" else arg.toString)
     }
   }
+  protected type TreePrinterInternal = TreePrinter
 
   // it's the printer for AST-based code generation
   class CodePrinter(out: PrintWriter, printRootPkg: Boolean) extends TreePrinter(out) {
@@ -710,11 +711,8 @@ trait Printers extends api.Printers { self: SymbolTable =>
       argss foreach {x: List[Tree] => if (!(x.isEmpty && argss.size == 1)) printRow(x, "(", ", ", ")")}
 
     override def printAnnotations(tree: MemberDef) = {
-      tree.mods.annotations match {
-        case Nil  => super.printAnnotations(tree)
-        case annots =>
-          annots foreach {annot => printAnnot(annot); print(" ")}
-      }
+      val annots = tree.mods.annotations
+      annots foreach {annot => printAnnot(annot); print(" ")}
     }
 
     protected def printAnnot(tree: Tree) = {

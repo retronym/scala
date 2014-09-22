@@ -2602,6 +2602,7 @@ trait Trees { self: Universe =>
       result
     }
   }
+  protected type TransformerApi = Transformer
 
   /** Delegates the transformation strategy to `scala.reflect.internal.Trees`,
    *  because pattern matching on abstract types we have here degrades performance.

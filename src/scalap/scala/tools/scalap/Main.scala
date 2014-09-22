@@ -55,23 +55,79 @@ class Main {
           val global: CustomGlobal.this.type = CustomGlobal.this
 
           override def classPath: PlatformClassPath = path
+
+        }
+        case object CompiledCode extends TermTree {
+          override def isTerm = true
+        }
+
+        override protected def xtraverse(traverser: Traverser, tree: Tree): Unit = tree match {
+          case CompiledCode =>
+          case _ => super.xtraverse(traverser, tree)
+        }
+
+        override protected def xtransform(transformer: TransformerApi, tree: Tree): Tree = tree match {
+          case CompiledCode => CompiledCode
+          case _ => super.xtransform(transformer, tree)
+        }
+
+        override def xprintTree(treePrinter: TreePrinterInternal, tree: Tree): Unit = tree match {
+          case CompiledCode => treePrinter.print("{ /* compiled code */ }")
+          case _ => super.xprintTree(treePrinter, tree)
         }
       }
       val global = new CustomGlobal
-      new global.Run()
-      global.exitingTyper {
-        val sym = global.rootMirror.getClassIfDefined(encName)
-        global.definitions.fullyInitializeSymbol(sym)
-        def symbolToTree(sym: global.Symbol): global.Tree = sym match {
-          case x if x.isMethod => global.DefDef(sym, if (x.isDeferred) global.EmptyTree else global.gen.mkZero(global.definitions.NothingTpe))
-          case x if x.isValue => global.ValDef(sym)
-          case x if x.isAbstractType => global.TypeDef(sym)
-          case x if x.isClass => global.ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
-          case x if x.isModule => global.ModuleDef(sym, global.Template(sym, sym.info.decls.sorted.map(symbolToTree)))
-          case _ => global.EmptyTree
+      import global._
+      new Run()
+      exitingTyper {
+        val sym = {
+          val clsSym = rootMirror.getClassIfDefined(encName)
+          if (clsSym.exists) clsSym else rootMirror.getModuleIfDefined(encName)
         }
+        definitions.fullyInitializeSymbol(sym)
+        def modifyModifiers(tree: MemberDef)(f: Modifiers => Modifiers): Tree = tree match {
+          case PackageDef(pid, stats) => tree
+          case TypeDef(mods, name, tparams, rhs) => treeCopy.TypeDef(tree, f(mods), name, tparams, rhs)
+          case ClassDef(mods, name, tparams, impl) => treeCopy.ClassDef(tree, f(mods), name, tparams, impl)
+          case ModuleDef(mods, name, impl) => treeCopy.ModuleDef(tree, f(mods), name, impl)
+          case DefDef(mods, name, tparams, vparamss, tpt, rhs) => treeCopy.DefDef(tree, f(mods), name, tparams, vparamss, tpt, rhs)
+          case ValDef(mods, name, tpt, rhs) => treeCopy.ValDef(tree, f(mods), name, tpt, rhs)
+          case _ => tree
+        }
+        def annotate(tree: Tree) = tree match {
+          case ann: Annotated => ann
+          case md: MemberDef if tree.symbol != null =>
+            def annotationToTree(info: AnnotationInfo): Tree = {
+              New(info.atp, Nil) // TODO args
+            }
+            val annots = tree.symbol.annotations map annotationToTree
+            def modMods(mods: Modifiers): Modifiers = {
+              val mods1 = mods.copy(annotations = annots)
+              val mods2 = mods1.copy(privateWithin = tree.symbol.privateWithin match {
+                case NoSymbol => tpnme.EMPTY
+                case sym => sym.name
+              })
+              mods2
+            }
+            modifyModifiers(md)(modMods)
+          case _ => tree
+        }
+        def symbolToTree(sym: Symbol): Tree = annotate(sym match {
+          case x if x.isMethod =>
+            val rhs =
+              if (x.isDeferred) EmptyTree
+              else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
+              else CompiledCode
+              DefDef(sym, rhs)
+          case x if x.isAbstractType => TypeDef(sym)
+          case x if x.isClass =>
+            ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
+          case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
+          case x if x.isValue => ValDef(sym)
+          case _ => EmptyTree
+        })
         val tree = symbolToTree(sym)
-        println(global.showCode(tree))
+        println(showCode(tree))
       }
     }
     else

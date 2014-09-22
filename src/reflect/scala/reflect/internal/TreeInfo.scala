@@ -453,7 +453,7 @@ abstract class TreeInfo {
         } map { dd =>
           val DefDef(dmods, dname, _, _, _, drhs) = dd
           // get access flags from DefDef
-          val vdMods = (vmods &~ Flags.AccessFlags) | (dmods & Flags.AccessFlags).flags
+          val vdMods = ((vmods &~ Flags.AccessFlags) | (dmods & Flags.AccessFlags).flags).copy(privateWithin = dmods.privateWithin)
           // for most cases lazy body should be taken from accessor DefDef
           val vdRhs = if (vmods.isLazy) lazyValDefRhs(drhs) else vrhs
           copyValDef(vd)(mods = vdMods, name = dname, rhs = vdRhs)
