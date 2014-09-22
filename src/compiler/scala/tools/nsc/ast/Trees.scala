@@ -20,6 +20,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   // --- additional cases --------------------------------------------------------
   /** Only used during parsing */
   case class Parens(args: List[Tree]) extends Tree
+  case class Braces(arg: Tree) extends Tree
 
   /** Documented definition, eliminated by analyzer */
   case class DocDef(comment: DocComment, definition: Tree)
@@ -86,6 +87,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   override protected def xtraverse(traverser: Traverser, tree: Tree): Unit = tree match {
     case Parens(ts) =>
       traverser.traverseTrees(ts)
+    case Braces(t) =>
+      traverser.traverse(t)
     case DocDef(comment, definition) =>
       traverser.traverse(definition)
     case SelectFromArray(qualifier, selector, erasure) =>

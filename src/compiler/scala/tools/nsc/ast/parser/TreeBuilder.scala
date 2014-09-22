@@ -45,6 +45,8 @@ abstract class TreeBuilder {
 
   def stripParens(t: Tree) = t match {
     case Parens(ts) => atPos(t.pos) { makeTupleTerm(ts) }
+    case Braces(EmptyTree)  => atPos(t.pos) { makeTupleTerm(Nil) }
+    case Braces(t)  => t
     case _ => t
   }
 
@@ -65,6 +67,7 @@ abstract class TreeBuilder {
     def mkNamed(args: List[Tree]) = if (isExpr) args map treeInfo.assignmentToMaybeNamedArg else args
     val arguments = right match {
       case Parens(args) => mkNamed(args)
+      case Braces(t)    => List(t)
       case _            => List(right)
     }
     if (isExpr) {

@@ -89,6 +89,10 @@ trait ParsersCommon extends ScannersCommon { self =>
      */
     @inline final def makeParens(body: => List[Tree]): Parens =
       Parens(inParens(if (in.token == RPAREN) Nil else body))
+    /** Creates an actual Braces node (only used during parsing.)
+     */
+    @inline final def makeBraces(body: => Tree): Braces =
+      Braces(inBraces(if (in.token == RBRACE) EmptyTree else body))
   }
 }
 
@@ -710,6 +714,7 @@ self =>
     /** Convert tree to formal parameter list. */
     def convertToParams(tree: Tree): List[ValDef] = tree match {
       case Parens(ts) => ts map convertToParam
+      case Braces(t)  => List(convertToParam(t))
       case _          => List(convertToParam(tree))
     }
 
@@ -1604,7 +1609,7 @@ self =>
             atPos(in.offset)(makeParens(commaSeparated(expr())))
           case LBRACE =>
             canApply = false
-            blockExpr()
+            blockExprBraces()
           case NEW =>
             canApply = false
             val nstart = in.skipToken()
@@ -1689,6 +1694,12 @@ self =>
         if (in.token == CASE) Match(EmptyTree, caseClauses())
         else block()
       }
+    }
+    def blockExprBraces(): Tree = atPos(in.offset) {
+      atPos(in.offset)(makeBraces(
+        if (in.token == CASE) Match(EmptyTree, caseClauses())
+        else block()
+      ))
     }
 
     /** {{{
