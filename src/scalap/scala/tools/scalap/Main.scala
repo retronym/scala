@@ -72,7 +72,7 @@ class Main {
         }
 
         override def xprintTree(treePrinter: TreePrinterInternal, tree: Tree): Unit = tree match {
-          case CompiledCode => treePrinter.print("{ /* compiled code */ }")
+          case CompiledCode => treePrinter.print("{ throw null; /* compiled code */ }")
           case _ => super.xprintTree(treePrinter, tree)
 
         }
@@ -90,105 +90,105 @@ class Main {
       val global = new CustomGlobal
       import global._
       new Run()
-      exitingTyper {
-        val sym = {
-          val clsSym = rootMirror.getClassIfDefined(encName)
-          if (clsSym.exists) clsSym else rootMirror.getModuleIfDefined(encName)
-        }
+      def toTree(sym: Symbol) = {
         definitions.fullyInitializeSymbol(sym)
-        def modifyModifiers(tree: MemberDef)(f: Modifiers => Modifiers): Tree = tree match {
-          case PackageDef(pid, stats) => tree
-          case TypeDef(mods, name, tparams, rhs) => treeCopy.TypeDef(tree, f(mods), name, tparams, rhs)
-          case ClassDef(mods, name, tparams, impl) => treeCopy.ClassDef(tree, f(mods), name, tparams, impl)
-          case ModuleDef(mods, name, impl) => treeCopy.ModuleDef(tree, f(mods), name, impl)
-          case DefDef(mods, name, tparams, vparamss, tpt, rhs) => treeCopy.DefDef(tree, f(mods), name, tparams, vparamss, tpt, rhs)
-          case ValDef(mods, name, tpt, rhs) => treeCopy.ValDef(tree, f(mods), name, tpt, rhs)
-          case _ => tree
-        }
-        def annotationToTree(info: AnnotationInfo): Tree = {
-          New(info.atp, Nil) // TODO args
-        }
-        def annotate(tree: Tree) = tree match {
-          case ann: Annotated => ann
-          case md: MemberDef if tree.symbol != null =>
-            val annots = tree.symbol.annotations map annotationToTree
-            def modMods(mods: Modifiers): Modifiers = {
-              val mods1 = mods.copy(annotations = annots)
-              val mods2 = mods1.copy(privateWithin = tree.symbol.privateWithin match {
-                case NoSymbol => tpnme.EMPTY
-                case sym => sym.name
-              })
-              mods2
-            }
-            modifyModifiers(md)(modMods)
-          case _ => tree
-        }
-        def symbolToTree(sym: Symbol): Tree = annotate(sym match {
-          case x if x.isMethod =>
-            val rhs =
-              if (x.isDeferred) EmptyTree
-              else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
-              else CompiledCode
-              DefDef(sym, rhs)
-          case x if x.isAbstractType || x.isTypeParameter => TypeDef(sym)
-          case x if x.isClass =>
-            ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
-          case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
-          case x if x.isValue =>
-            ValDef(sym)
-          case _ => EmptyTree
-        })
-        val tree = symbolToTree(sym)
-
-        object TypeExpander extends Transformer {
-          private def transformType(tp: Type) = transform(TypeTree(tp))
-          override def transform(tree: Tree): Tree = tree match {
-            case TypeTree() =>
-              tree.tpe match {
-                case ExistentialType(quantified, underlying) => ExistentialTypeTree(transformType(underlying), transformTrees(quantified map symbolToTree).asInstanceOf[List[MemberDef]])
-                case AnnotatedType(annotations, underlying) => (transformType(underlying) /: annotations)((accum, annot) => Annotated(annotationToTree(annot), accum))
-                case tp: CompoundType => CompoundTypeTree(Template(tp.parents map transformType, emptyValDef /*TODO*/ , transformTrees(tp.decls.sorted.map(symbolToTree))))
-                case TypeRef(pre, sym, args) =>
-                  val typefun = pre match {
-                    case NoPrefix =>
-                      Ident(sym)
-                    case _ =>
-                      def qualifiedRef = {
-                        val preTree = transformType(pre)
-                        preTree match {
-                          case SingletonTypeTree(ref) =>
-                            Select(ref, sym.name.toTypeName).setSymbol(sym)
-                          case _ =>
-                            SelectFromTypeTree(preTree, sym.name.toTypeName).setSymbol(sym)
-                        }
-                      }
-                      pre match {
-                        case ThisType(thissym) if thissym.info.decl(sym.name) != sym =>
-                          val superSym = thissym.parentSymbols.reverseIterator.find(_.info.member(sym.name) == sym).getOrElse(sym.owner /*TODO*/)
-                          Select(Super(This(pre.typeSymbol), superSym.name.toTypeName), sym.name.toTypeName)
-                        case _ =>
-                          qualifiedRef
-                      }
-                  }
-                  gen.mkAppliedTypeTree(typefun, args map transformType)
-                case ThisType(sym) => SingletonTypeTree(This(sym))
-                case SingleType(pre, sym) => SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
-                case ConstantType(const) =>
-                  transformType(const.tpe).updateAttachment(new CommentTreeAttachment(const.toString))
-              }
-            case TypeBoundsTree(lo, hi) =>
-              val loTree = if (lo.tpe == definitions.NothingTpe) EmptyTree else lo
-              val hiTree = if (hi.tpe == definitions.AnyTpe) EmptyTree else hi
-              TypeBoundsTree(loTree, hiTree)
-            case _ => super.transform(tree)
+        exitingTyper {
+          def modifyModifiers(tree: MemberDef)(f: Modifiers => Modifiers): Tree = tree match {
+            case PackageDef(pid, stats) => tree
+            case TypeDef(mods, name, tparams, rhs) => treeCopy.TypeDef(tree, f(mods), name, tparams, rhs)
+            case ClassDef(mods, name, tparams, impl) => treeCopy.ClassDef(tree, f(mods), name, tparams, impl)
+            case ModuleDef(mods, name, impl) => treeCopy.ModuleDef(tree, f(mods), name, impl)
+            case DefDef(mods, name, tparams, vparamss, tpt, rhs) => treeCopy.DefDef(tree, f(mods), name, tparams, vparamss, tpt, rhs)
+            case ValDef(mods, name, tpt, rhs) => treeCopy.ValDef(tree, f(mods), name, tpt, rhs)
+            case _ => tree
           }
+          def annotate(tree: Tree) = tree match {
+            case ann: Annotated => ann
+            case md: MemberDef if tree.symbol != null =>
+              val annots = tree.symbol.annotations map annotationToTree
+              def modMods(mods: Modifiers): Modifiers = {
+                val mods1 = mods.copy(annotations = annots)
+                val mods2 = mods1.copy(privateWithin = tree.symbol.privateWithin match {
+                  case NoSymbol => tpnme.EMPTY
+                  case sym => sym.name
+                })
+                mods2
+              }
+              modifyModifiers(md)(modMods)
+            case _ => tree
+          }
+          def symbolToTree(sym: Symbol): Tree = annotate(sym match {
+            case x if x.isMethod =>
+              val rhs =
+                if (x.isDeferred) EmptyTree
+                else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
+                else CompiledCode
+              DefDef(sym, rhs)
+            case x if x.isAbstractType || x.isTypeParameter => TypeDef(sym)
+            case x if x.isClass =>
+              ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
+            case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
+            case x if x.isValue =>
+              ValDef(sym, CompiledCode)
+            case _ => EmptyTree
+          })
+          val tree = symbolToTree(sym)
+
+          object TypeExpander extends Transformer {
+            private def transformType(tp: Type) = transform(TypeTree(tp))
+
+            override def transform(tree: Tree): Tree = tree match {
+              case TypeTree() =>
+                tree.tpe match {
+                  case ExistentialType(quantified, underlying) => ExistentialTypeTree(transformType(underlying), transformTrees(quantified map symbolToTree).asInstanceOf[List[MemberDef]])
+                  case AnnotatedType(annotations, underlying) => (transformType(underlying) /: annotations)((accum, annot) => Annotated(annotationToTree(annot), accum))
+                  case tp: CompoundType => CompoundTypeTree(Template(tp.parents map transformType, emptyValDef /*TODO*/ , transformTrees(tp.decls.sorted.map(symbolToTree))))
+                  case TypeRef(pre, sym, args) =>
+                    val typefun = pre match {
+                      case NoPrefix =>
+                        Ident(sym)
+                      case _ =>
+                        def qualifiedRef = {
+                          val preTree = transformType(pre)
+                          preTree match {
+                            case SingletonTypeTree(ref) =>
+                              Select(ref, sym.name.toTypeName).setSymbol(sym)
+                            case _ =>
+                              SelectFromTypeTree(preTree, sym.name.toTypeName).setSymbol(sym)
+                          }
+                        }
+                        pre match {
+                          case ThisType(thissym) if thissym.info.decl(sym.name) != sym =>
+                            val superSym = thissym.parentSymbols.reverseIterator.find(_.info.member(sym.name) == sym).getOrElse(sym.owner /*TODO*/)
+                            Select(Super(This(pre.typeSymbol), superSym.name.toTypeName), sym.name.toTypeName)
+                          case _ =>
+                            qualifiedRef
+                        }
+                    }
+                    gen.mkAppliedTypeTree(typefun, args map transformType)
+                  case ThisType(sym) => SingletonTypeTree(This(sym))
+                  case SingleType(pre, sym) => SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
+                  case ConstantType(const) =>
+                    transformType(const.tpe).updateAttachment(new CommentTreeAttachment(const.toString))
+                }
+              case TypeBoundsTree(lo, hi) =>
+                val loTree = if (lo.tpe == definitions.NothingTpe) EmptyTree else lo
+                val hiTree = if (hi.tpe == definitions.AnyTpe) EmptyTree else hi
+                TypeBoundsTree(loTree, hiTree)
+              case _ => super.transform(tree)
+            }
+          }
+          TypeExpander.transform(tree)
         }
-        val tree2 = TypeExpander.transform(tree)
-
-        val tree3 = PackageDef(Ident(sym.owner.fullName), tree2 :: Nil)
-
-        println(showCode(tree3, printRootPkg = true))
       }
+      val clsSym = rootMirror.getClassIfDefined(encName)
+      val moduleSym = rootMirror.getModuleIfDefined(encName)
+      val stats = (if (clsSym.exists) List(toTree(clsSym)) else Nil) ++ (if (moduleSym.exists) List(toTree(moduleSym)) else Nil)
+      val owner = if (clsSym.exists) clsSym.owner else moduleSym.owner
+
+      val tree = PackageDef(Ident(owner.fullName), stats)
+
+      println(showCode(tree, printRootPkg = true))
     }
     else
       Console.println("class/object " + classname + " not found.")
