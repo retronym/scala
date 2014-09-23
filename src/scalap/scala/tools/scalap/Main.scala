@@ -179,9 +179,7 @@ class Main {
             case TypeBoundsTree(lo, hi) =>
               val loTree = if (lo.tpe == definitions.NothingTpe) EmptyTree else lo
               val hiTree = if (hi.tpe == definitions.AnyTpe) EmptyTree else hi
-              val t = TypeBoundsTree(loTree, hiTree)
-              println((lo, hi, t))
-              t
+              TypeBoundsTree(loTree, hiTree)
             case _ => super.transform(tree)
           }
         }
