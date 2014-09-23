@@ -10,6 +10,7 @@ package tools.scalap
 
 import java.io.{PrintWriter, PrintStream, OutputStreamWriter, ByteArrayOutputStream}
 import scala.reflect.NameTransformer
+import scala.reflect.internal.Flags
 import scala.tools.nsc.Settings
 import scala.tools.nsc.backend.JavaPlatform
 import scala.tools.nsc.reporters.ConsoleReporter
@@ -122,52 +123,91 @@ class Main {
               val rhs =
                 if (x.isDeferred) EmptyTree
                 else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
+                else if (x.isConstructor) Block(Apply(This(tpnme.EMPTY), Nil), CompiledCode)
                 else CompiledCode
-              DefDef(sym, rhs)
+              val tree = DefDef(sym, rhs)
+              if (sym.isAuxiliaryConstructor)
+                copyDefDef(tree)(tpt = EmptyTree)
+              else tree
+            case x if x.isAliasType => TypeDef(sym, TypeTree(sym.info.dealias))
             case x if x.isAbstractType || x.isTypeParameter => TypeDef(sym)
             case x if x.isClass =>
-              ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
+              ClassDef(sym, sym.info.decls.sorted.map(symbolToTree)) // TODO generate dummy arguments to super constructor call
             case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
             case x if x.isValue =>
-              ValDef(sym, CompiledCode)
+              val result = ValDef(sym, CompiledCode)
+              if (result.mods.isLazy && result.mods.isMutable)
+                copyValDef(result)(mods = result.mods &~ Flags.LAZY)
+              else result
             case _ => EmptyTree
           })
           val tree = symbolToTree(sym)
 
           object TypeExpander extends Transformer {
             private def transformType(tp: Type) = transform(TypeTree(tp))
+            def fullyQualified(sym: Symbol): Tree = {
+              sym.ownerChain.takeWhile(_ != RootClass).reverse.foldLeft(Ident(RootClass.sourceModule): Tree)((accum, sym) => Select(accum, sym.sourceModule.orElse(sym).name))
+            }
 
             override def transform(tree: Tree): Tree = tree match {
               case TypeTree() =>
                 tree.tpe match {
                   case ExistentialType(quantified, underlying) => ExistentialTypeTree(transformType(underlying), transformTrees(quantified map symbolToTree).asInstanceOf[List[MemberDef]])
                   case AnnotatedType(annotations, underlying) => (transformType(underlying) /: annotations)((accum, annot) => Annotated(annotationToTree(annot), accum))
-                  case tp: CompoundType => CompoundTypeTree(Template(tp.parents map transformType, emptyValDef /*TODO*/ , transformTrees(tp.decls.sorted.map(symbolToTree))))
+                  case tp: CompoundType =>
+                    val decls = tp.decls.sorted.map(symbolToTree).map {
+                      case md: MemberDef =>
+                        modifyModifiers(md)(_ &~ Flag.OVERRIDE) match {
+                          case vd: ValDef => copyValDef(vd)(rhs = EmptyTree)
+                          case dd: DefDef => copyDefDef(dd)(rhs = EmptyTree)
+                          case t => t
+                        }
+                      case t => t
+                    }
+                    CompoundTypeTree(Template(tp.parents map transformType, emptyValDef /*TODO*/ , transformTrees(decls)))
+                  case TypeRef(_, sym, args) if sym.isExistential || sym.isTypeParameter =>
+                    gen.mkAppliedTypeTree(Ident(sym), args map transformType)
                   case TypeRef(pre, sym, args) =>
                     val typefun = pre match {
                       case NoPrefix =>
-                        Ident(sym)
+                        fullyQualified(sym)
                       case _ =>
                         def qualifiedRef = {
                           val preTree = transformType(pre)
                           preTree match {
-                            case SingletonTypeTree(ref) =>
+                            case SingletonTypeTree(ref) if sym.isType =>
                               Select(ref, sym.name.toTypeName).setSymbol(sym)
                             case _ =>
                               SelectFromTypeTree(preTree, sym.name.toTypeName).setSymbol(sym)
                           }
                         }
                         pre match {
-                          case ThisType(thissym) if thissym.info.decl(sym.name) != sym =>
+                          case ThisType(thissym) if sym.isType && thissym.info.decl(sym.name) != sym =>
                             val superSym = thissym.parentSymbols.reverseIterator.find(_.info.member(sym.name) == sym).getOrElse(sym.owner /*TODO*/)
                             Select(Super(This(pre.typeSymbol), superSym.name.toTypeName), sym.name.toTypeName)
+                          case SingleType(_, thissym) if thissym.isPackageClass =>
+                            Select(fullyQualified(thissym), sym.name).setSymbol(sym)
+                          case SingleType(_, _) if pre.typeSymbol.isPackageObjectClass =>
+                            Select(Select(fullyQualified(pre.typeSymbol.owner), nme.PACKAGE), sym).setSymbol(sym)
+                          case ThisType(thissym) if thissym.isStaticOwner =>
+                            Select(fullyQualified(thissym), sym.name).setSymbol(sym)
+                          case SingleType(pre, thissym)  =>
+                            Select(transformType(typeRef(pre, thissym, Nil)), sym.name).setSymbol(sym)
+                          case ThisType(thissym)  =>
+                            Select(This(thissym), sym.name).setSymbol(sym)
                           case _ =>
                             qualifiedRef
                         }
                     }
                     gen.mkAppliedTypeTree(typefun, args map transformType)
-                  case ThisType(sym) => SingletonTypeTree(This(sym))
-                  case SingleType(pre, sym) => SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
+                  case ThisType(sym) =>
+                    SingletonTypeTree(This(sym))
+                  case SingleType(pre1, sym) if pre1.typeSymbol.isPackageClass && sym.isTerm =>
+                    SingletonTypeTree(Select(fullyQualified(pre1.typeSymbol), sym.name).setSymbol(sym))
+                  case SingleType(ThisType(thissym), sym) if sym.isTerm =>
+                    SingletonTypeTree(Select(This(thissym), sym.name).setSymbol(sym))
+                  case SingleType(pre, sym) =>
+                    SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
                   case ConstantType(const) =>
                     transformType(const.tpe).updateAttachment(new CommentTreeAttachment(const.toString))
                 }
