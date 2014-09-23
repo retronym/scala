@@ -94,12 +94,12 @@ class Main {
           case ValDef(mods, name, tpt, rhs) => treeCopy.ValDef(tree, f(mods), name, tpt, rhs)
           case _ => tree
         }
+        def annotationToTree(info: AnnotationInfo): Tree = {
+          New(info.atp, Nil) // TODO args
+        }
         def annotate(tree: Tree) = tree match {
           case ann: Annotated => ann
           case md: MemberDef if tree.symbol != null =>
-            def annotationToTree(info: AnnotationInfo): Tree = {
-              New(info.atp, Nil) // TODO args
-            }
             val annots = tree.symbol.annotations map annotationToTree
             def modMods(mods: Modifiers): Modifiers = {
               val mods1 = mods.copy(annotations = annots)
@@ -119,7 +119,7 @@ class Main {
               else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
               else CompiledCode
               DefDef(sym, rhs)
-          case x if x.isAbstractType => TypeDef(sym)
+          case x if x.isAbstractType || x.isTypeParameter => TypeDef(sym)
           case x if x.isClass =>
             ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
           case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
@@ -127,7 +127,54 @@ class Main {
           case _ => EmptyTree
         })
         val tree = symbolToTree(sym)
-        println(showCode(tree))
+
+        object TypeExpander extends Transformer {
+          private def transformType(tp: Type) = transform(TypeTree(tp))
+          override def transform(tree: Tree): Tree = tree match {
+            case TypeTree() =>
+              tree.tpe match {
+                case ExistentialType(quantified, underlying) => ExistentialTypeTree(transformType(underlying), transformTrees(quantified map symbolToTree).asInstanceOf[List[MemberDef]])
+                case AnnotatedType(annotations, underlying) => (transformType(underlying) /: annotations)((accum, annot) => Annotated(annotationToTree(annot), accum))
+                case tp: CompoundType => CompoundTypeTree(Template(tp.parents map transformType, emptyValDef /*TODO*/ , transformTrees(tp.decls.sorted.map(symbolToTree))))
+                case TypeRef(pre, sym, args) =>
+                  val typefun = pre match {
+                    case NoPrefix =>
+                      Ident(sym)
+                    case _ =>
+                      def qualifiedRef = {
+                        val preTree = transformType(pre)
+                        preTree match {
+                          case SingletonTypeTree(ref) =>
+                            Select(ref, sym.name.toTypeName).setSymbol(sym)
+                          case _ =>
+                            SelectFromTypeTree(preTree, sym.name.toTypeName).setSymbol(sym)
+                        }
+                      }
+                      pre match {
+                        case ThisType(thissym) if thissym.info.decl(sym.name) != sym =>
+                          val superSym = thissym.parentSymbols.reverseIterator.find(_.info.member(sym.name) == sym).getOrElse(sym.owner /*TODO*/)
+                          Select(Super(This(pre.typeSymbol), superSym.name.toTypeName), sym.name.toTypeName)
+                        case _ =>
+                          qualifiedRef
+                      }
+                  }
+                  gen.mkAppliedTypeTree(typefun, args map transformType)
+                case ThisType(sym) => SingletonTypeTree(This(sym))
+                case SingleType(pre, sym) => SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
+              }
+            case TypeBoundsTree(lo, hi) =>
+              val loTree = if (lo.tpe == definitions.NothingTpe) EmptyTree else lo
+              val hiTree = if (hi.tpe == definitions.AnyTpe) EmptyTree else hi
+              val t = TypeBoundsTree(loTree, hiTree)
+              println((lo, hi, t))
+              t
+            case _ => super.transform(tree)
+          }
+        }
+        val tree2 = TypeExpander.transform(tree)
+
+        println(showCode(tree2))
+        println(showRaw(tree2))
       }
     }
     else
