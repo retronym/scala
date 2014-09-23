@@ -8,7 +8,7 @@
 package scala
 package tools.scalap
 
-import java.io.{ PrintStream, OutputStreamWriter, ByteArrayOutputStream }
+import java.io.{PrintWriter, PrintStream, OutputStreamWriter, ByteArrayOutputStream}
 import scala.reflect.NameTransformer
 import scala.tools.nsc.Settings
 import scala.tools.nsc.backend.JavaPlatform
@@ -74,6 +74,17 @@ class Main {
         override def xprintTree(treePrinter: TreePrinterInternal, tree: Tree): Unit = tree match {
           case CompiledCode => treePrinter.print("{ /* compiled code */ }")
           case _ => super.xprintTree(treePrinter, tree)
+
+        }
+
+        override def newCodePrinter(writer: PrintWriter, tree: Tree, printRootPkg: Boolean): TreePrinterInternal = new CodePrinter(writer, printRootPkg) {
+          override def processTreePrinting(tree: Tree): Unit = {
+            super.processTreePrinting(tree)
+            tree.attachments.get[CommentTreeAttachment] match {
+              case Some(attach) => print(s"/* ${attach.payload} */")
+              case _ =>
+            }
+          }
         }
       }
       val global = new CustomGlobal
@@ -123,7 +134,8 @@ class Main {
           case x if x.isClass =>
             ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
           case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
-          case x if x.isValue => ValDef(sym)
+          case x if x.isValue =>
+            ValDef(sym)
           case _ => EmptyTree
         })
         val tree = symbolToTree(sym)
@@ -161,6 +173,8 @@ class Main {
                   gen.mkAppliedTypeTree(typefun, args map transformType)
                 case ThisType(sym) => SingletonTypeTree(This(sym))
                 case SingleType(pre, sym) => SingletonTypeTree(Select(transformType(pre), sym.name).setSymbol(sym))
+                case ConstantType(const) =>
+                  transformType(const.tpe).updateAttachment(new CommentTreeAttachment(const.toString))
               }
             case TypeBoundsTree(lo, hi) =>
               val loTree = if (lo.tpe == definitions.NothingTpe) EmptyTree else lo
@@ -173,8 +187,7 @@ class Main {
         }
         val tree2 = TypeExpander.transform(tree)
 
-        println(showCode(tree2))
-        println(showRaw(tree2))
+        println(showCode(tree2, printRootPkg = true))
       }
     }
     else
@@ -247,3 +260,5 @@ object Main extends Main {
     arguments.getOthers foreach process(arguments, path)
   }
 }
+
+private class CommentTreeAttachment(val payload: String)
