@@ -185,7 +185,9 @@ class Main {
         }
         val tree2 = TypeExpander.transform(tree)
 
-        println(showCode(tree2, printRootPkg = true))
+        val tree3 = PackageDef(Ident(sym.owner.fullName), tree2 :: Nil)
+
+        println(showCode(tree3, printRootPkg = true))
       }
     }
     else
