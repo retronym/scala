@@ -137,7 +137,7 @@ class Main {
             case x if x.isValue =>
               val result = ValDef(sym, CompiledCode)
               if (result.mods.isLazy && result.mods.isMutable)
-                copyValDef(result)(mods = result.mods &~ Flags.LAZY)
+                copyValDef(result)(mods = result.mods &~ Flags.MUTABLE) // TODO fix this in ReificationSupport ?
               else result
             case _ => EmptyTree
           })
@@ -157,7 +157,7 @@ class Main {
                   case tp: CompoundType =>
                     val decls = tp.decls.sorted.map(symbolToTree).map {
                       case md: MemberDef =>
-                        modifyModifiers(md)(_ &~ Flag.OVERRIDE) match {
+                        modifyModifiers(md)(_ &~ Flag.OVERRIDE & Flag.DEFERRED) match {
                           case vd: ValDef => copyValDef(vd)(rhs = EmptyTree)
                           case dd: DefDef => copyDefDef(dd)(rhs = EmptyTree)
                           case t => t
