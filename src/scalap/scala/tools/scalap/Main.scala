@@ -123,7 +123,8 @@ class Main {
               val rhs =
                 if (x.isDeferred) EmptyTree
                 else if (x.isPrimaryConstructor) Block(gen.mkSyntheticUnit(), CompiledCode)
-                else if (x.isConstructor) Block(Apply(This(tpnme.EMPTY), Nil), CompiledCode)
+                else if (x.isConstructor)
+                  Block(Apply(This(tpnme.EMPTY), Nil), CompiledCode)
                 else CompiledCode
               val tree = DefDef(sym, rhs)
               if (sym.isAuxiliaryConstructor)
@@ -132,7 +133,7 @@ class Main {
             case x if x.isAliasType => TypeDef(sym, TypeTree(sym.info.dealias))
             case x if x.isAbstractType || x.isTypeParameter => TypeDef(sym)
             case x if x.isClass =>
-              ClassDef(sym, sym.info.decls.sorted.map(symbolToTree)) // TODO generate dummy arguments to super constructor call
+              ClassDef(sym, sym.info.decls.sorted.map(symbolToTree))
             case x if x.isModule => ModuleDef(sym, Template(sym, sym.info.decls.sorted.map(symbolToTree)))
             case x if x.isValue =>
               val result = ValDef(sym, CompiledCode)
@@ -182,7 +183,7 @@ class Main {
                           }
                         }
                         pre match {
-                          case ThisType(thissym) if sym.isType && thissym.info.decl(sym.name) != sym =>
+                          case ThisType(thissym) if !thissym.isPackageClass && sym.isType && thissym.info.decl(sym.name) != sym =>
                             val superSym = thissym.parentSymbols.reverseIterator.find(_.info.member(sym.name) == sym).getOrElse(sym.owner /*TODO*/)
                             Select(Super(This(pre.typeSymbol), superSym.name.toTypeName), sym.name.toTypeName)
                           case SingleType(_, thissym) if thissym.isPackageClass =>
