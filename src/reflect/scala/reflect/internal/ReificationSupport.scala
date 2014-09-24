@@ -299,7 +299,7 @@ trait ReificationSupport { self: SymbolTable =>
               case other => other
             }
             // undo flag modifications by merging flag info from constructor args and fieldDefs
-            val modsMap = fieldDefs.map { case ValDef(mods, name, _, _) => name -> mods }.toMap
+            val modsMap = fieldDefs.map { case ValDef(mods, name, _, _) => nme.unexpandedName(name) -> mods }.toMap
             def ctorArgsCorrespondToFields = vparamssRestoredImplicits.flatten.forall { vd => modsMap.contains(vd.name) }
             if (!ctorArgsCorrespondToFields) None
             else {
