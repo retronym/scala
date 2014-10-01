@@ -1244,7 +1244,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     val symbols =
       Set(UnitClass, BooleanClass, ByteClass,
           ShortClass, IntClass, LongClass, FloatClass,
-          DoubleClass, NilModule, ListClass) ++ TupleClass.seq
+          DoubleClass, NilModule, ListClass, OptionClass, SeqClass) ++ TupleClass.seq
     symbols.foreach(_.initialize)
   }
 

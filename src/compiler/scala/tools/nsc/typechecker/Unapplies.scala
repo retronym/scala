@@ -150,15 +150,15 @@ trait Unapplies extends ast.TreeDSL {
     val cparams    = List(ValDef(Modifiers(PARAM | SYNTHETIC), unapplyParamName, classType(cdef, tparams), EmptyTree))
     val resultType = {
       def repeatedToSeq(tp: Tree) = tp match {
-        case AppliedTypeTree(Select(_, tpnme.REPEATED_PARAM_CLASS_NAME), tps) => AppliedTypeTree(gen.rootScalaDot(tpnme.Seq), tps)
+        case AppliedTypeTree(Select(_, tpnme.REPEATED_PARAM_CLASS_NAME), tps) => AppliedTypeTree(Ident(definitions.SeqClass), tps)
         case _                                                                => tp
       }
       constrParamss(cdef) match {
         case Nil | Nil :: _ =>
-          gen.rootScalaDot(tpnme.Boolean)
+          Ident(definitions.BooleanClass)
         case params :: _ =>
           val constrParamTypes = params.map(param => repeatedToSeq(param.tpt))
-          AppliedTypeTree(gen.rootScalaDot(tpnme.Option), List(treeBuilder.makeTupleType(constrParamTypes)))
+          AppliedTypeTree(Ident(definitions.OptionClass), List(treeBuilder.makeTupleType(constrParamTypes)))
       }
     }
     val ifNull     = if (constrParamss(cdef).head.isEmpty) FALSE else REF(NoneModule)
