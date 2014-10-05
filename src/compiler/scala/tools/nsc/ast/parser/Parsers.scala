@@ -946,7 +946,7 @@ self =>
               val ts = typeParamClauseOpt(freshTypeName("typelambda"), null)
               if (in.token == ARROW) {
                 in.skipToken()
-                makeTypeLambdaTypeTree(ts, typ())
+                TypeFunction(ts, typ())
               } else {
                 syntaxError("`=>' expected", skipIt = false)
                 errorTypeTree

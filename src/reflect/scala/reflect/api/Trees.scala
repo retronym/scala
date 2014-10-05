@@ -1179,6 +1179,44 @@ trait Trees { self: Universe =>
     def body: Tree
   }
 
+  /** Anonymous type function
+    *  @group Trees
+    *  @template
+    */
+  type TypeFunction >: Null <: TypeFunctionApi with TypTree with SymTree
+
+  /** The constructor/extractor for `TypeFunction` instances.
+    *  @group Extractors
+    */
+  val TypeFunction: TypeFunctionExtractor
+
+  /** An extractor class to create and pattern match with syntax `TypeFunction(vparams, body)`.
+    *  This AST node corresponds to the following Scala code:
+    *
+    *    [tparams] => body
+    *
+    *  The symbol of a TypeFunction is a synthetic TypeSymbol.
+    *  It is the owner of the type function's parameters.
+    *  @group Extractors
+    */
+  abstract class TypeFunctionExtractor {
+    def apply(vparams: List[TypeDef], body: Tree): TypeFunction
+    def unapply(function: TypeFunction): Option[(List[TypeDef], Tree)]
+  }
+
+  /** The API that all type functions support
+   *  @group API
+   */
+  trait TypeFunctionApi extends TypTreeApi with SymTreeApi { this: TypeFunction =>
+    /** The list of type parameters of the type function.
+     */
+    def tparams: List[TypeDef]
+
+    /** The body of the type function.
+     */
+    def body: Tree
+  }
+
   /** Assignment
    *  @group Trees
    *  @template
@@ -2325,6 +2363,11 @@ trait Trees { self: Universe =>
      *  Having a tree as a prototype means that the tree's attachments, type and symbol will be copied into the result.
      */
     def Function(tree: Tree, vparams: List[ValDef], body: Tree): Function
+
+    /** Creates a `TypeFunction` node from the given components, having a given `tree` as a prototype.
+     *  Having a tree as a prototype means that the tree's attachments, type and symbol will be copied into the result.
+     */
+    def TypeFunction(tree: Tree, tparams: List[TypeDef], body: Tree): TypeFunction
 
     /** Creates a `Assign` node from the given components, having a given `tree` as a prototype.
      *  Having a tree as a prototype means that the tree's attachments, type and symbol will be copied into the result.

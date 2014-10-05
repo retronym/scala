@@ -298,6 +298,22 @@ trait Printers extends api.Printers { self: SymbolTable =>
         }
     }
 
+    protected def printTypeFunction(tree: TypeFunction)(printTypeParams: => Unit) = {
+      val TypeFunction(tparams, body) = tree
+      print("(");
+      printTypeParams
+      print(" => ", body, ")")
+      if (printIds && tree.symbol != null)
+        comment{
+          print("#" + tree.symbol.id)
+        }
+
+      if (printOwners && tree.symbol != null)
+        comment{
+          print("@" + tree.symbol.owner.id)
+        }
+    }
+
     protected def printSuper(tree: Super, resultName: => String, checkSymbol: Boolean = true) = {
       val Super(This(qual), mix) = tree
       if (qual.nonEmpty || (checkSymbol && tree.symbol != NoSymbol)) print(resultName + ".")
@@ -401,6 +417,9 @@ trait Printers extends api.Printers { self: SymbolTable =>
 
         case f @ Function(vparams, body) =>
           printFunction(f)(printValueParams(vparams))
+
+        case f @ TypeFunction(tparams, body) =>
+          printTypeFunction(f)(printTypeParams(tparams))
 
         case Assign(lhs, rhs) =>
           print(lhs, " = ", rhs)

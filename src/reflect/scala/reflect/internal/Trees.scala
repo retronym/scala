@@ -437,6 +437,11 @@ trait Trees extends api.Trees {
        extends SymTree with TermTree with FunctionApi
   object Function extends FunctionExtractor
 
+  case class TypeFunction(tparams: List[TypeDef], body: Tree)
+    extends SymTree with TypTree with TypeFunctionApi
+
+  object TypeFunction extends TypeFunctionExtractor
+
   case class Assign(lhs: Tree, rhs: Tree)
        extends TermTree with AssignApi
   object Assign extends AssignExtractor
@@ -684,6 +689,8 @@ trait Trees extends api.Trees {
       new ArrayValue(elemtpt, trees).copyAttrs(tree)
     def Function(tree: Tree, vparams: List[ValDef], body: Tree) =
       new Function(vparams, body).copyAttrs(tree)
+    def TypeFunction(tree: Tree, tparams: List[TypeDef], body: Tree) =
+      new TypeFunction(tparams, body).copyAttrs(tree)
     def Assign(tree: Tree, lhs: Tree, rhs: Tree) =
       new Assign(lhs, rhs).copyAttrs(tree)
     def AssignOrNamedArg(tree: Tree, lhs: Tree, rhs: Tree) =
@@ -833,6 +840,11 @@ trait Trees extends api.Trees {
       case t @ Function(vparams0, body0)
       if (vparams0 == vparams) && (body0 == body) => t
       case _ => treeCopy.Function(tree, vparams, body)
+    }
+    def TypeFunction(tree: Tree, tparams: List[TypeDef], body: Tree) = tree match {
+      case t @ TypeFunction(tparams0, body0)
+      if (tparams0 == tparams) && (body0 == body) => t
+      case _ => treeCopy.TypeFunction(tree, tparams, body)
     }
     def Assign(tree: Tree, lhs: Tree, rhs: Tree) = tree match {
       case t @ Assign(lhs0, rhs0)
@@ -1316,11 +1328,12 @@ trait Trees extends api.Trees {
 
     if (tree.canHaveAttrs) {
       tree match {
-        case PackageDef(pid, stats)  => traverse(pid) ; traverseStats(stats, mclass(tree.symbol))
-        case md: ModuleDef           => traverseMemberDef(md, mclass(tree.symbol))
-        case md: MemberDef           => traverseMemberDef(md, tree.symbol)
-        case Function(vparams, body) => atOwner(tree.symbol) { traverseParams(vparams) ; traverse(body) }
-        case _                       => traverseComponents()
+        case PackageDef(pid, stats)      => traverse(pid) ; traverseStats(stats, mclass(tree.symbol))
+        case md: ModuleDef               => traverseMemberDef(md, mclass(tree.symbol))
+        case md: MemberDef               => traverseMemberDef(md, tree.symbol)
+        case Function(vparams, body)     => atOwner(tree.symbol) { traverseParams(vparams) ; traverse(body) }
+        case TypeFunction(tparams, body) => atOwner(tree.symbol) { traverseParams(tparams) ; traverse(body) }
+        case _                           => traverseComponents()
       }
     }
   }
@@ -1370,6 +1383,10 @@ trait Trees extends api.Trees {
       case Function(vparams, body) =>
         atOwner(tree.symbol) {
           treeCopy.Function(tree, transformValDefs(vparams), transform(body))
+        }
+      case TypeFunction(tparams, body) =>
+        atOwner(tree.symbol) {
+          treeCopy.TypeFunction(tree, transformTypeDefs(tparams), transform(body))
         }
       case Match(selector, cases) =>
         treeCopy.Match(tree, transform(selector), transformCaseDefs(cases))
@@ -1476,7 +1493,7 @@ trait Trees extends api.Trees {
               tree.symbol = newowner
             }
           }
-        case _: DefTree | _: Function =>
+        case _: DefTree | _: Function | _: TypeFunction=>
           change(tree.symbol)
         case _ =>
       }

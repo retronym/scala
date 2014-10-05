@@ -471,6 +471,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def newAnonymousFunctionValue(pos: Position, newFlags: Long = 0L): TermSymbol =
       newTermSymbol(nme.ANON_FUN_NAME, pos, SYNTHETIC | newFlags) setInfo NoType
 
+    final def newAnonymousTypeFunction(pos: Position, newFlags: Long = 0L): TypeSymbol =
+      newTypeSymbol(tpnme.ANON_FUN_NAME, pos, SYNTHETIC | newFlags) setInfo NoType
+
     def newImplClass(name: TypeName, pos: Position = NoPosition, newFlags: Long = 0L): ClassSymbol = {
       newClassSymbol(name, pos, newFlags | IMPLCLASS)
     }

@@ -2195,6 +2195,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       treeCopy.DefDef(ddef, typedMods, ddef.name, tparams1, vparamss1, tpt1, rhs1) setType NoType
     }
 
+    def typedTypeFunction(tree: TypeFunction): Tree = {
+      // TODO duplication with typedTypeDef
+      tree.symbol.initialize
+      namer.createNamer(tree) enterSyms tree.tparams
+      reenterTypeParams(tree.tparams)
+      val tparams1 = tree.tparams mapConserve typedTypeDef
+      val rhs1 = checkNoEscaping.privates(tree.symbol, typedType(tree.body))
+      checkNonCyclic(tree.symbol)
+      val polyType = PolyType(tparams1.map(_.symbol), rhs1.tpe)
+      tree.symbol.setInfo(polyType)
+      treeCopy.TypeFunction(tree, tparams1, rhs1) setType polyType
+    }
+
     def typedTypeDef(tdef: TypeDef): TypeDef =
       typerWithCondLocalContext(context.makeNewScope(tdef, tdef.symbol))(tdef.tparams.nonEmpty) {
         _.typedTypeDefImpl(tdef)
@@ -5162,6 +5175,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         typerWithLocalContext(context.makeNewScope(fun, fun.symbol))(_.typedFunction(fun, mode, pt))
       }
+      def typedTypeFunction(fun: TypeFunction) = {
+        if (fun.symbol == NoSymbol)
+          fun.symbol = context.owner.newAnonymousTypeFunction(fun.pos)
+
+        typerWithLocalContext(context.makeNewScope(fun, fun.symbol))(_.typedTypeFunction(fun))
+      }
 
       // Trees only allowed during pattern mode.
       def typedInPatternMode(tree: Tree): Tree = tree match {
@@ -5179,6 +5198,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         case tree: CompoundTypeTree             => typedCompoundTypeTree(tree)
         case tree: ExistentialTypeTree          => typedExistentialTypeTree(tree)
         case tree: TypeTreeWithDeferredRefCheck => tree // TODO: retype the wrapped tree? TTWDRC would have to change to hold the wrapped tree (not a closure)
+        case tree: TypeFunction                 => typedTypeFunction(tree)
         case _                                  => abort(s"unexpected type-representing tree: ${tree.getClass}\n$tree")
       }
 
