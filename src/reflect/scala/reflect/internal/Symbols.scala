@@ -1506,6 +1506,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def setInfo(info: Type): this.type  = { info_=(info); this }
     /** Modifies this symbol's info in place. */
     def modifyInfo(f: Type => Type): this.type = setInfo(f(info))
+    def mutateTypeHistory(f: Type => Unit): this.type = {infos.toList.foreach(th => f(th.info)); this}
     /** Substitute second list of symbols for first in current info. */
     def substInfo(syms0: List[Symbol], syms1: List[Symbol]): this.type =
       if (syms0.isEmpty) this

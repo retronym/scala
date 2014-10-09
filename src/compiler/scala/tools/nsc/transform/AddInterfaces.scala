@@ -77,7 +77,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
           // -optimise and not otherwise, but the classpath can use arbitrary
           // logic so the classpath must be queried.
           if (classPath.context.isValidName(implName + ".class")) {
-            iface.owner.info.decls unlink implSym
+            iface.owner.mutateTypeHistory(_.decls unlink implSym)
             NoSymbol
           }
           else {
@@ -94,7 +94,13 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
       }
       impl.associatedFile = iface.sourceFile
       if (inClass)
-        iface.owner.info.decls enter impl
+        iface.owner.mutateTypeHistory{ (ownerInfo: Type) =>
+          val scope = ownerInfo.decls
+          val existing = scope.lookupEntry(impl.name)
+          if (existing != null)
+            scope.unlink(existing)
+          scope enter impl
+        }
 
       impl
     }
