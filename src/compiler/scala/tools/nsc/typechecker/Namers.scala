@@ -735,9 +735,35 @@ trait Namers extends MethodSynthesis {
       validateCompanionDefs(tree)
     }
 
-    // Hooks which are overridden in the presentation compiler
-    def enterExistingSym(sym: Symbol): Context = this.context
-    def enterIfNotThere(sym: Symbol) { }
+    // this logic is needed in case typer was interrupted half
+    // way through and then comes back to do the tree again. In
+    // that case the definitions that were already attributed as
+    // well as any default parameters of such methods need to be
+    // re-entered in the current scope.
+    def enterExistingSym(sym: Symbol): Context = {
+      if (isPastTyper) this // this condition is vital for SI-4716
+      else if (sym != null && sym.owner.isTerm) {
+        // ... and this handles reentrant typechecking of blocks in SI-5265.
+        enterIfNotThere(sym)
+        if (sym.isLazy)
+          sym.lazyAccessor andAlso enterIfNotThere
+
+        for (defAtt <- sym.attachments.get[DefaultsOfLocalMethodAttachment])
+          defAtt.defaultGetters foreach enterIfNotThere
+      }
+      context
+    }
+
+    def enterIfNotThere(sym: Symbol) {
+      val scope = context.scope
+      @tailrec def search(e: ScopeEntry) {
+        if ((e eq null) || (e.owner ne scope))
+          scope enter sym
+        else if (e.sym ne sym)  // otherwise, aborts since we found sym
+          search(e.tail)
+      }
+      search(scope lookupEntry sym.name)
+    }
 
     def enterSyntheticSym(tree: Tree): Symbol = {
       enterSym(tree)
