@@ -756,7 +756,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def isModuleNotMethod = {
       if (isModule) {
-        if (phase.refChecked) this.info // force completion to make sure lateMETHOD is there.
+        if (phase.refChecked) exitingPhase(refChecksPhase)(this.info) // force completion to make sure lateMETHOD is there.
         !isMethod
       } else false
     }
