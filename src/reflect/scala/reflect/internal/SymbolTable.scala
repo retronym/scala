@@ -402,6 +402,10 @@ abstract class SymbolTable extends macros.Universe
   @deprecated("Use enteringPhase", "2.10.0") // Used in SBT 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
+  private lazy val erasurePhase0 = findPhaseWithName("erasure")
+  private lazy val refchecksPhase0 = findPhaseWithName("refchecks")
+  def erasurePhase: Phase = erasurePhase0
+  def refChecksPhase: Phase = refchecksPhase0
 
   /**
    * Adds the `sm` String interpolator to a [[scala.StringContext]].

@@ -15,7 +15,7 @@ import scala.reflect.api.{TreeCreator, TypeCreator, Universe}
  */
 class JavaUniverse extends InternalSymbolTable with JavaUniverseForce with ReflectSetup with RuntimeSymbolTable { self =>
   def picklerPhase = SomePhase
-  def erasurePhase = SomePhase
+  override def erasurePhase = SomePhase
   lazy val settings = new Settings
 
   private val isLogging = sys.props contains "scala.debug.reflect"

@@ -1234,7 +1234,6 @@ trait Definitions extends api.StandardDefinitions {
       }
     }
 
-    private lazy val erasurePhase = findPhaseWithName("erasure")
     def getMemberIfDefined(owner: Symbol, name: Name): Symbol =
       // findMember considered harmful after erasure; e.g.
       //

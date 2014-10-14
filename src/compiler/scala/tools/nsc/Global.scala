@@ -89,7 +89,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   def picklerPhase: Phase = if (currentRun.isDefined) currentRun.picklerPhase else NoPhase
 
-  def erasurePhase: Phase = if (currentRun.isDefined) currentRun.erasurePhase else NoPhase
+  override def erasurePhase: Phase = if (currentRun.isDefined) currentRun.erasurePhase else NoPhase
 
   // platform specific elements
 
