@@ -49,10 +49,14 @@ object ScalaSigParser {
   }
 
   def parse(clazz: Class[_]): Option[ScalaSig] = {
-    val byteCode  = ByteCode.forClass(clazz)
-    val classFile = ClassFileParser.parse(byteCode)
-
-    parse(classFile)
+    try {
+      val byteCode  = ByteCode.forClass(clazz)
+      val classFile = ClassFileParser.parse(byteCode)
+      parse(classFile)
+    } catch {
+      case _: Throwable =>
+        throw new RuntimeException("Unable to load and parse bytecode for class " + clazz)
+    }
   }
 }
 
