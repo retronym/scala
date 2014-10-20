@@ -652,22 +652,15 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
       * .initialize: if 'annot' is read from pickle, atp might be uninitialized
       */
     private def shouldEmitAnnotation(annot: AnnotationInfo) = {
-      annot.symbol.initialize.isJavaDefined &&
-        annot.matches(ClassfileAnnotationClass) &&
+      annot.symbol.initialize
+      annot.matches(ClassfileAnnotationClass) &&
         retentionPolicyOf(annot) != AnnotationRetentionPolicySourceValue &&
         annot.args.isEmpty
     }
 
-    private def isRuntimeVisible(annot: AnnotationInfo): Boolean = {
-      annot.atp.typeSymbol.getAnnotation(AnnotationRetentionAttr) match {
-        case Some(retentionAnnot) =>
-          retentionAnnot.assocs.contains(nme.value -> LiteralAnnotArg(Constant(AnnotationRetentionPolicyRuntimeValue)))
-        case _ =>
-          // SI-8926: if the annotation class symbol doesn't have a @RetentionPolicy annotation, the
-          // annotation is emitted with visibility `RUNTIME`
-          true
-      }
-    }
+    private def isRuntimeVisible(annot: AnnotationInfo): Boolean =
+      annot.atp.typeSymbol.getAnnotation(AnnotationRetentionAttr)
+        .exists(_.assocs.contains((nme.value -> LiteralAnnotArg(Constant(AnnotationRetentionPolicyRuntimeValue)))))
 
     private def retentionPolicyOf(annot: AnnotationInfo): Symbol =
       annot.atp.typeSymbol.getAnnotation(AnnotationRetentionAttr).map(_.assocs).flatMap(assoc =>

@@ -3541,10 +3541,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
-    /**
-     * Convert an annotation constructor call into an AnnotationInfo.
-     */
+    /** Convert an annotation constructor call into an AnnotationInfo. */
     def typedAnnotation(ann: Tree, mode: Mode = EXPRmode): AnnotationInfo = {
+      //context.warning(ann.pos, ann.toString)
       var hasError: Boolean = false
       val pending = ListBuffer[AbsTypeError]()
       def ErroneousAnnotation = new ErroneousAnnotation().setOriginal(ann)

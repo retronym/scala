@@ -8,18 +8,16 @@
 
 package scala.annotation
 
-/** A base class for classfile annotations not visible at runtime.
+/** A base class for classfile annotations visible at runtime.
  *
  *  Inheriting from this trait is equivalent to adding the meta-annotation
- *  `@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.CLASS)`
+ *  `@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)`
  *  to an annotation in Java.
  *
  *  These are stored as
  *  [[http://docs.oracle.com/javase/7/docs/technotes/guides/language/annotations.html#_top Java annotations]]]
  *  in classfiles.
  *
- *  @author  Martin Odersky
- *  @version 1.1, 2/02/2007
- *  @since 2.4
+ *  @since 2.12
  */
-trait ClassfileAnnotation extends StaticAnnotation with ConstantAnnotation
+trait RuntimeAnnotation extends StaticAnnotation with ConstantAnnotation
