@@ -339,6 +339,9 @@ self =>
     }
     private def inScalaRootPackage = inScalaPackage && currentPackage == "scala"
 
+    // 42.type aka SIP-23
+    private[this] lazy val parseLiteralSingletonTypes = settings.Xexperimental.value
+
     def parseStartRule: () => Tree
 
     def parseRule[T](rule: this.type => T): T = {
@@ -674,11 +677,11 @@ self =>
 
     def isExprIntro: Boolean = isExprIntroToken(in.token)
 
-    def isTypeIntroToken(token: Token): Boolean = token match {
+    def isTypeIntroToken(token: Token): Boolean = (parseLiteralSingletonTypes && isLiteralToken(token)) || (token match {
       case IDENTIFIER | BACKQUOTED_IDENT | THIS |
            SUPER | USCORE | LPAREN | AT => true
       case _ => false
-    }
+    })
 
     def isStatSeqEnd = in.token == RBRACE || in.token == EOF
 
@@ -930,6 +933,7 @@ self =>
        *                     |  SimpleType `#' Id
        *                     |  StableId
        *                     |  Path `.' type
+       *                     |  Literal [`.' type]
        *                     |  `(' Types `)'
        *                     |  WildcardType
        *  }}}
@@ -939,7 +943,15 @@ self =>
         simpleTypeRest(in.token match {
           case LPAREN   => atPos(start)(makeTupleType(inParens(types())))
           case USCORE   => wildcardType(in.skipToken())
-          case _        =>
+          case tok if parseLiteralSingletonTypes && isLiteralToken(tok) => // SIP-23
+            // // TODO: if we go back to allowing an optional `.type` suffix:
+            // val lit = literal()
+            // if (in.token == DOT && lookingAhead { in.token == TYPE }) {
+            //   accept(DOT)
+            //   accept(TYPE)
+            // }
+            atPos(start)(SingletonTypeTree(literal()))
+          case _ =>
             path(thisOK = false, typeOK = true) match {
               case r @ SingletonTypeTree(_) => r
               case r => convertToTypeId(r)
