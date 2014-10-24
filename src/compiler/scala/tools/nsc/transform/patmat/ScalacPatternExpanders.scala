@@ -126,10 +126,22 @@ trait ScalacPatternExpanders {
       val patterns  = newPatterns(args)
       val isSeq = sel.symbol.name == nme.unapplySeq
       val isUnapply = sel.symbol.name == nme.unapply
+      def isMacro = sel.symbol.isMacro
+      def modifyFinalResultType(tp: Type)(f: Type => Type): Type = tp match {
+        case PolyType(tparams, tpe) => PolyType(tparams, modifyFinalResultType(tpe)(f))
+        case mt: MethodType => copyMethodType(mt, mt.params, modifyFinalResultType(mt.resultType)(f))
+        case _ => f(tp)
+      }
+      val fnType =
+        if (sel.symbol.isMacro)
+          // SI-8934 Sharpen the result type to account for whitebox macros, e.g. quasiquotes
+          //         The problem only manifest in the presentation compiler, for reasons unknown.
+          modifyFinalResultType(fn.tpe)(_ => sel.tpe)
+        else fn.tpe
       val extractor = sel.symbol.name match {
-        case nme.unapply    => unapplyMethodTypes(fn.tpe, isSeq = false)
-        case nme.unapplySeq => unapplyMethodTypes(fn.tpe, isSeq = true)
-        case _              => applyMethodTypes(fn.tpe)
+        case nme.unapply    => unapplyMethodTypes(fnType, isSeq = false)
+        case nme.unapplySeq => unapplyMethodTypes(fnType, isSeq = true)
+        case _              => applyMethodTypes(fnType)
       }
 
       /** Rather than let the error that is SI-6675 pollute the entire matching
