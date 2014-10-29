@@ -1770,7 +1770,8 @@ trait Namers extends MethodSynthesis {
     // SI-7264 Force the info of owners from previous compilation runs.
     //         Doing this generally would trigger cycles; that's what we also
     //         use the lower-level scan through the current Context as a fall back.
-    if (!currentRun.compiles(owner)) owner.initialize
+    if (!currentRun.compiles(owner) && !owner.rawInfo.isInstanceOf[TypeCompleter])
+      owner.initialize
     original.companionSymbol orElse {
       ctx.lookup(original.name.companionName, owner).suchThat(sym =>
         (original.isTerm || sym.hasModuleFlag) &&
