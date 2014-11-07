@@ -2788,7 +2788,7 @@ self =>
      */
     def packageObjectDef(start: Offset): PackageDef = {
       val defn   = objectDef(in.offset, NoMods)
-      val pidPos = o2p(defn.pos.startOrPoint)
+      val pidPos = defn.pos.makeTransparent
       val pkgPos = r2p(start, pidPos.point)
       gen.mkPackageObject(defn, pidPos, pkgPos)
     }
