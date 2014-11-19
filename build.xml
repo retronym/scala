@@ -752,6 +752,7 @@ TODO:
       <pathelement location="${build-locker.dir}/classes/library"/>
       <path refid="forkjoin.classpath"/>
       <path refid="aux.libs"/>
+      <path refid="scala-java8-compat.libs"/>
     </path>
 
     <path id="locker.reflect.build.path">
