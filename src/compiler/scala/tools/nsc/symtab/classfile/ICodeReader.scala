@@ -706,11 +706,13 @@ abstract class ICodeReader extends ClassfileParser {
     // reverse parameters, as they were prepended during code generation
     method.params = method.params.reverse
 
-    if (code.containsDUPX)
-      code.resolveDups()
+    if (!method.bytecodeHasInvokeDynamic) {
+      if (code.containsDUPX)
+        code.resolveDups()
 
-    if (code.containsNEW)
-      code.resolveNEWs()
+      if (code.containsNEW)
+        code.resolveNEWs()
+    }
   }
 
   /** Note: these methods are different from the methods of the same name found
