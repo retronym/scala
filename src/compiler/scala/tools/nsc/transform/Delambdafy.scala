@@ -353,8 +353,11 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
       }
 
       if (useLambdaMetafactory) {
-        val targetAttachment = LambdaMetaFactoryCapable(targetMethod(originalFunction), accessorMethod.symbol, originalFunction.vparams.length, functionalInterface)
-        anonymousClassDef.symbol.updateAttachment(targetAttachment)
+        if (functionalInterface.exists) {
+          val targetAttachment = LambdaMetaFactoryCapable(targetMethod(originalFunction), accessorMethod.symbol, originalFunction.vparams.length, functionalInterface)
+          anonymousClassDef.symbol.updateAttachment(targetAttachment)
+        } else
+          debuglog("unable to use invokedynamic lambdas as scala-java8-compat is absent from the compile time classpath")
       }
 
       val thisArg = optionSymbol(thisProxy) map (_ => gen.mkAttributedThis(oldClass) setPos originalFunction.pos)
