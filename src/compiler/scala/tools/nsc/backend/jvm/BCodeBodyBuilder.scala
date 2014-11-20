@@ -1316,7 +1316,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
   val lambdaMetaFactoryBootstrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "java/lang/invoke/LambdaMetafactory", "metafactory",
+      definitions.LambdaMetaFactory.fullName('/'), sn.Metafactory.toString,
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
 
 }

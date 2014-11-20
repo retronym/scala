@@ -221,7 +221,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
       val decls1 = scopeTransform(clazz)(
         decls filter (sym =>
           if (clazz.isInterface) isInterfaceMember(sym)
-          else sym.isClass || sym.isTerm
+          else sym.isClass || sym.isTerm || (sym.isAliasType && sym.owner == ScalaPackageClass)
         )
       )
       ClassInfoType(parents1, decls1, clazz)

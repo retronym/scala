@@ -511,6 +511,8 @@ trait Definitions extends api.StandardDefinitions {
     lazy val QuasiquoteClass_api_apply   = if (QuasiquoteClass_api != NoSymbol) getMember(QuasiquoteClass_api, nme.apply) else NoSymbol
     lazy val QuasiquoteClass_api_unapply = if (QuasiquoteClass_api != NoSymbol) getMember(QuasiquoteClass_api, nme.unapply) else NoSymbol
 
+    lazy val LambdaMetaFactory = getClassIfDefined("java.lang.invoke.LambdaMetafactory")
+
     lazy val ScalaSignatureAnnotation = requiredClass[scala.reflect.ScalaSignature]
     lazy val ScalaLongSignatureAnnotation = requiredClass[scala.reflect.ScalaLongSignature]
 
@@ -1513,6 +1515,7 @@ trait Definitions extends api.StandardDefinitions {
 
       def isPolymorphicSignature(sym: Symbol) = PolySigMethods(sym)
       private lazy val PolySigMethods: Set[Symbol] = Set[Symbol](MethodHandle.info.decl(sn.Invoke), MethodHandle.info.decl(sn.InvokeExact)).filter(_.exists)
+      lazy val LambdaMetaFactory_metafactory = getMemberIfDefined(LambdaMetaFactory, sn.Metafactory)
     }
   }
 }

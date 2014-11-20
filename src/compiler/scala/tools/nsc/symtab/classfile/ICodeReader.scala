@@ -64,7 +64,7 @@ abstract class ICodeReader extends ClassfileParser {
      *   - If no symbol is found in the right tpe, a new try is made in the
      *     companion class, in case the owner is an implementation class.
      */
-    def getMemberSymbol(index: Int, static: Boolean): Symbol = {
+    override def getMemberSymbol(index: Int, static: Boolean): Symbol = {
       if (index <= 0 || len <= index) errorBadIndex(index)
       var f = values(index).asInstanceOf[Symbol]
       if (f eq null) {
@@ -152,6 +152,7 @@ abstract class ICodeReader extends ClassfileParser {
     for (i <- 0 until fieldCount) parseField()
     val methodCount = u2
     for (i <- 0 until methodCount) parseMethod()
+    parseAttributes(clazz, clazz.info)
     instanceCode.methods = instanceCode.methods.reverse
     staticCode.methods = staticCode.methods.reverse
   }
@@ -598,13 +599,11 @@ abstract class ICodeReader extends ClassfileParser {
             method.updateRecursive(m)
           }
         case JVM.invokedynamic  =>
-          // TODO, this is just a place holder. A real implementation must parse the class constant entry
-          debuglog("Found JVM invokedynamic instructionm, inserting place holder ICode INVOKE_DYNAMIC.")
           containsInvokeDynamic = true
-          val poolEntry = in.nextChar.toInt
+          val info = pool.getInvokeDynamicInfo(u2)
           in.skip(2)
           size += 4
-          code.emit(INVOKE_DYNAMIC(poolEntry))
+          code.emit(INVOKE_DYNAMIC(info))
 
         case JVM.new_          =>
           code.emit(NEW(REFERENCE(pool.getClassSymbol(u2))))
@@ -706,13 +705,11 @@ abstract class ICodeReader extends ClassfileParser {
     // reverse parameters, as they were prepended during code generation
     method.params = method.params.reverse
 
-    if (!method.bytecodeHasInvokeDynamic) {
-      if (code.containsDUPX)
-        code.resolveDups()
+    if (code.containsDUPX)
+      code.resolveDups()
 
-      if (code.containsNEW)
-        code.resolveNEWs()
-    }
+    if (code.containsNEW)
+      code.resolveNEWs()
   }
 
   /** Note: these methods are different from the methods of the same name found

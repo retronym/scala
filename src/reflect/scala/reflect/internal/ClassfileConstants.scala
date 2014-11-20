@@ -107,6 +107,17 @@ object ClassfileConstants {
   final val T_INT     = 10
   final val T_LONG    = 11
 
+  // Method handle invocation kind
+  final val REF_getField         = 1
+  final val REF_getStatic        = 2
+  final val REF_putField         = 3
+  final val REF_putStatic        = 4
+  final val REF_invokeVirtual    = 5
+  final val REF_invokeStatic     = 6
+  final val REF_invokeSpecial    = 7
+  final val REF_newInvokeSpecial = 8
+  final val REF_invokeInterface  = 9
+
   // JVM mnemonics
   final val nop         = 0x00
   final val aconst_null = 0x01

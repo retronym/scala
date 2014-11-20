@@ -10,6 +10,7 @@ package backend.opt
 import scala.collection.mutable
 import scala.tools.nsc.symtab._
 import scala.reflect.internal.util.NoSourceFile
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
 
 /**
  * Inliner balances two competing goals:
@@ -190,6 +191,11 @@ abstract class Inliners extends SubComponent {
 
       /** Cache whether a method calls private members. */
       val usesNonPublics = mutable.Map.empty[IMethod, Value]
+
+      def combine(l: Value, r: Value) =
+        if (l == Private || r == Private) Private
+        else if (l == Protected || r == Protected) Protected
+        else Public
     }
     import NonPublicRefs._
 
@@ -693,11 +699,46 @@ abstract class Inliners extends SubComponent {
         def checkSuper(n: Symbol)   = check(n, isPrivateForInlining(n) || !n.isClassConstructor)
         def checkMethod(n: Symbol)  = check(n, isPrivateForInlining(n))
 
+        def checkNew(c: Symbol) = {
+          c.attachments.get[delambdafy.LambdaMetaFactoryCapable] match {
+            case Some(attach) =>
+              // Currently this should always return true
+              checkMethod(attach.accessor)
+            case _ => Public
+          }
+        }
+
+        def checkIndy(info: InvokeDynamicInfo[global.type]) = {
+          val (Constant(bootstrapMethod: Symbol), args) = info.bootstrapMethod()
+          def lmfAccess = {
+            var seen = Public
+            for (Constant(arg: Symbol) <- args) {
+              val argAccess =
+                if (nme.isLocalName(arg.name)) checkField(arg)
+                else if (arg.isMethod) checkMethod(arg)
+                else Private
+              seen = NonPublicRefs.combine(seen, argAccess)
+            }
+            seen
+          }
+          val isLMF = bootstrapMethod == currentRun.runDefinitions.LambdaMetaFactory_metafactory
+          if (isLMF) {
+            // We can inline INDY of LambdaMetafactory it its static boostrap arguments are
+            // all accessible.
+            lmfAccess
+          } else {
+            // In general we must treat INDY instructions as opaque an un-inlinable.
+            Private
+          }
+        }
+
         def getAccess(i: Instruction) = i match {
           case CALL_METHOD(n, SuperCall(_)) => checkSuper(n)
           case CALL_METHOD(n, _)            => checkMethod(n)
           case LOAD_FIELD(f, _)             => checkField(f)
           case STORE_FIELD(f, _)            => checkField(f)
+          case NEW(r)                       => checkNew(r.cls)
+          case INVOKE_DYNAMIC(info)         => checkIndy(info)
           case _                            => Public
         }
 
@@ -963,7 +1004,6 @@ abstract class Inliners extends SubComponent {
             if(isInlineForbidden)  { rs ::= "is annotated @noinline" }
             if(inc.isSynchronized) { rs ::= "is synchronized method" }
             if(inc.m.bytecodeHasEHs) { rs ::= "bytecode contains exception handlers / finally clause" } // SI-6188
-            if(inc.m.bytecodeHasInvokeDynamic) { rs ::= "bytecode contains invoke dynamic" }
             if(rs.isEmpty) null else rs.mkString("", ", and ", "")
           }
 

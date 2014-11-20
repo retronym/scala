@@ -268,6 +268,7 @@ trait StdNames {
     // Classfile Attributes
     final val AnnotationDefaultATTR: NameType      = "AnnotationDefault"
     final val BridgeATTR: NameType                 = "Bridge"
+    final val BoostrapMethodsATTR: NameType        = "BootstrapMethods"
     final val CodeATTR: NameType                   = "Code"
     final val ConstantValueATTR: NameType          = "ConstantValue"
     final val DeprecatedATTR: NameType             = "Deprecated"
@@ -1148,6 +1149,8 @@ trait StdNames {
     final val GetMethod: TermName        = newTermName("getMethod")
     final val Invoke: TermName           = newTermName("invoke")
     final val InvokeExact: TermName      = newTermName("invokeExact")
+
+    final val Metafactory: TermName      = newTermName("metafactory")
 
     val Boxed = immutable.Map[TypeName, TypeName](
       tpnme.Boolean -> BoxedBoolean,

@@ -67,6 +67,7 @@ abstract class ClassfileParser {
   protected var srcfile0 : Option[AbstractFile] = None
   protected def moduleClass: Symbol = staticModule.moduleClass
   private var sawPrivateConstructor = false
+  private var bootstrapMethods: List[(Constant, List[Constant])] = null
 
   private def ownerForFlags(jflags: JavaAccFlags) = if (jflags.isStatic) moduleClass else clazz
 
@@ -283,15 +284,37 @@ abstract class ClassfileParser {
     def getType(sym: Symbol, index: Int): Type = sigToType(sym, getExternalName(index))
     def getSuperClass(index: Int): Symbol      = if (index == 0) AnyClass else getClassSymbol(index)
 
+    def getMemberSymbol(index: Int, static: Boolean): Symbol = NoSymbol
+
     private def createConstant(index: Int): Constant = {
       val start = starts(index)
+      def readString() = getName(in.getChar(start + 1).toInt).toString
       Constant((in.buf(start).toInt: @switch) match {
-        case CONSTANT_STRING  => getName(in.getChar(start + 1).toInt).toString
+        case CONSTANT_STRING  => readString()
         case CONSTANT_INTEGER => in.getInt(start + 1)
         case CONSTANT_FLOAT   => in.getFloat(start + 1)
         case CONSTANT_LONG    => in.getLong(start + 1)
         case CONSTANT_DOUBLE  => in.getDouble(start + 1)
         case CONSTANT_CLASS   => getClassOrArrayType(index).typeSymbol.tpe_* // !!! Is this necessary or desirable?
+        case CONSTANT_METHODTYPE => readString()
+        case CONSTANT_METHODHANDLE =>
+          val refKind: Byte = in.buf(start + 1)
+          val refIndex = in.getChar(start + 2)
+          def sym(static: Boolean) = getMemberSymbol(refIndex, static = false)
+          refKind.toInt match {
+            case REF_getField |
+                 REF_putField |
+                 REF_invokeVirtual |
+                 REF_invokeSpecial |
+                 REF_newInvokeSpecial |
+                 REF_invokeInterface =>
+              sym(static = false)
+            case REF_getStatic |
+                 REF_putStatic |
+                 REF_invokeStatic =>
+              sym(static = true)
+            case _         => NoSymbol
+          }
         case _                => errorBadTag(start)
       })
     }
@@ -338,6 +361,26 @@ abstract class ClassfileParser {
             in.buf drop start + 2 take len
           }
           recordAtIndex(getSubArray(arr), head)
+      }
+    }
+
+    private def createInvokeDynamicInfo(index: Int): InvokeDynamicInfo[symbolTable.type] = {
+      val start = starts(index)
+      val boostrapMethodIndex = in.getChar(start + 1)
+      val nameAndTypeIndex = in.getChar(start + 3)
+      val (name, typ) = getNameAndType(nameAndTypeIndex, NoType)
+      def bootstrapMethod =
+        if (bootstrapMethods != null && bootstrapMethods.isDefinedAt(boostrapMethodIndex))
+          bootstrapMethods(boostrapMethodIndex)
+        else (Constant(NoSymbol), Nil)
+      InvokeDynamicInfo(bootstrapMethod _, name, typ)
+    }
+
+    def getInvokeDynamicInfo(index: Int): InvokeDynamicInfo[symbolTable.type] = {
+      if (index <= 0 || len <= index) errorBadIndex(index)
+      else values(index) match {
+        case info: InvokeDynamicInfo[_] => info.asInstanceOf[InvokeDynamicInfo[symbolTable.type]]
+        case _                          => recordAtIndex(createInvokeDynamicInfo(index), index)
       }
     }
 
@@ -861,6 +904,15 @@ abstract class ClassfileParser {
             log(s"$sym in ${sym.owner} is a java8+ default method.")
           }
           in.skip(attrLen)
+        case tpnme.BoostrapMethodsATTR =>
+          val count = u2
+          bootstrapMethods = for (i <- List.range(0, count)) yield {
+            val methodHandleIndex = u2
+            val methodHandle = pool.getConstant(methodHandleIndex)
+            val numBootstrapArguments = u2
+            val boostrapArgs = for (i <- List.range(0, numBootstrapArguments)) yield pool.getConstant(u2)
+            (methodHandle, boostrapArgs)
+          }
         case _ =>
           in.skip(attrLen)
       }
@@ -1183,4 +1235,7 @@ abstract class ClassfileParser {
 
   protected def getScope(flags: JavaAccFlags): Scope =
     if (flags.isStatic) staticScope else instanceScope
+
 }
+
+case class InvokeDynamicInfo[S <: SymbolTable with Singleton](bootstrapMethod: () => (S#Constant, List[S#Constant]), name: S#Name, typ: S#Type)

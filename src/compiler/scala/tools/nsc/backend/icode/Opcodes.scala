@@ -9,6 +9,7 @@ package backend
 package icode
 
 import scala.reflect.internal.util.{Position,NoPosition}
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
 
 /*
   A pattern match
@@ -396,23 +397,17 @@ trait Opcodes { self: ICodes =>
       override def category = mthdsCat
     }
 
-    /**
-     * A place holder entry that allows us to parse class files with invoke dynamic
-     * instructions. Because the compiler doesn't yet really understand the
-     * behavior of invokeDynamic, this op acts as a poison pill. Any attempt to analyze
-     * this instruction will cause a failure. The only optimization that
-     * should ever look at non-Scala generated icode is the inliner, and it
-     * has been modified to not examine any method with invokeDynamic
-     * instructions. So if this poison pill ever causes problems then
-     * there's been a serious misunderstanding
-     */
-    // TODO do the real thing
-    case class INVOKE_DYNAMIC(poolEntry: Int) extends Instruction {
-      private def error = sys.error("INVOKE_DYNAMIC is not fully implemented and should not be analyzed")
-      override def consumed = error
-      override def produced = error
-      override def producedTypes = error
-      override def category = error
+    case class INVOKE_DYNAMIC(info: InvokeDynamicInfo[global.type]) extends Instruction {
+      // (The type descriptor of a method handle is such that a valid call to invokeExact in
+      // java.lang.invoke.MethodHandle on the method handle has exactly the same stack effects
+      // as the bytecode behavior. Calling this method handle on a valid set of arguments has
+      // exactly the same effect and returns the same result (if any) as the corresponding
+      // bytecode behavior.)
+      private lazy val effectiveInstruction = new CALL_METHOD(NoSymbol.newTermSymbol(global.nme.EMPTY).setInfo(info.typ), Static(false))
+      override def consumed = effectiveInstruction.consumed
+      override def produced = effectiveInstruction.produced
+      override def producedTypes = effectiveInstruction.producedTypes
+      override def category = effectiveInstruction.category
     }
 
     case class BOX(boxType: TypeKind) extends Instruction {
