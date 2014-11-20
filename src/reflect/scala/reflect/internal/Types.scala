@@ -1409,7 +1409,7 @@ trait Types
 
     protected def shouldForceScope = settings.debug || parents.isEmpty || !decls.isEmpty
     protected def initDecls        = fullyInitializeScope(decls)
-    protected def scopeString      = if (shouldForceScope) initDecls.mkString("{", "; ", "}") else ""
+    protected def scopeString      = if (shouldForceScope && definitions.isDefinitionsInitialized) initDecls.mkString("{", "; ", "}") else ""
     override def safeToString      = parentsString(parents) + scopeString
   }
 
@@ -1803,7 +1803,7 @@ trait Types
     def formattedToString = parents.mkString("\n        with ") + scopeString
     override protected def shouldForceScope = settings.debug || decls.size > 1
     override protected def scopeString      = initDecls.mkString(" {\n  ", "\n  ", "\n}")
-    override def safeToString               = if (shouldForceScope) formattedToString else super.safeToString
+    override def safeToString               = if (shouldForceScope && definitions.isDefinitionsInitialized) formattedToString else super.safeToString
   }
 
   object ClassInfoType extends ClassInfoTypeExtractor
