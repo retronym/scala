@@ -3769,7 +3769,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         else if (owner == NoSymbol) tree exists (defines(_, sym))
         else containsDef(owner, sym) || isRawParameter(sym) || isCapturedExistential(sym)
       def containsLocal(tp: Type): Boolean =
-        tp exists (t => isLocal(t.typeSymbol) || isLocal(t.termSymbol))
+        tp exists (t => isLocal(t.typeSymbolDirect) || isLocal(t.termSymbol))
 
       val dealiasLocals = new TypeMap {
         def apply(tp: Type): Type = tp match {
@@ -3811,7 +3811,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                     // Ident's type is already over an existential.
                     // (If the type is already over an existential,
                     // then remap the type, not the core symbol.)
-                    if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
+                    if (!arg.tpe.typeSymbolDirect.hasFlag(EXISTENTIAL))
                       addIfLocal(arg.symbol, arg.tpe)
                   case _ => ()
                 }
@@ -3819,7 +3819,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _ =>
           }
           addIfLocal(t.termSymbol, t)
-          addIfLocal(t.typeSymbol, t)
+          addIfLocal(t.typeSymbolDirect, t)
         }
         for (sym <- remainingSyms) addLocals(sym.existentialBound)
       }
