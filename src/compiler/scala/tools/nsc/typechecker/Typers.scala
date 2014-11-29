@@ -1041,6 +1041,48 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (hasUndets)
             return instantiate(tree, mode, pt)
 
+          /* A Java annotation like
+           *
+           *   @interface Foo {
+           *     String[] value();
+           *   }
+           *
+           * can be used in Java as
+           *
+           *   @Foo("bar")
+           *
+           * (note the String at use-site vs. the String[] at declaration site)
+           * and therefore needs to be adapted.
+           */
+          if (context.unit.isJava) {
+            //context.warning(tree.pos, s"${pt} ${pt.typeSymbol == ArrayClass},  ${tree.tpe} ${definitions.elementType(ArrayClass, pt)}")
+            val b = tree.tpe.deconst =:= definitions.elementType(ArrayClass, pt).deconst
+            context.warning(tree.pos, b.toString)
+            if (pt.typeSymbol == ArrayClass && tree.tpe.deconst =:= definitions.elementType(ArrayClass, pt).deconst) {
+              context.warning(tree.pos, s"in second if!")// owner: ${context.owner}, enclClass: ${context.enclClass}, enclMethod: ${context.enclMethod} enclApply: ${context.enclosingApply}")
+              val adapted = typedPos(tree.pos, mode, pt)(gen.mkWrapArray(tree, arrayToExistential(tree.tpe.deconst)))
+              assert(adapted.tpe <:< pt, (adapted.tpe, pt))
+              return adapted
+            }
+          }
+
+          /**
+           * Converts arguments of the Array type constructor to covariant existentials.
+           * Example: `arrayToExistential(Array[String]) = Array[_ <: String]`
+           */
+          def arrayToExistential(tp: Type, owner: Symbol = NoSymbol): Type = {
+            tp map {
+              case TypeRef(pre, ArrayClass, args) =>
+                val syms = mapWithIndex(args) { (a: Type, i: Int) =>
+                  val name = tpnme.WILDCARD.append('$').append(i.toString)
+                  owner.newExistential(name).setInfo(TypeBounds.upper(a))
+                }
+                val args1 = syms map (sym => typeRef(NoPrefix, sym, Nil))
+                newExistentialType(syms, TypeRef(pre, ArrayClass, args1))
+              case t => t
+            }
+          }
+
           if (context.implicitsEnabled && !pt.isError && !tree.isErrorTyped) {
             // (14); the condition prevents chains of views
             debuglog("inferring view from " + tree.tpe + " to " + pt)
