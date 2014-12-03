@@ -3821,7 +3821,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           addIfLocal(t.termSymbol, t)
           addIfLocal(t.typeSymbolDirect, t)
         }
-        for (sym <- remainingSyms) addLocals(sym.existentialBound)
+        for (sym <- remainingSyms if !sym.isAliasType) addLocals(sym.existentialBound)
       }
 
       val dealiasedType = dealiasLocals(tree.tpe)
