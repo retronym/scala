@@ -18,7 +18,7 @@ abstract class TreeInfo {
   val global: SymbolTable
 
   import global._
-  import definitions.{ isTupleSymbol, isVarArgsList, isCastSymbol, ThrowableClass, TupleClass, uncheckedStableClass, isBlackboxMacroBundleType, isWhiteboxContextType }
+  import definitions.{ isTupleSymbol, isVarArgsList, isCastSymbol, ThrowableClass, TupleClass, uncheckedStableClass, VolatileAttr, isBlackboxMacroBundleType, isWhiteboxContextType }
 
   /* Does not seem to be used. Not sure what it does anyway.
   def isOwnerDefinition(tree: Tree): Boolean = tree match {
@@ -176,7 +176,8 @@ abstract class TreeInfo {
     case Select(Literal(const), name) =>
       const.isAnyVal && (const.tpe.member(name) != NoSymbol)
     case Select(qual, _) =>
-      tree.symbol.isStable && isExprSafeToInline(qual)
+      tree.symbol.isStable && isExprSafeToInline(qual) &&
+        !(tree.symbol.accessedOrSelf hasAnnotation VolatileAttr)
     case TypeApply(fn, _) =>
       isExprSafeToInline(fn)
     case Apply(Select(free @ Ident(_), nme.apply), _) if free.symbol.name endsWith nme.REIFY_FREE_VALUE_SUFFIX =>
@@ -209,7 +210,7 @@ abstract class TreeInfo {
     case EmptyTree | Literal(Constant(())) => false
     case _                                 =>
       def isWarnableRefTree = tree match {
-        case t: RefTree => isExprSafeToInline(t.qualifier) && t.symbol != null && t.symbol.isAccessor
+        case t: RefTree => isExprSafeToInline(t.qualifier) && t.symbol != null && t.symbol.isAccessor && !(t.symbol.accessedOrSelf hasAnnotation VolatileAttr)
         case _          => false
       }
       def isWarnableSymbol = {
