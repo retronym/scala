@@ -3152,6 +3152,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
           val argtypes = args map shapeType
           val pre = fun.symbol.tpe.prefix
+          def memberTypeOf(alt: Symbol): Type = {
+            val pre1 = if (alt.isTopLevel && pre.typeSymbol.isPackageClass) pre.packageObject.typeOfThis else pre
+            pre1 memberType alt
+          }
           var sym = fun.symbol filter { alt =>
             // must use pt as expected type, not WildcardType (a tempting quick fix to #2665)
             // now fixed by using isWeaklyCompatible in exprTypeArgs
@@ -3163,19 +3167,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             // Types: "refs = Array(Map(), Map())".  I determined that inference fails if there are at
             // least two invariant type parameters. See the test case I checked in to help backstop:
             // pos/isApplicableSafe.scala.
-            isApplicableSafe(context.undetparams, followApply(pre memberType alt), argtypes, pt)
+            isApplicableSafe(context.undetparams, followApply(memberTypeOf(alt)), argtypes, pt)
           }
           if (sym.isOverloaded) {
               // eliminate functions that would result from tupling transforms
               // keeps alternatives with repeated params
             val sym1 = sym filter (alt =>
-                 isApplicableBasedOnArity(pre memberType alt, argtypes.length, varargsStar = false, tuplingAllowed = false)
+                 isApplicableBasedOnArity(memberTypeOf(alt), argtypes.length, varargsStar = false, tuplingAllowed = false)
               || alt.tpe.params.exists(_.hasDefault)
             )
             if (sym1 != NoSymbol) sym = sym1
           }
           if (sym == NoSymbol) fun
-          else adapt(fun setSymbol sym setType pre.memberType(sym), mode.forFunMode, WildcardType)
+          else adapt(fun setSymbol sym setType memberTypeOf(sym), mode.forFunMode, WildcardType)
         } else fun
       }
 
