@@ -433,8 +433,12 @@ private[internal] trait TypeMaps {
     (pre eq NoType) || (pre eq NoPrefix) || !isPossiblePrefix(clazz)
     )
 
-  def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap =
-    new AsSeenFromMap(pre, clazz)
+  final def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap = {
+    val prePackageObjectExpanded = if (pre.typeSymbolDirect.hasPackageFlag && !clazz.hasPackageFlag)
+      pre.packageObject.typeOfThis
+    else pre
+    new AsSeenFromMap(prePackageObjectExpanded, clazz)
+  }
 
   /** A map to compute the asSeenFrom method.
     */
