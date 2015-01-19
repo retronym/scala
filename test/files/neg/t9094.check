@@ -1,0 +1,7 @@
+t9094.scala:2: error: recursive method free needs result type
+  def free[A] = free.Free
+                ^
+t9094.scala:4: error: package name conflicts with member of package object
+package p.free {
+          ^
+two errors found

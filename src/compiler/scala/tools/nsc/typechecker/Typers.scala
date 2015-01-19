@@ -4983,11 +4983,17 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       def typedPackageDef(pdef0: PackageDef) = {
         val pdef = treeCopy.PackageDef(pdef0, pdef0.pid, pluginsEnterStats(this, pdef0.stats))
-        val pid1 = typedQualifier(pdef.pid).asInstanceOf[RefTree]
-        assert(sym.moduleClass ne NoSymbol, sym)
-        val stats1 = newTyper(context.make(tree, sym.moduleClass, sym.info.decls))
-          .typedStats(pdef.stats, NoSymbol)
-        treeCopy.PackageDef(tree, pid1, stats1) setType NoType
+        val pid0 = typedQualifier(pdef.pid, QUALmode)
+        pid0 match {
+          case pid1: RefTree if pid1.symbol == sym =>
+            assert(sym.moduleClass ne NoSymbol, sym)
+            val stats1 = newTyper(context.make(tree, sym.moduleClass, sym.info.decls))
+              .typedStats(pdef.stats, NoSymbol)
+            treeCopy.PackageDef(tree, pid1, stats1) setType NoType
+          case _ =>
+            context.reporter.error(pdef.pid.pos, "package name conflicts with member of package object")
+            pdef0
+        }
       }
 
       /*
