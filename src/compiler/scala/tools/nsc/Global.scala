@@ -1379,8 +1379,8 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       settings.userSetSettings filter (_.isDeprecated) foreach { s =>
         currentRun.reporting.deprecationWarning(NoPosition, s.name + " is deprecated: " + s.deprecationMessage.get)
       }
-      if (settings.target.value.contains("jvm-1.5"))
-        currentRun.reporting.deprecationWarning(NoPosition, settings.target.name + ":" + settings.target.value + " is deprecated: use target for Java 1.6 or above.")
+      if (!settings.target.value.contains("jvm-1.8"))
+        currentRun.reporting.deprecationWarning(NoPosition, settings.target.name + ":" + settings.target.value + " is deprecated: use target for Java 1.8 or above.")
     }
 
     /* An iterator returning all the units being compiled in this run */
