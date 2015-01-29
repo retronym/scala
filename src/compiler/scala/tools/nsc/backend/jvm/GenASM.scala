@@ -172,7 +172,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
       for (sym <- icodes.classes.keys.toList if sym.hasAttachment[delambdafy.LambdaMetaFactoryCapable]) {
         if (settings.inline) {
           if (settings.Xdce && deadCode.liveClosures(sym))
-            debuglog(s"Forced to emit $sym as inlining has retained a reference")
+            println(s"Forced to emit $sym as inlining has retained a reference")
           else
             icodes.classes -= sym
         } else

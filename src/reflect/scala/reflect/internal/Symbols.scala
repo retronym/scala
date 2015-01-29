@@ -3383,6 +3383,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // The null check seems to be necessary for the reifier.
     override def sourceModule = if (module ne null) module else companionModule
     override def sourceModule_=(module: Symbol) { this.module = module }
+    def sourceModuleDirect = module
   }
 
   class PackageObjectClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)
@@ -3689,7 +3690,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   val AllOps = SymbolOps(isFlagRelated = false, mask = 0L)
   def FlagOps(mask: Long) = SymbolOps(isFlagRelated = true, mask = mask)
 
-  private def relevantSymbols(syms: Seq[Symbol]) = syms.flatMap(sym => List(sym, sym.moduleClass, sym.sourceModule))
+  private def relevantSymbols(syms: Seq[Symbol]) = syms.flatMap(sym =>
+    sym match {
+      case m: ModuleClassSymbol if m.sourceModuleDirect eq null =>
+        List(sym)
+      case _ =>
+        List(sym, sym.moduleClass, sym.sourceModule)
+    }
+  )
   def markFlagsCompleted(syms: Symbol*)(mask: Long): Unit = relevantSymbols(syms).foreach(_.markFlagsCompleted(mask))
   def markAllCompleted(syms: Symbol*): Unit = relevantSymbols(syms).foreach(_.markAllCompleted)
 }
