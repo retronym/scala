@@ -1,0 +1,6 @@
+implicit-invalid.scala:3: warning: implicit candidate method y in object Test was excluded for implicit search for Int because it did not have an explicit type annotation. However, it turned out to have a compatible type.
+  def foo = implicitly[Int]
+                      ^
+error: No warnings can be incurred under -Xfatal-warnings.
+one warning found
+one error found

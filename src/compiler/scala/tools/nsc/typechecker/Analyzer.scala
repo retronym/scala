@@ -106,6 +106,7 @@ trait Analyzer extends AnyRef
             warnUnusedImports(unit)
           if (settings.warnUnused)
             typer checkUnused unit
+          reportInvalidImplicitsThatMayHaveSatisfiedSearch()
         }
         finally {
           unit.toCheck.clear()

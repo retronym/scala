@@ -34,6 +34,17 @@ trait Implicits {
   import typingStack.{ printTyping }
   import typeDebug._
 
+  case class InvalidImplicit(search: ImplicitSearch, invalid: List[ImplicitInfo])
+  private var allInvalidImplicits: List[InvalidImplicit] = Nil
+  def reportInvalidImplicitsThatMayHaveSatisfiedSearch(): Unit = {
+    for (InvalidImplicit(search, invalid) <- allInvalidImplicits) {
+      invalid.find(info => search.matchesPt(info)).foreach { info =>
+        reporter.warning(search.tree.pos, s"implicit candidate ${info.sym.fullLocationString} was excluded for implicit search for ${search.pt} because it did not have an explicit type annotation. However, it turned out to have a compatible type.")
+      }
+    }
+    allInvalidImplicits = Nil
+  }
+
   def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context): SearchResult =
     inferImplicit(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent = true, tree.pos)
 
@@ -322,7 +333,7 @@ trait Implicits {
    *                          (useful when we infer synthetic stuff and pass EmptyTree in the `tree` argument)
    *                          If it's set to NoPosition, then position-based services will use `tree.pos`
    */
-  class ImplicitSearch(tree: Tree, pt: Type, isView: Boolean, context0: Context, pos0: Position = NoPosition) extends Typer(context0) with ImplicitsContextErrors {
+  class ImplicitSearch(val tree: Tree, val pt: Type, isView: Boolean, context0: Context, pos0: Position = NoPosition) extends Typer(context0) with ImplicitsContextErrors {
     val searchId = implicitSearchId()
     private def typingLog(what: String, msg: => String) =
       typingStack.printTyping(tree, f"[search #$searchId] $what $msg")
@@ -469,7 +480,7 @@ trait Implicits {
      *  or otherwise if `tp` is compatible with `pt`.
      *  This method is performance critical: 5-8% of typechecking time.
      */
-    private def matchesPt(tp: Type, pt: Type, undet: List[Symbol]): Boolean = {
+    private[Implicits] def matchesPt(tp: Type, pt: Type, undet: List[Symbol]): Boolean = {
       val start = if (Statistics.canEnable) Statistics.startTimer(matchesPtNanos) else null
       val result = normSubType(tp, pt) || isView && {
         pt match {
@@ -480,7 +491,7 @@ trait Implicits {
       if (Statistics.canEnable) Statistics.stopTimer(matchesPtNanos, start)
       result
     }
-    private def matchesPt(info: ImplicitInfo): Boolean = (
+    private[Implicits] def matchesPt(info: ImplicitInfo): Boolean = (
       info.isStablePrefix && matchesPt(depoly(info.tpe), wildPt, Nil)
     )
 
@@ -820,11 +831,11 @@ trait Implicits {
       /** The implicits that are not valid because they come later in the source and
        *  lack an explicit result type. Used for error diagnostics only.
        */
-      val invalidImplicits = new ListBuffer[Symbol]
+      val invalidImplicits = new ListBuffer[ImplicitInfo]
 
       /** Tests for validity and updates invalidImplicits by side effect when false.
        */
-      private def checkValid(sym: Symbol) = isValid(sym) || { invalidImplicits += sym ; false }
+      private def checkValid(info: ImplicitInfo) = isValid(info.sym) || { invalidImplicits += info ; false }
 
       /** Preventing a divergent implicit from terminating implicit search,
        *  so that if there is a best candidate it can still be selected.
@@ -869,7 +880,7 @@ trait Implicits {
        */
       val eligible = {
         val matches = iss flatMap { is =>
-          val result = is filter (info => checkValid(info.sym) && survives(info))
+          val result = is filter (info => checkValid(info) && survives(info))
           shadower addInfos is
           result
         }
@@ -944,10 +955,14 @@ trait Implicits {
           // our recovery attempt has failed, so we must now issue it.
           DivergentImplicitRecovery.issueSavedDivergentError()
 
-          if (invalidImplicits.nonEmpty)
+          if (invalidImplicits.nonEmpty) {
             setAddendum(pos, () =>
               s"\n Note: implicit ${invalidImplicits.head} is not applicable here because it comes after the application point and it lacks an explicit result type"
             )
+          }
+        }
+        if (invalidImplicits.nonEmpty) {
+          allInvalidImplicits ::= InvalidImplicit(ImplicitSearch.this, invalidImplicits.toList)
         }
 
         best
