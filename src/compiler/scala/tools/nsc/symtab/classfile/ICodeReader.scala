@@ -131,7 +131,7 @@ abstract class ICodeReader extends ClassfileParser {
     val name = cls.javaClassName
 
     classFileLookup.findClassFile(name) match {
-      case Some(classFile) => exitingRefchecks(parse(classFile, cls))
+      case Some(classFile) => parse(classFile, cls)
       case _               => MissingRequirementError.notFound("Could not find bytecode for " + cls)
     }
 

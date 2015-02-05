@@ -254,8 +254,14 @@ abstract class UnPickler {
           else NoSymbol
         }
 
+        def debug(name: Name): Symbol = {
+          if (name string_==  "Ordered")
+            println(owner.info)
+
+          NoSymbol
+        }
         // (1) Try name.
-        localDummy orElse fromName(name) orElse {
+        localDummy orElse fromName(name) orElse debug(name) orElse {
           // (2) Try with expanded name.  Can happen if references to private
           // symbols are read from outside: for instance when checking the children
           // of a class.  See #1722.

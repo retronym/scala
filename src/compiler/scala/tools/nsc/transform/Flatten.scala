@@ -92,6 +92,9 @@ abstract class Flatten extends InfoTransform {
                 }
               } else if (sym.isClass)
                 liftSymbol(sym)
+              else
+                decls1 enter sym // abstract type
+
             }
           }
           decls1

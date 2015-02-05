@@ -166,6 +166,7 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class URLZipArchive(val url: URL) extends ZipArchive(null) {
+  this.isClassContainer
   def iterator: Iterator[Entry] = {
     val root     = new DirEntry("/")
     val dirs     = mutable.HashMap[String, DirEntry]("/" -> root)
