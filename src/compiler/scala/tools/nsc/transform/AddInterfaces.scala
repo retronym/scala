@@ -99,8 +99,21 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
         impl.thisSym setName iface.thisSym.name
       }
       impl.associatedFile = iface.sourceFile
-      if (inClass)
-        iface.owner.info.decls enter impl
+      if (inClass) {
+        def addImplClass = {
+          val scope = iface.owner.info.decls
+          scope.lookupEntry(impl.name) match {
+            case null =>
+            case entry => scope.unlink(entry)
+          }
+          scope.lookupEntry(impl.name.toTermName) match {
+            case null =>
+            case entry => scope.unlink(entry)
+          }
+          scope enter impl
+        }
+        afterEachPhase(addImplClass)
+      }
 
       impl
     }

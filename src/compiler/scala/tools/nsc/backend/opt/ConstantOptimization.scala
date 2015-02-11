@@ -8,6 +8,7 @@ package tools.nsc
 package backend.opt
 
 import scala.annotation.tailrec
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
 
 /**
  * ConstantOptimization uses abstract interpretation to approximate for
@@ -413,6 +414,15 @@ abstract class ConstantOptimization extends SubComponent {
 
         case JUMP(_) | CJUMP(_, _, _, _) | CZJUMP(_, _, _, _) | RETURN(_) | THROW(_) | SWITCH(_, _) =>
           dumpClassesAndAbort("Unexpected block ending instruction: " + inst)
+
+        case id @ INVOKE_DYNAMIC(InvokeDynamicInfo(x, name, typ)) =>
+          val (Constant(bootstrapMethod: Symbol), args) = x()
+          val isLMF = bootstrapMethod == currentRun.runDefinitions.LambdaMetaFactory_metafactory
+          if (isLMF) {
+            interpretInst(in, id.effectiveInstruction)
+          } else {
+            dumpClassesAndAbort("Unknown bootstrap method: " + bootstrapMethod)
+          }
       }
     }
     /**

@@ -403,7 +403,7 @@ trait Opcodes { self: ICodes =>
       // as the bytecode behavior. Calling this method handle on a valid set of arguments has
       // exactly the same effect and returns the same result (if any) as the corresponding
       // bytecode behavior.)
-      private lazy val effectiveInstruction = new CALL_METHOD(NoSymbol.newTermSymbol(global.nme.EMPTY).setInfo(info.typ), Static(false))
+      lazy val effectiveInstruction = new CALL_METHOD(NoSymbol.newTermSymbol(global.nme.EMPTY).setInfo(info.typ), Static(false))
       override def consumed = effectiveInstruction.consumed
       override def produced = effectiveInstruction.produced
       override def producedTypes = effectiveInstruction.producedTypes

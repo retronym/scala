@@ -10,6 +10,8 @@ package backend.icode.analysis
 import scala.collection.{mutable, immutable}
 import java.util.concurrent.TimeUnit
 
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
+
 /** A data-flow analysis on types, that works on `ICode`.
  *
  *  @author Iulian Dragos
@@ -264,6 +266,14 @@ abstract class TypeFlowAnalysis {
           stack.pop(stack.length)
           stack.push(toTypeKind(clasz.tpe))
 
+        case id @ INVOKE_DYNAMIC(InvokeDynamicInfo(x, name, typ)) =>
+          val (Constant(bootstrapMethod: Symbol), args) = x()
+          val isLMF = bootstrapMethod == currentRun.runDefinitions.LambdaMetaFactory_metafactory
+          if (isLMF) {
+            mutatingInterpret(out, id.effectiveInstruction)
+          } else {
+            dumpClassesAndAbort("Unknown bootstrap method: " + i)
+          }
         case _ =>
           dumpClassesAndAbort("Unknown instruction: " + i)
       }

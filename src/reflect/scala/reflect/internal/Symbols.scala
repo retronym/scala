@@ -3659,12 +3659,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
     assert(validFrom != NoPeriod, this)
 
-    private def phaseString = "%s: %s".format(phaseOf(validFrom), info)
+    private def phaseString = "%s: %s".format(phaseOf(validFrom), info.decls)
     override def toString = toList reverseMap (_.phaseString) mkString ", "
 
     def toList: List[TypeHistory] = this :: ( if (prev eq null) Nil else prev.toList )
 
     def oldest: TypeHistory = if (prev == null) this else prev.oldest
+
+    def deprecatedPredef = toList reverseMap (_.phaseString) mkString ", "
   }
 
 // ----- Hoisted closures and convenience methods, for compile time reductions -------

@@ -1394,6 +1394,10 @@ trait Definitions extends api.StandardDefinitions {
       ScalaPackageClass.initialize
       val forced1 = symbolsNotPresentInBytecode
       val forced2 = NoSymbol
+      exitingPhase(findPhaseWithName("mixin")) {
+        PredefModule.initialize
+        PredefModule.owner.initialize
+      }
       isInitialized = true
     } //init
 

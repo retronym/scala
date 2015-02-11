@@ -157,6 +157,9 @@ abstract class ICodeReader extends ClassfileParser {
     staticCode.methods = staticCode.methods.reverse
   }
 
+  override protected def skipAttribute(attrName: TypeName): Boolean =
+    !(attrName == tpnme.ConstantValueATTR || attrName == tpnme.BoostrapMethodsATTR)
+
   override def parseField() {
     val (jflags, sym) = parseMember(field = true)
     getCode(jflags) addField new IField(sym)
@@ -252,8 +255,12 @@ abstract class ICodeReader extends ClassfileParser {
       definitions.NullClass
     else if (nme.isImplClassName(name)) {
       val iface = rootMirror.getClassByName(tpnme.interfaceName(name))
+      // force the mixin type-transformer
+      exitingMixin(iface.owner.info)
+      val implClassName = tpnme.implClassName(iface.name)
+      val implClass = iface.owner.info.decl(implClassName)
       log("forcing " + iface.owner + " at phase: " + phase + " impl: " + iface.implClass)
-      iface.owner.info // force the mixin type-transformer
+      assert(iface.implClass.isImplClass, iface.implClass)
       rootMirror.getClassByName(name)
     }
     else if (nme.isModuleName(name)) {

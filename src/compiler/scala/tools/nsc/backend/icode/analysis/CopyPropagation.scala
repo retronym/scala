@@ -8,6 +8,7 @@ package tools.nsc
 package backend.icode.analysis
 
 import scala.collection.{ mutable, immutable }
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
 
 /** A modified copy-propagation like analysis. It
  *  is augmented with a record-like value which is used
@@ -402,6 +403,14 @@ abstract class CopyPropagation {
         case LOAD_EXCEPTION(_) =>
           out.stack = Unknown :: Nil
 
+        case id @ INVOKE_DYNAMIC(InvokeDynamicInfo(x, name, typ)) =>
+          val (Constant(bootstrapMethod: Symbol), args) = x()
+          val isLMF = bootstrapMethod == currentRun.runDefinitions.LambdaMetaFactory_metafactory
+          if (isLMF) {
+            interpret(in, id.effectiveInstruction)
+          } else {
+            dumpClassesAndAbort("Unknown bootstrap method: " + i)
+          }
         case _ =>
           dumpClassesAndAbort("Unknown instruction: " + i)
       }

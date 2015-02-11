@@ -13,6 +13,7 @@ import scala.tools.nsc.symtab._
 import scala.tools.asm
 import asm.Label
 import scala.annotation.tailrec
+import scala.tools.nsc.symtab.classfile.InvokeDynamicInfo
 
 /**
  *  @author  Iulian Dragos (version 1.0, FJBG-based implementation)
@@ -642,7 +643,11 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
       cachedJN.toString
     }
 
-    def descriptor(t: Type):     String = { javaType(t).getDescriptor }
+    def descriptor(t: Type):     String = t match {
+      case mt: MethodType =>
+        asm.Type.getMethodDescriptor(javaType(mt.resultType), mt.params.map(sym => javaType(sym)): _*)
+      case _ => javaType(t).getDescriptor
+    }
     def descriptor(k: TypeKind): String = { javaType(k).getDescriptor }
     def descriptor(s: Symbol):   String = { javaType(s).getDescriptor }
 
@@ -2371,6 +2376,19 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
               jcode.invokevirtual(target, "clone", mdesc_arrayClone)
 
             case call @ CALL_METHOD(method, style) => genCallMethod(call)
+            case id @ INVOKE_DYNAMIC(InvokeDynamicInfo(x, name, typ)) =>
+              val (Constant(bootstrapMethod: Symbol), bsmArgs) = x()
+              val isLMF = bootstrapMethod == currentRun.runDefinitions.LambdaMetaFactory_metafactory
+              if (isLMF) {
+                val bsmArgsASM = bsmArgs.map {
+                  case Constant(sym: Symbol) => javaType(sym)
+                  case Constant(tpe: Type) => javaType(tpe)
+                  case _ => ???
+                }
+                jmethod.visitInvokeDynamicInsn(name.encoded, descriptor(typ), genBCode.lambdaMetaFactoryBootstrapHandle, bsmArgsASM: _*)
+              } else {
+                dumpClassesAndAbort("Unknown bootstrap method: " + bootstrapMethod)
+              }
 
           }
           genMethodsInstr()

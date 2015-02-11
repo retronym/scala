@@ -67,7 +67,7 @@ abstract class ClassfileParser {
   protected var srcfile0 : Option[AbstractFile] = None
   protected def moduleClass: Symbol = staticModule.moduleClass
   private var sawPrivateConstructor = false
-  private var bootstrapMethods: List[(Constant, List[Constant])] = null
+  protected var bootstrapMethods: List[(Constant, List[Constant])] = null
 
   private def ownerForFlags(jflags: JavaAccFlags) = if (jflags.isStatic) moduleClass else clazz
 
@@ -87,7 +87,7 @@ abstract class ClassfileParser {
   private def readClassFlags()      = JavaAccFlags classFlags u2
   private def readMethodFlags()     = JavaAccFlags methodFlags u2
   private def readFieldFlags()      = JavaAccFlags fieldFlags u2
-  private def readTypeName()        = readName().toTypeName
+  protected def readTypeName()        = readName().toTypeName
   private def readName()            = pool getName u2
   private def readType()            = pool getType u2
 
@@ -818,6 +818,9 @@ abstract class ClassfileParser {
     GenPolyType(ownTypeParams, tpe)
   } // sigToType
 
+  protected def skipAttribute(attrName: TypeName): Boolean = {
+    attrName == tpnme.BoostrapMethodsATTR
+  }
   def parseAttributes(sym: Symbol, symtype: Type) {
     def convertTo(c: Constant, pt: Type): Constant = {
       if (pt.typeSymbol == BooleanClass && c.tag == IntTag)
@@ -829,6 +832,8 @@ abstract class ClassfileParser {
       val attrName = readTypeName()
       val attrLen  = u4
       attrName match {
+        case _ if skipAttribute(attrName) =>
+          in.skip(attrLen)
         case tpnme.SignatureATTR =>
           if (!isScala && !isScalaRaw) {
             val sig = pool.getExternalName(u2)
