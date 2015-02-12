@@ -133,6 +133,12 @@ lazy val scalap = project.
   settings(commonSettings: _*).
   dependsOn(compiler)
 
+// deprecated Scala Actors project
+// TODO: it packages into actors.jar but it should be scala-actors.jar
+lazy val actors = project.
+  settings(commonSettings: _*).
+  dependsOn(library)
+
 lazy val forkjoin = project.
   settings(commonSettings: _*)
 
