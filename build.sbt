@@ -90,46 +90,9 @@ lazy val commonSettings = Seq(
   // given that classDirectory is overriden to be _outside_ of target directory, we have
   // to make sure its being cleaned properly
   cleanFiles += (classDirectory in Compile).value,
-
   copyrightString := "Copyright 2002-2013, LAMP/EPFL",
-
   resourceGenerators in Compile += generateVersionPropertiesFile.taskValue,
-
-  generateVersionPropertiesFile := {
-    val propFile = (resourceManaged in Compile).value / s"${name.value}.properties"
-    val props = new java.util.Properties
-
-    val (ver, mavenVer, osgiVer) =
-      version.value.split("-").toList match {
-        case ver :: Nil =>
-          ((ver, ""), (ver, ""), (ver, "-VFINAL"))
-        case ver :: suffix =>
-          val suffixStr = "-" + suffix.mkString("-")
-          if (suffixStr.endsWith("-SNAPSHOT"))
-            ((ver, ""), (ver, suffixStr), (ver, ""))
-          else ((ver, suffixStr), (ver, suffixStr), (ver, suffixStr))
-      }
-
-    def executeTool(tool: String) = {
-        val cmd =
-          if (System.getProperty("os.name").toLowerCase.contains("windows"))
-            s"cmd.exe /c tools\$tool.bat -p"
-          else s"tools/$tool"
-        Process(cmd).lines.head
-    }
-
-    val commitDate = executeTool("get-scala-commit-date")
-    val commitSha = executeTool("get-scala-commit-sha")
-
-    props.put("version.number", s"${ver._1}${ver._2}-$commitDate-$commitSha")
-    props.put("maven.version.number", s"${mavenVer._1}${mavenVer._2}")
-    props.put("osgi.version.number", s"${osgiVer._1}.v$commitDate${osgiVer._2}-$commitSha")
-    props.put("copyright.string", copyrightString.value)
-
-    IO.write(props, null, propFile)
-
-    Seq(propFile)
-  }
+  generateVersionPropertiesFile := generateVersionPropertiesFileImpl.value
 )
 
 lazy val library = project.
@@ -197,3 +160,39 @@ lazy val scala = (project in file(".")).
 lazy val copyrightString = SettingKey[String]("Copyright string.")
 
 lazy val generateVersionPropertiesFile = taskKey[Seq[File]]("Generating version properties file.")
+
+lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[Seq[File]]] = Def.task {
+  val propFile = (resourceManaged in Compile).value / s"${name.value}.properties"
+  val props = new java.util.Properties
+
+  val (ver, mavenVer, osgiVer) =
+    version.value.split("-").toList match {
+      case ver :: Nil =>
+        ((ver, ""), (ver, ""), (ver, "-VFINAL"))
+      case ver :: suffix =>
+        val suffixStr = "-" + suffix.mkString("-")
+        if (suffixStr.endsWith("-SNAPSHOT"))
+          ((ver, ""), (ver, suffixStr), (ver, ""))
+        else ((ver, suffixStr), (ver, suffixStr), (ver, suffixStr))
+    }
+
+  def executeTool(tool: String) = {
+      val cmd =
+        if (System.getProperty("os.name").toLowerCase.contains("windows"))
+          s"cmd.exe /c tools\$tool.bat -p"
+        else s"tools/$tool"
+      Process(cmd).lines.head
+  }
+
+  val commitDate = executeTool("get-scala-commit-date")
+  val commitSha = executeTool("get-scala-commit-sha")
+
+  props.put("version.number", s"${ver._1}${ver._2}-$commitDate-$commitSha")
+  props.put("maven.version.number", s"${mavenVer._1}${mavenVer._2}")
+  props.put("osgi.version.number", s"${osgiVer._1}.v$commitDate${osgiVer._2}-$commitSha")
+  props.put("copyright.string", copyrightString.value)
+
+  IO.write(props, null, propFile)
+
+  Seq(propFile)
+}
