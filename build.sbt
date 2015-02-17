@@ -91,7 +91,7 @@ lazy val commonSettings = Seq(
   // to make sure its being cleaned properly
   cleanFiles += (classDirectory in Compile).value,
   copyrightString := "Copyright 2002-2013, LAMP/EPFL",
-  resourceGenerators in Compile += generateVersionPropertiesFile.taskValue,
+  resourceGenerators in Compile += generateVersionPropertiesFile.map(file => Seq(file)).taskValue,
   generateVersionPropertiesFile := generateVersionPropertiesFileImpl.value
 )
 
@@ -159,9 +159,9 @@ lazy val scala = (project in file(".")).
 
 lazy val copyrightString = SettingKey[String]("Copyright string.")
 
-lazy val generateVersionPropertiesFile = taskKey[Seq[File]]("Generating version properties file.")
+lazy val generateVersionPropertiesFile = taskKey[File]("Generating version properties file.")
 
-lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[Seq[File]]] = Def.task {
+lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.task {
   val propFile = (resourceManaged in Compile).value / s"${name.value}.properties"
   val props = new java.util.Properties
 
@@ -194,5 +194,5 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[Seq[File]]] = De
 
   IO.write(props, null, propFile)
 
-  Seq(propFile)
+  propFile
 }
