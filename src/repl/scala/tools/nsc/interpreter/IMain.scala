@@ -1060,7 +1060,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   def typeOfTerm(id: String): Type = symbolOfTerm(id).tpe
 
   // Given the fullName of the symbol, reflectively drill down the path
-  def valueOfTerm(id: String): Option[Any] = {
+  def valueOfTerm(id: String): Option[Any] = exitingTyper {
     def value(fullName: String) = {
       val mirror = runtimeMirror
       import mirror.universe.{Symbol, InstanceMirror, TermName}
@@ -1088,7 +1088,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
                 mirror.reflect(mirrored.reflectMethod(s.asMethod).apply())
               }
               else {
-                assert(false, originalPath(s))
+                assert(false, fullName)
                 inst
               }
             loop(i, s, rest)
@@ -1142,6 +1142,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       )
     )
   }
+  // this is harder than getting the typed trees and fixing up the string to emit that reports types
   def cleanMemberDecl(owner: Symbol, member: Name): Type =
     cleanTypeAfterTyper(owner.info nonPrivateDecl member)
 
@@ -1226,6 +1227,12 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   def withoutTruncating[A](body: => A): A = reporter withoutTruncating body
 
   def symbolDefString(sym: Symbol) = {
+    /*
+    val ds = exitingTyper(sym.defString)
+    val no = List(sym.owner.name + ".this.", sym.owner.fullName + ".")
+    val q  = TypeStrings.quieter(ds, no: _*)
+    Console println ss"defstr of $ds excluding $no is $q"
+    */
     TypeStrings.quieter(
       exitingTyper(sym.defString),
       sym.owner.name + ".this.",
