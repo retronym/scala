@@ -165,16 +165,23 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
   val propFile = (resourceManaged in Compile).value / s"${name.value}.properties"
   val props = new java.util.Properties
 
-  val (ver, mavenVer, osgiVer) =
-    version.value.split("-").toList match {
-      case ver :: Nil =>
-        ((ver, ""), (ver, ""), (ver, "-VFINAL"))
-      case ver :: suffix =>
-        val suffixStr = "-" + suffix.mkString("-")
-        if (suffixStr.endsWith("-SNAPSHOT"))
-          ((ver, ""), (ver, suffixStr), (ver, ""))
-        else ((ver, suffixStr), (ver, suffixStr), (ver, suffixStr))
-    }
+  /**
+   * Regexp that splits version number split into two parts: version and suffix.
+   * Examples of how the split is performed:
+   *
+   *  "2.11.5": ("2.11.5", null)
+   *  "2.11.5-acda7a": ("2.11.5", "-acda7a")
+   *  "2.11.5-SNAPSHOT": ("2.11.5", "-SNAPSHOT")
+   *
+   */
+  val versionSplitted = """([\w+\.]+)(-[\w+\.]+)??""".r
+
+  val versionSplitted(ver, suffixOrNull) = version.value
+  val osgiSuffix = suffixOrNull match {
+    case null => "-VFINAL"
+    case "-SNAPSHOT" => ""
+    case suffixStr => suffixStr
+  }
 
   def executeTool(tool: String) = {
       val cmd =
@@ -187,9 +194,9 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
   val commitDate = executeTool("get-scala-commit-date")
   val commitSha = executeTool("get-scala-commit-sha")
 
-  props.put("version.number", s"${ver._1}${ver._2}-$commitDate-$commitSha")
-  props.put("maven.version.number", s"${mavenVer._1}${mavenVer._2}")
-  props.put("osgi.version.number", s"${osgiVer._1}.v$commitDate${osgiVer._2}-$commitSha")
+  props.put("version.number", s"${version.value}-$commitDate-$commitSha")
+  props.put("maven.version.number", s"${version.value}")
+  props.put("osgi.version.number", s"$ver.v$commitDate$osgiSuffix-$commitSha")
   props.put("copyright.string", copyrightString.value)
 
   IO.write(props, null, propFile)
