@@ -50,7 +50,7 @@
  *     https://groups.google.com/d/topic/scala-internals/gp5JsM1E0Fo/discussion
  */
 
-lazy val commonSettings = Seq(
+lazy val commonSettings = Seq[Setting[_]](
   organization := "org.scala-lang",
   version := "2.11.6-SNAPSHOT",
   scalaVersion := "2.11.5",
