@@ -142,6 +142,17 @@ lazy val scala = (project in file(".")).
   // an empty jar
   disablePlugins(plugins.IvyPlugin)
 
+/**
+ * Configures passed project as a subproject (e.g. compiler or repl)
+ * with common settings attached to it.
+ *
+ * Typical usage is:
+ *
+ *   lazy val mySubproject = configureAsSubproject(project)
+ *
+ * We pass `project` as an argument which is in fact a macro call. This macro determines
+ * project.id based on the name of the lazy val on the left-hand side.
+ */
 def configureAsSubproject(project: Project): Project = {
   val base = file(".") / "src" / project.id
   (project in base).settings(commonSettings: _*)
