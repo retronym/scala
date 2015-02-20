@@ -9,8 +9,13 @@ trait GenUtils {
   def reifyList(xs: List[Any]): Tree =
     mkList(xs map reify)
 
-  def reifyProduct(x: Product): Tree =
-    reifyProduct(x.productPrefix, x.productIterator.toList)
+  def reifyProduct(x: Product): Tree = x match {
+    case tt: TypeTreeWithDeferredRefCheck =>
+      reifyProduct(tt.check())
+    case _ =>
+      reifyProduct(x.productPrefix, x.productIterator.toList)
+  }
+
 
   def reifyProduct(prefix: String, elements: List[Any]): Tree = {
     // reflection would be more robust, but, hey, this is a hot path

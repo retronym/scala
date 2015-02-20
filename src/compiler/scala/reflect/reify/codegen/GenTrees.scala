@@ -69,6 +69,7 @@ trait GenTrees {
     case global.pendingSuperCall      => mirrorSelect(nme.pendingSuperCall)
     case Literal(const @ Constant(_)) => mirrorCall(nme.Literal, reifyProduct(const))
     case Import(expr, selectors)      => mirrorCall(nme.Import, reify(expr), mkList(selectors map reifyProduct))
+    case tt: TypeTreeWithDeferredRefCheck => reifyTreeSyntactically(tt.check())
     case _                            => reifyProduct(tree)
   }
 
