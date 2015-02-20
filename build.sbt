@@ -242,4 +242,4 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
   propFile
 }
 
-buildDirectory in ThisBuild := (baseDirectory in ThisBuild).value / "build"
+buildDirectory in ThisBuild := (baseDirectory in ThisBuild).value / "build-sbt"
