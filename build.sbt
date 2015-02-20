@@ -233,6 +233,10 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
   props.put("osgi.version.number", s"$ver.v$commitDate$osgiSuffix-$commitSha")
   props.put("copyright.string", copyrightString.value)
 
+  // unfortunately, this will write properties in arbitrary order
+  // this makes it harder to test for stability of generated artifacts
+  // consider using https://github.com/etiennestuder/java-ordered-properties
+  // instead of java.util.Properties
   IO.write(props, null, propFile)
 
   propFile
