@@ -150,9 +150,12 @@ trait Implicits {
    * when checking whether `b` is a valid implicit, as we haven't even searched a value for the implicit arg `x`,
    * so we have to approximate (otherwise it is excluded a priori).
    */
-  private def depoly(tp: Type): Type = tp match {
-    case PolyType(tparams, restpe) => deriveTypeWithWildcards(tparams)(ApproximateDependentMap(restpe))
-    case _                         => ApproximateDependentMap(tp)
+  private def depoly(info: ImplicitInfo): Type = {
+    val approxMap = new ApproximateDependentMap1(info.sym)
+    info.tpe match {
+      case PolyType(tparams, restpe) => deriveTypeWithWildcards(tparams)(approxMap(restpe))
+      case tp                        => approxMap(tp)
+    }
   }
 
   /** The result of an implicit search
@@ -481,7 +484,7 @@ trait Implicits {
       result
     }
     private def matchesPt(info: ImplicitInfo): Boolean = (
-      info.isStablePrefix && matchesPt(depoly(info.tpe), wildPt, Nil)
+      info.isStablePrefix && matchesPt(depoly(info), wildPt, Nil)
     )
 
     private def matchesPtView(tp: Type, ptarg: Type, ptres: Type, undet: List[Symbol]): Boolean = tp match {

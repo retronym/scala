@@ -867,9 +867,16 @@ private[internal] trait TypeMaps {
     }
   }
 
+  class ApproximateDependentMap1(owner: Symbol) extends TypeMap {
+    def apply(tp: Type): Type =
+      if (tp.isImmediatelyDependent1(owner))
+        WildcardType
+      else mapOver(tp)
+  }
   object ApproximateDependentMap extends TypeMap {
     def apply(tp: Type): Type =
-      if (tp.isImmediatelyDependent) WildcardType
+      if (tp.isImmediatelyDependent)
+        WildcardType
       else mapOver(tp)
   }
 

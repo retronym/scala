@@ -285,6 +285,7 @@ trait Types
       * I.e., is it a singleton type whose termSymbol refers to an argument of the symbol's owner (which is a method)?
       */
     def isImmediatelyDependent: Boolean = false
+    def isImmediatelyDependent1(owner: Symbol): Boolean = false
 
     /** Is this type a dependent method type? */
     def isDependentMethodType: Boolean = false
@@ -1218,6 +1219,7 @@ trait Types
 
     // more precise conceptually, but causes cyclic errors:    (paramss exists (_ contains sym))
     override def isImmediatelyDependent = (sym ne NoSymbol) && (sym.owner.isMethod && sym.isValueParameter)
+    override def isImmediatelyDependent1(owner: Symbol) = (sym ne NoSymbol) && sym.owner == owner && sym.isValueParameter
 /*
     override def narrow: Type = {
       if (phase.erasedTypes) this
