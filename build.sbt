@@ -171,8 +171,11 @@ lazy val root = (project in file(".")).
  */
 def configureAsSubproject(project: Project): Project = {
   val base = file(".") / "src" / project.id
-  (project in base).settings(scalaSubprojectSettings: _*).
-    settings(name := s"scala-${project.id}")
+  (project in base).settings(scalaSubprojectSettings: _*)//.
+    // uncommenting this line causes `update` to fail with:
+    // [error] a module is not authorized to depend on itself: org.scala-lang#scala-library;2.11.5
+    // Ouch! This is tracked here: https://github.com/sbt/sbt/issues/1872
+    //settings(name := s"scala-${project.id}")
 }
 
 /**
