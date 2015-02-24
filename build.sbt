@@ -78,6 +78,32 @@ lazy val commonSettings = Seq[Setting[_]](
   cleanFiles += (classDirectory in Compile).value
 )
 
+// we bind `update` to our hacked version of update task
+// other than that, we rewire a bunch of settings/tasks to depend on others
+// from `update` task scope. Eventually, we want `moduleName` to be derived
+// differently for update task compared to everything else
+// this way we can pretend that, for example, dependencies of `scala-library`
+// are resolved in context of `scala-library-bogus` so we don't run into
+// a problem described in https://github.com/sbt/sbt/issues/1872
+// all below is extreme hackery and I hope we can figure out something
+// better
+lazy val updateHacks = Seq[Setting[_]](
+  update <<= Hacks.hackedUpdateTask,
+  ivyModule in update := { val is = ivySbt.value; new is.Module((moduleSettings in update).value) },
+  moduleSettings in update := new InlineConfiguration((projectID in update).value, projectInfo.value,
+    allDependencies.value, dependencyOverrides.value,
+    ivyXML.value, ivyConfigurations.value,
+    defaultConfiguration.value, ivyScala.value,
+    ivyValidate.value, conflictManager.value),
+  projectID in update := {
+    val base = ModuleID(organization.value, (moduleName in update).value, version.value).cross(crossVersion in projectID value).artifacts(artifacts.value: _*)
+    apiURL.value match {
+      case Some(u) if autoAPIMappings.value => base.extra(CustomPomParser.ApiURLKey -> u.toExternalForm)
+      case _                                => base
+    }
+  }
+)
+
 lazy val scalaSubprojectSettings = commonSettings ++ Seq[Setting[_]](
   artifactPath in packageBin in Compile := {
     // two lines below are copied over from sbt's sources:
@@ -171,11 +197,12 @@ lazy val root = (project in file(".")).
  */
 def configureAsSubproject(project: Project): Project = {
   val base = file(".") / "src" / project.id
-  (project in base).settings(scalaSubprojectSettings: _*)//.
-    // uncommenting this line causes `update` to fail with:
+  (project in base).settings(scalaSubprojectSettings: _*).
+    // we set `moduleName in update` to something bogus to workaround
+    // the following error:
     // [error] a module is not authorized to depend on itself: org.scala-lang#scala-library;2.11.5
     // Ouch! This is tracked here: https://github.com/sbt/sbt/issues/1872
-    //settings(name := s"scala-${project.id}")
+    settings(name := s"scala-${project.id}", moduleName in update := s"${name.value}-bogus")
 }
 
 /**
