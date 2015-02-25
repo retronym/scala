@@ -858,7 +858,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           case Block(_, tree1) => tree1.symbol
           case _               => tree.symbol
         }
-        if (!meth.isConstructor && (isFunctionType(pt) || samOf(pt).exists)) { // (4.2)
+
+        def fail: Tree =
+          if (context.implicitsEnabled)
+            MissingArgsForMethodTpeError(tree, meth)
+          else
+            setError(tree)
+
+        def etaExpand0: Tree = {
           debuglog(s"eta-expanding $tree: ${tree.tpe} to $pt")
           checkParamsConvertible(tree, tree.tpe)
           val tree0 = etaExpand(context.unit, tree, this)
@@ -874,12 +881,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           else
             typed(tree0, mode, pt)
         }
-        else if (!meth.isConstructor && mt.params.isEmpty) // (4.3)
+
+        if (meth.isConstructor) fail
+        else if (isFunctionType(pt) || samOf(pt).exists)
+          etaExpand0
+        else if (mt.params.isEmpty)
           adapt(typed(Apply(tree, Nil) setPos tree.pos), mode, pt, original)
-        else if (context.implicitsEnabled)
-          MissingArgsForMethodTpeError(tree, meth)
-        else
-          setError(tree)
+        else fail
       }
 
       def adaptType(): Tree = {
