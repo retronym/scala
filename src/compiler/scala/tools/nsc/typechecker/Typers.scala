@@ -327,24 +327,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
-    def checkParamsConvertible(tree: Tree, tpe0: Type) {
-      def checkParamsConvertible0(tpe: Type) =
-        tpe match {
-          case MethodType(formals, restpe) =>
-            /*
-            if (formals.exists(_.typeSymbol == ByNameParamClass) && formals.length != 1)
-              error(pos, "methods with `=>`-parameter can be converted to function values only if they take no other parameters")
-            if (formals exists (isRepeatedParamType(_)))
-              error(pos, "methods with `*`-parameters cannot be converted to function values");
-            */
-            if (tpe.isDependentMethodType)
-              DependentMethodTpeConversionToFunctionError(tree, tpe)
-            checkParamsConvertible(tree, restpe)
-          case _ =>
-        }
-      checkParamsConvertible0(tpe0)
-    }
-
     /** Check that type of given tree does not contain local or private
      *  components.
      */
@@ -865,23 +847,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           else
             setError(tree)
 
-        def etaExpand0: Tree = {
-          debuglog(s"eta-expanding $tree: ${tree.tpe} to $pt")
-          checkParamsConvertible(tree, tree.tpe)
-          val tree0 = etaExpand(context.unit, tree, this)
-
-          // #2624: need to infer type arguments for eta expansion of a polymorphic method
-          // context.undetparams contains clones of meth.typeParams (fresh ones were generated in etaExpand)
-          // need to run typer on tree0, since etaExpansion sets the tpe's of its subtrees to null
-          // can't type with the expected type, as we can't recreate the setup in (3) without calling typed
-          // (note that (3) does not call typed to do the polymorphic type instantiation --
-          //  it is called after the tree has been typed with a polymorphic expected result type)
-          if (hasUndets)
-            instantiate(typed(tree0, mode), mode, pt)
-          else
-            typed(tree0, mode, pt)
-        }
-
         def canEtaExpandToPt: Boolean = {
           def warnFunction0(): Boolean = {
             if (pt.typeSymbolDirect.isNonBottomSubClass(FunctionClass(0))) {
@@ -903,7 +868,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         if (meth.isConstructor) fail
         else if (canEtaExpandToPt)
-          etaExpand0
+          typedEtaExpansion(tree, pt, mode, this)
         else if (mt.params.isEmpty)
           adapt(typed(Apply(tree, Nil) setPos tree.pos), mode, pt, original)
         else fail
@@ -4417,12 +4382,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           treeCopy.New(tree, tpt1).setType(tp)
       }
 
-      def functionTypeWildcard(tree: Tree, arity: Int): Type = {
-        val tp = functionType(List.fill(arity)(WildcardType), WildcardType)
-        if (tp == NoType) MaxFunctionArityError(tree)
-        tp
-      }
-
       def typedEta(expr1: Tree): Tree = expr1.tpe match {
         case TypeRef(_, ByNameParamClass, _) =>
           val expr2 = Function(List(), expr1) setPos expr1.pos
@@ -4434,10 +4393,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           typed1(expr2, mode, pt)
         case PolyType(_, MethodType(formals, _)) =>
           if (isFunctionType(pt)) expr1
-          else adapt(expr1, mode, functionTypeWildcard(expr1, formals.length))
+          else typedEtaExpansion(expr1, functionTypeWildcard(expr1, formals.length), mode, this)
         case MethodType(formals, _) =>
           if (isFunctionType(pt)) expr1
-          else adapt(expr1, mode, functionTypeWildcard(expr1, formals.length))
+          else typedEtaExpansion(expr1, functionTypeWildcard(expr1, formals.length), mode, this)
         case ErrorType =>
           expr1
         case _ =>
@@ -5461,6 +5420,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             logError("AT: " + tree.pos, ex)
           throw ex
       }
+    }
+
+    private def functionTypeWildcard(tree: Tree, arity: Int): Type = {
+      val tp = functionType(List.fill(arity)(WildcardType), WildcardType)
+      if (tp == NoType) MaxFunctionArityError(tree)
+      tp
     }
 
     def atOwner(owner: Symbol): Typer =

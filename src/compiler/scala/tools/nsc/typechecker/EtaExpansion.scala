@@ -18,6 +18,44 @@ trait EtaExpansion { self: Analyzer =>
 
   import global._
 
+  def typedEtaExpansion(tree: Tree, pt: Type, mode: Mode, typer: Typer): Tree = {
+    import typer.{ context, typed }
+    def hasUndets           = context.undetparams.nonEmpty
+    debuglog(s"eta-expanding $tree: ${tree.tpe} to $pt")
+    checkParamsConvertible(tree, tree.tpe, typer)
+    val tree0 = etaExpand(context.unit, tree, typer)
+
+    // #2624: need to infer type arguments for eta expansion of a polymorphic method
+    // context.undetparams contains clones of meth.typeParams (fresh ones were generated in etaExpand)
+    // need to run typer on tree0, since etaExpansion sets the tpe's of its subtrees to null
+    // can't type with the expected type, as we can't recreate the setup in (3) without calling typed
+    // (note that (3) does not call typed to do the polymorphic type instantiation --
+    //  it is called after the tree has been typed with a polymorphic expected result type)
+    if (hasUndets)
+      typer.instantiate(typed(tree0, mode), mode, pt)
+    else
+      typed(tree0, mode, pt)
+  }
+
+  private def checkParamsConvertible(tree: Tree, tpe0: Type, typer: Typer) {
+    def checkParamsConvertible0(tpe: Type) =
+      tpe match {
+        case MethodType(formals, restpe) =>
+          /*
+          if (formals.exists(_.typeSymbol == ByNameParamClass) && formals.length != 1)
+            error(pos, "methods with `=>`-parameter can be converted to function values only if they take no other parameters")
+          if (formals exists (isRepeatedParamType(_)))
+            error(pos, "methods with `*`-parameters cannot be converted to function values");
+          */
+          if (tpe.isDependentMethodType)
+            typer.TyperErrorGen.DependentMethodTpeConversionToFunctionError(tree, tpe)
+          checkParamsConvertible(tree, restpe, typer)
+        case _ =>
+      }
+    checkParamsConvertible0(tpe0)
+  }
+
+
   object etaExpansion {
     private def isMatch(vparam: ValDef, arg: Tree) = arg match {
       case Ident(name)  => vparam.name == name
