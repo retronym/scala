@@ -882,8 +882,27 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             typed(tree0, mode, pt)
         }
 
+        def canEtaExpandToPt: Boolean = {
+          def warnFunction0(): Boolean = {
+            if (pt.typeSymbolDirect.isNonBottomSubClass(FunctionClass(0))) {
+              if (settings.future.value) false
+              else {
+                context.warning(tree.pos, s"eta-expansion based on expected type ${pt} (which extends Function0) will be removed. Use `() => <expr>` or `<expr> _` instead.")
+                true
+              }
+            }
+            else true
+          }
+          if (isFunctionType(pt)) {
+            warnFunction0
+          } else {
+            val sam = samOf(pt)
+            sam.exists && sam.paramss != ListOfNil
+          }
+        }
+
         if (meth.isConstructor) fail
-        else if (isFunctionType(pt) || samOf(pt).exists)
+        else if (canEtaExpandToPt)
           etaExpand0
         else if (mt.params.isEmpty)
           adapt(typed(Apply(tree, Nil) setPos tree.pos), mode, pt, original)

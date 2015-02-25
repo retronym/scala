@@ -1,0 +1,6 @@
+t7187.scala:3: warning: eta-expansion based on expected type () => Any (which extends Function0) will be removed. Use `() => <expr>` or `<expr> _` instead.
+  val f: () => Any = foo
+                     ^
+error: No warnings can be incurred under -Xfatal-warnings.
+one warning found
+one error found

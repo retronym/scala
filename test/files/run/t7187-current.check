@@ -1,0 +1,4 @@
+t7187-current.scala:3: warning: eta-expansion based on expected type () => Any (which extends Function0) will be removed. Use `() => <expr>` or `<expr> _` instead.
+  val f: () => Any = foo
+                     ^
+<function0>
