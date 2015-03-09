@@ -1309,16 +1309,34 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         mt.toASMType
       }
 
+      val FLAG_SERIALIZABLE = 1
+      val FLAG_MARKERS = 2
+      val flags: Int = FLAG_SERIALIZABLE | FLAG_MARKERS
+      val ScalaSerializable = classBTypeFromSymbol(definitions.SerializableClass).toASMType
       bc.jmethod.visitInvokeDynamicInsn(methodName, desc, lambdaMetaFactoryBootstrapHandle,
           // boostrap args
-        applyN, targetHandle, constrainedType
+        applyN, targetHandle, constrainedType,
+        flags.asInstanceOf[AnyRef], 1.asInstanceOf[AnyRef], ScalaSerializable, 0.asInstanceOf[AnyRef]
       )
     }
   }
 
+  //   CallSite altMetafactory(MethodHandles.Lookup caller,
+  //  String invokedName,
+
+  //  MethodType invokedType,
+  //  MethodType samMethodType,
+  //  MethodHandle implMethod,
+  //  MethodType instantiatedMethodType,
+  //  int flags,
+  //  int markerInterfaceCount,  // IF flags has MARKERS set
+  //  Class... markerInterfaces, // IF flags has MARKERS set
+  //  int bridgeCount,           // IF flags has BRIDGES set
+  //  MethodType... bridges      // IF flags has BRIDGES set
+  //  )
   val lambdaMetaFactoryBootstrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "java/lang/invoke/LambdaMetafactory", "metafactory",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodType;Ljava/lang/invoke/MethodHandle;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
+      definitions.LambdaMetaFactory.fullName('/'), sn.AltMetafactory.toString,
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;")
 
 }
