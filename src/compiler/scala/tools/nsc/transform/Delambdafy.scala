@@ -79,6 +79,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     sealed abstract class TransformedFunction
     // A class definition for the lambda, an expression insantiating the lambda class
     case class DelambdafyAnonClass(lambdaClassDef: ClassDef, newExpr: Tree) extends TransformedFunction
+    case class InvokeDynamicLambda(tree: Apply) extends TransformedFunction
 
     // here's the main entry point of the transform
     override def transform(tree: Tree): Tree = tree match {
@@ -93,6 +94,9 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
             lambdaClassDefs(pkg) = lambdaClassDef :: lambdaClassDefs(pkg)
 
             super.transform(newExpr)
+          case InvokeDynamicLambda(apply) =>
+            // ... or an invokedynamic call
+            super.transform(apply)
         }
       case _ => super.transform(tree)
     }
@@ -278,15 +282,53 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
 
       pkg.info.decls enter anonymousClassDef.symbol
 
-      val thisArg = optionSymbol(thisProxy) map (_ => gen.mkAttributedThis(oldClass) setPos originalFunction.pos)
-      val captureArgs = captures map (capture => Ident(capture) setPos originalFunction.pos)
+      val useLambdaMetafactory = {
+        val hasValueClass = exitingErasure {
+          val methodType: Type = targetMethod(originalFunction).info
+          methodType.exists(_.isInstanceOf[ErasedValueType])
+        }
+        val isTarget18 = settings.target.value.contains("jvm-1.8")
+        settings.isBCodeActive && isTarget18 && !hasValueClass
+      }
 
-      val newStat =
+      def anonClass: TransformedFunction = {
+        val thisArg = optionSymbol(thisProxy) map (_ => gen.mkAttributedThis(oldClass) setPos originalFunction.pos)
+        val captureArgs = captures map (capture => Ident(capture) setPos originalFunction.pos)
+
+        val newStat =
           Typed(New(anonymousClassDef.symbol, (thisArg.toList ++ captureArgs): _*), TypeTree(abstractFunctionErasedType))
 
-      val typedNewStat = localTyper.typedPos(originalFunction.pos)(newStat)
+        val typedNewStat = localTyper.typedPos(originalFunction.pos)(newStat)
 
-      DelambdafyAnonClass(anonymousClassDef, typedNewStat)
+        DelambdafyAnonClass(anonymousClassDef, typedNewStat)
+      }
+      if (useLambdaMetafactory) {
+        val arity = originalFunction.vparams.length
+        val functionalInterface: Symbol = {
+          val sym = originalFunction.tpe.typeSymbol
+          val pack = currentRun.runDefinitions.Scala_Java8_CompatPackage
+          val returnUnit = restpe.typeSymbol == UnitClass
+          val functionInterfaceArray =
+            if (returnUnit) currentRun.runDefinitions.Scala_Java8_CompatPackage_JProcedure
+            else currentRun.runDefinitions.Scala_Java8_CompatPackage_JFunction
+          functionInterfaceArray.apply(arity)
+        }
+        if (functionalInterface.exists) {
+          val targetAttachment = LambdaMetaFactoryCapable(targetMethod(originalFunction), arity, functionalInterface)
+          anonymousClassDef.symbol.updateAttachment(targetAttachment)
+          val thisArg = optionSymbol(thisProxy) map (_ => gen.mkAttributedThis(oldClass) setPos originalFunction.pos)
+          val captureArgs = captures.iterator.map(capture => Ident(capture) setPos originalFunction.pos).toList
+
+          val msym   = currentOwner.newMethod(nme.ANON_FUN_NAME, originalFunction.pos, ARTIFACT)
+          val argTypes: List[Type] = captureArgs.map(_.tpe)
+          val params = msym.newSyntheticValueParams(argTypes)
+          msym.setInfo(MethodType(params, originalFunction.tpe))
+          
+          val tree = localTyper.typedPos(originalFunction.pos)(Apply(Ident(msym), captureArgs)).asInstanceOf[Apply]
+          tree.updateAttachment(targetAttachment)
+          InvokeDynamicLambda(tree.asInstanceOf[Apply])
+        } else anonClass
+      } else anonClass
     }
 
     /**
@@ -436,4 +478,6 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         super.traverse(tree)
     }
   }
+
+  final case class LambdaMetaFactoryCapable(symbol: Symbol, arity: Int, functionalInterface: Symbol)
 }
