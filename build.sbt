@@ -207,7 +207,8 @@ lazy val root = (project in file(".")).
     scaladoc, scalap, actors).settings(
     scalaVersion := boostrapScalaVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
-    sources in Compile := Seq.empty
+    sources in Compile := Seq.empty,
+    mkBin := mkBinImpl.value
   )
 
 /**
@@ -251,6 +252,7 @@ def configureAsForkOfJavaProject(project: Project): Project = {
 lazy val buildDirectory = settingKey[File]("The directory where all build products go. By default ./build")
 lazy val copyrightString = settingKey[String]("Copyright string.")
 lazy val generateVersionPropertiesFile = taskKey[File]("Generating version properties file.")
+lazy val mkBin = taskKey[Seq[File]]("Generate shell script (bash or Windows batch).")
 
 lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.task {
   val propFile = (resourceManaged in Compile).value / s"${thisProject.value.id}.properties"
@@ -297,6 +299,10 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
   IO.write(props, null, propFile)
 
   propFile
+}
+
+lazy val mkBinImpl: Def.Initialize[Task[Seq[File]]] = Def.task {
+  sys.error("TODO: Call code that lives in scala.tools.ant.ScalaTool")
 }
 
 buildDirectory in ThisBuild := (baseDirectory in ThisBuild).value / "build-sbt"
