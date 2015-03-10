@@ -202,7 +202,7 @@ lazy val asm = configureAsForkOfJavaProject(project)
 
 lazy val root = (project in file(".")).
   aggregate(library, forkjoin, reflect, compiler, asm, interactive, repl,
-    scaladoc, scalap).settings(
+    scaladoc, scalap, actors).settings(
     scalaVersion := boostrapScalaVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     sources in Compile := Seq.empty
