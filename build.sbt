@@ -208,9 +208,12 @@ lazy val root = (project in file(".")).
     scaladoc, scalap, actors).settings(
     scalaVersion := boostrapScalaVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
-    sources in Compile := Seq.empty,
-    mkBin := mkBinImpl.value
+    sources in Compile := Seq.empty
   )
+
+lazy val dist = (project in file("dist")).settings(
+  mkBin := mkBinImpl.value
+)
 
 /**
  * Configures passed project as a subproject (e.g. compiler or repl)
@@ -303,7 +306,38 @@ lazy val generateVersionPropertiesFileImpl: Def.Initialize[Task[File]] = Def.tas
 }
 
 lazy val mkBinImpl: Def.Initialize[Task[Seq[File]]] = Def.task {
-  sys.error("TODO: Call code that lives in scala.tools.ant.ScalaTool")
+  def mkScalaTool(mainCls: String, classpath: Seq[Attributed[File]]): ScalaTool =
+    ScalaTool(mainClass  = mainCls,
+      classpath  = classpath.toList.map(_.data.getAbsolutePath),
+      properties = Map.empty,
+      javaOpts   = "-Xmx256M -Xms32M",
+      toolFlags  = "")
+  val rootDir = (classDirectory in Compile in compiler).value
+  def writeScripts(scalaTool: ScalaTool, file: String, outDir: File): Seq[File] =
+    Seq(
+      scalaTool.writeScript(file, "unix", rootDir, outDir),
+      scalaTool.writeScript(file, "windows", rootDir, outDir)
+    )
+  def mkQuickBin(file: String, mainCls: String, classpath: Seq[Attributed[File]]): Seq[File] = {
+    val scalaTool = mkScalaTool(mainCls, classpath)
+    val outDir = buildDirectory.value / "quick/bin"
+    writeScripts(scalaTool, file, outDir)
+  }
+
+  def mkPackBin(file: String, mainCls: String): Seq[File] = {
+    val scalaTool = mkScalaTool(mainCls, classpath = Nil)
+    val outDir = buildDirectory.value / "pack/bin"
+    writeScripts(scalaTool, file, outDir)
+  }
+
+  def mkBin(file: String, mainCls: String, classpath: Seq[Attributed[File]]): Seq[File] =
+    mkQuickBin(file, mainCls, classpath) ++ mkPackBin(file, mainCls)
+
+  mkBin("scala"    , "scala.tools.nsc.MainGenericRunner", (fullClasspath in Compile in repl).value) ++
+  mkBin("scalac"   , "scala.tools.nsc.Main",              (fullClasspath in Compile in compiler).value) ++
+  mkBin("fsc"      , "scala.tools.nsc.CompileClient",     (fullClasspath in Compile in compiler).value) ++
+  mkBin("scaladoc" , "scala.tools.nsc.ScalaDoc",          (fullClasspath in Compile in scaladoc).value) ++
+  mkBin("scalap"   , "scala.tools.scalap.Main",           (fullClasspath in Compile in scalap).value)
 }
 
 buildDirectory in ThisBuild := (baseDirectory in ThisBuild).value / "build-sbt"
