@@ -152,7 +152,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   // don't keep the original owner in presentation compiler runs
   // (the map will grow indefinitely, and the only use case is the backend)
-  override protected def saveOriginalOwner(sym: Symbol) { }
+  override def defineOriginalOwner(sym: Symbol, owner: Symbol): Unit = { }
 
   override def forInteractive = true
   override protected def synchronizeNames = true
@@ -1084,7 +1084,6 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
       case t                                             => t
     }
     val context = doLocateContext(pos)
-
     val shouldTypeQualifier = tree0.tpe match {
       case null           => true
       case mt: MethodType => mt.isImplicit
@@ -1139,7 +1138,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
       for (view <- applicableViews) {
         val vtree = viewApply(view)
         val vpre = stabilizedType(vtree)
-        for (sym <- vtree.tpe.members) {
+        for (sym <- vtree.tpe.members if sym.isTerm) {
           addTypeMember(sym, vpre, inherited = false, view.tree.symbol)
         }
       }
