@@ -751,7 +751,7 @@ abstract class UnCurry extends InfoTransform
       }
 
       // create the symbol
-      val forwsym = currentClass.newMethod(dd.name.toTermName, dd.pos, VARARGS | SYNTHETIC | flatdd.symbol.flags) setInfo forwtype
+      val forwsym = currentClass.newMethod(dd.name.toTermName, dd.pos, VARARGS | SYNTHETIC | flatdd.symbol.flags).resetFlag(DEFERRED) setInfo forwtype
       def forwParams = forwsym.info.paramss.flatten
 
       // create the tree
@@ -776,8 +776,9 @@ abstract class UnCurry extends InfoTransform
       }
 
       // check if the method with that name and those arguments already exists in the template
-      currentClass.info.member(forwsym.name).alternatives.find(s => s != forwsym && s.tpe.matches(forwsym.tpe)) match {
-        case Some(s) => reporter.error(dd.symbol.pos,
+      currentClass.info.member(forwsym.name).filter(s => s != forwsym && s.tpe.matches(forwsym.tpe)).alternatives.headOption match {
+        case Some(s) =>
+          reporter.error(dd.symbol.pos,
                                    "A method with a varargs annotation produces a forwarder method with the same signature "
                                    + s.tpe + " as an existing method.")
         case None =>
