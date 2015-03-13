@@ -3799,7 +3799,7 @@ trait Types
   def nestedMemberType(sym: Symbol, pre: Type, owner: Symbol): Type = {
     def loop(tp: Type): Type =
       if (tp.isTrivial) tp
-      else if (tp.prefix.typeSymbol isNonBottomSubClass owner) {
+      else if (owner.ownerChain exists (tp.prefix.typeSymbol isNonBottomSubClass _)) {
         val widened = tp match {
           case _: ConstantType => tp // Java enum constants: don't widen to the enum type!
           case _               => tp.widen // C.X.type widens to C.this.X.type, otherwise `tp asSeenFrom (pre, C)` has no effect.
