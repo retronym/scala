@@ -8,6 +8,7 @@ import scala.tools.asm.Opcodes
 import scala.tools.asm.tree.{AbstractInsnNode, LabelNode, ClassNode, MethodNode}
 import scala.tools.cmd.CommandLineParser
 import scala.tools.nsc.backend.jvm.opt.LocalOpt
+import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.settings.{MutableSettings, ScalaSettings}
 import scala.tools.nsc.{Settings, Global}
 import scala.tools.partest.ASMConverters
@@ -43,7 +44,7 @@ object CodeGenTools {
     val settings = new Settings()
     val args = (CommandLineParser tokenize defaultArgs) ++ (CommandLineParser tokenize extraArgs)
     settings.processArguments(args, processAll = true)
-    val compiler = new Global(settings)
+    val compiler = new Global(settings, new StoreReporter)
     resetOutput(compiler)
     compiler
   }
