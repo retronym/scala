@@ -100,10 +100,11 @@ abstract class TreeBuilder {
 
   /** Create tree representing:
    *    { case x: Throwable =>
-   *        @inline def f[A](pf: PartialFunction[Throwable, A]) = pf
-   *        f(catchExpr).applyOrElse(x, t => throw t)
+   *        scala.runtime.ScalaRunTime.catchIdentity(catchExpr).applyOrElse(x, scala.runtime.ScalaRunTime.thrower)
+   *        //The names `x` and `f` are fresh names.
+   *        //@inline def f[A](pf: PartialFunction[Throwable, A]) = pf
+   *        //f(catchExpr).applyOrElse(x, t => throw t)
    *    }
-   *  The names `x` and `f` are fresh names.
    *
    *  The `catchExpr` can be either a cases block, for which the cases
    *  are used directly, or an arbitrary expr to be wrapped as shown.
@@ -112,42 +113,20 @@ abstract class TreeBuilder {
   def makeCatchFromExpr(catchExpr: Tree): List[CaseDef] = catchExpr match {
     case Match(EmptyTree, cases) => cases
     case _ =>
-      val binder      = freshTermName()
-      val pat         = Bind(binder, Typed(Ident(nme.WILDCARD), Ident(tpnme.Throwable)))
+      val binder = freshTermName()
+      val pat    = Bind(binder, Typed(Ident(termNames.WILDCARD), Ident(typeNames.Throwable)))
 
-      // since we're parser sugar, make a helper to infer A
-      //q"@_root_.scala.inline def f[A](pf: PartialFunction[Throwable, A]) = pf"
-      val pfIdentity  = freshTermName()
-      val inferHelper = DefDef(
-        Modifiers(ARTIFACT, privateWithin = typeNames.EMPTY,
-          List(
-            Apply(Select(New(Select(Select(Ident(termNames.ROOTPKG), TermName("scala")), TypeName("inline"))), termNames.CONSTRUCTOR), List())
-        )),
-        pfIdentity,
-        List(TypeDef(Modifiers(PARAM), TypeName("A"), List(), TypeBoundsTree(EmptyTree, EmptyTree))),
-        List(List(
-          ValDef(Modifiers(PARAM), TermName("pf"),
-            AppliedTypeTree(Ident(TypeName("PartialFunction")), List(Ident(TypeName("Throwable")), Ident(TypeName("A")))),
-            EmptyTree))),
-        TypeTree(),
-        Ident(TermName("pf"))
-      )
-
-      //q"f(h).applyOrElse(t, (x: Throwable) => throw x)"
+      //q"catchIdentity(pf).applyOrElse(t, (x: Throwable) => throw x)"
+      import gen.CODE.REF
       val doit = Apply(
         Select(
-          Apply(Ident(pfIdentity), List(catchExpr)),
-          TermName("applyOrElse")),
+          Apply(REF(currentRun.runDefinitions.catchIdentityMethod), catchExpr :: Nil),
+          termNames.applyOrElse),
         List(Ident(binder),
-          Function(List(ValDef(Modifiers(PARAM), TermName("x"), Ident(TypeName("Throwable")), EmptyTree)),
-            Throw(Ident(TermName("x"))))
+          REF(currentRun.runDefinitions.throwerMethod)
         )
       )
-
-      val body = atPos(catchExpr.pos.makeTransparent)(Block(
-        List(inferHelper),
-        doit
-      ))
+      val body = atPos(catchExpr.pos.makeTransparent)(doit)
       List(makeCaseDef(pat, EmptyTree, body))
   }
 

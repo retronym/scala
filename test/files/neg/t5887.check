@@ -14,8 +14,5 @@ Expected type was: ?
 t5887.scala:10: warning: A try without a catch or finally is equivalent to putting its body in a block; no exceptions are handled.
   def h = List("x") map (s => try { case _ => 7 })
                               ^
-t5887.scala:10: error: Cannot construct a collection of type That with elements of type <error> => Int based on a collection of type List[String].
-  def h = List("x") map (s => try { case _ => 7 })
-                    ^
 two warnings found
-three errors found
+two errors found

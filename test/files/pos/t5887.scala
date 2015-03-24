@@ -14,4 +14,13 @@ trait TheOldCollegeTry {
 
   // but not weirder than
   def tf = try (t: Throwable) => throw t finally ()
+
+  // old jedi mind trick
+//badcatch.scala:14: error: recursive value catchExpr1 needs type
+//    try {} catch catchExpr1
+//                 ^
+  def badcatch = {
+    def catchExpr1: PartialFunction[Throwable, Any] = ???
+    try {} catch catchExpr1
+  }
 }

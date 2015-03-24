@@ -33,6 +33,12 @@ object ScalaRunTime {
   def drop[Repr](coll: Repr, num: Int)(implicit traversable: IsTraversableLike[Repr]): Repr =
     traversable conversion coll drop num
 
+  // A helper for inferring type of a catch clause.
+  @inline def catchIdentity[A](pf: PartialFunction[Throwable, A]): PartialFunction[Throwable, A] = pf
+
+  // A helper for rethrowing from a catch clause.
+  val thrower: Throwable => Nothing = (t: Throwable) => throw t
+
   /** Return the class object representing an array with element class `clazz`.
    */
   def arrayClass(clazz: jClass[_]): jClass[_] = {

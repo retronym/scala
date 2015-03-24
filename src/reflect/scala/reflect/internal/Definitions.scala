@@ -1529,6 +1529,8 @@ trait Definitions extends api.StandardDefinitions {
       lazy val ensureAccessibleMethod = getMemberMethod(ScalaRunTimeModule, nme.ensureAccessible)
       lazy val arrayClassMethod       = getMemberMethod(ScalaRunTimeModule, nme.arrayClass)
       lazy val traversableDropMethod  = getMemberMethod(ScalaRunTimeModule, nme.drop)
+      lazy val catchIdentityMethod    = getMemberMethod(ScalaRunTimeModule, nme.catchIdentity)
+      lazy val throwerMethod          = getMemberMethod(ScalaRunTimeModule, nme.thrower)
 
       lazy val GroupOfSpecializable = getMemberClass(SpecializableModule, tpnme.Group)
 
