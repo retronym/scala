@@ -547,7 +547,8 @@ private[internal] trait TypeMaps {
       // parameter whose owner is rhsSym, and which shares the name of an actual
       // type parameter of rhsSym, but which is not among the type parameters of
       // rhsSym. One can see examples of it at SI-4365.
-      val argIndex = rhsSym.typeParams indexWhere (lhsSym.name == _.name)
+      val rhsTParams = rhsSym.typeParams
+      val argIndex = rhsTParams.iterator.take(rhsArgs.length) indexWhere (lhsSym.name == _.name)
       // don't be too zealous with the exceptions, see #2641
       if (argIndex < 0 && rhs.parents.exists(typeIsErroneous))
         ErrorType
@@ -561,9 +562,10 @@ private[internal] trait TypeMaps {
                |  tparams  ${rhsSym.typeParams map own_s mkString ", "}
                |"""
 
-        if (argIndex < 0)
-          abort(s"Something is wrong: cannot find $lhs in applied type $rhs\n" + explain)
-        else {
+        if (argIndex < 0) {
+          correspondingTypeArgument(rhsSym.tpe_*
+          reporter.warning(NoPosition, s"Something is wrong: cannot find $lhs in applied type $rhs\n" + explain)
+        } else {
           val targ   = rhsArgs(argIndex)
           // @M! don't just replace the whole thing, might be followed by type application
           val result = appliedType(targ, lhsArgs mapConserve this)
