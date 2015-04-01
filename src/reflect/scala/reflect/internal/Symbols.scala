@@ -1395,13 +1395,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 // ------ info and type -------------------------------------------------------------------
 
     private[Symbols] var infos: TypeHistory = null
-    def originalInfo = {
-      if (infos eq null) null
-      else {
-        var is = infos
-        while (is.prev ne null) { is = is.prev }
-        is.info
-      }
+    private[this] var _originalInfo: Type = null
+
+    def originalInfo: Type = {
+      _originalInfo
     }
 
     /** The "type" of this symbol.  The type of a term symbol is its usual
@@ -1506,6 +1503,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def info_=(info: Type) {
       assert(info ne null)
       infos = TypeHistory(currentPeriod, info, null)
+      _originalInfo = info
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
     }
@@ -1533,6 +1531,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val pid = phaseId(infos.validFrom)
       assert(pid <= phase.id, (pid, phase.id))
       if (pid == phase.id) infos = infos.prev
+      if (infos eq null) _originalInfo = info
       infos = TypeHistory(currentPeriod, info, infos)
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
       this
@@ -1627,6 +1626,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             infos.validFrom = validTo
             infos
           } else {
+            if (prev1 eq null) _originalInfo = info1
             this.infos = TypeHistory(validTo, info1, prev1)
             this.infos
           }
@@ -1770,6 +1770,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def reset(completer: Type): this.type = {
       resetFlags()
       infos = null
+      _originalInfo = null
       _validTo = NoPeriod
       //limit = NoPhase.id
       setInfo(completer)
