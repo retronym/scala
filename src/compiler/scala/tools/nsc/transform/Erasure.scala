@@ -204,6 +204,7 @@ abstract class Erasure extends AddInterfaces
   }
 
   private val fullNameInSigCache = perRunCaches.newAnyRefMap[Symbol, String]()
+  private val classSigCache = perRunCaches.newAnyRefMap[Type, String]()
 
   /** The Java signature of type 'info', for symbol sym. The symbol is used to give the right return
    *  type for constructors.
@@ -261,7 +262,7 @@ abstract class Erasure extends AddInterfaces
           jsig(st.supertype, existentiallyBound, toplevel, primitiveOK)
         case ExistentialType(tparams, tpe) =>
           jsig(tpe, tparams, toplevel, primitiveOK)
-        case TypeRef(pre, sym, args) =>
+        case tr @ TypeRef(pre, sym, args) =>
           def argSig(tp: Type) =
             if (existentiallyBound contains tp.typeSymbol) {
               val bounds = tp.typeSymbol.info.bounds
@@ -274,7 +275,7 @@ abstract class Erasure extends AddInterfaces
               case _ =>
                 boxedSig(tp)
             }
-          def classSig = {
+          def classSig = classSigCache.getOrElseUpdate(tr, {
             val preRebound = pre.baseType(sym.owner) // #2585
             dotCleanup(
               (
@@ -291,7 +292,7 @@ abstract class Erasure extends AddInterfaces
                 ";"
               )
             )
-          }
+          })
 
           // If args isEmpty, Array is being used as a type constructor
           if (sym == ArrayClass && args.nonEmpty) {
