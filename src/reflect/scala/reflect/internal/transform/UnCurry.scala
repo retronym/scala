@@ -26,10 +26,11 @@ trait UnCurry {
       val tp = expandAlias(tp0)
       tp match {
         case MethodType(params, MethodType(params1, restpe)) =>
+          val _params = params
           // This transformation is described in UnCurryTransformer.dependentParamTypeErasure
           val packSymbolsMap = new TypeMap {
             // Wrapping in a TypeMap to reuse the code that opts for a fast path if the function is an identity.
-            def apply(tp: Type): Type = packSymbols(params, tp)
+            def apply(tp: Type): Type = packSymbols(_params, tp)
           }
           val existentiallyAbstractedParam1s = packSymbolsMap.mapOver(params1)
           val substitutedResult = restpe.substSym(params1, existentiallyAbstractedParam1s)
