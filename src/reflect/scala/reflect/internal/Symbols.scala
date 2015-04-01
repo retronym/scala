@@ -1551,19 +1551,23 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
       var infos = this.infos
+
+      // Manually hoisting $outer as this is the hottest method in the compiler
+      val symtab: self.type = self
+
       assert(infos != null)
-      val curPeriod = currentPeriod
-      val curPid = phaseId(curPeriod)
+      val curPeriod = symtab.currentPeriod
+      val curPid = symtab.phaseId(curPeriod)
 
       if (validTo != NoPeriod) {
         // skip any infos that concern later phases
-        while (curPid < phaseId(infos.validFrom) && infos.prev != null)
+        while (curPid < symtab.phaseId(infos.validFrom) && infos.prev != null)
           infos = infos.prev
 
         if (validTo < curPeriod) {
-          assertCorrectThread()
+          symtab.assertCorrectThread()
           // adapt any infos that come from previous runs
-          val current = phase
+          val current = symtab.phase
           try {
             infos = adaptInfos(infos)
 
@@ -1571,23 +1575,28 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             //assert(runId(infos.validFrom) == currentRunId, name)
 
             if (validTo < curPeriod) {
-              var itr = infoTransformers.nextFrom(phaseId(validTo))
-              infoTransformers = itr; // caching optimization
-              while (itr.pid != NoPhase.id && itr.pid < current.id) {
-                phase = phaseWithId(itr.pid)
+              var itr = symtab.infoTransformers.nextFrom(symtab.phaseId(validTo))
+              symtab.infoTransformers = itr; // caching optimization
+              val noPhaseId = NoPhase.id
+              val currentId = current.id
+              while (itr.pid != noPhaseId && itr.pid < currentId) {
+                symtab.phase = symtab.phaseWithId(itr.pid)
                 val info1 = itr.transform(this, infos.info)
+                def curPeriod1 = curPeriod + itr.pid - curPid
                 if (info1 ne infos.info) {
-                  infos = TypeHistory(currentPeriod + 1, info1, infos)
+                  infos = TypeHistory(curPeriod1 + 1, info1, infos)
                   this.infos = infos
+                  _validTo = curPeriod1 + 1
+                } else {
+                  _validTo = curPeriod1 + 1 // to enable reads from same symbol during info-transform
                 }
-                _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
                 itr = itr.next
               }
-              _validTo = if (itr.pid == NoPhase.id) curPeriod
-                         else period(currentRunId, itr.pid)
+              _validTo = if (itr.pid == noPhaseId) curPeriod
+                         else symtab.period(symtab.currentRunId, itr.pid)
             }
           } finally {
-            phase = current
+            symtab.phase = current
           }
         }
       }
