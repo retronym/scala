@@ -61,6 +61,12 @@ trait Collections {
     head
   }
 
+  /** A version of List#contains, specialized for AnyRef keys */
+  final def containsList[A <: AnyRef](as: List[A], elem: A): Boolean = if (as eq Nil) false else {
+    if (as.head equals elem) true
+    else containsList(as.tail, elem)
+  }
+
   final def collectFirst[A, B](as: List[A])(pf: PartialFunction[A, B]): Option[B] = {
     @tailrec
     def loop(rest: List[A]): Option[B] = rest match {
