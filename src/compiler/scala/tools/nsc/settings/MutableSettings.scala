@@ -448,6 +448,7 @@ class MutableSettings(val errorFn: String => Unit)
     type T = Boolean
     protected var v: Boolean = false
     override def value: Boolean = v
+    override def booleanValue: Boolean = v // manual specialization
 
     def tryToSet(args: List[String]) = { value = true ; Some(args) }
     def unparse: List[String] = if (value) List(name) else Nil
@@ -907,4 +908,10 @@ class MutableSettings(val errorFn: String => Unit)
   }
   import scala.language.implicitConversions
   protected implicit def installEnableSettings[T <: BooleanSetting](s: T): EnableSettings[T] = new EnableSettings(s)
+
+  def newRunSettings: RunSettings = new RunSettings {
+    lazy val isDeveloper: Boolean = MutableSettings.this.developer.value
+    lazy val isScala211: Boolean = MutableSettings.this.isScala211
+    lazy val isScala212: Boolean = MutableSettings.this.isScala212
+  }
 }

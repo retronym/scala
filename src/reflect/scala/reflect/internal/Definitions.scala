@@ -490,7 +490,7 @@ trait Definitions extends api.StandardDefinitions {
     lazy val TypeCreatorClass      = getClassIfDefined("scala.reflect.api.TypeCreator") // defined in scala-reflect.jar, so we need to be careful
     lazy val TreeCreatorClass      = getClassIfDefined("scala.reflect.api.TreeCreator") // defined in scala-reflect.jar, so we need to be careful
 
-    private def Context_210               = if (settings.isScala211) NoSymbol else getClassIfDefined("scala.reflect.macros.Context") // needed under -Xsource:2.10
+    private def Context_210               = if (currentRunSettings.isScala211) NoSymbol else getClassIfDefined("scala.reflect.macros.Context") // needed under -Xsource:2.10
     lazy val BlackboxContextClass         = getClassIfDefined("scala.reflect.macros.blackbox.Context").orElse(Context_210) // defined in scala-reflect.jar, so we need to be careful
 
     lazy val WhiteboxContextClass         = getClassIfDefined("scala.reflect.macros.whitebox.Context").orElse(Context_210) // defined in scala-reflect.jar, so we need to be careful

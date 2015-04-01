@@ -62,7 +62,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
   private[this] def computeThreshHold: Int = (table.size * loadFactor).ceil.toInt
 
   /**
-   * find the bucket associated with an element's hash code
+   *  the bucket associated with an element's hash code
    */
   private[this] def bucketFor(hash: Int): Int = {
     // spread the bits around to try to avoid accidental collisions using the
@@ -172,7 +172,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
       removeStaleEntries()
       val hash = elem.hashCode
       val bucket = bucketFor(hash)
-      val oldHead = table(bucket)
+      val oldHead: Entry[A] = table(bucket)
 
       def add() = {
         table(bucket) = new Entry(elem, hash, oldHead, queue)
@@ -182,16 +182,21 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
       }
 
       @tailrec
-      def linkedListLoop(entry: Entry[A]): A = entry match {
+      def linkedListLoop(entry: Entry[A], i: Int): A = entry match {
         case null                    => add()
         case _                       => {
           val entryElem = entry.get
-          if (elem == entryElem) entryElem
-          else linkedListLoop(entry.tail)
+          if (elem == entryElem) {
+            if (i > 5) {
+              println("large hash collision: " + oldHead.toList.mkString("\n"))
+            }
+            entryElem
+          }
+          else linkedListLoop(entry.tail, i + 1)
         }
       }
 
-      linkedListLoop(oldHead)
+      linkedListLoop(oldHead, 0)
     }
   }
 
@@ -397,7 +402,9 @@ object WeakHashSet {
    * A single entry in a WeakHashSet. It's a WeakReference plus a cached hash code and
    * a link to the next Entry in the same bucket
    */
-  private class Entry[A](element: A, val hash:Int, var tail: Entry[A], queue: ReferenceQueue[A]) extends WeakReference[A](element, queue)
+  private class Entry[A](element: A, val hash:Int, var tail: Entry[A], queue: ReferenceQueue[A]) extends WeakReference[A](element, queue) {
+    def toList: List[A] = element :: (if (tail eq null) Nil else tail.toList)
+  }
 
   val defaultInitialCapacity = 16
   val defaultLoadFactor = .75

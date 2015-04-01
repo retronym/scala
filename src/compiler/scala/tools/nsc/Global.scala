@@ -84,6 +84,8 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   override def settings = currentSettings
 
+  def currentRunSettings = currentRun.runSettings
+
   /** Switch to turn on detailed type logs */
   var printTypings = settings.Ytyperdebug.value
 
@@ -278,7 +280,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       body
   }
 
-  override protected def isDeveloper = settings.developer || super.isDeveloper
+  override protected def isDeveloper = currentRun.runSettings.isDeveloper || super.isDeveloper
 
   /** This is for WARNINGS which should reach the ears of scala developers
    *  whenever they occur, but are not useful for normal users. They should
@@ -1463,6 +1465,8 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
     /** Caching member symbols that are def-s in Definitions because they might change from Run to Run. */
     val runDefinitions: definitions.RunDefinitions = new definitions.RunDefinitions
+
+    val runSettings: Settings#RunSettings = settings.newRunSettings
 
     /** Compile list of source files,
      *  unless there is a problem already,

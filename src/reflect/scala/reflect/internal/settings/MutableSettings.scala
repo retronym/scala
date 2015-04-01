@@ -31,6 +31,7 @@ abstract class MutableSettings extends AbsSettings {
       v = arg
       postSetHook()
     }
+    def booleanValue: Boolean = value.asInstanceOf[Boolean]
 
     /** Returns Some(value) in the case of a value set by user and None otherwise. */
     def valueSetByUser: Option[T] = if (isSetByUser) Some(value) else None
@@ -57,11 +58,15 @@ abstract class MutableSettings extends AbsSettings {
   def Yrecursion: IntSetting
   def maxClassfileName: IntSetting
 
-  def isScala211: Boolean
+  trait RunSettings {
+    def isScala211: Boolean
+    def isDeveloper: Boolean
+  }
+  def newRunSettings: RunSettings
 }
 
 object MutableSettings {
   import scala.language.implicitConversions
   /** Support the common use case, `if (settings.debug) println("Hello, martin.")` */
-  @inline implicit def reflectSettingToBoolean(s: MutableSettings#BooleanSetting): Boolean = s.value
+  @inline implicit def reflectSettingToBoolean(s: MutableSettings#BooleanSetting): Boolean = s.booleanValue
 }

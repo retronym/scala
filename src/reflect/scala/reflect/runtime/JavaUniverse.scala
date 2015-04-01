@@ -17,6 +17,7 @@ class JavaUniverse extends InternalSymbolTable with JavaUniverseForce with Refle
   def picklerPhase = SomePhase
   def erasurePhase = SomePhase
   lazy val settings = new Settings
+  lazy val currentRunSettings = settings.newRunSettings
 
   private val isLogging = sys.props contains "scala.debug.reflect"
   def log(msg: => AnyRef): Unit = if (isLogging) Console.err.println("[reflect] " + msg)
