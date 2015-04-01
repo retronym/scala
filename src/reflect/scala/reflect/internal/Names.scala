@@ -62,6 +62,30 @@ trait Names extends api.Names {
     i == len
   }
 
+  implicit def NameOrdering: Ordering[Name] = new Ordering[Name] {
+    def compare(thiz: Name, that: Name): Int = {
+      val len1: Int = thiz.length
+      val len2: Int = that.length
+      val n: Int = math.min(len1, len2)
+      var k: Int = 0
+      val lim: Int = n
+      if (thiz.isTypeName == that.isTypeName) {
+        while (k < lim) {
+          val c1 = thiz.charAt(k)
+          val c2 = that.charAt(k)
+          if (c1 != c2) {
+            return c1 - c2
+          }
+          k += 1
+        }
+        len1 - len2
+      } else {
+        if (thiz.isTypeName) 1 else -1
+      }
+    }
+  }
+
+
   /** Enter characters into chrs array. */
   private def enterChars(cs: Array[Char], offset: Int, len: Int) {
     var i = 0
