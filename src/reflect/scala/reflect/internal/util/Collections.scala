@@ -67,6 +67,18 @@ trait Collections {
     else containsList(as.tail, elem)
   }
 
+  final def unsafeRemove[A <: AnyRef](as: List[A], elem: A): List[A] = {
+    val result = as dropWhile(_ equals elem)
+    var i = result
+    while ((i ne Nil) && (i.tail ne Nil)) {
+      if (i.tail.head.equals(elem)) {
+        i.asInstanceOf[::[A]].tl = i.tail.tail
+      }
+      i = i.tail
+    }
+    result
+  }
+
   final def collectFirst[A, B](as: List[A])(pf: PartialFunction[A, B]): Option[B] = {
     @tailrec
     def loop(rest: List[A]): Option[B] = rest match {
