@@ -184,7 +184,7 @@ abstract class SymbolTable extends macros.Universe
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
-    case ps     => ps.reverseMap("->" + _).mkString("(", " ", ")")
+    case ps     => ps.iterator.map("->" + _).mkString("(", " ", ")")
   }
 
   final def phase_=(p: Phase) {
@@ -200,8 +200,7 @@ abstract class SymbolTable extends macros.Universe
     current
   }
   final def popPhase(ph: Phase) {
-    phStack = phStack.tail
-    phStack.remove(phStack.size)
+    phStack.remove(phStack.size - 1)
     phase = ph
   }
 
