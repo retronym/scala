@@ -1581,7 +1581,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
               while (itr.pid != noPhaseId && itr.pid < currentId) {
                 symtab.phase = symtab.phaseWithId(itr.pid)
                 val info1 = itr.transform(this, infos.info)
-                def curPeriod1 = curPeriod + itr.pid - curPid
+                val curPeriod1 = curPeriod + itr.pid - curPid
                 if (info1 ne infos.info) {
                   infos = TypeHistory(curPeriod1 + 1, info1, infos)
                   this.infos = infos
