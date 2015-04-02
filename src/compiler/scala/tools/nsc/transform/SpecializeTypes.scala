@@ -437,7 +437,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       else if (args.isEmpty)
         Set()
       else
-        specializedTypeVars(sym.typeParams zip args collect { case (tp, arg) if tp.isSpecialized => arg })
+        specializedTypeVars(flatMap2(sym.typeParams, args) { (tp, arg) => if (tp.isSpecialized) List(arg) else Nil })
 
     case PolyType(tparams, resTpe)   => specializedTypeVars(resTpe :: mapList(tparams)(symInfo)) // OPT
     // since this method may be run at phase typer (before uncurry, where NMTs are eliminated)
@@ -1112,7 +1112,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
   private def unify(tp1: List[Type], tp2: List[Type], env: TypeEnv, strict: Boolean): TypeEnv = {
     if (tp1.isEmpty || tp2.isEmpty) env
-    else (tp1 zip tp2).foldLeft(env) { (env, args) =>
+    else (tp1, tp2).zipped.foldLeft(env) { (env, args) =>
       if (!strict) unify(args._1, args._2, env, strict)
       else {
         val nenv = unify(args._1, args._2, emptyEnv, strict)
