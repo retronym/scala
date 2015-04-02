@@ -173,9 +173,15 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
 
       // For predictably ordered error messages.
       val IClassOrdering = new Ordering[IClass] {
+        private val buffer1 = new mutable.ArrayBuffer[Symbol](32)
+        private val buffer2 = new mutable.ArrayBuffer[Symbol](32)
         def compare(cls1: IClass, cls2: IClass): Int = {
-          val owner1 = cls1.symbol.ownerChain.reverseIterator
-          val owner2 = cls2.symbol.ownerChain.reverseIterator
+          buffer1.clear()
+          buffer2.clear()
+          cls1.symbol.ownersIterator.copyToBuffer(buffer1)
+          cls2.symbol.ownersIterator.copyToBuffer(buffer2)
+          val owner1 = buffer1.reverseIterator
+          val owner2 = buffer1.reverseIterator
           while (owner1.hasNext && owner2.hasNext) {
             val res = NameOrdering.compare(owner1.next().rawname, owner2.next().rawname)
             if (res != 0) return res
@@ -184,7 +190,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
           Ordering.Boolean.compare(owner1.hasNext, owner1.hasNext)
         }
       }
-      var sortedClasses = classes.values.toList sorted(IClassOrdering)
+      var sortedClasses = classes.values.toList.sorted(IClassOrdering)
 
       // Warn when classes will overwrite one another on case-insensitive systems.
       for ((_, v1 :: v2 :: _) <- sortedClasses groupBy (_.symbol.javaClassName.toString.toLowerCase)) {
@@ -3231,7 +3237,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
     || sym.isArtifact
     || sym.isLiftedMethod
     || sym.isBridge
-    || (sym.ownerChain exists (_.isImplClass))
+    || (sym.ownersIterator exists (_.isImplClass))
   )
 
   final def staticForwarderGenericSignature(sym: Symbol, moduleClass: Symbol, unit: CompilationUnit): String = {
