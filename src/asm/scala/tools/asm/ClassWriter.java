@@ -607,7 +607,7 @@ public class ClassWriter extends ClassVisitor {
     public ClassWriter(final int flags) {
         super(Opcodes.ASM5);
         index = 1;
-        pool = new ByteVector();
+        pool = new ByteVector(4192);
         items = new Item[256];
         threshold = (int) (0.75d * items.length);
         key = new Item();
