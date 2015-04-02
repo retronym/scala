@@ -1415,7 +1415,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       }
     }
 
-    def reportError[T](body: =>T)(handler: TypeError => T): T =
+    @inline final def reportError[T](body: =>T)(handler: TypeError => T): T =
       try body
       catch {
         case te: TypeError =>
@@ -1509,65 +1509,71 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
       curTree = tree
       tree match {
-        case Apply(Select(New(tpt), nme.CONSTRUCTOR), args) =>
-          def transformNew = {
-            debuglog("Attempting to specialize new %s(%s)".format(tpt, args.mkString(", ")))
-            val found = specializedType(tpt.tpe)
-            if (found.typeSymbol ne tpt.tpe.typeSymbol) { // the ctor can be specialized
-              val inst = New(found, transformTrees(args): _*)
-              reportError(localTyper.typedPos(tree.pos)(inst))(_ => super.transform(tree))
+        case ap: Apply => ap match {
+          case Apply(Select(New(tpt), nme.CONSTRUCTOR), args) =>
+            def transformNew = {
+              debuglog("Attempting to specialize new %s(%s)".format(tpt, args.mkString(", ")))
+              val found = specializedType(tpt.tpe)
+              if (found.typeSymbol ne tpt.tpe.typeSymbol) {
+                // the ctor can be specialized
+                val inst = New(found, transformTrees(args): _*)
+                reportError(localTyper.typedPos(tree.pos)(inst))(_ => super.transform(tree))
+              }
+              else
+                super.transform(tree)
             }
-            else
-              super.transform(tree)
-          }
-          transformNew
+            transformNew
 
-        case Apply(sel @ Select(sup @ Super(qual, name), name1), args) if hasNewParents(sup) =>
-          def transformSuperApply = {
-            val sup1  = Super(qual, name) setPos sup.pos
-            val tree1 = Apply(Select(sup1, name1) setPos sel.pos, transformTrees(args))
-            val res   = localTyper.typedPos(tree.pos)(tree1)
-            debuglog(s"retyping call to super, from: $symbol to ${res.symbol}")
-            res
-          }
-          transformSuperApply
-
-        // This rewires calls to specialized methods defined in a class (which have a receiver)
-        // class C {
-        //   def foo[@specialized T](t: T): T = t
-        //   C.this.foo(3) // TypeApply(Select(This(C), foo), List(Int)) => C.this.foo$mIc$sp(3)
-        // }
-        case TypeApply(sel @ Select(qual, name), targs)
-                if (specializedTypeVars(symbol.info).nonEmpty && name != nme.CONSTRUCTOR) =>
-          debuglog("checking typeapp for rerouting: " + tree + " with sym.tpe: " + symbol.tpe + " tree.tpe: " + tree.tpe)
-          val qual1 = transform(qual)
-          log(">>> TypeApply: " + tree + ", qual1: " + qual1)
-          specSym(qual1) match {
-            case NoSymbol =>
-              // See pos/exponential-spec.scala - can't call transform on the whole tree again.
-              treeCopy.TypeApply(tree, treeCopy.Select(sel, qual1, name), transformTrees(targs))
-            case specMember =>
-              debuglog("found " + specMember.fullName)
-              ifDebug(assert(symbol.info.typeParams.length == targs.length, symbol.info.typeParams + " / " + targs))
-
-              val env = typeEnv(specMember)
-              computeResidualTypeVars(tree, specMember, gen.mkAttributedSelect(qual1, specMember), targs, env)
-          }
-
-        // This rewires calls to specialized methods defined in the local scope. For example:
-        // def outerMethod = {
-        //   def foo[@specialized T](t: T): T = t
-        //   foo(3) // TypeApply(Ident(foo), List(Int)) => foo$mIc$sp(3)
-        // }
-        case TypeApply(sel @ Ident(name), targs) if name != nme.CONSTRUCTOR =>
-          val env = unify(symbol.tpe, tree.tpe, emptyEnv, false)
-          if (env.isEmpty) super.transform(tree)
-          else {
-            overloads(symbol) find (_ matchesEnv env) match {
-              case Some(Overload(specMember, _)) => computeResidualTypeVars(tree, specMember, Ident(specMember), targs, env)
-              case _ => super.transform(tree)
+          case Apply(sel@Select(sup@Super(qual, name), name1), args) if hasNewParents(sup) =>
+            def transformSuperApply = {
+              val sup1 = Super(qual, name) setPos sup.pos
+              val tree1 = Apply(Select(sup1, name1) setPos sel.pos, transformTrees(args))
+              val res = localTyper.typedPos(tree.pos)(tree1)
+              debuglog(s"retyping call to super, from: $symbol to ${res.symbol}")
+              res
             }
-          }
+            transformSuperApply
+          case _ => super.transform(tree)
+        }
+        case tap : TypeApply => tap match {
+          // This rewires calls to specialized methods defined in a class (which have a receiver)
+          // class C {
+          //   def foo[@specialized T](t: T): T = t
+          //   C.this.foo(3) // TypeApply(Select(This(C), foo), List(Int)) => C.this.foo$mIc$sp(3)
+          // }
+          case TypeApply(sel@Select(qual, name), targs)
+            if (specializedTypeVars(symbol.info).nonEmpty && name != nme.CONSTRUCTOR) =>
+            debuglog("checking typeapp for rerouting: " + tree + " with sym.tpe: " + symbol.tpe + " tree.tpe: " + tree.tpe)
+            val qual1 = transform(qual)
+            log(">>> TypeApply: " + tree + ", qual1: " + qual1)
+            specSym(qual1) match {
+              case NoSymbol =>
+                // See pos/exponential-spec.scala - can't call transform on the whole tree again.
+                treeCopy.TypeApply(tree, treeCopy.Select(sel, qual1, name), transformTrees(targs))
+              case specMember =>
+                debuglog("found " + specMember.fullName)
+                ifDebug(assert(symbol.info.typeParams.length == targs.length, symbol.info.typeParams + " / " + targs))
+
+                val env = typeEnv(specMember)
+                computeResidualTypeVars(tree, specMember, gen.mkAttributedSelect(qual1, specMember), targs, env)
+            }
+
+          // This rewires calls to specialized methods defined in the local scope. For example:
+          // def outerMethod = {
+          //   def foo[@specialized T](t: T): T = t
+          //   foo(3) // TypeApply(Ident(foo), List(Int)) => foo$mIc$sp(3)
+          // }
+          case TypeApply(sel@Ident(name), targs) if name != nme.CONSTRUCTOR =>
+            val env = unify(symbol.tpe, tree.tpe, emptyEnv, false)
+            if (env.isEmpty) super.transform(tree)
+            else {
+              overloads(symbol) find (_ matchesEnv env) match {
+                case Some(Overload(specMember, _)) => computeResidualTypeVars(tree, specMember, Ident(specMember), targs, env)
+                case _ => super.transform(tree)
+              }
+            }
+          case _ => super.transform(tree)
+        }
 
         case Select(Super(_, _), _) if illegalSpecializedInheritance(currentClass) =>
           val pos = tree.pos
@@ -1599,96 +1605,100 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           }
           transformTemplate
 
-        case ddef @ DefDef(_, _, _, vparamss, _, _) if info.isDefinedAt(symbol) =>
-        def transformDefDef = {
-          if (symbol.isConstructor) {
-            val t = atOwner(symbol)(forwardCtorCall(tree.pos, gen.mkSuperInitCall, vparamss, symbol.owner))
-            if (symbol.isPrimaryConstructor)
-              localTyper.typedPos(symbol.pos)(deriveDefDef(tree)(_ => Block(List(t), Literal(Constant(())))))
-            else // duplicate the original constructor
-              reportError(duplicateBody(ddef, info(symbol).target))(_ => ddef)
-          }
-          else info(symbol) match {
-            case Implementation(target) =>
-              assert(body.isDefinedAt(target), "sym: " + symbol.fullName + " target: " + target.fullName)
-              // we have an rhs, specialize it
-              val tree1 = reportError(duplicateBody(ddef, target))(_ => ddef)
-              debuglog("implementation: " + tree1)
-              deriveDefDef(tree1)(transform)
-
-            case NormalizedMember(target) =>
-              logResult("constraints")(satisfiabilityConstraints(typeEnv(symbol))) match {
-                case Some(constraint) if !target.isDeferred =>
+        case ddef : DefDef => ddef match {
+          case ddef@DefDef(_, _, _, vparamss, _, _) if info.isDefinedAt(symbol) =>
+            def transformDefDef = {
+              if (symbol.isConstructor) {
+                val t = atOwner(symbol)(forwardCtorCall(tree.pos, gen.mkSuperInitCall, vparamss, symbol.owner))
+                if (symbol.isPrimaryConstructor)
+                  localTyper.typedPos(symbol.pos)(deriveDefDef(tree)(_ => Block(List(t), Literal(Constant(())))))
+                else // duplicate the original constructor
+                  reportError(duplicateBody(ddef, info(symbol).target))(_ => ddef)
+              }
+              else info(symbol) match {
+                case Implementation(target) =>
+                  assert(body.isDefinedAt(target), "sym: " + symbol.fullName + " target: " + target.fullName)
                   // we have an rhs, specialize it
-                  val tree1 = reportError(duplicateBody(ddef, target, constraint))(_ => ddef)
+                  val tree1 = reportError(duplicateBody(ddef, target))(_ => ddef)
                   debuglog("implementation: " + tree1)
                   deriveDefDef(tree1)(transform)
-                case _ =>
-                  deriveDefDef(tree)(_ => localTyper typed gen.mkSysErrorCall("Fatal error in code generation: this should never be called."))
+
+                case NormalizedMember(target) =>
+                  logResult("constraints")(satisfiabilityConstraints(typeEnv(symbol))) match {
+                    case Some(constraint) if !target.isDeferred =>
+                      // we have an rhs, specialize it
+                      val tree1 = reportError(duplicateBody(ddef, target, constraint))(_ => ddef)
+                      debuglog("implementation: " + tree1)
+                      deriveDefDef(tree1)(transform)
+                    case _ =>
+                      deriveDefDef(tree)(_ => localTyper typed gen.mkSysErrorCall("Fatal error in code generation: this should never be called."))
+                  }
+
+                case SpecialOverride(target) =>
+                  assert(body.isDefinedAt(target), "sym: " + symbol.fullName + " target: " + target.fullName)
+                  //debuglog("moving implementation, body of target " + target + ": " + body(target))
+                  log("%s is param accessor? %b".format(ddef.symbol, ddef.symbol.isParamAccessor))
+                  // we have an rhs, specialize it
+                  val tree1 = addBody(ddef, target)
+                  (new ChangeOwnerTraverser(target, tree1.symbol))(tree1.rhs)
+                  debuglog("changed owners, now: " + tree1)
+                  deriveDefDef(tree1)(transform)
+
+                case SpecialOverload(original, env) =>
+                  debuglog("completing specialized " + symbol.fullName + " calling " + original)
+                  debuglog("special overload " + original + " -> " + env)
+                  val t = DefDef(symbol, { vparamss: List[List[Symbol]] =>
+                    val fun = Apply(Select(This(symbol.owner), original),
+                      makeArguments(original, vparamss.head))
+
+                    debuglog("inside defdef: " + symbol + "; type: " + symbol.tpe + "; owner: " + symbol.owner)
+                    gen.maybeMkAsInstanceOf(fun,
+                      symbol.owner.thisType.memberType(symbol).finalResultType,
+                      symbol.owner.thisType.memberType(original).finalResultType)
+                  })
+                  debuglog("created special overload tree " + t)
+                  debuglog("created " + t)
+                  reportError {
+                    localTyper.typed(t)
+                  } {
+                    _ => super.transform(tree)
+                  }
+
+                case fwd@Forward(_) =>
+                  debuglog("forward: " + fwd + ", " + ddef)
+                  val rhs1 = forwardCall(tree.pos, gen.mkAttributedRef(symbol.owner.thisType, fwd.target), vparamss)
+                  debuglog("-->d completed forwarder to specialized overload: " + fwd.target + ": " + rhs1)
+                  reportError {
+                    localTyper.typed(deriveDefDef(tree)(_ => rhs1))
+                  } {
+                    _ => super.transform(tree)
+                  }
+
+                case SpecializedAccessor(target) =>
+                  val rhs1 = if (symbol.isGetter)
+                    gen.mkAttributedRef(target)
+                  else
+                    Assign(gen.mkAttributedRef(target), Ident(vparamss.head.head.symbol))
+                  debuglog("specialized accessor: " + target + " -> " + rhs1)
+                  localTyper.typed(deriveDefDef(tree)(_ => rhs1))
+
+                case Abstract(targ) =>
+                  debuglog("abstract: " + targ)
+                  localTyper.typed(deriveDefDef(tree)(rhs => rhs))
+
+                case SpecialSuperAccessor(targ) =>
+                  debuglog("special super accessor: " + targ + " for " + tree)
+                  localTyper.typed(deriveDefDef(tree)(rhs => rhs))
               }
+            }
+            expandInnerNormalizedMembers(transformDefDef)
 
-            case SpecialOverride(target) =>
-              assert(body.isDefinedAt(target), "sym: " + symbol.fullName + " target: " + target.fullName)
-              //debuglog("moving implementation, body of target " + target + ": " + body(target))
-              log("%s is param accessor? %b".format(ddef.symbol, ddef.symbol.isParamAccessor))
-              // we have an rhs, specialize it
-              val tree1 = addBody(ddef, target)
-              (new ChangeOwnerTraverser(target, tree1.symbol))(tree1.rhs)
-              debuglog("changed owners, now: " + tree1)
-              deriveDefDef(tree1)(transform)
-
-            case SpecialOverload(original, env) =>
-              debuglog("completing specialized " + symbol.fullName + " calling " + original)
-              debuglog("special overload " + original + " -> " + env)
-              val t = DefDef(symbol, { vparamss: List[List[Symbol]] =>
-                val fun = Apply(Select(This(symbol.owner), original),
-                                makeArguments(original, vparamss.head))
-
-                debuglog("inside defdef: " + symbol + "; type: " + symbol.tpe + "; owner: " + symbol.owner)
-                gen.maybeMkAsInstanceOf(fun,
-                  symbol.owner.thisType.memberType(symbol).finalResultType,
-                  symbol.owner.thisType.memberType(original).finalResultType)
-              })
-              debuglog("created special overload tree " + t)
-              debuglog("created " + t)
-              reportError {
-                localTyper.typed(t)
-              } {
-                _ => super.transform(tree)
-              }
-
-            case fwd @ Forward(_) =>
-              debuglog("forward: " + fwd + ", " + ddef)
-              val rhs1 = forwardCall(tree.pos, gen.mkAttributedRef(symbol.owner.thisType, fwd.target), vparamss)
-              debuglog("-->d completed forwarder to specialized overload: " + fwd.target + ": " + rhs1)
-              reportError {
-                localTyper.typed(deriveDefDef(tree)(_ => rhs1))
-              } {
-                _ => super.transform(tree)
-              }
-
-            case SpecializedAccessor(target) =>
-              val rhs1 = if (symbol.isGetter)
-                gen.mkAttributedRef(target)
-              else
-                Assign(gen.mkAttributedRef(target), Ident(vparamss.head.head.symbol))
-              debuglog("specialized accessor: " + target + " -> " + rhs1)
-              localTyper.typed(deriveDefDef(tree)(_ => rhs1))
-
-            case Abstract(targ) =>
-              debuglog("abstract: " + targ)
-              localTyper.typed(deriveDefDef(tree)(rhs => rhs))
-
-            case SpecialSuperAccessor(targ) =>
-              debuglog("special super accessor: " + targ + " for " + tree)
-              localTyper.typed(deriveDefDef(tree)(rhs => rhs))
-          }
-          }
-          expandInnerNormalizedMembers(transformDefDef)
-
-        case ddef @ DefDef(_, _, _, _, _, _) =>
-          val tree1 = expandInnerNormalizedMembers(tree)
-          super.transform(tree1)
+          case ddef@DefDef(_, _, _, _, _, _) =>
+            val tree1 = expandInnerNormalizedMembers(tree)
+            super.transform(tree1)
+          case _ =>
+            super.transform(tree)
+        }
 
         case ValDef(_, _, _, _) if symbol.hasFlag(SPECIALIZED) && !symbol.isParamAccessor =>
           def transformValDef = {
