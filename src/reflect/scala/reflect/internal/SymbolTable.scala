@@ -171,11 +171,11 @@ abstract class SymbolTable extends macros.Universe
   final val NoRunId = 0
 
   // sigh, this has to be public or enteringPhase doesn't inline.
-  var phStack: List[Phase] = Nil
+  var phStack = mutable.ArrayBuffer[Phase]()
   private[this] var ph: Phase = NoPhase
   private[this] var per = NoPeriod
 
-  final def atPhaseStack: List[Phase] = phStack
+  final def atPhaseStack: Seq[Phase] = phStack
   final def phase: Phase = {
     if (Statistics.hotEnabled)
       Statistics.incCounter(SymbolTableStats.phaseCounter)
@@ -196,11 +196,12 @@ abstract class SymbolTable extends macros.Universe
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
     phase = ph
-    phStack ::= ph
+    phStack += ph
     current
   }
   final def popPhase(ph: Phase) {
     phStack = phStack.tail
+    phStack.remove(phStack.size)
     phase = ph
   }
 
