@@ -9,7 +9,7 @@ package internal
 
 import scala.language.postfixOps
 import scala.annotation.{ switch, meta }
-import scala.collection.{ mutable, immutable }
+import scala.collection.{mutable, immutable}
 import Flags._
 import scala.reflect.api.{Universe => ApiUniverse}
 

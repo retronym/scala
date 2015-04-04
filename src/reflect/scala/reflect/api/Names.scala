@@ -71,7 +71,7 @@ trait Names {
   /** The API of Name instances.
    *  @group API
    */
-  abstract class NameApi {
+  abstract class NameApi extends CharSequence {
     /** Checks whether the name is a term name */
     def isTermName: Boolean
 

@@ -166,7 +166,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
             sym.fullName + suffix
           case sym =>
             val separator = if (sym.owner.isModuleClass) "" else "$"
-            loop(sym.owner) + separator + sym.javaSimpleName.toString
+            loop(sym.owner) + separator + sym.javaSimpleNameString
         }
 
         loop(owner)

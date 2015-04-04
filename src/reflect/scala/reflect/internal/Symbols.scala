@@ -1198,6 +1198,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       def next = { val r = current; current = current.owner; r }
     }
 
+    def effectiveOwnersIterator: Iterator[Symbol] = new Iterator[Symbol] {
+      private var current = Symbol.this
+      def hasNext = current ne NoSymbol
+      def next = { val r = current; current = current.effectiveOwner; r }
+    }
+
     /** Same as `ownerChain contains sym` but more efficient, and
      *  with a twist for refinement classes (see RefinementClassSymbol.)
      */
@@ -1239,11 +1245,41 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       && !isImplClass
       && !isJavaDefined
     )
-    /** These should be moved somewhere like JavaPlatform.
-     */
+
     def javaSimpleName: Name = addModuleSuffix(simpleName.dropLocal)
     def javaBinaryName: Name = addModuleSuffix(fullNameInternal('/'))
-    def javaClassName: String  = addModuleSuffix(fullNameInternal('.')).toString
+
+    def javaSimpleNameString: String = {
+      val builder = new java.lang.StringBuilder
+      val simpleName1 = simpleName.dropLocal
+      builder.ensureCapacity(simpleName1.length + (if (needsModuleSuffix) nme.MODULE_SUFFIX_STRING.length else 0))
+      builder.append(simpleName1)
+      if (needsModuleSuffix) builder append nme.MODULE_SUFFIX_STRING
+      builder.toString
+    }
+    def javaBinaryNameString: String = javaFullName('/')
+    def javaClassName: String  = javaFullName('.')
+
+    def javaFullName(separator: Char): String = {
+      val builder = new StringBuilder()
+      def loop(sym: Symbol, len: Int): Unit = {
+        val name = sym.name
+        if (sym.isRoot || sym.isRootPackage || sym == NoSymbol || sym.owner.isEffectiveRoot) {
+          builder.ensureCapacity(len + name.length)
+          builder.append(sym.name.toString)
+        }
+        else {
+          loop(sym.effectiveOwner.enclClass, len + name.length)
+          builder.append(separator).append(name.toString)
+        }
+      }
+      if (needsModuleSuffix) {
+        loop(this, nme.MODULE_SUFFIX_STRING.length)
+        builder.append(nme.MODULE_SUFFIX_STRING)
+      } else loop(this, 0)
+      builder.toString
+    }
+
 
     /** The encoded full path name of this symbol, where outer names and inner names
      *  are separated by `separator` characters.

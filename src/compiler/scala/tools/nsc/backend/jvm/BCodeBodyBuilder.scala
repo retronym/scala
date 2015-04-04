@@ -421,7 +421,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val owner      =
         if (hostClass == null) internalName(field.owner)
         else                  internalName(hostClass)
-      val fieldJName = field.javaSimpleName.toString
+      val fieldJName = field.javaSimpleNameString
       val fieldDescr = symInfoTK(field).descriptor
       val isStatic   = field.isStaticMember
       val opc =
@@ -472,7 +472,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case EnumTag   =>
           val sym       = const.symbolValue
           val ownerName = internalName(sym.owner)
-          val fieldName = sym.javaSimpleName.toString
+          val fieldName = sym.javaSimpleNameString
           val fieldDesc = toTypeKind(sym.tpe.underlying).descriptor
           mnode.visitFieldInsn(
             asm.Opcodes.GETSTATIC,
@@ -1015,7 +1015,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       )
       val receiver = if (useMethodOwner) methodOwner else hostSymbol
       val jowner   = internalName(receiver)
-      val jname    = method.javaSimpleName.toString
+      val jname    = method.javaSimpleNameString
       val bmType   = asmMethodType(method)
       val mdescr   = bmType.descriptor
 

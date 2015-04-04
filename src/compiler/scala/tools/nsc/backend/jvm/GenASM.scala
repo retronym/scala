@@ -68,8 +68,8 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
     // unlike javaNameCache, reverseJavaName contains entries only for class symbols and their internal names.
     reverseJavaName.clear()
     reverseJavaName ++= List(
-      binarynme.RuntimeNothing.toString() -> RuntimeNothingClass, // RuntimeNothingClass is the bytecode-level return type of Scala methods with Nothing return-type.
-      binarynme.RuntimeNull.toString()    -> RuntimeNullClass
+      binarynme.RuntimeNothing -> RuntimeNothingClass, // RuntimeNothingClass is the bytecode-level return type of Scala methods with Nothing return-type.
+      binarynme.RuntimeNull    -> RuntimeNullClass
     )
 
     // Lazy val; can't have eager vals in Phase constructors which may
@@ -252,7 +252,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
 
   var pickledBytes = 0 // statistics
 
-  val javaNameCache = perRunCaches.newAnyRefMap[Symbol, Name]()
+  val javaNameCache = perRunCaches.newAnyRefMap[Symbol, String]()
 
   // unlike javaNameCache, reverseJavaName contains entries only for class symbols and their internal names.
   val reverseJavaName = perRunCaches.newAnyRefMap[String, Symbol]()
@@ -440,7 +440,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
     // global.lub(List(a.tpe, b.tpe)).typeSymbol.javaBinaryName.toString()
     // icodes.lub(icodes.toTypeKind(a.tpe), icodes.toTypeKind(b.tpe)).toType
     val lcaSym  = jvmWiseLUB(a, b)
-    val lcaName = lcaSym.javaBinaryName.toString // don't call javaName because that side-effects innerClassBuffer.
+    val lcaName = lcaSym.javaBinaryNameString // don't call javaName because that side-effects innerClassBuffer.
     val oldsym  = reverseJavaName.put(lcaName, lcaSym)
     assert(oldsym.isEmpty || (oldsym.get == lcaSym), "somehow we're not managing to compute common-super-class for ASM consumption")
     assert(lcaName != "scala/Any")
@@ -627,15 +627,17 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
 
       val hasInternalName = sym.isClass || sym.isModuleNotMethod
       val cachedJN = javaNameCache.getOrElseUpdate(sym, {
-        if (hasInternalName) { sym.javaBinaryName }
-        else                 { sym.javaSimpleName }
+        if (hasInternalName) { sym.javaBinaryNameString }
+        else                 { sym.javaSimpleNameString }
       })
 
       if(emitStackMapFrame && hasInternalName) {
-        val internalName = cachedJN.toString()
+        val internalName = cachedJN
         val trackedSym = jsymbol(sym)
-        reverseJavaName.get(internalName) match {
-          case Some(oldsym) if oldsym.exists && trackedSym.exists =>
+        reverseJavaName.getOrNull(internalName) match {
+          case null =>
+            reverseJavaName.put(internalName, trackedSym)
+          case oldsym if oldsym.exists && trackedSym.exists =>
             assert(
               // In contrast, neither NothingClass nor NullClass show up bytecode-level.
               (oldsym == trackedSym) || (oldsym == RuntimeNothingClass) || (oldsym == RuntimeNullClass) || (oldsym.isModuleClass && (oldsym.sourceModule == trackedSym.sourceModule)),
@@ -645,12 +647,10 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
                   |  tracked: ${trackedSym.fullNameString}
               """.stripMargin
             )
-          case _ =>
-            reverseJavaName.put(internalName, trackedSym)
         }
       }
 
-      cachedJN.toString
+      cachedJN
     }
 
     def descriptor(t: Type):     String = { javaType(t).getDescriptor }

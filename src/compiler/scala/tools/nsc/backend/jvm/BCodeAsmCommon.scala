@@ -208,7 +208,7 @@ final class BCodeAsmCommon[G <: Global](val global: G) {
       }
       Some(EnclosingMethodEntry(
         classDesc(enclosingClass),
-        methodOpt.map(_.javaSimpleName.toString).orNull,
+        methodOpt.map(_.javaSimpleNameString).orNull,
         methodOpt.map(methodDesc).orNull))
     } else {
       None
@@ -349,7 +349,7 @@ final class BCodeAsmCommon[G <: Global](val global: G) {
           warning = Some(ClassSymbolInfoFailureSI9111(classSym.fullName))
           None
         } else {
-          val name      = methodSym.javaSimpleName.toString // same as in genDefDef
+          val name      = methodSym.javaSimpleNameString // same as in genDefDef
           val signature = name + methodSymToDescriptor(methodSym)
 
           // Some detours are required here because of changing flags (lateDEFERRED, lateMODULE):

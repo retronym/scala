@@ -292,6 +292,8 @@ trait Names extends api.Names {
     /** @return the i'th Char of this name */
     final def charAt(i: Int): Char = chrs(index + i)
 
+    override def subSequence(start: Int, end: Int): CharSequence = subName(start, end)
+
     /** @return the index of first occurrence of char c in this name, length if not found */
     final def pos(c: Char): Int = pos(c, 0)
 

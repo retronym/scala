@@ -581,7 +581,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
 
       val jReturnType = toTypeKind(methodInfo.resultType)
       val mdesc = MethodBType(paramJavaTypes, jReturnType).descriptor
-      val mirrorMethodName = m.javaSimpleName.toString
+      val mirrorMethodName = m.javaSimpleNameString
       val mirrorMethod: asm.MethodVisitor = jclass.visitMethod(
         flags,
         mirrorMethodName,
@@ -755,7 +755,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
      */
     def genBeanInfoClass(cls: Symbol, cunit: CompilationUnit, fieldSymbols: List[Symbol], methodSymbols: List[Symbol]): asm.tree.ClassNode = {
 
-      def javaSimpleName(s: Symbol): String = { s.javaSimpleName.toString }
+      def javaSimpleName(s: Symbol): String = { s.javaSimpleNameString }
 
       innerClassBufferASM.clear()
 

@@ -1055,8 +1055,8 @@ trait StdNames {
   object binarynme {
     def toBinary(name: Name) = name mapName (_.replace('.', '/'))
 
-    val RuntimeNothing = toBinary(fulltpnme.RuntimeNothing).toTypeName
-    val RuntimeNull    = toBinary(fulltpnme.RuntimeNull).toTypeName
+    val RuntimeNothing = toBinary(fulltpnme.RuntimeNothing).toString
+    val RuntimeNull    = toBinary(fulltpnme.RuntimeNull).toString
   }
 
   val javanme = nme.javaKeywords

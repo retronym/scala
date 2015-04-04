@@ -396,7 +396,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       private def makeLocal(sym: Symbol, tk: BType): Local = {
         assert(!slots.contains(sym), "attempt to create duplicate local var.")
         assert(nxtIdx != -1, "not a valid start index")
-        val loc = Local(tk, sym.javaSimpleName.toString, nxtIdx, sym.isSynthetic)
+        val loc = Local(tk, sym.javaSimpleNameString, nxtIdx, sym.isSynthetic)
         slots += (sym -> loc)
         assert(tk.size > 0, "makeLocal called for a symbol whose type is Unit.")
         nxtIdx += tk.size
@@ -555,7 +555,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       assert(mnode == null, "GenBCode detected nested method.")
 
       methSymbol  = dd.symbol
-      jMethodName = methSymbol.javaSimpleName.toString
+      jMethodName = methSymbol.javaSimpleNameString
       returnType  = asmMethodType(dd.symbol).returnType
       isMethSymStaticCtor = methSymbol.isStaticConstructor
 
@@ -683,7 +683,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         insnModA      = new asm.tree.TypeInsnNode(asm.Opcodes.NEW, className)
         // INVOKESPECIAL <init>
         val callee = methSymbol.enclClass.primaryConstructor
-        val jname  = callee.javaSimpleName.toString
+        val jname  = callee.javaSimpleNameString
         val jowner = internalName(callee.owner)
         val jtype  = asmMethodType(callee).descriptor
         insnModB   = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESPECIAL, jowner, jname, jtype, false)
@@ -705,7 +705,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         // INVOKESTATIC CREATOR(): android.os.Parcelable$Creator; -- TODO where does this Android method come from?
         val callee = definitions.getMember(claszSymbol.companionModule, androidFieldName)
         val jowner = internalName(callee.owner)
-        val jname  = callee.javaSimpleName.toString
+        val jname  = callee.javaSimpleNameString
         val jtype  = asmMethodType(callee).descriptor
         insnParcA  = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESTATIC, jowner, jname, jtype, false)
         // PUTSTATIC `thisName`.CREATOR;
