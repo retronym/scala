@@ -437,7 +437,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       else if (args.isEmpty)
         Set()
       else
-        specializedTypeVars(flatMap2(sym.typeParams, args) { (tp, arg) => if (tp.isSpecialized) List(arg) else Nil })
+        specializedTypeVars(flatMap2(sym.typeParams, args) { (tp, arg) => if (tp.isSpecialized) arg :: Nil else Nil })
 
     case PolyType(tparams, resTpe)   => specializedTypeVars(resTpe :: mapList(tparams)(symInfo)) // OPT
     // since this method may be run at phase typer (before uncurry, where NMTs are eliminated)
@@ -585,7 +585,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           res
         }
 
-        var parents = List(applyContext(enteringTyper(clazz.tpe_*)))
+        var parents = applyContext(enteringTyper(clazz.tpe_*)) :: Nil
         // log("!!! Parents: " + parents + ", sym: " + parents.map(_.typeSymbol))
         if (parents.head.typeSymbol.isTrait)
           parents = parents.head.parents.head :: parents
