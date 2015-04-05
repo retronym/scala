@@ -62,7 +62,8 @@ trait Names extends api.Names {
     i == len
   }
 
-  implicit def NameOrdering: Ordering[Name] = new Ordering[Name] {
+  implicit def lowPriorityNameOrdering[T <: Names#Name]: Ordering[T] = _NameOrdering.asInstanceOf[Ordering[T]]
+  private val _NameOrdering: Ordering[Name] = new Ordering[Name] {
     def compare(thiz: Name, that: Name): Int = {
       val len1: Int = thiz.length
       val len2: Int = that.length
