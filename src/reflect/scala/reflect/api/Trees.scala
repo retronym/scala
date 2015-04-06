@@ -2588,10 +2588,10 @@ trait Trees { self: Universe =>
       val mapped = stats mapConserve (stat =>
         if (exprOwner != currentOwner && stat.isTerm) atOwner(exprOwner)(transform(stat))
         else transform(stat))
-      if (containsList(mapped, EmptyTree)) {
+      if (containsEqList(mapped, EmptyTree)) {
         if (mapped ne stats) {
-          unsafeRemove(mapped, EmptyTree)
-        } else mapped filter (EmptyTree != _)
+          unsafeRemoveEq(mapped, EmptyTree)
+        } else mapped filter (EmptyTree ne _)
       } else mapped
     }
     /** Transforms `Modifiers`. */

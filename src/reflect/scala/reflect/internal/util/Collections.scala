@@ -62,16 +62,16 @@ trait Collections {
   }
 
   /** A version of List#contains, specialized for AnyRef keys */
-  final def containsList[A <: AnyRef](as: List[A], elem: A): Boolean = if (as eq Nil) false else {
-    if (as.head equals elem) true
-    else containsList(as.tail, elem)
+  final def containsEqList[A <: AnyRef](as: List[A], elem: A): Boolean = if (as eq Nil) false else {
+    if (as.head eq elem) true
+    else containsEqList(as.tail, elem)
   }
 
-  final def unsafeRemove[A <: AnyRef](as: List[A], elem: A): List[A] = {
-    val result = as dropWhile(_ equals elem)
+  final def unsafeRemoveEq[A <: AnyRef](as: List[A], elem: A): List[A] = {
+    val result = as dropWhile(_ eq elem)
     var i = result
     while ((i ne Nil) && (i.tail ne Nil)) {
-      if (i.tail.head.equals(elem)) {
+      if (i.tail.head eq elem) {
         i.asInstanceOf[::[A]].tl = i.tail.tail
       }
       i = i.tail
