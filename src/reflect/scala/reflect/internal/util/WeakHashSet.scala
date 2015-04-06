@@ -157,7 +157,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
         case null                    => null.asInstanceOf[A]
         case _                       => {
           val entryElem = entry.get
-          if (elem == entryElem) entryElem
+          if (elem equals entryElem) entryElem
           else linkedListLoop(entry.tail)
         }
       }
@@ -186,10 +186,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
         case null                    => add()
         case _                       => {
           val entryElem = entry.get
-          if (elem == entryElem) {
-            if (i > 5) {
-              println("large hash collision: " + oldHead.toList.mkString("\n"))
-            }
+          if (elem equals entryElem) {
             entryElem
           }
           else linkedListLoop(entry.tail, i + 1)
