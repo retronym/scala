@@ -396,6 +396,16 @@ abstract class SymbolTable extends macros.Universe
   @deprecated("Use enteringPhase", "2.10.0") // Used in SBT 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
+  abstract class PeriodCache[T >: Null <: AnyRef] {
+    private var per: Period = NoPeriod
+    private var value: T = null
+    def compute: T
+    def apply(): T = {
+      val curPer = currentPeriod
+      if (curPer != per) {value = compute; per = curPer}
+      value
+    }
+  }
 
   /**
    * Adds the `sm` String interpolator to a [[scala.StringContext]].

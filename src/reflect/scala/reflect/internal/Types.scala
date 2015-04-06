@@ -2413,7 +2413,10 @@ trait Types
 
     override def paramss: List[List[Symbol]] = params :: resultType.paramss
 
-    override def paramTypes = mapList(params)(symTpe) // OPT use mapList rather than .map
+    private val paramTypesCache = new PeriodCache[List[Type]] {
+      override def compute: List[Type] = mapList(params)(symTpe)
+    }
+    override def paramTypes = paramTypesCache()
 
     override def boundSyms = resultType.boundSyms ++ params
 
