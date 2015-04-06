@@ -191,7 +191,7 @@ trait Infer extends Checkable {
       def errorValue  = if (context.reportErrors) context.owner.newErrorValue(name) else stdErrorValue
       def errorSym    = if (tree.isType) errorClass else errorValue
 
-      if (tree.hasSymbolField)
+      if (tree.hasSymbolField && !tree.isDef)
         tree setSymbol errorSym
 
       tree setType ErrorType
