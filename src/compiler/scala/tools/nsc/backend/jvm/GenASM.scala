@@ -183,7 +183,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
           val owner1 = buffer1.reverseIterator
           val owner2 = buffer1.reverseIterator
           while (owner1.hasNext && owner2.hasNext) {
-            val res = NameOrdering.compare(owner1.next().rawname, owner2.next().rawname)
+            val res = lowPriorityNameOrdering[Name].compare(owner1.next().rawname, owner2.next().rawname)
             if (res != 0) return res
           }
 
