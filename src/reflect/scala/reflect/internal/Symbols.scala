@@ -1596,47 +1596,78 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       if (validTo != NoPeriod) {
         // skip any infos that concern later phases
-        while (curPid < symtab.phaseId(infos.validFrom) && infos.prev != null)
-          infos = infos.prev
+        def skipLaterEntries: TypeHistory = {
+          var infos1 = infos
+          while (curPid < symtab.phaseId(infos1.validFrom) && infos1.prev != null)
+            infos1 = infos1.prev
+          infos1
+        }
+        infos = skipLaterEntries
 
         if (validTo < curPeriod) {
-          symtab.assertCorrectThread()
-          // adapt any infos that come from previous runs
-          val current = symtab.phase
-          try {
-            infos = adaptInfos(infos)
+          def adaptAndTransformInfos(infos0: TypeHistory): TypeHistory = {
+            var infos = infos0
+            symtab.assertCorrectThread()
+            // adapt any infos that come from previous runs
+            val current = symtab.phase
+            try {
+              infos = adaptInfos(infos)
 
-            //assert(runId(validTo) == currentRunId, name)
-            //assert(runId(infos.validFrom) == currentRunId, name)
+              //assert(runId(validTo) == currentRunId, name)
+              //assert(runId(infos.validFrom) == currentRunId, name)
 
-            if (validTo < curPeriod) {
-              var itr = symtab.infoTransformers.nextFrom(symtab.phaseId(validTo))
-              symtab.infoTransformers = itr; // caching optimization
-              val noPhaseId = NoPhase.id
-              val currentId = current.id
-              while (itr.pid != noPhaseId && itr.pid < currentId) {
-                symtab.phase = symtab.phaseWithId(itr.pid)
-                val info1 = itr.transform(this, infos.info)
-                val curPeriod1 = curPeriod + itr.pid - curPid
-                if (info1 ne infos.info) {
-                  infos = TypeHistory(curPeriod1 + 1, info1, infos)
-                  this.infos = infos
-                  _validTo = curPeriod1 + 1
-                } else {
-                  _validTo = curPeriod1 + 1 // to enable reads from same symbol during info-transform
+              if (validTo < curPeriod) {
+                def runInfoTransformers(infos0: TypeHistory): TypeHistory = {
+                  var infos = infos0
+                  var itr = symtab.infoTransformers.nextFrom(symtab.phaseId(validTo))
+                  symtab.infoTransformers = itr;
+                  // caching optimization
+                  val noPhaseId = NoPhase.id
+                  val currentId = current.id
+                  while (itr.pid != noPhaseId && itr.pid < currentId) {
+                    def runInfoTransformer(infos1: TypeHistory, itr: InfoTransformer) = {
+                      var infos = infos1
+                      symtab.phase = symtab.phaseWithId(itr.pid)
+                      val info1 = itr.transform(this, infos.info)
+                      val curPeriod1 = curPeriod + itr.pid - curPid
+                      if (info1 ne infos.info) {
+                        infos = TypeHistory(curPeriod1 + 1, info1, infos)
+                        this.infos = infos
+                        _validTo = curPeriod1 + 1
+                      } else {
+                        _validTo = curPeriod1 + 1 // to enable reads from same symbol during info-transform
+                      }
+                      infos
+                    }
+                    infos = runInfoTransformer(infos, itr)
+                    itr = itr.next
+                  }
+                  _validTo = if (itr.pid == noPhaseId) curPeriod else symtab.period(symtab.currentRunId, itr.pid)
+                  infos
                 }
-                itr = itr.next
+                infos = runInfoTransformers(infos)
               }
-              _validTo = if (itr.pid == noPhaseId) curPeriod
-                         else symtab.period(symtab.currentRunId, itr.pid)
+            } finally {
+              symtab.phase = current
             }
-          } finally {
-            symtab.phase = current
+            infos
           }
+          infos = adaptAndTransformInfos(infos)
         }
       }
       infos.info
     }
+
+    private def baseTypeSeqLength: Int = {
+      (if (isAbstractType) 1 + info.bounds.hi.baseTypeSeq.length else info.baseTypeSeq.length)
+      // TODO is this safe or do we need per-phase invalidation?
+//      if (cachedBaseTypeSeqLength == -1) {
+//        cachedBaseTypeSeqLength = (if (isAbstractType) 1 + info.bounds.hi.baseTypeSeq.length else info.baseTypeSeq.length)
+//      }
+//
+//      cachedBaseTypeSeqLength
+    }
+//    private var cachedBaseTypeSeqLength: Int = -1
 
     // adapt to new run in fsc.
     private def adaptInfos(infos: TypeHistory): TypeHistory = {
@@ -1888,12 +1919,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  the ordering is given by: (_.isType, -_.baseTypeSeq.length) for type symbols, followed by `id`.
      */
     final def isLess(that: Symbol): Boolean = {
-      def baseTypeSeqLength(sym: Symbol) =
-        if (sym.isAbstractType) 1 + sym.info.bounds.hi.baseTypeSeq.length
-        else sym.info.baseTypeSeq.length
       if (this.isType)
         (that.isType &&
-         { val diff = baseTypeSeqLength(this) - baseTypeSeqLength(that)
+         { val diff = this.baseTypeSeqLength - that.baseTypeSeqLength
            diff > 0 || diff == 0 && this.id < that.id })
       else
         that.isType || this.id < that.id
