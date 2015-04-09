@@ -1263,16 +1263,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def javaFullName(separator: Char) = fullNameInternal(separator, if (needsModuleSuffix) nme.MODULE_SUFFIX_STRING else "")
 
     def fullNameInternal(separator: Char, suffix: String): String = {
-      val builder = new StringBuilder()
+      val builder = new java.lang.StringBuilder()
       def loop(sym: Symbol, len: Int): Unit = {
         val name = sym.name
         if (sym.isRoot || sym.isRootPackage || sym == NoSymbol || sym.owner.isEffectiveRoot) {
           builder.ensureCapacity(len + name.length)
-          builder.append(sym.name.toString)
+          builder.append(sym.name : CharSequence)
         }
         else {
           loop(sym.effectiveOwner.enclClass, len + name.length)
-          builder.append(separator).append(name.toString)
+          builder.append(separator).append(name : CharSequence)
         }
       }
       loop(this, suffix.length)
