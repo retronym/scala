@@ -1246,8 +1246,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       && !isJavaDefined
     )
 
-    def javaSimpleName: Name = addModuleSuffix(simpleName.dropLocal)
-    def javaBinaryName: Name = addModuleSuffix(fullNameInternal('/'))
+    def javaSimpleName: Name = name.newName(javaSimpleNameString)
+    def javaBinaryName: Name = name.newName(javaBinaryNameString)
 
     def javaSimpleNameString: String = {
       val builder = new java.lang.StringBuilder
@@ -1260,7 +1260,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def javaBinaryNameString: String = javaFullName('/')
     def javaClassName: String  = javaFullName('.')
 
-    def javaFullName(separator: Char): String = {
+    def javaFullName(separator: Char) = fullNameInternal(separator, if (needsModuleSuffix) nme.MODULE_SUFFIX_STRING else "")
+
+    def fullNameInternal(separator: Char, suffix: String): String = {
       val builder = new StringBuilder()
       def loop(sym: Symbol, len: Int): Unit = {
         val name = sym.name
@@ -1273,13 +1275,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           builder.append(separator).append(name.toString)
         }
       }
-      if (needsModuleSuffix) {
-        loop(this, nme.MODULE_SUFFIX_STRING.length)
-        builder.append(nme.MODULE_SUFFIX_STRING)
-      } else loop(this, 0)
+      loop(this, suffix.length)
+      builder.append(suffix)
       builder.toString
     }
-
 
     /** The encoded full path name of this symbol, where outer names and inner names
      *  are separated by `separator` characters.
@@ -1287,23 +1286,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  Never adds id.
      *  Drops package objects.
      */
-    final def fullName(separator: Char): String = fullNameAsName(separator).toString
+    final def fullName(separator: Char, suffix: String = ""): String = fullNameInternal(separator, suffix)
 
-    /** Doesn't drop package objects, for those situations (e.g. classloading)
-     *  where the true path is needed.
-     */
-    private def fullNameInternal(separator: Char): Name = (
-      if (isRoot || isRootPackage || this == NoSymbol) name
-      else if (owner.isEffectiveRoot) name
-      else effectiveOwner.enclClass.fullNameAsName(separator) append (separator, name)
-    )
-
-    def fullNameAsName(separator: Char): Name = fullNameInternal(separator).dropLocal
+    def fullNameAsName(separator: Char): Name = name.newName(fullNameInternal(separator, "")).dropLocal
 
     /** The encoded full path name of this symbol, where outer names and inner names
      *  are separated by periods.
      */
-    final def fullName: String = fullName('.')
+    final def fullName: String = fullNameInternal('.', "")
 
     /**
      *  Symbol creation implementations.

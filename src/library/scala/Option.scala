@@ -98,7 +98,7 @@ object Option {
 sealed abstract class Option[+A] extends Product with Serializable {
   self =>
 
-  /** Returns true if the option is $none, false otherwise.
+  /** Returns true if the option is \none, false otherwise.
    */
   def isEmpty: Boolean
 

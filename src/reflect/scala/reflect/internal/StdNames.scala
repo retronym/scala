@@ -404,7 +404,7 @@ trait StdNames {
     }
 
     private def expandedNameInternal(name: TermName, base: Symbol, separator: String): TermName =
-      newTermNameCached(base.fullName('$') + separator + name)
+      newTermNameCached(base.fullName('$', separator + name))
 
     /** The expanded name of `name` relative to this class `base`
      */

@@ -252,7 +252,7 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
 
     private def delayedEndpointDef(stats: List[Tree]): DefDef = {
 
-      val methodName = currentUnit.freshTermName("delayedEndpoint$" + clazz.fullNameAsName('$').toString + "$")
+      val methodName = currentUnit.freshTermName("delayedEndpoint$" + clazz.fullName('$') + "$")
       val methodSym  = clazz.newMethod(methodName, impl.pos, SYNTHETIC | FINAL)
       methodSym setInfoAndEnter MethodType(Nil, UnitTpe)
 
