@@ -7,6 +7,8 @@ package scala.tools.nsc
 package backend
 package icode
 
+import scala.collection.mutable
+
 /* A type case
 
     case UNIT            =>
@@ -28,9 +30,9 @@ trait TypeKinds { self: ICodes =>
   import definitions.{ ArrayClass, AnyRefClass, ObjectClass, NullClass, NothingClass, arrayType }
 
   /** A map from scala primitive Types to ICode TypeKinds */
-  lazy val primitiveTypeMap: Map[Symbol, TypeKind] = {
+  lazy val primitiveTypeMap: mutable.AnyRefMap[Symbol, TypeKind] = {
     import definitions._
-    Map(
+    mutable.AnyRefMap(
       UnitClass     -> UNIT,
       BooleanClass  -> BOOL,
       CharClass     -> CHAR,
@@ -43,8 +45,8 @@ trait TypeKinds { self: ICodes =>
     )
   }
   /** Reverse map for toType */
-  private lazy val reversePrimitiveMap: Map[TypeKind, Symbol] =
-    (primitiveTypeMap map (_.swap)).toMap
+  private lazy val reversePrimitiveMap: mutable.AnyRefMap[TypeKind, Symbol] =
+    mutable.AnyRefMap(primitiveTypeMap.map(_.swap).toSeq : _*)
 
   /** This class represents a type kind. Type kinds
    * represent the types that the VM know (or the ICode
@@ -53,12 +55,14 @@ trait TypeKinds { self: ICodes =>
   sealed abstract class TypeKind {
     def maxType(other: TypeKind): TypeKind
 
-    def toType: Type = reversePrimitiveMap get this map (_.tpe) getOrElse {
-      this match {
-        case REFERENCE(cls) => cls.tpe_*
-        case ARRAY(elem)    => arrayType(elem.toType)
-        case _              => abort("Unknown type kind.")
-      }
+    def toType: Type = reversePrimitiveMap getOrNull this match {
+      case null =>
+        this match {
+          case REFERENCE(cls) => cls.tpe_*
+          case ARRAY(elem)    => arrayType(elem.toType)
+          case _              => abort("Unknown type kind.")
+        }
+      case x => x.tpe
     }
 
     def isReferenceType           = false
@@ -434,5 +438,8 @@ trait TypeKinds { self: ICodes =>
   private def primitiveOrRefType(sym: Symbol) =
     primitiveTypeMap.getOrElse(sym, newReference(sym))
   private def primitiveOrClassType(sym: Symbol, targs: List[Type]) =
-    primitiveTypeMap.getOrElse(sym, arrayOrClassType(sym, targs))
+    primitiveTypeMap.getOrNull(sym) match {
+      case null => arrayOrClassType(sym, targs)
+      case tp => tp
+    }
 }
