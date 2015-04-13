@@ -7,9 +7,12 @@ warn-inferred-any.scala:16: warning: a type was inferred to be `AnyVal`; this ma
 warn-inferred-any.scala:17: warning: a type was inferred to be `AnyVal`; this may indicate a programming error.
   { 1l to 5l contains 5d }
              ^
-warn-inferred-any.scala:25: warning: a type was inferred to be `Any`; this may indicate a programming error.
+warn-inferred-any.scala:26: warning: a type was inferred to be `Any`; this may indicate a programming error.
   def za = f(1, "one")
              ^
+warn-inferred-any.scala:27: warning: a type was inferred to be `Any`; this may indicate a programming error.
+  def zx = f2(1, "one")
+                 ^
 error: No warnings can be incurred under -Xfatal-warnings.
-four warnings found
+5 warnings found
 one error found

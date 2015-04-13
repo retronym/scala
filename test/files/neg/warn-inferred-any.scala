@@ -20,8 +20,10 @@ trait Ys[+A] {
 
 trait Zs {
   def f[A](a: A*) = 42
+  def f2[X, A](a: A*) = 42     // fixme warns on the 2nd arg
   def g[A >: Any](a: A*) = 42  // don't warn
 
   def za = f(1, "one")
+  def zx = f2(1, "one")
   def zu = g(1, "one")
 }

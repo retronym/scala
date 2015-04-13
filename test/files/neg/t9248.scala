@@ -6,14 +6,14 @@ object Test {
   def f[F[A], A](f: F[A]) = ???
   def test1(u: Unary[Any]) = f(u)
 
-  // reports inference error, cannot unifiy Binary[Any, Any] with ?F[?A]
+  // reports inference error, cannot unify Binary[Any, Any] with ?F[?A]
   // commented out as we can't have errors in a test for warnings.
   // def test2(u: Binary[Any, Any]) = f(u)
 
   def test3 = {
     implicit def b2u[A, B](b: Binary[A, B]): List[Int] = ???
     val b: Binary[Any, Any] = null
-    f(b) // inference fails initially, but then we try to coerse the arguments 
+    f(b) // inference fails initially, but then we try to coerce the arguments 
     //
     // Under -Ytyper-debug, we see:
     //
@@ -29,7 +29,7 @@ object Test {
     //
     // This leads to inference of ?F=Any, ?A=Nothing (this is kind-correct because Any/Nothing are kind polymorphic)
     // 
-    // When we instantatiate the method type of `f` with this, the formal parameter type is now just Any[Nothing]
+    // When we instantiate the method type of `f` with this, the formal parameter type is now just Any[Nothing]
     // which is just Any.
     //
     // The provided argument of type `Binary[A, B]` now unifies with this, no implicit coercion required.

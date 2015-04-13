@@ -1,4 +1,6 @@
-warning: there were two feature warnings; re-run with -feature for details
+t9248.scala:13: warning: type inference relied on kind-polymorphic nature of inferred type `Any` to conform to type parameter F[A]
+  def test3 = {
+              ^
 error: No warnings can be incurred under -Xfatal-warnings.
 one warning found
 one error found
