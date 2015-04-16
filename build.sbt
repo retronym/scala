@@ -50,23 +50,25 @@
  *     https://groups.google.com/d/topic/scala-internals/gp5JsM1E0Fo/discussion
  */
 
-val bootstrapScalaVersion = "2.11.5"
+val bootstrapScalaVersion = "2.11.6"
+val boostrapScalaBinaryVersion = "2.11"
 
 // exclusion of the scala-library transitive dependency avoids eviction warnings during `update`.
-val scalaParserCombinatorsDep = "org.scala-lang.modules" %% "scala-parser-combinators" % versionNumber("scala-parser-combinators") exclude("org.scala-lang", "scala-library")
-val scalaXmlDep = "org.scala-lang.modules" %% "scala-xml" % versionNumber("scala-xml") exclude("org.scala-lang", "scala-library")
-val partestDep = "org.scala-lang.modules" %% "scala-partest" % versionNumber("partest") exclude("org.scala-lang", "scala-library")
-val partestInterfaceDep = "org.scala-lang.modules" %% "scala-partest-interface" % "0.5.0" exclude("org.scala-lang", "scala-library")
+val scalaParserCombinatorsDep = "org.scala-lang.modules" %% "scala-parser-combinators" % versionNumber("scala-parser-combinators") intransitive()
+val scalaXmlDep = "org.scala-lang.modules" %% "scala-xml" % versionNumber("scala-xml") exclude("org.scala-lang", "scala-library") intransitive()
+val partestDep = "org.scala-lang.modules" %% "scala-partest" % versionNumber("partest") exclude("org.scala-lang", "scala-library") intransitive()
+val partestInterfaceDep = "org.scala-lang.modules" %% "scala-partest-interface" % "0.5.0" exclude("org.scala-lang", "scala-library") intransitive()
 val junitDep = "junit" % "junit" % "4.11"
 val junitIntefaceDep = "com.novocode" % "junit-interface" % "0.11" % "test"
 val jlineDep = "jline" % "jline" % versionProps("jline.version")
 val antDep = "org.apache.ant" % "ant" % "1.9.4"
-val scalacheckDep = "org.scalacheck" %% "scalacheck" % "1.11.4" exclude("org.scala-lang", "scala-library")
+val scalacheckDep = "org.scalacheck" %% "scalacheck" % "1.11.4" intransitive()
 
 lazy val commonSettings = clearSourceAndResourceDirectories ++ Seq[Setting[_]](
   organization := "org.scala-lang",
   version := "2.11.6-SNAPSHOT",
   scalaVersion := bootstrapScalaVersion,
+  scalaBinaryVersion := boostrapScalaBinaryVersion,
   // we don't cross build Scala itself
   crossPaths := false,
   // do not add Scala library jar as a dependency automatically
@@ -99,8 +101,9 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ Seq[Setting[_]](
   // given that classDirectory is overriden to be _outside_ of target directory, we have
   // to make sure its being cleaned properly
   cleanFiles += (classDirectory in Compile).value,
-  fork in run := true
-)
+  fork in run := true,
+  scalacOptions in Compile += "-optimise"
+) ++ cleanClassesSettings
 
 // disable various tasks that are not needed for projects that are used
 // only for compiling code and not publishing it as a standalone artifact
@@ -181,10 +184,6 @@ lazy val compiler = configureAsSubproject(project)
 
 lazy val interactive = configureAsSubproject(project)
   .settings(disableDocsAndPublishingTasks: _*)
-  .settings(
-    scalaVersion := bootstrapScalaVersion,
-    ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) }
-  )
   .dependsOn(compiler)
 
 lazy val repl = configureAsSubproject(project)
@@ -218,6 +217,7 @@ lazy val partestExtras = configureAsSubproject(Project("partest-extras", file(".
   .settings(clearSourceAndResourceDirectories: _*)
   .settings(
     scalaVersion := bootstrapScalaVersion,
+    scalaBinaryVersion := boostrapScalaBinaryVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     libraryDependencies += partestDep,
     unmanagedSourceDirectories in Compile := List(baseDirectory.value)
@@ -229,6 +229,7 @@ lazy val junit = project.in(file("test") / "junit")
   .settings(commonSettings: _*)
   .settings(
     scalaVersion := bootstrapScalaVersion,
+    scalaBinaryVersion := boostrapScalaBinaryVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     fork in Test := true,
     libraryDependencies ++= Seq(junitDep, junitIntefaceDep),
@@ -244,6 +245,7 @@ lazy val partestJavaAgent = (project in file(".") / "src" / "partest-javaagent")
     publishLocal := {},
     publish := {},
     scalaVersion := bootstrapScalaVersion,
+    scalaBinaryVersion := boostrapScalaBinaryVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     // Setting name to "scala-partest-javaagent" so that the jar file gets that name, which the Runner relies on
     name := "scala-partest-javaagent",
@@ -267,6 +269,7 @@ lazy val test = project.
   settings(Defaults.itSettings: _*).
   settings(
     scalaVersion := bootstrapScalaVersion,
+    scalaBinaryVersion := boostrapScalaBinaryVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     libraryDependencies ++= Seq(partestDep, scalaXmlDep, partestInterfaceDep, scalacheckDep),
     unmanagedBase in Test := baseDirectory.value / "files" / "lib",
@@ -295,9 +298,10 @@ lazy val root = (project in file(".")).
   aggregate(library, forkjoin, reflect, compiler, asm, interactive, repl,
     scaladoc, scalap, actors, partestExtras, junit).settings(
     scalaVersion := bootstrapScalaVersion,
+    scalaBinaryVersion := boostrapScalaBinaryVersion,
     ivyScala := ivyScala.value map { _.copy(overrideScalaVersion = true) },
     sources in Compile := Seq.empty
-  )
+  ).settings(cleanClassesSettings: _*)
 
 lazy val dist = (project in file("dist")).settings(
   mkBin := mkBinImpl.value
@@ -452,3 +456,7 @@ lazy val versionProps: Map[String, String] = {
 
 def versionNumber(name: String): String =
   versionProps(s"$name.version.number")
+
+lazy val cleanClasses = taskKey[Unit]("Clean all .class files. (Avoids cleaning Ivy resolution caches.)")
+
+def cleanClassesSettings = Seq(Compile, Test).flatMap(c => inConfig(c)(Seq(cleanClasses := Defaults.doClean(classDirectory.value :: Nil, Nil))))
