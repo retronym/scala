@@ -59,6 +59,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
        sym.isMethod
     && isInterfaceMember(sym)
     && (!sym.hasFlag(DEFERRED | SUPERACCESSOR) || (sym hasFlag lateDEFERRED))
+    && !useDefaultMethod(sym)
   )
 
   def implClassPhase = currentRun.erasurePhase.next
@@ -246,9 +247,13 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
     val isInterfaceTree = tree.isDef && isInterfaceMember(tree.symbol)
     if (isInterfaceTree && needsImplMethod(tree.symbol))
       create(tree)
-    else if (isInterfaceTree == isForInterface)
+    else if (isInterfaceTree == isForInterface) {
+      if (isInterfaceTree) {
+        tree.symbol.resetFlag(lateDEFERRED)
+        tree.symbol.setFlag(DEFAULTMETHOD)
+      }
       tree
-    else
+    } else
       EmptyTree
   }
   private def implMemberDef(tree: Tree): Tree  = createMemberDef(tree, false)(implMethodDef)
@@ -257,6 +262,11 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
   private def ifaceTemplate(templ: Template): Template =
     treeCopy.Template(templ, templ.parents, noSelfType, templ.body map ifaceMemberDef)
 
+  private def useDefaultMethod(methodSym: Symbol) = {
+    val isJvm18 = settings.target.value == "jvm-1.8"
+    val hasClassOwner = methodSym.allOverriddenSymbols.exists(_.owner.isClass)
+    isJvm18 && !hasClassOwner && !methodSym.isModule && !(methodSym hasFlag (ACCESSOR | SUPERACCESSOR))
+  }
   /** Transforms the member tree containing the implementation
    *  into a member of the impl class.
    */

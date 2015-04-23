@@ -528,7 +528,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             addLateInterfaceMembers(currentOwner)
 
           tree
-        case DefDef(_, _, _, vparams :: Nil, _, _) =>
+        case dd @ DefDef(_, _, _, vparams :: Nil, _, _) =>
           if (currentOwner.isImplClass) {
             if (isImplementedStatically(sym)) {
               sym setFlag notOVERRIDE

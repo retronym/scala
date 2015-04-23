@@ -297,6 +297,7 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
     // without having to provide any implementations, but that is an
     // illegal combination of modifiers at the bytecode level so
     // suppress final if abstract if present.
+
     import asm.Opcodes._
     mkFlags(
       if (privateFlag) ACC_PRIVATE else ACC_PUBLIC,
@@ -1400,10 +1401,11 @@ abstract class GenASM extends SubComponent with BytecodeWriters { self =>
       var resTpe: asm.Type = javaType(m.symbol.tpe.resultType)
       if (m.symbol.isClassConstructor)
         resTpe = asm.Type.VOID_TYPE
+      val isAbstractTraitMeth = isJInterface && !m.symbol.hasFlag(Flags.DEFAULTMETHOD)
 
       val flags = mkFlags(
         javaFlags(m.symbol),
-        if (isJInterface)          asm.Opcodes.ACC_ABSTRACT   else 0,
+        if (isAbstractTraitMeth)   asm.Opcodes.ACC_ABSTRACT   else 0,
         if (m.symbol.isStrictFP)   asm.Opcodes.ACC_STRICT     else 0,
         if (method.native)         asm.Opcodes.ACC_NATIVE     else 0, // native methods of objects are generated in mirror classes
         if(isDeprecated(m.symbol)) asm.Opcodes.ACC_DEPRECATED else 0  // ASM pseudo access flag
