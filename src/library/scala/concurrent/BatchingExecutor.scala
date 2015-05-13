@@ -43,18 +43,18 @@ private[concurrent] trait BatchingExecutor extends Executor {
 
   // invariant: if "_tasksLocal.get ne null" then we are inside BatchingRunnable.run; if it is null, we are outside
   private val _tasksLocal = new ThreadLocal[List[Runnable]]()
+  
+  private[this] val _blockContext = new ThreadLocal[BlockContext]()
 
   private class Batch(val initial: List[Runnable]) extends Runnable with BlockContext {
-    private var parentBlockContext: BlockContext = _
     // this method runs in the delegate ExecutionContext's thread
     override def run(): Unit = {
       require(_tasksLocal.get eq null)
 
-      val prevBlockContext = BlockContext.current
+      val prevBlockContext = _blockContext.get
+      _blockContext.set(BlockContext.current)
       BlockContext.withBlockContext(this) {
         try {
-          parentBlockContext = prevBlockContext
-
           @tailrec def processBatch(batch: List[Runnable]): Unit = batch match {
             case Nil => ()
             case head :: tail =>
@@ -78,7 +78,7 @@ private[concurrent] trait BatchingExecutor extends Executor {
           processBatch(initial)
         } finally {
           _tasksLocal.remove()
-          parentBlockContext = null
+          _blockContext.set(prevBlockContext)
         }
       }
     }
@@ -93,8 +93,7 @@ private[concurrent] trait BatchingExecutor extends Executor {
       }
 
       // now delegate the blocking to the previous BC
-      require(parentBlockContext ne null)
-      parentBlockContext.blockOn(thunk)
+      _blockContext.get.blockOn(thunk)
     }
   }
 
