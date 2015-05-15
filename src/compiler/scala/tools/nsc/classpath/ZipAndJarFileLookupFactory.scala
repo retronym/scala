@@ -173,6 +173,7 @@ object ZipAndJarFlatSourcePathFactory extends ZipAndJarFileLookupFactory {
     override private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = files(inPackage)
 
     override protected def createFileEntry(file: FileZipArchive#Entry): SourceFileEntryImpl = SourceFileEntryImpl(file)
+
     override protected def isRequiredFileType(file: AbstractFile): Boolean = file.isScalaOrJavaSource
   }
 

@@ -55,7 +55,6 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
    *  eny encountered top-level classes and modules in `root`
    */
   def browseTopLevel(root: Symbol, src: AbstractFile) {
-
     class BrowserTraverser extends Traverser {
       var packagePrefix = ""
       var entered = 0
@@ -79,17 +78,24 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
         packagePrefix = oldPrefix
       }
 
+      def effectiveRoot = if (root == NoSymbol) {
+        rootMirror.getPackageIfDefined(packagePrefix).moduleClass
+      } else if (packagePrefix == root.fullName) root
+      else NoSymbol
+
       override def traverse(tree: Tree): Unit = tree match {
         case PackageDef(pkg, body) =>
           inPackagePrefix(pkg) { body foreach traverse }
 
         case ClassDef(_, name, _, _) =>
-          if (packagePrefix == root.fullName) {
+          val root = effectiveRoot
+          if (root.exists) {
             enterClass(root, name.toString, new SourcefileLoader(src))
             entered += 1
           } else println("prefixes differ: "+packagePrefix+","+root.fullName)
         case ModuleDef(_, name, _) =>
-          if (packagePrefix == root.fullName) {
+          val root = effectiveRoot
+          if (root.exists) {
             val module = enterModule(root, name.toString, new SourcefileLoader(src))
             entered += 1
             if (name == nme.PACKAGEkw) {
@@ -115,7 +121,9 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
    */
   override def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile) {
     try {
-      if (root.isEffectiveRoot || !src.name.endsWith(".scala")) // RootClass or EmptyPackageClass
+      if (root == NoSymbol)
+        browseTopLevel(root, src)
+      else if (root.isEffectiveRoot || !src.name.endsWith(".scala")) // RootClass or EmptyPackageClass
         super.enterToplevelsFromSource(root, name, src)
       else
         browseTopLevel(root, src)

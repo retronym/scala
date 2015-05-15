@@ -8,6 +8,7 @@ package interactive
 import java.io.{ PrintWriter, StringWriter, FileReader, FileWriter }
 import scala.collection.mutable
 import mutable.{LinkedHashMap, SynchronizedMap, HashSet, SynchronizedSet}
+import scala.tools.util.FlatClassPathResolver
 import scala.util.control.ControlThrowable
 import scala.tools.nsc.io.AbstractFile
 import scala.reflect.internal.util.{ SourceFile, BatchSourceFile, Position, NoPosition }
@@ -1314,6 +1315,8 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     }
   }
 
+  lazy val flatClasspath = new FlatClassPathResolver(settings).result
+
   // ---------------- Helper classes ---------------------------
 
   /** The typer run */
@@ -1341,6 +1344,10 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   def newTyperRun() {
     currentTyperRun = new TyperRun
+    val allSources = flatClasspath.allSources
+    for (source <- allSources) {
+      loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
+    }
   }
 
   class TyperResult(val tree: Tree) extends ControlThrowable

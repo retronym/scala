@@ -63,6 +63,18 @@ trait DirectoryFileLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatC
     entries
   }
 
+  protected def allFiles: Seq[FileEntryType] = {
+    val result = collection.mutable.Buffer[FileEntryType]()
+    def loop(name: String): Unit = {
+      result ++= files(name)
+      for (p <- packages(name)){
+        loop(p.name)
+      }
+    }
+    loop(RootPackage)
+    result.toSeq
+  }
+
   override private[nsc] def list(inPackage: String): FlatClassPathEntries = {
     val dirForPackage = getDirectory(inPackage)
     val files: Array[File] = dirForPackage match {

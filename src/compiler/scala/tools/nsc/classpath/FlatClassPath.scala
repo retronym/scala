@@ -4,6 +4,7 @@
 package scala.tools.nsc.classpath
 
 import scala.reflect.io.AbstractFile
+import scala.tools.nsc.classpath.FlatClassPath._
 import scala.tools.nsc.util.{ ClassFileLookup, ClassPath, ClassRepresentation }
 
 /**
@@ -19,6 +20,18 @@ trait FlatClassPath extends ClassFileLookup[AbstractFile] {
   private[nsc] def packages(inPackage: String): Seq[PackageEntry]
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry]
   private[nsc] def sources(inPackage: String): Seq[SourceFileEntry]
+  private[nsc] def allSources: Seq[SourceFileEntry] = {
+    val result = collection.mutable.Buffer[SourceFileEntry]()
+    def loop(name: String): Unit = {
+      result ++= sources(name)
+      for (p <- packages(name)){
+        loop(p.name)
+      }
+    }
+    loop(RootPackage)
+    result.toSeq
+  }
+
 
   /** Allows to get entries for packages and classes merged with sources possibly in one pass. */
   private[nsc] def list(inPackage: String): FlatClassPathEntries

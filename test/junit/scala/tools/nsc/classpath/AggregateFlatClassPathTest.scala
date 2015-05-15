@@ -22,6 +22,7 @@ class AggregateFlatClassPathTest {
   private class TestFlatClassPath extends FlatClassPath {
     override def packages(inPackage: String): Seq[PackageEntry] = unsupported
     override def sources(inPackage: String): Seq[SourceFileEntry] = unsupported
+    override def allSources: Seq[SourceFileEntry] = unsupported
     override def classes(inPackage: String): Seq[ClassFileEntry] = unsupported
 
     override def list(inPackage: String): FlatClassPathEntries = unsupported
@@ -42,6 +43,8 @@ class AggregateFlatClassPathTest {
 
     override def sources(inPackage: String): Seq[SourceFileEntry] = Nil
 
+    override def allSources: Seq[SourceFileEntry] = Nil
+
     // we'll ignore packages
     override def list(inPackage: String): FlatClassPathEntries = FlatClassPathEntries(Nil, classes(inPackage))
   }
@@ -53,6 +56,12 @@ class AggregateFlatClassPathTest {
         entriesWrapper <- sourcesInPackage if entriesWrapper.inPackage == inPackage
         name <- entriesWrapper.names
       } yield sourceFileEntry(virtualPath, inPackage, name)
+
+    override def allSources: Seq[SourceFileEntry] =
+      for {
+        entriesWrapper <- sourcesInPackage
+        name <- entriesWrapper.names
+      } yield sourceFileEntry(virtualPath, null, name)
 
     override def classes(inPackage: String): Seq[ClassFileEntry] = Nil
 
