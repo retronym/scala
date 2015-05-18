@@ -1,4 +1,4 @@
-#partest !-Ydelambdafy:method
+#partest -Ydelambdafy:inline
 A$$anonfun$$lessinit$greater$1 / null (canon) / $anonfun$$lessinit$greater$1 (simple)
 - declared cls: List()
 - enclosing   : null (declaring cls) / class A (cls) / public A(int) (constr) / null (meth)
