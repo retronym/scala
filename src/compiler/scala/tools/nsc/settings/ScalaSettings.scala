@@ -349,7 +349,7 @@ trait ScalaSettings extends AbsScalaSettings
    */
   val Ybackend = ChoiceSetting ("-Ybackend", "choice of bytecode emitter", "Choice of bytecode emitter.",
                                 List("GenASM", "GenBCode"),
-                                "GenBCode")
+                                "GenASM")
   // Feature extensions
   val XmacroSettings          = MultiStringSetting("-Xmacro-settings", "option", "Custom settings for macros.")
 
