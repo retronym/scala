@@ -311,6 +311,17 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case app : Apply =>
           generatedType = genApply(app, expectedType)
 
+        case app @ ApplyDynamic(qual, args) if settings.target == "jvm.1.8" =>
+            genLoad(qual)
+            val symbol = app.symbol
+            val paramTypes = symbol.info.paramTypes map toTypeKind
+            genLoadArguments(args, paramTypes)
+            val argAsmTypes = symbol.info.params.map(symInfoTK).map(_.toASMType)
+            val returnAsmType = toTypeKind(symbol.info.resultType).toASMType
+            val invokedType = asm.Type.getMethodType(returnAsmType, toTypeKind(qual.tpe).toASMType +: argAsmTypes: _*)
+            val name = "dyn:callMethod:" + symbol.name
+            mnode.visitInvokeDynamicInsn(name, invokedType.getDescriptor, dynalinkBoostrapHandle)
+
         case ApplyDynamic(qual, args) => sys.error("No invokedynamic support yet.")
 
         case This(qual) =>
@@ -1323,5 +1334,12 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
       definitions.LambdaMetaFactory.fullName('/'), sn.AltMetafactory.toString,
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;")
+
+  // TODO use custom boostrap method in our runtime that employs ChainedCallSite to cache recently used linkage results
+  // TODO use "org.dynalang" % "dynalink" rather than relying on Nashorn internals
+  lazy val dynalinkBoostrapHandle =
+    new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
+      "jdk/internal/dynalink/DefaultBootstrapper", "bootstrap",
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
 
 }
