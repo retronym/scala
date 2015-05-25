@@ -280,7 +280,7 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
   protected def newJavap() =
     JavapClass(addToolsJarToLoader(), new IMain.ReplStrippingWriter(intp), Some(intp))
 
-  private lazy val javap = substituteAndLog[Javap]("javap", NoJavap)(newJavap())
+  private lazy val javap = substituteAndLog[Javap]("javap", ???)(newJavap())
 
   // Still todo: modules.
   private def typeCommand(line0: String): Result = {

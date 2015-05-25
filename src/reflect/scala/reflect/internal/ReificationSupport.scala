@@ -284,7 +284,7 @@ trait ReificationSupport { self: SymbolTable =>
         else {
           val (rawEdefs, rest) = tbody.span(treeInfo.isEarlyDef)
           val (gvdefs, etdefs) = rawEdefs.partition(treeInfo.isEarlyValDef)
-          val (fieldDefs, UnCtor(ctorMods, ctorVparamss, lvdefs) :: body) = rest.splitAt(indexOfCtor(rest))
+          val (fieldDefs, ctor @ UnCtor(ctorMods, ctorVparamss, lvdefs) :: body) = rest.splitAt(indexOfCtor(rest))
           val evdefs = gvdefs.zip(lvdefs).map {
             case (gvdef @ ValDef(_, _, tpt: TypeTree, _), ValDef(_, _, _, rhs)) =>
               copyValDef(gvdef)(tpt = tpt.original, rhs = rhs)
@@ -299,13 +299,17 @@ trait ReificationSupport { self: SymbolTable =>
               case other => other
             }
             // undo flag modifications by merging flag info from constructor args and fieldDefs
-            val modsMap = fieldDefs.map { case ValDef(mods, name, _, _) => nme.unexpandedName(name) -> mods }.toMap
+            val modsMap = fieldDefs.map {
+              case vd @ ValDef(mods, name, _, _) =>
+                val accessorMods = vd.symbol.owner.constrParamAccessors
+                nme.unexpandedName(name) -> mods
+            }.toMap
             def ctorArgsCorrespondToFields = vparamssRestoredImplicits.flatten.forall { vd => modsMap.contains(vd.name) }
             if (!ctorArgsCorrespondToFields) None
             else {
               val vparamss = mmap(vparamssRestoredImplicits) { vd =>
                 val originalMods = (modsMap(vd.name) | (vd.mods.flags & DEFAULTPARAM))
-                atPos(vd.pos)(ValDef(originalMods, vd.name, vd.tpt, vd.rhs))
+                atPos(vd.pos)(treeCopy.ValDef(vd, originalMods, vd.name, vd.tpt, vd.rhs))
               }
               result(ctorMods, vparamss, edefs, body)
             }
