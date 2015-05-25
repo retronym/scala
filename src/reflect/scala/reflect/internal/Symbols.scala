@@ -3634,6 +3634,20 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     else if (from.isClass) NoSymbol
     else closestEnclMethod(from.owner)
 
+  // The constructor parameter corresponding to an accessor
+  def constrParameter(constrParams: List[Symbol], acc: Symbol): Symbol = constrParameterNamed(constrParams, acc.unexpandedName.getterName)
+
+  // The constructor parameter with given name. This means the parameter
+  // has given name, or starts with given name, and continues with a `$` afterwards.
+  def constrParameterNamed(constrParams: List[Symbol], name: Name): Symbol = {
+    def matchesName(param: Symbol) = param.name == name || param.name.startsWith(name + nme.NAME_JOIN_STRING)
+
+    (constrParams filter matchesName) match {
+      case Nil    => abort(name + " not in " + constrParams)
+      case p :: _ => p
+    }
+  }
+
   /** An exception for cyclic references of symbol definitions */
   case class CyclicReference(sym: Symbol, info: Type)
   extends TypeError("illegal cyclic reference involving " + sym) {

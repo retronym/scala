@@ -492,20 +492,6 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
     // The parameter accessor fields which are members of the class
     val paramAccessors = clazz.constrParamAccessors
 
-    // The constructor parameter corresponding to an accessor
-    def parameter(acc: Symbol): Symbol = parameterNamed(acc.unexpandedName.getterName)
-
-    // The constructor parameter with given name. This means the parameter
-    // has given name, or starts with given name, and continues with a `$` afterwards.
-    def parameterNamed(name: Name): Symbol = {
-      def matchesName(param: Symbol) = param.name == name || param.name.startsWith(name + nme.NAME_JOIN_STRING)
-
-      (constrParams filter matchesName) match {
-        case Nil    => abort(name + " not in " + constrParams)
-        case p :: _ => p
-      }
-    }
-
     /*
      * `usesSpecializedField` makes a difference in deciding whether constructor-statements
      * should be guarded in a `shouldGuard` class, ie in a class that's the generic super-class of
@@ -547,15 +533,15 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           // references to parameter accessor methods of own class become references to parameters
           // outer accessors become references to $outer parameter
           if (canBeSupplanted(tree.symbol))
-            gen.mkAttributedIdent(parameter(tree.symbol.accessed)) setPos tree.pos
+            gen.mkAttributedIdent(constrParameter(constrParams, tree.symbol.accessed)) setPos tree.pos
           else if (tree.symbol.outerSource == clazz && !clazz.isImplClass)
-            gen.mkAttributedIdent(parameterNamed(nme.OUTER)) setPos tree.pos
+            gen.mkAttributedIdent(constrParameterNamed(constrParams, nme.OUTER)) setPos tree.pos
           else
             super.transform(tree)
 
         case Select(This(_), _) if canBeSupplanted(tree.symbol) =>
           // references to parameter accessor field of own class become references to parameters
-          gen.mkAttributedIdent(parameter(tree.symbol)) setPos tree.pos
+          gen.mkAttributedIdent(constrParameter(constrParams, tree.symbol)) setPos tree.pos
 
         case Select(_, _) if shouldGuard => // reasoning behind this guard in the docu of `usesSpecializedField`
           if (possiblySpecialized(tree.symbol)) {
