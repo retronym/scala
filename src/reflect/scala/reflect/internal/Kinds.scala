@@ -132,7 +132,8 @@ trait Kinds {
       param:         Symbol,
       paramowner:    Symbol,
       underHKParams: List[Symbol],
-      withHKArgs:    List[Symbol]
+      withHKArgs:    List[Symbol],
+      hkArgsPrefix:  Type
     ): KindErrors = {
 
       var kindErrors: KindErrors = NoKindErrors
@@ -172,7 +173,7 @@ trait Kinds {
           // is lost then.
           val declaredBounds     = transform(hkparam.info.instantiateTypeParams(tparams, targs).bounds, paramowner)
           val declaredBoundsInst = transform(bindHKParams(declaredBounds), owner)
-          val argumentBounds     = transform(hkarg.info.bounds, owner)
+          val argumentBounds     = transform(hkarg.info.asSeenFrom(hkArgsPrefix, hkarg.enclClass).bounds, owner)
 
           kindCheck(declaredBoundsInst <:< argumentBounds, _ strictnessError (hkarg -> hkparam))
 
@@ -193,7 +194,8 @@ trait Kinds {
             hkparam,
             paramowner,
             underHKParams ++ hkparam.typeParams,
-            withHKArgs ++ hkarg.typeParams
+            withHKArgs ++ hkarg.typeParams,
+            hkArgsPrefix
           )
         }
         if (!explainErrors && !kindErrors.isEmpty)
@@ -215,11 +217,12 @@ trait Kinds {
         targ.typeSymbolDirect.info
         // @M must use the typeParams of the *type* targ, not of the *symbol* of targ!!
         val tparamsHO = targ.typeParams
+        val tparamsHOPrefix = targ.prefix
         if (targ.isHigherKinded || tparam.typeParams.nonEmpty) {
           // NOTE: *not* targ.typeSymbol, which normalizes
           val kindErrors = checkKindBoundsHK(
             tparamsHO, targ.typeSymbolDirect, tparam,
-            tparam.owner, tparam.typeParams, tparamsHO
+            tparam.owner, tparam.typeParams, tparamsHO, tparamsHOPrefix
           )
           if (kindErrors.isEmpty) Nil else {
             if (explainErrors) List((targ, tparam, kindErrors))
