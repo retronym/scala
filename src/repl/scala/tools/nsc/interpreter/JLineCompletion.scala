@@ -295,7 +295,10 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     override def complete(buf: String, cursor: Int): Candidates = {
       verbosity = if (isConsecutiveTabs(buf, cursor)) verbosity + 1 else 0
       repldbg(f"%ncomplete($buf, $cursor%d) last = ($lastBuf, $lastCursor%d), verbosity: $verbosity")
-
+      intp.presentationCompile(buf, false) match {
+        case Left(_) =>
+        case Right(request) =>
+      }
       // we don't try lower priority completions unless higher ones return no results.
       def tryCompletion(p: Parsed, completionFunction: Parsed => List[String]): Option[Candidates] = {
         val winners = completionFunction(p)
