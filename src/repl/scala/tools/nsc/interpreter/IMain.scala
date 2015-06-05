@@ -575,14 +575,14 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
     }
   }
 
-  private[scala] def presentationCompile(line: String, synthetic: Boolean): Either[IR.Result, Request] = {
+  private[scala] def presentationCompile(line: String, synthetic: Boolean): Either[IR.Result, PresentationCompileResult] = {
     if (global == null) Left(IR.Error)
     else requestFromLine(line, synthetic, forPresentationCompile = true) match {
       case Left(result) => Left(result)
       case Right(req)   =>
        // null indicates a disallowed statement type; otherwise compile and
        // fail if false (implying e.g. a type error)
-       if (req == null || !req.presentationCompile) Left(IR.Error) else Right(req)
+       if (req == null) Left(IR.Error) else Right(req.presentationCompile)
     }
   }
 
@@ -910,7 +910,9 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
         if (!isReplPower) Nil // power mode only for now
         else List("def %s = %s".format("$line", tquoted(originalLine)), "def %s = Nil".format("$trees"))
       }
-      def preamble = s"""
+      def preamble = preamble(toCompute)
+      def preambleLength = preamble("").length
+      private def preamble(toCompute: String) = s"""
         |$preambleHeader
         |%s%s%s
       """.stripMargin.format(lineRep.readName, envLines.map("  " + _ + ";\n").mkString,
@@ -1011,13 +1013,12 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       }
     }
 
-    lazy val presentationCompile: Boolean = {
+    def presentationCompile: PresentationCompileResult = {
       val wrappedCode: String = ObjectSourceCode(handlers)
       parseAndTypeCheck(wrappedCode)
-      reporter.hasErrors
     }
 
-    private[this] def parseAndTypeCheck(code: String): Global#CompilationUnit = {
+    private[this] def parseAndTypeCheck(code: String): PresentationCompileResult = {
       val storeReporter: StoreReporter = new StoreReporter
       val dir: ReplDir = imain.replOutput.dir
       val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
@@ -1033,8 +1034,8 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       val run = new TyperRun()
       val unit = new RichCompilationUnit(newCompilationUnit(code).source)
       typeCheck(unit)
-      println(show(unit.body, printTypes = true))
-      newCompilationUnit(code)
+//      println(show(unit.body, printTypes = true))
+      PresentationCompileResult(this, interactiveGlobal)(unit, ObjectSourceCode.preambleLength)
     }
 
     lazy val resultSymbol = lineRep.resolvePathToSymbol(accessPath)
@@ -1286,6 +1287,26 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
     repldbg(msg + " " + res)
     res
   }
+
+  abstract class PresentationCompileResult {
+    def request: Request
+    val compiler: scala.tools.nsc.interactive.Global
+    def unit: compiler.RichCompilationUnit
+    def preambleLength: Int
+  }
+
+  object PresentationCompileResult {
+    def apply(request0: Request, compiler0: scala.tools.nsc.interactive.Global)(unit0: compiler0.RichCompilationUnit, preambleLength0: Int) = new PresentationCompileResult {
+
+      override def request: Request = request0
+
+      override val compiler = compiler0
+
+      override def unit = unit0.asInstanceOf[compiler.RichCompilationUnit]
+
+      override def preambleLength = preambleLength0
+    }
+  }
 }
 
 /** Utility methods for the Interpreter. */
@@ -1388,3 +1409,4 @@ object IMain {
     def stripImpl(str: String): String = naming.unmangle(str)
   }
 }
+
