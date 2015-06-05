@@ -661,7 +661,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   /** Make sure unit is typechecked
    */
-  private def typeCheck(unit: RichCompilationUnit) {
+  private[scala] def typeCheck(unit: RichCompilationUnit) {
     debugLog("type checking: "+unit)
     parseAndEnter(unit)
     unit.status = PartiallyChecked

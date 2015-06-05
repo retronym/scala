@@ -15,10 +15,13 @@ import scala.concurrent.{ Future, ExecutionContext }
 import scala.reflect.runtime.{ universe => ru }
 import scala.reflect.{ ClassTag, classTag }
 import scala.reflect.internal.util.{ BatchSourceFile, SourceFile }
+import scala.tools.nsc.interactive
+import scala.tools.nsc.reporters.StoreReporter
+import scala.tools.nsc.util.ClassPath.DefaultJavaContext
 import scala.tools.util.PathResolverFactory
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.typechecker.{ TypeStrings, StructuredTypeStrings }
-import scala.tools.nsc.util.{ ScalaClassLoader, stringFromReader, stringFromWriter, StackTraceOps, ClassPath, MergedClassPath }
+import scala.tools.nsc.util._
 import ScalaClassLoader.URLClassLoader
 import scala.tools.nsc.util.Exceptional.unwrap
 import scala.tools.nsc.backend.JavaPlatform
@@ -462,11 +465,11 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
   private def requestFromLine(line: String, synthetic: Boolean, forPresentationCompile: Boolean = false): Either[IR.Result, Request] = {
     val content = indentCode(line)
     if (forPresentationCompile)
-      return Right(buildRequest(line, Nil))
+      return Right(buildRequest(line, parse(content, forPresentationCompile).trees))
 
     val trees: List[global.Tree] = parse(content) match {
-      case parse.Incomplete     => return Left(IR.Incomplete)
-      case parse.Error          => return Left(IR.Error)
+      case parse.Incomplete(_)     => return Left(IR.Incomplete)
+      case parse.Error(_)          => return Left(IR.Error)
       case parse.Success(trees) => trees
     }
     repltrace(
@@ -1009,20 +1012,29 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
     }
 
     lazy val presentationCompile: Boolean = {
-      reporter.reset()
       val wrappedCode: String = ObjectSourceCode(handlers)
       parseAndTypeCheck(wrappedCode)
       reporter.hasErrors
     }
 
-    private[this] def parseAndTypeCheck(code: String): global.CompilationUnit = {
-      val unit = global.newCompilationUnit(code)
-      val parser = global.newUnitParser(unit)
-      val parserPhase = global.syntaxAnalyzer.newPhase(NoPhase)
-      val run: global.Run = new global.Run()
-      run.parserPhase.asInstanceOf[GlobalPhase].applyPhase(unit)
-      println(showCode(unit.body))
-      unit
+    private[this] def parseAndTypeCheck(code: String): Global#CompilationUnit = {
+      val storeReporter: StoreReporter = new StoreReporter
+      val dir: ReplDir = imain.replOutput.dir
+      val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
+      val interactiveGlobal = new interactive.Global(global.settings, storeReporter) { self =>
+        override def assertCorrectThread(): Unit = ()
+        override lazy val platform: ThisPlatform = new JavaPlatform {
+          val global: self.type = self
+
+          override def classPath: PlatformClassPath = replOutClasspath
+        }
+      }
+      import interactiveGlobal._
+      val run = new TyperRun()
+      val unit = new RichCompilationUnit(newCompilationUnit(code).source)
+      typeCheck(unit)
+      println(show(unit.body, printTypes = true))
+      newCompilationUnit(code)
     }
 
     lazy val resultSymbol = lineRep.resolvePathToSymbol(accessPath)
@@ -1179,20 +1191,24 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
 
   /** Parse a line into and return parsing result (error, incomplete or success with list of trees) */
   object parse {
-    abstract sealed class Result
-    case object Error extends Result
-    case object Incomplete extends Result
+    abstract sealed class Result { def trees: List[Tree] }
+    case class Error(trees: List[Tree]) extends Result
+    case class Incomplete(trees: List[Tree]) extends Result
     case class Success(trees: List[Tree]) extends Result
 
-    def apply(line: String): Result = debugging(s"""parse("$line")""")  {
+    def apply(line: String, forPresentation: Boolean = false): Result = debugging(s"""parse("$line")""")  {
       var isIncomplete = false
-      currentRun.parsing.withIncompleteHandler((_, _) => isIncomplete = true) {
+      def parse = {
         reporter.reset()
         val trees = newUnitParser(line).parseStats()
-        if (reporter.hasErrors) Error
-        else if (isIncomplete) Incomplete
+        if (reporter.hasErrors) Error(trees)
+        else if (isIncomplete) Incomplete(trees)
         else Success(trees)
       }
+      if (forPresentation)
+        parse
+      else currentRun.parsing.withIncompleteHandler((_, _) => isIncomplete = true) {parse}
+
     }
   }
 
