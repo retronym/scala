@@ -796,12 +796,6 @@ TODO:
       <path refid="asm.classpath"/>
     </path>
 
-    <path id="quick.repl.build.path">
-      <path refid="quick.compiler.build.path"/>
-      <pathelement location="${build-quick.dir}/classes/repl"/>
-      <path refid="repl.deps.classpath"/>
-    </path>
-
     <path id="quick.scalap.build.path">
       <path refid="quick.compiler.build.path"/>
       <pathelement location="${build-quick.dir}/classes/scalap"/>
@@ -830,6 +824,13 @@ TODO:
     <path id="quick.interactive.build.path">
       <path refid="quick.compiler.build.path"/>
       <pathelement location="${build-quick.dir}/classes/interactive"/>
+    </path>
+
+    <path id="quick.repl.build.path">
+      <path refid="quick.compiler.build.path"/>
+      <path refid="quick.interactive.build.path"/>
+      <pathelement location="${build-quick.dir}/classes/repl"/>
+      <path refid="repl.deps.classpath"/>
     </path>
 
     <path id="quick.bin.tool.path">
@@ -1156,14 +1157,14 @@ TODO:
   <target name="quick.comp"       depends="quick.reflect">
     <staged-build with="locker"   stage="quick" project="compiler"/> </target>
 
-  <target name="quick.repl"       depends="quick.comp">
-    <staged-build with="locker"   stage="quick" project="repl"/> </target>
-
   <target name="quick.scaladoc"   depends="quick.comp">
     <staged-build with="locker"   stage="quick" project="scaladoc" version="scaladoc"/> </target>
 
   <target name="quick.interactive" depends="quick.comp, quick.scaladoc">
     <staged-build with="locker"    stage="quick" project="interactive"/> </target>
+
+  <target name="quick.repl"       depends="quick.comp, quick.interactive">
+    <staged-build with="locker"   stage="quick" project="repl"/> </target>
 
   <target name="quick.scalap"     depends="quick.repl">
     <staged-build with="locker"   stage="quick" project="scalap"/> </target>
