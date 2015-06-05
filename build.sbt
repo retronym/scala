@@ -194,7 +194,7 @@ lazy val interactive = configureAsSubproject(project)
 lazy val repl = configureAsSubproject(project)
   .settings(libraryDependencies += jlineDep)
   .settings(disableDocsAndPublishingTasks: _*)
-  .dependsOn(compiler)
+  .dependsOn(compiler, interactive)
 
 lazy val scaladoc = configureAsSubproject(project)
   .settings(
