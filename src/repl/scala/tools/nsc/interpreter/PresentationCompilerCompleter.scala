@@ -12,9 +12,20 @@ class PresentationCompilerCompleter(intp: IMain) extends ScalaCompleter {
   override def complete(buf: String, cursor: Int): Candidates = {
     val request = new Request(buf, cursor)
     if (request == lastRequest) tabCount += 1 else { tabCount = 0; lastRequest = request}
+    val printMode = buf.matches(""".*// *print *$""") && cursor == buf.length
     intp.presentationCompile(buf, false) match {
       case Left(_) =>
         Completion.NoCandidates
+      case Right(result) if printMode =>
+        val offset = result.preambleLength
+        val pos1 = result.unit.source.position(offset).withEnd(offset + buf.length)
+        import result.compiler._
+        val tree = new Locator(pos1) locateIn result.unit.body match {
+          case Template(_, _, constructor :: (rest :+ last)) => if (rest.isEmpty) last else Block(rest, last)
+          case t => t
+        }
+        val printed = showCode(tree)
+        Candidates(cursor, "" :: printed :: Nil)
       case Right(result) =>
         try {
           val offset = result.preambleLength

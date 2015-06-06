@@ -1034,7 +1034,6 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       val run = new TyperRun()
       val unit = new RichCompilationUnit(newCompilationUnit(code).source)
       typeCheck(unit)
-//      println(show(unit.body, printTypes = true))
       PresentationCompileResult(this, interactiveGlobal)(unit, ObjectSourceCode.preambleLength)
     }
 
