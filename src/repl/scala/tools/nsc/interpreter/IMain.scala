@@ -1022,6 +1022,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       import interactiveGlobal._
       val run = new TyperRun()
       val unit = new RichCompilationUnit(newCompilationUnit(code).source)
+      unitOfFile(unit.source.file) = unit
       typeCheck(unit)
       PresentationCompileResult(this, interactiveGlobal)(unit, ObjectSourceCode.preambleLength)
     }
