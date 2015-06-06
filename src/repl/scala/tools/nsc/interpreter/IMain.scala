@@ -1206,9 +1206,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
         else if (isIncomplete) Incomplete(trees)
         else Success(trees)
       }
-      if (forPresentation)
-        parse
-      else currentRun.parsing.withIncompleteHandler((_, _) => isIncomplete = true) {parse}
+      currentRun.parsing.withIncompleteHandler((_, _) => isIncomplete = true) {parse}
 
     }
   }
@@ -1293,6 +1291,9 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
     val compiler: scala.tools.nsc.interactive.Global
     def unit: compiler.RichCompilationUnit
     def preambleLength: Int
+    def cleanup(): Unit = {
+      compiler.askShutdown()
+    }
   }
 
   object PresentationCompileResult {

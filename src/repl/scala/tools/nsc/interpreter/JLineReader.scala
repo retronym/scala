@@ -14,7 +14,7 @@ import Completion._
 /**
  *  Reads from the console using JLine.
  */
-class JLineReader(_completion: => Completion) extends InteractiveReader {
+class JLineReader(_completion: => Completion, directCompleter: Option[ScalaCompleter]) extends InteractiveReader {
   val interactive = true
   val consoleReader = new JLineConsoleReader()
 
@@ -63,7 +63,10 @@ class JLineReader(_completion: => Completion) extends InteractiveReader {
           new ArgumentCompleter(new JLineDelimiter, scalaToJline(completion.completer()))
         argCompletor setStrict false
 
-        this addCompleter argCompletor
+//        this addCompleter argCompletor
+        directCompleter foreach { c =>
+          this addCompleter scalaToJline(c)
+        }
         this setAutoprintThreshold 400 // max completion candidates without warning
       }
     }

@@ -296,28 +296,6 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
     override def complete(buf: String, cursor: Int): Candidates = {
       verbosity = if (isConsecutiveTabs(buf, cursor)) verbosity + 1 else 0
       repldbg(f"%ncomplete($buf, $cursor%d) last = ($lastBuf, $lastCursor%d), verbosity: $verbosity")
-      def presentationCompile: Option[Candidates] = {
-        intp.presentationCompile(buf, false) match {
-          case Left(_) =>
-            None
-          case Right(result) =>
-            val offset = result.preambleLength
-            val pos1 = result.unit.source.position(offset + cursor)
-            import result.compiler._
-            val focus1: Tree = typedTreeAt(pos1)
-            focus1 match {
-              case Select(qual, name) =>
-                val completions = typeMembers(pos1).toList.flatten.filter(_.sym.name.startsWith(name.encoded))
-                Some(Candidates(cursor, completions.map(_.sym.name.decoded)))
-              case Ident(name) =>
-                val allMembers = scopeMembers(pos1)
-                val completions = allMembers.filter(_.sym.name.startsWith(name.encoded))
-                Some(Candidates(cursor, completions.map(_.sym.name.decoded)))
-              case _ =>
-                None
-            }
-        }
-      }
       // we don't try lower priority completions unless higher ones return no results.
       def tryCompletion(p: Parsed, completionFunction: Parsed => List[String]): Option[Candidates] = {
         val winners = completionFunction(p)
@@ -345,7 +323,6 @@ class JLineCompletion(val intp: IMain) extends Completion with CompletionOutput 
 
       def tryAll = (
                   lastResultCompletion
-           orElse presentationCompile
            orElse tryCompletion(mkDotted, topLevelFor)
         getOrElse Candidates(cursor, Nil)
       )

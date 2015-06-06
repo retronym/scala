@@ -870,7 +870,8 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter)
       SimpleReader()
     else try new JLineReader(
       if (settings.noCompletion) NoCompletion
-      else new JLineCompletion(intp)
+      else new JLineCompletion(intp),
+      Some(new PresentationCompilerCompleter(intp))
     )
     catch {
       case ex @ (_: Exception | _: NoClassDefFoundError) =>

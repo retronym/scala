@@ -9,7 +9,7 @@ package interpreter
 import jline.console.completer.ArgumentCompleter.{ ArgumentDelimiter, ArgumentList }
 
 class JLineDelimiter extends ArgumentDelimiter {
-  def toJLine(args: List[String], cursor: Int) = args match {
+  def toJLine(args: List[String], cursor: Int): ArgumentList = args match {
     case Nil    => new ArgumentList(new Array[String](0), 0, 0, cursor)
     case xs     => new ArgumentList(xs.toArray, xs.size - 1, xs.last.length, cursor)
   }
