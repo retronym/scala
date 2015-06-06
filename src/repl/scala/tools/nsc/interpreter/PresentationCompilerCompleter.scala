@@ -11,6 +11,13 @@ class PresentationCompilerCompleter(intp: IMain) extends ScalaCompleter {
     val request = new Request(buf, cursor)
     if (request == lastRequest) tabCount += 1 else { tabCount = 0; lastRequest = request}
     val printMode = buf.matches(""".*// *print *$""") && cursor == buf.length
+    val (typeAtMode, start, end) = {
+      val R = """.*// *typeAt *(\d+) *(\d+) *$""".r
+      buf match {
+        case R(s, e) if cursor == buf.length => (true, s.toInt, e.toInt)
+        case _ => (false, -1, -1)
+      }
+    }
     intp.presentationCompile(buf) match {
       case Left(_) => Completion.NoCandidates
       case Right(result) => try {
@@ -24,6 +31,9 @@ class PresentationCompilerCompleter(intp: IMain) extends ScalaCompleter {
           }
           val printed = showCode(tree)
           Candidates(cursor, "" :: printed :: Nil)
+        } else if (typeAtMode) {
+          val tp = intp.api.typeAt(buf, start, end)
+          Candidates(cursor, "" :: tp ++: Nil)
         } else {
           import result.CompletionResult._
           result.completionsOf(buf, cursor) match {

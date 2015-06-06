@@ -64,6 +64,8 @@ import java.io.File
 class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Settings, protected val out: JPrintWriter) extends AbstractScriptEngine with Compilable with Imports with PresentationCompilation {
   imain =>
 
+  val api = new PresentationCompilerAPI(this)
+
   setBindings(createBindings, ScriptContext.ENGINE_SCOPE)
   object replOutput extends ReplOutput(settings.Yreploutdir) { }
 
@@ -1025,6 +1027,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       import interactiveGlobal._
       val run = new TyperRun()
       val unit = new RichCompilationUnit(newCompilationUnit(code).source)
+      unitOfFile(unit.source.file) = unit
       typeCheck(unit)
       PresentationCompileResult(this, interactiveGlobal)(unit, ObjectSourceCode.preambleLength)
     }
