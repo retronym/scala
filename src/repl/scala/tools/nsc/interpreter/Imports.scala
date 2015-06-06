@@ -108,7 +108,7 @@ trait Imports {
         // try to finesse this, we will mimic all imports for now.
         def keepHandler(handler: MemberHandler) = handler match {
           case _: ImportHandler => true
-          case x                => x.definesImplicit || (x.definedNames exists wanted)
+          case x                => x.definesImplicit || (x.definedNames exists (d => wanted.exists(w => d.startsWith(w))))
         }
 
         reqs match {
