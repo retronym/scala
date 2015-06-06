@@ -61,7 +61,7 @@ import java.io.File
  *  @author Moez A. Abdel-Gawad
  *  @author Lex Spoon
  */
-class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Settings, protected val out: JPrintWriter) extends AbstractScriptEngine with Compilable with Imports {
+class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Settings, protected val out: JPrintWriter) extends AbstractScriptEngine with Compilable with Imports with PresentationCompilation {
   imain =>
 
   setBindings(createBindings, ScriptContext.ENGINE_SCOPE)
@@ -443,7 +443,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
 
   /** Build a request from the user. `trees` is `line` after being parsed.
    */
-  private def buildRequest(line: String, trees: List[Tree]): Request = {
+  private[interpreter] def buildRequest(line: String, trees: List[Tree]): Request = {
     executingRequest = new Request(line, trees)
     executingRequest
   }
@@ -462,10 +462,8 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
     pos
   }
 
-  private def requestFromLine(line: String, synthetic: Boolean, forPresentationCompile: Boolean = false): Either[IR.Result, Request] = {
+  private[interpreter] def requestFromLine(line: String, synthetic: Boolean): Either[IR.Result, Request] = {
     val content = indentCode(line)
-    if (forPresentationCompile)
-      return Right(buildRequest(line, parse(content, forPresentationCompile).trees))
 
     val trees: List[global.Tree] = parse(content) match {
       case parse.Incomplete(_)     => return Left(IR.Incomplete)
@@ -535,7 +533,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
         // Rewriting    "foo ; bar ; 123"
         // to           "foo ; bar ; val resXX = 123"
         requestFromLine(rewrittenLine, synthetic) match {
-          case Right(req) if !forPresentationCompile => return Right(req withOriginalLine line)
+          case Right(req) => return Right(req withOriginalLine line)
           case x          => return x
         }
       case _ =>
@@ -572,17 +570,6 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
        // null indicates a disallowed statement type; otherwise compile and
        // fail if false (implying e.g. a type error)
        if (req == null || !req.compile) Left(IR.Error) else Right(req)
-    }
-  }
-
-  private[scala] def presentationCompile(line: String, synthetic: Boolean): Either[IR.Result, PresentationCompileResult] = {
-    if (global == null) Left(IR.Error)
-    else requestFromLine(line, synthetic, forPresentationCompile = true) match {
-      case Left(result) => Left(result)
-      case Right(req)   =>
-       // null indicates a disallowed statement type; otherwise compile and
-       // fail if false (implying e.g. a type error)
-       if (req == null) Left(IR.Error) else Right(req.presentationCompile)
     }
   }
 
@@ -1283,29 +1270,6 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
   def debugging[T](msg: String)(res: T) = {
     repldbg(msg + " " + res)
     res
-  }
-
-  abstract class PresentationCompileResult {
-    def request: Request
-    val compiler: scala.tools.nsc.interactive.Global
-    def unit: compiler.RichCompilationUnit
-    def preambleLength: Int
-    def cleanup(): Unit = {
-      compiler.askShutdown()
-    }
-  }
-
-  object PresentationCompileResult {
-    def apply(request0: Request, compiler0: scala.tools.nsc.interactive.Global)(unit0: compiler0.RichCompilationUnit, preambleLength0: Int) = new PresentationCompileResult {
-
-      override def request: Request = request0
-
-      override val compiler = compiler0
-
-      override def unit = unit0.asInstanceOf[compiler.RichCompilationUnit]
-
-      override def preambleLength = preambleLength0
-    }
   }
 }
 

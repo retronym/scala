@@ -1,7 +1,5 @@
 package scala.tools.nsc.interpreter
 
-import scala.reflect.internal.util.Position
-import scala.tools.nsc.interactive.Global
 import scala.tools.nsc.interpreter.Completion.{ScalaCompleter, Candidates}
 
 class PresentationCompilerCompleter(intp: IMain) extends ScalaCompleter {
@@ -13,51 +11,37 @@ class PresentationCompilerCompleter(intp: IMain) extends ScalaCompleter {
     val request = new Request(buf, cursor)
     if (request == lastRequest) tabCount += 1 else { tabCount = 0; lastRequest = request}
     val printMode = buf.matches(""".*// *print *$""") && cursor == buf.length
-    intp.presentationCompile(buf, false) match {
-      case Left(_) =>
-        Completion.NoCandidates
-      case Right(result) if printMode =>
-        val offset = result.preambleLength
-        val pos1 = result.unit.source.position(offset).withEnd(offset + buf.length)
-        import result.compiler._
-        val tree = new Locator(pos1) locateIn result.unit.body match {
-          case Template(_, _, constructor :: (rest :+ last)) => if (rest.isEmpty) last else Block(rest, last)
-          case t => t
-        }
-        val printed = showCode(tree)
-        Candidates(cursor, "" :: printed :: Nil)
-      case Right(result) =>
-        try {
+    intp.presentationCompile(buf) match {
+      case Left(_) => Completion.NoCandidates
+      case Right(result) => try {
+        if (printMode) {
           val offset = result.preambleLength
-          val pos1 = result.unit.source.position(offset + cursor)
+          val pos1 = result.unit.source.position(offset).withEnd(offset + buf.length)
           import result.compiler._
-          val focus1: Tree = typedTreeAt(pos1)
-          focus1 match {
-            case Select(qual, name) =>
-              val prefix = if (name == nme.ERROR) "" else name.encoded
-              val allTypeMembers = typeMembers(qual.pos).toList.flatten
-              val completions = allTypeMembers.filter(_.sym.name.startsWith(prefix))
-              def fallback = qual.pos.end + 2
-              val nameStart: Int = (qual.pos.end + 1 until focus1.pos.end).find(p =>
-                result.unit.source.identifier(result.unit.source.position(p)).exists(_.length > 0)
-              ).getOrElse(fallback)
-              val position: Int = cursor + nameStart - pos1.start
-              if (tabCount > 0 && completions.forall(_.sym.name == name)) {
-                val defStrings = completions.flatMap(_.sym.alternatives).map(sym => sym.defStringSeenAs(qual.tpe memberType sym))
+          val tree = new Locator(pos1) locateIn result.unit.body match {
+            case Template(_, _, constructor :: (rest :+ last)) => if (rest.isEmpty) last else Block(rest, last)
+            case t => t
+          }
+          val printed = showCode(tree)
+          Candidates(cursor, "" :: printed :: Nil)
+        } else {
+          import result.CompletionResult._
+          result.completionsOf(buf, cursor) match {
+            case TypeMembers(newCursor, result.compiler.Select(qual, name), members) =>
+              if (tabCount > 0 && members.forall(_.sym.name == name)) {
+                val defStrings = members.flatMap(_.sym.alternatives).map(sym => sym.defStringSeenAs(qual.tpe memberType sym))
                 Candidates(cursor, "" :: defStrings)
               } else {
-                val memberCompletions: List[String] = completions.map(_.sym.name.decoded)
-                Candidates(position, memberCompletions)
+                val memberCompletions: List[String] = members.map(_.sym.name.decoded)
+                Candidates(newCursor, memberCompletions)
               }
-            case Ident(name) =>
-              val allMembers = scopeMembers(pos1)
-              val completions = allMembers.filter(_.sym.name.startsWith(name.encoded))
-              val position: Int = cursor + focus1.pos.start - pos1.start
-              Candidates(position, completions.map(_.sym.name.decoded))
+            case ScopeMembers(newCursor, members) =>
+              Candidates(newCursor, members.map(_.sym.name.decoded))
             case _ =>
               Completion.NoCandidates
           }
-        } finally result.cleanup()
+        }
+      } finally result.cleanup()
     }
   }
 }
