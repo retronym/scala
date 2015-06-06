@@ -13,7 +13,7 @@ class PresentationCompilerAPI(interpreter: IMain) {
   }
 
   def typeAt(code: String, selectionStart: Int, selectionEnd: Int): Option[String] = {
-    interpreter.presentationCompile(code, synthetic = false) match {
+    interpreter.presentationCompile(code) match {
       case Left(_) => None
       case Right(result) =>
         val start = selectionStart + result.preambleLength
