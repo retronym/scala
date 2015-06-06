@@ -1009,7 +1009,12 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       val storeReporter: StoreReporter = new StoreReporter
       val dir: ReplDir = imain.replOutput.dir
       val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
-      val interactiveGlobal = new interactive.Global(global.settings, storeReporter) { self =>
+      def copySettings: Settings = {
+        val s = new Settings(_ => () /* ignores "bad option -nc" errors, etc */)
+        s.processArguments(global.settings.recreateArgs, processAll = false)
+        s
+      }
+      val interactiveGlobal = new interactive.Global(copySettings, storeReporter) { self =>
         override def assertCorrectThread(): Unit = ()
         override lazy val platform: ThisPlatform = new JavaPlatform {
           val global: self.type = self
