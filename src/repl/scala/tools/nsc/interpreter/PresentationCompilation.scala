@@ -5,8 +5,12 @@
 
 package scala.tools.nsc.interpreter
 
-import scala.collection.{ mutable, immutable }
-import scala.tools.nsc.interpreter.Completion.Candidates
+import scala.tools.nsc.backend.JavaPlatform
+import scala.tools.nsc.{interactive, Settings}
+import scala.tools.nsc.io._
+import scala.tools.nsc.reporters.StoreReporter
+import scala.tools.nsc.util.ClassPath.DefaultJavaContext
+import scala.tools.nsc.util.{DirectoryClassPath, MergedClassPath}
 
 trait PresentationCompilation {
   self: IMain =>
@@ -14,9 +18,40 @@ trait PresentationCompilation {
   private[scala] def presentationCompile(line: String): Either[IR.Result, PresentationCompileResult] = {
     if (global == null) Left(IR.Error)
     else {
-      val req = buildRequest(line, parse(line, forPresentation = true).trees)
-      if (req == null) Left(IR.Error) else Right(req.presentationCompile)
+      val compiler = newPresentationCompiler()
+      val trees = compiler.newUnitParser(line).parseStats()
+      val importer = global.mkImporter(compiler)
+      val request = new Request(line, trees map (t => importer.importTree(t)))
+      val wrappedCode: String = request.ObjectSourceCode(request.handlers)
+      import compiler._
+      val unit = new RichCompilationUnit(newCompilationUnit(wrappedCode).source)
+      unitOfFile(unit.source.file) = unit
+      typeCheck(unit)
+      val result = PresentationCompileResult(request, compiler)(unit, request.ObjectSourceCode.preambleLength)
+      Right(result)
     }
+  }
+
+  private def newPresentationCompiler(): interactive.Global = {
+    val storeReporter: StoreReporter = new StoreReporter
+    val dir: ReplDir = replOutput.dir
+    val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
+    def copySettings: Settings = {
+      val s = new Settings(_ => () /* ignores "bad option -nc" errors, etc */)
+      s.processArguments(global.settings.recreateArgs, processAll = false)
+      s
+    }
+    val interactiveGlobal = new interactive.Global(copySettings, storeReporter) { self =>
+      override def assertCorrectThread(): Unit = ()
+      override lazy val platform: ThisPlatform = new JavaPlatform {
+        val global: self.type = self
+
+        override def classPath: PlatformClassPath = replOutClasspath
+      }
+    }
+    import interactiveGlobal._
+    val run = new TyperRun()
+    interactiveGlobal
   }
 
   abstract class PresentationCompileResult {
@@ -65,7 +100,7 @@ trait PresentationCompilation {
   }
 
   object PresentationCompileResult {
-    def apply(request0: Request, compiler0: scala.tools.nsc.interactive.Global)(unit0: compiler0.RichCompilationUnit, preambleLength0: Int) = new PresentationCompileResult {
+    def apply(request0: Request, compiler0: interactive.Global)(unit0: compiler0.RichCompilationUnit, preambleLength0: Int) = new PresentationCompileResult {
 
       override def request: Request = request0
 

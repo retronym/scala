@@ -942,7 +942,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       def postwrap = s"}\nval $iw = new $iw\n"
     }
 
-    private lazy val ObjectSourceCode: Wrapper =
+    private[interpreter] lazy val ObjectSourceCode: Wrapper =
       if (settings.Yreplclassbased) new ClassBasedWrapper else new ObjectBasedWrapper
 
     private object ResultObjectSourceCode extends IMain.CodeAssembler[MemberHandler] {
@@ -1000,36 +1000,6 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
         val handls = if (printResults) handlers else Nil
         withoutWarnings(lineRep compile ResultObjectSourceCode(handls))
       }
-    }
-
-    def presentationCompile: PresentationCompileResult = {
-      val wrappedCode: String = ObjectSourceCode(handlers)
-      parseAndTypeCheck(wrappedCode)
-    }
-
-    private[this] def parseAndTypeCheck(code: String): PresentationCompileResult = {
-      val storeReporter: StoreReporter = new StoreReporter
-      val dir: ReplDir = imain.replOutput.dir
-      val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
-      def copySettings: Settings = {
-        val s = new Settings(_ => () /* ignores "bad option -nc" errors, etc */)
-        s.processArguments(global.settings.recreateArgs, processAll = false)
-        s
-      }
-      val interactiveGlobal = new interactive.Global(copySettings, storeReporter) { self =>
-        override def assertCorrectThread(): Unit = ()
-        override lazy val platform: ThisPlatform = new JavaPlatform {
-          val global: self.type = self
-
-          override def classPath: PlatformClassPath = replOutClasspath
-        }
-      }
-      import interactiveGlobal._
-      val run = new TyperRun()
-      val unit = new RichCompilationUnit(newCompilationUnit(code).source)
-      unitOfFile(unit.source.file) = unit
-      typeCheck(unit)
-      PresentationCompileResult(this, interactiveGlobal)(unit, ObjectSourceCode.preambleLength)
     }
 
     lazy val resultSymbol = lineRep.resolvePathToSymbol(accessPath)
