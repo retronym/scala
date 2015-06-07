@@ -34,8 +34,8 @@ trait PresentationCompilation {
 
   private def newPresentationCompiler(): interactive.Global = {
     val storeReporter: StoreReporter = new StoreReporter
-    val dir: ReplDir = replOutput.dir
-    val replOutClasspath = new MergedClassPath[AbstractFile](new DirectoryClassPath(dir, DefaultJavaContext) :: global.platform.classPath :: Nil, DefaultJavaContext)
+    val replOutClasspath: DirectoryClassPath = new DirectoryClassPath(replOutput.dir, DefaultJavaContext)
+    val claspath = new MergedClassPath[AbstractFile](replOutClasspath :: global.platform.classPath :: Nil, DefaultJavaContext)
     def copySettings: Settings = {
       val s = new Settings(_ => () /* ignores "bad option -nc" errors, etc */)
       s.processArguments(global.settings.recreateArgs, processAll = false)
@@ -46,7 +46,7 @@ trait PresentationCompilation {
       override lazy val platform: ThisPlatform = new JavaPlatform {
         val global: self.type = self
 
-        override def classPath: PlatformClassPath = replOutClasspath
+        override def classPath: PlatformClassPath = claspath
       }
     }
     import interactiveGlobal._
