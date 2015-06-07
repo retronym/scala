@@ -331,7 +331,7 @@ trait Implicits {
     if (Statistics.canEnable) Statistics.incCounter(implicitSearchCount)
 
     /** The type parameters to instantiate */
-    val undetParams = if (isView) Nil else context.outer.undetparams
+    val undetParams = if (isView) Nil else context.outer.enclosingUndetParams
     val wildPt = approximate(pt)
 
     private val runDefintions = currentRun.runDefinitions

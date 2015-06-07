@@ -300,6 +300,7 @@ trait Contexts { self: Analyzer =>
     /** Undetermined type parameters. See `Infer#{inferExprInstance, adjustTypeArgs}`. Not inherited to child contexts */
     def undetparams: List[Symbol] = _undetparams
     def undetparams_=(ps: List[Symbol]) = { _undetparams = ps }
+    def enclosingUndetParams: List[Symbol] = if (this == NoContext) Nil else undetparams ::: outer.undetparams
 
     /** Return and clear the undetermined type parameters */
     def extractUndetparams(): List[Symbol] = {
