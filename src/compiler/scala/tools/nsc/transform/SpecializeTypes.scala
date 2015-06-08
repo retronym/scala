@@ -314,6 +314,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     }
   }
 
+  def specializedOverloaded(sym: Symbol, args: List[Type]) = exitingSpecialize {
+    val env: TypeEnv = TypeEnv.fromSpecialization(sym.owner, args)
+    overloads(sym).find(_.matchesEnv(env)).map(_.sym).getOrElse(NoSymbol)
+  }
+
   /** Return the specialized name of 'sym' in the given environment. It
    *  guarantees the same result regardless of the map order by sorting
    *  type variables alphabetically.
