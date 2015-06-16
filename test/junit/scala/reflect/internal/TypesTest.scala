@@ -32,4 +32,27 @@ class TypesTest {
     val uniquelyNarrowed2 = refinedType(boolWithString1narrow2 :: Nil, NoSymbol)
     assert(uniquelyNarrowed1 =:= uniquelyNarrowed2)
   }
+
+  @Test
+  def constantToString(): Unit = {
+    def check(value: Any, expected: String) = assertEquals(expected, Constant(value).escapedStringValue)
+    check((), "()")
+    check(true, "true")
+    check(null, "null")
+    check("", "\"\"")
+    check("foo", "\"foo\"")
+    check("\tfoo", "\"\\tfoo\"")
+    check("\"", "\"\\\"\"")
+    check("\"", "\"\\\"\"")
+    check('\t', "'\\t'")
+    check('A', "'A'")
+    check(1 : Byte, "1")
+    check(1 : Short, "1")
+    check(1, "1")
+    check(1f, "1.0")
+    check(1d, "1.0")
+    check(Double.NaN, "NaN")
+    check(1L, "1L")
+    check(typeOf[String], "classOf[java.lang.String]")
+  }
 }
