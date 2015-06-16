@@ -203,38 +203,64 @@ trait Constants extends api.Constants {
       else if (tag == ClazzTag) signature(typeValue)
       else value.toString()
 
-    @switch def escapedChar(ch: Char): String = ch match {
-      case '\b' => "\\b"
-      case '\t' => "\\t"
-      case '\n' => "\\n"
-      case '\f' => "\\f"
-      case '\r' => "\\r"
-      case '"'  => "\\\""
-      case '\'' => "\\\'"
-      case '\\' => "\\\\"
-      case _    => if (ch.isControl) "\\0" + toOctalString(ch.toInt) else String.valueOf(ch)
+    def escapedChar(ch: Char): String = {
+      val sb = new StringBuffer()
+      escapedChar(ch, sb)
+      sb.toString
+    }
+
+    private def escapedString(s: String, buf: StringBuffer): Unit = {
+      for (i <- s.indices) escapedChar(s(i), buf)
+    }
+    private def escapedChar(ch: Char, buf: StringBuffer): Unit = ch match {
+      case '\b' => buf.append("\\b")
+      case '\t' => buf.append("\\t")
+      case '\n' => buf.append("\\n")
+      case '\f' => buf.append("\\f")
+      case '\r' => buf.append("\\r")
+      case '"'  => buf.append("\\\"")
+      case '\'' => buf.append("\\\'")
+      case '\\' => buf.append("\\\\")
+      case _    => if (ch.isControl) buf.append("\\0").append(toOctalString(ch.toInt)) else buf.append(ch)
     }
 
     def escapedStringValue: String = {
-      def escape(text: String): String = text flatMap escapedChar
+      def escapeStringConstant: String = {
+        // performance sensitive as Type#toString can be called a lot during implicit search
+        // See https://github.com/milessabin/shapeless/issues/50
+        val buf = new StringBuffer(stringValue.length + 2 /*quotes */)
+        buf.append("\"")
+        escapedString(stringValue, buf)
+        buf.append("\"")
+        buf.toString
+      }
+      def escapeCharConstant: String = {
+        val buf = new StringBuffer(stringValue.length + 2 /*quotes */)
+        buf.append("'")
+        escapedChar(charValue, buf)
+        buf.append("'")
+        buf.toString
+      }
+      def escapeClassConstant: String = {
+        def show(tpe: Type) = "classOf[" + signature(tpe) + "]"
+        typeValue match {
+          case ErasedValueType(clazz, underlying) =>
+            // A note on tpe_* usage here:
+            //
+            // We've intentionally erased the type arguments to the value class so that different
+            // instantiations of a particular value class that erase to the same underlying type
+            // don't result in spurious bridges (e.g. run/t6385.scala). I don't think that matters;
+            // printing trees of `classOf[ValueClass[String]]` shows `classOf[ValueClass]` at phase
+            // erasure both before and after the use of `tpe_*` here.
+            show(clazz.tpe_*)
+          case _ => show(typeValue)
+        }
+      }
       tag match {
         case NullTag   => "null"
-        case StringTag => "\"" + escape(stringValue) + "\""
-        case ClazzTag  =>
-          def show(tpe: Type) = "classOf[" + signature(tpe) + "]"
-          typeValue match {
-            case ErasedValueType(clazz, underlying) =>
-              // A note on tpe_* usage here:
-              //
-              // We've intentionally erased the type arguments to the value class so that different
-              // instantiations of a particular value class that erase to the same underlying type
-              // don't result in spurious bridges (e.g. run/t6385.scala). I don't think that matters;
-              // printing trees of `classOf[ValueClass[String]]` shows `classOf[ValueClass]` at phase
-              // erasure both before and after the use of `tpe_*` here.
-              show(clazz.tpe_*)
-            case _ => show(typeValue)
-          }
-        case CharTag   => "'" + escapedChar(charValue) + "'"
+        case StringTag => escapeStringConstant
+        case ClazzTag  => escapeClassConstant
+        case CharTag   => escapeCharConstant
         case LongTag   => longValue.toString() + "L"
         case EnumTag   => symbolValue.name.toString()
         case _         => String.valueOf(value)
