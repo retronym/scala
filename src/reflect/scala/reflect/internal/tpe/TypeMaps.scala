@@ -611,7 +611,7 @@ private[internal] trait TypeMaps {
     // we have to test the typeSymbol of the widened type, not pre.typeSymbol, or
     // B will not be considered.
     private def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) =
-      (clazz == candidate) && (pre.widen.typeSymbol isSubClass clazz)
+      (clazz == candidate) && ((pre.widen.typeSymbol isSubClass clazz) || (pre.typeSymbolDirect.isAbstractType && pre <:< clazz.tpeHK))
 
     // Whether the annotation tree currently being mapped over has had a This(_) node rewritten.
     private[this] var wroteAnnotation = false
