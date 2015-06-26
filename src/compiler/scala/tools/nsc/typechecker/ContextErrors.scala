@@ -196,24 +196,22 @@ trait ContextErrors {
         // members present, then display along with the expected members. This is done here because
         // this is the last point where we still have access to the original tree, rather than just
         // the found/req types.
-        val foundType: Type = req.dealiasWiden match {
+        val foundType = req.dealiasWiden match {
           case RefinedType(parents, decls) if !decls.isEmpty && found.typeSymbol.isAnonOrRefinementClass =>
-            val retyped    = typed (tree.duplicate.clearType())
-            val foundDecls = retyped.tpe.decls filter (sym => !sym.isConstructor && !sym.isSynthetic)
+            val foundDecls = tree.tpe.decls filter (sym => !sym.isConstructor && !sym.isSynthetic)
             if (foundDecls.isEmpty || (found.typeSymbol eq NoSymbol)) found
             else {
               // The members arrive marked private, presumably because there was no
               // expected type and so they're considered members of an anon class.
-              foundDecls foreach (_.makePublic)
+              refinedType(found.parents, found.typeSymbol.owner, newScopeWith(foundDecls.toList.map(_.cloneSymbol.makePublic) : _*), tree.pos)
               // TODO: if any of the found parents match up with required parents after normalization,
               // print the error so that they match. The major beneficiary there would be
               // java.lang.Object vs. AnyRef.
-              refinedType(found.parents, found.typeSymbol.owner, foundDecls, tree.pos)
             }
           case _ =>
             found
         }
-        assert(!foundType.isErroneous && !req.isErroneous, (foundType, req))
+        assert(!found.isErroneous && !req.isErroneous, (found, req))
 
         issueNormalTypeError(callee, withAddendum(callee.pos)(typeErrorMsg(foundType, req)))
         infer.explainTypes(foundType, req)
