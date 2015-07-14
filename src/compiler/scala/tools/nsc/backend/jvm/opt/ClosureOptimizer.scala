@@ -81,12 +81,13 @@ class ClosureOptimizer[BT <: BTypes](val btypes: BT) {
     // For each closure instantiation, a list of callsites of the closure that can be re-written
     // If a callsite cannot be rewritten, for example because the lambda body method is not accessible,
     // a warning is returned instead.
-    val callsitesToRewrite: Map[ClosureInstantiation, List[Either[RewriteClosureApplyToClosureBodyFailed, (MethodInsnNode, Int)]]] = {
-      closureInstantiationsByMethod flatMap {
+    val callsitesToRewrite: immutable.TreeMap[ClosureInstantiation, List[Either[RewriteClosureApplyToClosureBodyFailed, (MethodInsnNode, Int)]]] = {
+      val empty = immutable.TreeMap[ClosureInstantiation, List[Either[RewriteClosureApplyToClosureBodyFailed, (MethodInsnNode, Int)]]]()
+      empty ++ closureInstantiationsByMethod.iterator.flatMap{
         case (methodNode, closureInits) =>
           // A lazy val to ensure the analysis only runs if necessary (the value is passed by name to `closureCallsites`)
           lazy val prodCons = new ProdConsAnalyzer(methodNode, closureInits.head.ownerClass.internalName)
-          closureInits.map(init => (init, closureCallsites(init, prodCons)))
+          closureInits.iterator.map(init => (init, closureCallsites(init, prodCons)))
       }
     }
 
