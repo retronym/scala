@@ -303,18 +303,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     }
   }
 
-  def specializedFunctionName(sym: Symbol, args: List[Type]) = exitingSpecialize {
+  def specializedFunctionClass(sym: Symbol, args: List[Type]): Symbol = exitingSpecialize {
     require(isFunctionSymbol(sym), sym)
     val env: TypeEnv = TypeEnv.fromSpecialization(sym, args)
-    specializedClass.get((sym, env)) match {
-      case Some(x) =>
-        x.name
-      case None =>
-        sym.name
-    }
+    specializedClass.getOrElse((sym, env), sym)
   }
 
-  def specializedOverloaded(sym: Symbol, args: List[Type]) = exitingSpecialize {
+  def specializedOverloaded(sym: Symbol, args: List[Type]): Symbol = exitingSpecialize {
     val env: TypeEnv = TypeEnv.fromSpecialization(sym.owner, args)
     overloads(sym).find(_.matchesEnv(env)).map(_.sym).getOrElse(NoSymbol)
   }
