@@ -1197,7 +1197,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             val genericApply = functionClass.info.decl(nme.apply)
             val specializedApply = specializeTypes.specializedOverloaded(genericApply, exitingSpecialize(clazz.info.baseType(functionClass).typeArgs))
             val app = Apply(gen.mkAttributedSelect(gen.mkAttributedThis(clazz), specializedApply), vparamss.head.map(p => gen.mkAttributedIdent(p.symbol)))
-            dd.symbol.flags = dd.symbol.flags | Flags.DEFAULTMETHOD
+            dd.symbol.setFlag(Flags.DEFAULTMETHOD)
             copyDefDef(dd)(rhs = typedPos(tree.pos)(app))
           } else {
             tree
