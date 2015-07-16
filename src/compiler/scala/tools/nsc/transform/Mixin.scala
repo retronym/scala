@@ -1202,6 +1202,20 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           } else {
             tree
           }
+        case dd @ DefDef(_, _, _, vparamss, _, EmptyTree) if sym.owner.isTrait =>
+          val isDeferred = enteringPhase(currentRun.erasurePhase.prev)(sym.isDeferred) // before lateDEFERRED
+          // TODO Duplicated with isImplementedStatically, at this point sym.owner is still the trait so the other method returns false.
+          val isImplementedStatically = sym.isMethod && !sym.isModule && !sym.hasFlag(ACCESSOR | SUPERACCESSOR)
+          if (!isDeferred && isImplementedStatically) {
+            val implSym = exitingMixin(implClass(sym.owner).info.member(sym.name))
+            sym.setFlag(Flags.DEFAULTMETHOD)
+            val tree = Apply(staticRef(implSym), gen.mkAttributedCast(gen.mkAttributedThis(sym.owner), sym.owner.typeOfThis) ::  vparamss.head.map(t => gen.mkAttributedRef(t.symbol)))
+            val app = exitingMixin(typedPos(tree.pos)(tree))
+            copyDefDef(dd)(rhs = app)
+          } else {
+            tree
+          }
+
         case Apply(Select(qual, _), args) =>
           /*  Changes `qual.m(args)` where m refers to an implementation
            *  class method to Q.m(S, args) where Q is the implementation module of
