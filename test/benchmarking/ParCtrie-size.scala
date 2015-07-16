@@ -12,7 +12,7 @@ object Size extends testing.Benchmark {
   var parctrie = ParTrieMap((0 until length) zip (0 until length): _*)
   
   //collection.parallel.ForkJoinTasks.defaultForkJoinPool.setParallelism(par)
-  val ts = new collection.parallel.ForkJoinTaskSupport(new concurrent.forkjoin.ForkJoinPool(par))
+  val ts = new collection.parallel.ForkJoinTaskSupport(new java.util.concurrent.ForkJoinPool(par))
   parctrie.tasksupport = ts
   
   def run = {
