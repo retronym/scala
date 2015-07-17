@@ -25,6 +25,8 @@ package object io {
 
   type JManifest = java.util.jar.Manifest
   type JFile = java.io.File
+  type JPath = java.nio.file.Path
+  type JFileSystem = java.nio.file.FileSystem
 
   implicit def enrichManifest(m: JManifest): Jar.WManifest = Jar.WManifest(m)
 }
