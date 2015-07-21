@@ -1025,7 +1025,6 @@ trait Trees extends api.Trees {
       if (flags1 == flags) this
       else Modifiers(flags1, privateWithin, annotations) setPositions positions
     }
-    def | (flag: Int): Modifiers = this | flag.toLong
     def | (flag: Long): Modifiers = {
       val flags1 = flags | flag
       if (flags1 == flags) this

@@ -2168,7 +2168,7 @@ self =>
      *  }}}
      */
     def paramClauses(owner: Name, contextBounds: List[Tree], ofCaseClass: Boolean): List[List[ValDef]] = {
-      var implicitmod = 0
+      var implicitmod = 0L
       var caseParam = ofCaseClass
       def paramClause(): List[ValDef] = {
         if (in.token == RPAREN)
@@ -2226,7 +2226,7 @@ self =>
       }
     }
 
-    def param(owner: Name, implicitmod: Int, caseParam: Boolean): ValDef = {
+    def param(owner: Name, implicitmod: Long, caseParam: Boolean): ValDef = {
       val start = in.offset
       val annots = annotations(skipNewLines = false)
       var mods = Modifiers(Flags.PARAM)
@@ -2246,7 +2246,7 @@ self =>
       }
       val nameOffset = in.offset
       val name = ident()
-      var bynamemod = 0
+      var bynamemod = 0L
       val tpt =
         if ((settings.YmethodInfer && !owner.isTypeName) && in.token != COLON) {
           TypeTree()
@@ -3088,7 +3088,7 @@ self =>
     }
     */
 
-    def localDef(implicitMod: Int): List[Tree] = {
+    def localDef(implicitMod: Long): List[Tree] = {
       val annots = annotations(skipNewLines = true)
       val pos = in.offset
       val mods = (localModifiers() | implicitMod.toLong) withAnnotations annots
