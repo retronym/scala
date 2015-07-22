@@ -374,7 +374,7 @@ trait MethodSynthesis {
       def name       = tree.name
       def category   = GetterTargetClass
       def flagsMask  = GetterFlags
-      def flagsExtra = ACCESSOR.toLong | ( if (tree.mods.isMutable) 0 else STABLE )
+      def flagsExtra = ACCESSOR | ( if (tree.mods.isMutable) 0L else STABLE )
 
       override def validate() {
         assert(derivedSym != NoSymbol, tree)

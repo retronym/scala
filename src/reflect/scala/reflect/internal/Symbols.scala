@@ -323,9 +323,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def newModuleVarSymbol(accessor: Symbol): TermSymbol = {
       val newName  = nme.moduleVarName(accessor.name.toTermName)
-      val newFlags = MODULEVAR | ( if (this.isClass) PrivateLocal | SYNTHETIC else 0 )
+      val newFlags = MODULEVAR | ( if (this.isClass) PrivateLocal | SYNTHETIC else 0L )
       val newInfo  = accessor.tpe.finalResultType
-      val mval     = newVariable(newName, accessor.pos.focus, newFlags.toLong) addAnnotation VolatileAttr
+      val mval     = newVariable(newName, accessor.pos.focus, newFlags) addAnnotation VolatileAttr
 
       if (this.isClass)
         mval setInfoAndEnter newInfo
@@ -440,7 +440,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // don't test directly -- use isGADTSkolem
     // used to single out a gadt skolem symbol in deskolemizeGADT
     // gadtskolems are created in adaptConstrPattern and removed at the end of typedCase
-    final protected[Symbols] def GADT_SKOLEM_FLAGS = CASEACCESSOR | SYNTHETIC
+    final protected[Symbols] def GADT_SKOLEM_FLAGS: Long = CASEACCESSOR | SYNTHETIC
 
     // flags set up to maintain TypeSkolem's invariant: origin.isInstanceOf[Symbol] == !hasFlag(EXISTENTIAL)
     // GADT_SKOLEM_FLAGS (== CASEACCESSOR | SYNTHETIC) used to single this symbol out in deskolemizeGADT
@@ -3155,7 +3155,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // a type symbol bound by an existential type, for instance the T in
     // List[T] forSome { type T }
     override def isExistentialSkolem = this hasFlag EXISTENTIAL
-    override def isGADTSkolem        = this hasAllFlags GADT_SKOLEM_FLAGS.toLong
+    override def isGADTSkolem        = this hasAllFlags GADT_SKOLEM_FLAGS
     override def isTypeSkolem        = this hasFlag PARAM
     override def isAbstractType      = this hasFlag DEFERRED
 

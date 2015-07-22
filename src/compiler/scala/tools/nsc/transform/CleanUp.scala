@@ -86,11 +86,11 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
         /* ### CREATING THE METHOD CACHE ### */
 
         def addStaticVariableToClass(forName: TermName, forType: Type, forInit: Tree, isFinal: Boolean): Symbol = {
-          val flags = PRIVATE | STATIC | SYNTHETIC | (
-            if (isFinal) FINAL else 0
+          val flags: Long = PRIVATE | STATIC | SYNTHETIC | (
+            if (isFinal) FINAL else 0L
           )
 
-          val varSym = currentClass.newVariable(mkTerm("" + forName), ad.pos, flags.toLong) setInfoAndEnter forType
+          val varSym = currentClass.newVariable(mkTerm("" + forName), ad.pos, flags) setInfoAndEnter forType
           if (!isFinal)
             varSym.addAnnotation(VolatileAttr)
 

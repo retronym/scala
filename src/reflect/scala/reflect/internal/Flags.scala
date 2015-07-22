@@ -375,8 +375,8 @@ class Flags extends ModifierFlags {
     (ABSTRACT, ABSTRACT_PKL)
   )
 
-  private val mappedRawFlags = rawPickledCorrespondence map (_._1)
-  private val mappedPickledFlags = rawPickledCorrespondence map (_._2)
+  private val mappedRawFlags: Array[Long] = rawPickledCorrespondence map (_._1)
+  private val mappedPickledFlags: Array[Long] = rawPickledCorrespondence map (_._2)
 
   private class MapFlags(from: Array[Long], to: Array[Long]) extends (Long => Long) {
     val fromSet = (0L /: from) (_ | _)
@@ -517,7 +517,7 @@ class Flags extends ModifierFlags {
 
   final val pickledListOrder: List[Long] = {
     val all   = 0 to MaxBitPosition map (1L << _)
-    val front = mappedRawFlags map (_.toLong)
+    val front = mappedRawFlags
 
     front.toList ++ (all filterNot (front contains _))
   }

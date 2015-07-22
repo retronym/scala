@@ -2273,7 +2273,7 @@ self =>
           expr()
         } else EmptyTree
       atPos(start, if (name == nme.ERROR) start else nameOffset) {
-        ValDef((mods | implicitmod.toLong | bynamemod) withAnnotations annots, name.toTermName, tpt, default)
+        ValDef((mods | implicitmod | bynamemod) withAnnotations annots, name.toTermName, tpt, default)
       }
     }
 
@@ -3091,7 +3091,7 @@ self =>
     def localDef(implicitMod: Long): List[Tree] = {
       val annots = annotations(skipNewLines = true)
       val pos = in.offset
-      val mods = (localModifiers() | implicitMod.toLong) withAnnotations annots
+      val mods = (localModifiers() | implicitMod) withAnnotations annots
       val defs =
         if (!(mods hasFlag ~(Flags.IMPLICIT | Flags.LAZY))) defOrDcl(pos, mods)
         else List(tmplDef(pos, mods))

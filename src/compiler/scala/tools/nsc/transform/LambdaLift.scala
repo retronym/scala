@@ -308,12 +308,12 @@ abstract class LambdaLift extends InfoTransform {
 
       afterOwnPhase {
         for ((owner, freeValues) <- free.toList) {
-          val newFlags = SYNTHETIC | ( if (owner.isClass) PARAMACCESSOR | PrivateLocal else PARAM )
+          val newFlags: Long = SYNTHETIC | ( if (owner.isClass) PARAMACCESSOR | PrivateLocal else PARAM )
           debuglog("free var proxy: %s, %s".format(owner.fullLocationString, freeValues.toList.mkString(", ")))
           proxies(owner) =
             for (fv <- freeValues.toList) yield {
               val proxyName = proxyNames.getOrElse(fv, fv.name)
-              val proxy = owner.newValue(proxyName.toTermName, owner.pos, newFlags.toLong) setInfo fv.info
+              val proxy = owner.newValue(proxyName.toTermName, owner.pos, newFlags) setInfo fv.info
               if (owner.isClass) owner.info.decls enter proxy
               proxy
             }
