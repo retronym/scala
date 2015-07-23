@@ -980,7 +980,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def isNotOverridden = (
       owner.isClass && (
            owner.isEffectivelyFinal
-        || (owner.isSealed && owner.sealedChildren.forall(c => c.isEffectivelyFinal && (overridingSymbol(c) == NoSymbol)))
+        || (owner.childrenAreKnown && owner.children.forall(c => c.isEffectivelyFinal && (overridingSymbol(c) == NoSymbol)))
       )
     )
 
@@ -992,7 +992,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
              isPrivate
           || isLocalToBlock
          )
-      || isClass && originalOwner.isTerm && children.isEmpty // we track known subclasses of term-owned classes, use that infer finality
+      || isClass && childrenAreKnown && children.isEmpty // we track known subclasses of sealed and term-owned classes, use that to infer finality
     )
     /** Is this symbol effectively final or a concrete term member of sealed class whose children do not override it */
     final def isEffectivelyFinalOrNotOverridden: Boolean = isEffectivelyFinal || (isTerm && !isDeferred && isNotOverridden)
@@ -2500,6 +2500,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  Otherwise, the empty set.
      */
     def children: Set[Symbol] = Set()
+    def childrenAreKnown: Boolean = isSealed || originalOwner.isTerm
     final def sealedChildren: Set[Symbol] = if (!isSealed) Set.empty else children
 
     /** Recursively assemble all children of this symbol.

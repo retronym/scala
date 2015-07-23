@@ -1,0 +1,4 @@
+t9408-tailrec.scala:6: error: could not optimize @tailrec annotated method bar: it is neither private nor final so can be overridden
+      @tailrec def bar: Int = {println("here we go again"); bar}
+                   ^
+one error found
