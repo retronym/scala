@@ -263,6 +263,7 @@ abstract class ConstantOptimization extends SubComponent {
     // some precomputed constants
     private val NULL = Const(Constant(null: Any))
     private val UNKNOWN = Impossible(Set.empty)
+    private val UNKNOWN_BOOL = Possible(Set(true, false) map (x => Const(Constant(x))))
     private val NOT_NULL = SingleImpossible(NULL)
     private val CONST_UNIT = SinglePossible(Const(Constant(())))
     private val CONST_FALSE = SinglePossible(Const(Constant(false)))
@@ -569,7 +570,7 @@ abstract class ConstantOptimization extends SubComponent {
 
       // initially we know that 'this' is not null and the params are initialized to some unknown value
       val initThis: Iterator[(Local, Contents)] = if (m.isStatic) Iterator.empty else Iterator.single((THIS_LOCAL, NOT_NULL))
-      val initOtherLocals: Iterator[(Local, Contents)] = m.params.iterator map { param => (param, UNKNOWN) }
+      val initOtherLocals: Iterator[(Local, Contents)] = m.params.iterator map { param => (param, if (param.kind == BOOL) UNKNOWN_BOOL else UNKNOWN) }
       val initialLocals: Map[Local, Contents] = Map((initThis ++ initOtherLocals).toSeq: _*)
       val initialState = State(initialLocals, Nil)
 
