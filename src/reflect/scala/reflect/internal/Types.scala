@@ -2181,7 +2181,14 @@ trait Types
       // must initialise symbol, see test/files/pos/ticket0137.scala
       val tpars = initializedTypeParams
       if (tpars.isEmpty) this
-      else typeFunAnon(tpars, copyTypeRef(this, pre, sym, tpars map (_.tpeHK))) // todo: also beta-reduce?
+      else {
+        val map = newAsSeenFromMap(pre, sym.owner)
+        val tpars1 = map.mapOver(tpars)
+        if (tpars eq tpars1)
+          typeFunAnon(tpars, copyTypeRef(this, pre, sym, tpars map (_.tpeHK)))
+        else
+          typeFunAnon(tpars1, copyTypeRef(this, pre, sym, tpars map (_.tpeHK.substSym(tpars, tpars1))))
+      } // todo: also beta-reduce?
     }
 
     // only need to rebind type aliases, as typeRef already handles abstract types
