@@ -2182,15 +2182,7 @@ trait Types
       val tpars = initializedTypeParams
       if (tpars.isEmpty) this
       else {
-        val map = newAsSeenFromMap(pre, sym.owner)
-        val tpars1 = map.mapOver(tpars)
-        val tp = if (tpars eq tpars1)
-          typeFunAnon(tpars, copyTypeRef(this, pre, sym, tpars map (_.tpeHK)))
-        else
-          typeFunAnon(tpars1, copyTypeRef(this, pre, sym, tpars map (_.tpeHK.substSym(tpars, tpars1))))
-        val tp1 = typeFunAnonSeenFrom(pre, sym, tpars, bounds => copyTypeRef(this, pre, sym, bounds))
-        assert(tp.matches(tp) && tp1.matches(tp1))
-        tp
+        typeFunAnonSeenFrom(pre, sym, tpars, bounds => copyTypeRef(this, pre, sym, bounds))
       } // todo: also beta-reduce?
     }
 
