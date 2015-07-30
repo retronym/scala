@@ -1449,6 +1449,8 @@ trait Infer extends Checkable {
           val tparams = newAsSeenFromMap(pre, hd.owner) mapOver hd.typeParams
           val bounds  = tparams map (_.tpeHK) // see e.g., #1236
           val tpe     = PolyType(tparams, OverloadedType(AntiPolyType(pre, bounds), alts))
+          val tpe1 = typeFunAnonSeenFrom(pre, hd, hd.typeParams, (bounds: List[Type]) => OverloadedType(AntiPolyType(pre, bounds), alts))
+          assert(tpe.matches(tpe1) && tpe1.matches(tpe1))
           finish(sym setInfo tpe, tpe)
       }
       matchingLength.alternatives match {
