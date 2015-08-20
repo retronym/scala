@@ -135,7 +135,7 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
   }
   private def tquoted(s: String) = "\"\"\"" + s + "\"\"\""
   private val logScope = scala.sys.props contains "scala.repl.scope"
-  private def scopelog(msg: String) = if (logScope) Console.err.println(msg)
+  private def scopelog(msg: => String) = if (logScope) Console.err.println(msg)
 
   // argument is a thunk to execute after init is done
   def initialize(postInitSignal: => Unit) {
@@ -378,12 +378,15 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
 
   private def updateReplScope(sym: Symbol, isDefined: Boolean) {
     def log(what: String) {
-      val mark = if (sym.isType) "t " else "v "
-      val name = exitingTyper(sym.nameString)
-      val info = cleanTypeAfterTyper(sym)
-      val defn = sym defStringSeenAs info
+      def msg = {
+        val mark = if (sym.isType) "t " else "v "
+        val name = exitingTyper(sym.nameString)
+        val info = cleanTypeAfterTyper(sym)
+        val defn = sym defStringSeenAs info
+        f"[$mark$what%6s] $name%-25s $defn%s"
+      }
 
-      scopelog(f"[$mark$what%6s] $name%-25s $defn%s")
+      scopelog(msg)
     }
     if (ObjectClass isSubClass sym.owner) return
     // unlink previous
