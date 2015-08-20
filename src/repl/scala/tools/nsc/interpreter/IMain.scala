@@ -381,9 +381,14 @@ class IMain(@BeanProperty val factory: ScriptEngineFactory, initialSettings: Set
       def msg = {
         val mark = if (sym.isType) "t " else "v "
         val name = exitingTyper(sym.nameString)
-        val info = cleanTypeAfterTyper(sym)
-        val defn = sym defStringSeenAs info
-        f"[$mark$what%6s] $name%-25s $defn%s"
+        try {
+          val info = cleanTypeAfterTyper(sym)
+          val defn = sym defStringSeenAs info
+          f"[$mark$what%6s] $name%-25s $defn%s"
+        } catch {
+          case t: Throwable =>
+            f"[$mark$what%6s] $name"
+        }
       }
 
       scopelog(msg)
