@@ -3917,26 +3917,57 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         typedTypeApply(tree, mode, fun setType fun.tpe.widen, args)
       case PolyType(tparams, restpe) if tparams.nonEmpty =>
         if (sameLength(tparams, args)) {
-          val targs = mapList(args)(treeTpe)
-          checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
-          if (isPredefClassOf(fun.symbol))
-            typedClassOf(tree, args.head, noGen = true)
-          else {
-            if (!isPastTyper && fun.symbol == Any_isInstanceOf && targs.nonEmpty) {
-              val scrutineeType = fun match {
-                case Select(qual, _) => qual.tpe
-                case _               => AnyTpe
-              }
-              checkCheckable(tree, targs.head, scrutineeType, inPattern = false)
+          def isWildcard(t: Tree) = t match {
+            case tt : TypeTree => tt.original match {
+              case Ident(tpnme.WILDCARD) => true
+              case _ => false
             }
-            val resultpe = restpe.instantiateTypeParams(tparams, targs)
-            //@M substitution in instantiateParams needs to be careful!
-            //@M example: class Foo[a] { def foo[m[x]]: m[a] = error("") } (new Foo[Int]).foo[List] : List[Int]
-            //@M    --> first, m[a] gets changed to m[Int], then m gets substituted for List,
-            //          this must preserve m's type argument, so that we end up with List[Int], and not List[a]
-            //@M related bug: #1438
-            //println("instantiating type params "+restpe+" "+tparams+" "+targs+" = "+resultpe)
-            treeCopy.TypeApply(tree, fun, args) setType resultpe
+            case _ => false
+          }
+          if (args.exists(isWildcard)) {
+            // Allow a mixture of provided and inferred type arguments by interpreting a wildcard as
+            // meaning "use a type variable here".
+            //
+            // We use the provided type arguments to constrain the type of the function, and then let
+            // typechecking proceed. Typechecking an enclosing `Apply` will then proceed to infer all
+            // type arguments, finding a trivial solution for those that correspond to fully constrained
+            // type parameters. Similary, if the type apply was itself an expression, the subsequent
+            // `adapt` will trigger inference in the same fashion.
+            
+            // TODO sort out interaction with polymorphic overload resolution
+            val targs = args map {
+              case arg if isWildcard(arg) => WildcardType
+              case x => x.tpe
+            }
+            // TODO check kind, bounds of provided type args
+            def derive(tparam: Symbol, targ: Type): Symbol = {
+              if (targ.isWildcard) tparam
+              else tparam.cloneSymbol(tparam.owner).setInfo(TypeBounds(targ, targ))
+            }
+            val tparams1 = deriveSymbols2(tparams, targs, derive)
+            fun.setType(PolyType(tparams1, restpe.substSym(tparams, tparams1)))
+          } else {
+            val targs = mapList(args)(treeTpe)
+            checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
+            if (isPredefClassOf(fun.symbol))
+              typedClassOf(tree, args.head, noGen = true)
+            else {
+              if (!isPastTyper && fun.symbol == Any_isInstanceOf && targs.nonEmpty) {
+                val scrutineeType = fun match {
+                  case Select(qual, _) => qual.tpe
+                  case _ => AnyTpe
+                }
+                checkCheckable(tree, targs.head, scrutineeType, inPattern = false)
+              }
+              val resultpe = restpe.instantiateTypeParams(tparams, targs)
+              //@M substitution in instantiateParams needs to be careful!
+              //@M example: class Foo[a] { def foo[m[x]]: m[a] = error("") } (new Foo[Int]).foo[List] : List[Int]
+              //@M    --> first, m[a] gets changed to m[Int], then m gets substituted for List,
+              //          this must preserve m's type argument, so that we end up with List[Int], and not List[a]
+              //@M related bug: #1438
+              //println("instantiating type params "+restpe+" "+tparams+" "+targs+" = "+resultpe)
+              treeCopy.TypeApply(tree, fun, args) setType resultpe
+            }
           }
         }
         else {
