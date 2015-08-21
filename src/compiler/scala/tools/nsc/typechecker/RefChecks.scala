@@ -1224,6 +1224,18 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       transformTrees(newTrees map localTyper.typedPos(moduleDef.pos))
     }
 
+    def elimMixinModuleDef(clazz: Symbol): List[Tree] = {
+      val self = clazz.thisType
+      val newMembers = new ListBuffer[Tree]
+
+      val mixinModules = if (clazz.isTrait) Nil else clazz.mixinClasses.flatMap(_.info.decls.iterator.filter(_.isModule))
+      for (module <- mixinModules) {
+        println(s"need to desugar $module into $clazz")
+      }
+
+      newMembers.toList
+    }
+
     def transformStat(tree: Tree, index: Int): List[Tree] = tree match {
       case t if treeInfo.isSelfConstrCall(t) =>
         assert(index == 0, index)
@@ -1650,11 +1662,12 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             // SI-7870 default getters for constructors live in the companion module
             checkOverloadedRestrictions(currentOwner, currentOwner.companionModule)
             val bridges = addVarargBridges(currentOwner)
+            val moduleDesugared = elimMixinModuleDef(currentOwner)
             checkAllOverrides(currentOwner)
             checkAnyValSubclass(currentOwner)
             if (currentOwner.isDerivedValueClass)
               currentOwner.primaryConstructor makeNotPrivate NoSymbol // SI-6601, must be done *after* pickler!
-            if (bridges.nonEmpty) deriveTemplate(tree)(_ ::: bridges) else tree
+            if (bridges.nonEmpty || moduleDesugared.nonEmpty) deriveTemplate(tree)(_ ::: bridges ::: moduleDesugared) else tree
 
           case dc@TypeTreeWithDeferredRefCheck() => abort("adapt should have turned dc: TypeTreeWithDeferredRefCheck into tpt: TypeTree, with tpt.original == dc")
           case tpt@TypeTree() =>
