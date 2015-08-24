@@ -1188,26 +1188,6 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       // set NoType so it will be ignored.
       val cdef          = ClassDef(module.moduleClass, impl) setType NoType
 
-      // Create the module var unless the immediate owner is a class and
-      // the module var already exists there. See SI-5012, SI-6712.
-      def findOrCreateModuleVar() = {
-        val vsym = (
-          if (site.isTerm) NoSymbol
-          else site.info decl nme.moduleVarName(moduleName)
-        )
-        vsym orElse (site newModuleVarSymbol module)
-      }
-      def newInnerObject() = {
-        // Create the module var unless it is already in the module owner's scope.
-        // The lookup is on module.enclClass and not module.owner lest there be a
-        // nullary method between us and the class; see SI-5012.
-        val moduleVar = findOrCreateModuleVar()
-        val rhs       = gen.newModule(module, moduleVar.tpe)
-        val body      = if (site.isTrait) rhs else gen.mkAssignAndReturn(moduleVar, rhs)
-        val accessor  = DefDef(module, body.changeOwner(moduleVar -> module))
-
-        ValDef(moduleVar) :: accessor :: Nil
-      }
       def matchingInnerObject() = {
         val newFlags = (module.flags | STABLE) & ~MODULE
         val newInfo  = NullaryMethodType(module.moduleClass.tpe)
@@ -1219,9 +1199,51 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
         if (module.isStatic)
           if (module.isOverridingSymbol) matchingInnerObject() else Nil
         else
-          newInnerObject()
+          newInnerObject(site, module)
       )
       transformTrees(newTrees map localTyper.typedPos(moduleDef.pos))
+    }
+    def newInnerObject(site: Symbol, module: Symbol) = {
+      // Create the module var unless the immediate owner is a class and
+      // the module var already exists there. See SI-5012, SI-6712.
+      def findOrCreateModuleVar() = {
+        val vsym = (
+          if (site.isTerm) NoSymbol
+          else site.info decl nme.moduleVarName(module.name.toTermName)
+          )
+        vsym orElse (site newModuleVarSymbol module)
+      }
+      // Create the module var unless it is already in the module owner's scope.
+      // The lookup is on module.enclClass and not module.owner lest there be a
+      // nullary method between us and the class; see SI-5012.
+      val moduleVar = findOrCreateModuleVar()
+      val rhs       = gen.newModule(module, moduleVar.tpe)
+      val body      = if (site.isTrait) rhs else if (site.isTerm) gen.mkAssignAndReturn(moduleVar, rhs) else gen.mkDoubleCheckedLockAssignAndReturn(moduleVar, rhs)
+      val accessor  = DefDef(module, body.changeOwner(moduleVar -> module))
+
+      ValDef(moduleVar) :: accessor :: Nil
+    }
+
+    def elimMixinModuleDef(clazz: Symbol): List[Tree] = {
+      val self = clazz.thisType
+      val newMembers = new ListBuffer[Tree]
+
+      val mixinModules = if (clazz.isTrait) Nil else clazz.mixinClasses.flatMap(_.info.decls.iterator.filter(_.isModule))
+      def createModuleAccessorAndModuleVar(mixinModule: Symbol): Unit = {
+
+        val moduleType   = mixinModule.infoIn(clazz.thisType)
+        val accessor     = clazz.newMethod(mixinModule.name.toTermName, clazz.pos, STABLE).setInfo(moduleType)
+        val moduleVar    = clazz.newModuleVarSymbol(accessor)
+        val moduleVarDef = ValDef(moduleVar)
+
+        val rhs          = gen.newModule(accessor, moduleType)
+        val assignAndRet = gen.mkDoubleCheckedLockAssignAndReturn(moduleVar, rhs)
+        val rhs1         = assignAndRet
+
+        newMembers += moduleVarDef += DefDef(accessor, rhs1)
+      }
+      mixinModules foreach createModuleAccessorAndModuleVar
+      transformTrees(newMembers.toList map localTyper.typedPos(clazz.pos))
     }
 
     def transformStat(tree: Tree, index: Int): List[Tree] = tree match {
@@ -1650,11 +1672,12 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             // SI-7870 default getters for constructors live in the companion module
             checkOverloadedRestrictions(currentOwner, currentOwner.companionModule)
             val bridges = addVarargBridges(currentOwner)
+            val moduleDesugared = elimMixinModuleDef(currentOwner)
             checkAllOverrides(currentOwner)
             checkAnyValSubclass(currentOwner)
             if (currentOwner.isDerivedValueClass)
               currentOwner.primaryConstructor makeNotPrivate NoSymbol // SI-6601, must be done *after* pickler!
-            if (bridges.nonEmpty) deriveTemplate(tree)(_ ::: bridges) else tree
+            if (bridges.nonEmpty || moduleDesugared.nonEmpty) deriveTemplate(tree)(_ ::: bridges ::: moduleDesugared) else tree
 
           case dc@TypeTreeWithDeferredRefCheck() => abort("adapt should have turned dc: TypeTreeWithDeferredRefCheck into tpt: TypeTree, with tpt.original == dc")
           case tpt@TypeTree() =>

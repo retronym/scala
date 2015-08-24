@@ -58,6 +58,11 @@ abstract class TreeGen extends scala.reflect.internal.TreeGen with TreeDSL {
     def lhsRef = if (lhs.owner.isClass) Select(This(lhs.owner), lhs) else Ident(lhs)
     Block(Assign(lhsRef, rhs) :: Nil, lhsRef)
   }
+  def mkDoubleCheckedLockAssignAndReturn(lhs: Symbol, rhs: Tree): Tree = {
+    val Block(List(assign @ Assign(moduleVarRef, _)), returnTree) = gen.mkAssignAndReturn(lhs, rhs)
+    val cond = Apply(Select(moduleVarRef, Object_eq), List(Literal(Constant(null))))
+    If(cond, gen.mkSynchronizedCheck(This(lhs.owner), cond, List(assign), List(returnTree)), returnTree)
+  }
 
   def newModule(accessor: Symbol, tpe: Type) = {
     val ps = tpe.typeSymbol.primaryConstructor.info.paramTypes
