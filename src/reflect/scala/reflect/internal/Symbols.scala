@@ -893,7 +893,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *
      * Stability and volatility are checked separately to allow volatile paths in patterns that amount to equality checks. SI-6815
      */
-    final def isStable        = isTerm && !isMutable && !(hasFlag(BYNAMEPARAM)) && (!isMethod || hasStableFlag)
+    final def isStable        = isTerm && !isMutable && !(hasFlag(BYNAMEPARAM)) && (!isMethod || hasStableFlag || isModule)
     final def hasVolatileType = tpe.isVolatile && !hasAnnotation(uncheckedStableClass)
 
     /** Does this symbol denote the primary constructor of its enclosing class? */
@@ -1001,7 +1001,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def isLocalToBlock: Boolean = owner.isTerm
 
     /** Is this symbol a constant? */
-    final def isConstant: Boolean = isStable && isConstantType(tpe.resultType)
+    final def isConstant: Boolean = isStable && (isConstantType(tpe.resultType))
 
     /** Is this class nested in another class or module (not a package). Includes locally defined classes. */
     def isNestedClass = false
@@ -1654,7 +1654,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def cookJavaRawInfo(): this.type = {
       // only try once...
-      if (phase.erasedTypes || (this hasFlag TRIEDCOOKING))
+      if (phase.erasedTypes || (this hasFlag TRIEDCOOKING) || isModule)
         return this
 
       this setFlag TRIEDCOOKING
@@ -2888,6 +2888,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
       else rawname
     }
+    override def tpeHK: Type = if (hasFlag(LOCKED)) typeRef(owner.thisType, this, Nil) else super.tpeHK
   }
   implicit val ModuleSymbolTag = ClassTag[ModuleSymbol](classOf[ModuleSymbol])
 
@@ -3657,7 +3658,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     else closestEnclMethod(from.owner)
 
   /** An exception for cyclic references of symbol definitions */
-  case class CyclicReference(sym: Symbol, info: Type)
+  case class  CyclicReference(sym: Symbol, info: Type)
   extends TypeError("illegal cyclic reference involving " + sym) {
     if (settings.debug.value) printStackTrace()
   }

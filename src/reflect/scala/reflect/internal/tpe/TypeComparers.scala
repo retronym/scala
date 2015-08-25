@@ -544,6 +544,7 @@ trait TypeComparers {
             case _                                => false
           }
         case RefinedType(parents, _) => parents exists (retry(_, tp2))
+        case _: SingleType if tp2 eq ObjectTpe => true
         case _: SingletonType        => retry(tp1.underlying, tp2)
         case _                       => false
       }

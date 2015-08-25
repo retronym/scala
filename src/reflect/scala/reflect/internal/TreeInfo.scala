@@ -128,7 +128,7 @@ abstract class TreeInfo {
        symOk(tree.symbol)
     && tree.symbol.isStable
     && !definitions.isByNameParamType(tree.tpe)
-    && (allowVolatile || !tree.symbol.hasVolatileType) // TODO SPEC: not required by spec
+    && (tree.symbol.isModule || (allowVolatile || !tree.symbol.hasVolatileType)) // TODO SPEC: not required by spec
   )
 
   /** Is `tree`'s type volatile? (Ignored if its symbol has the @uncheckedStable annotation.)

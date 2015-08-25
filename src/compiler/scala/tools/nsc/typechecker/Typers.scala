@@ -579,7 +579,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       def isModuleTypedExpr = (
            treeInfo.admitsTypeSelection(tree)
-        && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+        && (sym.isModuleNotMethod || isStableContext(tree, mode, pt))
       )
       def isStableValueRequired = (
            isStableIdPattern
@@ -629,7 +629,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def stabilizable = (
            pre.isStable
         && sym.tpe.params.isEmpty
-        && (isStableContext(tree, mode, pt) || sym.isModule)
+        && (sym.isModule || isStableContext(tree, mode, pt))
       )
       tree.tpe match {
         case MethodType(_, _) if stabilizable => tree setType MethodType(Nil, singleType(pre, sym)) // TODO: should this be a NullaryMethodType?
