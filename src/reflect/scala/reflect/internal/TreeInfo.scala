@@ -119,7 +119,7 @@ abstract class TreeInfo {
    * Stable members are packages or members introduced
    * by object definitions or by value definitions of non-volatile types (§3.6).
    */
-  def isStableMemberOf(sym: Symbol, tree: Tree, allowVolatile: Boolean): Boolean = (
+  def isStableMemberOf(sym: Symbol, tree: Tree, allowVolatile: Boolean): Boolean = sym.isModule || (
     symOk(sym)       && (!sym.isTerm   || (sym.isStable && (allowVolatile || !sym.hasVolatileType))) &&
     typeOk(tree.tpe) && (allowVolatile || !hasVolatileType(tree)) && !definitions.isByNameParamType(tree.tpe)
   )
