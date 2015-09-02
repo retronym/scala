@@ -133,12 +133,7 @@ private class JLineConsoleReader extends jconsole.ConsoleReader with interpreter
         }
       }
 
-    // a last bit of nastiness: parsing help depending on the flavor of completer (fixme)
     completion match {
-      case _: JLineCompletion =>
-        val jlineCompleter = new ArgumentCompleter(new JLineDelimiter, completer)
-        jlineCompleter setStrict false
-        this addCompleter jlineCompleter
       case NoCompletion       => ()
       case _                  => this addCompleter completer
     }

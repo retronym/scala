@@ -38,10 +38,4 @@ object Completion {
     && !(code startsWith "./")
     && !(code startsWith "..")
   )
-  object Forwarder {
-    def apply(forwardTo: () => Option[CompletionAware]): CompletionAware = new CompletionAware {
-      def completions(verbosity: Int) = forwardTo() map (_ completions verbosity) getOrElse Nil
-      override def follow(s: String) = forwardTo() flatMap (_ follow s)
-    }
-  }
 }
