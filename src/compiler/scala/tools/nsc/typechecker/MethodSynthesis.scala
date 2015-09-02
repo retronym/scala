@@ -134,11 +134,10 @@ trait MethodSynthesis {
           val getterSym = getter.createAndEnterSymbol()
 
           // Create the setter if necessary.
-          if (getter.needsSetter)
-            Setter(tree).createAndEnterSymbol()
+          if (getter.needsSetter) Setter(tree).createAndEnterSymbol()
 
-          // If the getter's abstract the tree gets the getter's symbol,
-          // otherwise, create a field (assume the getter requires storage).
+          // If the getter's abstract, the tree gets the getter's symbol,
+          // otherwise, create a field (we have to assume the getter requires storage for now).
           // NOTE: we cannot look at symbol info, since we're in the process of deriving them
           // (luckily, they only matter for lazy vals, which we've ruled out in this else branch,
           // and `doNotDeriveField` will skip them if `!mods.isLazy`)
@@ -314,7 +313,7 @@ trait MethodSynthesis {
         // Presently one of: field, getter, setter, beanGetter, beanSetter, param.
         // For traits, getter must play role of field as there isn't one until Constructors (we'll triage there)
         val categories = this match {
-          case _: BaseGetter    => List(GetterTargetClass)
+          case _: BaseGetter    => if (owner.isTrait) List(FieldTargetClass, GetterTargetClass) else List(GetterTargetClass)
           case _: Setter        => List(SetterTargetClass)
           case _: BeanSetter    => List(BeanSetterTargetClass)
           case _: AnyBeanGetter => List(BeanGetterTargetClass)
@@ -328,6 +327,7 @@ trait MethodSynthesis {
           // By default annotations go to the field, except if the field is
           // generated for a class parameter (PARAMACCESSOR).
           case _: Field                       => !mods.isParamAccessor
+          case _: BaseGetter if owner.isTrait => true // like, Field, but cannot be a param accessor in a trait
           case _                              => false
         }
 
@@ -335,11 +335,14 @@ trait MethodSynthesis {
         // should be propagated to this kind of accessor.
         val sym = derivedSym setAnnotations (initial filter annotationFilter(categories, defaultRetention))
 
+        if (sym.isSetter && owner.isTrait && !isDeferred)
+          sym addAnnotation TraitSetterAnnotationClass
+
         logDerived(derivedTree)
       }
+
     }
     sealed trait DerivedGetter extends DerivedFromValDef {
-      // A getter must be accompanied by a setter if the ValDef is mutable.
       def needsSetter = mods.isMutable
     }
     sealed trait DerivedSetter extends DerivedFromValDef {
@@ -396,6 +399,7 @@ trait MethodSynthesis {
       override def derivedSym = if (Field.noFieldFor(tree)) basisSym else basisSym.getterIn(enclClass)
       private def derivedRhs  = if (Field.noFieldFor(tree)) tree.rhs else fieldSelection
 
+      // TODO: more principled approach -- this is a bit bizarre
       private def derivedTpt = {
         // For existentials, don't specify a type for the getter, even one derived
         // from the symbol! This leads to incompatible existentials for the field and
@@ -470,7 +474,9 @@ trait MethodSynthesis {
       // No field for these vals (either never emitted or eliminated later on):
       //   - abstract vals have no value we could store (until they become concrete, potentially)
       //   - lazy vals of type Unit
-      //   - [Emitted, later removed during AddInterfaces/Mixins] concrete vals in traits can't have a field
+      //   - concrete vals in traits don't yield a field here either (their getter's RHS has the initial value)
+      //     Constructors will move the assignment to the constructor, abstracting over the field using the field setter,
+      //     and Mixin will add a field to the class that mixes in the trait, implementing the accessors in terms of it
       //   - [Emitted, later removed during Constructors] a concrete val with a statically known value (Unit / ConstantType)
       //     performs its side effect according to lazy/strict semantics, but doesn't need to store its value
       //     each access will "evaluate" the RHS (a literal) again

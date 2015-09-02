@@ -41,6 +41,7 @@ abstract class Phase(val prev: Phase) {
   def checkable: Boolean = true
   def specialized: Boolean = false
   def erasedTypes: Boolean = false
+  def assignsFields: Boolean = false // allow assigning to val
   def flatClasses: Boolean = false
   def refChecked: Boolean = false
 

@@ -288,18 +288,16 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     def mixinTraitMembers(mixinClass: Symbol) {
       // For all members of a trait's interface do:
       for (mixinMember <- mixinClass.info.decls) {
-        if (isConcreteAccessor(mixinMember)) {
+        if (isConcreteAccessor(mixinMember) && mixinMember.isLazy) {
           if (isOverriddenAccessor(mixinMember, clazz.info.baseClasses))
             devWarning(s"Overridden concrete accessor: ${mixinMember.fullLocationString}")
           else {
             // mixin field accessors
             val mixedInAccessor = cloneAndAddMixinMember(mixinClass, mixinMember)
-            if (mixinMember.isLazy) {
-              initializer(mixedInAccessor) = (
-                implClass(mixinClass).info.decl(mixinMember.name)
-                  orElse abort("Could not find initializer for " + mixinMember.name)
-              )
-            }
+            initializer(mixedInAccessor) = (
+              implClass(mixinClass).info.decl(mixinMember.name)
+                orElse abort("Could not find initializer for " + mixinMember.name)
+            )
             if (!mixinMember.isSetter)
               mixinMember.tpe match {
                 case MethodType(Nil, ConstantType(_)) =>
@@ -539,9 +537,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             else EmptyTree
           }
           else {
-            if (currentOwner.isTrait && sym.isSetter && !enteringPickler(sym.isDeferred)) {
-              sym.addAnnotation(TraitSetterAnnotationClass)
-            }
             tree
           }
         // !!! What is this doing, and why is it only looking for exactly
@@ -1068,7 +1063,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         }
         // if class is not a trait add accessor definitions
         else if (!clazz.isTrait) {
-          if (isConcreteAccessor(sym)) {
+          if (isConcreteAccessor(sym) && sym.isLazy) {
             // add accessor definitions
             addDefDef(sym, {
               if (sym.isSetter) {
@@ -1095,7 +1090,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
             addDefDef(sym, rhs1)
           }
-          else if (!sym.isMethod) {
+          else if (!sym.isMethod && sym.isLazy) {
             // add fields
             addValDef(sym)
           }

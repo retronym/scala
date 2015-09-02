@@ -172,6 +172,10 @@ class Flags extends ModifierFlags {
 
   final val SYNCHRONIZED  = 1L << 45      // symbol is a method which should be marked ACC_SYNCHRONIZED
 
+  final val SYNTHESIZE_IMPL_IN_SUBCLASS = 1L << 50 // Like MIXEDIN, but used in Fields
+  final val NEEDS_TREES   = 1L << 59           // Communicate from Fields' info transform to its tree transform -- this symbol needs a tree. (distinct from SYNTHESIZE_IMPL_IN_SUBCLASS)
+  final val OVERRIDDEN_TRAIT_SETTER = 1L << 60 // Communicate from Fields' info transform to its tree transform -- this setter gets a unit body.
+
   // ------- shift definitions -------------------------------------------------------
   //
   // Flags from 1L to (1L << 50) are normal flags.
@@ -269,7 +273,8 @@ class Flags extends ModifierFlags {
   /** These modifiers appear in TreePrinter output. */
   final val PrintableFlags =
     ExplicitFlags | BridgeFlags | LOCAL | SYNTHETIC | STABLE | CASEACCESSOR | MACRO |
-    ACCESSOR | SUPERACCESSOR | PARAMACCESSOR | STATIC | SPECIALIZED | SYNCHRONIZED | ARTIFACT
+    ACCESSOR | SUPERACCESSOR | PARAMACCESSOR | STATIC | SPECIALIZED | SYNCHRONIZED | ARTIFACT |
+    SYNTHESIZE_IMPL_IN_SUBCLASS | NEEDS_TREES | OVERRIDDEN_TRAIT_SETTER
 
   /** When a symbol for a field is created, only these flags survive
    *  from Modifiers.  Others which may be applied at creation time are:
@@ -454,7 +459,7 @@ class Flags extends ModifierFlags {
     case  JAVA_DEFAULTMETHOD => "<defaultmethod>"                     // (1L << 47)
     case           JAVA_ENUM => "<enum>"                              // (1L << 48)
     case     JAVA_ANNOTATION => "<annotation>"                        // (1L << 49)
-    case    0x4000000000000L => ""                                    // (1L << 50)
+    case    NEEDS_TREES      => "<needs_trees>"                       // (1L << 50)
     case      `lateDEFERRED` => "<latedeferred>"                      // (1L << 51)
     case         `lateFINAL` => "<latefinal>"                         // (1L << 52)
     case        `lateMETHOD` => "<latemethod>"                        // (1L << 53)
@@ -463,8 +468,8 @@ class Flags extends ModifierFlags {
     case      `notPROTECTED` => "<notprotected>"                      // (1L << 56)
     case       `notOVERRIDE` => "<notoverride>"                       // (1L << 57)
     case        `notPRIVATE` => "<notprivate>"                        // (1L << 58)
-    case  0x800000000000000L => ""                                    // (1L << 59)
-    case 0x1000000000000000L => ""                                    // (1L << 60)
+    case SYNTHESIZE_IMPL_IN_SUBCLASS => "<sub_synth>"                 // (1L << 59)
+    case OVERRIDDEN_TRAIT_SETTER => "<overridden_trait_setter>"       // (1L << 60)
     case 0x2000000000000000L => ""                                    // (1L << 61)
     case 0x4000000000000000L => ""                                    // (1L << 62)
     case 0x8000000000000000L => ""                                    // (1L << 63)

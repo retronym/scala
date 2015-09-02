@@ -135,7 +135,7 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
    *       and thus may only be accessed from value or method definitions owned by the current class
    *       (ie there's no point drilling down into nested classes).
    *
-   *   (d) regarding candidates in (b), they are accessible from all places listed in (c) and in addition
+   *   (d) regarding candidates in (b), they are accesible from all places listed in (c) and in addition
    *       from nested classes (nested at any number of levels).
    *
    * In all cases, we're done with traversing as soon as all candidates have been ruled out.
@@ -640,10 +640,11 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           //   - the constructor, before the super call (early initialized or a parameter accessor),
           //   - the constructor, after the super call (regular val).
           case ValDef(mods, _, _, rhs) =>
-            val emitField = memoizeValue(statSym)
-            moveEffectToCtor(mods, rhs, emitField)
-
-            if (emitField) defBuf += deriveValDef(stat)(_ => EmptyTree)
+            if (statSym.isLazy) {
+              val emitField = memoizeValue(statSym)
+              moveEffectToCtor(mods, rhs, emitField)
+              if (emitField) defBuf += deriveValDef(stat)(_ => EmptyTree)
+            } else defBuf += stat
 
           // all other statements go into the constructor
           case _ => constrStatBuf += intoConstructor(impl.symbol, primaryConstr.symbol)(stat)
