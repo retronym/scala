@@ -83,11 +83,15 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
                 case Some(ExpectedTypeAttachment(pt)) =>
                   val strippedName = r.name.stripSuffix("__")
                   val anyNameResults: List[Member] = r.results.filter(m => CompletionResult.prefixMatcher(m, strippedName))
-                  val expectedTypeMatching = anyNameResults.filter(x => {
+                  val expectedTypeMatching1 = anyNameResults.filter(x => {
                     x.sym.name.isTermName && (x.prefix memberType x.sym).finalResultType <:< pt.asInstanceOf[Type]
                   })
-                  val memberCompletions: List[String] = expectedTypeMatching.map(_.symNameDropLocal.decoded).distinct.sorted
-                  Candidates(cursor, "" :: s"expected type: $pt\n\n" :: memberCompletions)
+                  val expectedTypeMatching2 = anyNameResults.filter(x => {
+                    x.sym.name.isTermName && deriveTypeWithWildcards(x.sym.typeParams)((x.prefix memberType x.sym).finalResultType) <:< pt.asInstanceOf[Type]
+                  })
+                  val memberCompletions: List[String] = (expectedTypeMatching1 ++ expectedTypeMatching2).map(_.symNameDropLocal.decoded).distinct.sorted
+                  println(s"\n${r.name} : $pt")
+                  Candidates(cursor, "" :: memberCompletions)
                 case _ => Completion.NoCandidates
               }
             } else if (matching.nonEmpty && matching.forall(_.symNameDropLocal == r.name))
