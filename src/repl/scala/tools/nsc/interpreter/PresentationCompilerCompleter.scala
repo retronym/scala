@@ -78,7 +78,19 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
           val doubleTab = tabCount > 0 && matching.forall(_.symNameDropLocal == r.name)
           if (tabAfterCommonPrefixCompletion || doubleTab) defStringCandidates(matching, r.name)
           else {
-            if (matching.nonEmpty && matching.forall(_.symNameDropLocal == r.name))
+            if (matching.isEmpty && r.name.endsWith("__") && r.name.isTermName) {
+              r.tree.attachments.get[ExpectedTypeAttachment[_]] match {
+                case Some(ExpectedTypeAttachment(pt)) =>
+                  val strippedName = r.name.stripSuffix("__")
+                  val anyNameResults: List[Member] = r.results.filter(m => CompletionResult.prefixMatcher(m, strippedName))
+                  val expectedTypeMatching = anyNameResults.filter(x => {
+                    x.sym.name.isTermName && (x.prefix memberType x.sym).finalResultType <:< pt.asInstanceOf[Type]
+                  })
+                  val memberCompletions: List[String] = expectedTypeMatching.map(_.symNameDropLocal.decoded).distinct.sorted
+                  Candidates(cursor, "" :: s"expected type: $pt\n\n" :: memberCompletions)
+                case _ => Completion.NoCandidates
+              }
+            } else if (matching.nonEmpty && matching.forall(_.symNameDropLocal == r.name))
               Completion.NoCandidates // don't offer completion if the only option has been fully typed already
             else {
               // regular completion

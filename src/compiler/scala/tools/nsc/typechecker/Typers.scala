@@ -5414,7 +5414,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           typingStack.showAdapt(tree1, result, ptPlugins, context)
 
         if (!isPastTyper)
-          signalDone(context.asInstanceOf[analyzer.Context], tree, result)
+          signalDone(context.asInstanceOf[analyzer.Context], tree, result, pt)
 
         result
       }

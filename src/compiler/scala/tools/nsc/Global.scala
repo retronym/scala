@@ -226,7 +226,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   /** Called every time an AST node is successfully typechecked in typerPhase.
    */
-  def signalDone(context: analyzer.Context, old: Tree, result: Tree) {}
+  def signalDone(context: analyzer.Context, old: Tree, result: Tree, pt: Type) {}
 
   /** Called from parser, which signals hereby that a method definition has been parsed. */
   def signalParseProgress(pos: Position) {}

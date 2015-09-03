@@ -338,7 +338,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
    *  @param  old      The original node
    *  @param  result   The transformed node
    */
-  override def signalDone(context: Context, old: Tree, result: Tree) {
+  override def signalDone(context: Context, old: Tree, result: Tree, pt: Type) {
     val canObserveTree = (
          interruptsEnabled
       && analyzer.lockedCount == 0
@@ -1162,12 +1162,13 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     def matchingResults(matcher: (M, Name) => Boolean = CompletionResult.prefixMatcher): List[M] = {
       results filter (r => matcher(r, name))
     }
+    def tree: Tree = EmptyTree
   }
   object CompletionResult {
-    final case class ScopeMembers(positionDelta: Int, results: List[ScopeMember], name: Name) extends CompletionResult {
+    final case class ScopeMembers(positionDelta: Int, results: List[ScopeMember], override val tree: Tree, name: Name) extends CompletionResult {
       type M = ScopeMember
     }
-    final case class TypeMembers(positionDelta: Int, qualifier: Tree, tree: Tree, results: List[TypeMember], name: Name) extends CompletionResult {
+    final case class TypeMembers(positionDelta: Int, qualifier: Tree, override val tree: Tree, results: List[TypeMember], name: Name) extends CompletionResult {
       type M = TypeMember
     }
     case object NoResults extends CompletionResult {
@@ -1201,7 +1202,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
         val nameStart = i.pos.start
         val positionDelta: Int = nameStart - pos.start
         val subName = name.subName(0, pos.start - i.pos.start)
-        CompletionResult.ScopeMembers(positionDelta, allMembers, subName)
+        CompletionResult.ScopeMembers(positionDelta, allMembers, i, subName)
       case imp@Import(qual, selectors) =>
         selectors.reverseIterator.find(_.namePos <= pos.start) match {
           case None => CompletionResult.NoResults
@@ -1216,11 +1217,11 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
           source.identifier(source.position(p)).exists(_.length > 0)
         ).getOrElse(fallback)
         typeCompletions(sel, qual, nameStart, name)
-      case Ident(name) =>
+      case i @ Ident(name) =>
         val allMembers = scopeMembers(pos)
         val positionDelta: Int = focus1.pos.start - pos.start
         val subName = name.subName(0, -positionDelta)
-        CompletionResult.ScopeMembers(positionDelta, allMembers, subName)
+        CompletionResult.ScopeMembers(positionDelta, allMembers, i, subName)
       case _ =>
         CompletionResult.NoResults
     }

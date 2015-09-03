@@ -71,6 +71,13 @@ trait PresentationCompilation {
 
         override def classPath: PlatformClassPath = mergedClasspath
       }
+
+      override def signalDone(context: Context, old: Tree, result: Tree, pt: Type): Unit = {
+        super.signalDone(context, old, result, pt)
+        if (pt != WildcardType) {
+          result.updateAttachment[ExpectedTypeAttachment[_]](ExpectedTypeAttachment(pt))
+        }
+      }
     }
     new interactiveGlobal.TyperRun()
     interactiveGlobal
@@ -109,3 +116,5 @@ trait PresentationCompilation {
     }
   }
 }
+
+final case class ExpectedTypeAttachment[G <: reflect.internal.SymbolTable](pt: G#Type)
