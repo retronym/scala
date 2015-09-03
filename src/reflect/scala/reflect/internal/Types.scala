@@ -1175,7 +1175,7 @@ trait Types
       if (settings.debug) sym.nameString + ".this."
       else if (sym.isAnonOrRefinementClass) "this."
       else if (sym.isOmittablePrefix) ""
-      else if (sym.isModuleClass) sym.fullNameString + "."
+      else if (sym.isModuleClass) sym.fullNameString(omitOmittables = true) + "."
       else sym.nameString + ".this."
     override def safeToString: String =
       if (sym.isEffectiveRoot) "" + sym.name

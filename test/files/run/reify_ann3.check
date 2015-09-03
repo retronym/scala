@@ -11,7 +11,7 @@
 {
   class Tree[A, +B] extends AnyRef {
     final <paramaccessor> private[this] val key: A = _;
-    @inline @scala.annotation.meta.getter final <stable> <accessor> <paramaccessor> def key: A = Tree.this.key;
+    @inline @annotation.meta.getter final <stable> <accessor> <paramaccessor> def key: A = Tree.this.key;
     def <init>(key: A): Tree[A,B] = {
       Tree.super.<init>();
       ()

@@ -48,7 +48,7 @@ package <empty> {
       };
       scala.this.Predef.print(barParam$1)
     };
-    @SerialVersionUID(value = 0) final <synthetic> class $anonfun$tryy$1 extends scala.runtime.AbstractFunction0$mcV$sp with Serializable {
+    @SerialVersionUID(value = 0) final <synthetic> class $anonfun$tryy$1 extends runtime.AbstractFunction0$mcV$sp with Serializable {
       def <init>($outer: T, tryyParam$1: String, tryyLocal$1: runtime.ObjectRef): <$anon: Function0> = {
         $anonfun$tryy$1.super.<init>();
         ()

@@ -12,10 +12,10 @@ res0: $r.global.noSelfType.type = private val _ = _
 
 scala> val tp = ArrayClass[scala.util.Random]    // magic with tags
 warning: there was one feature warning; re-run with -feature for details
-tp: $r.global.Type = Array[scala.util.Random]
+tp: $r.global.Type = Array[util.Random]
 
 scala> tp.memberType(Array_apply)                // evidence
-res1: $r.global.Type = (i: Int)scala.util.Random
+res1: $r.global.Type = (i: Int)util.Random
 
 scala> val m = LIT(10)                           // treedsl
 m: $r.treedsl.global.Literal = 10

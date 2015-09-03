@@ -57,7 +57,7 @@ t1513: Array[Null] = Array(null)
 scala> // ambiguous toString problem from #547
 
 scala> val atom = new scala.xml.Atom(())
-atom: scala.xml.Atom[Unit] = ()
+atom: xml.Atom[Unit] = ()
 
 scala> // overriding toString problem from #1404
 
@@ -297,7 +297,7 @@ scala> <a>
   c="c"
   d="dd"
 /></a>
-res8: scala.xml.Elem =
+res8: xml.Elem =
 <a>
 <b c="c" d="dd"/></a>
 

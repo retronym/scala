@@ -3,7 +3,7 @@ scala> import scala.reflect.ClassTag
 import scala.reflect.ClassTag
 
 scala> def f[A: ClassTag](a: A) = java.util.Arrays.asList(Array(a): _*)
-f: [A](a: A)(implicit evidence$1: scala.reflect.ClassTag[A])java.util.List[A]
+f: [A](a: A)(implicit evidence$1: reflect.ClassTag[A])java.util.List[A]
 
 scala> f(".")
 res0: java.util.List[String] = [.]

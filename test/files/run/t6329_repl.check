@@ -4,30 +4,30 @@ import scala.reflect.classTag
 
 scala> classManifest[scala.List[_]]
 warning: there was one deprecation warning; re-run with -deprecation for details
-res0: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
+res0: reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
 
 scala> classTag[scala.List[_]]
-res1: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List
+res1: reflect.ClassTag[List[_]] = scala.collection.immutable.List
 
 scala> classManifest[scala.collection.immutable.List[_]]
 warning: there was one deprecation warning; re-run with -deprecation for details
-res2: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
+res2: reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
 
 scala> classTag[scala.collection.immutable.List[_]]
-res3: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List
+res3: reflect.ClassTag[List[_]] = scala.collection.immutable.List
 
 scala> classManifest[Predef.Set[_]]
 warning: there was one deprecation warning; re-run with -deprecation for details
-res4: scala.reflect.ClassTag[scala.collection.immutable.Set[_]] = scala.collection.immutable.Set[<?>]
+res4: reflect.ClassTag[collection.immutable.Set[_]] = scala.collection.immutable.Set[<?>]
 
 scala> classTag[Predef.Set[_]]
-res5: scala.reflect.ClassTag[scala.collection.immutable.Set[_]] = scala.collection.immutable.Set
+res5: reflect.ClassTag[collection.immutable.Set[_]] = scala.collection.immutable.Set
 
 scala> classManifest[scala.collection.immutable.Set[_]]
 warning: there was one deprecation warning; re-run with -deprecation for details
-res6: scala.reflect.ClassTag[scala.collection.immutable.Set[_]] = scala.collection.immutable.Set[<?>]
+res6: reflect.ClassTag[collection.immutable.Set[_]] = scala.collection.immutable.Set[<?>]
 
 scala> classTag[scala.collection.immutable.Set[_]]
-res7: scala.reflect.ClassTag[scala.collection.immutable.Set[_]] = scala.collection.immutable.Set
+res7: reflect.ClassTag[collection.immutable.Set[_]] = scala.collection.immutable.Set
 
 scala> :quit

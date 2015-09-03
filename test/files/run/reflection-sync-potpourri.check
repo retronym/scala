@@ -1,0 +1,3000 @@
+Exception in thread "Reflector-871" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-870" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-872" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-867" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-692" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-587" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-392" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-988" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-942" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-931" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-805" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-208" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-124" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-195" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-938" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-660" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-514" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-269" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-883" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-875" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-862" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-473" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-370" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-143" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-787" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-657" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-497" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-221" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-827" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-318" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-920" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-879" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-456" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-410" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-322" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-413" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-997" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-340" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-950" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-900" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-778" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-758" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-666" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-489" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-453" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-385" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-264" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-186" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-106" Exception in thread "Reflector-108" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-104" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-102" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-271" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-52" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-31" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-26" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-179" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-348" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-989" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-388" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-144" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-141" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-935" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-925" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-930" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-926" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-923" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-919" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-916" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-906" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-914" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-915" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-908" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-904" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-893" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-896" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-898" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-901" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-886" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-889" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-890" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-874" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-846" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-715" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-697" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-707" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-492" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-439" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-617" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-16" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-965" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-403" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-386" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-954" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-902" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-878" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-844" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-822" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-814" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-800" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-635" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-561" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-524" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-537" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-171" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-450" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-408" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-309" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-992" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-59" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-200" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-18" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-396" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-933" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-937" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-922" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-880" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-853" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-820" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-804" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-782" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-777" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-766" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-739" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-723" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-646" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-622" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-616" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-596" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-588" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-520" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-482" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-441" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-429" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-157" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-280" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-430" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-297" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-303" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-105" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-65" Exception in thread "Reflector-62" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-47" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-40" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-32" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-975" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-969" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-401" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-395" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-917" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-882" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-815" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-764" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-742" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-706" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-688" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-672" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-667" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-664" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-639" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-634" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-625" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-577" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-568" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-563" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-546" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-541" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-519" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-504" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-172" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-154" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-164" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-232" Exception in thread "Reflector-234" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-260" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-438" Exception in thread "Reflector-278" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-127" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-129" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-310" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-315" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-101" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-84" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-145" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-984" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-238" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-53" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-54" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-35" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-974" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-991" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-918" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-888" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-912" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-876" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-830" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-762" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-713" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-668" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-658" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-652" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-545" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-521" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-505" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-486" Exception in thread "Reflector-487" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-448" Exception in thread "Reflector-446" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-421" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-338" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-161" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-197" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-254" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-263" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-293" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-123" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-301" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-829" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-986" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-981" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-44" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-41" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-376" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-384" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-945" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-911" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-847" Exception in thread "Reflector-860" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-849" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-843" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-828" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-793" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-781" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-785" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-774" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-763" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-731" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-717" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-694" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-696" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-693" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-678" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-690" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-653" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-614" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-584" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-578" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-579" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-552" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-550" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-543" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-526" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-518" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-477" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-467" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-464" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-460" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-435" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-454" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-463" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-355" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-344" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-155" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-222" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-242" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-258" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-135" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-274" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-445" Exception in thread "Reflector-279" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-132" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-140" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-139" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-411" Exception in thread "Reflector-131" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-289" Exception in thread "Reflector-286" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-119" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-423" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-422" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-305" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-465" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-308" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-612" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-95" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-87" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-88" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-73" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-333" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-982" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-228" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-49" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-353" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-343" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-972" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-10" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-168" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-5" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-964" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-393" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-92" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-952" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-153" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-845" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-837" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-834" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-818" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-806" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-798" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-784" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-783" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-767" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-772" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-765" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-754" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-761" Exception in thread "Reflector-749" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-741" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-734" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-703" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-698" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-718" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-711" Exception in thread "Reflector-716" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-699" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-669" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-651" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-647" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-631" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-605" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-606" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-593" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-585" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-576" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-551" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-536" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-527" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-516" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-490" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-471" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-475" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-452" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-163" Exception in thread "Reflector-366" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-173" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-233" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-261" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-296" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-295" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-304" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-116" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-112" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-273" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-97" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-90" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-142" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-82" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-56" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-209" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-24" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-181" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-23" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-22" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-19" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-8" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-7" Exception in thread "Reflector-971" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-12" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-362" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-360" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-380" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-391" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-428" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-959" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-948" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-998" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-941" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-934" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-873" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-877" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-868" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-864" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-858" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-789" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-773" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-748" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-735" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-725" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-700" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-708" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-645" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-623" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-600" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-589" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-581" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-570" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-573" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-544" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-535" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-538" Exception in thread "Reflector-531" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-530" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-515" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-503" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-485" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-470" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-449" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-462" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-472" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-457" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-387" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-451" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-167" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-182" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-205" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-204" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-225" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-229" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-226" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-231" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-244" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-287" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-282" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-469" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-418" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-419" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-313" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-323" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-270" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-255" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-75" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-990" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-337" Exception in thread "Reflector-243" Exception in thread "Reflector-248" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-213" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-239" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-979" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-352" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-996" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-356" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-368" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-375" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-374" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-951" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-932" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-903" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-921" Exception in thread "Reflector-913" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-884" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-869" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-866" Exception in thread "Reflector-861" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-841" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-831" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-832" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-809" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-816" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-797" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-768" Exception in thread "Reflector-770" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-751" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-740" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-722" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-702" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-687" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-677" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-683" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-659" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-665" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-661" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-643" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-621" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-608" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-599" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-590" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-560" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-548" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-506" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-507" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-500" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-495" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-437" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-459" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-378" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-162" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-170" Exception in thread "Reflector-196" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-212" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-247" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-276" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-133" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-444" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-434" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-299" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-420" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-312" Exception in thread "Reflector-311" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-110" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-272" Exception in thread "Reflector-317" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-325" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-93" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-328" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-251" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-71" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-69" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-146" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-216" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-51" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-37" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-38" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-30" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-29" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-976" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-351" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-354" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-4" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-349" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-358" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-382" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-431" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-137" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-943" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-944" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-894" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-885" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-821" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-813" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-796" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-791" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-790" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-780" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-760" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-733" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-721" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-681" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-674" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-649" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-648" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-644" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-603" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-595" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-580" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-574" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-569" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-558" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-491" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-474" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-468" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-357" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-176" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-319" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-220" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-219" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-138" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-265" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-277" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-424" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-134" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-292" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-126" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-121" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-440" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-118" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-307" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-306" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-111" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-117" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-266" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-327" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-74" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-999" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-987" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-210" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-36" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-194" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-980" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-190" Exception in thread "Reflector-28" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-27" Exception in thread "Reflector-180" Exception in thread "Reflector-341" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-978" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-346" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-11" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-13" Exception in thread "Reflector-6" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-350" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-361" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-993" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-970" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-962" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-927" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-907" Exception in thread "Reflector-910" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-857" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-840" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-811" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-807" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-799" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-788" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-779" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-771" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-710" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-691" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-680" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-594" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-592" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-572" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-542" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-554" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-533" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-532" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-522" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-517" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-499" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-494" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-484" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-481" Exception in thread "Reflector-427" Exception in thread "Reflector-476" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-466" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-458" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-335" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-151" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-227" Exception in thread "Reflector-199" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-236" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-252" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-436" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-294" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-285" Exception in thread "Reflector-128" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-433" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-114" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-109" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-412" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-103" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-320" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-324" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-835" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-96" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-89" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-85" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-80" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-78" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-331" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-245" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-240" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-336" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-206" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-192" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-175" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-14" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-178" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-363" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-381" Exception in thread "Reflector-966" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-963" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-399" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-397" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-929" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-891" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-905" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-855" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-842" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-824" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-817" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-801" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-803" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-795" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-753" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-759" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-744" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-729" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-712" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-684" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-679" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-676" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-675" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-655" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-598" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-583" Exception in thread "Reflector-582" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-575" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-591" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-566" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-565" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-567" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-571" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-523" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-557" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-496" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-483" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-394" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-150" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-246" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-218" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-302" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-316" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-414" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-611" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-314" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-610" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-275" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-326" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-330" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-79" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-72" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-61" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-334" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-201" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-45" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-342" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-174" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-15" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-166" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-1" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-359" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-372" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-967" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-958" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-379" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-383" Exception in thread "Reflector-960" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-961" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-400" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-447" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-406" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-398" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-957" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-859" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-825" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-812" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-823" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-792" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-752" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-714" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-724" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-695" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-689" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-709" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-701" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-654" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-650" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-637" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-628" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-615" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-601" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-604" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-534" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-525" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-529" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-512" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-509" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-502" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-501" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-455" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-390" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-235" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-217" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-291" Exception in thread "Reflector-136" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-130" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-281" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-125" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-122" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-426" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-113" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-443" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-417" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-329" Exception in thread "Reflector-115" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-257" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-442" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-995" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-332" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-249" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-25" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-183" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-347" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-9" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-367" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-364" Exception in thread "Reflector-365" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-405" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-939" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-936" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-924" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-851" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-850" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-833" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-826" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-808" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-769" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-756" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-776" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-738" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-745" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-730" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-720" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-685" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-670" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-642" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-641" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-629" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-630" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-597" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-556" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-493" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-159" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-185" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-193" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-215" Exception in thread "Reflector-237" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-288" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-425" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-284" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-409" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-838" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-99" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-268" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-86" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-68" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-250" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-241" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-50" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-70" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-48" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-60" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-187" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-169" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-373" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-402" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-77" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-947" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-897" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-940" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-895" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-863" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-819" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-839" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-802" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-755" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-757" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-743" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-727" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-633" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-618" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-609" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-559" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-586" Exception in thread "Reflector-547" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-549" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-562" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-511" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-564" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-432" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-149" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-165" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-120" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-259" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-946" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-67" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-83" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-58" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-43" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-202" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-17" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-3" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-892" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-881" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-887" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-737" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-728" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-705" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-662" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-640" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-607" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-602" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-540" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-508" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-147" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-207" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-156" Exception in thread "Reflector-224" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-214" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-415" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-267" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-76" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-64" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-985" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-34" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-191" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-973" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-20" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-371" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-956" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-949" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-899" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-955" Exception in thread "Reflector-848" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-852" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-726" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-750" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-732" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-719" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-626" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-613" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-513" Exception in thread "Reflector-488" Exception in thread "Reflector-528" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-479" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-498" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-510" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-283" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-253" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-184" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-152" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-160" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-369" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-461" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-57" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-977" Exception in thread "Reflector-189" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-55" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-107" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-994" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-854" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-928" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-865" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-810" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-775" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-636" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-620" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-619" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-478" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-230" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-1000" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-416" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-91" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-94" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-98" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-46" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-345" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-2" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-404" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-836" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-377" Exception in thread "Reflector-704" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-736" Exception in thread "Reflector-794" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-656" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-747" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-786" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-177" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-480" Exception in thread "Reflector-298" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-632" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-682" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-746" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-33" Exception in thread "Reflector-389" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-188" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-39" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-321" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-300" Exception in thread "Reflector-223" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-290" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-63" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-262" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-203" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-198" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-983" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-100" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-968" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-256" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-553" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-158" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-909" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-953" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-671" Exception in thread "Reflector-339" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-856" Exception in thread "Reflector-81" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-555" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-66" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-627" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-673" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-42" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-211" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-407" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-624" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-638" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-686" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-148" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-21" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+Exception in thread "Reflector-539" Exception in thread "Reflector-663" java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)
+java.lang.AssertionError: assertion failed
+	at scala.Predef$.assert(Predef.scala:156)
+	at Test$$anonfun$6$$anon$1.run(reflection-sync-potpourri.scala:28)

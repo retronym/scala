@@ -1,6 +1,6 @@
 
 scala> val g: scala.reflect.internal.SymbolTable = null; import g.abort
-g: scala.reflect.internal.SymbolTable = null
+g: reflect.internal.SymbolTable = null
 import g.abort
 
 scala> class C(val a: Any) extends AnyVal

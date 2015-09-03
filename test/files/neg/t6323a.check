@@ -1,4 +1,4 @@
-t6323a.scala:10: materializing requested scala.reflect.type.ClassTag[Test] using `package`.this.materializeClassTag[Test]()
+t6323a.scala:10: materializing requested reflect.type.ClassTag[Test] using `package`.this.materializeClassTag[Test]()
       val lookAtMe = m.reflect(Test("a",List(5)))
                               ^
 t6323a.scala:11: materializing requested reflect.runtime.universe.type.TypeTag[Test] using `package`.this.materializeTypeTag[Test](scala.reflect.runtime.`package`.universe)

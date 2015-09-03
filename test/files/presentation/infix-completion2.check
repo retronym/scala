@@ -140,14 +140,14 @@ def isValidLong: Boolean
 def longValue(): Long
 def round: Long
 def shortValue(): Short
-def to(end: Double): Range.Partial[Double,scala.collection.immutable.NumericRange[Double]]
-def to(end: Double,step: Double): scala.collection.immutable.NumericRange.Inclusive[Double]
-def to(end: Float): Range.Partial[Float,scala.collection.immutable.NumericRange[Float]]
-def to(end: Float,step: Float): scala.collection.immutable.NumericRange.Inclusive[Float]
-def to(end: Int): scala.collection.immutable.Range.Inclusive
-def to(end: Int,step: Int): scala.collection.immutable.Range.Inclusive
-def to(end: Long): scala.collection.immutable.NumericRange.Inclusive[Long]
-def to(end: Long,step: Long): scala.collection.immutable.NumericRange.Inclusive[Long]
+def to(end: Double): Range.Partial[Double,collection.immutable.NumericRange[Double]]
+def to(end: Double,step: Double): collection.immutable.NumericRange.Inclusive[Double]
+def to(end: Float): Range.Partial[Float,collection.immutable.NumericRange[Float]]
+def to(end: Float,step: Float): collection.immutable.NumericRange.Inclusive[Float]
+def to(end: Int): collection.immutable.Range.Inclusive
+def to(end: Int,step: Int): collection.immutable.Range.Inclusive
+def to(end: Long): collection.immutable.NumericRange.Inclusive[Long]
+def to(end: Long,step: Long): collection.immutable.NumericRange.Inclusive[Long]
 def toBinaryString: String
 def toByte: Byte
 def toChar: Char
@@ -165,14 +165,14 @@ def unary_+: Int
 def unary_-: Int
 def unary_~: Int
 def underlying(): AnyRef
-def until(end: Double): Range.Partial[Double,scala.collection.immutable.NumericRange[Double]]
-def until(end: Double,step: Double): scala.collection.immutable.NumericRange.Exclusive[Double]
-def until(end: Float): Range.Partial[Float,scala.collection.immutable.NumericRange[Float]]
-def until(end: Float,step: Float): scala.collection.immutable.NumericRange.Exclusive[Float]
-def until(end: Int): scala.collection.immutable.Range
-def until(end: Int,step: Int): scala.collection.immutable.Range
-def until(end: Long): scala.collection.immutable.NumericRange.Exclusive[Long]
-def until(end: Long,step: Long): scala.collection.immutable.NumericRange.Exclusive[Long]
+def until(end: Double): Range.Partial[Double,collection.immutable.NumericRange[Double]]
+def until(end: Double,step: Double): collection.immutable.NumericRange.Exclusive[Double]
+def until(end: Float): Range.Partial[Float,collection.immutable.NumericRange[Float]]
+def until(end: Float,step: Float): collection.immutable.NumericRange.Exclusive[Float]
+def until(end: Int): collection.immutable.Range
+def until(end: Int,step: Int): collection.immutable.Range
+def until(end: Long): collection.immutable.NumericRange.Exclusive[Long]
+def until(end: Long,step: Long): collection.immutable.NumericRange.Exclusive[Long]
 def |(x: Byte): Int
 def |(x: Char): Int
 def |(x: Int): Int

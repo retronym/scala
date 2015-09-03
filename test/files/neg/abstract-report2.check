@@ -92,7 +92,7 @@ it has 24 unimplemented members.
   def foreach[U](f: ((Set[Int], String)) => U): Unit = ???
   def hasDefiniteSize: Boolean = ???
   def isEmpty: Boolean = ???
-  def seq: scala.collection.TraversableOnce[(Set[Int], String)] = ???
+  def seq: collection.TraversableOnce[(Set[Int], String)] = ???
   def toTraversable: Traversable[(Set[Int], String)] = ???
 
   // Members declared in Xyz

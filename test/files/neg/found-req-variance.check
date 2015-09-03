@@ -148,7 +148,7 @@ You may wish to investigate a wildcard type such as `_ <: AnyRef`. (SLS 3.2.10)
   def g1 = f[AnyRef](new java.util.ArrayList[String] { })
                      ^
 found-req-variance.scala:87: error: type mismatch;
- found   : scala.math.Ordering[AnyRef]
+ found   : math.Ordering[AnyRef]
  required: java.util.Comparator[String]
 Note: AnyRef >: String, but Java-defined trait Comparator is invariant in type T.
 You may wish to investigate a wildcard type such as `_ >: String`. (SLS 3.2.10)
@@ -176,7 +176,7 @@ You may wish to define T2 as +T2 instead. (SLS 4.5)
   def g1 = Set[Trippy[AnyRef, AnyRef, AnyRef]]() + new Trippy[String, String, String]
                                                    ^
 found-req-variance.scala:105: error: type mismatch;
- found   : scala.collection.immutable.Map[AnyRef,String]
+ found   : collection.immutable.Map[AnyRef,String]
  required: Map[String,String]
 Note: AnyRef >: String, but trait Map is invariant in type A.
 You may wish to investigate a wildcard type such as `_ >: String`. (SLS 3.2.10)

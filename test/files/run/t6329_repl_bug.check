@@ -7,9 +7,9 @@ import scala.reflect.runtime._
 
 scala> classManifest[List[_]]
 warning: there was one deprecation warning; re-run with -deprecation for details
-res0: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
+res0: reflect.ClassTag[List[_]] = scala.collection.immutable.List[<?>]
 
 scala> scala.reflect.classTag[List[_]]
-res1: scala.reflect.ClassTag[List[_]] = scala.collection.immutable.List
+res1: reflect.ClassTag[List[_]] = scala.collection.immutable.List
 
 scala> :quit

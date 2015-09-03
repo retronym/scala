@@ -170,6 +170,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def paramLists: List[List[Symbol]] = paramss
   }
 
+  def isOmittablePrefix(sym: Symbol) = /*!settings.debug.value &&*/ (
+    UnqualifiedOwners(sym.skipPackageObject)
+      || sym.isEmptyPrefix
+    )
+
   private[reflect] case class SymbolKind(accurate: String, sanitized: String, abbreviation: String)
 
   /** The class for all symbols */
@@ -839,10 +844,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Conditions where we omit the prefix when printing a symbol, to avoid
      *  unpleasantries like Predef.String, $iw.$iw.Foo and <empty>.Bippy.
      */
-    final def isOmittablePrefix = /*!settings.debug.value &&*/ (
-         UnqualifiedOwners(skipPackageObject)
-      || isEmptyPrefix
-    )
+    final def isOmittablePrefix = self.isOmittablePrefix(this)
+
     def isEmptyPrefix = (
          isEffectiveRoot                      // has no prefix for real, <empty> or <root>
       || isAnonOrRefinementClass              // has uninteresting <anon> or <refinement> prefix
@@ -2617,10 +2620,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       name_s + idString + kind_s
     }
 
-    def fullNameString: String = {
+    def fullNameString: String = fullNameString(omitOmittables = false)
+
+    final def fullNameString(omitOmittables: Boolean): String = {
       def recur(sym: Symbol): String = {
         if (sym.isRootSymbol || sym == NoSymbol) sym.nameString
-        else if (sym.owner.isEffectiveRoot) sym.nameString
+        else if (sym.owner.isEffectiveRoot || (omitOmittables && sym.owner.isOmittablePrefix)) sym.nameString
         else recur(sym.effectiveOwner.enclClass) + "." + sym.nameString
       }
 

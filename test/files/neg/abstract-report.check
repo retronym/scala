@@ -16,7 +16,7 @@ it has 12 unimplemented members.
   def foreach[U](f: String => U): Unit = ???
   def hasDefiniteSize: Boolean = ???
   def isEmpty: Boolean = ???
-  def seq: scala.collection.TraversableOnce[String] = ???
+  def seq: collection.TraversableOnce[String] = ???
   def toTraversable: Traversable[String] = ???
 
 class Unimplemented extends TraversableOnce[String] { }

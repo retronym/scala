@@ -2,8 +2,8 @@ compile-time
 package scala
 primary constructor: NoSymbol
 object List
-primary constructor: def <init>(): scala.collection.immutable.List.type => true
-def <init>(): scala.collection.immutable.List.type => true
+primary constructor: def <init>(): collection.immutable.List.type => true
+def <init>(): collection.immutable.List.type => true
 trait Product1
 primary constructor: def $init$(): Unit => true
 class UninitializedFieldError
@@ -18,8 +18,8 @@ runtime
 package scala
 primary constructor: NoSymbol
 object List
-primary constructor: def <init>(): scala.collection.immutable.List.type => true
-def <init>(): scala.collection.immutable.List.type => true
+primary constructor: def <init>(): collection.immutable.List.type => true
+def <init>(): collection.immutable.List.type => true
 trait Product1
 primary constructor: def $init$(): Unit => true
 class UninitializedFieldError

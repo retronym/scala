@@ -2,7 +2,7 @@ t1181.scala:8: warning: a pure expression does nothing in statement position; yo
      case (Nil, Nil) => map
                         ^
 t1181.scala:9: error: type mismatch;
- found   : scala.collection.immutable.Map[Symbol,Symbol]
+ found   : collection.immutable.Map[Symbol,Symbol]
  required: Symbol
      _ => buildMap(map.updated(keyList.head, valueList.head), keyList.tail, valueList.tail)
                   ^

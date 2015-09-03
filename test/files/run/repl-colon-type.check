@@ -11,13 +11,13 @@ scala> :type def foo[T](x: T) = List(x)
 [T](x: T)List[T]
 
 scala> :type val bar = List(Set(1))
-List[scala.collection.immutable.Set[Int]]
+List[collection.immutable.Set[Int]]
 
 scala> :type lazy val bar = Set(Set(1))
-scala.collection.immutable.Set[scala.collection.immutable.Set[Int]]
+collection.immutable.Set[collection.immutable.Set[Int]]
 
 scala> :type def f[T >: Null, U <: String](x: T, y: U) = Set(x, y)
-[T >: Null, U <: String](x: T, y: U)scala.collection.immutable.Set[Any]
+[T >: Null, U <: String](x: T, y: U)collection.immutable.Set[Any]
 
 scala> :type def x = 1 ; def bar[T >: Null <: AnyRef](xyz: T) = 5
 => Int <and> [T >: Null <: AnyRef](xyz: T)Int
@@ -75,7 +75,7 @@ TypeRef(
     )
     TypeRef(
       TypeSymbol(
-        sealed abstract class List[+A] extends AbstractSeq[A] with LinearSeq[A] with Product with GenericTraversableTemplate[A,List] with LinearSeqOptimized[A,List[A]] with Serializable
+        sealed abstract class List[+A] extends collection.AbstractSeq[A] with collection.immutable.LinearSeq[A] with Product with collection.generic.GenericTraversableTemplate[A,List] with collection.LinearSeqOptimized[A,List[A]] with Serializable
 
       )
       args = List(
@@ -87,7 +87,7 @@ TypeRef(
 
 scala> :type -v def f[T >: Null, U <: String](x: T, y: U) = Set(x, y)
 // Type signature
-[T >: Null, U <: String](x: T, y: U)scala.collection.immutable.Set[Any]
+[T >: Null, U <: String](x: T, y: U)collection.immutable.Set[Any]
 
 // Internal Type structure
 PolyType(
@@ -96,7 +96,7 @@ PolyType(
     params = List(TermSymbol(x: T), TermSymbol(y: U))
     resultType = TypeRef(
       TypeSymbol(
-        abstract trait Set[A] extends Iterable[A] with Set[A] with GenericSetTemplate[A,scala.collection.immutable.Set] with SetLike[A,scala.collection.immutable.Set[A]] with Parallelizable[A,scala.collection.parallel.immutable.ParSet[A]]
+        abstract trait Set[A] extends collection.immutable.Iterable[A] with collection.Set[A] with collection.generic.GenericSetTemplate[A,collection.immutable.Set] with collection.SetLike[A,collection.immutable.Set[A]] with collection.Parallelizable[A,collection.parallel.immutable.ParSet[A]]
 
       )
       args = List(TypeRef(TypeSymbol(abstract class Any extends )))
@@ -137,12 +137,13 @@ TypeRef(
     TypeRef(TypeSymbol(final abstract class Int extends AnyVal))
     TypeRef(
       TypeSymbol(
-        abstract trait Iterator[+A] extends TraversableOnce[A]
+        abstract trait Iterator[+A] extends collection.TraversableOnce[A]
+
       )
       args = List(
         TypeRef(
           TypeSymbol(
-            sealed abstract class List[+A] extends AbstractSeq[A] with LinearSeq[A] with Product with GenericTraversableTemplate[A,List] with LinearSeqOptimized[A,List[A]] with Serializable
+            sealed abstract class List[+A] extends collection.AbstractSeq[A] with collection.immutable.LinearSeq[A] with Product with collection.generic.GenericTraversableTemplate[A,List] with collection.LinearSeqOptimized[A,List[A]] with Serializable
 
           )
           args = List(
@@ -170,12 +171,13 @@ PolyType(
         TypeRef(TypeSymbol(final abstract class Int extends AnyVal))
         TypeRef(
           TypeSymbol(
-            abstract trait Iterator[+A] extends TraversableOnce[A]
+            abstract trait Iterator[+A] extends collection.TraversableOnce[A]
+
           )
           args = List(
             TypeRef(
               TypeSymbol(
-                sealed abstract class List[+A] extends AbstractSeq[A] with LinearSeq[A] with Product with GenericTraversableTemplate[A,List] with LinearSeqOptimized[A,List[A]] with Serializable
+                sealed abstract class List[+A] extends collection.AbstractSeq[A] with collection.immutable.LinearSeq[A] with Product with collection.generic.GenericTraversableTemplate[A,List] with collection.LinearSeqOptimized[A,List[A]] with Serializable
 
               )
               args = List(TypeParamTypeRef(TypeParam(T <: AnyVal)))
@@ -198,7 +200,7 @@ PolyType(
     params = List(TermSymbol(x: T), TermSymbol(y: List[U]))
     resultType = TypeRef(
       TypeSymbol(
-        sealed abstract class List[+A] extends AbstractSeq[A] with LinearSeq[A] with Product with GenericTraversableTemplate[A,List] with LinearSeqOptimized[A,List[A]] with Serializable
+        sealed abstract class List[+A] extends collection.AbstractSeq[A] with collection.immutable.LinearSeq[A] with Product with collection.generic.GenericTraversableTemplate[A,List] with collection.LinearSeqOptimized[A,List[A]] with Serializable
 
       )
       args = List(TypeParamTypeRef(TypeParam(U >: T)))

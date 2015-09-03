@@ -12,7 +12,7 @@ scala>     class A
 defined class A
 
 scala>     lazy val apiru = ru: ApiUniverse
-apiru: scala.reflect.api.Universe = <lazy>
+apiru: reflect.api.Universe = <lazy>
 
 scala>     apiru.typeTag[A].in(cm)
 res0: reflect.runtime.universe.TypeTag[A] = TypeTag[A]
