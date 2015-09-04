@@ -7,7 +7,7 @@ package scala.tools.nsc
 package transform
 
 import symtab._
-import Flags._
+import reflect.internal.Flags._
 import scala.collection.{ mutable, immutable }
 
 abstract class Mixin extends InfoTransform with ast.TreeDSL {
@@ -1060,6 +1060,21 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           isOverriddenAccessor(other.getterIn(other.owner), clazz.info.baseClasses)
         }
 
+      if (isFunctionSymbol(clazz) && clazz.isSpecialized) {
+        val sym = clazz.info.decl(nme.apply)
+        // <default> def apply(v1: Object)Object = apply(v1.unbox).box
+        val functionClass = clazz.baseClasses(1)
+        val genericApply = functionClass.info.member(nme.apply)
+        val bridge = genericApply.cloneSymbol(clazz, /*BRIDGE |*/ METHOD | DEFAULTMETHOD | DEFERRED).setPos(sym.pos)
+        addDefDef(bridge,
+          Apply(gen.mkAttributedSelect(gen.mkAttributedThis(sym.owner), sym), bridge.paramss.head.map(p => gen.mkAttributedIdent(p))))
+
+        // <deferred> def apply$mcII$sp(v1: Int)Int
+        val specializedApply = specializeTypes.specializedOverloaded(genericApply, exitingSpecialize(clazz.info.baseType(functionClass).typeArgs))
+        val m2 = specializedApply.cloneSymbol(clazz, METHOD | DEFERRED).setPos(sym.pos)
+        addDefDef(m2.setPos(sym.pos))
+      }
+
       // for all symbols `sym` in the class definition, which are mixed in:
       for (sym <- clazz.info.decls ; if sym hasFlag MIXEDIN) {
         // if current class is a trait interface, add an abstract method for accessor `sym`
@@ -1166,6 +1181,40 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         // remove widening casts
         case Apply(TypeApply(Select(qual, _), targ :: _), _) if isCastSymbol(sym) && (qual.tpe <:< targ.tpe) =>
           qual
+
+        case dd @ DefDef(_, _, _, vparamss, _, EmptyTree) if isFunctionSymbol(sym.owner) =>
+          val addDefault = enteringPhase(currentRun.erasurePhase.prev)(!sym.isDeferred) && sym.name != nme.toString_ // before lateDEFERRED
+          if (addDefault) {
+            def implSym = implClass(sym.owner).info.member(sym.name)
+            sym.setFlag(Flags.DEFAULTMETHOD)
+            val tree = Apply(staticRef(implSym), gen.mkAttributedThis(sym.owner) :: sym.paramss.head.map(gen.mkAttributedRef))
+            val app = typedPos(tree.pos)(tree)
+            copyDefDef(dd)(rhs = app)
+          } else if (sym.owner.isSpecialized && sym.name == nme.apply) {
+            val clazz = sym.owner
+            val functionClass = clazz.baseClasses(1)
+            val substitutedApply = clazz.info.decl(nme.apply)
+            val genericApply = functionClass.info.decl(nme.apply)
+            val specializedApply = specializeTypes.specializedOverloaded(genericApply, exitingSpecialize(clazz.info.baseType(functionClass).typeArgs))
+            val app = Apply(gen.mkAttributedSelect(gen.mkAttributedThis(clazz), specializedApply), vparamss.head.map(p => gen.mkAttributedIdent(p.symbol)))
+            dd.symbol.setFlag(Flags.DEFAULTMETHOD)
+            copyDefDef(dd)(rhs = typedPos(tree.pos)(app))
+          } else {
+            tree
+          }
+        case dd @ DefDef(_, _, _, vparamss, _, EmptyTree) if sym.owner.isTrait =>
+          val isDeferred = enteringPhase(currentRun.erasurePhase.prev)(sym.isDeferred) // before lateDEFERRED
+          // TODO Duplicated with isImplementedStatically, at this point sym.owner is still the trait so the other method returns false.
+          val isImplementedStatically = sym.isMethod && !sym.isModule && !sym.hasFlag(ACCESSOR | SUPERACCESSOR)
+          if (!isDeferred && isImplementedStatically) {
+            val implSym = exitingMixin(implClass(sym.owner).info.member(sym.name))
+            sym.setFlag(Flags.DEFAULTMETHOD)
+            val tree = Apply(staticRef(implSym), gen.mkAttributedCast(gen.mkAttributedThis(sym.owner), sym.owner.typeOfThis) ::  vparamss.head.map(t => gen.mkAttributedRef(t.symbol)))
+            val app = exitingMixin(typedPos(tree.pos)(tree))
+            copyDefDef(dd)(rhs = app)
+          } else {
+            tree
+          }
 
         case Apply(Select(qual, _), args) =>
           /*  Changes `qual.m(args)` where m refers to an implementation

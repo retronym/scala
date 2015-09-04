@@ -379,7 +379,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
       }
       val functionType = definitions.functionType(functionParamTypes, functionResultType)
 
-      val (functionalInterface, isSpecialized) = java8CompatFunctionalInterface(target, functionType)
+      val (functionalInterface, samMethod, isSpecialized) = java8CompatFunctionalInterface(target, functionType)
       if (functionalInterface.exists) {
         // Create a symbol representing a fictional lambda factory method that accepts the captured
         // arguments and returns a Function.
@@ -407,7 +407,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
 
         // The backend needs to know the target of the lambda and the functional interface in order
         // to emit the invokedynamic instruction. We pass this information as tree attachment.
-        apply.updateAttachment(LambdaMetaFactoryCapable(lambdaTarget, arity, functionalInterface))
+        apply.updateAttachment(LambdaMetaFactoryCapable(lambdaTarget, arity, functionalInterface, samMethod))
         InvokeDynamicLambda(apply)
       } else {
         val anonymousClassDef = makeAnonymousClass
@@ -566,24 +566,25 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     }
   }
 
-  final case class LambdaMetaFactoryCapable(target: Symbol, arity: Int, functionalInterface: Symbol)
+  final case class LambdaMetaFactoryCapable(target: Symbol, arity: Int, functionalInterface: Symbol, samMethod: Symbol)
 
   // The functional interface that can be used to adapt the lambda target method `target` to the
   // given function type. Returns `NoSymbol` if the compiler settings are unsuitable.
-  private def java8CompatFunctionalInterface(target: Symbol, functionType: Type): (Symbol, Boolean) = {
+  private def java8CompatFunctionalInterface(target: Symbol, functionType: Type): (Symbol, Symbol, Boolean) = {
     val canUseLambdaMetafactory = settings.isBCodeActive
 
-    val sym = functionType.typeSymbol
-    val pack = currentRun.runDefinitions.Scala_Java8_CompatPackage
-    val name1 = specializeTypes.specializedFunctionName(sym, functionType.typeArgs)
-    val paramTps :+ restpe = functionType.typeArgs
-    val arity = paramTps.length
-    val isSpecialized = name1.toTypeName != sym.name
-    val functionalInterface = if (!isSpecialized) {
-      currentRun.runDefinitions.Scala_Java8_CompatPackage_JFunction(arity)
+    val clazz = functionType.typeSymbol
+    val specializedFunction = specializeTypes.specializedFunctionClass(clazz, functionType.typeArgs)
+    val isSpecialized = specializedFunction != clazz
+    val genericApply = clazz.info.member(nme.apply)
+    val samMethod = if (isSpecialized) {
+      specializeTypes.specializedOverloaded(genericApply, functionType.typeArgs)
     } else {
-      pack.info.decl(name1.toTypeName.prepend("J"))
+      genericApply
     }
-    (if (canUseLambdaMetafactory) functionalInterface else NoSymbol, isSpecialized)
+    val x = if (canUseLambdaMetafactory) {
+      specializedFunction
+    } else NoSymbol
+    (x, samMethod, isSpecialized)
   }
 }
