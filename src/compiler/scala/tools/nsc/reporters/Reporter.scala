@@ -51,6 +51,11 @@ abstract class Reporter extends scala.reflect.internal.Reporter {
   // reason for copy/paste: this is used by partest (must be a val, not an object)
   // TODO: use count(ERROR) in scala.tools.partest.nest.DirectCompiler#errorCount, rather than ERROR.count
   lazy val ERROR = new Severity(2)("ERROR")
+  def severityFor(id: Int) = id match {
+    case INFO.id => INFO
+    case WARNING.id => WARNING
+    case ERROR.id => ERROR
+  }
 
   def count(severity: Severity): Int       = severity.count
   def resetCount(severity: Severity): Unit = severity.count = 0

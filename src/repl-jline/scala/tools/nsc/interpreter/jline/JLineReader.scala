@@ -7,6 +7,7 @@
 
 package scala.tools.nsc.interpreter.jline
 
+import java.awt.event.{ActionEvent, ActionListener}
 import java.util.{Collection => JCollection, List => JList}
 
 import _root_.jline.{console => jconsole}
@@ -15,7 +16,7 @@ import jconsole.history.{History => JHistory}
 
 
 import scala.tools.nsc.interpreter
-import scala.tools.nsc.interpreter.{Completion, JLineCompletion, NoCompletion}
+import scala.tools.nsc.interpreter.{PresentationCompilerCompleter, Completion, JLineCompletion, NoCompletion}
 import scala.tools.nsc.interpreter.Completion.Candidates
 import scala.tools.nsc.interpreter.session.History
 
@@ -140,8 +141,23 @@ private class JLineConsoleReader extends jconsole.ConsoleReader with interpreter
         jlineCompleter setStrict false
         this addCompleter jlineCompleter
       case NoCompletion       => ()
+      case pc:PresentationCompilerCompleter =>
+        val CTRL_Q = 17.toChar
+        this.getKeys.bind(CTRL_Q.toString, new ActionListener {
+          override def actionPerformed(e: ActionEvent): Unit = {
+            println()
+            val all = getCursorBuffer.toString + "// print"
+            printColumns_(pc.complete(all, all.length).candidates)
+            redrawLineAndFlush()
+          }
+
+        })
+        this addCompleter completer
       case _                  => this addCompleter completer
+
     }
+    this.getKeys.getBound(15.toChar.toString)
+
     setAutoprintThreshold(400) // max completion candidates without warning
   }
 }

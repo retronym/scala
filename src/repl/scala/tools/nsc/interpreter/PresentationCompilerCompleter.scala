@@ -7,6 +7,7 @@ package scala.tools.nsc.interpreter
 import scala.reflect.internal.Flags
 import scala.reflect.internal.util.StringOps
 import scala.tools.nsc.interpreter.Completion.{ScalaCompleter, Candidates}
+import scala.tools.nsc.reporters.{AbstractReporter, StoreReporter}
 import scala.util.control.NonFatal
 
 class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCompleter {
@@ -18,6 +19,10 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
   private var lastRequest = NoRequest
   private var tabCount = 0
   private var lastCommonPrefixCompletion: Option[String] = None
+  private val CamelRegex = "([A-Z][^A-Z]*)".r
+  private def camelComponents(s: String): List[String] = {
+    CamelRegex.findAllIn("X" + s).toList match { case head :: tail => head.drop(1) :: tail; case Nil => Nil }
+  }
 
   def resetVerbosity(): Unit = { tabCount = 0 ; lastRequest = NoRequest }
   def completer(): ScalaCompleter = this
@@ -46,7 +51,17 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
         case Template(_, _, constructor :: (rest :+ last)) => if (rest.isEmpty) last else Block(rest, last)
         case t => t
       }
-      val printed = showCode(tree) + " // : " + tree.tpe.safeToString
+      println("")
+      result.compiler.reporter match {
+        case sr: StoreReporter =>
+          sr.infos.foreach(i => {
+            val ar = intp.reporter.asInstanceOf[AbstractReporter]
+            val severity = ar.severityFor(i.severity.id)
+            ar.display(i.pos, i.msg, severity)
+          })
+        case _ => ""
+      }
+      val printed = showCode(tree) + " // : " + tree.tpe.safeToString + "\n"
       Candidates(cursor, "" :: printed :: Nil)
     }
     def typeAt(result: Result, start: Int, end: Int) = {
@@ -94,6 +109,17 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
                   Candidates(cursor, "" :: memberCompletions)
                 case _ => Completion.NoCandidates
               }
+            } else if (matching.isEmpty){
+              val anyNameResults: List[Member] = r.results.filter(m => CompletionResult.prefixMatcher(m, nme.EMPTY))
+              val camelComponents1 = camelComponents(r.name.toString)
+              val camelMatches = anyNameResults.filter(x => {
+                camelComponents1.forall(component => x.sym.name.containsName(component)) && {
+                  val camelComponents2 = camelComponents(x.sym.name.toString)
+                  (camelComponents1 corresponds camelComponents2.take(camelComponents1.length))((x, y) => y.startsWith(x))
+                }
+              })
+              val memberCompletions: List[String] = camelMatches.map(_.symNameDropLocal.decoded).distinct.sorted
+              Candidates(cursor + r.positionDelta, memberCompletions)
             } else if (matching.nonEmpty && matching.forall(_.symNameDropLocal == r.name))
               Completion.NoCandidates // don't offer completion if the only option has been fully typed already
             else {

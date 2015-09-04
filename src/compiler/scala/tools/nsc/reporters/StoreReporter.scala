@@ -15,6 +15,11 @@ import scala.reflect.internal.util.Position
 class StoreReporter extends Reporter {
   case class Info(pos: Position, msg: String, severity: Severity) {
     override def toString() = "pos: " + pos + " " + msg + " " + severity
+    def render: String = severity match {
+      case ERROR => "error: " + msg
+      case WARNING => "error: " + msg
+      case INFO => "info: " + msg
+    }
   }
   val infos = new mutable.LinkedHashSet[Info]
   protected def info0(pos: Position, msg: String, severity: Severity, force: Boolean) {

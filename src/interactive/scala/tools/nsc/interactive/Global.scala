@@ -1177,6 +1177,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
       override def positionDelta = 0
 
     }
+
     val prefixMatcher = (member: Member, name: Name) => {
       val symbol = member.sym
       val prefix = if (name == nme.ERROR) nme.EMPTY else name
