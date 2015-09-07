@@ -290,9 +290,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
        * otherwise we will side-effect on the tree that is used in the fast path
        */
       private class TreeSymSubstituterWithCopying(from: List[Symbol], to: List[Symbol]) extends TreeSymSubstituter(from, to) {
-        override def transform(tree: Tree): Tree = super.transform(tree.duplicate)
-
-        override def apply[T <: Tree](tree: T): T = if (from.isEmpty) tree else super.apply(tree)
+        override def apply[T <: Tree](tree: T): T = if (from.isEmpty) tree else super.apply(tree.duplicate)
       }
 
       /*  return a 'lazified' version of rhs. It uses double-checked locking to ensure
