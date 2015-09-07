@@ -265,7 +265,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
 
       private def mkSlowPathDef(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
                         stats: List[Tree], retVal: Tree, attrThis: Tree, args: List[Tree]): Symbol = {
-        val defSym = clazz.newMethod(nme.newLazyValSlowComputeName(lzyVal.name.toTermName), lzyVal.pos, Flags.PRIVATE)
+        val defSym = clazz.newMethod(nme.newLazyValSlowComputeName(lzyVal.name.toTermName), lzyVal.pos, PRIVATE)
         val params = defSym newSyntheticValueParams args.map(_.symbol.tpe)
         defSym setInfoAndEnter MethodType(params, lzyVal.tpe.resultType)
         val rhs: Tree = (gen.mkSynchronizedCheck(attrThis, cond, syncBody, stats)).changeOwner(currentOwner -> defSym)
@@ -290,10 +290,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
        * otherwise we will side-effect on the tree that is used in the fast path
        */
       private class TreeSymSubstituterWithCopying(from: List[Symbol], to: List[Symbol]) extends TreeSymSubstituter(from, to) {
-        override def transform(tree: Tree): Tree =
-          if (tree.hasSymbolField && from.contains(tree.symbol))
-            super.transform(tree.duplicate)
-          else super.transform(tree.duplicate)
+        override def transform(tree: Tree): Tree = super.transform(tree.duplicate)
 
         override def apply[T <: Tree](tree: T): T = if (from.isEmpty) tree else super.apply(tree)
       }
