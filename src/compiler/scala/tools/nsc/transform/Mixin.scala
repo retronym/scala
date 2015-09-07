@@ -599,7 +599,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           stat
       }
 
-      addNewDefsImpl.buildBitmapOffsets()
       var stats1 = addNewDefsImpl.addCheckedGetters(clazz, stats)
 
       def getterBody(getter: Symbol) = {

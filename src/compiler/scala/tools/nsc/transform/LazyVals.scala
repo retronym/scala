@@ -47,7 +47,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
     }
   }
 
-  /*TODO private */def isFieldWithBitmap(field: Symbol) = {
+  private def isFieldWithBitmap(field: Symbol) = {
     field.info // ensure that nested objects are transformed
     // For checkinit consider normal value getters
     // but for lazy values only take into account lazy getters
@@ -62,7 +62,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
     *        That's why they are excluded.
     *  Note: The `checkinit` option does not check if transient fields are initialized.
     */
-  /*TODO private */def needsInitFlag(sym: Symbol) = (
+  private def needsInitFlag(sym: Symbol) = (
     settings.checkInit
       && sym.isGetter
       && !sym.isInitializedToDefault
@@ -114,7 +114,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
     }
   }
 
-  /*TODO*/private def nullableFields(templ: Template): Map[Symbol, Set[Symbol]] = {
+  private def nullableFields(templ: Template): Map[Symbol, Set[Symbol]] = {
     val scope = templ.symbol.owner.info.decls
     // if there are no lazy fields, take the fast path and save a traversal of the whole AST
     if (scope exists (_.isLazy)) {
@@ -142,34 +142,34 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       *  For each class, fields defined by the class come after inherited fields. Mixed-in
       *  fields count as fields defined by the class itself.
       */
-    /*TODO private */val fieldOffset = perRunCaches.newMap[Symbol, Int]()
+    private val fieldOffset = perRunCaches.newMap[Symbol, Int]()
 
     /** Map lazy values to the fields they should null after initialization. */
-    /*TODO private */var lazyValNullables: Map[Symbol, Set[Symbol]] = _
+    private var lazyValNullables: Map[Symbol, Set[Symbol]] = _
 
     def findLazyValNullables(templ: Template): Unit = {
       lazyValNullables = nullableFields(templ) withDefaultValue Set()
     }
 
-  /*TODO private */ val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
+    private val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
 
     // ByteClass, IntClass, LongClass
-    /*TODO private */ def bitmapKind(field: Symbol): ClassSymbol = bitmapKindForCategory(bitmapCategory(field))
+    private def bitmapKind(field: Symbol): ClassSymbol = bitmapKindForCategory(bitmapCategory(field))
 
-    /*TODO private */ def flagsPerBitmap(field: Symbol): Int = bitmapKind(field) match {
+    private def flagsPerBitmap(field: Symbol): Int = bitmapKind(field) match {
       case BooleanClass => 1
       case ByteClass    => 8
       case IntClass     => 32
       case LongClass    => 64
     }
-    def needsInitAndHasOffset(sym: Symbol) =
+    private def needsInitAndHasOffset(sym: Symbol) =
       needsInitFlag(sym) && (fieldOffset contains sym)
 
     /** Examines the symbol and returns a name indicating what brand of
       *  bitmap it requires.  The possibilities are the BITMAP_* vals
       *  defined in StdNames.  If it needs no bitmap, nme.NO_NAME.
       */
-    def bitmapCategory(field: Symbol): Name = {
+    private def bitmapCategory(field: Symbol): Name = {
       import nme._
       val isNormal = (
         if (isFieldWithBitmap(field)) true
@@ -186,13 +186,15 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       }
     }
     class AddNewDefs(clazz: Symbol, stats: List[Tree], localTyper: analyzer.Typer, addDef: (Position, Tree) => Unit) {
-      def position(sym: Symbol) = if (sym.pos == NoPosition) clazz.pos else sym.pos
+      buildBitmapOffsets()
+
+      private def position(sym: Symbol) = if (sym.pos == NoPosition) clazz.pos else sym.pos
 
       /*
        *  Return the bitmap field for 'offset'. Depending on the hierarchy it is possible to reuse
        *  the bitmap of its parents. If that does not exist yet we create one.
        */
-      def bitmapFor(clazz0: Symbol, offset: Int, field: Symbol): Symbol = {
+      private def bitmapFor(clazz0: Symbol, offset: Int, field: Symbol): Symbol = {
         val category   = bitmapCategory(field)
         val bitmapName = nme.newBitmapName(category, offset / flagsPerBitmap(field)).toTermName
         val sym        = clazz0.info.decl(bitmapName)
@@ -222,13 +224,13 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         sym orElse createBitmap
       }
 
-      def maskForOffset(offset: Int, sym: Symbol, kind: ClassSymbol): Tree = {
+      private def maskForOffset(offset: Int, sym: Symbol, kind: ClassSymbol): Tree = {
         def realOffset = offset % flagsPerBitmap(sym)
         if (kind == LongClass ) LIT(1L << realOffset) else LIT(1 << realOffset)
       }
 
       /* Return an (untyped) tree of the form 'Clazz.this.bmp = Clazz.this.bmp | mask'. */
-      def mkSetFlag(clazz: Symbol, offset: Int, valSym: Symbol, kind: ClassSymbol): Tree = {
+      private def mkSetFlag(clazz: Symbol, offset: Int, valSym: Symbol, kind: ClassSymbol): Tree = {
         val bmp      = bitmapFor(clazz, offset, valSym)
         def mask     = maskForOffset(offset, valSym, kind)
         def x        = This(clazz) DOT bmp
@@ -248,7 +250,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       /* Return an (untyped) tree of the form 'clazz.this.bitmapSym & mask (==|!=) 0', the
        * precise comparison operator depending on the value of 'equalToZero'.
        */
-      def mkTest(clazz: Symbol, mask: Tree, bitmapSym: Symbol, equalToZero: Boolean, kind: ClassSymbol): Tree = {
+      private def mkTest(clazz: Symbol, mask: Tree, bitmapSym: Symbol, equalToZero: Boolean, kind: ClassSymbol): Tree = {
         val bitmapTree  = (This(clazz) DOT bitmapSym)
         def lhs         = bitmapTree GEN_& (mask, kind)
         kind match {
@@ -261,7 +263,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         }
       }
 
-      def mkSlowPathDef(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
+      private def mkSlowPathDef(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
                         stats: List[Tree], retVal: Tree, attrThis: Tree, args: List[Tree]): Symbol = {
         val defSym = clazz.newMethod(nme.newLazyValSlowComputeName(lzyVal.name.toTermName), lzyVal.pos, Flags.PRIVATE)
         val params = defSym newSyntheticValueParams args.map(_.symbol.tpe)
@@ -272,12 +274,12 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         defSym
       }
 
-      def mkFastPathLazyBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
+      private def mkFastPathLazyBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
                              stats: List[Tree], retVal: Tree): Tree = {
         mkFastPathBody(clazz, lzyVal, cond, syncBody, stats, retVal, gen.mkAttributedThis(clazz), List())
       }
 
-      def mkFastPathBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
+      private def mkFastPathBody(clazz: Symbol, lzyVal: Symbol, cond: Tree, syncBody: List[Tree],
                          stats: List[Tree], retVal: Tree, attrThis: Tree, args: List[Tree]): Tree = {
         val slowPathSym: Symbol = mkSlowPathDef(clazz, lzyVal, cond, syncBody, stats, retVal, attrThis, args)
         If(cond, fn (This(clazz), slowPathSym, args.map(arg => Ident(arg.symbol)): _*), retVal)
@@ -287,7 +289,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       /* Always copy the tree if we are going to perform sym substitution,
        * otherwise we will side-effect on the tree that is used in the fast path
        */
-      class TreeSymSubstituterWithCopying(from: List[Symbol], to: List[Symbol]) extends TreeSymSubstituter(from, to) {
+      private class TreeSymSubstituterWithCopying(from: List[Symbol], to: List[Symbol]) extends TreeSymSubstituter(from, to) {
         override def transform(tree: Tree): Tree =
           if (tree.hasSymbolField && from.contains(tree.symbol))
             super.transform(tree.duplicate)
@@ -333,7 +335,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
        *  If the class contains only a single lazy val then the bitmap is represented
        *  as a Boolean and the condition checking is a simple bool test.
        */
-      def mkLazyDef(clazz: Symbol, lzyVal: Symbol, init: List[Tree], retVal: Tree, offset: Int): Tree = {
+      private def mkLazyDef(clazz: Symbol, lzyVal: Symbol, init: List[Tree], retVal: Tree, offset: Int): Tree = {
         def nullify(sym: Symbol) = Select(This(clazz), sym.accessedOrSelf) === LIT(null)
 
         val bitmapSym = bitmapFor(clazz, offset, lzyVal)
@@ -357,7 +359,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         else mkCheckedAccessor(clazz, retVal, fieldOffset(getter), getter.pos, getter)
       }
 
-      def mkCheckedAccessor(clazz: Symbol, retVal: Tree, offset: Int, pos: Position, fieldSym: Symbol): Tree = {
+      private def mkCheckedAccessor(clazz: Symbol, retVal: Tree, offset: Int, pos: Position, fieldSym: Symbol): Tree = {
         val sym = fieldSym.getterIn(fieldSym.owner)
         val bitmapSym = bitmapFor(clazz, offset, sym)
         val kind      = bitmapKind(sym)
@@ -420,7 +422,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         }
       }
 
-      class AddInitBitsTransformer(clazz: Symbol) extends Transformer {
+      private class AddInitBitsTransformer(clazz: Symbol) extends Transformer {
         private def checkedGetter(lhs: Tree) = {
           val sym = clazz.info decl lhs.symbol.getterName suchThat (_.isGetter)
           if (needsInitAndHasOffset(sym)) {
@@ -447,16 +449,14 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       /* Adds statements to set the 'init' bit for each field initialized
        * in the body of a constructor.
        */
-      def addInitBits(clazz: Symbol, rhs: Tree): Tree =
+      private def addInitBits(clazz: Symbol, rhs: Tree): Tree =
         new AddInitBitsTransformer(clazz) transform rhs
-
-      // begin addNewDefs
 
       /* Fill the map from fields to offset numbers.
        * Instead of field symbols, the map keeps their getter symbols. This makes
        * code generation easier later.
        */
-      def buildBitmapOffsets() {
+      private def buildBitmapOffsets() {
         def fold(fields: List[Symbol], category: Name) = {
           var idx = 0
           fields foreach { f =>
