@@ -479,8 +479,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     private var localTyper: erasure.Typer = _
     private def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
 
-    /** Map lazy values to the fields they should null after initialization. */
-    private var lazyValNullables: Map[Symbol, Set[Symbol]] = _
+    private val lzy = new lazyVals.LazyValues(unit)
 
     /** Map a field symbol to a unique integer denoting its position in the class layout.
      *  For each class, fields defined by the class come after inherited fields. Mixed-in
@@ -852,7 +851,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         val kind      = bitmapKind(lzyVal)
         val mask      = maskForOffset(offset, lzyVal, kind)
         def cond      = mkTest(clazz, mask, bitmapSym, equalToZero = true, kind)
-        val nulls     = lazyValNullables(lzyVal).toList sortBy (_.id) map nullify
+        val nulls     = lzy.lazyValNullables(lzyVal).toList sortBy (_.id) map nullify
         def syncBody  = init ::: List(mkSetFlag(clazz, offset, lzyVal, kind), UNIT)
 
         if (nulls.nonEmpty)
@@ -1126,7 +1125,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           // change parents of templates to conform to parents in the symbol info
           val parents1 = currentOwner.info.parents map (t => TypeTree(t) setPos tree.pos)
           // mark fields which can be nulled afterward
-          lazyValNullables = nullableFields(templ) withDefaultValue Set()
+          lzy.lazyValNullables = nullableFields(templ) withDefaultValue Set()
           // add all new definitions to current class or interface
           treeCopy.Template(tree, parents1, self, addNewDefs(currentOwner, body))
 

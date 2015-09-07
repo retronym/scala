@@ -52,6 +52,8 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
   class LazyValues(unit: CompilationUnit) extends TypingTransformer(unit) {
     /** map from method symbols to the number of lazy values it defines. */
     private val lazyVals = perRunCaches.newMap[Symbol, Int]() withDefaultValue 0
+    /** Map lazy values to the fields they should null after initialization. */
+    /*TODO private */var lazyValNullables: Map[Symbol, Set[Symbol]] = _
 
     import symtab.Flags._
     private def flattenThickets(stats: List[Tree]): List[Tree] = stats.flatMap(_ match {
