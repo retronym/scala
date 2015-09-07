@@ -616,33 +616,23 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
               val selection = fieldAccess(getter)
               val init      = if (isUnit) initCall else atPos(getter.pos)(Assign(selection, initCall))
               val returns   = if (isUnit) UNIT else selection
-              addNewDefsImpl.mkLazyDef(clazz, getter, List(init), returns, lzy.fieldOffset(getter))
+              addNewDefsImpl.mkLazyDefGetter(getter, init, returns)
             }
             // For a field of type Unit in a trait, no actual field is generated when being mixed in.
             else if (isUnitGetter(getter)) UNIT
             else fieldAccess(getter)
         }
-        if (!lazyVals.needsInitFlag(getter)) readValue
-        else addNewDefsImpl.mkCheckedAccessor(clazz, readValue, lzy.fieldOffset(getter), getter.pos, getter)
+        addNewDefsImpl.mkCheckedAccessorGetter(getter, readValue)
       }
 
       def setterBody(setter: Symbol) = {
         val getter = setter.getterIn(clazz)
 
-        // A trait with a field of type Unit creates a trait setter (invoked by the
-        // implementation class constructor), like for any other trait field.
-        // However, no actual field is created in the class that mixes in the trait.
-        // Therefore the setter does nothing (except setting the -Xcheckinit flag).
-
-        val setInitFlag =
-          if (!lazyVals.needsInitFlag(getter)) Nil
-          else List(addNewDefsImpl.mkSetFlag(clazz, lzy.fieldOffset(getter), getter, lzy.bitmapKind(getter)))
-
         val fieldInitializer =
           if (isUnitGetter(getter)) Nil
           else List(Assign(fieldAccess(setter), Ident(setter.firstParam)))
 
-        (fieldInitializer ::: setInitFlag) match {
+        (fieldInitializer ::: addNewDefsImpl.setInitFlag(getter)) match {
           case Nil => UNIT
           // If there's only one statement, the Block factory does not actually create a Block.
           case stats => Block(stats: _*)

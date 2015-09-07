@@ -218,6 +218,14 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
         x === newValue
       }
 
+      // A trait with a field of type Unit creates a trait setter (invoked by the
+      // implementation class constructor), like for any other trait field.
+      // However, no actual field is created in the class that mixes in the trait.
+      // Therefore the setter does nothing (except setting the -Xcheckinit flag).
+      def setInitFlag(getter: Symbol): List[Tree] =
+        if (!needsInitFlag(getter)) Nil
+        else List(mkSetFlag(clazz, fieldOffset(getter), getter, bitmapKind(getter)))
+
       /* Return an (untyped) tree of the form 'clazz.this.bitmapSym & mask (==|!=) 0', the
        * precise comparison operator depending on the value of 'equalToZero'.
        */
@@ -320,6 +328,14 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           log("nulling fields inside " + lzyVal + ": " + nulls)
 
         localTyper.typedPos(init.head.pos)(mkFastPathLazyBody(clazz, lzyVal, cond, syncBody, nulls, retVal))
+      }
+
+      def mkLazyDefGetter(lzyVal: Symbol, init: Tree, retVal: Tree): Tree =
+        mkLazyDef(clazz, lzyVal, List(init), retVal, fieldOffset(lzyVal))
+
+      def mkCheckedAccessorGetter(getter: Symbol, retVal: Tree): Tree = {
+        if (!needsInitFlag(getter)) retVal
+        else mkCheckedAccessor(clazz, retVal, fieldOffset(getter), getter.pos, getter)
       }
 
       def mkCheckedAccessor(clazz: Symbol, retVal: Tree, offset: Int, pos: Position, fieldSym: Symbol): Tree = {
