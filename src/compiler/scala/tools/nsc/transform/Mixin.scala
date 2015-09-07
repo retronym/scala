@@ -693,20 +693,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       stats1
     }
 
-    private def nullableFields(templ: Template): Map[Symbol, Set[Symbol]] = {
-      val scope = templ.symbol.owner.info.decls
-      // if there are no lazy fields, take the fast path and save a traversal of the whole AST
-      if (scope exists (_.isLazy)) {
-        val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
-        // check what fields can be nulled for
-        for ((field, users) <- lazyVals.singleUseFields(templ); lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
-          map(lazyFld) += field
-
-        map.toMap
-      }
-      else Map()
-    }
-
     /** The transform that gets applied to a tree after it has been completely
      *  traversed and possible modified by a preTransform.
      *  This step will
@@ -736,7 +722,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           // change parents of templates to conform to parents in the symbol info
           val parents1 = currentOwner.info.parents map (t => TypeTree(t) setPos tree.pos)
           // mark fields which can be nulled afterward
-          lzy.lazyValNullables = nullableFields(templ) withDefaultValue Set()
+          lzy.findLazyValNullables(templ)
           // add all new definitions to current class or interface
           treeCopy.Template(tree, parents1, self, addNewDefs(currentOwner, body))
 

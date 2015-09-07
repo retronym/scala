@@ -114,6 +114,21 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
     }
   }
 
+  /*TODO*/private def nullableFields(templ: Template): Map[Symbol, Set[Symbol]] = {
+    val scope = templ.symbol.owner.info.decls
+    // if there are no lazy fields, take the fast path and save a traversal of the whole AST
+    if (scope exists (_.isLazy)) {
+      val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
+      // check what fields can be nulled for
+      for ((field, users) <- lazyVals.singleUseFields(templ); lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
+        map(lazyFld) += field
+
+      map.toMap
+    }
+    else Map()
+  }
+
+
   /**
    * Transform local lazy accessors to check for the initialized bit.
    */
@@ -131,6 +146,10 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
 
     /** Map lazy values to the fields they should null after initialization. */
     /*TODO private */var lazyValNullables: Map[Symbol, Set[Symbol]] = _
+
+    def findLazyValNullables(templ: Template): Unit = {
+      lazyValNullables = nullableFields(templ) withDefaultValue Set()
+    }
 
   /*TODO private */ val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
 
