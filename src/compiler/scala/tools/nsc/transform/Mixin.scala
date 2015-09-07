@@ -414,19 +414,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
     private val lzy = new lazyVals.LazyValues(unit)
 
-    private val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
-
-    // ByteClass, IntClass, LongClass
-    private def bitmapKind(field: Symbol): ClassSymbol = bitmapKindForCategory(bitmapCategory(field))
-
-    private def flagsPerBitmap(field: Symbol): Int = bitmapKind(field) match {
-      case BooleanClass => 1
-      case ByteClass    => 8
-      case IntClass     => 32
-      case LongClass    => 64
-    }
-
-
     /** The first transform; called in a pre-order traversal at phase mixin
      *  (that is, every node is processed before its children).
      *  What transform does:
@@ -531,30 +518,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         REF(sym.owner.sourceModule) DOT sym
     }
 
-    def needsInitAndHasOffset(sym: Symbol) =
-      lazyVals.needsInitFlag(sym) && (lzy.fieldOffset contains sym)
-
-    /** Examines the symbol and returns a name indicating what brand of
-     *  bitmap it requires.  The possibilities are the BITMAP_* vals
-     *  defined in StdNames.  If it needs no bitmap, nme.NO_NAME.
-     */
-    def bitmapCategory(field: Symbol): Name = {
-      import nme._
-      val isNormal = (
-        if (lazyVals.isFieldWithBitmap(field)) true
-        // bitmaps for checkinit fields are not inherited
-        else if (lazyVals.needsInitFlag(field) && !field.isDeferred) false
-        else return NO_NAME
-      )
-      if (field.accessed hasAnnotation TransientAttr) {
-        if (isNormal) BITMAP_TRANSIENT
-        else BITMAP_CHECKINIT_TRANSIENT
-      } else {
-        if (isNormal) BITMAP_NORMAL
-        else BITMAP_CHECKINIT
-      }
-    }
-
     /** Add all new definitions to a non-trait class
      *  These fall into the following categories:
      *    - for a trait interface:
@@ -639,14 +602,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
        *  the bitmap of its parents. If that does not exist yet we create one.
        */
       def bitmapFor(clazz0: Symbol, offset: Int, field: Symbol): Symbol = {
-        val category   = bitmapCategory(field)
-        val bitmapName = nme.newBitmapName(category, offset / flagsPerBitmap(field)).toTermName
+        val category   = lzy.bitmapCategory(field)
+        val bitmapName = nme.newBitmapName(category, offset / lzy.flagsPerBitmap(field)).toTermName
         val sym        = clazz0.info.decl(bitmapName)
 
         assert(!sym.isOverloaded, sym)
 
         def createBitmap: Symbol = {
-          val bitmapKind =  bitmapKindForCategory(category)
+          val bitmapKind =  lzy.bitmapKindForCategory(category)
           val sym = clazz0.newVariable(bitmapName, clazz0.pos) setInfo bitmapKind.tpe
           enteringTyper(sym addAnnotation VolatileAttr)
 
@@ -669,7 +632,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       }
 
       def maskForOffset(offset: Int, sym: Symbol, kind: ClassSymbol): Tree = {
-        def realOffset = offset % flagsPerBitmap(sym)
+        def realOffset = offset % lzy.flagsPerBitmap(sym)
         if (kind == LongClass ) LIT(1L << realOffset) else LIT(1 << realOffset)
       }
 
@@ -775,7 +738,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         def nullify(sym: Symbol) = Select(This(clazz), sym.accessedOrSelf) === LIT(null)
 
         val bitmapSym = bitmapFor(clazz, offset, lzyVal)
-        val kind      = bitmapKind(lzyVal)
+        val kind      = lzy.bitmapKind(lzyVal)
         val mask      = maskForOffset(offset, lzyVal, kind)
         def cond      = mkTest(clazz, mask, bitmapSym, equalToZero = true, kind)
         val nulls     = lzy.lazyValNullables(lzyVal).toList sortBy (_.id) map nullify
@@ -790,7 +753,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       def mkCheckedAccessor(clazz: Symbol, retVal: Tree, offset: Int, pos: Position, fieldSym: Symbol): Tree = {
         val sym = fieldSym.getterIn(fieldSym.owner)
         val bitmapSym = bitmapFor(clazz, offset, sym)
-        val kind      = bitmapKind(sym)
+        val kind      = lzy.bitmapKind(sym)
         val mask      = maskForOffset(offset, sym, kind)
         val msg       = s"Uninitialized field: ${unit.source}: ${pos.line}"
         val result    =
@@ -839,7 +802,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           else if (settings.checkInit && !clazz.isTrait && sym.isSetter) {
             val getter = sym.getterIn(clazz)
             if (lazyVals.needsInitFlag(getter) && lzy.fieldOffset.isDefinedAt(getter))
-              deriveDefDef(stat)(rhs => Block(List(rhs, localTyper.typed(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))), UNIT))
+              deriveDefDef(stat)(rhs => Block(List(rhs, localTyper.typed(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, lzy.bitmapKind(getter)))), UNIT))
             else stat
           }
           else stat
@@ -853,9 +816,9 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       class AddInitBitsTransformer(clazz: Symbol) extends Transformer {
         private def checkedGetter(lhs: Tree) = {
           val sym = clazz.info decl lhs.symbol.getterName suchThat (_.isGetter)
-          if (needsInitAndHasOffset(sym)) {
+          if (lzy.needsInitAndHasOffset(sym)) {
             debuglog("adding checked getter for: " + sym + " " + lhs.symbol.flagString)
-            List(localTyper typed mkSetFlag(clazz, lzy.fieldOffset(sym), sym, bitmapKind(sym)))
+            List(localTyper typed mkSetFlag(clazz, lzy.fieldOffset(sym), sym, lzy.bitmapKind(sym)))
           }
           else Nil
         }
@@ -895,12 +858,12 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           }
 
           if (idx == 0) ()
-          else if (idx == 1) bitmapKindForCategory(category) = BooleanClass
-          else if (idx < 9)  bitmapKindForCategory(category) = ByteClass
-          else if (idx < 33) bitmapKindForCategory(category) = IntClass
-          else bitmapKindForCategory(category)               = LongClass
+          else if (idx == 1) lzy.bitmapKindForCategory(category) = BooleanClass
+          else if (idx < 9)  lzy.bitmapKindForCategory(category) = ByteClass
+          else if (idx < 33) lzy.bitmapKindForCategory(category) = IntClass
+          else lzy.bitmapKindForCategory(category)               = LongClass
         }
-        clazz.info.decls.toList groupBy bitmapCategory foreach {
+        clazz.info.decls.toList groupBy lzy.bitmapCategory foreach {
           case (nme.NO_NAME, _)            => ()
           case (category, fields)          => fold(fields, category)
         }
@@ -942,7 +905,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
         val setInitFlag =
           if (!lazyVals.needsInitFlag(getter)) Nil
-          else List(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))
+          else List(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, lzy.bitmapKind(getter)))
 
         val fieldInitializer =
           if (isUnitGetter(getter)) Nil

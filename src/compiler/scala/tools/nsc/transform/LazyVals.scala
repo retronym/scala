@@ -14,7 +14,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
 
   val phaseName: String = "lazyvals"
   private val FLAGS_PER_BYTE: Int = 8 // Byte
-  private def bitmapKind = ByteClass
+  private def bitmapKindLocal = ByteClass
 
   def newTransformer(unit: CompilationUnit): Transformer =
     new LazyValues(unit)
@@ -129,6 +129,41 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
 
     /** Map lazy values to the fields they should null after initialization. */
     /*TODO private */var lazyValNullables: Map[Symbol, Set[Symbol]] = _
+
+  /*TODO private */ val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
+
+    // ByteClass, IntClass, LongClass
+    /*TODO private */ def bitmapKind(field: Symbol): ClassSymbol = bitmapKindForCategory(bitmapCategory(field))
+
+    /*TODO private */ def flagsPerBitmap(field: Symbol): Int = bitmapKind(field) match {
+      case BooleanClass => 1
+      case ByteClass    => 8
+      case IntClass     => 32
+      case LongClass    => 64
+    }
+    def needsInitAndHasOffset(sym: Symbol) =
+      needsInitFlag(sym) && (fieldOffset contains sym)
+
+    /** Examines the symbol and returns a name indicating what brand of
+      *  bitmap it requires.  The possibilities are the BITMAP_* vals
+      *  defined in StdNames.  If it needs no bitmap, nme.NO_NAME.
+      */
+    def bitmapCategory(field: Symbol): Name = {
+      import nme._
+      val isNormal = (
+        if (isFieldWithBitmap(field)) true
+        // bitmaps for checkinit fields are not inherited
+        else if (needsInitFlag(field) && !field.isDeferred) false
+        else return NO_NAME
+        )
+      if (field.accessed hasAnnotation TransientAttr) {
+        if (isNormal) BITMAP_TRANSIENT
+        else BITMAP_CHECKINIT_TRANSIENT
+      } else {
+        if (isNormal) BITMAP_NORMAL
+        else BITMAP_CHECKINIT
+      }
+    }
 
     import symtab.Flags._
     private def flattenThickets(stats: List[Tree]): List[Tree] = stats.flatMap(_ match {
@@ -353,13 +388,13 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           (mkBlock(rhs),         UNIT)
       }
 
-      val cond = (bitmapRef GEN_& (mask, bitmapKind)) GEN_== (ZERO, bitmapKind)
+      val cond = (bitmapRef GEN_& (mask, bitmapKindLocal)) GEN_== (ZERO, bitmapKindLocal)
       val lazyDefs = mkFastPathBody(methOrClass.enclClass, lazyVal, cond, List(block), Nil, res)
       (atPos(tree.pos)(localTyper.typed {lazyDefs._1 }), atPos(tree.pos)(localTyper.typed {lazyDefs._2 }))
     }
 
     private def mkSetFlag(bmp: Symbol, mask: Tree, bmpRef: Tree): Tree =
-      bmpRef === (bmpRef GEN_| (mask, bitmapKind))
+      bmpRef === (bmpRef GEN_| (mask, bitmapKindLocal))
 
     val bitmaps = mutable.Map[Symbol, List[Symbol]]() withDefaultValue Nil
 
