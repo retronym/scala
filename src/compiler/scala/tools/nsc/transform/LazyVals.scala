@@ -52,6 +52,13 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
   class LazyValues(unit: CompilationUnit) extends TypingTransformer(unit) {
     /** map from method symbols to the number of lazy values it defines. */
     private val lazyVals = perRunCaches.newMap[Symbol, Int]() withDefaultValue 0
+
+    /** Map a field symbol to a unique integer denoting its position in the class layout.
+      *  For each class, fields defined by the class come after inherited fields. Mixed-in
+      *  fields count as fields defined by the class itself.
+      */
+    /*TODO private */val fieldOffset = perRunCaches.newMap[Symbol, Int]()
+
     /** Map lazy values to the fields they should null after initialization. */
     /*TODO private */var lazyValNullables: Map[Symbol, Set[Symbol]] = _
 

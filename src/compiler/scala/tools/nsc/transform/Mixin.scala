@@ -481,12 +481,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
     private val lzy = new lazyVals.LazyValues(unit)
 
-    /** Map a field symbol to a unique integer denoting its position in the class layout.
-     *  For each class, fields defined by the class come after inherited fields. Mixed-in
-     *  fields count as fields defined by the class itself.
-     */
-    private val fieldOffset = perRunCaches.newMap[Symbol, Int]()
-
     private val bitmapKindForCategory = perRunCaches.newMap[Name, ClassSymbol]()
 
     // ByteClass, IntClass, LongClass
@@ -605,7 +599,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     }
 
     def needsInitAndHasOffset(sym: Symbol) =
-      needsInitFlag(sym) && (fieldOffset contains sym)
+      needsInitFlag(sym) && (lzy.fieldOffset contains sym)
 
     /** Examines the symbol and returns a name indicating what brand of
      *  bitmap it requires.  The possibilities are the BITMAP_* vals
@@ -887,20 +881,20 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           def isEmpty = stat.rhs == EmptyTree
 
           if (sym.isLazy && !isEmpty && !clazz.isImplClass) {
-            assert(fieldOffset contains sym, sym)
+            assert(lzy.fieldOffset contains sym, sym)
             deriveDefDef(stat) {
-              case t if isUnit => mkLazyDef(clazz, sym, List(t), UNIT, fieldOffset(sym))
+              case t if isUnit => mkLazyDef(clazz, sym, List(t), UNIT, lzy.fieldOffset(sym))
 
               case Block(stats, res) =>
-                mkLazyDef(clazz, sym, stats, Select(This(clazz), res.symbol), fieldOffset(sym))
+                mkLazyDef(clazz, sym, stats, Select(This(clazz), res.symbol), lzy.fieldOffset(sym))
 
               case t => t // pass specialized lazy vals through
             }
           }
           else if (needsInitFlag(sym) && !isEmpty && !clazz.hasFlag(IMPLCLASS | TRAIT)) {
-            assert(fieldOffset contains sym, sym)
+            assert(lzy.fieldOffset contains sym, sym)
             deriveDefDef(stat)(rhs =>
-              (mkCheckedAccessor(clazz, _: Tree, fieldOffset(sym), stat.pos, sym))(
+              (mkCheckedAccessor(clazz, _: Tree, lzy.fieldOffset(sym), stat.pos, sym))(
                 if (sym.tpe.resultType.typeSymbol == UnitClass) UNIT
                 else rhs
               )
@@ -911,8 +905,8 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           }
           else if (settings.checkInit && !clazz.isTrait && sym.isSetter) {
             val getter = sym.getterIn(clazz)
-            if (needsInitFlag(getter) && fieldOffset.isDefinedAt(getter))
-              deriveDefDef(stat)(rhs => Block(List(rhs, localTyper.typed(mkSetFlag(clazz, fieldOffset(getter), getter, bitmapKind(getter)))), UNIT))
+            if (needsInitFlag(getter) && lzy.fieldOffset.isDefinedAt(getter))
+              deriveDefDef(stat)(rhs => Block(List(rhs, localTyper.typed(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))), UNIT))
             else stat
           }
           else stat
@@ -928,7 +922,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           val sym = clazz.info decl lhs.symbol.getterName suchThat (_.isGetter)
           if (needsInitAndHasOffset(sym)) {
             debuglog("adding checked getter for: " + sym + " " + lhs.symbol.flagString)
-            List(localTyper typed mkSetFlag(clazz, fieldOffset(sym), sym, bitmapKind(sym)))
+            List(localTyper typed mkSetFlag(clazz, lzy.fieldOffset(sym), sym, bitmapKind(sym)))
           }
           else Nil
         }
@@ -963,7 +957,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         def fold(fields: List[Symbol], category: Name) = {
           var idx = 0
           fields foreach { f =>
-            fieldOffset(f) = idx
+            lzy.fieldOffset(f) = idx
             idx += 1
           }
 
@@ -995,14 +989,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
               val selection = fieldAccess(getter)
               val init      = if (isUnit) initCall else atPos(getter.pos)(Assign(selection, initCall))
               val returns   = if (isUnit) UNIT else selection
-              mkLazyDef(clazz, getter, List(init), returns, fieldOffset(getter))
+              mkLazyDef(clazz, getter, List(init), returns, lzy.fieldOffset(getter))
             }
             // For a field of type Unit in a trait, no actual field is generated when being mixed in.
             else if (isUnitGetter(getter)) UNIT
             else fieldAccess(getter)
         }
         if (!needsInitFlag(getter)) readValue
-        else mkCheckedAccessor(clazz, readValue, fieldOffset(getter), getter.pos, getter)
+        else mkCheckedAccessor(clazz, readValue, lzy.fieldOffset(getter), getter.pos, getter)
       }
 
       def setterBody(setter: Symbol) = {
@@ -1015,7 +1009,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
 
         val setInitFlag =
           if (!needsInitFlag(getter)) Nil
-          else List(mkSetFlag(clazz, fieldOffset(getter), getter, bitmapKind(getter)))
+          else List(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))
 
         val fieldInitializer =
           if (isUnitGetter(getter)) Nil
