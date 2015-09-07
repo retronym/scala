@@ -70,33 +70,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
   private def toInterface(tp: Type): Type =
     enteringMixin(tp.typeSymbol.toInterface).tpe
 
-  private def isFieldWithBitmap(field: Symbol) = {
-    field.info // ensure that nested objects are transformed
-    // For checkinit consider normal value getters
-    // but for lazy values only take into account lazy getters
-    field.isLazy && field.isMethod && !field.isDeferred
-  }
-
-  /** Does this field require an initialized bit?
-   *  Note: fields of classes inheriting DelayedInit are not checked.
-   *        This is because they are neither initialized in the constructor
-   *        nor do they have a setter (not if they are vals anyway). The usual
-   *        logic for setting bitmaps does therefore not work for such fields.
-   *        That's why they are excluded.
-   *  Note: The `checkinit` option does not check if transient fields are initialized.
-   */
-  private def needsInitFlag(sym: Symbol) = (
-        settings.checkInit
-     && sym.isGetter
-     && !sym.isInitializedToDefault
-     && !isConstantType(sym.info.finalResultType) // SI-4742
-     && !sym.hasFlag(PARAMACCESSOR | SPECIALIZED | LAZY)
-     && !sym.accessed.hasFlag(PRESUPER)
-     && !sym.isOuterAccessor
-     && !(sym.owner isSubClass DelayedInitClass)
-     && !(sym.accessed hasAnnotation TransientAttr)
-  )
-
   /** Maps all parts of this type that refer to implementation classes to
    *  their corresponding interfaces.
    */
@@ -420,46 +393,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       tp
   }
 
-  /** Return a map of single-use fields to the lazy value that uses them during initialization.
-   *  Each field has to be private and defined in the enclosing class, and there must
-   *  be exactly one lazy value using it.
-   *
-   *  Such fields will be nulled after the initializer has memoized the lazy value.
-   */
-  def singleUseFields(templ: Template): scala.collection.Map[Symbol, List[Symbol]] = {
-    val usedIn = mutable.HashMap[Symbol, List[Symbol]]() withDefaultValue Nil
-
-    object SingleUseTraverser extends Traverser {
-      override def traverse(tree: Tree) {
-        tree match {
-          case Assign(lhs, rhs) => traverse(rhs) // assignments don't count
-          case _ =>
-            if (tree.hasSymbolField && tree.symbol != NoSymbol) {
-              val sym = tree.symbol
-              if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod))
-                  && sym.isPrivate
-                  && !(currentOwner.isGetter && currentOwner.accessed == sym) // getter
-                  && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol)
-                  && sym.owner == templ.symbol.owner
-                  && !sym.isLazy
-                  && !tree.isDef) {
-                debuglog("added use in: " + currentOwner + " -- " + tree)
-                usedIn(sym) ::= currentOwner
-
-              }
-            }
-            super.traverse(tree)
-        }
-      }
-    }
-    SingleUseTraverser(templ)
-    debuglog("usedIn: " + usedIn)
-    usedIn filter {
-      case (_, member :: Nil) => member.isValue && member.isLazy
-      case _                  => false
-    }
-  }
-
 // --------- term transformation -----------------------------------------------
 
   protected def newTransformer(unit: CompilationUnit): Transformer =
@@ -599,7 +532,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     }
 
     def needsInitAndHasOffset(sym: Symbol) =
-      needsInitFlag(sym) && (lzy.fieldOffset contains sym)
+      lazyVals.needsInitFlag(sym) && (lzy.fieldOffset contains sym)
 
     /** Examines the symbol and returns a name indicating what brand of
      *  bitmap it requires.  The possibilities are the BITMAP_* vals
@@ -608,9 +541,9 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
     def bitmapCategory(field: Symbol): Name = {
       import nme._
       val isNormal = (
-        if (isFieldWithBitmap(field)) true
+        if (lazyVals.isFieldWithBitmap(field)) true
         // bitmaps for checkinit fields are not inherited
-        else if (needsInitFlag(field) && !field.isDeferred) false
+        else if (lazyVals.needsInitFlag(field) && !field.isDeferred) false
         else return NO_NAME
       )
       if (field.accessed hasAnnotation TransientAttr) {
@@ -891,7 +824,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
               case t => t // pass specialized lazy vals through
             }
           }
-          else if (needsInitFlag(sym) && !isEmpty && !clazz.hasFlag(IMPLCLASS | TRAIT)) {
+          else if (lazyVals.needsInitFlag(sym) && !isEmpty && !clazz.hasFlag(IMPLCLASS | TRAIT)) {
             assert(lzy.fieldOffset contains sym, sym)
             deriveDefDef(stat)(rhs =>
               (mkCheckedAccessor(clazz, _: Tree, lzy.fieldOffset(sym), stat.pos, sym))(
@@ -905,7 +838,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           }
           else if (settings.checkInit && !clazz.isTrait && sym.isSetter) {
             val getter = sym.getterIn(clazz)
-            if (needsInitFlag(getter) && lzy.fieldOffset.isDefinedAt(getter))
+            if (lazyVals.needsInitFlag(getter) && lzy.fieldOffset.isDefinedAt(getter))
               deriveDefDef(stat)(rhs => Block(List(rhs, localTyper.typed(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))), UNIT))
             else stat
           }
@@ -995,7 +928,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             else if (isUnitGetter(getter)) UNIT
             else fieldAccess(getter)
         }
-        if (!needsInitFlag(getter)) readValue
+        if (!lazyVals.needsInitFlag(getter)) readValue
         else mkCheckedAccessor(clazz, readValue, lzy.fieldOffset(getter), getter.pos, getter)
       }
 
@@ -1008,7 +941,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         // Therefore the setter does nothing (except setting the -Xcheckinit flag).
 
         val setInitFlag =
-          if (!needsInitFlag(getter)) Nil
+          if (!lazyVals.needsInitFlag(getter)) Nil
           else List(mkSetFlag(clazz, lzy.fieldOffset(getter), getter, bitmapKind(getter)))
 
         val fieldInitializer =
@@ -1082,7 +1015,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       if (scope exists (_.isLazy)) {
         val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
         // check what fields can be nulled for
-        for ((field, users) <- singleUseFields(templ); lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
+        for ((field, users) <- lazyVals.singleUseFields(templ); lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
           map(lazyFld) += field
 
         map.toMap

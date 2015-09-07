@@ -2,6 +2,7 @@ package scala.tools.nsc
 package transform
 
 import scala.collection.{ mutable, immutable }
+import scala.reflect.internal.Flags
 
 abstract class LazyVals extends Transform with TypingTransformers with ast.TreeDSL {
   // inherits abstract value `global` and class `Phase` from Transform
@@ -43,6 +44,73 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           case _ =>
             super.traverse(t)
         }
+    }
+  }
+
+  /*TODO private */def isFieldWithBitmap(field: Symbol) = {
+    field.info // ensure that nested objects are transformed
+    // For checkinit consider normal value getters
+    // but for lazy values only take into account lazy getters
+    field.isLazy && field.isMethod && !field.isDeferred
+  }
+
+  /** Does this field require an initialized bit?
+    *  Note: fields of classes inheriting DelayedInit are not checked.
+    *        This is because they are neither initialized in the constructor
+    *        nor do they have a setter (not if they are vals anyway). The usual
+    *        logic for setting bitmaps does therefore not work for such fields.
+    *        That's why they are excluded.
+    *  Note: The `checkinit` option does not check if transient fields are initialized.
+    */
+  /*TODO private */def needsInitFlag(sym: Symbol) = (
+    settings.checkInit
+      && sym.isGetter
+      && !sym.isInitializedToDefault
+      && !isConstantType(sym.info.finalResultType) // SI-4742
+      && !sym.hasFlag(Flags.PARAMACCESSOR | Flags.SPECIALIZED | Flags.LAZY)
+      && !sym.accessed.hasFlag(Flags.PRESUPER)
+      && !sym.isOuterAccessor
+      && !(sym.owner isSubClass DelayedInitClass)
+      && !(sym.accessed hasAnnotation TransientAttr)
+    )
+
+  /** Return a map of single-use fields to the lazy value that uses them during initialization.
+    *  Each field has to be private and defined in the enclosing class, and there must
+    *  be exactly one lazy value using it.
+    *
+    *  Such fields will be nulled after the initializer has memoized the lazy value.
+    */
+  def singleUseFields(templ: Template): scala.collection.Map[Symbol, List[Symbol]] = {
+    val usedIn = mutable.HashMap[Symbol, List[Symbol]]() withDefaultValue Nil
+
+    object SingleUseTraverser extends Traverser {
+      override def traverse(tree: Tree) {
+        tree match {
+          case Assign(lhs, rhs) => traverse(rhs) // assignments don't count
+          case _ =>
+            if (tree.hasSymbolField && tree.symbol != NoSymbol) {
+              val sym = tree.symbol
+              if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod))
+                && sym.isPrivate
+                && !(currentOwner.isGetter && currentOwner.accessed == sym) // getter
+                && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol)
+                && sym.owner == templ.symbol.owner
+                && !sym.isLazy
+                && !tree.isDef) {
+                debuglog("added use in: " + currentOwner + " -- " + tree)
+                usedIn(sym) ::= currentOwner
+
+              }
+            }
+            super.traverse(tree)
+        }
+      }
+    }
+    SingleUseTraverser(templ)
+    debuglog("usedIn: " + usedIn)
+    usedIn filter {
+      case (_, member :: Nil) => member.isValue && member.isLazy
+      case _                  => false
     }
   }
 
