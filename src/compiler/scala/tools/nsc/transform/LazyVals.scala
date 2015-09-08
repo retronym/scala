@@ -197,7 +197,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       private def bitmapFor(clazz0: Symbol, offset: Int, field: Symbol): Symbol = {
         val category   = bitmapCategory(field)
         val bitmapName = nme.newBitmapName(category, offset / flagsPerBitmap(field)).toTermName
-        val sym        = clazz0.info.decl(bitmapName)
+        val sym        = enteringMixin(clazz0.info).decl(bitmapName)
 
         assert(!sym.isOverloaded, sym)
 
@@ -216,7 +216,8 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           }
 
           sym setFlag Flags.PrivateLocal
-          clazz0.info.decls.enter(sym)
+          def enter = clazz0.info.decls.enter(sym)
+          enteringMixin(clazz0.info.decls.enter(sym))
           addDef(clazz0.pos, init)
           sym
         }
@@ -381,15 +382,17 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           def isEmpty = stat.rhs == EmptyTree
 
           if (sym.isLazy && !isEmpty && !clazz.isImplClass) {
-            assert(fieldOffset contains sym, sym)
-            deriveDefDef(stat) {
-              case t if isUnit => mkLazyDef(clazz, sym, List(t), UNIT, fieldOffset(sym))
+            if (fieldOffset.contains(sym)) {
+              assert(fieldOffset contains sym, (fieldOffset, sym))
+              deriveDefDef(stat) {
+                case t if isUnit => mkLazyDef(clazz, sym, List(t), UNIT, fieldOffset(sym))
 
-              case Block(stats, res) =>
-                mkLazyDef(clazz, sym, stats, Select(This(clazz), res.symbol), fieldOffset(sym))
+                case Block(stats, res) =>
+                  mkLazyDef(clazz, sym, stats, Select(This(clazz), res.symbol), fieldOffset(sym))
 
-              case t => t // pass specialized lazy vals through
-            }
+                case t => t // pass specialized lazy vals through
+              }
+            } else stat
           }
           else if (needsInitFlag(sym) && !isEmpty && !clazz.hasFlag(Flags.IMPLCLASS | Flags.TRAIT)) {
             assert(fieldOffset contains sym, sym)
@@ -451,7 +454,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
        * Instead of field symbols, the map keeps their getter symbols. This makes
        * code generation easier later.
        */
-      private def buildBitmapOffsets() {
+      def buildBitmapOffsets() {
         def fold(fields: List[Symbol], category: Name) = {
           var idx = 0
           fields foreach { f =>
@@ -540,7 +543,7 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
           } else ddef1
         }
 
-        case Template(_, _, body) => atOwner(currentOwner) {
+        case templ @ Template(_, _, body) => def foo = {
           val body1 = super.transformTrees(body)
           var added = false
           val stats =
@@ -557,6 +560,59 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
               case _ =>
                 stat
             }
+          val newDefs = mutable.ListBuffer[Tree]()
+          def addNewDef(pos: Position, t: Tree): Unit = {
+            newDefs += localTyper.typedPos(if (pos == NoPosition) tree.pos else pos)(t)
+          }
+
+          val clazz = currentOwner
+          val addNewDefs = new AddNewDefs(clazz, stats, localTyper, addNewDef)
+          findLazyValNullables(templ)
+          val mixinlazyValInit = mutable.AnyRefMap[Symbol, (Tree, Tree)]()
+          if (!currentOwner.isTrait) {
+            val mixinClasses = currentOwner.mixinClasses
+            for (mixinClass <- mixinClasses; mixinMember <- mixinClass.info.decls) {
+              if (mixer.isConcreteAccessor(mixinMember) && mixinMember.isLazy) {
+                val field = mixer.mixinGetterField(clazz, mixinMember)
+                field match {
+                  case NoSymbol =>
+                  case sym =>
+                    field.setInfoAndEnter(field.info.asSeenFrom(clazz.typeOfThis, clazz))
+
+                    val accessor = enteringErasure(clazz.newMethod(mixinMember.name.toTermName, clazz.pos, LAZY | ACCESSOR | STABLE | MIXEDIN))
+                    accessor.setInfoAndEnter(mixinMember.info.asSeenFrom(clazz.typeOfThis, clazz))
+                    // TODO DUPLICATION
+                    def isUnitGetter(getter: Symbol) = getter.tpe.resultType.typeSymbol == UnitClass
+                    def fieldAccess(accessor: Symbol) = Select(This(clazz), field)
+                    val selection = fieldAccess(accessor)
+                    val isUnit = isUnitGetter(sym)
+                    //                    val init      = if (isUnit) initCall else atPos(sym.pos)(Assign(selection, initCall))
+                    val returns   = if (isUnit) UNIT else selection
+                    val sourceModule = mixinMember.owner.owner.info.decl(tpnme.implClassName(mixinMember.owner.name))// TODO Why doesn't implClass.sourceModule always work!
+                    val initMethod = sourceModule.info.decl(mixinMember.name)
+                    println((mixinMember, sourceModule, initMethod))
+                    val init = exitingMixin(localTyper.typedPos(clazz.pos)(Apply(Select(gen.mkAttributedStableRef(sourceModule), initMethod), This(clazz) :: Nil)))
+                    mixinlazyValInit(accessor) = (init, returns)
+                    // DUPLICATION
+                }
+              }
+            }
+            addNewDefs.buildBitmapOffsets()
+
+            for (accessor <- clazz.info.decls if accessor.isLazy && mixer.isConcreteAccessor(accessor)) {
+              mixinlazyValInit.get(accessor) match {
+                case Some((init, selectField)) =>
+                  addNewDef(accessor.pos, DefDef(accessor, addNewDefs.mkCheckedAccessorGetter(accessor, addNewDefs.mkLazyDefGetter(accessor, init, selectField))))
+                case None =>
+              }
+            }
+          }
+          val stats1 = addNewDefs.addCheckedGetters(clazz, stats)
+
+          //          var stats1 = addNewDefs.mkLazyDefGetter(tree.symbol, stats)
+//          var stats1 = addNewDefs.mkCheckedAccessorGetter(tree.symbol, stats)
+
+
           val innerClassBitmaps = if (!added && currentOwner.isClass && bitmaps.contains(currentOwner)) {
               // add bitmap to inner class if necessary
                 val toAdd0 = bitmaps(currentOwner).map(s => typed(ValDef(s, ZERO)))
@@ -568,8 +624,9 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
                 })
                 toAdd0
             } else List()
-          deriveTemplate(tree)(_ => innerClassBitmaps ++ flattenThickets(stats))
+          deriveTemplate(tree)(_ => innerClassBitmaps ++ flattenThickets(stats1) ++ newDefs)
         }
+        atOwner(currentOwner)(foo)
 
         case ValDef(_, _, _, _) if !sym.owner.isModule && !sym.owner.isClass =>
           deriveValDef(tree) { rhs0 =>

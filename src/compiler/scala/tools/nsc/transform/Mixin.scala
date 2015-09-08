@@ -219,6 +219,35 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       debuglog("new defs of " + clazz + " = " + clazz.info.decls)
     }
   }
+  def mixinGetterField(clazz: Symbol, mixinMember: Symbol): Symbol = {
+    mixinMember.tpe match {
+      case MethodType(Nil, ConstantType(_)) =>
+        // mixinMember is a constant; only getter is needed
+        NoSymbol
+      case MethodType(Nil, TypeRef(_, UnitClass, _)) =>
+        // mixinMember is a value of type unit. No field needed
+        NoSymbol
+      case _ => // otherwise mixin a field as well
+        // enteringPhase: the private field is moved to the implementation class by erasure,
+        // so it can no longer be found in the mixinMember's owner (the trait)
+        val accessed = enteringPickler(mixinMember.accessed)
+        // #3857, need to retain info before erasure when cloning (since cloning only
+        // carries over the current entry in the type history)
+        val sym = enteringErasure {
+          // so we have a type history entry before erasure
+          clazz.newValue(mixinMember.localName, mixinMember.pos).setInfo(mixinMember.tpe.resultType)
+        }
+        sym updateInfo mixinMember.tpe.resultType // info at current phase
+
+        val newFlags = (
+          (PrivateLocal)
+            | (mixinMember getFlag MUTABLE | LAZY)
+            | (if (mixinMember.hasStableFlag) 0 else MUTABLE)
+          )
+
+        sym setFlag newFlags setAnnotations accessed.annotations
+    }
+  }
 
   /** Add all members to be mixed in into a (non-trait-) class
    *  These are:
@@ -266,41 +295,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             devWarning(s"Overridden concrete accessor: ${mixinMember.fullLocationString}")
           else {
             // mixin field accessors
-            val mixedInAccessor = cloneAndAddMixinMember(mixinClass, mixinMember)
-            if (mixinMember.isLazy) {
-              initializer(mixedInAccessor) = (
-                implClass(mixinClass).info.decl(mixinMember.name)
-                  orElse abort("Could not find initializer for " + mixinMember.name)
-              )
-            }
-            if (!mixinMember.isSetter)
-              mixinMember.tpe match {
-                case MethodType(Nil, ConstantType(_)) =>
-                  // mixinMember is a constant; only getter is needed
-                  ;
-                case MethodType(Nil, TypeRef(_, UnitClass, _)) =>
-                  // mixinMember is a value of type unit. No field needed
-                  ;
-                case _ => // otherwise mixin a field as well
-                  // enteringPhase: the private field is moved to the implementation class by erasure,
-                  // so it can no longer be found in the mixinMember's owner (the trait)
-                  val accessed = enteringPickler(mixinMember.accessed)
-                  // #3857, need to retain info before erasure when cloning (since cloning only
-                  // carries over the current entry in the type history)
-                  val sym = enteringErasure {
-                    // so we have a type history entry before erasure
-                    clazz.newValue(mixinMember.localName, mixinMember.pos).setInfo(mixinMember.tpe.resultType)
-                  }
-                  sym updateInfo mixinMember.tpe.resultType // info at current phase
-
-                  val newFlags = (
-                      ( PrivateLocal )
-                    | ( mixinMember getFlag MUTABLE | LAZY)
-                    | ( if (mixinMember.hasStableFlag) 0 else MUTABLE )
-                  )
-
-                  addMember(clazz, sym setFlag newFlags setAnnotations accessed.annotations)
+            if (!(mixinMember.isLazy || mixinMember.isSetter)) {
+              val mixedInAccessor = cloneAndAddMixinMember(mixinClass, mixinMember)
+              mixinGetterField(clazz, mixinMember) match {
+                case NoSymbol =>
+                case member =>
+                  addMember(clazz, member)
               }
+            }
           }
         }
         else if (mixinMember.isSuperAccessor) { // mixin super accessors
@@ -657,16 +659,15 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         else if (!clazz.isTrait) {
           if (isConcreteAccessor(sym)) {
             // add accessor definitions
-            addDefDef(sym, {
-              if (sym.isSetter) {
+            if (sym.isSetter) {
+              addDefDef(sym, {
                 // If this is a setter of a mixed-in field which is overridden by another mixin,
                 // the trait setter of the overridden one does not need to do anything - the
                 // trait setter of the overriding field will initialize the field.
                 if (isOverriddenSetter(sym)) UNIT
                 else setterBody(sym)
-              }
-              else getterBody(sym)
-            })
+              })
+            }
           }
           else if (sym.isModule && !(sym hasFlag LIFTED | BRIDGE)) {
             // Moved to Refchecks
@@ -790,14 +791,16 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           tree
 
         case Select(qual, name) if sym.owner.isImplClass && !isStaticOnly(sym) =>
-          assert(!sym.isMethod, "no method allowed here: %s%s %s".format(sym, sym.isImplOnly, sym.flagString))
-          // refer to fields in some implementation class via an abstract
-          // getter in the interface.
-          val iface  = toInterface(sym.owner.tpe).typeSymbol
-          val ifaceGetter = sym getterIn iface
+          if (sym.isMethod) tree
+          else {
+            // refer to fields in some implementation class via an abstract
+            // getter in the interface.
+            val iface = toInterface(sym.owner.tpe).typeSymbol
+            val ifaceGetter = sym getterIn iface
 
-          if (ifaceGetter == NoSymbol) abort("No getter for " + sym + " in " + iface)
-          else typedPos(tree.pos)((qual DOT ifaceGetter)())
+            if (ifaceGetter == NoSymbol) abort("No getter for " + sym + " in " + iface)
+            else typedPos(tree.pos)((qual DOT ifaceGetter)())
+          }
 
         case Assign(Apply(lhs @ Select(qual, _), List()), rhs) =>
           // assign to fields in some implementation class via an abstract

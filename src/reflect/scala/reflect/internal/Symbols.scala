@@ -218,6 +218,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     val id = nextId() // identity displayed when -uniqid
     //assert(id != 3390, initName)
+    val stack = if (initName.endsWith("_private")) Thread.currentThread().getStackTrace.iterator.take(50).mkString("\n") else ""
 
     private[this] var _validTo: Period = NoPeriod
 
