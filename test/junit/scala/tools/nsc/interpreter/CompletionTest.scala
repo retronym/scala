@@ -155,6 +155,13 @@ class CompletionTest {
     checkExact(completer, "case class D(a: Int, b: Int) { this.a")("a", "asInstanceOf")
   }
 
+  @Test
+  def classOfTypeArg(): Unit = {
+    val intp = newIMain()
+    val completer = new PresentationCompilerCompleter(intp)
+    checkExact(completer, "class X_Y_Z; classOf[X_Y_")("X_Y_Z")
+  }
+
   def checkExact(completer: PresentationCompilerCompleter, before: String, after: String = "")(expected: String*): Unit = {
     assertEquals(expected.toSet, completer.complete(before, after).candidates.toSet)
   }

@@ -3930,9 +3930,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         if (sameLength(tparams, args)) {
           val targs = mapList(args)(treeTpe)
           checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
-          if (isPredefClassOf(fun.symbol))
-            typedClassOf(tree, args.head, noGen = true)
-          else {
+          if (isPredefClassOf(fun.symbol)) {
+            val result = typedClassOf(tree, args.head, noGen = true)
+            if (canAdaptConstantTypeToLiteral) result
+            else treeCopy.TypeApply(tree, fun, args).setType(result.tpe)
+          } else {
             if (!isPastTyper && fun.symbol == Any_isInstanceOf && targs.nonEmpty) {
               val scrutineeType = fun match {
                 case Select(qual, _) => qual.tpe
@@ -4884,7 +4886,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             else if (isPredefClassOf(sym) && pt.typeSymbol == ClassClass && pt.typeArgs.nonEmpty) {
               // Inferring classOf type parameter from expected type.  Otherwise an
               // actual call to the stubbed classOf method is generated, returning null.
-              typedClassOf(tree, TypeTree(pt.typeArgs.head).setPos(tree.pos.focus))
+              val result = typedClassOf(tree, TypeTree(pt.typeArgs.head).setPos(tree.pos.focus))
+              if (canAdaptConstantTypeToLiteral) result
+              else treeCopy.Ident(tree, name).setType(result.tpe)
             }
           else {
               val pre1  = if (sym.isTopLevel) sym.owner.thisType else if (qual == EmptyTree) NoPrefix else qual.tpe
