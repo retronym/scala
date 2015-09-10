@@ -15,6 +15,7 @@ import scala.reflect.internal.Flags.PARAMACCESSOR
 import scala.reflect.internal.Flags.PRESUPER
 import scala.reflect.internal.Flags.TRAIT
 import scala.compat.Platform.EOL
+import scala.reflect.internal.SymbolTable
 
 trait Trees extends scala.reflect.internal.Trees { self: Global =>
   // --- additional cases --------------------------------------------------------
@@ -45,6 +46,10 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
 
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree
+
+  case class IncompleteModifiers(mods: Modifiers) extends MemberDef {
+    def name = nme.ERROR
+  }
 
   // --- factory methods ----------------------------------------------------------
 
@@ -94,6 +99,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
       traverser.traverse(arg)
     case TypeTreeWithDeferredRefCheck() =>
       // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
+    case IncompleteModifiers(mods) =>
+      traverser.traverseModifiers(mods)
     case _ => super.xtraverse(traverser, tree)
   }
 
@@ -102,6 +109,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     def SelectFromArray(tree: Tree, qualifier: Tree, selector: Name, erasure: Type): SelectFromArray
     def InjectDerivedValue(tree: Tree, arg: Tree): InjectDerivedValue
     def TypeTreeWithDeferredRefCheck(tree: Tree): TypeTreeWithDeferredRefCheck
+    def IncompleteModifiers(tree: Tree, mods: Modifiers): Tree
   }
   implicit val TreeCopierTag: ClassTag[TreeCopier] = ClassTag[TreeCopier](classOf[TreeCopier])
 
@@ -118,6 +126,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     def TypeTreeWithDeferredRefCheck(tree: Tree) = tree match {
       case dc@TypeTreeWithDeferredRefCheck() => new TypeTreeWithDeferredRefCheck()(dc.check).copyAttrs(tree)
     }
+    def IncompleteModifiers(tree: Tree, mods: Modifiers): Tree =
+      new IncompleteModifiers(mods).copyAttrs(tree)
   }
 
   class LazyTreeCopier extends super.LazyTreeCopier with TreeCopier {
@@ -139,6 +149,11 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     def TypeTreeWithDeferredRefCheck(tree: Tree) = tree match {
       case t @ TypeTreeWithDeferredRefCheck() => t
       case _ => this.treeCopy.TypeTreeWithDeferredRefCheck(tree)
+    }
+    def IncompleteModifiers(t: Tree, mods: Modifiers): Tree = t match {
+      case im@IncompleteModifiers(mods0)
+      if mods0 eq mods => t
+      case _ => this.treeCopy.IncompleteModifiers(t, mods)
     }
   }
 
@@ -169,6 +184,21 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
         tree, transformer.transform(arg))
     case TypeTreeWithDeferredRefCheck() =>
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(tree)
+    case IncompleteModifiers(mods) =>
+      transformer.treeCopy.IncompleteModifiers(tree, mods)
+  }
+
+  override def xrecreateTree(importer: StandardImporter)(their: importer.from.Tree): Tree = {
+    importer.from match {
+      case global: Global with importer.from.type =>
+        (their: Any) match {
+          // TODO this ought to fix SI-9421, but I couldn't get it to kick in when testing
+          // case tt: global.TypeTreeWithDeferredRefCheck =>
+          //  TypeTreeWithDeferredRefCheck()(() => importer.importTree(tt.check().asInstanceOf[importer.from.TypeTree]).asInstanceOf[TypeTree])
+          case im: global.IncompleteModifiers =>
+            IncompleteModifiers(importer.importModifiers(im.mods))
+        }
+    }
   }
 
   object resetPos extends Traverser {
@@ -340,7 +370,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
    case TypeTreeWithDeferredRefCheck() =>                          (created and eliminated by typer)
    case SelectFromArray(_, _, _) =>                                (created and eliminated by erasure)
    case InjectDerivedValue(_) =>                                   (created and eliminated by erasure)
-
+   case IncompleteModifiers(_) =>                                  (only during incomplete code such ase `{ @foo }`)
   */
 
  }

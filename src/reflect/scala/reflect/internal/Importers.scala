@@ -18,6 +18,7 @@ trait Importers { to: SymbolTable =>
         def importType(their: from.Type) = their.asInstanceOf[to.Type]
         def importTree(their: from.Tree) = their.asInstanceOf[to.Tree]
         def importPosition(their: from.Position) = their.asInstanceOf[to.Position]
+        def importModifiers(their: from.Modifiers) = their.asInstanceOf[to.Modifiers]
       }
     } else {
       // todo. fix this loophole
@@ -25,6 +26,8 @@ trait Importers { to: SymbolTable =>
       new StandardImporter { val from = from0.asInstanceOf[SymbolTable] }
     }
   ).asInstanceOf[Importer { val from: from0.type }]
+
+  def xrecreateTree(importer: StandardImporter)(their: importer.from.Tree): to.Tree = throw new MatchError(their)
 
   abstract class StandardImporter extends Importer {
 
@@ -409,6 +412,8 @@ trait Importers { to: SymbolTable =>
         EmptyTree
       case null =>
         null
+      case _ =>
+        xrecreateTree(this)(their)
     }
 
     def importTree(their: from.Tree): Tree = {

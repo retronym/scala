@@ -2713,7 +2713,10 @@ self =>
         case CASEOBJECT =>
           objectDef(pos, (mods | Flags.CASE) withPosition (Flags.CASE, tokenRange(in.prev /*scanner skips on 'case' to 'object', thus take prev*/)))
         case _ =>
-          syntaxErrorOrIncompleteAnd("expected start of definition", skipIt = true)(EmptyTree)
+          syntaxErrorOrIncompleteAnd("expected start of definition", skipIt = true)(
+            // assume a class defintion so as not to have somewhere to
+            atPos(pos)(IncompleteModifiers(mods))
+          )
       }
     }
 

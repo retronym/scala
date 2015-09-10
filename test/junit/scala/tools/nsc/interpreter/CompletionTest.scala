@@ -50,6 +50,13 @@ class CompletionTest {
     // Output is sorted
     assertEquals(List("prefix_aaa", "prefix_nnn", "prefix_zzz"), completer.complete( """class C { def prefix_nnn = 0; def prefix_zzz = 0; def prefix_aaa = 0; prefix_""").candidates)
   }
+  @Test
+  def annotations(): Unit = {
+    val intp = newIMain()
+    val completer = new PresentationCompilerCompleter(intp)
+//    checkExact(completer, """@deprecatedN""", """ class Foo""")("deprecatedName")
+    checkExact(completer, """@deprecateN""")("deprecatedName")
+  }
 
   @Test
   def symbolically(): Unit = {

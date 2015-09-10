@@ -1213,6 +1213,7 @@ trait Trees extends api.Trees {
           traverseParamss(vparamss)
           traverseTypeAscription(tpt)
           traverse(rhs)
+        case _ =>
       }
     }
     def traverseComponents(): Unit = tree match {

@@ -3558,6 +3558,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedAnnotation(ann: Tree, mode: Mode = EXPRmode): AnnotationInfo = {
       var hasError: Boolean = false
       val pending = ListBuffer[AbsTypeError]()
+      def ErroneousAnnotation = new ErroneousAnnotation(ann).setOriginal(ann)
 
       def finish(res: AnnotationInfo): AnnotationInfo = {
         if (hasError) {
@@ -5307,13 +5308,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       def typedMemberDef(tree: MemberDef): Tree = tree match {
-        case tree: ValDef     => typedValDef(tree)
-        case tree: DefDef     => defDefTyper(tree).typedDefDef(tree)
-        case tree: ClassDef   => newTyper(context.makeNewScope(tree, sym)).typedClassDef(tree)
-        case tree: ModuleDef  => newTyper(context.makeNewScope(tree, sym.moduleClass)).typedModuleDef(tree)
-        case tree: TypeDef    => typedTypeDef(tree)
-        case tree: PackageDef => typedPackageDef(tree)
-        case _                => abort(s"unexpected member def: ${tree.getClass}\n$tree")
+        case tree: ValDef           => typedValDef(tree)
+        case tree: DefDef           => defDefTyper(tree).typedDefDef(tree)
+        case tree: ClassDef         => newTyper(context.makeNewScope(tree, sym)).typedClassDef(tree)
+        case tree: ModuleDef        => newTyper(context.makeNewScope(tree, sym.moduleClass)).typedModuleDef(tree)
+        case tree: TypeDef          => typedTypeDef(tree)
+        case tree: PackageDef       => typedPackageDef(tree)
+        case _: IncompleteModifiers => tree
+        case _                      => abort(s"unexpected member def: ${tree.getClass}\n$tree")
       }
 
       // Trees not allowed during pattern mode.

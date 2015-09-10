@@ -932,6 +932,8 @@ trait Internals { self: Universe =>
     /** In the current universe, creates a position that corresponds to the provided position in the source universe.
      */
     def importPosition(pos: from.Position): Position
+
+    def importModifiers(pos: from.Modifiers): Modifiers
   }
 
   @deprecated("Use `internal.createImporter` instead", "2.11.0")
