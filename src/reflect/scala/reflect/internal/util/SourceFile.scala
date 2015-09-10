@@ -126,7 +126,7 @@ class BatchSourceFile(val file : AbstractFile, content0: Array[Char]) extends So
   def start = 0
   def isSelfContained = true
 
-  override def identifier(pos: Position) =
+  override def identifier(pos: Position): Option[String] =
     if (pos.isDefined && pos.source == this && pos.point != -1) {
       def isOK(c: Char) = isIdentifierPart(c) || isOperatorPart(c)
       Some(new String(content drop pos.point takeWhile isOK))

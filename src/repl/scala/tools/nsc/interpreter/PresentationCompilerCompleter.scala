@@ -5,7 +5,8 @@
 package scala.tools.nsc.interpreter
 
 import scala.reflect.internal.Flags
-import scala.reflect.internal.util.StringOps
+import scala.reflect.internal.util.{BatchSourceFile, StringOps}
+import scala.tools.nsc.ast.parser.Tokens
 import scala.tools.nsc.interpreter.Completion.{ScalaCompleter, Candidates}
 import scala.util.control.NonFatal
 
@@ -68,6 +69,20 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
           }
         Candidates(cursor, "" :: defStrings.distinct)
       }
+      def suggestedName(m: Member): String = {
+        val x = m.symNameDropLocal.decoded
+        def validateIdentifier(x: String): Option[String] = {
+          val dummySource = newSourceFile(x)
+          dummySource.identifier(dummySource.position(0))
+          val dummyUnit = newCompilationUnit("class " + x)
+          val scanner = newUnitScanner(dummyUnit)
+          scanner.nextToken()
+          scanner.nextToken()
+          scanner.nextToken()
+          if (Tokens.isIdentifier(scanner.token) && {scanner.nextToken(); scanner.token == Tokens.EOF}) Some(x) else None
+        }
+        validateIdentifier(x).orElse(validateIdentifier(s"`$x`")).getOrElse(x)
+      }
       val found = result.completionsAt(cursor) match {
         case NoResults => Completion.NoCandidates
         case r =>
@@ -91,7 +106,7 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
           else if (matching.isEmpty) {
             // Lenient matching based on camel case and on eliding JavaBean "get" / "is" boilerplate
             val camelMatches: List[Member] = r.matchingResults(CompletionResult.camelMatch(_)).filterNot(shouldHide)
-            val memberCompletions = camelMatches.map(_.symNameDropLocal.decoded).distinct.sorted
+            val memberCompletions = camelMatches.map(suggestedName).distinct.sorted
             def allowCompletion = (
                  (memberCompletions.size == 1)
               || CompletionResult.camelMatch(r.name)(r.name.newName(StringOps.longestCommonPrefix(memberCompletions)))
@@ -103,7 +118,7 @@ class PresentationCompilerCompleter(intp: IMain) extends Completion with ScalaCo
             Completion.NoCandidates // don't offer completion if the only option has been fully typed already
           else {
             // regular completion
-            val memberCompletions: List[String] = matching.map(_.symNameDropLocal.decoded).distinct.sorted
+            val memberCompletions: List[String] = matching.map(suggestedName).distinct.sorted
             Candidates(cursor + r.positionDelta, memberCompletions)
           }
       }
