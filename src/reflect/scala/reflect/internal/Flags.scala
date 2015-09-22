@@ -263,7 +263,7 @@ class Flags extends ModifierFlags {
     OVERRIDE | CASE | IMPLICIT | ABSOVERRIDE | LAZY | JAVA_DEFAULTMETHOD
 
   /** The two bridge flags */
-  final val BridgeFlags = BRIDGE | VBRIDGE
+  final val BridgeFlags = BRIDGE | VBRIDGE | ARTIFACT
   final val BridgeAndPrivateFlags = BridgeFlags | PRIVATE
 
   /** These modifiers appear in TreePrinter output. */

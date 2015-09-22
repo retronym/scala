@@ -63,7 +63,7 @@ abstract class ExplicitOuter extends InfoTransform
   }
 
   private def outerField(clazz: Symbol): Symbol = {
-    val result = clazz.info.member(nme.OUTER_LOCAL)
+    val result = clazz.info.memberBasedOnName(nme.OUTER_LOCAL, 0)
     assert(result != NoSymbol, "no outer field in "+clazz+" at "+phase)
 
     result
