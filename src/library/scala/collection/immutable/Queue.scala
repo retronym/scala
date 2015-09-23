@@ -159,7 +159,12 @@ object Queue extends SeqFactory[Queue] {
   implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, Queue[A]] = ReusableCBF.asInstanceOf[GenericCanBuildFrom[A]]
   def newBuilder[A]: Builder[A, Queue[A]] = new ListBuffer[A] mapResult (x => new Queue[A](Nil, x.toList))
   override def empty[A]: Queue[A] = EmptyQueue.asInstanceOf[Queue[A]]
-  override def apply[A](xs: A*): Queue[A] = new Queue[A](Nil, xs.toList)
+//  override def apply[A](xs: A*): Queue[A] = new Queue[A](Nil, xs.toList)
+  override def apply[A](): Queue[A] = new Queue[A](Nil, Nil)
+  override def apply[A](e1: A): Queue[A] = new Queue[A](Nil, e1 :: Nil)
+  override def apply[A](e1: A, e2: A): Queue[A] = new Queue[A](Nil, e1 :: e2 :: Nil)
+  override def apply[A](e1: A, e2: A, e3: A): Queue[A] = new Queue[A](Nil, e1 :: e2 :: e3 :: Nil)
+  override def apply[A](e1: A, e2: A, e3: A, es: A*): Queue[A] = new Queue[A](Nil, e1 :: e2 :: e3 :: es.toList)
 
   private object EmptyQueue extends Queue[Nothing](Nil, Nil) { }
 }

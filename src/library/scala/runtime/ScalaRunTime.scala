@@ -360,4 +360,8 @@ object ScalaRunTime {
     case java.lang.Boolean.TYPE => classOf[java.lang.Boolean]
     case _ => clazz
   }
+  def mkList1[A](a1: A): List[A] = a1 :: Nil
+  def mkList2[A](a1: A, a2: A): List[A] = a1 :: a2 :: Nil
+  def mkList3[A](a1: A, a2: A, a3: A): List[A] = a1 :: a2 :: a3 :: Nil
+  def mkList4[A](a1: A, a2: A, a3: A, a4: A): List[A] = a1 :: a2 :: a3 :: a4 :: Nil
 }

@@ -1113,7 +1113,12 @@ object Stream extends SeqFactory[Stream] {
   override def empty[A]: Stream[A] = Empty
 
   /** A stream consisting of given elements */
-  override def apply[A](xs: A*): Stream[A] = xs.toStream
+//  override def apply[A](xs: A*): Stream[A] = xs.toStream
+  override def apply[A](): scala.Stream[A] = empty[A]
+  override def apply[A](e1: A): scala.Stream[A] = cons(e1, Empty)
+  override def apply[A](e1: A, e2: A): scala.Stream[A] = cons(e1, cons(e2, Empty))
+  override def apply[A](e1: A, e2: A, e3: A): scala.Stream[A] = cons(e1, cons(e2, cons(e2, Empty)))
+  override def apply[A](e1: A, e2: A, e3: A, es: A*): scala.Stream[A] = cons(e1, cons(e2, cons(e2, es.toStream)))
 
   /** A wrapper class that adds `#::` for cons and `#:::` for concat as operations
    *  to streams.

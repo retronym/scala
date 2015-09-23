@@ -451,8 +451,14 @@ object List extends SeqFactory[List] {
 
   override def empty[A]: List[A] = Nil
 
-  override def apply[A](xs: A*): List[A] = xs.toList
-  
+//  override def apply[A](xs: A*): List[A] = xs.toList
+
+  override def apply[A](): scala.List[A] = Nil
+  override def apply[A](e1: A): scala.List[A] = e1 :: Nil
+  override def apply[A](e1: A, e2: A): scala.List[A] = e1 :: e2 :: Nil
+  override def apply[A](e1: A, e2: A, e3: A): scala.List[A] = e1 :: e2 :: e3 :: Nil
+  override def apply[A](e1: A, e2: A, e3: A, es: A*): scala.List[A] = e1 :: e2 :: e3 :: es.toList
+
   private[collection] val partialNotApplied = new Function1[Any, Any] { def apply(x: Any): Any = this }
 
   @SerialVersionUID(1L)

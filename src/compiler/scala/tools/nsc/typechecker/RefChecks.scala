@@ -1531,6 +1531,9 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
 
           transform(qual)
 
+      case Apply(fn, args) if fn.symbol == List_apply && treeInfo.isQualifierSafeToElide(fn) =>
+        args
+        gen.mkMethodCall(ScalaReu)
       case Apply(fn, args) =>
         // sensicality should be subsumed by the unreachability/exhaustivity/irrefutability
         // analyses in the pattern matcher
