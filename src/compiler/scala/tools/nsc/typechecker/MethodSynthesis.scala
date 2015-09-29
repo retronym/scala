@@ -347,12 +347,12 @@ trait MethodSynthesis {
     }
     sealed trait DerivedSetter extends DerivedFromValDef {
       override def isSetter = true
-      private def setterParam = derivedSym.paramss match {
+      protected def setterParam = derivedSym.paramss match {
         case (p :: Nil) :: _  => p
         case _                => NoSymbol
       }
 
-      private def setterRhs = {
+      protected def setterRhs = {
         assert(!derivedSym.isOverloaded, s"Unexpected overloaded setter $derivedSym for $basisSym in $enclClass")
         if (Field.noFieldFor(tree) || derivedSym.isOverloaded) EmptyTree
         else Assign(fieldSelection, Ident(setterParam))
@@ -540,7 +540,9 @@ trait MethodSynthesis {
     }
     case class BooleanBeanGetter(tree: ValDef) extends BeanAccessor("is") with AnyBeanGetter { }
     case class BeanGetter(tree: ValDef) extends BeanAccessor("get") with AnyBeanGetter { }
-    case class BeanSetter(tree: ValDef) extends BeanAccessor("set") with DerivedSetter
+    case class BeanSetter(tree: ValDef) extends BeanAccessor("set") with DerivedSetter {
+      override protected def setterRhs = Apply(Ident(tree.name.setterName), List(Ident(setterParam)))
+    }
 
     // No Symbols available.
     private def beanAccessorsFromNames(tree: ValDef) = {
