@@ -1,3 +1,8 @@
+trait T { final val bla: Int = 123 }
+class C extends T // bla should be final in C
+
+
+
 trait T { final val C = "S" }
 // there should be a C method in `T$class`!
 class C extends T { println(C) }

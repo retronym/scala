@@ -175,6 +175,7 @@ class Flags extends ModifierFlags {
   final val SYNTHESIZE_IMPL_IN_SUBCLASS = 1L << 50 // Like MIXEDIN, but used in Fields
   final val NEEDS_TREES   = 1L << 59           // Communicate from Fields' info transform to its tree transform -- this symbol needs a tree. (distinct from SYNTHESIZE_IMPL_IN_SUBCLASS)
   final val OVERRIDDEN_TRAIT_SETTER = 1L << 60 // Communicate from Fields' info transform to its tree transform -- this setter gets a unit body.
+  final val FINAL_TRAIT_ACCESSOR = 1L << 61 // Communicate from Fields' info transform to its tree transform -- this accessor's synthesized implementation should be final.
 
   // ------- shift definitions -------------------------------------------------------
   //
@@ -470,7 +471,7 @@ class Flags extends ModifierFlags {
     case        `notPRIVATE` => "<notprivate>"                        // (1L << 58)
     case SYNTHESIZE_IMPL_IN_SUBCLASS => "<sub_synth>"                 // (1L << 59)
     case OVERRIDDEN_TRAIT_SETTER => "<overridden_trait_setter>"       // (1L << 60)
-    case 0x2000000000000000L => ""                                    // (1L << 61)
+    case FINAL_TRAIT_ACCESSOR => "<final_trait_acc>"                  // (1L << 61)
     case 0x4000000000000000L => ""                                    // (1L << 62)
     case 0x8000000000000000L => ""                                    // (1L << 63)
     case _ => ""
