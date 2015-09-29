@@ -138,18 +138,19 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
         // strict, memoized accessors will receive an implementation in first real class to extend this trait
         decls.foreach {
-          case accessor if (accessor hasFlag ACCESSOR) && !(accessor hasFlag (DEFERRED | LAZY))
-                        && fieldMemoizationIn(accessor, clazz).needsField =>
+          case accessor if accessor hasFlag ACCESSOR =>
             // only affects private symbols, with a destructive update of their name, also sets flags
             // required for private vals in traits
             accessor.makeNotPrivate(clazz)
 
-            // in a trait, a memoized accessor becomes deferred
-            // (it'll receive an implementation in the first real class to extend this trait)
-            markAccessorImplementedInSubclass(accessor)
+            if (!(accessor hasFlag (DEFERRED | LAZY)) && fieldMemoizationIn(accessor, clazz).needsField) {
+              // in a trait, a memoized accessor becomes deferred
+              // (it'll receive an implementation in the first real class to extend this trait)
+              markAccessorImplementedInSubclass(accessor)
 
-            if ((accessor hasFlag STABLE) && accessor.isGetter) // TODO: isGetter is probably redundant?
-              newSetters += newTraitSetter(accessor, clazz)
+              if ((accessor hasFlag STABLE) && accessor.isGetter) // TODO: isGetter is probably redundant?
+                newSetters += newTraitSetter(accessor, clazz)
+            }
 
           case _ =>
         }

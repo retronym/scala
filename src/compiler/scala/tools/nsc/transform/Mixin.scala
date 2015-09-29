@@ -46,7 +46,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
        sym.owner.isImplClass
     && sym.isMethod
     && (!sym.isModule || sym.hasFlag(PRIVATE | LIFTED))
-    && (!(sym hasFlag (ACCESSOR | SUPERACCESSOR)) || sym.isLazy)
+    && (!(sym hasFlag (ACCESSOR | SUPERACCESSOR)) || sym.isLazy || !(sym hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS))
   )
 
   /** A member of a trait is static only if it belongs only to the

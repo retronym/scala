@@ -1,3 +1,7 @@
+trait T { final val C = "S" }
+// there should be a C method in `T$class`!
+class C extends T { println(C) }
+
 trait T {
   type Res
   val x: Res = ???

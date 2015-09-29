@@ -58,7 +58,7 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
   def needsImplMethod(sym: Symbol) = (
        sym.isMethod
     && isInterfaceMember(sym)
-    && (!sym.isAccessor || sym.isLazy) // We no longer do the implclass-dance for accessors -- they are mixed in directly into their implementing classes during the fields phase
+    && (!(sym hasFlag ACCESSOR) || sym.isLazy || !(sym hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS)) // SYNTHESIZE_IMPL_IN_SUBCLASS accessors are mixed in by the fields phase, but others should be treated as regulars methods (constant-typed getters)
 // so that constructors populates the init method in the impl class
     && (!sym.hasFlag(DEFERRED | SUPERACCESSOR) || (sym hasFlag lateDEFERRED))
   )
