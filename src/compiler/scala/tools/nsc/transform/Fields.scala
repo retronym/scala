@@ -52,10 +52,10 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     val pre = site.thisType
     @tailrec def loop (bcs: List[Symbol]): Boolean = {
 //      println(s"checking ${bcs.head} for member overriding $member (of ${member.owner})")
-      bcs.head != member.owner && (matchingAccessor(pre, member, bcs.head) != NoSymbol || loop(bcs.tail))
+      bcs.nonEmpty && bcs.head != member.owner && (matchingAccessor(pre, member, bcs.head) != NoSymbol || loop(bcs.tail))
     }
 
-    loop(site.info.baseClasses)
+    member.exists && loop(site.info.baseClasses)
   }
 
   class FieldMemoization(accessorOrField: Symbol, site: Symbol) {
@@ -120,21 +120,24 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // strict, memoized accessors will receive an implementation in first real class to extend this trait
         decls.foreach {
           case accessor if accessor hasFlag ACCESSOR =>
+            // check flags before calling makeNotPrivate
+            val memoizedGetter = !(accessor hasFlag (DEFERRED | LAZY)) && fieldMemoizationIn(accessor, clazz).needsField
+            val finality = if (accessor hasFlag FINAL) FINAL_TRAIT_ACCESSOR else 0
+
             // only affects private symbols, with a destructive update of their name, also sets flags
             // required for private vals in traits
             accessor.makeNotPrivate(clazz)
 
-            if (!(accessor hasFlag (DEFERRED | LAZY)) && fieldMemoizationIn(accessor, clazz).needsField) {
-              // in a trait, a memoized accessor becomes deferred
-              // (it'll receive an implementation in the first real class to extend this trait)
+            // trait members cannot be final (but the synthesized ones should be)
+            // LOCAL no longer applies (already made not-private)
+            accessor resetFlag (FINAL | LOCAL)
 
+            // derive trait setter after calling makeNotPrivate (so that names are mangled consistently)
+            if (memoizedGetter) {
+              // a memoized accessor in a trait is made deferred now (mixins will deal with non-memoized getters like any other method)
               // can't mark getter as FINAL in trait, but remember for when we synthetisize the impl in the subclass to make it FINAL
-              val finality = if (accessor hasFlag FINAL) FINAL_TRAIT_ACCESSOR else 0
-              accessor setFlag (finality | lateFINAL | DEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS)
-
-              // trait members cannot be final (but the synthesized ones should be)
-              // LOCAL no longer applies (already made not-private)
-              accessor resetFlag (FINAL | LOCAL)
+              // (it'll receive an implementation in the first real class to extend this trait)
+              accessor setFlag (finality | DEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS)
 
               if ((accessor hasFlag STABLE) && accessor.isGetter) // TODO: isGetter is probably redundant?
                 newSetters += newTraitSetter(accessor, clazz)
@@ -151,6 +154,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         } else tp
 
       // mix in fields & accessors for all mixed in traits
+
       case tp@ClassInfoType(parents, oldDecls, clazz) if !clazz.isPackageClass =>
         val site = clazz.thisType
         // TODO (1): improve logic below, which is used to avoid mixing in anything that would result in an error in refchecks
@@ -265,6 +269,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             mixedInFieldAndAccessors foreach newDecls.enter
             newDecls
           }
+//        println(s"new decls: $newDecls")
 
         if (newDecls eq oldDecls) tp
         else ClassInfoType(parents, newDecls, clazz)
@@ -285,12 +290,13 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     def fieldsAndAccessors(templateSym: Symbol): List[ValOrDefDef] = {
       val clazz = templateSym.owner
       def fieldAccess(accessor: Symbol) = {
-        val field = accessor.accessed
-        assert(field.exists, s"No field for $accessor in $clazz")
+        val fieldName = accessor.localName
+        val field = clazz.info.decl(fieldName)
+        assert(field.exists, s"Field '$fieldName' not found in ${clazz.info.decls}")
         Select(This(clazz), field)
       }
 
-      val accessorsAndFieldsNeedingTrees = afterOwnPhase{ clazz.info }.decls.toList.filter(_ hasFlag NEEDS_TREES)
+      val accessorsAndFieldsNeedingTrees = clazz.info.decls.toList.filter(_ hasFlag NEEDS_TREES)
       accessorsAndFieldsNeedingTrees foreach (_ resetFlag NEEDS_TREES) // emitting the needed trees now
 
 //      println(s"accessorsAndFieldsNeedingTrees: $accessorsAndFieldsNeedingTrees")

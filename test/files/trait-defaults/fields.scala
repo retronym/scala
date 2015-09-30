@@ -1,3 +1,40 @@
+// test mixin of getters / setters, and implementing abstract
+// methods using @BeanProperty
+class C extends T with BeanF {
+  def foo() {
+    setF("doch!")
+    setG(true)
+    this.getF()
+  }
+}
+
+trait T {
+  @scala.beans.BeanProperty var f = "nei"
+  @scala.beans.BooleanBeanProperty var g = false
+}
+
+trait BeanF {
+  def getF(): String
+  def setF(n: String): Unit
+
+  def isG(): Boolean
+  def setG(nb: Boolean): Unit
+}
+
+/*
+    @scala.beans.BeanProperty private[this] var f: String = "nei";
+    <accessor> def f: String = T.this.f;
+    <accessor> def f_=(x$1: String): Unit = T.this.f = x$1;
+    def setF(x$1: String): Unit = T.this.f = x$1;
+    @scala.beans.BooleanBeanProperty private[this] var g: Boolean = false;
+    <accessor> def g: Boolean = T.this.g;
+    <accessor> def g_=(x$1: Boolean): Unit = T.this.g = x$1;
+    def setG(x$1: Boolean): Unit = T.this.g = x$1;
+    def getF(): String = T.this.f;
+    def isG(): Boolean = T.this.g
+*/
+
+
 trait T { final val bla: Int = 123 }
 class C extends T // bla should be final in C
 
@@ -135,29 +172,29 @@ class SUB extends IterableSplitter
 //   }
 // }
 
-// class Nest { val x = println(1)}
+class Nest { val x = println(1)}
 
-// package scala
-//
-// trait OneConcreteVal[T] {
-//   @deprecatedOverriding val x = 1 // : T = ???
-//   @volatile  var vy = "a"
-//   println(x)
-//   def foo = x
-// }
-//
+package scala
 
-// trait OneOtherConcreteVal[T] {
-//   var y: T = ???
-// }
-//
-// class C extends OneConcreteVal[Int] with OneOtherConcreteVal[String]
+trait OneConcreteVal[T] {
+  @deprecatedOverriding val x = 1 // : T = ???
+  @volatile  var vy = "a"
+  println(x)
+  def foo = x
+}
 
-// object T extends App {
-//   val c = new C
-//   println(c.x)
-//   println(c.y)
-// }
+
+trait OneOtherConcreteVal[T] {
+  var y: T = ???
+}
+
+class C extends OneConcreteVal[Int] with OneOtherConcreteVal[String]
+
+object T extends App {
+  val c = new C
+  println(c.x)
+  println(c.y)
+}
 /*
 old decls for trait trait OneOtherConcreteVal: Scope{
   def y(): Object;
@@ -204,64 +241,64 @@ new decls for class C: Scope{
 */
 
 
-// class Meh {
-//   final val x = 1
-//   def foo = x
-// }
-// class CE extends Empty
-//
-// trait T {
-//   val abs: String
-//   protected val protabs: String
-//   val pub = "public"
-//   protected val prot = "protected"
-//   private val privvy = "private"
-//   private[this] val privateThis = "private[this]"
-//   // TODO:
-//   // final val const = "const"
-//
-//   trait Nested { println(abs + privateThis) }
-//
-//   object NO {
-//     println(abs)
-//     println(pub)
-//     println(prot)
-//     println(protabs)
-//     println(privvy)
-//     println(privateThis)
-//   }
-//
-//   trait NT {
-//     println(abs)
-//     println(pub)
-//     println(prot)
-//     println(protabs)
-//     println(privvy)
-//     println(privateThis)
-//   }
-//
-//   class NC {
-//     println(abs)
-//     println(pub)
-//     println(prot)
-//     println(protabs)
-//     println(privvy)
-//     println(privateThis)
-//   }
-// }
-//
-// class C extends AnyRef with T {
-//   println("x")
-//   val abs = "abstract"
-//   println("y")
-//   val protabs = "abstract protected"
-//   final val const = "const"
-//   println("z")
-// }
-//
-// object Test extends C {
-//   def main(args: Array[String]): Unit = {
-//   NO
-//   new NT{}
-//   new NC
-// }}
+class Meh {
+  final val x = 1
+  def foo = x
+}
+class CE extends Empty
+
+trait T {
+  val abs: String
+  protected val protabs: String
+  val pub = "public"
+  protected val prot = "protected"
+  private val privvy = "private"
+  private[this] val privateThis = "private[this]"
+  // TODO:
+  // final val const = "const"
+
+  trait Nested { println(abs + privateThis) }
+
+  object NO {
+    println(abs)
+    println(pub)
+    println(prot)
+    println(protabs)
+    println(privvy)
+    println(privateThis)
+  }
+
+  trait NT {
+    println(abs)
+    println(pub)
+    println(prot)
+    println(protabs)
+    println(privvy)
+    println(privateThis)
+  }
+
+  class NC {
+    println(abs)
+    println(pub)
+    println(prot)
+    println(protabs)
+    println(privvy)
+    println(privateThis)
+  }
+}
+
+class C extends AnyRef with T {
+  println("x")
+  val abs = "abstract"
+  println("y")
+  val protabs = "abstract protected"
+  final val const = "const"
+  println("z")
+}
+
+object Test extends C {
+  def main(args: Array[String]): Unit = {
+  NO
+  new NT{}
+  new NC
+}}
