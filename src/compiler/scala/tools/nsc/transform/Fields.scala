@@ -128,9 +128,17 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             // required for private vals in traits
             accessor.makeNotPrivate(clazz)
 
+            // Need to mark as notPROTECTED, so that it's carried over to the synthesized member in subclasses,
+            // since the trait member will receive this flag later in ExplicitOuter, but the synthetic subclass member will not.
+            // If we don't add notPROTECTED to the synthesized one, the member will not be seen as overriding the trait member.
+            // Therefore, addForwarders's call to membersBasedOnFlags would see the deferred member in the trait,
+            // instead of the concrete (desired) one in the class
+            if (accessor.isProtected) accessor setFlag notPROTECTED
+
             // trait members cannot be final (but the synthesized ones should be)
-            // LOCAL no longer applies (already made not-private)
-            accessor resetFlag (FINAL | LOCAL)
+            // must not reset LOCAL, as we must maintain protected[this]ness to allow that variance hole
+            // (not sure why this only problem only arose when we started setting the notPROTECTED flag)
+            accessor resetFlag (FINAL)
 
             // derive trait setter after calling makeNotPrivate (so that names are mangled consistently)
             if (memoizedGetter) {
