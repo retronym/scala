@@ -1102,7 +1102,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             // add forwarders
             assert(sym.alias != NoSymbol, sym)
             // debuglog("New forwarder: " + sym.defString + " => " + sym.alias.defString)
-            if (!sym.isMacro) addDefDef(sym, Apply(staticRef(sym.alias), gen.mkAttributedThis(clazz) :: sym.paramss.head.map(Ident)))
+            if (!sym.isMacro) {
+              val rhs =
+                enteringPickler(sym.info) match {
+                  case ct: ConstantType => gen.mkAttributedQualifier(ct) // don't call forwarder if it's just going to return a literal
+                  case _ => Apply(staticRef(sym.alias), gen.mkAttributedThis(clazz) :: sym.paramss.head.map(Ident))
+                }
+              addDefDef(sym, rhs)
+            }
           }
         }
       }
