@@ -5,7 +5,8 @@ package <empty> {
       Foo.super.<init>();
       ()
     };
-    private[this] val f: String => String = {
+    private[this] val f: String => String = _;
+    Foo.this.f = {
       final <artifact> def $anonfun(param: String): String = param;
       ((param: String) => $anonfun(param))
     };

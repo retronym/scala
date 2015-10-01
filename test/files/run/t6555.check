@@ -5,7 +5,8 @@ package <empty> {
       Foo.super.<init>();
       ()
     };
-    private[this] val f: Int => Int = {
+    private[this] val f: Int => Int = _;
+    Foo.this.f = {
       @SerialVersionUID(value = 0) final <synthetic> class $anonfun extends scala.runtime.AbstractFunction1$mcII$sp with Serializable {
         def <init>(): <$anon: Int => Int> = {
           $anonfun.super.<init>();

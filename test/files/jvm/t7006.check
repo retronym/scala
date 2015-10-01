@@ -5,6 +5,7 @@
 [running phase patmat on Foo_1.scala]
 [running phase superaccessors on Foo_1.scala]
 [running phase extmethods on Foo_1.scala]
+[running phase fields on Foo_1.scala]
 [running phase pickler on Foo_1.scala]
 [running phase refchecks on Foo_1.scala]
 [running phase uncurry on Foo_1.scala]

@@ -6,7 +6,8 @@ package <empty> {
       T.super.<init>();
       ()
     };
-    private[this] val field: String = "";
+    private[this] val field: String = _;
+    T.this.field = "";
     <stable> <accessor> def field(): String = T.this.field;
     def foo(methodParam: String): Function0 = {
       val methodLocal: String = "";
