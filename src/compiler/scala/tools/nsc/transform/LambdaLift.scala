@@ -451,7 +451,7 @@ abstract class LambdaLift extends InfoTransform {
            // See neg/t1909-object.scala
            def msg = s"SI-1909 Unable to STATICally lift $sym, which is defined in the self- or super-constructor call of ${sym.owner.owner}. A VerifyError is likely."
            devWarning(tree.pos, msg)
-          } else sym setFlag STATIC
+         } else sym setFlag STATIC
       }
 
       sym.owner = sym.owner.enclClass
