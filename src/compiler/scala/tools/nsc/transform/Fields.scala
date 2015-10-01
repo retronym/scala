@@ -91,7 +91,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   // NOTE: this only considers type, filter on flags first!
   def fieldMemoizationIn(accessorOrField: Symbol, site: Symbol) = new FieldMemoization(accessorOrField, site)
 
-  override def transformInfo(sym: Symbol, tp: Type): Type = synthFieldsAndAccessors(tp)
+  override def transformInfo(sym: Symbol, tp: Type): Type = if (!sym.isJavaDefined) synthFieldsAndAccessors(tp) else tp
 
   private def newTraitSetter(getter: Symbol, clazz: Symbol) = {
     // Add setter for an immutable, memoizing getter
