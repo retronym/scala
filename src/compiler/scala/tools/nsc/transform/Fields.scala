@@ -210,8 +210,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         //  class OverridingVal extends OneVal[Int] { override val x: Int = ??? }
 
 
-        // mixin field accessors
-        val mixedInFieldAndAccessors = accessorsMaybeNeedingImpl flatMap { accessor =>
+        // mixin field accessors --
+        // invariant: (accessorsMaybeNeedingImpl, mixedInAccessorAndFields).zipped.forall(case (acc, clone :: _) => `clone` is clone of `acc` case _ => true)
+        val mixedInAccessorAndFields = accessorsMaybeNeedingImpl map { accessor =>
           def cloneAccessor() = {
             val clonedAccessor = (accessor cloneSymbol clazz) setPos clazz.pos setFlag NEEDS_TREES resetFlag DEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS | FINAL_TRAIT_ACCESSOR
             if (accessor hasFlag FINAL_TRAIT_ACCESSOR) {
@@ -219,10 +220,10 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             }
             // if we don't cloneInfo, method argument symbols are shared between trait and subclasses --> lambalift proxy crash
             // TODO: use derive symbol variant?
-            val clonedInfo = accessor.info.cloneInfo(clonedAccessor)
-            val relativeInfo = clonedInfo.asSeenFrom(clazz.thisType, accessor.owner)
-//            println(s"cloning accessor $accessor to $clazz / $clonedInfo -> $relativeInfo")
-            clonedAccessor setInfo relativeInfo
+
+            //            println(s"cloning accessor $accessor to $clazz / $clonedInfo -> $relativeInfo")
+            clonedAccessor setInfo ((clazz.thisType memberType accessor) cloneInfo clonedAccessor) // accessor.info.cloneInfo(clonedAccessor).asSeenFrom(clazz.thisType, accessor.owner)
+
           }
 
           // when considering whether to mix in the trait setter, forget about conflicts -- they will be reported for the getter
@@ -247,6 +248,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           else if (accessorConflictsExistingVal(accessor) || isOverriddenAccessor(accessor, clazz)) Nil
           else if (accessor.isGetter && fieldMemoizationIn(accessor, clazz).needsField) {
             // add field if needed
+
             val field = clazz.newValue(accessor.localName, accessor.pos) setInfo fieldTypeForGetterIn(accessor, clazz.thisType)
 
             val newFlags = (
@@ -264,19 +266,28 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           } else List(cloneAccessor())
         }
 
-//        println(s"new decls for $clazz: $mixedInFieldAndAccessors")
+//        println(s"new decls for $clazz: $mixedInAccessorAndFields")
 
         // omit fields that are not memoized, retain all other members
         def omittableField(sym: Symbol) = sym.isValue && !sym.isMethod && fieldMemoizationIn(sym, clazz).effectOnly // TODO: not yet `needsField`, to produce same bytecode as M2
 
         val newDecls =
-          if (mixedInFieldAndAccessors.isEmpty) oldDecls.filterNot(omittableField)
+          if (mixedInAccessorAndFields.isEmpty) oldDecls.filterNot(omittableField)
           else {  // must not alter `decls` directly
             val newDecls = newScope
             oldDecls foreach { d => if (!omittableField(d)) newDecls.enter(d) }
-            mixedInFieldAndAccessors foreach newDecls.enter
+            val enter = { mixedin: Symbol => newDecls enter mixedin }
+            mixedInAccessorAndFields foreach { _ foreach enter }
+
+            // subst from accessors to corresponding clonedAccessors in types in newDecls
+            val (origs, mixedins) = (accessorsMaybeNeedingImpl, mixedInAccessorAndFields).zipped.collect {
+              case (traitAccessor, mixedin :: _) => (traitAccessor, mixedin)
+            }.unzip
+            newDecls foreach { sym => sym.substInfo(origs.toList, mixedins.toList) }
+
             newDecls
           }
+
 //        println(s"new decls: $newDecls")
 
         if (newDecls eq oldDecls) tp
@@ -294,13 +305,13 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     def mkTypedUnit(pos: Position) = localTyper.typedPos(pos)(CODE.UNIT)
     def deriveUnitDef(stat: Tree)  = deriveDefDef(stat)(_ => mkTypedUnit(stat.pos))
 
-    // synth trees for mixed in accessors/fields and trait setters
+    // synth trees for accessors/fields and trait setters when they are mixed into a class
     def fieldsAndAccessors(templateSym: Symbol): List[ValOrDefDef] = {
       val clazz = templateSym.owner
       def fieldAccess(accessor: Symbol) = {
         val fieldName = accessor.localName
         val field = clazz.info.decl(fieldName)
-        assert(field.exists, s"Field '$fieldName' not found in ${clazz.info.decls}")
+        assert(field.exists, s"Field '$fieldName' not found in ${clazz.info.decls} of $clazz for $accessor")
         Select(This(clazz), field)
       }
 
