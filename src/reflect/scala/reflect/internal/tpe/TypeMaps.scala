@@ -1167,7 +1167,16 @@ private[internal] trait TypeMaps {
       // of PolyType and MethodType in adaptToNewRun
 
       case ClassInfoType(parents, decls, clazz) =>
-        if (clazz.isPackageClass) tp
+        if (clazz.isPackageClass) {
+          val lookup = decls.lookup(nme.PACKAGEkw)
+          lookup match {
+            case NoSymbol =>
+              tp
+            case po =>
+              openPackageModule(po, clazz)
+              clazz.info
+          }
+        }
         else {
           val parents1 = parents mapConserve (this)
           if (parents1 eq parents) tp

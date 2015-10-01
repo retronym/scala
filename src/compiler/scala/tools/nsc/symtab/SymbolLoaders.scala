@@ -118,6 +118,11 @@ abstract class SymbolLoaders {
   def enterClassAndModule(root: Symbol, name: String, completer: SymbolLoader) {
     val clazz = enterClass(root, name, completer)
     val module = enterModule(root, name, completer)
+    (clazz, module) match {
+      case (mc: ModuleClassSymbol, m: ModuleSymbol) =>
+        connectModuleToClass(mc, m)
+      case _ =>
+    }
     if (!clazz.isAnonymousClass) {
       // Diagnostic for SI-7147
       def msg: String = {

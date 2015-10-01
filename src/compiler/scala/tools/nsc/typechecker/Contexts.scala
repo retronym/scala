@@ -828,7 +828,7 @@ trait Contexts { self: Analyzer =>
           // I haven't been able to boil that down the an automated test yet.
           // Looking up implicit members in the package, rather than package object, here is at least
           // consistent with what is done just below for named imports.
-          collectImplicits(qual.tpe.implicitMembers, pre, imported = true)
+          collectImplicits(pre.implicitMembers, pre, imported = true)
         case ImportSelector(from, _, to, _) :: sels1 =>
           var impls = collect(sels1) filter (info => info.name != from)
           if (to != nme.WILDCARD) {

@@ -282,6 +282,8 @@ abstract class SymbolTable extends macros.Universe
   }
 
   def openPackageModule(container: Symbol, dest: Symbol) {
+    if (dest.fullName == "scala.concurrent.duration")
+      println(s"openPackageModule($container, $dest)")
     // unlink existing symbols in the package
     for (member <- container.info.decls.iterator) {
       if (!member.isPrivate && !member.isConstructor) {
