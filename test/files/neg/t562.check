@@ -1,4 +1,4 @@
-t562.scala:10: error: super may not be used on value y
+t562.scala:10: error: super may not be used on <none>
   override val y = super.y;
                          ^
 one error found

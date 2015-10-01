@@ -1,9 +1,6 @@
 t6276.scala:4: warning: method a in class C does nothing other than call itself recursively
       def a: Any = a // warn
                    ^
-t6276.scala:5: warning: value b in class C does nothing other than call itself recursively
-      val b: Any = b // warn
-                   ^
 t6276.scala:7: warning: method c in class C does nothing other than call itself recursively
       def c: Any = this.c // warn
                         ^
@@ -17,5 +14,5 @@ t6276.scala:22: warning: method a does nothing other than call itself recursivel
       def a = a // warn
               ^
 error: No warnings can be incurred under -Xfatal-warnings.
-6 warnings found
+5 warnings found
 one error found

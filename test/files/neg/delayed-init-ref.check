@@ -8,9 +8,6 @@ delayed-init-ref.scala:28: warning: trait DelayedInit in package scala is deprec
 See the release notes for more details: https://github.com/scala/scala/releases/tag/v2.11.0-RC1
 trait Before extends DelayedInit {
                      ^
-delayed-init-ref.scala:40: warning: Selecting value foo from trait UserContext, which extends scala.DelayedInit, is likely to yield an uninitialized value
-    println({locally(()); this}.foo)  // warn (spurious, but we can't discriminate)
-                                ^
 error: No warnings can be incurred under -Xfatal-warnings.
-four warnings found
+three warnings found
 one error found

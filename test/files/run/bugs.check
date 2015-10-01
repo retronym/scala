@@ -91,6 +91,8 @@ C
 >>> bug 396
 
 <<< bug 399
-a
+Exception in thread "Thread[main,5,main]" java.lang.AbstractMethodError: Bug399Test$G$1.Bug399Test$C$1$_setter_$x$1_$eq(Ljava/lang/String;)V
 >>> bug 399
 
+
+1 error

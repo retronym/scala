@@ -13,12 +13,12 @@ type T2 => false
 trait T => true
 method $init$ => false
 value z1 => true
-value z2 => false
-value z2 => false
+value z2 => true
 method w1 => true
 method w2 => false
 type U1 => true
 type U2 => false
+method T$_setter_$z2_= => true
 =======class D=======
 class D => false
 constructor D => false
