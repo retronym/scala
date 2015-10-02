@@ -591,7 +591,7 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           case ValDef(mods, name, _, _) if mods hasFlag PRESUPER =>
             // stat is the constructor-local definition of the field value
             val fields = presupers filter (_.getterName == name)
-            assert(fields.length == 1)
+            assert(fields.length == 1, s"expected exactly one field by name $name in $presupers of $clazz's early initializers")
             val to = fields.head.symbol
 
             if (memoizeValue(to)) constrStatBuf += mkAssign(to, Ident(stat.symbol))
