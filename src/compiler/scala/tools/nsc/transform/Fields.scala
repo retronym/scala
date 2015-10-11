@@ -35,6 +35,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   /** the following two members override abstract members in Transform */
   val phaseName: String = "fields"
 
+  // TODO: replace SYNTHESIZE_IMPL_IN_SUBCLASS by (late)DEFERRED | FINAL, which would also obviate need for FINAL_TRAIT_ACCESSOR
+
   // used for internal communication between info and tree transform of this phase -- not pickled, not in initialflags
   override def phaseNewFlags: Long = NEEDS_TREES | OVERRIDDEN_TRAIT_SETTER | FINAL_TRAIT_ACCESSOR
 
@@ -135,13 +137,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             // instead of the concrete (desired) one in the class
             if (accessor.isProtected) accessor setFlag notPROTECTED
 
-            // trait members cannot be final (but the synthesized ones should be)
             // must not reset LOCAL, as we must maintain protected[this]ness to allow that variance hole
             // (not sure why this only problem only arose when we started setting the notPROTECTED flag)
-            accessor resetFlag (FINAL)
 
             // derive trait setter after calling makeNotPrivate (so that names are mangled consistently)
             if (memoizedGetter) {
+              // memoized trait members cannot be final (but the synthesized ones should be)
+              accessor resetFlag (FINAL)
+
               // a memoized accessor in a trait is made deferred now (mixins will deal with non-memoized getters like any other method)
               // can't mark getter as FINAL in trait, but remember for when we synthetisize the impl in the subclass to make it FINAL
               // (it'll receive an implementation in the first real class to extend this trait)
