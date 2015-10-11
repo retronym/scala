@@ -331,12 +331,14 @@ trait MethodSynthesis {
           case _                              => false
         }
 
+        val derivedAnnotations = initial filter annotationFilter(categories, defaultRetention)
+        // println(s"annots for $derivedSym: $derivedAnnotations (out of $initial)")
         // The annotations amongst those found on the original symbol which
         // should be propagated to this kind of accessor.
-        val sym = derivedSym setAnnotations (initial filter annotationFilter(categories, defaultRetention))
+        derivedSym setAnnotations derivedAnnotations
 
-        if (sym.isSetter && owner.isTrait && !isDeferred)
-          sym addAnnotation TraitSetterAnnotationClass
+        if (derivedSym.isSetter && owner.isTrait && !isDeferred)
+          derivedSym addAnnotation TraitSetterAnnotationClass
 
         logDerived(derivedTree)
       }
