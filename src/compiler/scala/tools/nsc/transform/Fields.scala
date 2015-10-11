@@ -339,29 +339,34 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       }
     }
 
-    private def transformStat(templateSym: Symbol)(stat: Tree): List[Tree] = {
-      val clazz = templateSym.owner
+    private def transformStat(exprOwner: Symbol)(stat: Tree): List[Tree] = {
+      val clazz = currentOwner
+      val statSym = stat.symbol
 
-      // TODO do we need to .changeOwner(statSym -> owner)) `rhs` before transforming?
-      // changing owners as proposed above causes a stackoverflow in uncurry when bootstrapping
-      // maybe go from statSym -> statSym.owner?
-      // there's another (conflicting) issue when compiling scala.util.Properties,
-      // where some references from the impl class are still pointing to the trait interface, not the impl class
-      def initEffect(rhs: Tree, assignSym: Symbol) =
-        if (assignSym eq NoSymbol) rhs
+      // println(s"transformStat $statSym in ${exprOwner.ownerChain}")
+      //        currentRun.trackerFactory.snapshot()
+
+      // TODO: which symbol should own `rhs`, as the expression is lifted from `statSym` to the class's template?
+      // Normally, the local dummy (`exprOwner`) is the owner for stats in the template (not `clazz`!)
+      // when we get owners wrong, the following fails:
+      //   - stackoverflow in uncurry when bootstrapping
+      //   - compiling scala.util.Properties,
+      //     where some references from the impl class are still pointing to the trait interface, not the impl class
+      //   - test/files/trait-defaults/ultimate-nesting.scala,
+      //     where a nested module class is separated from its module, as well as from the `settings` reference
+      def initEffect(rhs: Tree, assignSym: Symbol) = {
+        // println(s"initEffect: owner $statSym --> $exprOwner (currentOwner= $currentOwner)")
+        // println(s"initEffect for $assignSym is $rhs")
+
+        val lifted = atOwner(exprOwner)(super.transform(rhs.changeOwner(statSym -> exprOwner)))
+
+        if (assignSym eq NoSymbol) lifted
         else localTyper.typedPos(rhs.pos) {
           val qual = Select(This(clazz), assignSym)
-          if (assignSym.isSetter) Apply(qual, List(rhs))
-          else Assign(qual, rhs)
+          if (assignSym.isSetter) Apply(qual, List(lifted))
+          else Assign(qual, lifted)
         }
-
-      val statSym = stat.symbol
-      //      println(s"transformStat $statSym in ${templateSym.ownerChain}")
-
-      // `clazz` is not the right owner, local dummy is more accurate at this phase,
-      // since it's the symbol of the template and thus the owner of template statements
-      //        currentRun.trackerFactory.snapshot()
-      def lifted(rhs: Tree) = super.transform(rhs.changeOwner(statSym -> templateSym))
+      }
 
       stat match {
         case DefDef(_, _, _, _, _, rhs) if (rhs ne EmptyTree) && (statSym hasFlag ACCESSOR) && !(statSym hasFlag LAZY) =>
@@ -371,7 +376,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           // TODO: consolidate with ValDef case
           if (clazz.isTrait) {
             // there's a synthetic setter if val is not mutable (symbol is created in info transform)
-            if (fieldMemoization.effectful) deriveDefDef(stat)(getterRhs) :: initEffect(lifted(rhs), fieldMemoization.assignSym) :: Nil
+            if (fieldMemoization.effectful) deriveDefDef(stat)(getterRhs) :: initEffect(rhs, fieldMemoization.assignSym) :: Nil
             else stat :: Nil
           } else (
             // regular getter -- field will be preserved (see case ValDef)
@@ -386,25 +391,37 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         case ValDef(mods, _, _, rhs) if (rhs ne EmptyTree) && !(statSym hasFlag LAZY) && !(mods hasFlag PRESUPER) =>
           val fieldMemoization = fieldMemoizationIn(statSym, clazz)
 
-          if (fieldMemoization.needsField) deriveValDef(stat)(_ => EmptyTree) :: initEffect(lifted(rhs), fieldMemoization.assignSym) :: Nil
-          else if (fieldMemoization.effectOnly) initEffect(lifted(rhs), NoSymbol) :: Nil // drop the val entirely -- it could not have been referenced outside accesors
+          if (fieldMemoization.needsField) deriveValDef(stat)(_ => EmptyTree) :: initEffect(rhs, fieldMemoization.assignSym) :: Nil
+          else if (fieldMemoization.effectOnly) initEffect(rhs, NoSymbol) :: Nil // drop the val entirely -- it could not have been referenced outside accesors
           else Nil
 
-        case tree => List(super.transform(tree))
+        //    case Template(parents, self, body) =>
+        //    treeCopy.Template(tree, transformTrees(parents), transformValDef(self), transformStats(body, tree.symbol))
+
+        case tree => List(
+          if (exprOwner != currentOwner && tree.isTerm) atOwner(exprOwner)(super.transform(tree))
+          else super.transform(tree)
+        )
       }
     }
 
-    override def transformTemplate(tree: Template): Template = {
-//      println(s"transforming stats in ${currentOwner}")
-      // Skip interfaces (they have no concrete methods, so no work to be done)
-      if (!currentOwner.isClass || currentOwner.isPackageClass || currentOwner.isInterface) super.transformTemplate(tree)
+    override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
+      if (!currentOwner.isClass || currentOwner.isPackageClass || currentOwner.isInterface) super.transformStats(stats, exprOwner)
       else afterOwnPhase {
-        currentOwner.info // TODO remove -- for debugging
-        deriveTemplate(tree)(stats => {
-          val templateSym = tree.symbol
-          fieldsAndAccessors(templateSym) ++ stats.flatMap(transformStat(templateSym))
-        })
+        fieldsAndAccessors(exprOwner) ++ (stats flatMap transformStat(exprOwner))
       }
-    }
+
+//    override def transformTemplate(tree: Template): Template = {
+////      println(s"transforming stats in ${currentOwner}")
+//      // Skip interfaces (they have no concrete methods, so no work to be done)
+//      else afterOwnPhase {
+//        currentOwner.info // TODO remove -- for debugging
+//        deriveTemplate(tree)(stats => {
+//          val templateSym = tree.symbol
+//          fieldsAndAccessors(templateSym) ++ stats.flatMap(transformStat(templateSym))
+//        })
+//      }
+//    }
+
   }
 }
