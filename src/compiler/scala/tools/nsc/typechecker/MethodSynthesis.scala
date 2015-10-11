@@ -486,10 +486,12 @@ trait MethodSynthesis {
       // as the symbol info is in the process of being created then.
       // TODO: harmonize tree & symbol creation
       // TODO: the `def field` call-site breaks when you add `|| vd.symbol.owner.isTrait` (detected in test suite)
-      def noFieldFor(vd: ValDef) = (
-        vd.mods.isDeferred
-      || (vd.mods.isLazy && isUnitType(vd.symbol.info))
-      || (owner.isTrait && !vd.mods.hasFlag(PRESUPER)))
+      def noFieldFor(vd: ValDef) = vd.mods.isDeferred || (owner.isTrait && !traitFieldFor(vd))
+
+      // TODO: remove need for this as we moved over all kinds of field to the getter-based encoding
+      private def traitFieldFor(vd: ValDef): Boolean =
+        (vd.mods.isLazy && !isUnitType(vd.symbol.info)) || vd.mods.hasFlag(PRESUPER)
+
     }
 
     case class Field(tree: ValDef) extends DerivedFromValDef {
