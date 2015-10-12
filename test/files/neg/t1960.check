@@ -1,5 +1,4 @@
-t1960.scala:5: error: class Aclass needs to be abstract, since variable p in trait TBase of type Int is not defined
-(Note that variables need to be initialized to be defined)
+t1960.scala:5: error: parameter 'p' requires field but conflicts with method p in trait TBase
 class Aclass (p: Int) extends TBase { def g() { f(p) } }
-      ^
+              ^
 one error found

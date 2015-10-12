@@ -13,6 +13,7 @@ import symtab.Flags._
 /** Lift rhs out of vals, synthesize accessors and field for each (strict) val owned by a class.
   *
   * For traits:
+  *
   *   - Namers translates a definition `val x = rhs` into a getter `def x = rhs`
   *   - This phase moves `rhs` into a block nested under the template's local dummy.
   *     If the value is memoized (stored), the block's final expression assigns the value to the val,
@@ -35,20 +36,47 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   /** the following two members override abstract members in Transform */
   val phaseName: String = "fields"
 
-  // TODO: replace SYNTHESIZE_IMPL_IN_SUBCLASS by (late)DEFERRED | FINAL, which would also obviate need for FINAL_TRAIT_ACCESSOR
+  protected def newTransformer(unit: CompilationUnit): Transformer = new FieldsTransformer(unit)
+  override def transformInfo(sym: Symbol, tp: Type): Type =
+    if (!sym.isJavaDefined && !(sym hasFlag FINAL_TRAIT_ACCESSOR)) {
+      sym setFlag FINAL_TRAIT_ACCESSOR // TODO: remove overloaded use of this flag, used to check hypothesis that info transformer is run re-entrantly?
+      synthFieldsAndAccessors(tp)
+    } else tp
+
+
+  // we leave lazy vars/accessors and early-init vals alone for now
+  private def excludedAccessorOrFieldByFlags(statSym: Symbol): Boolean = statSym hasFlag LAZY | PRESUPER
 
   // used for internal communication between info and tree transform of this phase -- not pickled, not in initialflags
-  override def phaseNewFlags: Long = NEEDS_TREES | OVERRIDDEN_TRAIT_SETTER | FINAL_TRAIT_ACCESSOR
+  override def phaseNewFlags: Long = NEEDS_TREES | OVERRIDDEN_TRAIT_SETTER
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new FieldsTransformer(unit)
+  final val TRAIT_SETTER_FLAGS = NEEDS_TREES | DEFERRED
 
-  def matchingAccessor(pre: Type, member: Symbol, clazz: Symbol) =  {
-    val res = member.matchingSymbol(clazz, pre) filter (sym => (sym hasFlag ACCESSOR) && (!(sym hasFlag DEFERRED) || (sym hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS)))
-//    if (res != NoSymbol) println(s"matching accessor for $member in $clazz = $res (under $pre)")
-//    else println(s"no matching accessor for $member in $clazz (under $pre) among ${clazz.info.decls}")
-    res
+  private def accessorImplementedInSubclass(accessor: Symbol) = accessor hasAllFlags (ACCESSOR | SYNTHESIZE_IMPL_IN_SUBCLASS)
+
+  private def concreteOrSynthImpl(sym: Symbol): Boolean = !(sym hasFlag DEFERRED) || (sym hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS)
+
+  private def setTraitAccessorFlags(accessor: Symbol): Unit = {
+    accessor setFlag lateDEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS
   }
+
+  private def setClonedTraitSetterFlags(clazz: Symbol, correspondingGetter: Symbol, cloneInSubclass: Symbol): Unit = {
+    val overridden = isOverriddenAccessor(correspondingGetter, clazz)
+    if (overridden) cloneInSubclass setFlag OVERRIDDEN_TRAIT_SETTER
+    else if (correspondingGetter.isEffectivelyFinal) cloneInSubclass setFlag FINAL
+  }
+
+  private def setClonedAccessorFlags(orig: Symbol, cloneInSubclass: Symbol): Unit =
+    cloneInSubclass setFlag NEEDS_TREES resetFlag DEFERRED | lateDEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS
+
+  private def setFieldFlags(accessor: Symbol, fieldInSubclass: TermSymbol): Unit =
+    fieldInSubclass setFlag ( NEEDS_TREES |
+          PrivateLocal
+        | (accessor getFlag MUTABLE | LAZY)
+        | (if (accessor.hasStableFlag) 0 else MUTABLE)
+      )
+
+
 
   private def isOverriddenAccessor(member: Symbol, site: Symbol): Boolean = {
     val pre = site.thisType
@@ -59,6 +87,16 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
     member.exists && loop(site.info.baseClasses)
   }
+
+
+  def matchingAccessor(pre: Type, member: Symbol, clazz: Symbol) =  {
+    val res = member.matchingSymbol(clazz, pre) filter (sym => (sym hasFlag ACCESSOR) && concreteOrSynthImpl(sym))
+//    if (res != NoSymbol) println(s"matching accessor for $member in $clazz = $res (under $pre)")
+//    else println(s"no matching accessor for $member in $clazz (under $pre) among ${clazz.info.decls}")
+    res
+  }
+
+
 
   class FieldMemoization(accessorOrField: Symbol, site: Symbol) {
     private val tp = fieldTypeOfAccessorIn(accessorOrField, site.thisType)
@@ -93,26 +131,28 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   // NOTE: this only considers type, filter on flags first!
   def fieldMemoizationIn(accessorOrField: Symbol, site: Symbol) = new FieldMemoization(accessorOrField, site)
 
-  override def transformInfo(sym: Symbol, tp: Type): Type = if (!sym.isJavaDefined) synthFieldsAndAccessors(tp) else tp
 
-  private def newTraitSetter(getter: Symbol, clazz: Symbol) = {
-    // Add setter for an immutable, memoizing getter
-    // (can't emit during namers because we don't yet know whether it's going to be memoized or not)
-    // TODO: any flags to inherit from getter??? (probably not -- certainly exclude: stable, override, implicit, private, local)
-    // TODO: stable/mutable? (we need to access the setter from the init method, so it needs to be in the interface)
-    // TODO: annotations?
-    // TODO: ARTIFACT or SYNTHETIC?? neither?
-    // protected, because implemented by subclass, never used outside of hierarchy
-    val setterFlags = (getter.flags & ~(STABLE | PrivateLocal | OVERRIDE | IMPLICIT | FINAL)) | MUTABLE | ACCESSOR | NEEDS_TREES | DEFERRED
-    val setterName = nme.expandedSetterName(getter.name.setterName, clazz)
-    val setter = clazz.newMethod(setterName, getter.pos.focus, setterFlags)
-    val fieldTp = fieldTypeForGetterIn(getter, clazz.thisType)
-//    println(s"newTraitSetter in $clazz for $getter = $setterName : $fieldTp")
-    setter setInfo MethodType(List(setter.newSyntheticValueParam(fieldTp)), UnitTpe)
-    setter
-  }
 
-  private val synthFieldsAndAccessors = new TypeMap {
+  private object synthFieldsAndAccessors extends TypeMap {
+    private def newTraitSetter(getter: Symbol, clazz: Symbol) = {
+      // Add setter for an immutable, memoizing getter
+      // (can't emit during namers because we don't yet know whether it's going to be memoized or not)
+      // TODO: any flags to inherit from getter??? (probably not -- certainly exclude: stable, override, implicit, private, local)
+      // TODO: stable/mutable? (we need to access the setter from the init method, so it needs to be in the interface)
+      // TODO: annotations?
+      // TODO: ARTIFACT or SYNTHETIC?? neither?
+      // protected, because implemented by subclass, never used outside of hierarchy
+      val setterFlags = (getter.flags & ~(STABLE | PrivateLocal | OVERRIDE | IMPLICIT | FINAL)) | MUTABLE | ACCESSOR | TRAIT_SETTER_FLAGS
+      val setterName = nme.expandedSetterName(getter.name.setterName, clazz)
+      val setter = clazz.newMethod(setterName, getter.pos.focus, setterFlags)
+      val fieldTp = fieldTypeForGetterIn(getter, clazz.thisType)
+
+//      println(s"newTraitSetter in $clazz for $getter = $setterName : $fieldTp")
+
+      setter setInfo MethodType(List(setter.newSyntheticValueParam(fieldTp)), UnitTpe)
+      setter
+    }
+
     def apply(tp0: Type): Type = mapOver(tp0) match {
       // TODO: make less destructive (name changes, decl additions, flag setting --
       // none of this is actually undone when travelling back in time using atPhase)
@@ -124,7 +164,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           case accessor if accessor hasFlag ACCESSOR =>
             // check flags before calling makeNotPrivate
             val memoizedGetter = !(accessor hasFlag (DEFERRED | LAZY)) && fieldMemoizationIn(accessor, clazz).needsField
-            val finality = if (accessor hasFlag FINAL) FINAL_TRAIT_ACCESSOR else 0
 
             // only affects private symbols, with a destructive update of their name, also sets flags
             // required for private vals in traits
@@ -142,13 +181,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
             // derive trait setter after calling makeNotPrivate (so that names are mangled consistently)
             if (memoizedGetter) {
-              // memoized trait members cannot be final (but the synthesized ones should be)
-              accessor resetFlag (FINAL)
-
-              // a memoized accessor in a trait is made deferred now (mixins will deal with non-memoized getters like any other method)
-              // can't mark getter as FINAL in trait, but remember for when we synthetisize the impl in the subclass to make it FINAL
-              // (it'll receive an implementation in the first real class to extend this trait)
-              accessor setFlag (finality | DEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS)
+              setTraitAccessorFlags(accessor)
 
               if ((accessor hasFlag STABLE) && accessor.isGetter) // TODO: isGetter is probably redundant?
                 newSetters += newTraitSetter(accessor, clazz)
@@ -217,31 +250,25 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // invariant: (accessorsMaybeNeedingImpl, mixedInAccessorAndFields).zipped.forall(case (acc, clone :: _) => `clone` is clone of `acc` case _ => true)
         val mixedInAccessorAndFields = accessorsMaybeNeedingImpl map { accessor =>
           def cloneAccessor() = {
-            val clonedAccessor = (accessor cloneSymbol clazz) setPos clazz.pos setFlag NEEDS_TREES resetFlag DEFERRED | SYNTHESIZE_IMPL_IN_SUBCLASS | FINAL_TRAIT_ACCESSOR
-            if (accessor hasFlag FINAL_TRAIT_ACCESSOR) {
-              clonedAccessor setFlag FINAL | lateFINAL // lateFINAL thrown in for good measure, by analogy to makeNotPrivate
-            }
+            val clonedAccessor = (accessor cloneSymbol clazz) setPos clazz.pos
+            setClonedAccessorFlags(accessor, clonedAccessor)
+
             // if we don't cloneInfo, method argument symbols are shared between trait and subclasses --> lambalift proxy crash
             // TODO: use derive symbol variant?
-
             //            println(s"cloning accessor $accessor to $clazz / $clonedInfo -> $relativeInfo")
             clonedAccessor setInfo ((clazz.thisType memberType accessor) cloneInfo clonedAccessor) // accessor.info.cloneInfo(clonedAccessor).asSeenFrom(clazz.thisType, accessor.owner)
-
           }
 
           // when considering whether to mix in the trait setter, forget about conflicts -- they will be reported for the getter
           // a trait setter for an overridden val will receive a unit body in the tree transform
-          // (this is communicated using the DEFERRED flag)
           if (nme.isTraitSetterName(accessor.name)) {
             val getter = accessor.getterIn(accessor.owner)
-            val overridden = isOverriddenAccessor(getter, clazz)
 //            println(s"mixing in trait setter ${accessor.defString}: $overridden")
             val clone = cloneAccessor()
 
             clone filterAnnotations (ai => !ai.matches(TraitSetterAnnotationClass)) // only supposed to be set in trait
 
-            if (overridden) clone setFlag OVERRIDDEN_TRAIT_SETTER
-            else if (getter.isEffectivelyFinal) clone setFlag FINAL // TODO: why isn't the FINAL_TRAIT_ACCESSOR carry-over from getter enough?
+            setClonedTraitSetterFlags(clazz, getter, clone)
 //            println(s"mixed in trait setter ${clone.defString}")
 
             List(clone)
@@ -251,20 +278,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           else if (accessorConflictsExistingVal(accessor) || isOverriddenAccessor(accessor, clazz)) Nil
           else if (accessor.isGetter && fieldMemoizationIn(accessor, clazz).needsField) {
             // add field if needed
-
             val field = clazz.newValue(accessor.localName, accessor.pos) setInfo fieldTypeForGetterIn(accessor, clazz.thisType)
 
-            val newFlags = (
-              (PrivateLocal | NEEDS_TREES)
-                | (accessor getFlag MUTABLE | LAZY)
-                | (if (accessor.hasStableFlag) 0 else MUTABLE)
-              )
+            setFieldFlags(accessor, field)
 
             // TODO: filter getter's annotations to exclude those only meant for the field
             // we must keep them around long enough to see them here, though, when we create the field
             field setAnnotations (accessor.annotations filter AnnotationInfo.mkFilter(FieldTargetClass, defaultRetention = true))
 
-            field setFlag newFlags
             List(cloneAccessor(), field)
           } else List(cloneAccessor())
         }
@@ -299,9 +320,6 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       case tp => tp
     }
   }
-
-  private def accessorImplementedInSubclass(accessor: Symbol) =
-    accessor hasAllFlags (ACCESSOR | SYNTHESIZE_IMPL_IN_SUBCLASS)
 
 
   class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
@@ -369,7 +387,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       }
 
       stat match {
-        case DefDef(_, _, _, _, _, rhs) if (rhs ne EmptyTree) && (statSym hasFlag ACCESSOR) && !(statSym hasFlag LAZY) =>
+        case DefDef(_, _, _, _, _, rhs) if (rhs ne EmptyTree) && (statSym hasFlag ACCESSOR) && !excludedAccessorOrFieldByFlags(statSym) =>
           val fieldMemoization = fieldMemoizationIn(statSym, clazz)
           def getterRhs(x: Tree) = if (fieldMemoization.effectOnly) mkTypedUnit(statSym.pos) else EmptyTree
 
@@ -388,15 +406,12 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           ) :: Nil
 
         // If a val needs a field, an empty valdef and an assignment to its rhs go into the template
-        case ValDef(mods, _, _, rhs) if (rhs ne EmptyTree) && !(statSym hasFlag LAZY) && !(mods hasFlag PRESUPER) =>
+        case ValDef(mods, _, _, rhs) if (rhs ne EmptyTree) && !excludedAccessorOrFieldByFlags(statSym) =>
           val fieldMemoization = fieldMemoizationIn(statSym, clazz)
 
           if (fieldMemoization.needsField) deriveValDef(stat)(_ => EmptyTree) :: initEffect(rhs, fieldMemoization.assignSym) :: Nil
           else if (fieldMemoization.effectOnly) initEffect(rhs, NoSymbol) :: Nil // drop the val entirely -- it could not have been referenced outside accesors
           else Nil
-
-        //    case Template(parents, self, body) =>
-        //    treeCopy.Template(tree, transformTrees(parents), transformValDef(self), transformStats(body, tree.symbol))
 
         case tree => List(
           if (exprOwner != currentOwner && tree.isTerm) atOwner(exprOwner)(super.transform(tree))
@@ -408,9 +423,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
       if (!currentOwner.isClass || currentOwner.isPackageClass || currentOwner.isInterface) super.transformStats(stats, exprOwner)
       else afterOwnPhase {
-        fieldsAndAccessors(exprOwner) ++ (stats flatMap transformStat(exprOwner))
+        fieldsAndAccessors(exprOwner) ++ (stats flatMap transformStat(exprOwner)) // TODO use thicket encoding of multi-tree transformStat?
       }
+  }
+}
 
+
+//    case Template(parents, self, body) =>
+//    treeCopy.Template(tree, transformTrees(parents), transformValDef(self), transformStats(body, tree.symbol))
 //    override def transformTemplate(tree: Template): Template = {
 ////      println(s"transforming stats in ${currentOwner}")
 //      // Skip interfaces (they have no concrete methods, so no work to be done)
@@ -423,5 +443,3 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 //      }
 //    }
 
-  }
-}
