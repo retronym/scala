@@ -189,7 +189,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           }
         }}
 
-        if (newSetters nonEmpty) {
+        if (newSetters.nonEmpty) {
 //          println(s"newSetters for $clazz = $newSetters")
           val newDecls = newScope
           origDecls  foreach newDecls.enter

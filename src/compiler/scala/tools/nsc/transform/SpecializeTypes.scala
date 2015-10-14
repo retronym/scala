@@ -1385,6 +1385,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   def specializeCalls(unit: CompilationUnit) = new TypingTransformer(unit) {
     /** Map a specializable method to its rhs, when not deferred. */
     val body = perRunCaches.newMap[Symbol, Tree]()
+    val init = perRunCaches.newMap[Symbol, Tree]()
 
     /** Map a specializable method to its value parameter symbols. */
     val parameters = perRunCaches.newMap[Symbol, List[Symbol]]()
@@ -1406,6 +1407,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           body(tree.symbol) = rhs
           // log("!!! adding body of a valdef " + tree.symbol + ": " + rhs)
           //super.traverse(tree)
+        case Template(_, _, body) =>
+          body.foreach {
+            case Assign(lhs, rhs) if concreteSpecMethods(lhs.symbol) =>
+              init(lhs.symbol) = rhs
+            case Apply(qual, rhs :: Nil) if qual.symbol.isSetter && concreteSpecMethods(qual.symbol) =>
+              init(qual.symbol) = rhs
+            case _ =>
+          }
+          super.traverse(tree)
         case _ =>
           super.traverse(tree)
       }
@@ -1861,6 +1871,21 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           }
         } else if (m.isValue) {
           mbrs += ValDef(m).setType(NoType)
+          val initForM = init.get(m.alias)
+          initForM match {
+            case Some(init) =>
+              // mbrs += Assign(gen.mkAttributedStableRef(m), )
+              val d = new SpecializationDuplicator(emptyEnv)
+              val newValDef = d.retyped(
+                localTyper.context1.asInstanceOf[d.Context],
+                Assign(gen.mkAttributedIdent(m), init.substituteThis(m.alias.owner, gen.mkAttributedThis(sClass))),
+                m.alias.enclClass,
+                m.enclClass,
+                typeEnv(m.alias) ++ typeEnv(m)
+              )
+//              mbrs += newValDef
+            case _ =>
+          }
         } else if (m.isClass) {
 //           mbrs  +=
 //              ClassDef(m, Template(m.info.parents map TypeTree, noSelfType, List())

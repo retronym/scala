@@ -515,7 +515,7 @@ trait Trees extends api.Trees {
   }
 
   case class ApplyDynamic(qual: Tree, args: List[Tree]) extends SymTree with TermTree
-
+  
   case class Super(qual: Tree, mix: TypeName) extends TermTree with SuperApi {
     override def symbol: Symbol = qual.symbol
     override def symbol_=(sym: Symbol) { qual.symbol = sym }

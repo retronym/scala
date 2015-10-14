@@ -363,7 +363,8 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
         log("merge: looking at " + stat)
         val stat1 = stat match {
           case Assign(sel @ Select(This(_), field), _) =>
-            specializedAssignFor(sel.symbol).getOrElse(stat)
+            val xxx = specializedAssignFor(sel.symbol)
+            xxx.getOrElse(stat)
           case _ => stat
         }
         if (stat1 ne stat) {
