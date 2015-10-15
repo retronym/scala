@@ -58,6 +58,12 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
     class BrowserTraverser extends Traverser {
       var packagePrefix = ""
       var entered = 0
+
+      def createPackageSymbol(pos: Position, pid: RefTree): Symbol = {
+        analyzer.newNamer(typer.context.make(pid, currentOwner)).createPackageSymbol(pos, pid)
+      }
+
+      // TODO can we just get rid of this and rely on currentOwner instead?
       def addPackagePrefix(pkg: Tree): Unit = pkg match {
         case Select(pre, name) =>
           addPackagePrefix(pre)
@@ -73,13 +79,17 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
 
       private def inPackagePrefix(pkg: Tree)(op: => Unit): Unit = {
         val oldPrefix = packagePrefix
+        val oldOwner = currentOwner
+        currentOwner = createPackageSymbol(pkg.pos, pkg.asInstanceOf[RefTree])
         addPackagePrefix(pkg)
         op
+        currentOwner = oldOwner
         packagePrefix = oldPrefix
       }
 
+      // TODO rename this to clarify what it does...
       def effectiveRoot = if (root == NoSymbol) {
-        rootMirror.getPackageIfDefined(packagePrefix).moduleClass
+        currentOwner
       } else if (packagePrefix == root.fullName) root
       else NoSymbol
 
