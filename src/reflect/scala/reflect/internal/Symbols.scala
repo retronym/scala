@@ -1672,7 +1672,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       this setFlag TRIEDCOOKING
       info  // force the current info
-      if (isJavaDefined || isType && owner.isJavaDefined)
+      if (isJavaDefined || isType && owner.isJavaDefined) // TODO we could skip this for package class symbols, which are considered as "java defined"
         this modifyInfo rawToExistential
       else if (isOverloaded)
         alternatives withFilter (_.isJavaDefined) foreach (_ modifyInfo rawToExistential)

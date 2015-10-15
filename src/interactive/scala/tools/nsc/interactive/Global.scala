@@ -8,6 +8,7 @@ package interactive
 import java.io.{ PrintWriter, StringWriter, FileReader, FileWriter }
 import scala.collection.mutable
 import mutable.{LinkedHashMap, SynchronizedMap, HashSet, SynchronizedSet}
+import scala.tools.nsc.classpath.SourceFileEntry
 import scala.tools.util.FlatClassPathResolver
 import scala.util.control.ControlThrowable
 import scala.tools.nsc.io.AbstractFile
@@ -294,6 +295,8 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     ignoredFiles -= file
     debugLog("Removed crashed file %s. Still in the ignored buffer: %s".format(file, ignoredFiles))
   }
+
+  private var sourcePathLastModified: Map[AbstractFile, Long] = Map()
 
   /** The currently active typer run */
   private var currentTyperRun: TyperRun = _
@@ -1344,10 +1347,16 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   def newTyperRun() {
     currentTyperRun = new TyperRun
-    val allSources = flatClasspath.allSources
+    val allSources: Seq[SourceFileEntry] = flatClasspath.allSources
+
     for (source <- allSources) {
-      loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
+      val currentLastModified = source.file.lastModified
+      assert(sourcePathLastModified ne null)
+      val oldLastModified = sourcePathLastModified.getOrElse(source.file, 0L)
+      if (currentLastModified != oldLastModified)
+        loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
     }
+    sourcePathLastModified = mapFrom(allSources.iterator.map(_.file).toList)(_.file.lastModified)
   }
 
   class TyperResult(val tree: Tree) extends ControlThrowable
