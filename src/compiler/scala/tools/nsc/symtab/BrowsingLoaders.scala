@@ -6,6 +6,9 @@
 package scala.tools.nsc
 package symtab
 
+import scala.reflect.internal.TypesStats._
+import scala.reflect.internal.util.Statistics
+import scala.reflect.internal.util.Statistics._
 import scala.tools.nsc.classpath.{FlatClassPath, AggregateFlatClassPath, SourceFileEntry}
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.util.FlatClassPathResolver
@@ -136,6 +139,7 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
 
   override def enterToplevelsFromSourcePath(): Unit = {
     if (enterToplevelsFromSourcePathRunId != currentRunId) {
+      val start = Statistics.startTimer(BrowsingLoaderStats.sourcePathOutlineParse)
       enterToplevelsFromSourcePathRunId = currentRunId
       val allSources = sourcePath.allSources
       for (source <- sourcePath.allSources) {
@@ -146,6 +150,8 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
           loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
       }
       sourcePathLastModified = mapFrom(allSources.iterator.map(_.file).toList)(_.file.lastModified)
+      Statistics.stopTimer(BrowsingLoaderStats.sourcePathOutlineParse, start)
+      println(BrowsingLoaderStats.sourcePathOutlineParse.line)
     }
   }
 
@@ -165,4 +171,8 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
         super.enterToplevelsFromSource(root, name, src)
     }
   }
+}
+
+object BrowsingLoaderStats {
+  val sourcePathOutlineParse = newTimer("time spent eagerly outline parsing source files on the source path", "typer")
 }
