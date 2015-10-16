@@ -140,6 +140,7 @@ abstract class SymbolLoaders {
   def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile) {
     enterClassAndModule(root, name, new SourcefileLoader(src))
   }
+  def enterToplevelsFromSourcePath(): Unit = {}
 
   /** The package objects of scala and scala.reflect should always
    *  be loaded in binary if classfiles are available, even if sourcefiles

@@ -54,5 +54,6 @@ trait RichCompilationUnits { self: Global =>
 
     /** The last fully type-checked body of this unit */
     var lastBody: Tree = EmptyTree
+    var onlyInSourcePath: Boolean = false
   }
 }

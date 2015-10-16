@@ -6,7 +6,9 @@
 package scala.tools.nsc
 package symtab
 
+import scala.tools.nsc.classpath.{FlatClassPath, AggregateFlatClassPath, SourceFileEntry}
 import scala.tools.nsc.io.AbstractFile
+import scala.tools.util.FlatClassPathResolver
 
 /** A subclass of SymbolLoaders that implements browsing behavior.
  *  This class should be used whenever file dependencies and recompile sets
@@ -80,7 +82,7 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
       private def inPackagePrefix(pkg: Tree)(op: => Unit): Unit = {
         val oldPrefix = packagePrefix
         val oldOwner = currentOwner
-        currentOwner = createPackageSymbol(pkg.pos, pkg.asInstanceOf[RefTree])
+        currentOwner = createPackageSymbol(pkg.pos, pkg.asInstanceOf[RefTree]).moduleClass
         addPackagePrefix(pkg)
         op
         currentOwner = oldOwner
@@ -88,23 +90,20 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
       }
 
       // TODO rename this to clarify what it does...
-      def effectiveRoot = if (root == NoSymbol) {
-        currentOwner
-      } else if (packagePrefix == root.fullName) root
-      else NoSymbol
+      def effectiveRoot = currentOwner
 
       override def traverse(tree: Tree): Unit = tree match {
         case PackageDef(pkg, body) =>
           inPackagePrefix(pkg) { body foreach traverse }
 
         case ClassDef(_, name, _, _) =>
-          val root = effectiveRoot
+          val root = currentOwner
           if (root.exists) {
             enterClass(root, name.toString, new SourcefileLoader(src))
             entered += 1
           } else println("prefixes differ: "+packagePrefix+","+root.fullName)
         case ModuleDef(_, name, _) =>
-          val root = effectiveRoot
+          val root = currentOwner
           if (root.exists) {
             val module = enterModule(root, name.toString, new SourcefileLoader(src))
             entered += 1
@@ -125,6 +124,29 @@ abstract class BrowsingLoaders extends GlobalSymbolLoaders {
     browser.traverse(body)
     if (browser.entered == 0)
       warning("No classes or objects found in "+source+" that go in "+root)
+  }
+
+  lazy val sourcePath: FlatClassPath = {
+    val sourcePathSettings = new Settings()
+    sourcePathSettings.sourcepath.value = settings.sourcepath.value
+    new FlatClassPathResolver(sourcePathSettings).result
+  }
+  private var sourcePathLastModified: Map[AbstractFile, Long] = Map()
+  private var enterToplevelsFromSourcePathRunId: RunId = NoRunId
+
+  override def enterToplevelsFromSourcePath(): Unit = {
+    if (enterToplevelsFromSourcePathRunId != currentRunId) {
+      enterToplevelsFromSourcePathRunId = currentRunId
+      val allSources = sourcePath.allSources
+      for (source <- sourcePath.allSources) {
+        val currentLastModified = source.file.lastModified
+        assert(sourcePathLastModified ne null)
+        val oldLastModified = sourcePathLastModified.getOrElse(source.file, 0L)
+        if (currentLastModified != oldLastModified)
+          loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
+      }
+      sourcePathLastModified = mapFrom(allSources.iterator.map(_.file).toList)(_.file.lastModified)
+    }
   }
 
   /** Enter top-level symbols from a source file

@@ -296,8 +296,6 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     debugLog("Removed crashed file %s. Still in the ignored buffer: %s".format(file, ignoredFiles))
   }
 
-  private var sourcePathLastModified: Map[AbstractFile, Long] = Map()
-
   /** The currently active typer run */
   private var currentTyperRun: TyperRun = _
   newTyperRun()
@@ -754,7 +752,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     unitOfFile(source.file) = unit
     toBeRemoved -= source.file
     toBeRemovedAfterRun -= source.file
-    reset(unit)
+    reset(unit) // TODO why reset a newly created unit?
     //parseAndEnter(unit)
   }
 
@@ -1347,16 +1345,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   def newTyperRun() {
     currentTyperRun = new TyperRun
-    val allSources: Seq[SourceFileEntry] = flatClasspath.allSources
-
-    for (source <- allSources) {
-      val currentLastModified = source.file.lastModified
-      assert(sourcePathLastModified ne null)
-      val oldLastModified = sourcePathLastModified.getOrElse(source.file, 0L)
-      if (currentLastModified != oldLastModified)
-        loaders.enterToplevelsFromSource(NoSymbol, "", source.file)
-    }
-    sourcePathLastModified = mapFrom(allSources.iterator.map(_.file).toList)(_.file.lastModified)
+    loaders.enterToplevelsFromSourcePath()
   }
 
   class TyperResult(val tree: Tree) extends ControlThrowable
