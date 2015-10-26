@@ -1878,7 +1878,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               val d = new SpecializationDuplicator(emptyEnv)
               val newValDef = d.retyped(
                 localTyper.context1.asInstanceOf[d.Context],
-                Assign(gen.mkAttributedIdent(m), init.substituteThis(m.alias.owner, gen.mkAttributedThis(sClass))),
+                Assign(gen.mkAttributedIdent(m), init.duplicate.substituteThis(m.alias.owner, gen.mkAttributedThis(sClass))),
                 m.alias.enclClass,
                 m.enclClass,
                 typeEnv(m.alias) ++ typeEnv(m)

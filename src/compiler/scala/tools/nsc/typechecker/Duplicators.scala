@@ -365,6 +365,11 @@ abstract class Duplicators extends Analyzer {
           // no need to do anything, in particular, don't set the type to null, EmptyTree.tpe_= asserts
           tree
 
+        case Assign(lhs, rhs) if context.owner.isClass =>
+          val lhs1 = typedPos(tree.pos, EXPRmode | Mode.LHSmode, WildcardType)(lhs)
+          val innerTyper = atOwner(lhs1.symbol)
+          val rhs1 = innerTyper.typedPos(tree.pos, EXPRmode | Mode.BYVALmode, lhs1.tpe)(rhs)
+          treeCopy.Assign(tree, lhs1, rhs1)
         case _ =>
           debuglog("Duplicators default case: " + tree.summaryString)
           debuglog(" ---> " + tree)
