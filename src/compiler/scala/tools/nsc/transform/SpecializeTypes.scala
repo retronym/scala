@@ -1611,7 +1611,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
         case Template(parents, self, body) =>
           def transformTemplate = {
-          val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: (implSpecClasses(body) map localTyper.typed)
+          val specMembers = makeSpecializedMembers(tree.symbol.enclClass, tree.symbol) ::: (implSpecClasses(body) map localTyper.typed)
           if (!symbol.isPackageClass)
             (new CollectMethodBodies)(tree)
           val parents1 = map2(currentOwner.info.parents, parents)((tpe, parent) =>
@@ -1834,7 +1834,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     /** Create trees for specialized members of 'sClass', based on the
      *  symbols that are already there.
      */
-    private def makeSpecializedMembers(sClass: Symbol): List[Tree] = {
+    private def makeSpecializedMembers(sClass: Symbol, exprOwner: Symbol): List[Tree] = {
       // add special overrides first
 //      if (!specializedClass.hasFlag(SPECIALIZED))
 //        for (m <- specialOverrides(specializedClass)) specializedClass.info.decls.enter(m)
@@ -1876,13 +1876,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
             case Some(init) =>
               // mbrs += Assign(gen.mkAttributedStableRef(m), )
               val d = new SpecializationDuplicator(emptyEnv)
-              val newValDef = d.retyped(
+              val newValDef = atOwner(exprOwner)(d.retyped(
                 localTyper.context1.asInstanceOf[d.Context],
-                Assign(gen.mkAttributedIdent(m), init.duplicate.substituteThis(m.alias.owner, gen.mkAttributedThis(sClass))),
+                Assign(gen.mkAttributedIdent(m), init.duplicate),
                 m.alias.enclClass,
                 m.enclClass,
                 typeEnv(m.alias) ++ typeEnv(m)
-              )
+              ))
 //              mbrs += newValDef
             case _ =>
           }
