@@ -695,6 +695,7 @@ trait StdNames {
     val freshTermName: NameType        = "freshTermName"
     val freshTypeName: NameType        = "freshTypeName"
     val get: NameType                  = "get"
+    val parameterTypes: NameType    = "parameterTypes"
     val hashCode_ : NameType           = "hashCode"
     val hash_ : NameType               = "hash"
     val head : NameType                = "head"

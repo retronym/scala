@@ -310,6 +310,20 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case app : Apply =>
           generatedType = genApply(app, expectedType)
 
+        case app @ ApplyDynamic(qual, Literal(Constant(reflectiveMethodType: MethodType)) :: Nil) if qual.symbol == MethodCacheIndy =>
+          val returnAsmType = typeToBType(qual.symbol.info.resultType).toASMType
+          val invokedType = asm.Type.getMethodType(returnAsmType)
+          val reflectiveParams = reflectiveMethodType.params.map(p => typeToBType(p.info))
+          val reflectiveParamsDescriptor = MethodBType(reflectiveParams, ObjectRef).toASMType.getDescriptor
+          mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, invokedType.getDescriptor, structuralCallSite_BoostrapHandle, reflectiveParamsDescriptor)
+
+        case app @ ApplyDynamic(qual, Literal(Constant(symname: String)) :: Nil) if qual.symbol == Symbol_apply =>
+          val symbol = app.symbol
+          val returnAsmType = typeToBType(symbol.info.resultType).toASMType
+          val invokedType = asm.Type.getMethodType(returnAsmType)
+          val name = "apply"
+          mnode.visitInvokeDynamicInsn(name, invokedType.getDescriptor, symbolLiteralBoostrapHandle, symname)
+
         case ApplyDynamic(qual, args) => sys.error("No invokedynamic support yet.")
 
         case This(qual) =>
@@ -1313,7 +1327,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       def asmType(sym: Symbol) = classBTypeFromSymbol(sym).toASMType
 
       val implMethodHandle =
-        new asm.Handle(if (lambdaTarget.hasFlag(Flags.STATIC)) asm.Opcodes.H_INVOKESTATIC else asm.Opcodes.H_INVOKEVIRTUAL,
+        new asm.Handle(if (lambdaTarget.hasFlag(Flags.STATIC)) asm.Opcodes.H_INVOKESTATIC else if (lambdaTarget.isTrait) asm.Opcodes.H_INVOKEINTERFACE else asm.Opcodes.H_INVOKEVIRTUAL,
           classBTypeFromSymbol(lambdaTarget.owner).internalName,
           lambdaTarget.name.toString,
           methodBTypeFromSymbol(lambdaTarget).descriptor)
@@ -1354,4 +1368,14 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           ArrayBType(ObjectRef)),
         coreBTypes.jliCallSiteRef
       ).descriptor)
+
+  lazy val symbolLiteralBoostrapHandle =
+    new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
+      "scala/runtime/SymbolLiteral", "bootstrap",
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
+
+  lazy val structuralCallSite_BoostrapHandle =
+    new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
+      "scala/runtime/StructuralCallSite", "bootstrap",
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
 }

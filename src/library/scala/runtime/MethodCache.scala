@@ -10,7 +10,8 @@ package scala
 package runtime
 
 
-import java.lang.reflect.{ Method => JMethod }
+import java.lang.invoke.MethodType
+import java.lang.reflect.{Method => JMethod, InvocationTargetException}
 import java.lang.{ Class => JClass }
 
 import scala.annotation.tailrec
