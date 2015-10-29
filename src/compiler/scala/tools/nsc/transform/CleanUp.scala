@@ -446,7 +446,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        *   refinement, where the refinement defines a parameter based on a
        *   type variable. */
 
-      case tree: ApplyDynamic =>
+      case tree: ApplyDynamic if !(settings.isBCodeActive && !settings.YindyStructuralCall.value && tree.qual.symbol.isStructuralRefinementMember) =>
         transformApplyDynamic(tree)
 
       /* Some cleanup transformations add members to templates (classes, traits, etc).
@@ -524,12 +524,16 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
         if treeInfo.isQualifierSafeToElide(qual) && fn.symbol == Symbol_apply && !currentClass.isTrait =>
 
         def transformApply = {
-          // add the symbol name to a map if it's not there already
-          val rhs = gen.mkMethodCall(Symbol_apply, arg :: Nil)
-          val staticFieldSym = getSymbolStaticField(tree.pos, symname, rhs, tree)
-          // create a reference to a static field
-          val ntree = typedWithPos(tree.pos)(REF(staticFieldSym))
-          super.transform(ntree)
+          if (settings.YindySymbolLiteral.value)
+            super.transform(treeCopy.ApplyDynamic(tree, fn, arg :: Nil))
+          else {
+            // add the symbol name to a map if it's not there already
+            val rhs = gen.mkMethodCall(Symbol_apply, arg :: Nil)
+            val staticFieldSym = getSymbolStaticField(tree.pos, symname, rhs, tree)
+            // create a reference to a static field
+            val ntree = typedWithPos(tree.pos)(REF(staticFieldSym))
+            super.transform(ntree)
+          }
         }
         transformApply
 
