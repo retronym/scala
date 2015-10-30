@@ -320,7 +320,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val reflectiveParamsDescriptor = MethodBType(reflectiveParams, ObjectRef).toASMType.getDescriptor
           mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, invokedType.getDescriptor, structuralCallSite_BoostrapHandle, reflectiveParamsDescriptor)
 
-        case app @ ApplyDynamic(qual, Literal(Constant(symname: String)) :: Nil) if settings.YindySymbolLiteral.value && qual.symbol == Symbol_apply =>
+        case app @ ApplyDynamic(qual, Literal(Constant(symname: String)) :: Nil) if qual.symbol == Symbol_apply =>
           val symbol = app.symbol
           val returnAsmType = typeToBType(symbol.info.resultType).toASMType
           val invokedType = asm.Type.getMethodType(returnAsmType)

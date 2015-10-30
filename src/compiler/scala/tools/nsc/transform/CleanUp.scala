@@ -448,46 +448,15 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
 
      /*
       * This transformation should identify Scala symbol invocations in the tree and replace them
-      * with references to a static member. Also, whenever a class has at least a single symbol invocation
-      * somewhere in its methods, a new static member should be created and initialized for that symbol.
-      * For instance, say we have a Scala class:
-      *
-      * class Cls {
-      *   def someSymbol1 = 'Symbolic1
-      *   def someSymbol2 = 'Symbolic2
-      *   def sameSymbol1 = 'Symbolic1
-      *   val someSymbol3 = 'Symbolic3
-      * }
-      *
-      * After transformation, this class looks like this:
-      *
-      * class Cls {
-      *   private <static> var symbol$1: scala.Symbol
-      *   private <static> var symbol$2: scala.Symbol
-      *   private <static> var symbol$3: scala.Symbol
-      *   private          val someSymbol3: scala.Symbol
-      *
-      *   private <static> def <clinit> = {
-      *     symbol$1 = Symbol.apply("Symbolic1")
-      *     symbol$2 = Symbol.apply("Symbolic2")
-      *   }
-      *
-      *   private def <init> = {
-      *     someSymbol3 = symbol$3
-      *   }
-      *
-      *   def someSymbol1 = symbol$1
-      *   def someSymbol2 = symbol$2
-      *   def sameSymbol1 = symbol$1
-      *   val someSymbol3 = someSymbol3
-      * }
+      * with references to a statically cached instance.
       *
       * The reasoning behind this transformation is the following. Symbols get interned - they are stored
       * in a global map which is protected with a lock. The reason for this is making equality checks
       * quicker. But calling Symbol.apply, although it does return a unique symbol, accesses a locked object,
       * making symbol access slow. To solve this, the unique symbol from the global symbol map in Symbol
-      * is accessed only once during class loading, and after that, the unique symbol is in the static
-      * member. Hence, it is cheap to both reach the unique symbol and do equality checks on it.
+      * is accessed only once during class loading, and after that, the unique symbol is in the statically
+      * initialized call site returned by invokedynamic. Hence, it is cheap to both reach the unique symbol
+      * and do equality checks on it.
       *
       * And, finally, be advised - Scala's Symbol literal (scala.Symbol) and the Symbol class of the compiler
       * have little in common.
@@ -495,19 +464,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       case Apply(fn @ Select(qual, _), (arg @ Literal(Constant(symname: String))) :: Nil)
         if treeInfo.isQualifierSafeToElide(qual) && fn.symbol == Symbol_apply && !currentClass.isTrait =>
 
-        def transformApply = {
-          if (settings.YindySymbolLiteral.value)
-            super.transform(treeCopy.ApplyDynamic(tree, fn, arg :: Nil))
-          else {
-            // add the symbol name to a map if it's not there already
-            val rhs = gen.mkMethodCall(Symbol_apply, arg :: Nil)
-            val staticFieldSym = getSymbolStaticField(tree.pos, symname, rhs, tree)
-            // create a reference to a static field
-            val ntree = typedWithPos(tree.pos)(REF(staticFieldSym))
-            super.transform(ntree)
-          }
-        }
-        transformApply
+        super.transform(treeCopy.ApplyDynamic(tree, fn, arg :: Nil))
 
       // Replaces `Array(Predef.wrapArray(ArrayValue(...).$asInstanceOf[...]), <tag>)`
       // with just `ArrayValue(...).$asInstanceOf[...]`
@@ -522,32 +479,6 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
 
       case _ =>
         super.transform(tree)
-    }
-
-    /* Returns the symbol and the tree for the symbol field interning a reference to a symbol 'synmname'.
-     * If it doesn't exist, i.e. the symbol is encountered the first time,
-     * it creates a new static field definition and initialization and returns it.
-     */
-    private def getSymbolStaticField(pos: Position, symname: String, rhs: Tree, tree: Tree): Symbol = {
-      symbolsStoredAsStatic.getOrElseUpdate(symname, {
-        val theTyper = typer.atOwner(tree, currentClass)
-
-        // create a symbol for the static field
-        val stfieldSym = (
-          currentClass.newVariable(mkTerm("symbol$"), pos, PRIVATE | STATIC | SYNTHETIC | FINAL)
-            setInfoAndEnter SymbolClass.tpe
-        )
-
-        // create field definition and initialization
-        val stfieldDef  = theTyper.typedPos(pos)(ValDef(stfieldSym, rhs))
-        val stfieldInit = theTyper.typedPos(pos)(REF(stfieldSym) === rhs)
-
-        // add field definition to new defs
-        newStaticMembers append stfieldDef
-        newStaticInits append stfieldInit
-
-        stfieldSym
-      })
     }
 
   } // CleanUpTransformer
