@@ -454,6 +454,12 @@ trait Definitions extends api.StandardDefinitions {
     lazy val MethodCacheClass       = requiredClass[scala.runtime.MethodCache]
       def methodCache_find          = getMemberMethod(MethodCacheClass, nme.find_)
       def methodCache_add           = getMemberMethod(MethodCacheClass, nme.add_)
+    // Marker for invokedynamic runtime.StructuralCall.bootstrap
+    lazy val MethodCacheIndy        = NoSymbol.newMethodSymbol(TermName("mkMethodCache")).setInfo(NullaryMethodType(StructuralCallSite.tpe))
+    lazy val StructuralCallSite    = getClassIfDefined("scala.runtime.StructuralCallSite")
+      def StructuralCallSite_find              = getMemberMethod(StructuralCallSite, nme.find_)
+      def StructuralCallSite_add               = getMemberMethod(StructuralCallSite, nme.add_)
+      def StructuralCallSite_getParameterTypes = getMemberMethod(StructuralCallSite, nme.parameterTypes)
 
     // XML
     lazy val ScalaXmlTopScope = getModuleIfDefined("scala.xml.TopScope")

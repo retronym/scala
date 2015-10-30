@@ -184,7 +184,8 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
     def visitAnnotationss(annotss: Array[java.util.List[AnnotationNode]]) = if (annotss != null) annotss foreach visitAnnotations
 
     def visitHandle(handle: Handle): Unit = {
-      visitInternalNameOrArrayReference(handle.getOwner)
+      if (handle.getOwner != "scala/runtime/LambdaDeserialize")
+        visitInternalNameOrArrayReference(handle.getOwner)
       visitDescriptor(handle.getDesc)
     }
 

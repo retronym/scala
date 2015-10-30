@@ -313,16 +313,12 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case app : Apply =>
           generatedType = genApply(app, expectedType)
 
-        case app @ ApplyDynamic(qual, args) if settings.YindyStructuralCall.value && app.symbol.owner.isRefinementClass =>
-          genLoad(qual)
-          val symbol = app.symbol
-          val paramTypes = symbol.info.paramTypes map typeToBType
-          genLoadArguments(args, paramTypes)
-          val argAsmTypes = symbol.info.params.map(symInfoTK).map(_.toASMType)
-          val returnAsmType = typeToBType(symbol.info.resultType).toASMType
-          val invokedType = asm.Type.getMethodType(returnAsmType, typeToBType(qual.tpe).toASMType +: argAsmTypes: _*)
-          val name = symbol.name.encoded
-          mnode.visitInvokeDynamicInsn(name, invokedType.getDescriptor, structuralCallBoostrapHandle)
+        case app @ ApplyDynamic(qual, Literal(Constant(reflectiveMethodType: MethodType)) :: Nil) if qual.symbol == MethodCacheIndy =>
+          val returnAsmType = typeToBType(qual.symbol.info.resultType).toASMType
+          val invokedType = asm.Type.getMethodType(returnAsmType)
+          val reflectiveParams = reflectiveMethodType.params.map(p => typeToBType(p.info))
+          val reflectiveParamsDescriptor = MethodBType(reflectiveParams, ObjectRef).toASMType.getDescriptor
+          mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, invokedType.getDescriptor, structuralCallSite_BoostrapHandle, reflectiveParamsDescriptor)
 
         case app @ ApplyDynamic(qual, Literal(Constant(symname: String)) :: Nil) if settings.YindySymbolLiteral.value && qual.symbol == Symbol_apply =>
           val symbol = app.symbol
@@ -1364,8 +1360,8 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       "scala/runtime/SymbolLiteral", "bootstrap",
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
 
-  lazy val structuralCallBoostrapHandle =
+  lazy val structuralCallSite_BoostrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "scala/runtime/StructuralCall", "bootstrap",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
+      "scala/runtime/StructuralCallSite", "bootstrap",
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
 }

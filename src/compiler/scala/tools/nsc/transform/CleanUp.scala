@@ -85,24 +85,6 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
 
         /* ### CREATING THE METHOD CACHE ### */
 
-        def addStaticVariableToClass(forName: TermName, forType: Type, forInit: Tree, isFinal: Boolean): Symbol = {
-          val flags = PRIVATE | STATIC | SYNTHETIC | (
-            if (isFinal) FINAL else 0
-          )
-
-          val varSym = currentClass.newVariable(mkTerm("" + forName), ad.pos, flags.toLong) setInfoAndEnter forType
-          if (!isFinal)
-            varSym.addAnnotation(VolatileAttr)
-
-          val varDef = typedPos(ValDef(varSym, forInit))
-          newStaticMembers append transform(varDef)
-
-          val varInit = typedPos( REF(varSym) === forInit )
-          newStaticInits append transform(varInit)
-
-          varSym
-        }
-
         def addStaticMethodToClass(forBody: (Symbol, Symbol) => Tree): Symbol = {
           val methSym = currentClass.newMethod(mkTerm(nme.reflMethodName.toString), ad.pos, STATIC | SYNTHETIC)
           val params  = methSym.newSyntheticValueParams(List(ClassClass.tpe))
@@ -112,9 +94,6 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
           newStaticMembers append transform(methDef)
           methSym
         }
-
-        def fromTypesToClassArrayLiteral(paramTypes: List[Type]): Tree =
-          ArrayValue(TypeTree(ClassClass.tpe), paramTypes map LIT)
 
         def reflectiveMethodCache(method: String, paramTypes: List[Type]): Symbol = {
           /* Implementation of the cache is as follows for method "def xyz(a: A, b: B)"
@@ -126,7 +105,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
             var reflPoly$Cache: SoftReference[scala.runtime.MethodCache] = new SoftReference(new EmptyMethodCache())
 
             def reflMethod$Method(forReceiver: JClass[_]): JMethod = {
-              var methodCache: MethodCache = reflPoly$Cache.find(forReceiver)
+              var methodCache: StructuralCallSite = indy[StructuralCallSite.bootstrap, "(LA;LB;)Ljava/lang/Object;]
               if (methodCache eq null) {
                 methodCache = new EmptyMethodCache
                 reflPoly$Cache = new SoftReference(methodCache)
@@ -135,41 +114,32 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
               if (method ne null)
                 return method
               else {
-                method = ScalaRunTime.ensureAccessible(forReceiver.getMethod("xyz", reflParams$Cache))
-                reflPoly$Cache = new SoftReference(methodCache.add(forReceiver, method))
+                method = ScalaRunTime.ensureAccessible(forReceiver.getMethod("xyz", methodCache.parameterTypes()))
+                methodCache.add(forReceiver, method)
                 return method
               }
             }
+
+            invokedynamic is used rather than a static field for the cache to support emitting bodies of methods
+            in Java 8 interfaces, which don't support static fields.
           */
 
-          val reflParamsCacheSym: Symbol =
-            addStaticVariableToClass(nme.reflParamsCacheName, arrayType(ClassClass.tpe), fromTypesToClassArrayLiteral(paramTypes), true)
-
-          def mkNewPolyCache = gen.mkSoftRef(NEW(TypeTree(EmptyMethodCacheClass.tpe)))
-          val reflPolyCacheSym: Symbol = addStaticVariableToClass(nme.reflPolyCacheName, SoftReferenceClass.tpe, mkNewPolyCache, false)
-
-          def getPolyCache = gen.mkCast(fn(REF(reflPolyCacheSym), nme.get), MethodCacheClass.tpe)
-
           addStaticMethodToClass((reflMethodSym, forReceiverSym) => {
-            val methodCache = reflMethodSym.newVariable(mkTerm("methodCache"), ad.pos) setInfo MethodCacheClass.tpe
+            val methodCache = reflMethodSym.newVariable(mkTerm("methodCache"), ad.pos) setInfo StructuralCallSite.tpe
             val methodSym = reflMethodSym.newVariable(mkTerm("method"), ad.pos) setInfo MethodClass.tpe
 
+            val dummyMethodType = MethodType(NoSymbol.newSyntheticValueParams(paramTypes), AnyTpe)
             BLOCK(
-              ValDef(methodCache, getPolyCache),
-              IF (REF(methodCache) OBJ_EQ NULL) THEN BLOCK(
-                REF(methodCache) === NEW(TypeTree(EmptyMethodCacheClass.tpe)),
-                REF(reflPolyCacheSym) === gen.mkSoftRef(REF(methodCache))
-              ) ENDIF,
-
-              ValDef(methodSym, (REF(methodCache) DOT methodCache_find)(REF(forReceiverSym))),
+              ValDef(methodCache, ApplyDynamic(gen.mkAttributedIdent(MethodCacheIndy), LIT(dummyMethodType) :: Nil).setType(StructuralCallSite.tpe)),
+              ValDef(methodSym, (REF(methodCache) DOT StructuralCallSite_find)(REF(forReceiverSym))),
               IF (REF(methodSym) OBJ_NE NULL) .
                 THEN (Return(REF(methodSym)))
               ELSE {
-                def methodSymRHS  = ((REF(forReceiverSym) DOT Class_getMethod)(LIT(method), REF(reflParamsCacheSym)))
-                def cacheRHS      = ((REF(methodCache) DOT methodCache_add)(REF(forReceiverSym), REF(methodSym)))
+                def methodSymRHS  = ((REF(forReceiverSym) DOT Class_getMethod)(LIT(method), (REF(methodCache) DOT StructuralCallSite_getParameterTypes)()))
+                def cacheAdd      = ((REF(methodCache) DOT StructuralCallSite_add)(REF(forReceiverSym), REF(methodSym)))
                 BLOCK(
                   REF(methodSym)        === (REF(currentRun.runDefinitions.ensureAccessibleMethod) APPLY (methodSymRHS)),
-                  REF(reflPolyCacheSym) === gen.mkSoftRef(cacheRHS),
+                  cacheAdd,
                   Return(REF(methodSym))
                 )
               }
@@ -369,6 +339,8 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
                   reporter.error(ad.pos, "Cannot resolve overload.")
                   (Nil, NoType)
               }
+            case NoType =>
+              abort(ad.symbol.toString)
           }
           typedPos {
             val sym = currentOwner.newValue(mkTerm("qual"), ad.pos) setInfo qual0.tpe
@@ -446,7 +418,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        *   refinement, where the refinement defines a parameter based on a
        *   type variable. */
 
-      case tree: ApplyDynamic if !(settings.isBCodeActive && settings.YindyStructuralCall.value && tree.symbol.owner.isRefinementClass) =>
+      case tree: ApplyDynamic if tree.symbol.owner.isRefinementClass =>
         transformApplyDynamic(tree)
 
       /* Some cleanup transformations add members to templates (classes, traits, etc).
