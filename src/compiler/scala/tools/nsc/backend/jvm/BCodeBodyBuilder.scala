@@ -313,7 +313,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case app : Apply =>
           generatedType = genApply(app, expectedType)
 
-        case app @ ApplyDynamic(qual, args) if settings.YindyStructuralCall.value && qual.symbol.isStructuralRefinementMember =>
+        case app @ ApplyDynamic(qual, args) if settings.YindyStructuralCall.value && app.symbol.owner.isRefinementClass =>
           genLoad(qual)
           val symbol = app.symbol
           val paramTypes = symbol.info.paramTypes map typeToBType
@@ -321,8 +321,8 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val argAsmTypes = symbol.info.params.map(symInfoTK).map(_.toASMType)
           val returnAsmType = typeToBType(symbol.info.resultType).toASMType
           val invokedType = asm.Type.getMethodType(returnAsmType, typeToBType(qual.tpe).toASMType +: argAsmTypes: _*)
-          val name = "dyn:callMethod:" + symbol.name
-          mnode.visitInvokeDynamicInsn(name, invokedType.getDescriptor, dynalinkBoostrapHandle)
+          val name = symbol.name.encoded
+          mnode.visitInvokeDynamicInsn(name, invokedType.getDescriptor, structuralCallBoostrapHandle)
 
         case app @ ApplyDynamic(qual, Literal(Constant(symname: String)) :: Nil) if settings.YindySymbolLiteral.value && qual.symbol == Symbol_apply =>
           val symbol = app.symbol
@@ -1359,16 +1359,14 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       definitions.LambdaMetaFactory.fullName('/'), sn.AltMetafactory.toString,
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;[Ljava/lang/Object;)Ljava/lang/invoke/CallSite;")
 
-  // TODO use custom boostrap method in our runtime that employs ChainedCallSite to cache recently used linkage results
-  // TODO use "org.dynalang" % "dynalink" rather than relying on Nashorn internals
-  lazy val dynalinkBoostrapHandle =
-    new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "jdk/internal/dynalink/DefaultBootstrapper", "bootstrap",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
-
   lazy val symbolLiteralBoostrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
       "scala/runtime/SymbolLiteral", "bootstrap",
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
+
+  lazy val structuralCallBoostrapHandle =
+    new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
+      "scala/runtime/StructuralCall", "bootstrap",
+      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
 
 }

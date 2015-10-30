@@ -10,7 +10,7 @@ package scala
 package runtime
 
 
-import java.lang.reflect.{ Method => JMethod }
+import java.lang.reflect.{Method => JMethod, InvocationTargetException}
 import java.lang.{ Class => JClass }
 
 import scala.annotation.tailrec
@@ -30,6 +30,33 @@ private[scala] sealed abstract class MethodCache {
    *  the cache for later use. */
   def find(forReceiver: JClass[_]): JMethod
   def add(forReceiver: JClass[_], forMethod: JMethod): MethodCache
+}
+
+private[scala] class MethodCacheRef(name: String, params: Array[Class[_]]) {
+  import java.lang.ref.SoftReference
+  private[this] var reflPoly$Cache = new SoftReference[MethodCache](new EmptyMethodCache)
+  def apply(forReceiver: JClass[_]): JMethod = {
+    var methodCache: MethodCache = reflPoly$Cache.get
+    if (methodCache eq null) {
+      methodCache = new EmptyMethodCache
+      reflPoly$Cache = new SoftReference(methodCache)
+    }
+    var method: JMethod = methodCache.find(forReceiver)
+    if (method ne null)
+      method
+    else {
+      method = ScalaRunTime.ensureAccessible(forReceiver.getMethod(name, params : _*))
+      reflPoly$Cache = new SoftReference(methodCache.add(forReceiver, method))
+      method
+    }
+  }
+  def invoke(receiver: Object, args: Array[Object]): Object = {
+    try {
+      this(receiver.getClass).invoke(receiver, args : _*)
+    } catch {
+      case e: InvocationTargetException => throw e.getCause
+    }
+  }
 }
 
 private[scala] final class EmptyMethodCache extends MethodCache {

@@ -446,7 +446,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        *   refinement, where the refinement defines a parameter based on a
        *   type variable. */
 
-      case tree: ApplyDynamic if !(settings.isBCodeActive && !settings.YindyStructuralCall.value && tree.qual.symbol.isStructuralRefinementMember) =>
+      case tree: ApplyDynamic if !(settings.isBCodeActive && settings.YindyStructuralCall.value && tree.symbol.owner.isRefinementClass) =>
         transformApplyDynamic(tree)
 
       /* Some cleanup transformations add members to templates (classes, traits, etc).
