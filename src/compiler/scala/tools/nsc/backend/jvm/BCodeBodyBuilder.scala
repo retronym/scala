@@ -1368,5 +1368,4 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
       "scala/runtime/StructuralCall", "bootstrap",
       "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
-
 }
