@@ -6,17 +6,24 @@ import java.util.Arrays;
 import java.util.HashMap;
 
 public final class LambdaDeserialize {
-    private LambdaDeserialize() {
+
+    private MethodHandles.Lookup lookup;
+    private final HashMap<String, MethodHandle> cache = new HashMap<>();
+    private final LambdaDeserializer$ l = LambdaDeserializer$.MODULE$;
+
+    private LambdaDeserialize(MethodHandles.Lookup lookup) {
+        this.lookup = lookup;
+    }
+
+    public Object deserializeLambda(SerializedLambda serialized) {
+        return l.deserializeLambda(lookup, cache, serialized);
     }
 
     public static CallSite bootstrap(MethodHandles.Lookup lookup, String invokedName,
                                      MethodType invokedType) throws Throwable {
-        HashMap<String, MethodHandle> cache = new HashMap<>();
-        LambdaDeserializer$ l = LambdaDeserializer$.MODULE$;
-        MethodType type = MethodType.fromMethodDescriptorString("(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/util/Map;Ljava/lang/invoke/SerializedLambda;)Ljava/lang/Object;", lookup.getClass().getClassLoader());
-        MethodHandle deserializeLambda = lookup.findVirtual(LambdaDeserializer$.class, "deserializeLambda", type);
-        MethodHandle bound = deserializeLambda.bindTo(l).bindTo(lookup).bindTo(cache);
-        MethodHandle exact = bound.asType(invokedType);
+        MethodType type = MethodType.fromMethodDescriptorString("(Ljava/lang/invoke/SerializedLambda;)Ljava/lang/Object;", lookup.getClass().getClassLoader());
+        MethodHandle deserializeLambda = lookup.findVirtual(LambdaDeserialize.class, "deserializeLambda", type);
+        MethodHandle exact = deserializeLambda.bindTo(new LambdaDeserialize(lookup)).asType(invokedType);
         return new ConstantCallSite(exact);
     }
 }
