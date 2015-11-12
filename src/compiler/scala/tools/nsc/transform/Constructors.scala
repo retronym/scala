@@ -631,7 +631,9 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           // The primary constructor is dealt with separately (we're massaging it here).
           case _: DefDef if statSym.isPrimaryConstructor => ()
           case _: DefDef if statSym.isConstructor => auxConstructorBuf += stat
-          case _: DefDef => defBuf += stat
+          case stat: DefDef =>
+              defBuf += stat
+
 
           // If a val needs a field, an empty valdef goes into the template.
           // Except for lazy and ConstantTyped vals, the field is initialized by an assignment in:
@@ -641,7 +643,7 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           case ValDef(mods, _, _, rhs) =>
             if (rhs ne EmptyTree) {
               val emitField = memoizeValue(statSym)
-              moveEffectToCtor(mods, rhs, if (emitField) statSym else NoSymbol)
+              moveEffectToCtor(mods, rhs, if (emitField) statSym else NoSymbol) // TODO: ever NoSymbol?
               if (emitField) defBuf += deriveValDef(stat)(_ => EmptyTree)
             } else defBuf += stat
 
