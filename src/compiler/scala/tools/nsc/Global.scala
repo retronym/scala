@@ -461,10 +461,18 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     val runsRightAfter = None
   } with ExtensionMethods
 
+  // phaseName = "fields"
+  object fields extends {
+    val global: Global.this.type = Global.this
+    // somewhere between typers, before erasure (so we get bridges for getters) and pickler (separate compilation of trait with fields and subclass)
+    val runsAfter = List("extmethods")
+    val runsRightAfter = None
+  } with Fields
+
   // phaseName = "pickler"
   object pickler extends {
     val global: Global.this.type = Global.this
-    val runsAfter = List("extmethods")
+    val runsAfter = List("fields")
     val runsRightAfter = None
   } with Pickler
 
@@ -608,7 +616,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
    *  This implementation creates a description map at the same time.
    */
   protected def computeInternalPhases(): Unit = {
-    // Note: this fits -Xshow-phases into 80 column width, which it is
+    // Note: this fits -Xshow-phases into 80 column width, which is
     // desirable to preserve.
     val phs = List(
       syntaxAnalyzer          -> "parse source into ASTs, perform simple desugaring",
@@ -618,6 +626,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       patmat                  -> "translate match expressions",
       superAccessors          -> "add super accessors in traits and nested classes",
       extensionMethods        -> "add extension methods for inline classes",
+      fields                  -> "synthesize accessors and fields",
       pickler                 -> "serialize symbol tables",
       refChecks               -> "reference/override checking, translate nested objects",
       uncurry                 -> "uncurry, translate function values to anonymous classes",

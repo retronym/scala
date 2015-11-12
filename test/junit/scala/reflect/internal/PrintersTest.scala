@@ -142,7 +142,7 @@ trait BasePrintTests {
     |else
     |  ((a.toString): String)""",
     typedCode=sm"""
-    |val a = 1;
+    |val a: Int = 1;
     |if (PrintersContext.this.a.>(1))
     |  ((PrintersContext.this.a): scala.Int)
     |else
@@ -853,7 +853,7 @@ trait TraitPrintTests {
 
   @Test def testTraitWithSelf2 = assertPrintedCode(sm"""
     |trait X { self: scala.Cloneable with scala.Serializable =>
-    |  val x: scala.Int = 1
+    |  val x: Int = 1
     |}""")
 
   @Test def testTraitTypeParams = assertPrintedCode("trait X[A, B]")
@@ -892,7 +892,7 @@ trait TraitPrintTests {
     |  type Foo;
     |  type XString = scala.Predef.String
     |} with scala.Serializable {
-    |  val z = 7
+    |  val z: Int = 7
     |}""")
 
   @Test def testTraitWithSingletonTypeTree = assertPrintedCode(sm"""
