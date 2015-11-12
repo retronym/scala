@@ -8,6 +8,8 @@
 
 package scala
 
+import scala.annotation.meta._
+
 /** An annotation that designates that overriding a member is deprecated.
  *
  *  Overriding such a member in  a sub-class then generates a warning.
@@ -17,4 +19,5 @@ package scala
  *  @since  2.10
  *  @see    [[scala.deprecatedInheritance]]
  */
+@getter @setter @beanGetter @beanSetter
 class deprecatedOverriding(message: String = "", since: String = "") extends scala.annotation.StaticAnnotation

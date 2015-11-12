@@ -96,8 +96,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def isByNameParam: Boolean = this.isValueParameter && (this hasFlag BYNAMEPARAM)
     def isImplementationArtifact: Boolean = (this hasFlag BRIDGE) || (this hasFlag VBRIDGE) || (this hasFlag ARTIFACT)
     def isJava: Boolean = isJavaDefined
-    def isVal: Boolean = isTerm && !isModule && !isMethod && !isMutable
-    def isVar: Boolean = isTerm && !isModule && !isMethod && !isLazy && isMutable
+
+    def isField: Boolean = isTerm && !isModule && (!isMethod || owner.isTrait && isAccessor)
+    def isMutableVal = if (owner.isTrait) !hasFlag(STABLE) else isMutable
+    def isVal: Boolean = isField && !isMutableVal
+    def isVar: Boolean = isField && !isLazy && isMutableVal
+
     def isAbstract: Boolean = isAbstractClass || isDeferred || isAbstractType
     def isPrivateThis = (this hasFlag PRIVATE) && (this hasFlag LOCAL)
     def isProtectedThis = (this hasFlag PROTECTED) && (this hasFlag LOCAL)
@@ -2057,7 +2061,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       assert(hasAccessorFlag, this)
       val localField = owner.info decl localName
 
-      if (localField == NoSymbol && this.hasFlag(MIXEDIN)) {
+      if (localField == NoSymbol && this.hasFlag(MIXEDIN)) { // TODO: fields phase does not (yet?) add MIXEDIN in setMixedinAccessorFlags
         // SI-8087: private[this] fields don't have a `localName`. When searching the accessed field
         // for a mixin accessor of such a field, we need to look for `name` instead.
         // The phase travel ensures that the field is found (`owner` is the trait class symbol, the
@@ -2103,8 +2107,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** If this is a lazy value, the lazy accessor; otherwise this symbol. */
     def lazyAccessorOrSelf: Symbol = if (isLazy) lazyAccessor else this
 
-    /** If this is an accessor, the accessed symbol.  Otherwise, this symbol. */
-    def accessedOrSelf: Symbol = if (hasAccessorFlag) accessed else this
+    /** `accessed`, if this is an accessor that should have an underlying field. Otherwise, `this`.
+      *  Note that a "regular" accessor in a trait does not have a field, as an interface cannot define a field.
+      *  "non-regular" vals are: early initialized or lazy vals.
+      *  Eventually, we should delay introducing symbols for all val/vars until the fields (or lazyvals) phase,
+      *  as they are an implementation detail that's irrelevant to type checking.
+      */
+    def accessedOrSelf: Symbol =
+      if (hasAccessorFlag && (!owner.isTrait || hasFlag(PRESUPER | LAZY))) accessed
+      else this
 
     /** For an outer accessor: The class from which the outer originates.
      *  For all other symbols: NoSymbol

@@ -423,9 +423,9 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             overrideError("cannot be used here - class definitions cannot be overridden")
           } else if (!other.isDeferred && member.isClass) {
             overrideError("cannot be used here - classes can only override abstract types")
-          } else if (other.isEffectivelyFinal) { // (1.2)
+          } else if (other.isEffectivelyFinal && !other.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS)) { // (1.2)
             overrideError("cannot override final member")
-          } else if (!other.isDeferredOrJavaDefault && !other.hasFlag(JAVA_DEFAULTMETHOD) && !member.isAnyOverride && !member.isSynthetic) { // (*)
+          } else if (!other.isDeferredOrJavaDefault && !other.hasFlag(JAVA_DEFAULTMETHOD) && !member.isAnyOverride && !member.isSynthetic && !other.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS)) { // (*)
             // (*) Synthetic exclusion for (at least) default getters, fixes SI-5178. We cannot assign the OVERRIDE flag to
             // the default getter: one default getter might sometimes override, sometimes not. Example in comment on ticket.
               if (isNeitherInClass && !(other.owner isSubClass member.owner))
@@ -465,7 +465,8 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             overrideError("cannot be used here - only term macros can override term macros")
           } else {
             checkOverrideTypes()
-            checkOverrideDeprecated()
+            if (!other.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS))
+              checkOverrideDeprecated()
             if (settings.warnNullaryOverride) {
               if (other.paramss.isEmpty && !member.paramss.isEmpty) {
                 reporter.warning(member.pos, "non-nullary method overrides nullary method")
@@ -1131,22 +1132,16 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       case _ =>
     }
 
-    // SI-6276 warn for `def foo = foo` or `val bar: X = bar`, which come up more frequently than you might think.
-    def checkInfiniteLoop(valOrDef: ValOrDefDef) {
-      def callsSelf = valOrDef.rhs match {
-        case t @ (Ident(_) | Select(This(_), _)) =>
-          t hasSymbolWhich (_.accessedOrSelf == valOrDef.symbol)
-        case _ => false
+    // SI-6276 warn for trivial recursion, such as `def foo = foo` or `val bar: X = bar`, which come up more frequently than you might think.
+    // TODO: Move to abide rule. Also, this does not check that the def is final or not overridden, for example
+    def checkInfiniteLoop(sym: Symbol, rhs: Tree): Unit =
+      if (!sym.isValueParameter && sym.paramss.isEmpty) {
+        rhs match {
+          case t@(Ident(_) | Select(This(_), _)) if t hasSymbolWhich (_.accessedOrSelf == sym) =>
+            reporter.warning(rhs.pos, s"${sym.fullLocationString} does nothing other than call itself recursively")
+          case _ =>
+        }
       }
-      val trivialInfiniteLoop = (
-        !valOrDef.isErroneous
-     && !valOrDef.symbol.isValueParameter
-     && valOrDef.symbol.paramss.isEmpty
-     && callsSelf
-      )
-      if (trivialInfiniteLoop)
-        reporter.warning(valOrDef.rhs.pos, s"${valOrDef.symbol.fullLocationString} does nothing other than call itself recursively")
-    }
 
 // Transformation ------------------------------------------------------------
 
@@ -1480,7 +1475,21 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       tree match {
         case m: MemberDef =>
           val sym = m.symbol
-          applyChecks(sym.annotations)
+          val allAnnots = sym.annotations
+
+          // drop field-targeting annotations from getters
+          // (in traits, getters must also hold annotations that target the underlying field,
+          //  because the latter won't be created until the trait is mixed into a class)
+          // TODO do bean getters need special treatment to suppress field-targeting annotations in traits?
+          val annots =
+            if (sym.isGetter && sym.owner.isTrait) {
+              val annots = allAnnots filter AnnotationInfo.mkFilter(GetterTargetClass, defaultRetention = false)
+//              if (annots != allAnnots) println(s"filtering for $sym: $allAnnots to $annots")
+              sym setAnnotations annots
+              annots
+            } else allAnnots
+
+          applyChecks(annots)
 
           def messageWarning(name: String)(warn: String) =
             reporter.warning(tree.pos, f"Invalid $name message for ${sym}%s${sym.locationString}%s:%n$warn")
@@ -1654,9 +1663,13 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             sym resetFlag DEFERRED
             transform(deriveDefDef(tree)(_ => typed(gen.mkSysErrorCall("native method stub"))))
 
-          case ValDef(_, _, _, _) | DefDef(_, _, _, _, _, _) =>
+          // NOTE: a val in a trait is now a DefDef, with the RHS being moved to an Assign in AddInterfaces
+          case tree: ValOrDefDef =>
             checkDeprecatedOvers(tree)
-            checkInfiniteLoop(tree.asInstanceOf[ValOrDefDef])
+
+            if (!tree.isErroneous)
+              checkInfiniteLoop(tree.symbol, tree.rhs)
+
             if (settings.warnNullaryUnit)
               checkNullaryMethodReturnType(sym)
             if (settings.warnInaccessible) {

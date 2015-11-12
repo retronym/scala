@@ -58,6 +58,9 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
   def needsImplMethod(sym: Symbol) = (
        sym.isMethod
     && isInterfaceMember(sym)
+       // SYNTHESIZE_IMPL_IN_SUBCLASS accessors are mixed in by the fields phase, but others should be treated as regulars methods
+       // (this will eventually include constant-typed getters, as they can be fully implemented in the interface)
+    && (!(sym hasFlag ACCESSOR) || sym.isLazy || !(sym hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS))
     && (!sym.hasFlag(DEFERRED | SUPERACCESSOR) || (sym hasFlag lateDEFERRED))
   )
 
@@ -243,13 +246,25 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
   }
 
   private def isInterfaceTree(tree: Tree) = tree.isDef && isInterfaceMember(tree.symbol)
+  private def isMemoizedTraitGetter(tree: Tree) = (tree.symbol hasFlag SYNTHESIZE_IMPL_IN_SUBCLASS) && tree.symbol.isGetter && !tree.symbol.info.resultType.isInstanceOf[ConstantType]
 
-  private def deriveMemberForImplClass(tree: Tree): Tree  =
-    if (isInterfaceTree(tree)) if (needsImplMethod(tree.symbol)) implMethodDef(tree)            else EmptyTree
+  private def mkAssign(clazz: Symbol, assignSym: Symbol, rhs: Tree): Tree = {
+    val qual = Select(This(clazz), assignSym)
+    if (assignSym.isSetter) Apply(qual, List(rhs))
+    else Assign(qual, rhs)
+  }
+
+  private def deriveMemberForImplClass(clazz: Symbol, iface: Symbol, exprOwner: Symbol)(tree: Tree): Tree  =
+    if (isInterfaceTree(tree))
+      if (needsImplMethod(tree.symbol)) implMethodDef(tree)
+      else if (isMemoizedTraitGetter(tree)) mkAssign(clazz, tree.symbol.setterIn(iface), tree.asInstanceOf[DefDef].rhs.changeOwner(tree.symbol -> exprOwner))
+      else EmptyTree
     else tree
 
   private def deriveMemberForInterface(tree: Tree): Tree =
-    if (isInterfaceTree(tree)) if (needsImplMethod(tree.symbol)) DefDef(tree.symbol, EmptyTree) else tree
+    if (isInterfaceTree(tree))
+      if (needsImplMethod(tree.symbol) || isMemoizedTraitGetter(tree)) DefDef(tree.symbol, EmptyTree) // TODO: use deriveDefDef(tree)(_ => EmptyTree) ?
+      else tree
     else EmptyTree
 
   private def ifaceTemplate(templ: Template): Template =
@@ -282,20 +297,22 @@ abstract class AddInterfaces extends InfoTransform { self: Erasure =>
     if (treeInfo.firstConstructor(stats) != EmptyTree) stats
     else DefDef(clazz.primaryConstructor, Block(List(), Literal(Constant(())))) :: stats
 
-  private def implTemplate(clazz: Symbol, templ: Template): Template = atPos(templ.pos) {
-    val templ1 = (
-      Template(templ.parents, noSelfType, addMixinConstructorDef(clazz, templ.body map deriveMemberForImplClass))
-        setSymbol clazz.newLocalDummy(templ.pos)
-    )
-    templ1.changeOwner(templ.symbol.owner -> clazz, templ.symbol -> templ1.symbol)
-    templ1
+  private def implTemplate(clazz: Symbol, iface: ClassDef): Template = atPos(iface.impl.pos) {
+    val templ     = iface.impl
+    val exprOwner = clazz.newLocalDummy(templ.pos)
+    val derivedImplClassMembers = templ.body map deriveMemberForImplClass(clazz, iface.symbol, exprOwner)
+    val templWithMixedinMembers = Template(templ.parents, noSelfType, addMixinConstructorDef(clazz, derivedImplClassMembers))
+
+    templWithMixedinMembers setSymbol exprOwner
+    templWithMixedinMembers changeOwner (templ.symbol.owner -> clazz, templ.symbol -> exprOwner)
+    templWithMixedinMembers
   }
 
   def implClassDefs(trees: List[Tree]): List[Tree] = {
     trees collect {
       case cd: ClassDef if cd.symbol.needsImplClass =>
         val clazz = implClass(cd.symbol).initialize
-        ClassDef(clazz, implTemplate(clazz, cd.impl))
+        ClassDef(clazz, implTemplate(clazz, cd))
     }
   }
 

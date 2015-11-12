@@ -7,6 +7,7 @@ package scala.tools.nsc
 package typechecker
 
 import scala.collection.mutable
+import scala.annotation.tailrec
 import symtab.Flags._
 import scala.language.postfixOps
 import scala.reflect.internal.util.ListOfNil
@@ -116,10 +117,10 @@ trait Namers extends MethodSynthesis {
     }
 
     // All lazy vals need accessors, including those owned by terms (e.g., in method) or private[this] in a class
-    def deriveAccessors(vd: ValDef) = vd.mods.isLazy || (owner.isClass && deriveAccessorsInClass(vd))
+    def deriveAccessors(vd: ValDef) = (vd.mods.isLazy || owner.isTrait || (owner.isClass && deriveAccessorsInClass(vd)))
 
     private def deriveAccessorsInClass(vd: ValDef) =
-      !vd.mods.isPrivateLocal &&         // note, private[this] lazy vals do get accessors -- see outer disjunction of deriveAccessors
+      !vd.mods.isPrivateLocal && // note, private[this] lazy vals do get accessors -- see outer disjunction of deriveAccessors
       !(vd.name startsWith nme.OUTER) && // outer accessors are added later, in explicitouter
       !isEnumConstant(vd)                // enums can only occur in classes, so only check here
 
