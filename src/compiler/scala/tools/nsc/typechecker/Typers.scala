@@ -1056,13 +1056,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
            */
           if (context.unit.isJava) {
             //context.warning(tree.pos, s"${pt} ${pt.typeSymbol == ArrayClass},  ${tree.tpe} ${definitions.elementType(ArrayClass, pt)}")
-            val b = tree.tpe.deconst =:= definitions.elementType(ArrayClass, pt).deconst
-            context.warning(tree.pos, b.toString)
-            if (pt.typeSymbol == ArrayClass && tree.tpe.deconst =:= definitions.elementType(ArrayClass, pt).deconst) {
-              context.warning(tree.pos, s"in second if!")// owner: ${context.owner}, enclClass: ${context.enclClass}, enclMethod: ${context.enclMethod} enclApply: ${context.enclosingApply}")
-              val adapted = typedPos(tree.pos, mode, pt)(gen.mkWrapArray(tree, arrayToExistential(tree.tpe.deconst)))
-              assert(adapted.tpe <:< pt, (adapted.tpe, pt))
-              return adapted
+            if (pt.typeSymbol == ArrayClass) {
+              val ptElemType = definitions.elementType(ArrayClass, pt)
+              if (arrayToExistential(tree.tpe) <:< pt)
+                tree.setType(pt)
+              else if (arrayToExistential(tree.tpe) <:< ptElemType) {
+                val adapted = atPos(tree.pos)(ArrayValue(TypeTree(ptElemType), tree :: Nil).setType(pt))
+                return adapted
+              }
             }
           }
 
