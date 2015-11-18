@@ -37,10 +37,11 @@ abstract class SymbolPairs {
   def sameInBaseClass(baseClass: Symbol)(tp1: Type, tp2: Type) =
     (tp1 baseType baseClass) =:= (tp2 baseType baseClass)
 
-  case class SymbolPair(base: Symbol, low: Symbol, high: Symbol) {
+  final case class SymbolPair(base: Symbol, low: Symbol, high: Symbol) {
+    private[this] val self  = base.thisType
+
     def pos                 = if (low.owner == base) low.pos else if (high.owner == base) high.pos else base.pos
-    def self: Type          = base.thisType
-    def rootType: Type      = base.thisType
+    def rootType: Type      = self
 
     def lowType: Type       = self memberType low
     def lowErased: Type     = erasure.specialErasure(base)(low.tpe)
