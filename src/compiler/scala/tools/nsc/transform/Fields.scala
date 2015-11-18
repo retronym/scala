@@ -329,36 +329,40 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     // synth trees for accessors/fields and trait setters when they are mixed into a class
     def fieldsAndAccessors(templateSym: Symbol): List[ValOrDefDef] = {
       val clazz = templateSym.owner
-      def fieldAccess(accessor: Symbol) = {
+      def fieldAccess(accessor: Symbol): Option[Tree] = {
         val fieldName = accessor.localName
         val field = clazz.info.decl(fieldName)
-        assert(field.exists, s"Field '$fieldName' not found in ${clazz.info.decls} of $clazz for $accessor")
-        Select(This(clazz), field)
+        // The `None` result denotes an error, but we defer to refchecks to report it.
+        // This is the result of overriding a val with a def, so that no field is found in the subclass.
+        if (field.exists) Some(Select(This(clazz), field))
+        else None
       }
 
       val accessorsAndFieldsNeedingTrees = clazz.info.decls.toList.filter(checkAndClearNeedsTrees)
 
-      def getterBody(getter: Symbol): Tree = {
+      def getterBody(getter: Symbol): Option[Tree] = {
         val fieldMemoization = fieldMemoizationIn(getter, clazz)
-        if (fieldMemoization.pureConstant) gen.mkAttributedQualifier(fieldMemoization.tp) // TODO: drop when we no longer care about producing identical bytecode
+        if (fieldMemoization.pureConstant) Some(gen.mkAttributedQualifier(fieldMemoization.tp)) // TODO: drop when we no longer care about producing identical bytecode
         else fieldAccess(getter)
       }
 
 //      println(s"accessorsAndFieldsNeedingTrees for $templateSym: $accessorsAndFieldsNeedingTrees")
-      def setterBody(setter: Symbol): Tree = {
+      def setterBody(setter: Symbol): Option[Tree] = {
         // trait setter in trait
-        if (clazz.isTrait) EmptyTree
+        if (clazz.isTrait) Some(EmptyTree)
         // trait setter for overridden val in class
-        else if (checkAndClearOverridden(setter)) mkTypedUnit(setter.pos)
+        else if (checkAndClearOverridden(setter)) Some(mkTypedUnit(setter.pos))
         // trait val/var setter mixed into class
-        else Assign(fieldAccess(setter), Ident(setter.firstParam))
+        else fieldAccess(setter) map (fieldSel => Assign(fieldSel, Ident(setter.firstParam)))
       }
 
-      accessorsAndFieldsNeedingTrees map {
-        case setter if setter.isSetter   => localTyper.typedPos(setter.pos)(DefDef(setter, setterBody(setter))).asInstanceOf[DefDef]
-        case getter if getter.isAccessor => localTyper.typedPos(getter.pos)(DefDef(getter, getterBody(getter))).asInstanceOf[DefDef]
-        case field                       => assert(field.isValue && !field.isMethod, s"Expecting field, got $field")
-          localTyper.typedPos(field.pos)(ValDef(field)).asInstanceOf[ValDef]
+      def mkAccessor(accessor: Symbol)(body: Tree) = localTyper.typedPos(accessor.pos)(DefDef(accessor, body)).asInstanceOf[DefDef]
+
+      accessorsAndFieldsNeedingTrees flatMap {
+        case setter if setter.isSetter                  => setterBody(setter) map mkAccessor(setter)
+        case getter if getter.isAccessor                => getterBody(getter) map mkAccessor(getter)
+        case field  if field.isValue && !field.isMethod => Some(localTyper.typedPos(field.pos)(ValDef(field)).asInstanceOf[ValDef])
+        case _ => None
       }
     }
 
