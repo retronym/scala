@@ -439,9 +439,11 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
           } else if (other.isAbstractOverride && other.isIncompleteIn(clazz) && !member.isAbstractOverride) {
             overrideError("needs `abstract override' modifiers")
           }
-          else if (member.isAnyOverride && (other hasFlag ACCESSOR) && other.accessed.isVariable && !other.accessed.isLazy) {
-            // !?! this is not covered by the spec. We need to resolve this either by changing the spec or removing the test here.
-            // !!! is there a !?! convention? I'm !!!ing this to make sure it turns up on my searches.
+          else if (member.isAnyOverride && !(member hasFlag MIXEDIN_ACCESSOR) && (other hasFlag ACCESSOR) && !(other hasFlag STABLE)) {
+            // The check above used to look at `field` == `other.accessed`, ensuring field.isVariable && !field.isLazy,
+            // which I think is identical to the more direct `!(other hasFlag STABLE)` (given that `other` is a method).
+            // Also, we're moving away from (looking at) underlying fields (vals in traits no longer have them, to begin with)
+            // TODO: this is not covered by the spec. We need to resolve this either by changing the spec or removing the test here.
             if (!settings.overrideVars)
               overrideError("cannot override a mutable variable")
           }
@@ -456,7 +458,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
           } else if (member.isValue && member.isLazy &&
                      other.isValue && !other.isSourceMethod && !other.isDeferred && !other.isLazy) {
             overrideError("cannot override a concrete non-lazy value")
-          } else if (other.isValue && other.isLazy && !other.isSourceMethod && !other.isDeferred &&
+          } else if (other.isValue && other.isLazy && !other.isSourceMethod && !other.isDeferred && // !(other.hasFlag(MODULE) && other.hasFlag(PACKAGE | JAVA)) && other.hasFlag(LAZY)  && (!other.isMethod || other.hasFlag(STABLE)) && !other.hasFlag(DEFERRED)
                      member.isValue && !member.isLazy) {
             overrideError("must be declared lazy to override a concrete lazy value")
           } else if (other.isDeferred && member.isTermMacro && member.extendedOverriddenSymbols.forall(_.isDeferred)) { // (1.9)
