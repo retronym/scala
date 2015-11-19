@@ -298,16 +298,29 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
       def infoString(sym: Symbol) = infoString0(sym, sym.owner != clazz)
       def infoStringWithLocation(sym: Symbol) = infoString0(sym, true)
 
-      def infoString0(sym: Symbol, showLocation: Boolean) = {
-        val sym1 = analyzer.underlyingSymbol(sym)
-        sym1.toString() +
+      def infoString0(member: Symbol, showLocation: Boolean) = {
+        val underlying = // not using analyzer.underlyingSymbol(member) because we should get rid of it
+          if (!(member hasFlag ACCESSOR)) member
+          else member.accessed match {
+              case field if field.exists => field
+              case _ if member.isSetter  => member.getterIn(member.owner)
+              case _ => member
+            }
+
+        def memberInfo =
+          self.memberInfo(underlying) match {
+            case getterTp if underlying.isGetter => getterTp.resultType
+            case tp => tp
+          }
+
+        underlying.toString() +
         (if (showLocation)
-          sym1.locationString +
-          (if (sym1.isAliasType) ", which equals "+self.memberInfo(sym1)
-           else if (sym1.isAbstractType) " with bounds"+self.memberInfo(sym1)
-           else if (sym1.isModule) ""
-           else if (sym1.isTerm) " of type "+self.memberInfo(sym1)
-           else "")
+          underlying.locationString +
+          (if (underlying.isAliasType)         s", which equals $memberInfo"
+           else if (underlying.isAbstractType) s" with bounds$memberInfo"
+           else if (underlying.isModule)       ""
+           else if (underlying.isTerm)         s" of type $memberInfo"
+           else                                "")
          else "")
       }
 
@@ -321,7 +334,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
         def memberTp = lowType
         def otherTp  = highType
 
-        debuglog("Checking validity of %s overriding %s".format(member.fullLocationString, other.fullLocationString))
+//        debuglog(s"Checking validity of ${member.fullLocationString} overriding ${other.fullLocationString}")
 
         def noErrorType = !pair.isErroneous
         def isRootOrNone(sym: Symbol) = sym != null && sym.isRoot || sym == NoSymbol
@@ -346,9 +359,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
               analyzer.foundReqMsg(member.tpe, other.tpe)
             else ""
 
-          "overriding %s;\n %s %s%s".format(
-            infoStringWithLocation(other), infoString(member), msg, addendum
-          )
+          s"overriding ${infoStringWithLocation(other)};\n ${infoString(member)} $msg$addendum"
         }
         def emitOverrideError(fullmsg: String) {
           if (member.owner == clazz) reporter.error(member.pos, fullmsg)
@@ -652,7 +663,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
 
           for (member <- missing) {
             def undefined(msg: String) = abstractClassError(false, infoString(member) + " is not defined" + msg)
-            val underlying = analyzer.underlyingSymbol(member)
+            val underlying = analyzer.underlyingSymbol(member) // TODO: don't use this method
 
             // Give a specific error message for abstract vars based on why it fails:
             // It could be unimplemented, have only one accessor, or be uninitialized.

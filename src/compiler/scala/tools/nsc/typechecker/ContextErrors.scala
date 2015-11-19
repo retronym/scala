@@ -731,7 +731,7 @@ trait ContextErrors {
           case xs     => xs.mkString("\n  ", "\n  ", "")
         }
 
-        issueSymbolTypeError(sym0, sym1+" is defined twice" + addendum)
+        issueSymbolTypeError(sym0, s"$sym1 is defined twice$addendum")
       }
 
       // cyclic errors
