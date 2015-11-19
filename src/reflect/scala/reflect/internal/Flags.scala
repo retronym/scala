@@ -172,10 +172,11 @@ class Flags extends ModifierFlags {
 
   final val SYNCHRONIZED  = 1L << 45      // symbol is a method which should be marked ACC_SYNCHRONIZED
 
-  final val SYNTHESIZE_IMPL_IN_SUBCLASS = 1L << 50 // Like MIXEDIN, but used in Fields -- TODO: reuse MIXEDIN flag
+  final val SYNTHESIZE_IMPL_IN_SUBCLASS = 1L << 50 // used in fields phase to indicate this accessor should receive an implementation in a subclass
 
   // flags used strictly internally in the Fields phase (info/tree transform):
   final val NEEDS_TREES   = 1L << 59           // this symbol needs a tree. (distinct from SYNTHESIZE_IMPL_IN_SUBCLASS)
+  final val MIXEDIN_ACCESSOR = 1L << 60 // Like MIXEDIN, but used in Fields -- TODO: reuse MIXEDIN flag
 
   // ------- shift definitions -------------------------------------------------------
   //
