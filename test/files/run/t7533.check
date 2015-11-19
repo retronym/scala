@@ -18,7 +18,7 @@ method wAbs => abstract
 method w => concrete
 type UAbs => abstract
 type U => concrete
-method T$_setter_$z_= => abstract
+variable z => abstract
 =======class AllConcrete=======
 class AllConcrete => concrete
 constructor AllConcrete => concrete
