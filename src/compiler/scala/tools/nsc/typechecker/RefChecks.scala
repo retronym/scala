@@ -478,8 +478,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
             overrideError("cannot be used here - only term macros can override term macros")
           } else {
             checkOverrideTypes()
-            if (!other.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS))
-              checkOverrideDeprecated()
+            checkOverrideDeprecated()
             if (settings.warnNullaryOverride) {
               if (other.paramss.isEmpty && !member.paramss.isEmpty) {
                 reporter.warning(member.pos, "non-nullary method overrides nullary method")
@@ -561,7 +560,7 @@ abstract class RefChecks extends InfoTransform with scala.reflect.internal.trans
         }
 
         def checkOverrideDeprecated() {
-          if (other.hasDeprecatedOverridingAnnotation && !member.ownerChain.exists(x => x.isDeprecated || x.hasBridgeAnnotation)) {
+          if (other.hasDeprecatedOverridingAnnotation && !(member.hasDeprecatedOverridingAnnotation || member.ownerChain.exists(x => x.isDeprecated || x.hasBridgeAnnotation))) {
             val suffix = other.deprecatedOverridingMessage map (": " + _) getOrElse ""
             val msg = s"overriding ${other.fullLocationString} is deprecated$suffix"
             currentRun.reporting.deprecationWarning(member.pos, other, msg)
