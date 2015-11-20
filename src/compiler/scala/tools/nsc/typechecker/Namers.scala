@@ -1383,7 +1383,9 @@ trait Namers extends MethodSynthesis {
                 else valOwner.thisType.memberType(overridden).resultType
               }
 
-            assignTypeToTree(vdef, typer, pt) // defines (based on `pt`) and returns `vdef.tpt.tpe`
+            // derives the val's result type from type checking its rhs under the expected type `pt`
+            // vdef.tpt is mutated, and `vdef.tpt.tpe` is `assignTypeToTree`'s result
+            assignTypeToTree(vdef, typer, pt)
           }
         } else typer.typedType(tpt).tpe
 
