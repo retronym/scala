@@ -1368,8 +1368,8 @@ trait Namers extends MethodSynthesis {
           } else {
             val valOwner = owner.owner
             val pt =
-            // there's no overriding outside of classes
-              if (!valOwner.isClass) WildcardType
+              // there's no overriding outside of classes
+              if (!valOwner.isClass || settings.isScala211) WildcardType
               else {
                 // normalize to getter so that we correctly consider a val overriding a def
                 // (a val's name ends in a " ", so can't compare to def)
