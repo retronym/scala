@@ -6,6 +6,8 @@ scala> trait T extends B { val x: y.type = y }
 defined trait T
 
 scala> println((new T{}).x)
-a
+java.lang.AbstractMethodError: $anon$1.$line3$$read$B$_setter_$y_$eq(Ljava/lang/String;)V
+  at B$class.$init$(<console>:11)
+  ... 67 elided
 
 scala> :quit
