@@ -2583,10 +2583,12 @@ trait Trees { self: Universe =>
     def transformIdents(trees: List[Ident]): List[Ident] =
       trees mapConserve (tree => transform(tree).asInstanceOf[Ident])
     /** Traverses a list of trees with a given owner symbol. */
-    def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
-      stats mapConserve (stat =>
+    def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
+      val stats1 = stats mapConserve (stat =>
         if (exprOwner != currentOwner && stat.isTerm) atOwner(exprOwner)(transform(stat))
         else transform(stat)) filter (EmptyTree != _)
+      flattenThickets(stats1)
+    }
     /** Transforms `Modifiers`. */
     def transformModifiers(mods: Modifiers): Modifiers = {
       if (mods.annotations.isEmpty) mods
@@ -2602,6 +2604,8 @@ trait Trees { self: Universe =>
       result
     }
   }
+
+  protected def flattenThickets(stats: List[Tree]): List[Tree]
 
   /** Delegates the transformation strategy to `scala.reflect.internal.Trees`,
    *  because pattern matching on abstract types we have here degrades performance.

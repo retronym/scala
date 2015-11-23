@@ -395,6 +395,17 @@ trait Trees extends api.Trees {
        extends TermTree with BlockApi
   object Block extends BlockExtractor
 
+  // This is a poor man's version of dotty's Thicket: https://github.com/lampepfl/dotty/blob/d5280358d1/src/dotty/tools/dotc/ast/Trees.scala#L707
+  // We encode it as `Block(trees, EmptyTree)`
+  object Thicket {
+    def apply(trees: List[Tree]): Tree = Block(trees, EmptyTree)
+    def unapply(t: Tree): Option[List[Tree]] = t match {
+      case Block(ts, EmptyTree) => Some(ts)
+      case _ => None
+    }
+    val isThicketOrEmpty = (t: Tree) => unapply(t).isDefined || t == EmptyTree
+  }
+
   case class CaseDef(pat: Tree, guard: Tree, body: Tree)
        extends Tree with CaseDefApi
   object CaseDef extends CaseDefExtractor
@@ -1331,6 +1342,14 @@ trait Trees extends api.Trees {
       }
     }
   }
+
+  def flattenThickets(stats: List[Tree]): List[Tree] = if (stats.exists(Thicket.isThicketOrEmpty)) {
+    stats.flatMap {
+      case EmptyTree => Nil
+      case Thicket(ts) => ts
+      case t => List(t)
+    }
+  } else stats // avoid allocations on the common case
 
   //OPT ordered according to frequency to speed it up.
   override protected def itransform(transformer: Transformer, tree: Tree): Tree = {
