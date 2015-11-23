@@ -54,12 +54,6 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
     private val lazyVals = perRunCaches.newMap[Symbol, Int]() withDefaultValue 0
 
     import symtab.Flags._
-    private def flattenThickets(stats: List[Tree]): List[Tree] = stats.flatMap(_ match {
-      case b @ Block(List(d1@DefDef(_, n1, _, _, _, _)), d2@DefDef(_, n2, _, _, _, _)) if b.tpe == null && n1.endsWith(nme.LAZY_SLOW_SUFFIX) =>
-        List(d1, d2)
-      case stat =>
-        List(stat)
-    })
 
     /** Perform the following transformations:
      *  - for a lazy accessor inside a method, make it check the initialization bitmap
@@ -87,12 +81,6 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
       curTree = tree
 
       tree match {
-
-        case Block(_, _) =>
-          val block1 = super.transform(tree)
-          val Block(stats, expr) = block1
-          treeCopy.Block(block1, flattenThickets(stats), expr)
-
         case DefDef(_, _, _, _, _, rhs) => atOwner(tree.symbol) {
           val (res, slowPathDef) = if (!sym.owner.isClass && sym.isLazy) {
             val enclosingClassOrDummyOrMethod = {
@@ -129,42 +117,42 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
 
           val ddef1 = deriveDefDef(tree)(_ => if (LocalLazyValFinder.find(res)) typed(addBitmapDefs(sym, res)) else res)
           if (slowPathDef != EmptyTree) {
-            // The contents of this block are flattened into the enclosing statement sequence, see flattenThickets
-            // This is a poor man's version of dotty's Thicket: https://github.com/lampepfl/dotty/blob/d5280358d1/src/dotty/tools/dotc/ast/Trees.scala#L707
-            Block(slowPathDef, ddef1)
+            Thicket(slowPathDef :: ddef1 :: Nil)
           } else ddef1
         }
 
-        case Template(_, _, body) => atOwner(currentOwner) {
-          val body1 = super.transformTrees(body)
-          var added = false
-          val stats =
-            for (stat <- body1) yield stat match {
-              case Block(_, _) | Apply(_, _) | If(_, _, _) | Try(_, _, _) if !added =>
-                // Avoid adding bitmaps when they are fully overshadowed by those
-                // that are added inside loops
-                if (LocalLazyValFinder.find(stat)) {
-                  added = true
-                  typed(addBitmapDefs(sym, stat))
-                } else stat
-              case ValDef(_, _, _, _) =>
-                typed(deriveValDef(stat)(addBitmapDefs(stat.symbol, _)))
-              case _ =>
-                stat
-            }
-          val innerClassBitmaps = if (!added && currentOwner.isClass && bitmaps.contains(currentOwner)) {
-              // add bitmap to inner class if necessary
-                val toAdd0 = bitmaps(currentOwner).map(s => typed(ValDef(s, ZERO)))
-                toAdd0.foreach(t => {
-                    if (currentOwner.info.decl(t.symbol.name) == NoSymbol) {
-                      t.symbol.setFlag(PROTECTED)
-                      currentOwner.info.decls.enter(t.symbol)
-                    }
-                })
-                toAdd0
+        case _: Template =>
+          // in addition to recursing, will flatten thickets created in template body
+          val Template(_, _, body1) = super.transform(tree)
+          atOwner(currentOwner) {
+            var added = false
+            val stats =
+              for (stat <- body1) yield stat match {
+                case Block(_, _) | Apply(_, _) | If(_, _, _) | Try(_, _, _) if !added =>
+                  // Avoid adding bitmaps when they are fully overshadowed by those
+                  // that are added inside loops
+                  if (LocalLazyValFinder.find(stat)) {
+                    added = true
+                    typed(addBitmapDefs(sym, stat))
+                  } else stat
+                case ValDef(_, _, _, _) =>
+                  typed(deriveValDef(stat)(addBitmapDefs(stat.symbol, _)))
+                case _ =>
+                  stat
+              }
+            val innerClassBitmaps = if (!added && currentOwner.isClass && bitmaps.contains(currentOwner)) {
+               // add bitmap to inner class if necessary
+               val toAdd0 = bitmaps(currentOwner).map(s => typed(ValDef(s, ZERO)))
+               toAdd0.foreach(t => {
+                  if (currentOwner.info.decl(t.symbol.name) == NoSymbol) {
+                     t.symbol.setFlag(PROTECTED)
+                     currentOwner.info.decls.enter(t.symbol)
+                  }
+               })
+               toAdd0
             } else List()
-          deriveTemplate(tree)(_ => innerClassBitmaps ++ flattenThickets(stats))
-        }
+            deriveTemplate(tree)(_ => innerClassBitmaps ++ stats)
+          }
 
         case ValDef(_, _, _, _) if !sym.owner.isModule && !sym.owner.isClass =>
           deriveValDef(tree) { rhs0 =>
