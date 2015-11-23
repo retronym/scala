@@ -79,14 +79,6 @@ abstract class UnCurry extends InfoTransform
       }
     }
 
-    /** Add a new synthetic member for `currentOwner` */
-    private def addNewMember(t: Tree): Unit =
-      newMembers.getOrElseUpdate(currentOwner, mutable.Buffer()) += t
-
-    /** Process synthetic members for `owner`. They are removed form the `newMembers` as a side-effect. */
-    @inline private def useNewMembers[T](owner: Symbol)(f: List[Tree] => T): T =
-      f(newMembers.remove(owner).getOrElse(Nil).toList)
-
     private def newFunction0(body: Tree): Tree = {
       val result = localTyper.typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
       log("Change owner from %s to %s in %s".format(currentOwner, result.symbol, result.body))
@@ -559,21 +551,6 @@ abstract class UnCurry extends InfoTransform
       }
 
       tree match {
-        /* Some uncurry post transformations add members to templates.
-         *
-         * Members registered by `addMembers` for the current template are added
-         * once the template transformation has finished.
-         *
-         * In particular, this case will add:
-         * - synthetic Java varargs forwarders for repeated parameters
-         */
-        case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
-          useNewMembers(currentClass) {
-            newMembers =>
-              deriveTemplate(tree)(transformTrees(newMembers) ::: _)
-          }
-
         case dd @ DefDef(_, _, _, vparamss0, _, rhs0) =>
           val ddSym = dd.symbol
           val (newParamss, newRhs): (List[List[ValDef]], Tree) =
@@ -771,8 +748,8 @@ abstract class UnCurry extends InfoTransform
      * It looks for the method in the `repeatedParams` map, and generates a Java-style
      * varargs forwarder.
      */
-    private def addJavaVarargsForwarders(dd: DefDef, flatdd: DefDef): DefDef = {
-      if (!dd.symbol.hasAnnotation(VarargsClass) || !enteringUncurry(mexists(dd.symbol.paramss)(sym => definitions.isRepeatedParamType(sym.tpe))))
+    private def addJavaVarargsForwarders(dd: DefDef, flatdd: DefDef): Tree = {
+      if (dd.symbol.isLocalToBlock || !dd.symbol.hasAnnotation(VarargsClass) || !enteringUncurry(mexists(dd.symbol.paramss)(sym => definitions.isRepeatedParamType(sym.tpe))))
         return flatdd
 
       def toArrayType(tp: Type): Type = {
@@ -837,13 +814,12 @@ abstract class UnCurry extends InfoTransform
         case Some(s) => reporter.error(dd.symbol.pos,
                                    "A method with a varargs annotation produces a forwarder method with the same signature "
                                    + s.tpe + " as an existing method.")
+          flatdd
         case None =>
           // enter symbol into scope
           currentClass.info.decls enter forwsym
-          addNewMember(forwtree)
+          Thicket(flatdd :: forwtree :: Nil)
       }
-
-      flatdd
     }
   }
 }
