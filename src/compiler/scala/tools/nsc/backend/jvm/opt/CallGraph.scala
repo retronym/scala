@@ -137,7 +137,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
                   callee = method,
                   calleeDeclarationClass = declarationClassBType,
                   safeToInline = safeToInline,
-                  safeToRewrite = safeToRewrite,
+                  safeToRewrite = false,
                   annotatedInline = annotatedInline,
                   annotatedNoInline = annotatedNoInline,
                   samParamTypes = samParamTypes,
@@ -298,7 +298,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
               receiverType.info.orThrow.inlineInfo.isEffectivelyFinal // (1)
           }
 
-          val isRewritableTraitCall = isStaticallyResolved && methodInlineInfo.traitMethodWithStaticImplementation
+          val isRewritableTraitCall = false
 
           val warning = calleeDeclarationClassBType.info.orThrow.inlineInfo.warning.map(
             MethodInlineInfoIncomplete(calleeDeclarationClassBType.internalName, calleeMethodNode.name, calleeMethodNode.desc, _))

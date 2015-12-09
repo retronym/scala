@@ -435,7 +435,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
       if (!currentOwner.isClass || currentOwner.isPackageClass || currentOwner.isInterface) super.transformStats(stats, exprOwner)
       else afterOwnPhase {
-        fieldsAndAccessors(exprOwner) ++ (stats flatMap transformStat(exprOwner)) // TODO use thicket encoding of multi-tree transformStat?
+        val accessors = fieldsAndAccessors(exprOwner)
+        val transformed = stats flatMap transformStat(exprOwner)
+        accessors ++ transformed // TODO use thicket encoding of multi-tree transformStat?
       }
   }
 }

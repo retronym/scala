@@ -1033,7 +1033,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       hostSymbol.info ; methodOwner.info
 
       def needsInterfaceCall(sym: Symbol) = (
-           sym.isInterface
+           sym.isTraitOrInterface
         || sym.isJavaDefined && sym.isNonBottomSubClass(definitions.ClassfileAnnotationClass)
       )
 
@@ -1046,6 +1046,10 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       )
       val receiver = if (useMethodOwner) methodOwner else hostSymbol
       val jowner   = internalName(receiver)
+
+      if (style.isSuper && receiver.isTraitOrInterface && !cnode.interfaces.contains(jowner))
+        cnode.interfaces.add(jowner)
+
       val jname    = method.javaSimpleName.toString
       val bmType   = methodBTypeFromSymbol(method)
       val mdescr   = bmType.descriptor
@@ -1327,7 +1331,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       def asmType(sym: Symbol) = classBTypeFromSymbol(sym).toASMType
 
       val implMethodHandle =
-        new asm.Handle(if (lambdaTarget.hasFlag(Flags.STATIC)) asm.Opcodes.H_INVOKESTATIC else if (lambdaTarget.isTrait) asm.Opcodes.H_INVOKEINTERFACE else asm.Opcodes.H_INVOKEVIRTUAL,
+        new asm.Handle(if (lambdaTarget.hasFlag(Flags.STATIC)) asm.Opcodes.H_INVOKESTATIC else if (lambdaTarget.owner.isTrait) asm.Opcodes.H_INVOKEINTERFACE else asm.Opcodes.H_INVOKEVIRTUAL,
           classBTypeFromSymbol(lambdaTarget.owner).internalName,
           lambdaTarget.name.toString,
           methodBTypeFromSymbol(lambdaTarget).descriptor)
