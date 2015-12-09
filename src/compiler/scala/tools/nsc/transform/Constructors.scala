@@ -73,7 +73,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     override def transform(tree: Tree): Tree = {
       tree match {
-        case cd @ ClassDef(mods0, name0, tparams0, impl0) if !cd.symbol.isInterface && !isPrimitiveValueClass(cd.symbol) =>
+        case cd @ ClassDef(mods0, name0, tparams0, impl0) if !isPrimitiveValueClass(cd.symbol) && cd.symbol.primaryConstructor != NoSymbol =>
           if(cd.symbol eq AnyValClass) {
             cd
           }
@@ -460,7 +460,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     // find and dissect primary constructor
     private val (primaryConstr, _primaryConstrParams, primaryConstrBody) = stats collectFirst {
-      case dd@DefDef(_, _, _, vps :: Nil, _, rhs: Block) if dd.symbol.isPrimaryConstructor => (dd, vps map (_.symbol), rhs)
+      case dd@DefDef(_, _, _, vps :: Nil, _, rhs: Block) if dd.symbol.isPrimaryConstructor || dd.symbol.isMixinConstructor => (dd, vps map (_.symbol), rhs)
     } getOrElse {
       abort("no constructor in template: impl = " + impl)
     }
@@ -521,9 +521,11 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
         case Apply(Select(This(_), _), List()) =>
           // references to parameter accessor methods of own class become references to parameters
           // outer accessors become references to $outer parameter
-          if (canBeSupplanted(tree.symbol))
+          if (clazz.isTrait)
+            super.transform(tree)
+          else if (canBeSupplanted(tree.symbol))
             gen.mkAttributedIdent(parameter(tree.symbol.accessed)) setPos tree.pos
-          else if (tree.symbol.outerSource == clazz && !clazz.isImplClass)
+          else if (tree.symbol.outerSource == clazz)
             gen.mkAttributedIdent(parameterNamed(nme.OUTER)) setPos tree.pos
           else
             super.transform(tree)
@@ -549,10 +551,14 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     }
 
     // Create an assignment to class field `to` with rhs `from`
-    def mkAssign(to: Symbol, from: Tree): Tree =
-      localTyper.typedPos(to.pos) {
-        Assign(Select(This(clazz), to), from)
-      }
+    def mkAssign(to: Symbol, from: Tree): Tree = {
+      val tree = if (to.owner.isTrait) {
+        val setter = to.setterIn(to.owner)
+        gen.mkMethodCall(This(to.owner), setter, Nil, from :: Nil)
+      } else Assign(Select(This(clazz), to), from)
+
+      localTyper.typedPos(to.pos)(tree)
+    }
 
     // Create code to copy parameter to parameter accessor field.
     // If parameter is $outer, check that it is not null so that we NPE
@@ -570,7 +576,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     }
 
     // Constant typed vals are not memoized.
-    def memoizeValue(sym: Symbol) = !sym.info.isInstanceOf[ConstantType]
+    def memoizeValue(sym: Symbol) = !sym.info.resultType.isInstanceOf[ConstantType]
 
     /** Triage definitions and statements in this template into the following categories.
       * The primary constructor is treated separately, as it is assembled in part from these pieces.
@@ -628,13 +634,17 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
         stat match {
           // recurse on class definition, store in defBuf
-          case _: ClassDef => defBuf += new ConstructorTransformer(unit).transform(stat)
+          case _: ClassDef if !stat.symbol.isInterface => defBuf += new ConstructorTransformer(unit).transform(stat)
 
           // Triage methods -- they all end up in the template --
           // regular ones go to `defBuf`, secondary contructors go to `auxConstructorBuf`.
           // The primary constructor is dealt with separately (we're massaging it here).
-          case _: DefDef if statSym.isPrimaryConstructor => ()
+          case _: DefDef if statSym.isPrimaryConstructor || statSym.isMixinConstructor => ()
           case _: DefDef if statSym.isConstructor => auxConstructorBuf += stat
+          case stat: DefDef if stat.symbol.owner.isTrait && stat.symbol.hasAllFlags(ACCESSOR) && !stat.symbol.isSpecialized && stat.symbol.firstParam == NoSymbol && !stat.symbol.isLazy && stat.rhs != EmptyTree =>
+            val emitField = memoizeValue(statSym)
+            moveEffectToCtor(stat.mods, stat.rhs, if (emitField) statSym else NoSymbol) // TODO: ever NoSymbol?
+            defBuf += deriveDefDef(stat)(_ => EmptyTree)
           case stat: DefDef =>
               defBuf += stat
 
