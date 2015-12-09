@@ -56,8 +56,15 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
 
   lazy val lambdaDeserializeBoostrapHandle =
     new scala.tools.asm.Handle(scala.tools.asm.Opcodes.H_INVOKESTATIC,
-      "scala/runtime/LambdaDeserialize", "bootstrap",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;)Ljava/lang/invoke/CallSite;")
+      coreBTypes.srLambdaDeserializerRef.internalName, "bootstrap",
+      MethodBType(
+        List(
+          coreBTypes.jliMethodHandlesLookupRef,
+          coreBTypes.StringRef,
+          coreBTypes.jliMethodTypeRef
+        ),
+        coreBTypes.jliCallSiteRef
+      ).descriptor)
 
   /**
    * Add:

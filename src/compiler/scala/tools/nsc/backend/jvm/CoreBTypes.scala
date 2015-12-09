@@ -122,6 +122,9 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   lazy val jliLambdaMetafactoryRef   : ClassBType = classBTypeFromSymbol(requiredClass[java.lang.invoke.LambdaMetafactory])
   lazy val srLambdaDeserializerRef   : ClassBType = classBTypeFromSymbol(requiredModule[scala.runtime.LambdaDeserializer.type].moduleClass)
   lazy val srBoxesRunTimeRef         : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.BoxesRunTime])
+  lazy val srSymbolLiteral           : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.SymbolLiteral])
+  lazy val srStructuralCallSite      : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.StructuralCallSite])
+  lazy val srLambdaDeserialize       : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.LambdaDeserialize])
 
   lazy val hashMethodSym: Symbol = getMember(ScalaRunTimeModule, nme.hash_)
 
@@ -195,16 +198,20 @@ trait CoreBTypesProxyGlobalIndependent[BTS <: BTypes] {
   def boxedClasses: Set[ClassBType]
 
   def ObjectRef                 : ClassBType
+  def StringRef                 : ClassBType
   def srNothingRef              : ClassBType
   def srNullRef                 : ClassBType
   def jlCloneableRef            : ClassBType
   def jiSerializableRef         : ClassBType
   def juHashMapRef              : ClassBType
   def juMapRef                  : ClassBType
+  def jliCallSiteRef            : ClassBType
+  def jliMethodTypeRef          : ClassBType
   def jliSerializedLambdaRef    : ClassBType
   def jliMethodHandlesRef       : ClassBType
   def jliMethodHandlesLookupRef : ClassBType
   def srLambdaDeserializerRef   : ClassBType
+  def srLambdaDeserialize       : ClassBType
 }
 
 /**
@@ -248,6 +255,9 @@ final class CoreBTypesProxy[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: 
   def jliLambdaMetafactoryRef   : ClassBType = _coreBTypes.jliLambdaMetafactoryRef
   def srLambdaDeserializerRef   : ClassBType = _coreBTypes.srLambdaDeserializerRef
   def srBoxesRunTimeRef         : ClassBType = _coreBTypes.srBoxesRunTimeRef
+  def srSymbolLiteral           : ClassBType = _coreBTypes.srSymbolLiteral
+  def srStructuralCallSite      : ClassBType = _coreBTypes.srStructuralCallSite
+  def srLambdaDeserialize       : ClassBType = _coreBTypes.srLambdaDeserialize
 
   def hashMethodSym: Symbol = _coreBTypes.hashMethodSym
 

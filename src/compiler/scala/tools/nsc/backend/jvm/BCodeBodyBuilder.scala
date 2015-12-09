@@ -1371,11 +1371,27 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
   lazy val symbolLiteralBoostrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "scala/runtime/SymbolLiteral", "bootstrap",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
+      coreBTypes.srSymbolLiteral.internalName, sn.Bootstrap.toString,
+      MethodBType(
+        List(
+          coreBTypes.jliMethodHandlesLookupRef,
+          coreBTypes.StringRef,
+          coreBTypes.jliMethodTypeRef,
+          coreBTypes.StringRef
+         ),
+         coreBTypes.jliCallSiteRef
+      ).descriptor)
 
   lazy val structuralCallSite_BoostrapHandle =
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC,
-      "scala/runtime/StructuralCallSite", "bootstrap",
-      "(Ljava/lang/invoke/MethodHandles$Lookup;Ljava/lang/String;Ljava/lang/invoke/MethodType;Ljava/lang/String;)Ljava/lang/invoke/CallSite;")
+      coreBTypes.srStructuralCallSite.internalName, sn.Bootstrap.toString,
+      MethodBType(
+        List(
+          coreBTypes.jliMethodHandlesLookupRef,
+          coreBTypes.StringRef,
+          coreBTypes.jliMethodTypeRef,
+          coreBTypes.StringRef
+        ),
+        coreBTypes.jliCallSiteRef
+      ).descriptor)
 }
