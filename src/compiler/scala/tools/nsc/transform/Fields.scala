@@ -77,7 +77,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
   private final val OVERRIDDEN_TRAIT_SETTER = TRANS_FLAG
 
-  final val TRAIT_SETTER_FLAGS = NEEDS_TREES | DEFERRED
+  final val TRAIT_SETTER_FLAGS = NEEDS_TREES | DEFERRED | ProtectedLocal
 
   private def accessorImplementedInSubclass(accessor: Symbol) = accessor hasAllFlags (ACCESSOR | SYNTHESIZE_IMPL_IN_SUBCLASS)
 
