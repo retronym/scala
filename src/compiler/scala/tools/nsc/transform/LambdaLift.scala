@@ -403,7 +403,19 @@ abstract class LambdaLift extends InfoTransform {
           }
 
         case ClassDef(_, _, _, _) =>
-          val freeParamDefs = freeParams(sym) map (p => ValDef(p) setPos tree.pos setType NoType)
+          def defsForParam(sym: Symbol): List[Tree] = if (tree.symbol.isTrait) {
+            val getter: Tree = ValDef(sym) setPos tree.pos setType NoType
+            val setter: Tree = {
+              val setterSym = fields.newTraitSetter(sym, tree.symbol)
+              tree.symbol.info.decls.enter(setterSym)
+              DefDef(setterSym, EmptyTree) setPos tree.pos setType NoType
+            }
+            getter :: setter :: Nil
+          } else {
+            val getter = ValDef(sym) setPos tree.pos setType NoType
+            getter :: Nil
+          }
+          val freeParamDefs = freeParams(sym) flatMap defsForParam
 
           if (freeParamDefs.isEmpty) tree
           else deriveClassDef(tree)(impl => deriveTemplate(impl)(_ ::: freeParamDefs))
