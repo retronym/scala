@@ -13,7 +13,7 @@ import symtab.Flags._
 /** This phase converts classes with parameters into Java-like classes with
  *  fields, which are assigned to from constructors.
  */
-abstract class Constructors extends Statics with Transform with ast.TreeDSL {
+abstract class Constructors extends Statics with Transform with TypingTransformers with ast.TreeDSL {
   import global._
   import definitions._
 
@@ -26,7 +26,7 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
   private val guardedCtorStats: mutable.Map[Symbol, List[Tree]] = perRunCaches.newMap[Symbol, List[Tree]]()
   private val ctorParams: mutable.Map[Symbol, List[Symbol]] = perRunCaches.newMap[Symbol, List[Symbol]]()
 
-  class ConstructorTransformer(unit: CompilationUnit) extends Transformer {
+  class ConstructorTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     /*
      * Inspect for obvious out-of-order initialization; concrete, eager vals or vars, declared in this class,
      * for which a reference to the member precedes its definition.
@@ -80,7 +80,10 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           else {
             checkUninitializedReads(cd)
             val tplTransformer = new TemplateTransformer(unit, impl0)
-            treeCopy.ClassDef(cd, mods0, name0, tparams0, tplTransformer.transformed)
+            tplTransformer.localTyper = this.localTyper
+            tplTransformer.atOwner(impl0, cd.symbol) {
+              treeCopy.ClassDef(cd, mods0, name0, tparams0, tplTransformer.transformed)
+            }
           }
         case _ =>
           super.transform(tree)
@@ -442,13 +445,14 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
   } // GuardianOfCtorStmts
 
   private class TemplateTransformer(val unit: CompilationUnit, val impl: Template)
-    extends StaticsTransformer
+    extends TypingTransformer(unit)
+    with    StaticsTransformer
     with    DelayedInitHelper
     with    OmittablesHelper
-    with    GuardianOfCtorStmts {
+    with    GuardianOfCtorStmts
+    {
 
     val clazz         = impl.symbol.owner  // the transformed class
-    val localTyper    = typer.atOwner(impl, clazz)
 
     val isDelayedInitSubclass = clazz isSubClass DelayedInitClass
 
