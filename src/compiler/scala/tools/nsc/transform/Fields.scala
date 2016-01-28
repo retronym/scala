@@ -162,19 +162,20 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
 
 
-  private object synthFieldsAndAccessors extends TypeMap {
-    private def newTraitSetter(getter: Symbol, clazz: Symbol) = {
-      // Add setter for an immutable, memoizing getter
-      // (can't emit during namers because we don't yet know whether it's going to be memoized or not)
-      val setterFlags = (getter.flags & ~(STABLE | PrivateLocal | OVERRIDE | IMPLICIT | FINAL)) | MUTABLE | ACCESSOR | TRAIT_SETTER_FLAGS
-      val setterName  = nme.expandedSetterName(getter.name.setterName, clazz)
-      val setter      = clazz.newMethod(setterName, getter.pos.focus, setterFlags)
-      val fieldTp     = fieldTypeForGetterIn(getter, clazz.thisType)
-      // println(s"newTraitSetter in $clazz for $getter = $setterName : $fieldTp")
+  def newTraitSetter(getter: Symbol, clazz: Symbol): MethodSymbol = {
+    // Add setter for an immutable, memoizing getter
+    // (can't emit during namers because we don't yet know whether it's going to be memoized or not)
+    val setterFlags = (getter.flags & ~(STABLE | PrivateLocal | OVERRIDE | IMPLICIT | FINAL)) | MUTABLE | ACCESSOR | TRAIT_SETTER_FLAGS
+    val setterName  = nme.expandedSetterName(getter.name.setterName, clazz)
+    val setter      = clazz.newMethod(setterName, getter.pos.focus, setterFlags)
+    val fieldTp     = fieldTypeForGetterIn(getter, clazz.thisType)
+    // println(s"newTraitSetter in $clazz for $getter = $setterName : $fieldTp")
 
-      setter setInfo MethodType(List(setter.newSyntheticValueParam(fieldTp)), UnitTpe)
-      setter
-    }
+    setter setInfo MethodType(List(setter.newSyntheticValueParam(fieldTp)), UnitTpe)
+    setter
+  }
+
+  private object synthFieldsAndAccessors extends TypeMap {
 
     def apply(tp0: Type): Type = mapOver(tp0) match {
       // TODO: make less destructive (name changes, decl additions, flag setting --
