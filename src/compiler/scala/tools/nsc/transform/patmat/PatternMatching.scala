@@ -226,7 +226,14 @@ trait Interface extends ast.TreeDSL {
             // (don't need to use origTp as the expected type, though, and can't always do this anyway due to unknown type params stemming from polymorphic extractors)
             else typer.typed(to)
 
-          def typedStable(t: Tree) = typer.typed(t.shallowDuplicate, Mode.MonoQualifierModes | Mode.TYPEPATmode)
+          def typedStable(t: Tree) = {
+            val t1 = typer.typed(t.shallowDuplicate, Mode.MonoQualifierModes | Mode.TYPEPATmode)
+            t1 match {
+              case i @ Ident(_) if i.symbol.isStable =>
+                t1.setType(singleType(NoPrefix, i.symbol))
+              case _ => t1
+            }
+          }
           lazy val toTypes: List[Type] = to map (tree => typedStable(tree).tpe)
 
           override def transform(tree: Tree): Tree = {
