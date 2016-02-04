@@ -2451,8 +2451,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       setterIn(base, hasExpandedName)
 
     /** The setter of this value or getter definition, or NoSymbol if none exists. */
-    final def setterIn(base: Symbol, hasExpandedName: Boolean = needsExpandedSetterName): Symbol =
-      base.info decl setterNameInBase(base, hasExpandedName) filter (_.hasAccessorFlag)
+    final def setterIn(base: Symbol, hasExpandedName: Boolean = needsExpandedSetterName): Symbol = {
+      def lookup = base.info decl setterNameInBase(base, hasExpandedName) filter (_.hasAccessorFlag)
+      lookup.orElse {
+        if (base.isTrait) base.info.decls.find {
+          case ts: TermSymbol if ts.referenced == this => true
+          case _ => false
+        }.getOrElse(NoSymbol) else NoSymbol
+      }
+    }
 
     def needsExpandedSetterName = (
       if (isMethod) hasStableFlag && !isLazy
@@ -2559,6 +2566,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  on exactly when a symbol is loaded.
      */
     final def sealedSortName: String = initName + "#" + id
+
+    private[scala] final def initialName: Name = this.initName
 
     /** String representation of symbol's definition key word */
     final def keyString: String =

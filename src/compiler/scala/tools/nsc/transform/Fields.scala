@@ -172,6 +172,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     // println(s"newTraitSetter in $clazz for $getter = $setterName : $fieldTp")
 
     setter setInfo MethodType(List(setter.newSyntheticValueParam(fieldTp)), UnitTpe)
+    if (clazz.isLocalClass)
+      setter.referenced = getter
     setter
   }
 
