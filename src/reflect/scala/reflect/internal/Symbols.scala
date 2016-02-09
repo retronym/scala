@@ -1637,6 +1637,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         val prev1 = adaptInfos(infos.prev)
         if (prev1 ne infos.prev) prev1
         else {
+          // Manage the flag used by the info transform in Fields used to cache
+          // whether or not the transform has been run. See run/trait_fields_repl.check
+          // TODO: Rather than using a flag, consider using a field on ClassSymbol that
+          //       stores the RunID for which the transform is valid.
+          resetFlag(SYNTHESIZE_IMPL_IN_SUBCLASS)
+
           val pid = phaseId(infos.validFrom)
 
           _validTo = period(currentRunId, pid)
