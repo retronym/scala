@@ -107,12 +107,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   def checkAndClearOverridden(setter: Symbol) = checkAndClear(OVERRIDDEN_TRAIT_SETTER)(setter)
   def checkAndClearNeedsTrees(setter: Symbol) = checkAndClear(NEEDS_TREES)(setter)
   def checkAndClear(flag: Long)(sym: Symbol) =
-    sym.hasFlag(flag) match {
-      case overridden =>
-        sym resetFlag flag
-        overridden
-    }
-
+    sym.hasFlag(flag) && { sym resetFlag flag; true }
 
   private def isOverriddenAccessor(member: Symbol, site: Symbol): Boolean = {
     val pre = site.thisType
@@ -215,7 +210,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           } else if (fieldMemoization.pureConstant) setTraitAccessorFlags(accessor) // TODO: remove when we no longer care about producing identical bytecode
         }}
 
-        if (newSetters nonEmpty) {
+        if (newSetters.nonEmpty) {
 //          println(s"newSetters for $clazz = $newSetters")
           val newDecls = newScope
           origDecls  foreach newDecls.enter
@@ -285,7 +280,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
             // filter getter's annotations to exclude those only meant for the field
             // we must keep them around long enough to see them here, though, when we create the field
-            field setAnnotations (accessor.annotations filter AnnotationInfo.mkFilter(FieldTargetClass, defaultRetention = true))
+            val fieldAnnotations = accessor.annotations filter AnnotationInfo.mkFilter(FieldTargetClass, defaultRetention = true)
+            field setAnnotations fieldAnnotations
 
             List(cloneAccessor(), field)
           } else List(cloneAccessor())
