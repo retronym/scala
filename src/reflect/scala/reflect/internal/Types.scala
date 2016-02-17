@@ -3970,15 +3970,14 @@ trait Types
     }
   }
 
-  def normalizePlus(tp: Type): Type = {
+  def normalizePlus(tp: Type) = (
     if (isRawType(tp)) rawToExistential(tp)
     else tp.normalize match {
-      // Unify the representations of module classes
-      case st@SingleType(_, sym) if sym.isModule => st.underlying.normalize
-      case st@ThisType(sym) if sym.isModuleClass => normalizePlus(st.underlying)
-      case _ => tp.normalize
+      // Unify the two representations of module classes
+      case st @ SingleType(_, sym) if sym.isModule => st.underlying.normalize
+      case _                                       => tp.normalize
     }
-  }
+  )
 
   /*
   todo: change to:
