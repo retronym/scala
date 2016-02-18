@@ -91,7 +91,8 @@ class BTypesFromClassfileTest {
     sameBType(fromSymbol, fromClassfile)
   }
 
-  @Test
+  @Test @org.junit.Ignore
+  // test currently disabled, see https://github.com/retronym/scala/pull/19#issuecomment-185818210
   def compareClassBTypes(): Unit = {
     // Note that not only these classes are tested, but also all their parents and all nested
     // classes in their InnerClass attributes.
