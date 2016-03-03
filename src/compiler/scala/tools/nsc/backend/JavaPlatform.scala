@@ -29,12 +29,13 @@ trait JavaPlatform extends Platform {
     currentClassPath.get
   }
 
-  private[nsc] lazy val flatClassPath: FlatClassPath = {
+  private lazy val flatClassPathCache: () => FlatClassPath = {
     assert(settings.YclasspathImpl.value == ClassPathRepresentationType.Flat,
       "To use flat classpath representation you must enable it with -YclasspathImpl:flat compiler option.")
 
-    new FlatClassPathResolver(settings).result
+    perRunCaches.newGeneric(new FlatClassPathResolver(settings).result)
   }
+  private[nsc] def flatClassPath: FlatClassPath = flatClassPathCache()
 
   /** Update classpath with a substituted subentry */
   def updateClassPath(subst: Map[ClassPath[AbstractFile], ClassPath[AbstractFile]]) =

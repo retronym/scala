@@ -87,6 +87,7 @@ trait DirectoryFileLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatC
 
   protected def createFileEntry(file: AbstractFile): FileEntryType
   protected def fileFilter: FileFilter
+  override def close(): Unit = ()
 }
 
 object DirectoryFileLookup {

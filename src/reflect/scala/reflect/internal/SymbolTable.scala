@@ -7,6 +7,8 @@ package scala
 package reflect
 package internal
 
+import java.io.Closeable
+
 import scala.annotation.elidable
 import scala.collection.mutable
 import util._
@@ -375,12 +377,15 @@ abstract class SymbolTable extends macros.Universe
     def newWeakSet[K <: AnyRef]() = recordCache(new WeakHashSet[K]())
 
     def newAnyRefMap[K <: AnyRef, V]() = recordCache(mutable.AnyRefMap[K, V]())
-    def newGeneric[T](f: => T): () => T = {
+    def newGeneric[T](f: => T, onClear: T => Unit = (t: T) => t match { case c: Closeable => c.close() case _ => ()}): () => T = {
       val NoCached: T = null.asInstanceOf[T]
       var cached: T = NoCached
       var cachedRunId = NoRunId
       recordCache(new Clearable {
-        def clear(): Unit = cached = NoCached
+        def clear(): Unit = {
+          if (cached != NoCached) onClear(cached)
+          cached = NoCached
+        }
       })
       () => {
         if (currentRunId != cachedRunId || cached == NoCached) {

@@ -1,6 +1,8 @@
 package scala.tools
 package reflect
 
+import java.io.Closeable
+
 import scala.reflect.internal.util.ScalaClassLoader
 import scala.tools.nsc.Global
 import scala.tools.nsc.reporters.Reporter
@@ -21,7 +23,7 @@ class ReflectGlobal(currentSettings: Settings, reporter: Reporter, override val 
      *  Macro expansion can use everything available in [[global.classPath]] or [[rootClassLoader]].
      *  The [[rootClassLoader]] is used to obtain runtime defined macros.
      */
-    override protected def findMacroClassLoader(): ClassLoader = {
+    override protected def findMacroClassLoader(): (ClassLoader with Closeable) = {
       val classpath = global.classPath.asURLs
       ScalaClassLoader.fromURLs(classpath, rootClassLoader)
     }

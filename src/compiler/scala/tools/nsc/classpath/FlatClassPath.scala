@@ -3,6 +3,8 @@
  */
 package scala.tools.nsc.classpath
 
+import java.io.Closeable
+
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.util.{ ClassFileLookup, ClassPath, ClassRepresentation }
 
@@ -14,7 +16,7 @@ import scala.tools.nsc.util.{ ClassFileLookup, ClassPath, ClassRepresentation }
  *
  * This is an alternative design compared to scala.tools.nsc.util.ClassPath
  */
-trait FlatClassPath extends ClassFileLookup[AbstractFile] {
+trait FlatClassPath extends ClassFileLookup[AbstractFile] with Closeable {
   /** Empty string represents root package */
   private[nsc] def packages(inPackage: String): Seq[PackageEntry]
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry]

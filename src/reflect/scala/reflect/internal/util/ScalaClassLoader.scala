@@ -141,8 +141,9 @@ object ScalaClassLoader {
     }
   }
 
-  def fromURLs(urls: Seq[URL], parent: ClassLoader = null): URLClassLoader =
+  def fromURLs(urls: Seq[URL], parent: ClassLoader = null): URLClassLoader = {
     new URLClassLoader(urls, parent)
+  }
 
   /** True if supplied class exists in supplied path */
   def classExists(urls: Seq[URL], name: String): Boolean =

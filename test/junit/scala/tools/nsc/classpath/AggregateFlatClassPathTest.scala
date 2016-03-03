@@ -30,6 +30,7 @@ class AggregateFlatClassPathTest {
     override def asClassPathStrings: Seq[String] = unsupported
     override def asSourcePathString: String = unsupported
     override def asURLs: Seq[URL] = unsupported
+    override def close(): Unit = unsupported
   }
 
   private case class TestClassPath(virtualPath: String, classesInPackage: EntryNamesInPackage*) extends TestFlatClassPath {

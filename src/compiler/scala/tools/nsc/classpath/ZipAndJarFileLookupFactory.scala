@@ -3,7 +3,7 @@
  */
 package scala.tools.nsc.classpath
 
-import java.io.File
+import java.io.{Closeable, File}
 import java.net.URL
 import scala.annotation.tailrec
 import scala.reflect.io.{ AbstractFile, FileZipArchive, ManifestResources }
@@ -47,7 +47,7 @@ object ZipAndJarFlatClassPathFactory extends ZipAndJarFileLookupFactory {
 
   private case class ZipArchiveFlatClassPath(zipFile: File)
     extends ZipArchiveFileLookup[ClassFileEntryImpl]
-    with NoSourcePaths {
+    with NoSourcePaths with Closeable {
 
     override def findClassFile(className: String): Option[AbstractFile] = {
       val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
@@ -58,6 +58,7 @@ object ZipAndJarFlatClassPathFactory extends ZipAndJarFileLookupFactory {
 
     override protected def createFileEntry(file: FileZipArchive#Entry): ClassFileEntryImpl = ClassFileEntryImpl(file)
     override protected def isRequiredFileType(file: AbstractFile): Boolean = file.isClass
+    override def close(): Unit = ???
   }
 
   /**
@@ -138,6 +139,7 @@ object ZipAndJarFlatClassPathFactory extends ZipAndJarFileLookupFactory {
     }
 
     override private[nsc] def list(inPackage: String): FlatClassPathEntries = FlatClassPathEntries(packages(inPackage), classes(inPackage))
+    override def close(): Unit = ()
   }
 
   private object ManifestResourcesFlatClassPath {
@@ -174,6 +176,7 @@ object ZipAndJarFlatSourcePathFactory extends ZipAndJarFileLookupFactory {
 
     override protected def createFileEntry(file: FileZipArchive#Entry): SourceFileEntryImpl = SourceFileEntryImpl(file)
     override protected def isRequiredFileType(file: AbstractFile): Boolean = file.isScalaOrJavaSource
+    override def close(): Unit = ()
   }
 
   override protected def createForZipFile(zipFile: AbstractFile): FlatClassPath = ZipArchiveFlatSourcePath(zipFile.file)

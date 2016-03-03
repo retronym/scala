@@ -5,6 +5,8 @@
 package scala
 package reflect.internal.util
 
+import java.io.Closeable
+
 import scala.collection.mutable
 import scala.reflect.io.AbstractFile
 import java.net.{ URL, URLConnection, URLStreamHandler }
@@ -18,7 +20,7 @@ import java.util.{ Collections => JCollections, Enumeration => JEnumeration }
  */
 class AbstractFileClassLoader(val root: AbstractFile, parent: ClassLoader)
     extends ClassLoader(parent)
-    with ScalaClassLoader
+    with ScalaClassLoader with Closeable
 {
   protected def classNameToPath(name: String): String =
     if (name endsWith ".class") name
@@ -107,4 +109,9 @@ class AbstractFileClassLoader(val root: AbstractFile, parent: ClassLoader)
 
   override def getPackages(): Array[Package] =
     root.iterator.filter(_.isDirectory).map(dir => getPackage(dir.name)).toArray
+
+  override def close(): Unit = parent match {
+    case c: Closeable => c.close()
+    case _ =>
+  }
 }

@@ -6,6 +6,8 @@
 package scala.tools.nsc
 package interpreter
 
+import java.io.Closeable
+
 import typechecker.Analyzer
 
 /** A layer on top of Global so I can guarantee some extra
@@ -24,7 +26,7 @@ trait ReplGlobal extends Global {
     val global: ReplGlobal.this.type = ReplGlobal.this
   } with Analyzer {
 
-    override protected def findMacroClassLoader(): ClassLoader = {
+    override protected def findMacroClassLoader(): (ClassLoader with Closeable) = {
       val loader = super.findMacroClassLoader
       macroLogVerbose("macro classloader: initializing from a REPL classloader: %s".format(global.classPath.asURLs))
       val virtualDirectory = globalSettings.outputDirs.getSingleOutput.get

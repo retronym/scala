@@ -122,4 +122,5 @@ case class AggregateFlatClassPath(aggregates: Seq[FlatClassPath]) extends FlatCl
 
   private def classesGetter(pkg: String) = (cp: FlatClassPath) => cp.classes(pkg)
   private def sourcesGetter(pkg: String) = (cp: FlatClassPath) => cp.sources(pkg)
+  override def close(): Unit = aggregates.foreach(_.close())
 }

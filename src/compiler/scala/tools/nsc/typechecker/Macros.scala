@@ -1,6 +1,7 @@
 package scala.tools.nsc
 package typechecker
 
+import java.io.Closeable
 import java.lang.Math.min
 import symtab.Flags._
 import scala.reflect.internal.util.ScalaClassLoader
@@ -59,7 +60,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
    *
    *  Mirrors with runtime definitions (e.g. Repl) need to adjust this method.
    */
-  protected def findMacroClassLoader(): ClassLoader = {
+  protected def findMacroClassLoader(): (ClassLoader with Closeable) = {
     val classpath = global.classPath.asURLs
     macroLogVerbose("macro classloader: initializing from -cp: %s".format(classpath))
     ScalaClassLoader.fromURLs(classpath, self.getClass.getClassLoader)

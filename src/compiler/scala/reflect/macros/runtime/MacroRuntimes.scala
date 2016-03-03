@@ -1,6 +1,8 @@
 package scala.reflect.macros
 package runtime
 
+import java.io.Closeable
+
 import scala.reflect.internal.Flags._
 import scala.reflect.runtime.ReflectionUtils
 
@@ -44,7 +46,9 @@ trait MacroRuntimes extends JavaReflectionRuntimes {
    *  which compiles implementations into a virtual directory (very much like REPL does) and then conjures
    *  a classloader mapped to that virtual directory.
    */
-  lazy val defaultMacroClassloader: ClassLoader = findMacroClassLoader()
+  val defaultMacroClassloader: () => (ClassLoader with Closeable) = {
+    perRunCaches.newGeneric(findMacroClassLoader())
+  }
 
   /** Abstracts away resolution of macro runtimes.
    */
@@ -61,8 +65,8 @@ trait MacroRuntimes extends JavaReflectionRuntimes {
       } else {
         try {
           macroLogVerbose(s"resolving macro implementation as $className.$methName (isBundle = $isBundle)")
-          macroLogVerbose(s"classloader is: ${ReflectionUtils.show(defaultMacroClassloader)}")
-          resolveJavaReflectionRuntime(defaultMacroClassloader)
+          macroLogVerbose(s"classloader is: ${ReflectionUtils.show(defaultMacroClassloader())}")
+          resolveJavaReflectionRuntime(defaultMacroClassloader())
         } catch {
           case ex: Exception =>
             macroLogVerbose(s"macro runtime failed to load: ${ex.toString}")
