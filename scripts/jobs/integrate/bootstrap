@@ -269,20 +269,24 @@ buildScalacheck(){
   fi
 }
 
+publishTasksPrivateRepo=('set credentials += Credentials(Path.userHome / ".credentials-private-repo")' "set every publishTo := Some(\"private-repo\" at \"$releaseTempRepoUrl\")")
+publishTasksSonatype=('set credentials += Credentials(Path.userHome / ".credentials-sonatype")' "set pgpPassphrase := Some(Array.empty)")
+
 # build modules, using ${buildTasks[@]} (except for Scalacheck, which is hard-coded to publish to private-repo)
 buildModules() {
-  publishTasks=('set credentials += Credentials(Path.userHome / ".credentials-private-repo")' "set every publishTo := Some(\"private-repo\" at \"$releaseTempRepoUrl\")")
+  publishTasks=($publishTasksPrivateRepo)
   buildTasks=($publishPrivateTask)
-  buildXML
-  buildParsers
-  buildSwing
+  buildModulesNotScalacheck()
   buildScalacheck
-  buildPartest
 }
 
 buildPublishedModules() {
-  publishTasks=('set credentials += Credentials(Path.userHome / ".credentials-sonatype")' "set pgpPassphrase := Some(Array.empty)")
+  publishTasks=($publishTasksSonatype)
   buildTasks=($publishSonatypeTaskModules)
+  buildModulesNotScalacheck()
+}
+
+buildModulesNotScalacheck() {
   buildXML
   buildParsers
   buildSwing
@@ -600,4 +604,10 @@ bootstrap
 
 if [ "$publishToSonatype" == "yes" ]
   then publishSonatype
+else
+  # Even if we're not publishing to sonatype, we should run the module builds a second time,
+  # which will have scaladoc generation and publishing enabled. See https://github.com/scala/scala-dev/issues/89
+  publishTasks=($publishTasksPrivateRepo)
+  buildTasks=($publishPrivateTask)
+  buildModulesNotScalacheck()
 fi
