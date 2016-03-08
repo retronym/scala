@@ -1502,4 +1502,14 @@ class InlinerTest extends ClearAfterClass {
     val List(a, b) = compileClassesSeparately(List(codeA, codeB), extraArgs = "-Yopt:l:project -Yopt-warnings")
     assertInvoke(getSingleMethod(b, "t"), "A", "f")
   }
+
+  @Test
+  def sd86(): Unit = {
+    val code =
+      """trait T { @inline def f = 1 } // note that f is not final
+        |class C extends T
+      """.stripMargin
+    val List(c, t) = compile(code, allowMessage = _ => true)
+    assertSameSummary(getSingleMethod(c, "f"), List(ICONST_1, IRETURN))
+  }
 }
