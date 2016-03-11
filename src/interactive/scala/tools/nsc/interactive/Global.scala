@@ -1245,10 +1245,17 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
         val qualPos = qual.pos
         def fallback = qualPos.end + 2
         val source = pos.source
-        val nameStart: Int = (qualPos.end + 1 until focus1.pos.end).find(p =>
+        val searchStart = (if (qualPos.isOffset) 0 else 1) + qualPos.end
+        val nameStart: Int = (searchStart until focus1.pos.end).find(p =>
           source.identifier(source.position(p)).exists(_.length > 0)
         ).getOrElse(fallback)
-        typeCompletions(sel, qual, nameStart, name)
+        if (qualPos.isOffset) {
+          val allMembers = scopeMembers(pos)
+          val positionDelta: Int = pos.start - nameStart
+          val subName = name.subName(0, positionDelta)
+          CompletionResult.ScopeMembers(positionDelta, allMembers, subName)
+        } else
+          typeCompletions(sel, qual, nameStart, name)
       case Ident(name) =>
         val allMembers = scopeMembers(pos)
         val positionDelta: Int = pos.start - focus1.pos.start
