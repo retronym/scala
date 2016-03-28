@@ -988,14 +988,14 @@ class InlinerTest extends ClearAfterClass {
       case _ => true
     })
     // the indy call is inlined into t, and the closure elimination rewrites the closure invocation to the body method
-    assertInvoke(t1, "C", "C$$$anonfun$2")
+    assertInvoke(t1, "C", "$anonfun$2")
 
     val t2 = getSingleMethod(c, "t2")
     assert(t2.instructions forall { // indy is eliminated by push-pop
       case _: InvokeDynamic => false
       case _ => true
     })
-    assertInvoke(t2, "M$", "M$$$anonfun$1")
+    assertInvoke(t2, "M$", "$anonfun$1")
   }
 
   @Test
@@ -1079,7 +1079,7 @@ class InlinerTest extends ClearAfterClass {
       """.stripMargin
 
     val List(c) = compile(code)
-    assertInvoke(getSingleMethod(c, "t1"), "C", "C$$$anonfun$1")
+    assertInvoke(getSingleMethod(c, "t1"), "C", "$anonfun$1")
     assertInvoke(getSingleMethod(c, "t2"), "C", "a")
     assertInvoke(getSingleMethod(c, "t3"), "C", "b")
     assertNoInvoke(getSingleMethod(c, "t4"))
@@ -1143,8 +1143,8 @@ class InlinerTest extends ClearAfterClass {
       """.stripMargin
 
     val List(c) = compile(code)
-    assertInvoke(getSingleMethod(c, "t1"), "C", "C$$$anonfun$1")
-    assertInvoke(getSingleMethod(c, "t2"), "C", "C$$$anonfun$2")
+    assertInvoke(getSingleMethod(c, "t1"), "C", "$anonfun$1")
+    assertInvoke(getSingleMethod(c, "t2"), "C", "$anonfun$2")
     assertInvoke(getSingleMethod(c, "t3"), "scala/Function1", "apply$mcII$sp")
     assertInvoke(getSingleMethod(c, "t4"), "scala/Function1", "apply$mcII$sp")
     assertInvoke(getSingleMethod(c, "t5"), "C", "h")
@@ -1319,39 +1319,39 @@ class InlinerTest extends ClearAfterClass {
       """.stripMargin
     val List(c, _, _) = compile(code)
 
-    assertSameSummary(getSingleMethod(c, "t1"), List(BIPUSH, "C$$$anonfun$1", IRETURN))
-    assertSameSummary(getSingleMethod(c, "t1a"), List(LCONST_1, "C$$$anonfun$2", IRETURN))
-    assertSameSummary(getSingleMethod(c, "t2"), List(ICONST_1, ICONST_2, "C$$$anonfun$3",IRETURN))
+    assertSameSummary(getSingleMethod(c, "t1"), List(BIPUSH, "$anonfun$1", IRETURN))
+    assertSameSummary(getSingleMethod(c, "t1a"), List(LCONST_1, "$anonfun$2", IRETURN))
+    assertSameSummary(getSingleMethod(c, "t2"), List(ICONST_1, ICONST_2, "$anonfun$3",IRETURN))
 
     // val a = new ValKl(n); new ValKl(anonfun(a.x)).x
     // value class instantiation-extraction should be optimized by boxing elim
     assertSameSummary(getSingleMethod(c, "t3"), List(
       NEW, DUP, ICONST_1, "<init>", ASTORE,
       NEW, DUP, ALOAD, "x",
-      "C$$$anonfun$4",
+      "$anonfun$4",
       "<init>",
       "x", IRETURN))
 
-    assertSameSummary(getSingleMethod(c, "t4"), List(BIPUSH, "C$$$anonfun$5", "boxToInteger", ARETURN))
-    assertSameSummary(getSingleMethod(c, "t4a"), List(ICONST_1, LDC, "C$$$anonfun$6", LRETURN))
-    assertSameSummary(getSingleMethod(c, "t5"), List(BIPUSH, ICONST_3, "C$$$anonfun$7", "boxToInteger", ARETURN))
-    assertSameSummary(getSingleMethod(c, "t5a"), List(BIPUSH, BIPUSH, I2B, "C$$$anonfun$8", IRETURN))
-    assertSameSummary(getSingleMethod(c, "t6"), List(BIPUSH, "C$$$anonfun$9", RETURN))
-    assertSameSummary(getSingleMethod(c, "t7"), List(ICONST_1, "C$$$anonfun$10", RETURN))
-    assertSameSummary(getSingleMethod(c, "t8"), List(ICONST_1, LDC, "C$$$anonfun$11", LRETURN))
-    assertSameSummary(getSingleMethod(c, "t9"), List(ICONST_1, "boxToInteger", "C$$$anonfun$12", RETURN))
+    assertSameSummary(getSingleMethod(c, "t4"), List(BIPUSH, "$anonfun$5", "boxToInteger", ARETURN))
+    assertSameSummary(getSingleMethod(c, "t4a"), List(ICONST_1, LDC, "$anonfun$6", LRETURN))
+    assertSameSummary(getSingleMethod(c, "t5"), List(BIPUSH, ICONST_3, "$anonfun$7", "boxToInteger", ARETURN))
+    assertSameSummary(getSingleMethod(c, "t5a"), List(BIPUSH, BIPUSH, I2B, "$anonfun$8", IRETURN))
+    assertSameSummary(getSingleMethod(c, "t6"), List(BIPUSH, "$anonfun$9", RETURN))
+    assertSameSummary(getSingleMethod(c, "t7"), List(ICONST_1, "$anonfun$10", RETURN))
+    assertSameSummary(getSingleMethod(c, "t8"), List(ICONST_1, LDC, "$anonfun$11", LRETURN))
+    assertSameSummary(getSingleMethod(c, "t9"), List(ICONST_1, "boxToInteger", "$anonfun$12", RETURN))
 
     // t9a inlines Range.foreach, which is quite a bit of code, so just testing the core
-    assertInvoke(getSingleMethod(c, "t9a"), "C", "C$$$anonfun$13")
+    assertInvoke(getSingleMethod(c, "t9a"), "C", "$anonfun$13")
     assertInvoke(getSingleMethod(c, "t9a"), "scala/runtime/BoxesRunTime", "boxToInteger")
 
     assertSameSummary(getSingleMethod(c, "t10"), List(
       ICONST_1, ISTORE,
       ALOAD, ILOAD,
-      "C$$$anonfun$14", RETURN))
+      "$anonfun$14", RETURN))
 
     // t10a inlines Range.foreach
-    assertInvoke(getSingleMethod(c, "t10a"), "C", "C$$$anonfun$15")
+    assertInvoke(getSingleMethod(c, "t10a"), "C", "$anonfun$15")
     assertDoesNotInvoke(getSingleMethod(c, "t10a"), "boxToInteger")
   }
 
@@ -1377,7 +1377,7 @@ class InlinerTest extends ClearAfterClass {
     val List(c) = compile(code)
     assertSameCode(getSingleMethod(c, "t1"), List(Op(ICONST_0), Op(ICONST_1), Op(IADD), Op(IRETURN)))
     assertEquals(getSingleMethod(c, "t2").instructions collect { case i: Invoke => i.owner +"."+ i.name }, List(
-      "scala/runtime/IntRef.create", "C.C$$$anonfun$1"))
+      "scala/runtime/IntRef.create", "C.$anonfun$1"))
   }
 
   @Test
@@ -1495,9 +1495,9 @@ class InlinerTest extends ClearAfterClass {
 
     // box-unbox will clean it up
     assertSameSummary(getSingleMethod(c, "t"), List(
-      ALOAD, "C$$$anonfun$1", IFEQ /*A*/,
-      "C$$$anonfun$2", IRETURN,
-      -1 /*A*/, "C$$$anonfun$3", IRETURN))
+      ALOAD, "$anonfun$1", IFEQ /*A*/,
+      "$anonfun$2", IRETURN,
+      -1 /*A*/, "$anonfun$3", IRETURN))
   }
 
   @Test

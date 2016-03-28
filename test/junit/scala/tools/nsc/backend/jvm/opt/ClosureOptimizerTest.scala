@@ -50,7 +50,7 @@ class ClosureOptimizerTest extends ClearAfterClass {
 
     val List(c) = compileClasses(compiler)(code)
     val t = findAsmMethod(c, "t")
-    val List(bodyCall) = findInstr(t, "INVOKESTATIC C.C$$$anonfun$1 ()Lscala/runtime/Nothing$")
+    val List(bodyCall) = findInstr(t, "INVOKESTATIC C.$anonfun$1 ()Lscala/runtime/Nothing$")
     assert(bodyCall.getNext.getOpcode == ATHROW)
   }
 
@@ -66,7 +66,7 @@ class ClosureOptimizerTest extends ClearAfterClass {
 
     val List(c) = compileClasses(compiler)(code)
     val t = findAsmMethod(c, "t")
-    val List(bodyCall) = findInstr(t, "INVOKESTATIC C.C$$$anonfun$1 ()Lscala/runtime/Null$")
+    val List(bodyCall) = findInstr(t, "INVOKESTATIC C.$anonfun$1 ()Lscala/runtime/Null$")
     assert(bodyCall.getNext.getOpcode == POP)
     assert(bodyCall.getNext.getNext.getOpcode == ACONST_NULL)
   }
@@ -84,7 +84,7 @@ class ClosureOptimizerTest extends ClearAfterClass {
     val List(c) = compileClasses(compiler)(code)
     assertSameCode(getSingleMethod(c, "t"),
       List(VarOp(ALOAD, 1), Invoke(INVOKEVIRTUAL, "scala/collection/immutable/List", "head", "()Ljava/lang/Object;", false),
-        TypeOp(CHECKCAST, "java/lang/String"), Invoke(INVOKESTATIC, "C", "C$$$anonfun$1", "(Ljava/lang/String;)Ljava/lang/String;", false),
+        TypeOp(CHECKCAST, "java/lang/String"), Invoke(INVOKESTATIC, "C", "C$anonfun$1", "(Ljava/lang/String;)Ljava/lang/String;", false),
         Op(ARETURN)))
   }
 

@@ -136,7 +136,6 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
       val captures = FreeVarTraverser.freeVarsOf(originalFunction)
 
       val target = targetMethod(originalFunction)
-      target.makeNotPrivate(target.owner)
       if (!thisReferringMethods.contains(target))
         target setFlag STATIC
 
