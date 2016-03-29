@@ -333,6 +333,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     definitions.BlackboxContextClass
     definitions.WhiteboxContextClass
     definitions.MacroImplAnnotation
+    definitions.Interpreter_iw
     definitions.StringContextClass
     definitions.StringContextModule
     definitions.QuasiquoteClass

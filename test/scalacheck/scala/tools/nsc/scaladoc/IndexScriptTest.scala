@@ -9,7 +9,7 @@ import scala.tools.nsc.doc.html.page.IndexScript
 object IndexScriptTest extends Properties("IndexScript") {
 
   val docFactory = {
-    val settings = new doc.Settings({Console.err.println(_)})
+    val settings = new doc.Settings(Console.err.println(_))
     settings.scaladocQuietRun = true
     settings.nowarn.value = true
     SettingsUtil.configureClassAndSourcePath(settings)
@@ -39,7 +39,8 @@ object IndexScriptTest extends Properties("IndexScript") {
           "scala.tools.nsc",
           "scala.tools.nsc.doc",
           "scala.tools.nsc.doc.html",
-          "scala.tools.nsc.doc.html.page"
+          "scala.tools.nsc.doc.html.page",
+          "scala.tools.nsc.interpreter"     // incurred by Contexts.isRootImport
         )
       case None =>
         false

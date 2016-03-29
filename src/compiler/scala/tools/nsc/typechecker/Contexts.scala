@@ -36,7 +36,7 @@ trait Contexts { self: Analyzer =>
     enclClass  = this
     enclMethod = this
 
-    override val depth = 0
+    override lazy val depth = 0
     override def nextEnclosing(p: Context => Boolean): Context = this
     override def enclosingContextChain: List[Context] = Nil
     override def implicitss: List[List[ImplicitInfo]] = Nil
@@ -237,16 +237,17 @@ trait Contexts { self: Analyzer =>
 
     protected def outerDepth = if (outerIsNoContext) 0 else outer.depth
 
-    val depth: Int = {
+    lazy val depth: Int = {
       val increasesDepth = isRootImport || outerIsNoContext || (outer.scope != scope)
       ( if (increasesDepth) 1 else 0 ) + outerDepth
     }
 
-    /** The currently visible imports */
+    /** The currently visible imports, from innermost to outermost. */
     def imports: List[ImportInfo] = outer.imports
     /** Equivalent to `imports.headOption`, but more efficient */
     def firstImport: Option[ImportInfo] = outer.firstImport
     protected[Contexts] def importOrNull: ImportInfo = null
+    /** A root import is never unused and always bumps context depth. (scala/Predef/java.lang and magic REPL imports) */
     def isRootImport: Boolean = false
 
     /** Types for which implicit arguments are currently searched */
@@ -489,10 +490,11 @@ trait Contexts { self: Analyzer =>
         else prefix
 
       // The blank canvas
-      val c = if (isImport)
-        new Context(tree, owner, scope, unit, this, reporter) with ImportContext
-      else
-        new Context(tree, owner, scope, unit, this, reporter)
+      val c =
+        if (isImport)
+          new Context(tree, owner, scope, unit, this, reporter) with ImportContext
+        else
+          new Context(tree, owner, scope, unit, this, reporter)
 
       // Fields that are directly propagated
       c.variance           = variance
@@ -1308,7 +1310,7 @@ trait Contexts { self: Analyzer =>
 
   /** A `Context` focussed on an `Import` tree */
   trait ImportContext extends Context {
-    private val impInfo: ImportInfo = {
+    private[this] lazy val impInfo: ImportInfo = {
       val info = new ImportInfo(tree.asInstanceOf[Import], outerDepth)
       if (settings.warnUnusedImport && openMacros.isEmpty && !isRootImport) // excludes java.lang/scala/Predef imports
         allImportInfos(unit) ::= info
@@ -1317,7 +1319,14 @@ trait Contexts { self: Analyzer =>
     override final def imports      = impInfo :: super.imports
     override final def firstImport  = Some(impInfo)
     override final def importOrNull = impInfo
-    override final def isRootImport = !tree.pos.isDefined
+    override final lazy val isRootImport = !tree.pos.isDefined || {
+      val head = {
+        val all = impInfo.allImportedSymbols.iterator
+        if (all.hasNext) all.next else null
+      }
+      //definitions.Interpreter_iw == head
+      head != null && definitions.Interpreter_iw.fullName == head.fullName
+    }
     override final def toString     = s"${super.toString} with ImportContext { $impInfo; outer.owner = ${outer.owner} }"
   }
 
@@ -1467,7 +1476,6 @@ trait Contexts { self: Analyzer =>
     protected def handleError(pos: Position, msg: String): Unit = reporter.error(pos, msg)
  }
 
-
   private[typechecker] class BufferingReporter(_errorBuffer: mutable.LinkedHashSet[AbsTypeError] = null, _warningBuffer: mutable.LinkedHashSet[(Position, String)] = null) extends ContextReporter(_errorBuffer, _warningBuffer) {
     override def isBuffering = true
 
@@ -1506,7 +1514,7 @@ trait Contexts { self: Analyzer =>
     def qual: Tree = tree.symbol.info match {
       case ImportType(expr) => expr
       case ErrorType        => tree setType NoType // fix for #2870
-      case _                => throw new FatalError("symbol " + tree.symbol + " has bad type: " + tree.symbol.info) //debug
+      case _                => throw new FatalError(s"symbol ${tree.symbol} has bad type: ${tree.symbol.info}") //debug
     }
 
     /** Is name imported explicitly, not via wildcard? */

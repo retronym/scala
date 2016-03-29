@@ -536,8 +536,10 @@ trait Namers extends MethodSynthesis {
       val Import(expr, selectors) = tree
       val base = expr.tpe
 
-      def checkNotRedundant(pos: Position, from: Name, to0: Name) {
-        def check(to: Name) = {
+      // warn proactively if specific import loses to definition in scope,
+      // since it may result in desired implicit not imported into scope.
+      def checkNotRedundant(pos: Position, from: Name, to0: Name): Unit = {
+        def check(to: Name): Unit = {
           val e = context.scope.lookupEntry(to)
 
           if (e != null && e.owner == context.scope && e.sym.exists)
@@ -549,15 +551,20 @@ trait Namers extends MethodSynthesis {
             defSym andAlso (typer.permanentlyHiddenWarning(pos, to0, _))
           }
         }
-        if (!tree.symbol.isSynthetic && expr.symbol != null && !expr.symbol.isInterpreterWrapper) {
+
+        def isReplMagic(importInfo: ImportInfo): Boolean = importInfo.isExplicitImport(Interpreter_iw.name)
+
+        if (!tree.symbol.isSynthetic && expr.symbol != null && !context.imports.exists(isReplMagic)) {
           if (base.member(from) != NoSymbol)
             check(to0)
           if (base.member(from.toTypeName) != NoSymbol)
             check(to0.toTypeName)
         }
       }
+
       def checkSelector(s: ImportSelector) = {
         val ImportSelector(from, fromPos, to, _) = s
+
         def isValid(original: Name) =
           (base nonLocalMember original.toTermName) == NoSymbol &&
             (base nonLocalMember original.toTypeName) == NoSymbol
@@ -587,15 +594,17 @@ trait Namers extends MethodSynthesis {
       def noDuplicates(): Unit = {
         @inline def isRename(hd: ImportSelector): Boolean =
           hd.rename != null && hd.rename != nme.WILDCARD && hd.rename != hd.name
+
         def loop(xs: List[ImportSelector]): Unit = xs match {
-          case Nil      => ()
+          case Nil => ()
           case hd :: tl =>
-            if (hd.name != nme.WILDCARD && tl.exists(x => ! (x.name == nme.WILDCARD) && x.name == hd.name))
+            if (hd.name != nme.WILDCARD && tl.exists(x => !(x.name == nme.WILDCARD) && x.name == hd.name))
               DuplicatesError(tree, hd.name, RenamedTwice)
             else if (isRename(hd) && tl.exists(x => isRename(hd) && x.rename == hd.rename))
               DuplicatesError(tree, hd.rename, AppearsTwice)
             else loop(tl)
         }
+
         loop(selectors)
       }
       // checks on the whole set
@@ -1819,7 +1828,6 @@ trait Namers extends MethodSynthesis {
         ImportType(expr1)
       }
     }
-
 
     /** Given a case class
      *   case class C[Ts] (ps: Us)
