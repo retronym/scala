@@ -1172,7 +1172,7 @@ class InlinerTest extends ClearAfterClass {
 
     val warn =
       """C::h()I is annotated @inline but could not be inlined:
-        |The callee C::h()I contains the instruction INVOKESPECIAL C.f$1 ()I
+        |The callee C::h()I contains the instruction INVOKESTATIC C.f$1 ()I
         |that would cause an IllegalAccessError when inlined into class D.""".stripMargin
 
     val List(c, d) = compile(code, allowMessage = _.msg contains warn)
