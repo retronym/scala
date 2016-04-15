@@ -79,9 +79,11 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
           }
           else {
             checkUninitializedReads(cd)
-            val tplTransformer = new TemplateTransformer(unit, impl0)
+            val tplTransformer = new TemplateTransformer(unit, super.transform(impl0).asInstanceOf[Template])
             treeCopy.ClassDef(cd, mods0, name0, tparams0, tplTransformer.transformed)
           }
+        case Apply(fun, args) if fun.symbol != null && fun.symbol.isConstructor && !sameLength(fun.symbol.info.params, args) =>
+          treeCopy.Apply(tree, super.transform(fun) /* .modifyType(...) ? */, args.drop(1))
         case _ =>
           super.transform(tree)
       }
@@ -708,12 +710,20 @@ abstract class Constructors extends Statics with Transform with ast.TreeDSL {
         else (Nil, remainingConstrStats)
 
       // Assemble final constructor
-      val primaryConstructor = deriveDefDef(primaryConstr)(_ => {
-        treeCopy.Block(
+      val primaryConstructor = {
+        val body = treeCopy.Block(
           primaryConstrBody,
           paramInits ::: constructorPrefix ::: uptoSuperStats ::: guardSpecializedInitializer(remainingConstrStatsDelayedInit),
           primaryConstrBody.expr)
-      })
+        val vparamss = if (clazz.originalOwner.logicallyEnclosingMember.isTerm && omittableAccessor.exists(_.isOuterField)) {
+          val List(outerParam :: rest) = primaryConstr.vparamss
+          primaryConstr.symbol.modifyInfo {
+            case GenPolyType(tparams, MethodType(params, res)) => GenPolyType(tparams, MethodType(params.drop(1), res))
+          }
+          rest :: Nil
+        } else primaryConstr.vparamss
+        treeCopy.DefDef(primaryConstr, primaryConstr.mods, primaryConstr.name, primaryConstr.tparams, vparamss, primaryConstr.tpt, body)
+      }
 
       val constructors = primaryConstructor :: auxConstructors
 
