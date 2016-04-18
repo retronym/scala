@@ -3131,13 +3131,54 @@ trait Types
        */
       def unifyFull(tpe: Type): Boolean = {
         def unifySpecific(tp: Type) = {
-          sameLength(typeArgs, tp.typeArgs) && {
+          if(sameLength(typeArgs, tp.typeArgs)) {
             val lhs = if (isLowerBound) tp.typeArgs else typeArgs
             val rhs = if (isLowerBound) typeArgs else tp.typeArgs
             // This is a higher-kinded type var with same arity as tp.
             // If so (see SI-7517), side effect: adds the type constructor itself as a bound.
             isSubArgs(lhs, rhs, params, AnyDepth) && { addBound(tp.typeConstructor); true }
-          }
+          } else if(settings.YhigherOrderUnification && typeArgs.lengthCompare(0) > 0 && compareLengths(typeArgs, tp.typeArgs) < 0) {
+            // Simple algorithm as suggested by Paul Chiusano in the comments on SI-2712
+            //
+            //   https://issues.scala-lang.org/browse/SI-2712?focusedCommentId=61270
+            //
+            // Treat the type constructor as curried and partially applied, we treat a prefix
+            // as constants and solve for the suffix. For the example in the ticket, unifying
+            // M[A] with Int => Int this unifies as,
+            //
+            //   M[t] = [t][Int => t]
+            //   A = Int
+            //
+            // A more "natural" unifier might be M[t] = [t][t => t]. There's lots of scope for
+            // experimenting with alternatives here.
+
+            val tpSym = tp.typeSymbolDirect
+            val rightToLeft = tpSym.annotations.exists(_ matches definitions.unifyRightToLeftClass)
+
+            val numAbstracted = typeArgs.length
+            val numCaptured = tp.typeArgs.length-numAbstracted
+            val (captured, abstracted) =
+              if(rightToLeft) tp.typeArgs.splitAt(numAbstracted).swap
+             else tp.typeArgs.splitAt(numCaptured)
+
+            val lhs = if (isLowerBound) abstracted else typeArgs
+            val rhs = if (isLowerBound) typeArgs else abstracted
+            // This is a higher-kinded type var with same arity as tp.
+            // If so (see SI-7517), side effect: adds the type constructor itself as a bound.
+            isSubArgs(lhs, rhs, params, AnyDepth) && {
+              val absSyms =
+                if(rightToLeft) tpSym.typeParams.take(numAbstracted)
+                else tpSym.typeParams.drop(numCaptured)
+              val freeSyms = absSyms.map(_.cloneSymbol(tpSym))
+              val args =
+                if(rightToLeft) freeSyms.map(_.tpeHK) ++ captured
+                else captured ++ freeSyms.map(_.tpeHK)
+              val poly = PolyType(freeSyms, appliedType(tp.typeConstructor, args))
+              addBound(poly)
+              true
+            }
+          } else
+            false
         }
         // The type with which we can successfully unify can be hidden
         // behind singleton types and type aliases.

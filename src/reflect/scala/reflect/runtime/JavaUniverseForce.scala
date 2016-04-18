@@ -384,6 +384,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     definitions.VarargsClass
     definitions.uncheckedStableClass
     definitions.uncheckedVarianceClass
+    definitions.unifyRightToLeftClass
     definitions.BeanPropertyAttr
     definitions.BooleanBeanPropertyAttr
     definitions.CompileTimeOnlyAttr

@@ -1,0 +1,12 @@
+t2712.scala:4: error: inferred type arguments [Int,[+B]scala.collection.immutable.Map[Char,B]] do not conform to method shuffle's type parameter bounds [T,CC[X] <: TraversableOnce[X]]
+  scala.util.Random.shuffle("abcd".map(x => (x, x.toInt)).toMap)
+                    ^
+t2712.scala:4: error: type mismatch;
+ found   : scala.collection.immutable.Map[Char,Int]
+ required: CC[T]
+  scala.util.Random.shuffle("abcd".map(x => (x, x.toInt)).toMap)
+                                                          ^
+t2712.scala:4: error: Cannot construct a collection of type CC[T] with elements of type T based on a collection of type CC[T].
+  scala.util.Random.shuffle("abcd".map(x => (x, x.toInt)).toMap)
+                           ^
+three errors found
