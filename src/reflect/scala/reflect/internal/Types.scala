@@ -3136,7 +3136,11 @@ trait Types
             val rhs = if (isLowerBound) typeArgs else tp.typeArgs
             // This is a higher-kinded type var with same arity as tp.
             // If so (see SI-7517), side effect: adds the type constructor itself as a bound.
-            isSubArgs(lhs, rhs, params, AnyDepth) && { addBound(tp.typeConstructor); true }
+            val saved = undoLog.log
+            val withinBounds = isWithinBounds(prefix, origin.typeSymbol.owner, origin.typeSymbol :: Nil, tp.typeConstructor :: Nil)
+            withinBounds && isSubArgs(lhs, rhs, params, AnyDepth) && {
+              addBound(tp.typeConstructor); true
+            }
           } else if(settings.YhigherOrderUnification && typeArgs.lengthCompare(0) > 0 && compareLengths(typeArgs, tp.typeArgs) < 0) {
             // Simple algorithm as suggested by Paul Chiusano in the comments on SI-2712
             //
@@ -3153,7 +3157,7 @@ trait Types
             // experimenting with alternatives here.
 
             val tpSym = tp.typeSymbolDirect
-            val rightToLeft = tpSym.annotations.exists(_ matches definitions.unifyRightToLeftClass)
+            val rightToLeft = tpSym.hasAnnotation(definitions.unifyRightToLeftClass)
 
             val numAbstracted = typeArgs.length
             val numCaptured = tp.typeArgs.length-numAbstracted
@@ -3165,7 +3169,8 @@ trait Types
             val rhs = if (isLowerBound) typeArgs else abstracted
             // This is a higher-kinded type var with same arity as tp.
             // If so (see SI-7517), side effect: adds the type constructor itself as a bound.
-            isSubArgs(lhs, rhs, params, AnyDepth) && {
+            val withinBounds = isWithinBounds(prefix, origin.typeSymbol.owner, origin.typeSymbol :: Nil, tp.typeConstructor :: Nil)
+            withinBounds && isSubArgs(lhs, rhs, params, AnyDepth) && {
               val absSyms =
                 if(rightToLeft) tpSym.typeParams.take(numAbstracted)
                 else tpSym.typeParams.drop(numCaptured)

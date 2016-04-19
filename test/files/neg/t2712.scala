@@ -1,5 +1,8 @@
 package test
 
+trait Two[A, B]
+
 object Test {
-  scala.util.Random.shuffle("abcd".map(x => (x, x.toInt)).toMap)
+  def foo[M[_], A](m: M[A]) = ()
+  def test(ma: Two[Int, String]) = foo(ma) // should fail with -Yhigher-order-unification *disabled*
 }
