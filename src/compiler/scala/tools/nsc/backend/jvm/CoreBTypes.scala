@@ -96,6 +96,7 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   lazy val ObjectRef                 : ClassBType = classBTypeFromSymbol(ObjectClass)
   lazy val StringRef                 : ClassBType = classBTypeFromSymbol(StringClass)
   lazy val PredefRef                 : ClassBType = classBTypeFromSymbol(PredefModule.moduleClass)
+  lazy val SomeRef                   : ClassBType = classBTypeFromSymbol(SomeClass)
   lazy val jlStringBuilderRef        : ClassBType = classBTypeFromSymbol(JavaStringBuilderClass)
   lazy val jlStringBufferRef         : ClassBType = classBTypeFromSymbol(JavaStringBufferClass)
   lazy val jlCharSequenceRef         : ClassBType = classBTypeFromSymbol(JavaCharSequenceClass)
@@ -313,6 +314,7 @@ trait CoreBTypesProxyGlobalIndependent[BTS <: BTypes] {
   def ObjectRef                 : ClassBType
   def StringRef                 : ClassBType
   def PredefRef                 : ClassBType
+  def SomeRef                   : ClassBType
   def jlCloneableRef            : ClassBType
   def jiSerializableRef         : ClassBType
   def juHashMapRef              : ClassBType
@@ -372,6 +374,7 @@ final class CoreBTypesProxy[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: 
   def ObjectRef                 : ClassBType = _coreBTypes.ObjectRef
   def StringRef                 : ClassBType = _coreBTypes.StringRef
   def PredefRef                 : ClassBType = _coreBTypes.PredefRef
+  def SomeRef                   : ClassBType = _coreBTypes.SomeRef
   def jlStringBuilderRef        : ClassBType = _coreBTypes.jlStringBuilderRef
   def jlStringBufferRef         : ClassBType = _coreBTypes.jlStringBufferRef
   def jlCharSequenceRef         : ClassBType = _coreBTypes.jlCharSequenceRef
