@@ -38,7 +38,13 @@ object FlatClassPathFactory {
         ZipAndJarFlatClassPathFactory.create(file, settings)
       else if (file.isDirectory)
         new DirectoryFlatClassPath(file.file)
-      else
+      else if (file.hasExtension("jimage")) {
+        import java.nio.file._, java.net.URI, scala.collection.JavaConverters._
+        val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
+        val dir: Path = fs.getPath("/modules")
+        val modules = Files.list(dir).iterator().asScala.toList
+        new AggregateFlatClassPath(modules.map(m => new JImageDirectoryLookup(m.getFileName.toString)))
+      } else
         sys.error(s"Unsupported classpath element: $file")
   }
 }

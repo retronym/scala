@@ -4,9 +4,11 @@
 package scala.tools.nsc.classpath
 
 import java.io.File
-import java.net.URL
-import scala.reflect.io.AbstractFile
-import scala.reflect.io.PlainFile
+import java.net.{URI, URL}
+import java.nio.file.{FileSystems, Files, SimpleFileVisitor}
+import java.util.function.IntFunction
+
+import scala.reflect.io.{AbstractFile, PlainFile, PlainNioFile}
 import scala.tools.nsc.util.ClassRepresentation
 import FileUtils._
 
@@ -100,6 +102,47 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends Dire
 
   def asURLs: Seq[URL] = Seq(dir.toURI.toURL)
   def asClassPathStrings: Seq[String] = Seq(dir.getPath)
+}
+
+class JImageDirectoryLookup(module: String) extends DirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
+  import java.nio.file.Path, java.nio.file._
+  type F = Path
+  private val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
+  val dir: Path = fs.getPath("/modules/" + module)
+
+//  Files.walkFileTree(dir, new SimpleFileVisitor[Path]() {
+//    override def visitFile(p: Path, attr: attribute.BasicFileAttributes) = {
+//      println(p); super.visitFile(p, attr)}
+//  })
+
+  protected def emptyFiles: Array[Path] = Array.empty
+  protected def getSubDir(packageDirName: String): Option[Path] = {
+    val packageDir = dir.resolve(packageDirName)
+    if (Files.exists(packageDir) && Files.isDirectory(packageDir)) Some(packageDir)
+    else None
+  }
+  protected def listChildren(dir: Path, filter: Option[Path => Boolean]): Array[Path] = {
+    import scala.collection.JavaConverters._
+    val f = filter.getOrElse((p: Path) => true)
+    Files.list(dir).iterator().asScala.filter(f).toArray[Path]
+  }
+  protected def getName(f: Path): String = f.getFileName.toString
+  protected def toAbstractFile(f: Path): AbstractFile = new scala.reflect.io.PlainNioFile(f)
+  protected def isPackage(f: Path): Boolean = Files.isDirectory(f) && mayBeValidPackage(f.getFileName.toString)
+
+  assert(dir != null, "Directory file in DirectoryFileLookup cannot be null")
+
+  def asURLs: Seq[URL] = Seq(dir.toUri.toURL)
+  def asClassPathStrings: Seq[String] = asURLs.map(_.toString)
+
+  def findClassFile(className: String): Option[AbstractFile] = {
+    val relativePath = FileUtils.dirPath(className)
+    val classFile = dir.resolve(relativePath)
+    if (Files.exists(classFile)) Some(new PlainNioFile(classFile)) else None
+  }
+  override protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
+  override protected def isMatchingFile(f: Path): Boolean = Files.isRegularFile(f) && f.getFileName.toString.endsWith(".class")
+  override private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 }
 
 case class DirectoryFlatClassPath(dir: File) extends JFileDirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
