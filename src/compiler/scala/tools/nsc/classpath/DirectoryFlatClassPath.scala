@@ -136,7 +136,7 @@ class JImageDirectoryLookup(module: String) extends DirectoryLookup[ClassFileEnt
   def asClassPathStrings: Seq[String] = asURLs.map(_.toString)
 
   def findClassFile(className: String): Option[AbstractFile] = {
-    val relativePath = FileUtils.dirPath(className)
+    val relativePath = FileUtils.dirPath(className) + ".class"
     val classFile = dir.resolve(relativePath)
     if (Files.exists(classFile)) Some(new PlainNioFile(classFile)) else None
   }
