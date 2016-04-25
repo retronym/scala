@@ -8,7 +8,7 @@ package tools.nsc
 
 import io.{ AbstractFile, Directory, File, Path }
 import java.io.IOException
-import scala.tools.nsc.classpath.DirectoryFlatClassPath
+import scala.tools.nsc.classpath.DirectoryClassPath
 import scala.tools.nsc.reporters.{Reporter,ConsoleReporter}
 import scala.tools.nsc.settings.ClassPathRepresentationType
 import util.Exceptional.unwrap
@@ -114,7 +114,7 @@ class ScriptRunner extends HasCompileSocket {
     }
 
     def hasClassToRun(d: Directory): Boolean = {
-      val cp = DirectoryFlatClassPath(d.jfile)
+      val cp = DirectoryClassPath(d.jfile)
       cp.findClass(mainClass).isDefined
     }
 

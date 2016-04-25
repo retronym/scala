@@ -5,12 +5,12 @@ import scala.reflect.internal.util.ScalaClassLoader
 import scala.tools.nsc.Driver
 import scala.tools.nsc.Global
 import scala.tools.nsc.Settings
-import scala.tools.util.PathResolverFactory
+import scala.tools.util.PathResolverBase
 
 object ReflectMain extends Driver {
 
   private def classloaderFromSettings(settings: Settings) = {
-    val classPathURLs = PathResolverFactory.create(settings).resultAsURLs
+    val classPathURLs = new PathResolverBase(settings).resultAsURLs
     ScalaClassLoader.fromURLs(classPathURLs, getClass.getClassLoader)
   }
 

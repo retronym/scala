@@ -5,11 +5,9 @@ package scala.tools.nsc.classpath
 
 import java.io.File
 import java.net.{URI, URL}
-import java.nio.file.{FileSystems, Files, SimpleFileVisitor}
-import java.util.function.IntFunction
 
 import scala.reflect.io.{AbstractFile, PlainFile, PlainNioFile}
-import scala.tools.nsc.util.ClassRepresentation
+import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import FileUtils._
 
 /**
@@ -19,7 +17,7 @@ import FileUtils._
  * when we have a name of a package.
  * It abstracts over the file representation to work with both JFile and AbstractFile.
  */
-trait DirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatClassPath {
+trait DirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends ClassPath {
   type F
 
   val dir: F
@@ -35,7 +33,7 @@ trait DirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatClass
   protected def isMatchingFile(f: F): Boolean
 
   private def getDirectory(forPackage: String): Option[F] = {
-    if (forPackage == FlatClassPath.RootPackage) {
+    if (forPackage == ClassPath.RootPackage) {
       Some(dir)
     } else {
       val packageDirName = FileUtils.dirPath(forPackage)
@@ -62,7 +60,7 @@ trait DirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatClass
     files.map(f => createFileEntry(toAbstractFile(f)))
   }
 
-  private[nsc] def list(inPackage: String): FlatClassPathEntries = {
+  private[nsc] def list(inPackage: String): ClassPathEntries = {
     val dirForPackage = getDirectory(inPackage)
     val files: Array[F] = dirForPackage match {
       case None => emptyFiles
@@ -77,7 +75,7 @@ trait DirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatClass
       else if (isMatchingFile(file))
         fileBuf += createFileEntry(toAbstractFile(file))
     }
-    FlatClassPathEntries(packageBuf, fileBuf)
+    ClassPathEntries(packageBuf, fileBuf)
   }
 }
 
@@ -104,16 +102,24 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepClassPathEntry] extends Dire
   def asClassPathStrings: Seq[String] = Seq(dir.getPath)
 }
 
-class JImageDirectoryLookup(module: String) extends DirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
+object JImageDirectoryLookup {
+  import java.nio.file._, java.net.URI, scala.collection.JavaConverters._
+  def apply(): List[ClassPath] = {
+    try {
+      val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
+      val dir: Path = fs.getPath("/modules")
+      val modules = Files.list(dir).iterator().asScala.toList
+      modules.map(m => new JImageDirectoryLookup(fs, m.getFileName.toString))
+    } catch {
+      case _: ProviderNotFoundException | _: FileSystemNotFoundException =>
+        Nil
+    }
+  }
+}
+class JImageDirectoryLookup(fs: java.nio.file.FileSystem, module: String) extends DirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
   import java.nio.file.Path, java.nio.file._
   type F = Path
-  private val fs = FileSystems.getFileSystem(URI.create("jrt:/"))
   val dir: Path = fs.getPath("/modules/" + module)
-
-//  Files.walkFileTree(dir, new SimpleFileVisitor[Path]() {
-//    override def visitFile(p: Path, attr: attribute.BasicFileAttributes) = {
-//      println(p); super.visitFile(p, attr)}
-//  })
 
   protected def emptyFiles: Array[Path] = Array.empty
   protected def getSubDir(packageDirName: String): Option[Path] = {
@@ -145,7 +151,7 @@ class JImageDirectoryLookup(module: String) extends DirectoryLookup[ClassFileEnt
   override private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 }
 
-case class DirectoryFlatClassPath(dir: File) extends JFileDirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
+case class DirectoryClassPath(dir: File) extends JFileDirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
   override def findClass(className: String): Option[ClassRepresentation] = findClassFile(className) map ClassFileEntryImpl
 
   def findClassFile(className: String): Option[AbstractFile] = {
@@ -164,7 +170,7 @@ case class DirectoryFlatClassPath(dir: File) extends JFileDirectoryLookup[ClassF
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 }
 
-case class DirectoryFlatSourcePath(dir: File) extends JFileDirectoryLookup[SourceFileEntryImpl] with NoClassPaths {
+case class DirectorySourcePath(dir: File) extends JFileDirectoryLookup[SourceFileEntryImpl] with NoClassPaths {
   def asSourcePathString: String = asClassPathString
 
   protected def createFileEntry(file: AbstractFile): SourceFileEntryImpl = SourceFileEntryImpl(file)

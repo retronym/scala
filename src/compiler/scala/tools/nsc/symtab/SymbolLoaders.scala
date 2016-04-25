@@ -8,12 +8,13 @@ package symtab
 
 import classfile.ClassfileParser
 import java.io.IOException
+
 import scala.reflect.internal.MissingRequirementError
 import scala.reflect.internal.util.Statistics
-import scala.reflect.io.{ AbstractFile, NoAbstractFile }
-import scala.tools.nsc.classpath.FlatClassPath
+import scala.reflect.io.{AbstractFile, NoAbstractFile}
+import scala.tools.nsc.util.ClassPath
 import scala.tools.nsc.settings.ClassPathRepresentationType
-import scala.tools.nsc.util.{ ClassPath, ClassRepresentation }
+import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 
 /** This class ...
  *
@@ -249,9 +250,9 @@ abstract class SymbolLoaders {
   /**
    * Loads contents of a package
    */
-  class PackageLoaderUsingFlatClassPath(packageName: String, classPath: FlatClassPath) extends SymbolLoader with FlagAgnosticCompleter {
+  class PackageLoader(packageName: String, classPath: ClassPath) extends SymbolLoader with FlagAgnosticCompleter {
     protected def description = {
-      val shownPackageName = if (packageName == FlatClassPath.RootPackage) "<root package>" else packageName
+      val shownPackageName = if (packageName == ClassPath.RootPackage) "<root package>" else packageName
       s"package loader $shownPackageName"
     }
 
@@ -268,9 +269,9 @@ abstract class SymbolLoaders {
           val fullName = pkg.name
 
           val name =
-            if (packageName == FlatClassPath.RootPackage) fullName
+            if (packageName == ClassPath.RootPackage) fullName
             else fullName.substring(packageName.length + 1)
-          val packageLoader = new PackageLoaderUsingFlatClassPath(fullName, classPath)
+          val packageLoader = new PackageLoader(fullName, classPath)
           enterPackage(root, name, packageLoader)
         }
 
@@ -299,7 +300,7 @@ abstract class SymbolLoaders {
 
       val loaders = SymbolLoaders.this.asInstanceOf[SymbolLoadersRefined]
 
-      override def classFileLookup: util.ClassFileLookup = platform.flatClassPath
+      override def classFileLookup: ClassPath = platform.classPath
     }
 
     protected def description = "class file "+ classfile.toString

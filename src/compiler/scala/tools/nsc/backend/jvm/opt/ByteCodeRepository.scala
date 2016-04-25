@@ -13,12 +13,12 @@ import scala.collection.convert.decorateAsScala._
 import scala.collection.concurrent
 import scala.tools.asm.Attribute
 import scala.tools.nsc.backend.jvm.BackendReporting._
-import scala.tools.nsc.io.AbstractFile
-import scala.tools.nsc.util.ClassFileLookup
 import BytecodeUtils._
 import ByteCodeRepository._
 import BTypes.InternalName
 import java.util.concurrent.atomic.AtomicLong
+
+import scala.tools.nsc.util.ClassPath
 
 /**
  * The ByteCodeRepository provides utilities to read the bytecode of classfiles from the compilation
@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * @param classPath The compiler classpath where classfiles are searched and read from.
  */
-class ByteCodeRepository[BT <: BTypes](val classPath: ClassFileLookup, val btypes: BT) {
+class ByteCodeRepository[BT <: BTypes](val classPath: ClassPath, val btypes: BT) {
   import btypes._
 
   /**

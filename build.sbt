@@ -57,7 +57,10 @@ import VersionUtil._
 
 val bootstrapScalaVersion = versionProps("starr.version")
 
-def withoutScalaLang(moduleId: ModuleID): ModuleID = moduleId exclude("org.scala-lang", "*")
+def withoutScalaLang(moduleId: ModuleID): ModuleID =
+  moduleId
+    .exclude("org.scala-lang", "*")
+    .cross(CrossVersion.binaryMapped( { case "2.12.0-a6844d3-SNAPSHOT" => "2.12.0-M4" case x => x}))
 
 // exclusion of the scala-library transitive dependency avoids eviction warnings during `update`.
 val scalaParserCombinatorsDep = withoutScalaLang("org.scala-lang.modules" %% "scala-parser-combinators" % versionNumber("scala-parser-combinators"))

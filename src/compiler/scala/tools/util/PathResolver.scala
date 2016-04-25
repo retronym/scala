@@ -8,12 +8,13 @@ package tools
 package util
 
 import java.net.URL
+
 import scala.tools.reflect.WrappedProperties.AccessControl
 import scala.tools.nsc.Settings
-import scala.tools.nsc.util.{ClassFileLookup, ClassPath}
-import scala.reflect.io.{ File, Directory, Path, AbstractFile }
+import scala.tools.nsc.util.ClassPath
+import scala.reflect.io.{AbstractFile, Directory, File, Path}
 import PartialFunction.condOpt
-import scala.tools.nsc.classpath.{ AggregateFlatClassPath, ClassPathFactory, FlatClassPath, FlatClassPathFactory }
+import scala.tools.nsc.classpath._
 import scala.tools.nsc.settings.ClassPathRepresentationType
 
 // Loosely based on the draft specification at:
@@ -174,26 +175,25 @@ object PathResolver {
     } else {
       val settings = new Settings()
       val rest = settings.processArguments(args.toList, processAll = false)._2
-      val pr = PathResolverFactory.create(settings)
+      val pr = new PathResolverBase(settings)
       println("COMMAND: 'scala %s'".format(args.mkString(" ")))
       println("RESIDUAL: 'scala %s'\n".format(rest.mkString(" ")))
 
       pr.result match {
-        case cp: AggregateFlatClassPath =>
+        case cp: AggregateClassPath =>
           println(s"ClassPath has ${cp.aggregates.size} entries and results in:\n${cp.asClassPathStrings}")
       }
     }
 }
 
 trait PathResolverResult {
-  def result: ClassFileLookup
+  def result: ClassPath
 
   def resultAsURLs: Seq[URL] = result.asURLs
 }
 
-abstract class PathResolverBase[BaseClassPathType <: ClassFileLookup, ResultClassPathType <: BaseClassPathType]
-(settings: Settings, classPathFactory: ClassPathFactory[BaseClassPathType])
-  extends PathResolverResult {
+final class PathResolverBase(settings: Settings) extends PathResolverResult {
+  private val classPathFactory = new ClassPathFactory(settings)
 
   import PathResolver.{ AsLines, Defaults, ppcp }
 
@@ -241,7 +241,8 @@ abstract class PathResolverBase[BaseClassPathType <: ClassFileLookup, ResultClas
     import classPathFactory._
 
     // Assemble the elements!
-    def basis = List[Traversable[BaseClassPathType]](
+    def basis = List[Traversable[ClassPath]](
+      JImageDirectoryLookup.apply(),                // 0. The Java 9 classpath (backed by the jrt:/ virtual system)
       classesInPath(javaBootClassPath),             // 1. The Java bootstrap class path.
       contentsOfDirsInPath(javaExtDirs),            // 2. The Java extension class path.
       classesInExpandedPath(javaUserClassPath),     // 3. The Java application class path.
@@ -272,7 +273,7 @@ abstract class PathResolverBase[BaseClassPathType <: ClassFileLookup, ResultClas
 
   import PathResolver.MkLines
 
-  def result: ResultClassPathType = {
+  def result: ClassPath = {
     val cp = computeResult()
     if (settings.Ylogcp) {
       Console print f"Classpath built from ${settings.toConciseString} %n"
@@ -288,17 +289,6 @@ abstract class PathResolverBase[BaseClassPathType <: ClassFileLookup, ResultClas
   @deprecated("Use resultAsURLs instead of this one", "2.11.5")
   def asURLs: List[URL] = resultAsURLs.toList
 
-  protected def computeResult(): ResultClassPathType
+  private def computeResult(): ClassPath = AggregateClassPath(containers.toIndexedSeq)
 }
 
-class FlatClassPathResolver(settings: Settings, flatClassPathFactory: ClassPathFactory[FlatClassPath])
-  extends PathResolverBase[FlatClassPath, AggregateFlatClassPath](settings, flatClassPathFactory) {
-
-  def this(settings: Settings) = this(settings, new FlatClassPathFactory(settings))
-
-  override protected def computeResult(): AggregateFlatClassPath = AggregateFlatClassPath(containers.toIndexedSeq)
-}
-
-object PathResolverFactory {
-  def create(settings: Settings): PathResolverResult = new FlatClassPathResolver(settings)
-}
