@@ -2181,7 +2181,9 @@ trait Types
       // must initialise symbol, see test/files/pos/ticket0137.scala
       val tpars = initializedTypeParams
       if (tpars.isEmpty) this
-      else typeFunAnon(tpars, copyTypeRef(this, pre, sym, tpars map (_.tpeHK))) // todo: also beta-reduce?
+      else {
+        typeFunAnonSeenFrom(pre, sym, tpars, bounds => copyTypeRef(this, pre, sym, bounds))
+      } // todo: also beta-reduce?
     }
 
     // only need to rebind type aliases, as typeRef already handles abstract types
@@ -3612,6 +3614,15 @@ trait Types
 
   /** A creator for a type functions, assuming the type parameters tps already have the right owner. */
   def typeFun(tps: List[Symbol], body: Type): Type = PolyType(tps, body)
+
+  def typeFunAnonSeenFrom(pre: Type, sym: Symbol, tpars: List[Symbol], body: List[Type] => Type): Type = {
+    val map = newAsSeenFromMap(pre, sym.owner)
+    val tpars1 = map.mapOver(tpars)
+    if (tpars eq tpars1)
+      typeFunAnon(tpars, body(tpars map (_.tpeHK)))
+    else
+      typeFunAnon(tpars1, body(tpars map (_.tpeHK.substSym(tpars, tpars1))))
+  }
 
   /** A creator for existential types. This generates:
    *
