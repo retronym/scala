@@ -2,7 +2,7 @@ package scala.tools.partest
 
 import scala.collection.JavaConverters._
 import scala.tools.asm
-import asm.{tree => t}
+import asm.{Opcodes, tree => t}
 
 /** Makes using ASM from ByteCodeTests more convenient.
  *
