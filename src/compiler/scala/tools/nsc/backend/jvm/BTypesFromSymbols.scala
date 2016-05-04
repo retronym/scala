@@ -509,7 +509,7 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
    * classfile attribute.
    */
   private def buildInlineInfo(classSym: Symbol, internalName: InternalName): InlineInfo = {
-    def buildFromSymbol = buildInlineInfoFromClassSymbol(classSym, classBTypeFromSymbol(_).internalName, methodBTypeFromSymbol(_).descriptor)
+    def buildFromSymbol = buildInlineInfoFromClassSymbol(classSym)
 
     // phase travel required, see implementation of `compiles`. for nested classes, it checks if the
     // enclosingTopLevelClass is being compiled. after flatten, all classes are considered top-level,
@@ -528,6 +528,73 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
           EmptyInlineInfo.copy(warning = Some(ClassNotFoundWhenBuildingInlineInfoFromSymbol(missingClass)))
       }
     }
+  }
+
+  /**
+   * Build the [[InlineInfo]] for a class symbol.
+   */
+  def buildInlineInfoFromClassSymbol(classSym: Symbol): InlineInfo = {
+    val isEffectivelyFinal = classSym.isEffectivelyFinal
+
+    val sam = {
+      if (classSym.isEffectivelyFinal) None
+      else {
+        // Phase travel necessary. For example, nullary methods (getter of an abstract val) get an
+        // empty parameter list in later phases and would therefore be picked as SAM.
+        val samSym = exitingPickler(definitions.samOf(classSym.tpe))
+        if (samSym == NoSymbol) None
+        else Some(samSym.javaSimpleName.toString + methodBTypeFromSymbol(samSym).descriptor)
+      }
+    }
+
+    var warning = Option.empty[ClassSymbolInfoFailureSI9111]
+
+    // Primitive methods cannot be inlined, so there's no point in building a MethodInlineInfo. Also, some
+    // primitive methods (e.g., `isInstanceOf`) have non-erased types, which confuses [[typeToBType]].
+    val methodInlineInfos = classSym.info.decls.iterator.filter(m => m.isMethod && !scalaPrimitives.isPrimitive(m)).flatMap({
+      case methodSym =>
+        if (completeSilentlyAndCheckErroneous(methodSym)) {
+          // Happens due to SI-9111. Just don't provide any MethodInlineInfo for that method, we don't need fail the compiler.
+          if (!classSym.isJavaDefined) devWarning("SI-9111 should only be possible for Java classes")
+          warning = Some(ClassSymbolInfoFailureSI9111(classSym.fullName))
+          Nil
+        } else {
+          val name      = methodSym.javaSimpleName.toString // same as in genDefDef
+          val signature = name + methodBTypeFromSymbol(methodSym).descriptor
+
+          // In `trait T { object O }`, `oSym.isEffectivelyFinalOrNotOverridden` is true, but the
+          // method is abstract in bytecode, `defDef.rhs.isEmpty`. Abstract methods are excluded
+          // so they are not marked final in the InlineInfo attribute.
+          //
+          // However, due to https://github.com/scala/scala-dev/issues/126, this currently does not
+          // work, the abstract accessor for O will be marked effectivelyFinal.
+          val effectivelyFinal = methodSym.isEffectivelyFinalOrNotOverridden && !methodSym.isDeferred
+
+          val info = MethodInlineInfo(
+            effectivelyFinal  = effectivelyFinal,
+            annotatedInline   = methodSym.hasAnnotation(ScalaInlineClass),
+            annotatedNoInline = methodSym.hasAnnotation(ScalaNoInlineClass))
+
+          if (isTraitMethodRequiringStaticImpl(methodSym)) {
+            val selfParam = methodSym.newSyntheticValueParam(methodSym.owner.typeConstructor, nme.SELF)
+            val staticMethodType = methodSym.info match {
+              case mt @ MethodType(params, res) => copyMethodType(mt, selfParam :: params, res)
+            }
+            val staticMethodSignature = name + methodBTypeFromMethodType(staticMethodType, isConstructor = false)
+            val staticMethodInfo = MethodInlineInfo(
+              effectivelyFinal  = true,
+              annotatedInline   = info.annotatedInline,
+              annotatedNoInline = info.annotatedNoInline)
+            if (methodSym.isMixinConstructor)
+              List((staticMethodSignature, staticMethodInfo))
+            else
+              List((signature, info), (staticMethodSignature, staticMethodInfo))
+          } else
+            List((signature, info))
+        }
+    }).toMap
+
+    InlineInfo(isEffectivelyFinal, sam, methodInlineInfos, warning)
   }
 
   /**

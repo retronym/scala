@@ -7,10 +7,11 @@ package scala.tools.nsc
 package backend.jvm
 package opt
 
-import scala.tools.asm.tree.MethodNode
+import scala.tools.asm.tree.{AbstractInsnNode, MethodInsnNode, MethodNode}
 import scala.tools.nsc.backend.jvm.BTypes.InternalName
 import scala.collection.JavaConverters._
-import scala.tools.nsc.backend.jvm.BackendReporting.OptimizerWarning
+import scala.tools.asm.Opcodes
+import scala.tools.nsc.backend.jvm.BackendReporting.{Invalid, OptimizerWarning}
 
 class InlinerHeuristics[BT <: BTypes](val bTypes: BT) {
   import bTypes._

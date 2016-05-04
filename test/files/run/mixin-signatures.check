@@ -1,6 +1,7 @@
 class Test$bar1$ {
   public default java.lang.String Foo1.f(java.lang.Object)
     generic: public default java.lang.String Foo1.f(T)
+  public static java.lang.String Foo1.f(Foo1,java.lang.Object)
   public java.lang.Object Test$bar1$.f(java.lang.Object) <bridge> <synthetic>
   public java.lang.String Test$bar1$.g(java.lang.String)
   public java.lang.Object Test$bar1$.g(java.lang.Object) <bridge> <synthetic>
@@ -12,6 +13,7 @@ class Test$bar1$ {
 class Test$bar2$ {
   public default java.lang.Object Foo2.f(java.lang.String)
     generic: public default R Foo2.f(java.lang.String)
+  public static java.lang.Object Foo2.f(Foo2,java.lang.String)
   public java.lang.Object Test$bar2$.f(java.lang.Object) <bridge> <synthetic>
   public java.lang.String Test$bar2$.g(java.lang.String)
   public java.lang.Object Test$bar2$.g(java.lang.Object) <bridge> <synthetic>

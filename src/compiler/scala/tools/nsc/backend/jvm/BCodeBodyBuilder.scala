@@ -1060,12 +1060,6 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       receiverClass.info // ensure types the type is up to date; erasure may add lateINTERFACE to traits
       val receiverName = internalName(receiverClass)
 
-      // super calls are only allowed to direct parents
-      if (style.isSuper && receiverClass.isTraitOrInterface && !cnode.interfaces.contains(receiverName)) {
-        thisBType.info.get.inlineInfo.lateInterfaces += receiverName
-        cnode.interfaces.add(receiverName)
-      }
-
       def needsInterfaceCall(sym: Symbol) = {
         sym.isTraitOrInterface ||
           sym.isJavaDefined && sym.isNonBottomSubClass(definitions.ClassfileAnnotationClass)
@@ -1082,7 +1076,11 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         case Virtual =>
           if (needsInterfaceCall(receiverClass)) bc.invokeinterface(receiverName, jname, mdescr, pos)
           else                               bc.invokevirtual  (receiverName, jname, mdescr, pos)
-        case Super   =>                      bc.invokespecial  (receiverName, jname, mdescr, pos)
+        case Super   =>
+          if (receiverClass.isTraitOrInterface) {
+            val staticDesc = MethodBType(typeToBType(method.owner.info) :: method.info.paramTypes.map(typeToBType), typeToBType(method.info.resultType)).descriptor
+            bc.invokestatic(receiverName, jname, staticDesc, pos)
+          } else bc.invokespecial  (receiverName, jname, mdescr, pos)
       }
 
       bmType.returnType
