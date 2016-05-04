@@ -9,6 +9,7 @@ import scala.collection.JavaConverters._
 import scala.tools.asm.Opcodes
 import scala.tools.asm.Opcodes._
 import scala.tools.asm.tree.ClassNode
+import scala.tools.nsc.backend.jvm.opt.BytecodeUtils
 import scala.tools.partest.ASMConverters._
 import scala.tools.testing.BytecodeTesting
 import scala.tools.testing.BytecodeTesting._
@@ -18,8 +19,8 @@ class BytecodeTest extends BytecodeTesting {
   import compiler._
 
   def checkForwarder(classes: Map[String, ClassNode], clsName: Symbol, target: String) = {
-    val List(f) = getMethods(classes(clsName.name), "f")
-    assertSameCode(f, List(VarOp(ALOAD, 0), Invoke(INVOKESPECIAL, target, "f", "()I", false), Op(IRETURN)))
+    val f = getMethod(classes(clsName.name), "f")
+    assertSameCode(f, List(VarOp(ALOAD, 0), Invoke(INVOKESTATIC, target, "f", s"(L$target;)I", false), Op(IRETURN)))
   }
 
   @Test
@@ -141,7 +142,7 @@ class BytecodeTest extends BytecodeTesting {
   def invocationReceivers(): Unit = {
     val List(c1, c2, t, u) = compileClasses(invocationReceiversTestCode.definitions("Object"))
     // mixin forwarder in C1
-    assertSameCode(getMethod(c1, "clone"), List(VarOp(ALOAD, 0), Invoke(INVOKESPECIAL, "T", "clone", "()Ljava/lang/Object;", false), Op(ARETURN)))
+    assertSameCode(getMethod(c1, "clone"), List(VarOp(ALOAD, 0), Invoke(INVOKESTATIC, "T", "clone", "(LT;)Ljava/lang/Object;", false), Op(ARETURN)))
     assertInvoke(getMethod(c1, "f1"), "T", "clone")
     assertInvoke(getMethod(c1, "f2"), "T", "clone")
     assertInvoke(getMethod(c1, "f3"), "C1", "clone")
@@ -151,7 +152,7 @@ class BytecodeTest extends BytecodeTesting {
 
     val List(c1b, c2b, tb, ub) = compileClasses(invocationReceiversTestCode.definitions("String"))
     def ms(c: ClassNode, n: String) = c.methods.asScala.toList.filter(_.name == n)
-    assert(ms(tb, "clone").length == 1)
+    assert(ms(tb, "clone").filterNot(BytecodeUtils.isStaticMethod).length == 1)
     assert(ms(ub, "clone").isEmpty)
     val List(c1Clone) = ms(c1b, "clone")
     assertEquals(c1Clone.desc, "()Ljava/lang/Object;")

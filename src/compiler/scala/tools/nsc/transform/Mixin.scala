@@ -143,6 +143,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       // implementation class, as it's a clone that was made after erasure, and thus it does not
       // know its info at the beginning of erasure anymore.
       val sym = mixinMember cloneSymbol clazz
+      sym.removeAttachment[NeedStaticImpl.type]
 
       val erasureMap = erasure.erasure(mixinMember)
       val erasedInterfaceInfo: Type = erasureMap(mixinMember.info)
@@ -1007,7 +1008,13 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
             case tree => tree
           }
           // add all new definitions to current class or interface
-          treeCopy.Template(tree, parents1, self, addNewDefs(currentOwner, bodyEmptyAccessors))
+          val body1 = addNewDefs(currentOwner, bodyEmptyAccessors)
+          body1 foreach {
+            case dd: DefDef if isTraitMethodRequiringStaticImpl(dd) =>
+              dd.symbol.updateAttachment(NeedStaticImpl)
+            case _ =>
+          }
+          treeCopy.Template(tree, parents1, self, body1)
 
         case Select(qual, name) if sym.owner.isTrait && !sym.isMethod =>
           // refer to fields in some trait an abstract getter in the interface.
@@ -1022,7 +1029,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           val setter = lhs.symbol.setterIn(lhs.symbol.owner.tpe.typeSymbol) setPos lhs.pos
 
           typedPos(tree.pos)((qual DOT setter)(rhs))
-
 
         case _ =>
           tree
@@ -1042,4 +1048,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       finally localTyper = saved
     }
   }
+
+  private def isTraitMethodRequiringStaticImpl(dd: DefDef): Boolean = {
+    val sym = dd.symbol
+    sym != null && sym.owner.isTrait && !sym.isDeferred &&
+      (sym.isLazy || !sym.isAccessor) && !sym.isSuperAccessor && !sym.isModule && // these are not deferred, but defDef.rhs.isEmpty
+      !sym.isPrivate && // no need to put implementations of private methods into a static method
+      !sym.hasFlag(Flags.STATIC)
+  }
+
+  case object NeedStaticImpl extends PlainAttachment
 }

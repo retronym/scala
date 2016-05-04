@@ -475,11 +475,9 @@ class InlinerTest extends BytecodeTesting {
         |  def t2 = this.f
         |}
       """.stripMargin
-    val warns = Set(
-      "C::f()I is annotated @inline but cannot be inlined: the method is not final and may be overridden",
-      "T::f()I is annotated @inline but cannot be inlined: the method is not final and may be overridden")
+    val warn = "T::f()I is annotated @inline but cannot be inlined: the method is not final and may be overridden"
     var count = 0
-    val List(c, t) = compile(code, allowMessage = i => {count += 1; warns.exists(i.msg contains _)})
+    val List(c, t) = compile(code, allowMessage = i => {count += 1; i.msg contains warn})
     assert(count == 2, count)
     assertInvoke(getMethod(c, "t1"), "T", "f")
     assertInvoke(getMethod(c, "t2"), "C", "f")
@@ -1525,5 +1523,20 @@ class InlinerTest extends BytecodeTesting {
       """.stripMargin)
     val c :: _ = compileClassesSeparately(codes, extraArgs = compilerArgs)
     assertInvoke(getMethod(c, "t"), "p1/Implicits$RichFunction1$", "toRx$extension")
+  }
+
+  @Test
+  def traitHO(): Unit = {
+    val code =
+      """trait T {
+        |  def foreach(f: Int => Unit): Unit = f(1)
+        |}
+        |final class C extends T {
+        |  def cons(x: Int): Unit = ()
+        |  def t1 = foreach(cons)
+        |}
+      """.stripMargin
+    val List(c, t) = compile(code)
+    assertNoIndy(getMethod(c, "t1"))
   }
 }

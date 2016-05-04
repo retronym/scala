@@ -11,6 +11,7 @@ import scala.tools.asm
 import scala.tools.nsc.io.AbstractFile
 import GenBCode._
 import BackendReporting._
+import scala.reflect.internal.Flags
 
 /*
  *  Traits encapsulating functionality to convert Scala AST Trees into ASM ClassNodes.
@@ -48,6 +49,9 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
       value
     }
   }
+
+  def isTraitMethodRequiringStaticImpl(sym: Symbol) =
+    sym.hasAttachment[global.mixer.NeedStaticImpl.type]
 
   /**
    * True if `classSym` is an anonymous class or a local class. I.e., false if `classSym` is a
@@ -229,58 +233,6 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
       }
       sym.isErroneous
     }
-
-  /**
-   * Build the [[InlineInfo]] for a class symbol.
-   */
-  def buildInlineInfoFromClassSymbol(classSym: Symbol, classSymToInternalName: Symbol => InternalName, methodSymToDescriptor: Symbol => String): InlineInfo = {
-    val isEffectivelyFinal = classSym.isEffectivelyFinal
-
-    val sam = {
-      if (classSym.isEffectivelyFinal) None
-      else {
-        // Phase travel necessary. For example, nullary methods (getter of an abstract val) get an
-        // empty parameter list in later phases and would therefore be picked as SAM.
-        val samSym = exitingPickler(definitions.samOf(classSym.tpe))
-        if (samSym == NoSymbol) None
-        else Some(samSym.javaSimpleName.toString + methodSymToDescriptor(samSym))
-      }
-    }
-
-    var warning = Option.empty[ClassSymbolInfoFailureSI9111]
-
-    // Primitive methods cannot be inlined, so there's no point in building a MethodInlineInfo. Also, some
-    // primitive methods (e.g., `isInstanceOf`) have non-erased types, which confuses [[typeToBType]].
-    val methodInlineInfos = classSym.info.decls.iterator.filter(m => m.isMethod && !scalaPrimitives.isPrimitive(m)).flatMap({
-      case methodSym =>
-        if (completeSilentlyAndCheckErroneous(methodSym)) {
-          // Happens due to SI-9111. Just don't provide any MethodInlineInfo for that method, we don't need fail the compiler.
-          if (!classSym.isJavaDefined) devWarning("SI-9111 should only be possible for Java classes")
-          warning = Some(ClassSymbolInfoFailureSI9111(classSym.fullName))
-          None
-        } else {
-          val name      = methodSym.javaSimpleName.toString // same as in genDefDef
-          val signature = name + methodSymToDescriptor(methodSym)
-
-          // In `trait T { object O }`, `oSym.isEffectivelyFinalOrNotOverridden` is true, but the
-          // method is abstract in bytecode, `defDef.rhs.isEmpty`. Abstract methods are excluded
-          // so they are not marked final in the InlineInfo attribute.
-          //
-          // However, due to https://github.com/scala/scala-dev/issues/126, this currently does not
-          // work, the abstract accessor for O will be marked effectivelyFinal.
-          val effectivelyFinal = methodSym.isEffectivelyFinalOrNotOverridden && !methodSym.isDeferred
-
-          val info = MethodInlineInfo(
-            effectivelyFinal                    = effectivelyFinal,
-            annotatedInline                     = methodSym.hasAnnotation(ScalaInlineClass),
-            annotatedNoInline                   = methodSym.hasAnnotation(ScalaNoInlineClass)
-          )
-          Some((signature, info))
-        }
-    }).toMap
-
-    InlineInfo(isEffectivelyFinal, sam, methodInlineInfos, warning)
-  }
 
   /*
    * must-single-thread
