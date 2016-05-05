@@ -345,6 +345,11 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
               reporter.error(clazz.pos, "Member %s of mixin %s is missing a concrete super implementation.".format(
                 mixinMember.alias, mixinClass))
             case alias1 =>
+              val temp = alias1
+              if (temp.owner.isJavaDefined && temp.owner.isInterface && !clazz.parentSymbols.contains(temp.owner)) {
+                val suggestedParent = exitingTyper(clazz.info.baseType(temp.owner))
+                reporter.error(clazz.pos, s"Unable to implement a super accessor required by trait ${mixinClass.name} unless $suggestedParent is directly extended by $clazz.")
+              }
               superAccessor.asInstanceOf[TermSymbol] setAlias alias1
           }
         }
