@@ -689,11 +689,16 @@ abstract class Erasure extends AddInterfaces
           case InjectDerivedValue(arg) =>
             (tree.attachments.get[TypeRefAttachment]: @unchecked) match {
               case Some(itype) =>
+                def unwrapInjectDerivedValue(tree: Tree): Tree = tree match {
+                  case InjectDerivedValue(arg) => unwrapInjectDerivedValue(arg)
+                  case _=> tree
+                }
                 val tref = itype.tpe
+                val unwrappedArg = unwrapInjectDerivedValue(arg)
                 val argPt = enteringErasure(erasedValueClassArg(tref))
-                log(s"transforming inject $arg -> $tref/$argPt")
-                val result = typed(arg, mode, argPt)
-                log(s"transformed inject $arg -> $tref/$argPt = $result:${result.tpe}")
+                log(s"transforming inject $unwrappedArg -> $tref/$argPt")
+                val result = typed(unwrappedArg, mode, argPt)
+                log(s"transformed inject $unwrappedArg -> $tref/$argPt = $result:${result.tpe}")
                 return result setType ErasedValueType(tref.sym, result.tpe)
 
             }
