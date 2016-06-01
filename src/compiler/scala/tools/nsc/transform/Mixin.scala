@@ -143,6 +143,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       // implementation class, as it's a clone that was made after erasure, and thus it does not
       // know its info at the beginning of erasure anymore.
       val sym = mixinMember cloneSymbol clazz
+      sym.removeAttachment[NeedStaticImpl.type]
 
       val erasureMap = erasure.erasure(mixinMember)
       val erasedInterfaceInfo: Type = erasureMap(mixinMember.info)
@@ -344,6 +345,11 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
               reporter.error(clazz.pos, "Member %s of mixin %s is missing a concrete super implementation.".format(
                 mixinMember.alias, mixinClass))
             case alias1 =>
+              val temp = alias1
+              if (temp.owner.isJavaDefined && temp.owner.isInterface && !clazz.parentSymbols.contains(temp.owner)) {
+                val suggestedParent = exitingTyper(clazz.info.baseType(temp.owner))
+                reporter.error(clazz.pos, s"Unable to implement a super accessor required by trait ${mixinClass.name} unless $suggestedParent is directly extended by $clazz.")
+              }
               superAccessor.asInstanceOf[TermSymbol] setAlias alias1
           }
         }
@@ -1001,8 +1007,19 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           val parents1 = currentOwner.info.parents map (t => TypeTree(t) setPos tree.pos)
           // mark fields which can be nulled afterward
           lazyValNullables = nullableFields(templ) withDefaultValue Set()
+          val bodyEmptyAccessors = if (!sym.enclClass.isTrait) body else body mapConserve {
+            case dd: DefDef if dd.symbol.isAccessor && !dd.symbol.isLazy =>
+              deriveDefDef(dd)(_ => EmptyTree)
+            case tree => tree
+          }
           // add all new definitions to current class or interface
-          treeCopy.Template(tree, parents1, self, addNewDefs(currentOwner, body))
+          val body1 = addNewDefs(currentOwner, bodyEmptyAccessors)
+          body1 foreach {
+            case dd: DefDef if isTraitMethodRequiringStaticImpl(dd) =>
+              dd.symbol.updateAttachment(NeedStaticImpl)
+            case _ =>
+          }
+          treeCopy.Template(tree, parents1, self, body1)
 
         case Select(qual, name) if sym.owner.isTrait && !sym.isMethod =>
           // refer to fields in some trait an abstract getter in the interface.
@@ -1017,7 +1034,6 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
           val setter = lhs.symbol.setterIn(lhs.symbol.owner.tpe.typeSymbol) setPos lhs.pos
 
           typedPos(tree.pos)((qual DOT setter)(rhs))
-
 
         case _ =>
           tree
@@ -1037,4 +1053,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
       finally localTyper = saved
     }
   }
+
+  private def isTraitMethodRequiringStaticImpl(dd: DefDef): Boolean = {
+    val sym = dd.symbol
+    sym != null && sym.owner.isTrait && !sym.isDeferred &&
+      (sym.isLazy || !sym.isAccessor) && !sym.isSuperAccessor && !sym.isModule && // these are not deferred, but defDef.rhs.isEmpty
+      !sym.isPrivate && // no need to put implementations of private methods into a static method
+      !sym.hasFlag(Flags.STATIC)
+  }
+
+  case object NeedStaticImpl extends PlainAttachment
 }

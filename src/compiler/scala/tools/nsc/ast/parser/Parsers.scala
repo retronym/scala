@@ -39,7 +39,7 @@ trait ParsersCommon extends ScannersCommon { self =>
    */
   abstract class ParserCommon {
     val in: ScannerCommon
-    def deprecationWarning(off: Offset, msg: String): Unit
+    def deprecationWarning(off: Offset, msg: String, since: String): Unit
     def accept(token: Token): Int
 
     /** Methods inParensOrError and similar take a second argument which, should
@@ -154,7 +154,7 @@ self =>
 
     // suppress warnings; silent abort on errors
     def warning(offset: Offset, msg: String): Unit = ()
-    def deprecationWarning(offset: Offset, msg: String): Unit = ()
+    def deprecationWarning(offset: Offset, msg: String, since: String): Unit = ()
 
     def syntaxError(offset: Offset, msg: String): Unit = throw new MalformedInput(offset, msg)
     def incompleteInputError(msg: String): Unit = throw new MalformedInput(source.content.length - 1, msg)
@@ -206,8 +206,8 @@ self =>
     override def warning(offset: Offset, msg: String): Unit =
       reporter.warning(o2p(offset), msg)
 
-    override def deprecationWarning(offset: Offset, msg: String): Unit =
-      currentRun.reporting.deprecationWarning(o2p(offset), msg)
+    override def deprecationWarning(offset: Offset, msg: String, since: String): Unit =
+      currentRun.reporting.deprecationWarning(o2p(offset), msg, since)
 
     private var smartParsing = false
     @inline private def withSmartParsing[T](body: => T): T = {
@@ -1822,7 +1822,7 @@ self =>
       val hasEq = in.token == EQUALS
 
       if (hasVal) {
-        if (hasEq) deprecationWarning(in.offset, "val keyword in for comprehension is deprecated")
+        if (hasEq) deprecationWarning(in.offset, "val keyword in for comprehension is deprecated", "2.10.0")
         else syntaxError(in.offset, "val in for comprehension must be followed by assignment")
       }
 
@@ -1901,19 +1901,20 @@ self =>
       }
 
       /** {{{
-       *  Pattern1    ::= varid `:' TypePat
+       *  Pattern1    ::= boundvarid `:' TypePat
        *                |  `_' `:' TypePat
        *                |  Pattern2
-       *  SeqPattern1 ::= varid `:' TypePat
+       *  SeqPattern1 ::= boundvarid `:' TypePat
        *                |  `_' `:' TypePat
        *                |  [SeqPattern2]
        *  }}}
        */
       def pattern1(): Tree = pattern2() match {
         case p @ Ident(name) if in.token == COLON =>
-          if (treeInfo.isVarPattern(p))
+          if (nme.isVariableName(name)) {
+            p.removeAttachment[BackquotedIdentifierAttachment.type]
             atPos(p.pos.start, in.skipToken())(Typed(p, compoundType()))
-          else {
+          } else {
             syntaxError(in.offset, "Pattern variables must start with a lower-case letter. (SLS 8.1.1.)")
             p
           }
@@ -1921,10 +1922,9 @@ self =>
       }
 
       /** {{{
-       *  Pattern2    ::=  varid [ @ Pattern3 ]
+       *  Pattern2    ::=  id  @ Pattern3
+       *                |  `_' @ Pattern3
        *                |   Pattern3
-       *  SeqPattern2 ::=  varid [ @ SeqPattern3 ]
-       *                |   SeqPattern3
        *  }}}
        */
       def pattern2(): Tree = {
@@ -1935,7 +1935,7 @@ self =>
           case Ident(nme.WILDCARD) =>
             in.nextToken()
             pattern3()
-          case Ident(name) if treeInfo.isVarPattern(p) =>
+          case Ident(name) =>
             in.nextToken()
             atPos(p.pos.start) { Bind(name, pattern3()) }
           case _ => p
@@ -1964,8 +1964,8 @@ self =>
           case _ => EmptyTree
         }
         def loop(top: Tree): Tree = reducePatternStack(base, top) match {
-          case next if isIdentExcept(raw.BAR) => pushOpInfo(next) ; loop(simplePattern(badPattern3))
-          case next                           => next
+          case next if isIdent && !isRawBar => pushOpInfo(next) ; loop(simplePattern(badPattern3))
+          case next                         => next
         }
         checkWildStar orElse stripParens(loop(top))
       }
@@ -2358,7 +2358,7 @@ self =>
           while (in.token == VIEWBOUND) {
             val msg = "Use an implicit parameter instead.\nExample: Instead of `def f[A <% Int](a: A)` use `def f[A](a: A)(implicit ev: A => Int)`."
             if (settings.future)
-              deprecationWarning(in.offset, s"View bounds are deprecated. $msg")
+              deprecationWarning(in.offset, s"View bounds are deprecated. $msg", "2.12.0")
             contextBoundBuf += atPos(in.skipToken())(makeFunctionTypeTree(List(Ident(pname)), typ()))
           }
           while (in.token == COLON) {
@@ -2652,14 +2652,14 @@ self =>
           if (isStatSep || in.token == RBRACE) {
             if (restype.isEmpty) {
               if (settings.future)
-                deprecationWarning(in.lastOffset, s"Procedure syntax is deprecated. Convert procedure `$name` to method by adding `: Unit`.")
+                deprecationWarning(in.lastOffset, s"Procedure syntax is deprecated. Convert procedure `$name` to method by adding `: Unit`.", "2.12.0")
               restype = scalaUnitConstr
             }
             newmods |= Flags.DEFERRED
             EmptyTree
           } else if (restype.isEmpty && in.token == LBRACE) {
             if (settings.future)
-              deprecationWarning(in.offset, s"Procedure syntax is deprecated. Convert procedure `$name` to method by adding `: Unit =`.")
+              deprecationWarning(in.offset, s"Procedure syntax is deprecated. Convert procedure `$name` to method by adding `: Unit =`.", "2.12.0")
             restype = scalaUnitConstr
             blockExpr()
           } else {
@@ -2921,7 +2921,7 @@ self =>
       case vdef @ ValDef(mods, _, _, _) if !mods.isDeferred =>
         copyValDef(vdef)(mods = mods | Flags.PRESUPER)
       case tdef @ TypeDef(mods, name, tparams, rhs) =>
-        deprecationWarning(tdef.pos.point, "early type members are deprecated. Move them to the regular body: the semantics are the same.")
+        deprecationWarning(tdef.pos.point, "early type members are deprecated. Move them to the regular body: the semantics are the same.", "2.11.0")
         treeCopy.TypeDef(tdef, mods | Flags.PRESUPER, name, tparams, rhs)
       case docdef @ DocDef(comm, rhs) =>
         treeCopy.DocDef(docdef, comm, rhs)

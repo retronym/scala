@@ -133,7 +133,7 @@ self =>
    *  end characters; i.e., apply `.stripLineEnd` to all lines
    *  returned by `linesWithSeparators`.
    */
-  @deprecated("Use `lines` instead.","2.11.0")
+  @deprecated("use `lines` instead","2.11.0")
   def linesIterator: Iterator[String] =
     linesWithSeparators map (line => new WrappedString(line).stripLineEnd)
 
@@ -336,8 +336,7 @@ self =>
    *  holes.
    *
    *    The interpretation of the formatting patterns is described in
-   *    <a href="" target="contentFrame" class="java/util/Formatter">
-   *    `java.util.Formatter`</a>, with the addition that
+   *    [[java.util.Formatter]], with the addition that
    *    classes deriving from `ScalaNumber` (such as [[scala.BigInt]] and
    *    [[scala.BigDecimal]]) are unwrapped to pass a type which `Formatter`
    *    understands.
@@ -352,8 +351,7 @@ self =>
    *  which influences formatting as in `java.lang.String`'s format.
    *
    *    The interpretation of the formatting patterns is described in
-   *    <a href="" target="contentFrame" class="java/util/Formatter">
-   *    `java.util.Formatter`</a>, with the addition that
+   *    [[java.util.Formatter]], with the addition that
    *    classes deriving from `ScalaNumber` (such as `scala.BigInt` and
    *    `scala.BigDecimal`) are unwrapped to pass a type which `Formatter`
    *    understands.

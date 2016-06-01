@@ -25,8 +25,12 @@ class Inliner[BT <: BTypes](val btypes: BT) {
   import inlinerHeuristics._
   import backendUtils._
 
+  case class InlineLog(request: InlineRequest, sizeBefore: Int, sizeAfter: Int, sizeInlined: Int, warning: Option[CannotInlineWarning])
+  var inlineLog: List[InlineLog] = Nil
+
   def runInliner(): Unit = {
-    for (request <- collectAndOrderInlineRequests) {
+    val orderedRequests = collectAndOrderInlineRequests
+    for (request <- orderedRequests) {
       val Right(callee) = request.callsite.callee // collectAndOrderInlineRequests returns callsites with a known callee
 
       // TODO: if the request has downstream requests, create a snapshot to which we could roll back in case some downstream callsite cannot be inlined
@@ -35,10 +39,33 @@ class Inliner[BT <: BTypes](val btypes: BT) {
 
       val warnings = inline(request)
       for (warning <- warnings) {
-        if ((callee.annotatedInline && btypes.compilerSettings.YoptWarningEmitAtInlineFailed) || warning.emitWarning(compilerSettings)) {
+        if ((callee.annotatedInline && btypes.compilerSettings.optWarningEmitAtInlineFailed) || warning.emitWarning(compilerSettings)) {
           val annotWarn = if (callee.annotatedInline) " is annotated @inline but" else ""
           val msg = s"${BackendReporting.methodSignature(callee.calleeDeclarationClass.internalName, callee.callee)}$annotWarn could not be inlined:\n$warning"
           backendReporting.inlinerWarning(request.callsite.callsitePosition, msg)
+        }
+      }
+    }
+
+    if (compilerSettings.YoptLogInline.isSetByUser) {
+      val methodPrefix = { val p = compilerSettings.YoptLogInline.value; if (p == "_") "" else p }
+      val byCallsiteMethod = inlineLog.groupBy(_.request.callsite.callsiteMethod).toList.sortBy(_._2.head.request.callsite.callsiteClass.internalName)
+      for ((m, mLogs) <- byCallsiteMethod) {
+        val initialSize = mLogs.minBy(_.sizeBefore).sizeBefore
+        val firstLog = mLogs.head
+        val methodName = s"${firstLog.request.callsite.callsiteClass.internalName}.${m.name}"
+        if (methodName.startsWith(methodPrefix)) {
+          println(s"Inlining into $methodName (initially $initialSize instructions, ultimately ${m.instructions.size}):")
+          val byCallee = mLogs.groupBy(_.request.callsite.callee.get).toList.sortBy(_._2.length).reverse
+          for ((c, cLogs) <- byCallee) {
+            val first = cLogs.head
+            if (first.warning.isEmpty) {
+              val num = if (cLogs.tail.isEmpty) "" else s" ${cLogs.length} times"
+              println(s"  - Inlined ${c.calleeDeclarationClass.internalName}.${c.callee.name} (${first.sizeInlined} instructions)$num: ${first.request.reason}")
+            } else
+              println(s"  - Failed to inline ${c.calleeDeclarationClass.internalName}.${c.callee.name} (${first.request.reason}): ${first.warning.get}")
+          }
+          println()
         }
       }
     }
@@ -80,6 +107,8 @@ class Inliner[BT <: BTypes](val btypes: BT) {
     val elided = mutable.Set.empty[InlineRequest]
     def nonElidedRequests(methodNode: MethodNode): Set[InlineRequest] = requestsByMethod(methodNode) diff elided
 
+    def allCallees(r: InlineRequest): Set[MethodNode] = r.post.flatMap(allCallees).toSet + r.callsite.callee.get.callee
+
     /**
      * Break cycles in the inline request graph by removing callsites.
      *
@@ -88,20 +117,20 @@ class Inliner[BT <: BTypes](val btypes: BT) {
      */
     def breakInlineCycles: List[InlineRequest] = {
       // is there a path of inline requests from start to goal?
-      def isReachable(start: MethodNode, goal: MethodNode): Boolean = {
-        @tailrec def reachableImpl(check: List[MethodNode], visited: Set[MethodNode]): Boolean = check match {
-          case x :: xs =>
+      def isReachable(start: Set[MethodNode], goal: MethodNode): Boolean = {
+        @tailrec def reachableImpl(check: Set[MethodNode], visited: Set[MethodNode]): Boolean = {
+          if (check.isEmpty) false
+          else {
+            val x = check.head
             if (x == goal) true
-            else if (visited(x)) reachableImpl(xs, visited)
+            else if (visited(x)) reachableImpl(check - x, visited)
             else {
-              val callees = nonElidedRequests(x).map(_.callsite.callee.get.callee)
-              reachableImpl(xs ::: callees.toList, visited + x)
+              val callees = nonElidedRequests(x).flatMap(allCallees)
+              reachableImpl(check - x ++ callees, visited + x)
             }
-
-          case Nil =>
-            false
+          }
         }
-        reachableImpl(List(start), Set.empty)
+        reachableImpl(start, Set.empty)
       }
 
       val result = new mutable.ListBuffer[InlineRequest]()
@@ -110,7 +139,7 @@ class Inliner[BT <: BTypes](val btypes: BT) {
       java.util.Arrays.sort(requests, callsiteOrdering)
       for (r <- requests) {
         // is there a chain of inlining requests that would inline the callsite method into the callee?
-        if (isReachable(r.callsite.callee.get.callee, r.callsite.callsiteMethod))
+        if (isReachable(allCallees(r), r.callsite.callsiteMethod))
           elided += r
         else
           result += r
@@ -124,8 +153,8 @@ class Inliner[BT <: BTypes](val btypes: BT) {
       if (requests.isEmpty) Nil
       else {
         val (leaves, others) = requests.partition(r => {
-          val inlineRequestsForCallee = nonElidedRequests(r.callsite.callee.get.callee)
-          inlineRequestsForCallee.forall(visited)
+          val inlineRequestsForCallees = allCallees(r).flatMap(nonElidedRequests)
+          inlineRequestsForCallees.forall(visited)
         })
         assert(leaves.nonEmpty, requests)
         leaves ::: leavesFirst(others, visited ++ leaves)
@@ -184,7 +213,7 @@ class Inliner[BT <: BTypes](val btypes: BT) {
     def impl(post: InlineRequest, at: Callsite): List[InlineRequest] = {
       post.callsite.inlinedClones.find(_.clonedWhenInlining == at) match {
         case Some(clonedCallsite) =>
-          List(InlineRequest(clonedCallsite.callsite, post.post))
+          List(InlineRequest(clonedCallsite.callsite, post.post, post.reason))
         case None =>
           post.post.flatMap(impl(_, post.callsite)).flatMap(impl(_, at))
       }
@@ -199,9 +228,17 @@ class Inliner[BT <: BTypes](val btypes: BT) {
    * @return An inliner warning for each callsite that could not be inlined.
    */
   def inline(request: InlineRequest): List[CannotInlineWarning] = canInlineBody(request.callsite) match {
-    case Some(w) => List(w)
+    case Some(w) =>
+      if (compilerSettings.YoptLogInline.isSetByUser) {
+        val size = request.callsite.callsiteMethod.instructions.size
+        inlineLog ::= InlineLog(request, size, size, 0, Some(w))
+      }
+      List(w)
     case None =>
+      val sizeBefore = request.callsite.callsiteMethod.instructions.size
       inlineCallsite(request.callsite)
+      if (compilerSettings.YoptLogInline.isSetByUser)
+        inlineLog ::= InlineLog(request, sizeBefore, request.callsite.callsiteMethod.instructions.size, request.callsite.callee.get.callee.instructions.size, None)
       val postRequests = request.post.flatMap(adaptPostRequestForMainCallsite(_, request.callsite))
       postRequests flatMap inline
   }

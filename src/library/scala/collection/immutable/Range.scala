@@ -33,7 +33,7 @@ import scala.collection.parallel.immutable.ParRange
  *  `init`) are also permitted on overfull ranges.
  *
  *  @param start      the start of this range.
- *  @param end        the end of the range.  For exclusive ranges, e.g. 
+ *  @param end        the end of the range.  For exclusive ranges, e.g.
  *                    `Range(0,3)` or `(0 until 3)`, this is one
  *                    step past the last one in the range.  For inclusive
  *                    ranges, e.g. `Range.inclusive(0,3)` or `(0 to 3)`,
@@ -80,7 +80,8 @@ extends scala.collection.AbstractSeq[Int]
     || (start < end && step < 0)
     || (start == end && !isInclusive)
   )
-  @deprecated("This method will be made private, use `length` instead.", "2.11")
+
+  @deprecated("this method will be made private, use `length` instead", "2.11.0")
   final val numRangeElements: Int = {
     if (step == 0) throw new IllegalArgumentException("step cannot be 0.")
     else if (isEmpty) 0
@@ -90,8 +91,9 @@ extends scala.collection.AbstractSeq[Int]
       else len.toInt
     }
   }
-  @deprecated("This method will be made private, use `last` instead.", "2.11")
-  final val lastElement = 
+
+  @deprecated("this method will be made private, use `last` instead", "2.11.0")
+  final val lastElement =
     if (isEmpty) start - step
     else step match {
       case 1  => if (isInclusive) end else end-1
@@ -102,8 +104,8 @@ extends scala.collection.AbstractSeq[Int]
         else if (isInclusive) end
         else end - step
     }
-    
-  @deprecated("This method will be made private.", "2.11")
+
+  @deprecated("this method will be made private", "2.11.0")
   final val terminalElement = lastElement + step
 
   /** The last element of this range.  This method will return the correct value
@@ -197,7 +199,7 @@ extends scala.collection.AbstractSeq[Int]
       copy(locationAfterN(n), end, step)
     }
   )
-  
+
   /** Creates a new range containing the elements starting at `from` up to but not including `until`.
    *
    *  $doesNotUseBuilders
@@ -214,7 +216,7 @@ extends scala.collection.AbstractSeq[Int]
       if (from >= until) newEmptyRange(fromValue)
       else new Range.Inclusive(fromValue, locationAfterN(until-1), step)
     }
-    
+
   /** Creates a new range containing all the elements of this range except the last one.
    *
    *  $doesNotUseBuilders
@@ -396,22 +398,20 @@ extends scala.collection.AbstractSeq[Int]
     case _ =>
       super.equals(other)
   }
-  /** Note: hashCode can't be overridden without breaking Seq's
-   *  equals contract.
-   */
 
-  override def toString() = {
-    val endStr =
-      if (numRangeElements > Range.MAX_PRINT || (!isEmpty && numRangeElements < 0)) ", ... )" else ")"
-    take(Range.MAX_PRINT).mkString("Range(", ", ", endStr)
+  /* Note: hashCode can't be overridden without breaking Seq's equals contract. */
+
+  override def toString = {
+    val preposition = if (isInclusive) "to" else "until"
+    val stepped = if (step == 1) "" else s" by $step"
+    val prefix = if (isEmpty) "empty " else if (!isExact) "inexact " else ""
+    s"${prefix}Range $start $preposition $end$stepped"
   }
 }
 
 /** A companion object for the `Range` class.
  */
 object Range {
-  private[immutable] val MAX_PRINT = 512  // some arbitrary value
-
   /** Counts the number of range elements.
    *  @pre  step != 0
    *  If the size of the range exceeds Int.MaxValue, the
@@ -512,8 +512,9 @@ object Range {
 
   // As there is no appealing default step size for not-really-integral ranges,
   // we offer a partially constructed object.
-  class Partial[T, U](f: T => U) {
+  class Partial[T, U](private val f: T => U) extends AnyVal {
     def by(x: T): U = f(x)
+    override def toString = "Range requires step"
   }
 
   // Illustrating genericity with Int Range, which should have the same behavior

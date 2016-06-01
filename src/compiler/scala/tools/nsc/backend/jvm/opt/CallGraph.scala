@@ -9,14 +9,14 @@ package opt
 
 import scala.collection.immutable.IntMap
 import scala.reflect.internal.util.{NoPosition, Position}
-import scala.tools.asm.{Opcodes, Type, Handle}
+import scala.tools.asm.{Handle, Opcodes, Type}
 import scala.tools.asm.tree._
 import scala.collection.{concurrent, mutable}
 import scala.collection.JavaConverters._
-import scala.tools.nsc.backend.jvm.BTypes.InternalName
+import scala.tools.nsc.backend.jvm.BTypes.{InternalName, MethodInlineInfo}
 import scala.tools.nsc.backend.jvm.BackendReporting._
 import scala.tools.nsc.backend.jvm.analysis._
-import ByteCodeRepository.{Source, CompilationUnit}
+import ByteCodeRepository.{CompilationUnit, Source}
 import BytecodeUtils._
 
 class CallGraph[BT <: BTypes](val btypes: BT) {
@@ -68,6 +68,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
   }
 
   def containsCallsite(callsite: Callsite): Boolean = callsites(callsite.callsiteMethod) contains callsite.callsiteInstruction
+  def findCallSite(method: MethodNode, call: MethodInsnNode): Option[Callsite] = callsites.getOrElse(method, Map.empty).get(call)
 
   def removeClosureInstantiation(indy: InvokeDynamicInsnNode, methodNode: MethodNode): Option[ClosureInstantiation] = {
     val methodClosureInits = closureInstantiations(methodNode)
@@ -102,8 +103,8 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
       // It is also used to get the stack height at the call site.
 
       val analyzer = {
-        if (compilerSettings.YoptNullnessTracking && AsmAnalyzer.sizeOKForNullness(methodNode)) {
-          Some(new AsmAnalyzer(methodNode, definingClass.internalName, new NullnessAnalyzer(btypes)))
+        if (compilerSettings.optNullnessTracking && AsmAnalyzer.sizeOKForNullness(methodNode)) {
+          Some(new AsmAnalyzer(methodNode, definingClass.internalName, new NullnessAnalyzer(btypes, methodNode)))
         } else if (AsmAnalyzer.sizeOKForBasicValue(methodNode)) {
           Some(new AsmAnalyzer(methodNode, definingClass.internalName))
         } else None
@@ -273,7 +274,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
       // callee, we only check there for the methodInlineInfo, we should find it there.
       calleeDeclarationClassBType.info.orThrow.inlineInfo.methodInfos.get(methodSignature) match {
         case Some(methodInlineInfo) =>
-          val canInlineFromSource = compilerSettings.YoptInlineGlobal || calleeSource == CompilationUnit
+          val canInlineFromSource = compilerSettings.optInlineGlobal || calleeSource == CompilationUnit
 
           val isAbstract = BytecodeUtils.isAbstractMethod(calleeMethodNode)
 
@@ -359,7 +360,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
       "Invocation of" +
         s" ${callee.map(_.calleeDeclarationClass.internalName).getOrElse("?")}.${callsiteInstruction.name + callsiteInstruction.desc}" +
         s"@${callsiteMethod.instructions.indexOf(callsiteInstruction)}" +
-        s" in ${callsiteClass.internalName}.${callsiteMethod.name}"
+        s" in ${callsiteClass.internalName}.${callsiteMethod.name}${callsiteMethod.desc}"
   }
 
   final case class ClonedCallsite(callsite: Callsite, clonedWhenInlining: Callsite)
@@ -394,6 +395,7 @@ class CallGraph[BT <: BTypes](val btypes: BT) {
                           samParamTypes: IntMap[btypes.ClassBType],
                           calleeInfoWarning: Option[CalleeInfoWarning]) {
     override def toString = s"Callee($calleeDeclarationClass.${callee.name})"
+    def textifyCallee = AsmUtils.textify(callee)
   }
 
   /**
