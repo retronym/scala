@@ -70,7 +70,7 @@ class MailBox {
       if (s1 != null) {
         s.next = s1.next; s1.elem
       } else {
-        val r = insert(lastReceiver, new Receiver {
+        val r = insert(lastReceiver, new Receiver {BCodeSkelBuilder
             def isDefined(msg: Any) = f.isDefinedAt(msg);
         });
         lastReceiver = r;
