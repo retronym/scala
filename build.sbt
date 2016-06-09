@@ -63,14 +63,14 @@ def withoutScalaLang(moduleId: ModuleID): ModuleID = moduleId exclude("org.scala
 val scalaParserCombinatorsDep = withoutScalaLang("org.scala-lang.modules" %% "scala-parser-combinators" % versionNumber("scala-parser-combinators"))
 val scalaSwingDep = withoutScalaLang("org.scala-lang.modules" %% "scala-swing" % versionNumber("scala-swing"))
 val scalaXmlDep = withoutScalaLang("org.scala-lang.modules" %% "scala-xml" % versionNumber("scala-xml"))
-val partestDep = withoutScalaLang("org.scala-lang.modules" %% "scala-partest" % versionNumber("partest"))
 val junitDep = "junit" % "junit" % "4.11"
 val junitIntefaceDep = "com.novocode" % "junit-interface" % "0.11" % "test"
 val jolDep = "org.openjdk.jol" % "jol-core" % "0.5"
 val asmDep = "org.scala-lang.modules" % "scala-asm" % versionProps("scala-asm.version")
 val jlineDep = "jline" % "jline" % versionProps("jline.version")
 val antDep = "org.apache.ant" % "ant" % "1.9.4"
-val scalacheckDep = withoutScalaLang("org.scalacheck" %% "scalacheck" % versionNumber("scalacheck") % "it")
+val sbtTestInterfaceDep = "org.scala-sbt" %  "test-interface" % "1.0"
+val diffutilsDep = "com.googlecode.java-diff-utils" % "diffutils" % "1.3.0"
 
 /** Publish to ./dists/maven-sbt, similar to the ANT build which publishes to ./dists/maven. This
   * can be used to compare the output of the sbt and ANT builds during the transition period. Any
@@ -505,12 +505,13 @@ lazy val replJlineEmbedded = Project("repl-jline-embedded", file(".") / "target"
   .dependsOn(replJline)
 
 lazy val scaladoc = configureAsSubproject(project)
+  .dependsOn(partestExtras) // TODO make a provided dependency
   .settings(disableDocs: _*)
   .settings(disablePublishing: _*)
   .settings(
     name := "scala-compiler-doc",
     description := "Scala Documentation Generator",
-    libraryDependencies ++= Seq(scalaXmlDep, scalaParserCombinatorsDep, partestDep),
+    libraryDependencies ++= Seq(scalaXmlDep, scalaParserCombinatorsDep),
     includeFilter in unmanagedResources in Compile := "*.html" | "*.css" | "*.gif" | "*.png" | "*.js" | "*.txt" | "*.svg" | "*.eot" | "*.woff" | "*.ttf"
   )
   .dependsOn(compiler)
@@ -529,14 +530,14 @@ lazy val scalap = configureAsSubproject(project)
   .dependsOn(compiler)
 
 lazy val partestExtras = configureAsSubproject(Project("partest-extras", file(".") / "src" / "partest-extras"))
-  .dependsOn(replJlineEmbedded)
+  .dependsOn(replJlineEmbedded, scalap)
   .settings(clearSourceAndResourceDirectories: _*)
   .settings(disableDocs: _*)
   .settings(disablePublishing: _*)
   .settings(
     name := "scala-partest-extras",
     description := "Scala Compiler Testing Tool (compiler-specific extras)",
-    libraryDependencies += partestDep,
+    libraryDependencies ++= List(sbtTestInterfaceDep, diffutilsDep),
     unmanagedSourceDirectories in Compile := List(baseDirectory.value)
   )
 
@@ -581,7 +582,7 @@ lazy val test = project
   .settings(disablePublishing: _*)
   .settings(Defaults.itSettings: _*)
   .settings(
-    libraryDependencies ++= Seq(asmDep, partestDep, scalaXmlDep, scalacheckDep),
+    libraryDependencies ++= Seq(asmDep, scalaXmlDep),
     unmanagedBase in IntegrationTest := baseDirectory.value / "files" / "lib",
     unmanagedJars in IntegrationTest <+= (unmanagedBase) (j => Attributed.blank(j)) map(identity),
     // no main sources
