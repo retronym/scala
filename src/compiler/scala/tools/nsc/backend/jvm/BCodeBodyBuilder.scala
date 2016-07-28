@@ -1074,16 +1074,14 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       import InvokeStyle._
       if (style == Super) {
         assert(receiverClass == methodOwner, s"for super call, expecting $receiverClass == $methodOwner")
-        if (receiverClass.isTrait && !receiverClass.isJavaDefined) {
-          val staticDesc = MethodBType(typeToBType(method.owner.info) :: bmType.argumentTypes, bmType.returnType).descriptor
-          val staticName = traitImplMethodName(method).toString
-          bc.invokestatic(receiverName, staticName, staticDesc, isInterface, pos)
-        } else {
-          if (receiverClass.isTraitOrInterface) {
-            // An earlier check in Mixin reports an error in this case, so it doesn't reach the backend
-            assert(cnode.interfaces.contains(receiverName), s"cannot invokespecial $receiverName.$jname, the interface is not a direct parent.")
-          }
+        if (method.isClassConstructor) {
           bc.invokespecial(receiverName, jname, mdescr, isInterface, pos)
+        } else if (method.isMixinConstructor) {
+          val staticName = method.javaSimpleName.toString
+          bc.invokestatic(receiverName, staticName, mdescr, isInterface, pos)
+        } else {
+          def staticDesc = MethodBType(typeToBType(method.owner.info) :: bmType.argumentTypes, bmType.returnType).descriptor
+          bc.jmethod.visitInvokeDynamicInsn(jname, staticDesc, coreBTypes.invokeExactBootstrapHandle, classBTypeFromSymbol(methodOwner).toASMType)
         }
       } else {
         val opc = style match {

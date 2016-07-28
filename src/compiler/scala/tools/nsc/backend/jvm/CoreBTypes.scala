@@ -103,6 +103,7 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   lazy val jlCloneableRef            : ClassBType = classBTypeFromSymbol(JavaCloneableClass)        // java/lang/Cloneable
   lazy val jiSerializableRef         : ClassBType = classBTypeFromSymbol(JavaSerializableClass)     // java/io/Serializable
   lazy val jlClassCastExceptionRef   : ClassBType = classBTypeFromSymbol(ClassCastExceptionClass)   // java/lang/ClassCastException
+  lazy val jlClassRef                : ClassBType = classBTypeFromSymbol(ClassClass)                // java/lang/Class
   lazy val juMapRef                  : ClassBType = classBTypeFromSymbol(JavaUtilMap)               // java/util/Map
   lazy val juHashMapRef              : ClassBType = classBTypeFromSymbol(JavaUtilHashMap)           // java/util/HashMap
   lazy val sbScalaBeanInfoRef        : ClassBType = classBTypeFromSymbol(requiredClass[scala.beans.ScalaBeanInfo])
@@ -117,6 +118,7 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   lazy val srSymbolLiteral           : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.SymbolLiteral])
   lazy val srStructuralCallSite      : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.StructuralCallSite])
   lazy val srLambdaDeserialize       : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.LambdaDeserialize])
+  lazy val srInvokeExact             : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.InvokeExact])
   lazy val srBoxedUnitRef            : ClassBType = classBTypeFromSymbol(requiredClass[scala.runtime.BoxedUnit])
 
   private def methodNameAndType(cls: Symbol, name: Name, static: Boolean = false, filterOverload: Symbol => Boolean = _ => true): MethodNameAndType = {
@@ -288,6 +290,20 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
         coreBTypes.jliCallSiteRef
       ).descriptor,
       /* itf = */ coreBTypes.srLambdaDeserialize.isInterface.get)
+
+  lazy val invokeExactBootstrapHandle =
+    new scala.tools.asm.Handle(scala.tools.asm.Opcodes.H_INVOKESTATIC,
+      coreBTypes.srInvokeExact.internalName, sn.Bootstrap.toString,
+      MethodBType(
+        List(
+          coreBTypes.jliMethodHandlesLookupRef,
+          coreBTypes.StringRef,
+          coreBTypes.jliMethodTypeRef,
+          coreBTypes.jlClassRef
+        ),
+        coreBTypes.jliCallSiteRef
+      ).descriptor,
+      /* itf = */ coreBTypes.srInvokeExact.isInterface.get)
 }
 
 /**
@@ -377,6 +393,7 @@ final class CoreBTypesProxy[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: 
   def jlThrowableRef            : ClassBType = _coreBTypes.jlThrowableRef
   def jlCloneableRef            : ClassBType = _coreBTypes.jlCloneableRef
   def jiSerializableRef         : ClassBType = _coreBTypes.jiSerializableRef
+  def jlClassRef                : ClassBType = _coreBTypes.jlClassRef
   def jlClassCastExceptionRef   : ClassBType = _coreBTypes.jlClassCastExceptionRef
   def juMapRef                  : ClassBType = _coreBTypes.juMapRef
   def juHashMapRef              : ClassBType = _coreBTypes.juHashMapRef
@@ -410,6 +427,7 @@ final class CoreBTypesProxy[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: 
   def srSymbolLiteral           : ClassBType = _coreBTypes.srSymbolLiteral
   def srStructuralCallSite      : ClassBType = _coreBTypes.srStructuralCallSite
   def srLambdaDeserialize       : ClassBType = _coreBTypes.srLambdaDeserialize
+  def srInvokeExact             : ClassBType = _coreBTypes.srInvokeExact
 
   def typeOfArrayOp: Map[Int, BType] = _coreBTypes.typeOfArrayOp
 
@@ -427,4 +445,5 @@ final class CoreBTypesProxy[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: 
   def lambdaMetaFactoryMetafactoryHandle    : asm.Handle = _coreBTypes.lambdaMetaFactoryMetafactoryHandle
   def lambdaMetaFactoryAltMetafactoryHandle : asm.Handle = _coreBTypes.lambdaMetaFactoryAltMetafactoryHandle
   def lambdaDeserializeBootstrapHandle      : asm.Handle = _coreBTypes.lambdaDeserializeBootstrapHandle
+  def invokeExactBootstrapHandle            : asm.Handle = _coreBTypes.invokeExactBootstrapHandle
 }
