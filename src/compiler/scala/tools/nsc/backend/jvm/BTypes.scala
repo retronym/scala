@@ -11,7 +11,7 @@ import scala.collection.{concurrent, mutable}
 import scala.collection.concurrent.TrieMap
 import scala.reflect.internal.util.Position
 import scala.tools.asm
-import asm.Opcodes
+import asm.{Opcodes, Type}
 import scala.tools.asm.tree._
 import scala.tools.nsc.backend.jvm.BTypes.{InlineInfo, MethodInlineInfo}
 import scala.tools.nsc.backend.jvm.BackendReporting._
@@ -1093,7 +1093,9 @@ abstract class BTypes {
     }
   }
 
-  final case class MethodBType(argumentTypes: List[BType], returnType: BType) extends BType
+  final case class MethodBType(argumentTypes: List[BType], returnType: BType) extends BType {
+    def toAsmType: Type = asm.Type.getMethodType(returnType.toASMType, argumentTypes.map(_.toASMType): _*)
+  }
 
   /* Some definitions that are required for the implementation of BTypes. They are abstract because
    * initializing them requires information from types / symbols, which is not accessible here in
