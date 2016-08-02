@@ -147,7 +147,9 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
   }
 
   def bootstrapMethodArg(t: Constant, pos: Position): AnyRef = t match {
-    case Constant(mt: Type) => methodBTypeFromMethodType(transformedType(mt), isConstructor = false).toASMType
+    case Constant(mt: MethodType) => methodBTypeFromMethodType(transformedType(mt), isConstructor = false).toASMType
+    case Constant(mt: NullaryMethodType) => methodBTypeFromMethodType(transformedType(mt), isConstructor = false).toASMType
+    case Constant(tp: Type) => typeToBType(transformedType(tp)).toASMType
     case c @ Constant(sym: Symbol) => staticHandleFromSymbol(sym)
     case c @ Constant(value: String) => value
     case c @ Constant(value) if c.isNonUnitAnyVal => c.value.asInstanceOf[AnyRef]
