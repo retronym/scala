@@ -563,13 +563,6 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               fun.symbol.javaSimpleName.toString == INSTANCE_CONSTRUCTOR_NAME &&
               isStaticModuleClass(claszSymbol)) {
               isModuleInitialized = true
-              mnode.visitVarInsn(asm.Opcodes.ALOAD, 0)
-              mnode.visitFieldInsn(
-                asm.Opcodes.PUTSTATIC,
-                thisBType.internalName,
-                strMODULE_INSTANCE_FIELD,
-                thisBType.descriptor
-              )
             }
           }
           // 'super' call: Note: since constructors are supposed to

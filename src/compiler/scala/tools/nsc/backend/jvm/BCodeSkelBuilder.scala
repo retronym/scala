@@ -217,8 +217,10 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       /* "legacy static initialization" */
       if (isCZStaticModule) {
         clinit.visitTypeInsn(asm.Opcodes.NEW, thisBType.internalName)
+        clinit.visitInsn(asm.Opcodes.DUP)
         clinit.visitMethodInsn(asm.Opcodes.INVOKESPECIAL,
                                thisBType.internalName, INSTANCE_CONSTRUCTOR_NAME, "()V", false)
+        clinit.visitFieldInsn(asm.Opcodes.PUTSTATIC, thisBType.internalName, strMODULE_INSTANCE_FIELD, thisBType.descriptor)
       }
       if (isCZParcelable) { legacyAddCreatorCode(clinit, cnode, thisBType.internalName) }
       clinit.visitInsn(asm.Opcodes.RETURN)
