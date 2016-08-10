@@ -133,11 +133,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     }
 
     def withConstructor(stats: List[Tree]): List[Tree] = {
-      val pureStats = stats map {
-        case DocDef(_, defn) => defn
-        case defn => defn
-      }
-      if(treeInfo.firstConstructor(pureStats) == EmptyTree) {
+      if(treeInfo.firstConstructor(stats) == EmptyTree) {
         makeConstructor(Nil) :: stats
       } else {
         stats
@@ -719,13 +715,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           if (in.token == ENUM || definesInterface(in.token)) mods |= Flags.STATIC
           val decls = joinComment(memberDecl(mods, parentToken))
 
-          def isDefDef(tree: Tree): Boolean = tree match {
-            case _: DefDef => true
-            case DocDef(_, defn) => isDefDef(defn)
-            case _ => false
-          }
-
-          (if (mods.hasStaticFlag || inInterface && !(decls exists isDefDef))
+          (if (mods.hasStaticFlag || inInterface && !(decls exists (x => x.isInstanceOf[DefDef])))
              statics
            else
              members) ++= decls

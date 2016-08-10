@@ -315,6 +315,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
       printColumn(stats ::: List(expr), "{", ";", "}")
 
     def printTree(tree: Tree) = {
+      xPrePrintTree(this, tree)
       tree match {
         case EmptyTree =>
           print("<empty>")
@@ -1106,6 +1107,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
   }
 
   /** Hook for extensions */
+  def xPrePrintTree(treePrinter: TreePrinter, tree: Tree): Unit = ()
   def xprintTree(treePrinter: TreePrinter, tree: Tree) =
     treePrinter.print(tree.productPrefix+tree.productIterator.mkString("(", ", ", ")"))
 

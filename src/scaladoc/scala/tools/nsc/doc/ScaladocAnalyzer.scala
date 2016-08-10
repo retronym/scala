@@ -27,15 +27,22 @@ trait ScaladocAnalyzer extends Analyzer {
         super.macroImplementationNotFoundMessage(name)
       + "\nWhen generating scaladocs for multiple projects at once, consider using -Ymacro-no-expand to disable macro expansions altogether."
     )
+    override def typed(tree: Tree, mode: Mode, pt: Type): Tree = tree match {
+      case DocDef(comment, defn) =>
+        val result = super.typed(tree, mode, pt)
+        processDocComment(comment, defn)
+        result
+      case _ =>
+        super.typed(tree, mode, pt)
+    }
 
-    override def typedDocDef(docDef: DocDef, mode: Mode, pt: Type): Tree = {
-      val sym = docDef.symbol
+    private def processDocComment(comment: DocComment, defn: Tree): Unit = {
+      val sym = defn.symbol
 
       if ((sym ne null) && (sym ne NoSymbol)) {
-        val comment = docDef.comment
         docComments(sym) = comment
         comment.defineVariables(sym)
-        val typer1 = newTyper(context.makeNewScope(docDef, context.owner))
+        val typer1 = newTyper(context.makeNewScope(defn, context.owner))
         for (useCase <- comment.useCases) {
           typer1.silent(_.asInstanceOf[ScaladocTyper].defineUseCases(useCase)) match {
             case SilentTypeError(err) =>
@@ -48,8 +55,6 @@ trait ScaladocAnalyzer extends Analyzer {
           }
         }
       }
-
-      super.typedDocDef(docDef, mode, pt)
     }
 
     def defineUseCases(useCase: UseCase): List[Symbol] = {
@@ -191,18 +196,8 @@ abstract class ScaladocSyntaxAnalyzer[G <: Global](val global: G) extends Syntax
       val doc = in.flushDoc
       if ((doc ne null) && doc.raw.length > 0) {
         log(s"joinComment(doc=$doc)")
-        val joined = trees map {
-          t =>
-            DocDef(doc, t) setPos {
-              if (t.pos.isDefined) {
-                val pos = doc.pos.withEnd(t.pos.end)
-                // always make the position transparent
-                pos.makeTransparent
-              } else {
-                t.pos
-              }
-            }
-        }
+        val joined = trees map { t => DocDef(doc, t) }
+        // TODO DocDef: is this code still needed now that `DocDef` is not longer an AST node?
         joined.find(_.pos.isOpaqueRange) foreach {
           main =>
             val mains = List(main)
@@ -266,21 +261,14 @@ abstract class ScaladocSyntaxAnalyzer[G <: Global](val global: G) extends Syntax
     override val in = new ScaladocJavaUnitScanner(unit)
   } with JavaUnitParser(unit) {
 
+    // TODO duplication with ScalaDocUnitParser
     override def joinComment(trees: => List[Tree]): List[Tree] = {
       val doc = in.flushDoc()
 
       if ((doc ne null) && doc.raw.length > 0) {
         log(s"joinComment(doc=$doc)")
-        val joined = trees map { t =>
-          DocDef(doc, t) setPos {
-            if (t.pos.isDefined) {
-              val pos = doc.pos.withEnd(t.pos.end)
-              pos.makeTransparent
-            } else {
-              t.pos
-            }
-          }
-        }
+        val joined = trees map { t => DocDef(doc, t)}
+        // TODO DocDef Is this still needed now that DocDef is no longer an AST node?
         joined.find(_.pos.isOpaqueRange) foreach { main =>
           val mains = List(main)
           joined foreach { t => if (t ne main) ensureNonOverlapping(t, mains) }

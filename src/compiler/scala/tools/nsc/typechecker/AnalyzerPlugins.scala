@@ -244,9 +244,9 @@ trait AnalyzerPlugins { self: Analyzer =>
      * Creates a symbol for the given tree in lexical context encapsulated by the given namer.
      *
      * Default implementation provided in `namer.standardEnterSym` handles MemberDef's and Imports,
-     * doing nothing for other trees (DocDef's are seen through and rewrapped). Typical implementation
-     * of `enterSym` for a particular tree flavor creates a corresponding symbol, assigns it to the tree,
-     * enters the symbol into scope and then might even perform some code generation.
+     * doing nothing for other trees. Typical implementation of `enterSym` for a particular tree flavor
+     * creates a corresponding symbol, assigns it to the tree, enters the symbol into scope and then might
+     * even perform some code generation.
      *
      * $nonCumulativeReturnValueDoc.
      */

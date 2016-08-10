@@ -135,9 +135,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       if (phase.erasedTypes) erasure.specialScalaErasure(tp) else tp
     }
 
-    def typedDocDef(docDef: DocDef, mode: Mode, pt: Type): Tree =
-      typed(docDef.definition, mode, pt)
-
     /** Find implicit arguments and pass them to given tree.
      */
     def applyImplicitArgs(fun: Tree): Tree = fun.tpe match {
@@ -1855,7 +1852,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  to be transparent.
      */
     def rewrappingWrapperTrees(f: Tree => List[Tree]): Tree => List[Tree] = {
-      case dd @ DocDef(comment, defn) => f(defn) map (stat => DocDef(comment, stat) setPos dd.pos)
       case Annotated(annot, defn)     => f(defn) map (stat => Annotated(annot, stat))
       case tree                       => f(tree)
     }
@@ -5350,7 +5346,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         case tree: ApplyDynamic     => typedApplyDynamic(tree)
         case tree: ReferenceToBoxed => typedReferenceToBoxed(tree)
         case tree: LabelDef         => labelTyper(tree).typedLabelDef(tree)
-        case tree: DocDef           => typedDocDef(tree, mode, pt)
         case _                      => abort(s"unexpected tree: ${tree.getClass}\n$tree")
       }
 

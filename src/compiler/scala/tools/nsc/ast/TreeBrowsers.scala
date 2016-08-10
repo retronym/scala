@@ -358,9 +358,6 @@ abstract class TreeBrowsers {
       case UnitTree(unit) =>
         List(unit.body)
 
-      case DocDef(comment, definition) =>
-        List(definition)
-
       case ClassDef(mods, name, tparams, impl) => {
         var children: List[Tree] = List()
         children = tparams ::: children

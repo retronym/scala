@@ -42,12 +42,16 @@ trait Printers extends scala.reflect.internal.Printers { this: Global =>
     }
   }
 
-  // overflow cases missing from TreePrinter in scala.reflect.api
-  override def xprintTree(treePrinter: super.TreePrinter, tree: Tree) = tree match {
+  override def xPrePrintTree(treePrinter: super.TreePrinter, tree: Tree) = tree match {
     case DocDef(comment, definition) =>
       treePrinter.print(comment.raw)
       treePrinter.println()
-      treePrinter.print(definition)
+    case _ =>
+  }
+
+  // overflow cases missing from TreePrinter in scala.reflect.api
+  override def xprintTree(treePrinter: super.TreePrinter, tree: Tree) = tree match {
+    // TODO need a new extension point to print doc comments before the definition to which they are attached
 
     case TypeTreeWithDeferredRefCheck() =>
       treePrinter.print("<tree with deferred refcheck>")

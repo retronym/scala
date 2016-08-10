@@ -90,7 +90,6 @@ trait Translations {
     case _: TypeDef             => TYPEDEFtree
     case _: LabelDef            => LABELtree
     case _: Import              => IMPORTtree
-    // case _: DocDef              => DOCDEFtree
     case _: Template            => TEMPLATEtree
     case _: Block               => BLOCKtree
     case _: CaseDef             => CASEtree

@@ -15,13 +15,13 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   case class Parens(args: List[Tree]) extends Tree
 
   /** Documented definition, eliminated by analyzer */
-  case class DocDef(comment: DocComment, definition: Tree)
-       extends Tree {
-    override def symbol: Symbol = definition.symbol
-    override def symbol_=(sym: Symbol) { definition.symbol = sym }
-    override def isDef = definition.isDef
-    override def isTerm = definition.isTerm
-    override def isType = definition.isType
+  object DocDef {
+    def apply(comment: DocComment, definition: Tree): Tree = definition.updateAttachment(comment)
+    def unapply(tree: Tree): Option[(DocComment, Tree)] = {
+      if (tree.hasAttachment[DocComment])
+        tree.attachments.get[DocComment].map(comment => (comment, tree))
+      else None // fast path for common case
+    }
   }
 
  /** Array selection `<qualifier> . <name>` only used during erasure */
@@ -79,8 +79,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   override protected def xtraverse(traverser: Traverser, tree: Tree): Unit = tree match {
     case Parens(ts) =>
       traverser.traverseTrees(ts)
-    case DocDef(comment, definition) =>
-      traverser.traverse(definition)
     case SelectFromArray(qualifier, selector, erasure) =>
       traverser.traverse(qualifier)
     case InjectDerivedValue(arg) =>
@@ -91,7 +89,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   }
 
   trait TreeCopier extends super.InternalTreeCopierOps {
-    def DocDef(tree: Tree, comment: DocComment, definition: Tree): DocDef
     def SelectFromArray(tree: Tree, qualifier: Tree, selector: Name, erasure: Type): SelectFromArray
     def InjectDerivedValue(tree: Tree, arg: Tree): InjectDerivedValue
     def TypeTreeWithDeferredRefCheck(tree: Tree): TypeTreeWithDeferredRefCheck
@@ -102,8 +99,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   def newLazyTreeCopier: TreeCopier = new LazyTreeCopier
 
   class StrictTreeCopier extends super.StrictTreeCopier with TreeCopier {
-    def DocDef(tree: Tree, comment: DocComment, definition: Tree) =
-      new DocDef(comment, definition).copyAttrs(tree)
     def SelectFromArray(tree: Tree, qualifier: Tree, selector: Name, erasure: Type) =
       new SelectFromArray(qualifier, selector, erasure).copyAttrs(tree)
     def InjectDerivedValue(tree: Tree, arg: Tree) =
@@ -114,11 +109,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   }
 
   class LazyTreeCopier extends super.LazyTreeCopier with TreeCopier {
-    def DocDef(tree: Tree, comment: DocComment, definition: Tree) = tree match {
-      case t @ DocDef(comment0, definition0)
-      if (comment0 == comment) && (definition0 == definition) => t
-      case _ => this.treeCopy.DocDef(tree, comment, definition)
-    }
     def SelectFromArray(tree: Tree, qualifier: Tree, selector: Name, erasure: Type) = tree match {
       case t @ SelectFromArray(qualifier0, selector0, _)
       if (qualifier0 == qualifier) && (selector0 == selector) => t
@@ -152,8 +142,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   }
 
   override protected def xtransform(transformer: super.Transformer, tree: Tree): Tree = tree match {
-    case DocDef(comment, definition) =>
-      transformer.treeCopy.DocDef(tree, comment, transformer.transform(definition))
     case SelectFromArray(qualifier, selector, erasure) =>
       transformer.treeCopy.SelectFromArray(
         tree, transformer.transform(qualifier), selector, erasure)
@@ -329,7 +317,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /* New pattern matching cases:
 
    case Parens(expr)                                               (only used during parsing)
-   case DocDef(comment, defn) =>                                   (eliminated by typer)
    case TypeTreeWithDeferredRefCheck() =>                          (created and eliminated by typer)
    case SelectFromArray(_, _, _) =>                                (created and eliminated by erasure)
    case InjectDerivedValue(_) =>                                   (created and eliminated by erasure)

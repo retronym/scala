@@ -12,7 +12,7 @@ import scala.reflect.internal.util._
 import DocParser.Parsed
 
 /** A very minimal global customized for extracting `DocDefs`.  It stops
- *  right after parsing so it can read `DocDefs` from source code which would
+ *  right after parsing so it can read `DocComment`s from source code which would
  *  otherwise cause the compiler to go haywire.
  */
 class DocParser(settings: nsc.Settings, reporter: Reporter) extends Global(settings, reporter) with ScaladocGlobalTrait {
@@ -27,13 +27,13 @@ class DocParser(settings: nsc.Settings, reporter: Reporter) extends Global(setti
     phasesSet += syntaxAnalyzer
   }
 
-  /** Returns a list of `DocParser.Parseds`, which hold the DocDefs found
+  /** Returns a list of `DocParser.Parseds`, which hold the DocComments found
    *  in the given code along with the surrounding trees.
    */
   def docDefs(code: String) = {
     def loop(enclosing: List[Tree], tree: Tree): List[Parsed] = tree match {
       case x: PackageDef => x.stats flatMap (t => loop(enclosing :+ x, t))
-      case x: DocDef     => new Parsed(enclosing, x) :: loop(enclosing :+ x.definition, x.definition)
+      case DocDef(comment, defn) => new Parsed(enclosing, comment, tree) :: loop(enclosing :+ defn, defn)
       case x             => x.children flatMap (t => loop(enclosing, t))
     }
     loop(Nil, docUnit(code))
@@ -56,12 +56,12 @@ class DocParser(settings: nsc.Settings, reporter: Reporter) extends Global(setti
 object DocParser {
   type Tree    = Global#Tree
   type DefTree = Global#DefTree
-  type DocDef  = Global#DocDef
+  type DocComment  = Global#DocComment
   type Name    = Global#Name
 
-  class Parsed(val enclosing: List[Tree], val docDef: DocDef) {
-    def nameChain: List[Name] = (enclosing :+ docDef.definition) collect { case x: DefTree => x.name }
-    def raw: String           = docDef.comment.raw
+  class Parsed(val enclosing: List[Tree], comment: DocComment, defn: Tree) {
+    def nameChain: List[Name] = (enclosing :+ defn) collect { case x: DefTree => x.name }
+    def raw: String           = comment.raw
 
     override def toString = (
       nameChain.init.map(x => if (x.isTypeName) x + "#" else x + ".").mkString + nameChain.last

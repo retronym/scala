@@ -40,8 +40,6 @@ digraph SQLTypes {
   
   Attributed -> Tree
   
-  DocDef -> Tree
-  
   Template -> SymTree
   
   Block -> TermTree

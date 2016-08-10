@@ -81,11 +81,7 @@ trait InteractiveAnalyzer extends Analyzer {
         val owningInfo = sym.owner.info
         val existingDerivedSym = owningInfo.decl(sym.name.toTermName).filter(sym => sym.isSynthetic && sym.isMethod)
         existingDerivedSym.alternatives foreach (owningInfo.decls.unlink)
-        val defTree = tree match {
-          case dd: DocDef => dd.definition // See SI-9011, Scala IDE's presentation compiler incorporates ScaladocGlobal with InteractiveGlobal, so we have to unwrap DocDefs.
-          case _ => tree
-        }
-        enterImplicitWrapper(defTree.asInstanceOf[ClassDef])
+        enterImplicitWrapper(tree.asInstanceOf[ClassDef])
       }
       super.enterExistingSym(sym, tree)
     }
