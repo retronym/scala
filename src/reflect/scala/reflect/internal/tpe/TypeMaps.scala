@@ -1001,23 +1001,23 @@ private[internal] trait TypeMaps {
   class ContainsCollector(sym: Symbol) extends TypeCollector(false) {
     def traverse(tp: Type) {
       if (!result) {
+        // JZ: Removed normalization that was added originally in e1c732db44 (tcpoly)
+        // This means that:
+        //
+        // type T = Int; !typeOf[T].contains(IntClass)
+        //
+        // This seems correct to me, in the same way that:
+        //
+        // def foo = bar; !typed(Ident(foo)).exists(_.symbol == BarClass)
+        //
         tp match {
-          case _: ExistentialType =>
-            // ExistentialType#normalize internally calls contains, which leads to exponential performance
-            // for types like: `A[_ <: B[_ <: ... ]]`. Example: pos/existential-contains.scala.
-            //
-            // We can just map over the components and wait until we see the underlying type before we call
-            // normalize.
-            mapOver(tp)
-          case _ =>
-            tp.normalize match {
-              case TypeRef(_, sym1, _) if (sym == sym1) => result = true
-              case refined: RefinedType =>
-                mapOver(tp.prefix)
-                mapOver(refined)
-              case SingleType(_, sym1) if (sym == sym1) => result = true
-              case _ => mapOver(tp)
-            }
+          case TypeRef(_, sym1, _) if (sym == sym1) => result = true
+          case refined: RefinementTypeRef =>
+            mapOver(tp.prefix)
+            // SI-5294 Needed so that `typeOf[{def foo: Int}].baseTypeSeq(0).contain(IntClass)`
+            mapOver(refined.sym.info)
+          case SingleType(_, sym1) if (sym == sym1) => result = true
+          case _ => mapOver(tp)
         }
       }
     }
