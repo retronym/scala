@@ -91,10 +91,6 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
     def storageClass: ClassSymbol = symbol.info.typeSymbol.asClass
   }
 
-  // TODO: base on symbol, not name
-  def isBitmapField(sym: Symbol) = sym.name.startsWith(nme.BITMAP_PREFIX)
-  // if we decide to explicitly initialize, use this RHS: if (symbol.info.typeSymbol.asClass == BooleanClass) FALSE else ZERO)
-  def bitmapFieldDef(symbol: Symbol) = ValDef(symbol) // don't explicitly initialize the bitmap (the status quo before the fields phase)
 
   // TODO: better way to communicate from info transform to tree transfor?
   private[this] val _bitmapInfo  = perRunCaches.newMap[Symbol, BitmapInfo]
