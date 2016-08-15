@@ -679,9 +679,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         val bitmapSym = bitmapFor(clazz, offset, lzyVal)
         val kind      = bitmapKind(lzyVal)
         val mask      = maskForOffset(offset, lzyVal, kind)
-        def cond      = mkTest(clazz, mask, bitmapSym, equalToZero = true, kind)
         val nulls     = lazyValNullables(lzyVal).toList sortBy (_.id) map nullify
-        def syncBody  = init ::: List(mkSetFlag(clazz, offset, lzyVal, kind), UNIT)
 
         if (nulls.nonEmpty)
           log("nulling fields inside " + lzyVal + ": " + nulls)
@@ -690,10 +688,14 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL {
         val slowPathSym =
           clazz.newMethod(nme.newLazyValSlowComputeName(lzyVal.name.toTermName), pos, PRIVATE) setInfoAndEnter MethodType(Nil, lzyVal.tpe.resultType)
 
-        val rhs = gen.mkSynchronizedCheck(gen.mkAttributedThis(clazz), cond, syncBody, nulls)
-        addDef(pos, DefDef(slowPathSym, BLOCK(rhs.changeOwner(currentOwner -> slowPathSym), retVal)))
+        def thisRef = gen.mkAttributedThis(clazz)
+        def cond    = mkTest(clazz, mask, bitmapSym, equalToZero = true, kind)
 
-        typedPos(init.head.pos)(If(cond, Apply(Select(This(clazz), slowPathSym), Nil), retVal))
+        val statsToSynch  = init ::: List(mkSetFlag(clazz, offset, lzyVal, kind), UNIT)
+        val synchedRhs = gen.mkSynchronizedCheck(thisRef, cond, statsToSynch, nulls)
+        addDef(pos, DefDef(slowPathSym, Block(List(synchedRhs.changeOwner(currentOwner -> slowPathSym)), retVal)))
+
+        typedPos(init.head.pos)(If(cond, Apply(Select(thisRef, slowPathSym), Nil), retVal))
       }
 
       def mkCheckedAccessor(clazz: Symbol, retVal: Tree, offset: Int, pos: Position, fieldSym: Symbol): Tree = {
