@@ -590,7 +590,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
           else if (clazz.isTrait || (notStored && !vd.symbol.isLazy)) mkAccessor(statSym)(transformedRhs)
-          else if (clazz.isClass) accessorInit.expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs)
+          else if (clazz.isClass) accessorInitialization(clazz).expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
           else {
             // local lazy val (same story as modules: info transformer doesn't get here, so can't drive tree synthesis)
             val lazyVar = newLazyVarSymbol(currentOwner, statSym, statSym.info.resultType, extraFlags = 0, localLazyVal = true)
@@ -623,14 +623,16 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       if (stat.isTerm) atOwner(exprOwner)(transform(stat))
       else transform(stat)
 
-    private var accessorInit: LazyAccessorSynth = null
+
+    private val nullables = perRunCaches.newMap[Symbol, Map[Symbol, List[Symbol]]]
+
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
       val addedStats =
         if (!currentOwner.isClass) Nil
         else afterOwnPhase { fieldsAndAccessors(currentOwner) }
 
       if (currentOwner.isClass && !(currentOwner.isPackageClass || currentOwner.isTrait))
-        accessorInit = accessorInitialization(currentOwner, stats)
+        nullables(currentOwner) = lazyValNullables(currentOwner, stats)
 
       val newStats =
         stats mapConserve (if (exprOwner != currentOwner) transformTermsAtExprOwner(exprOwner) else transform)

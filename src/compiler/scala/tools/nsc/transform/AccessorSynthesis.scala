@@ -189,13 +189,12 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
   trait CheckedAccessorSynthTransformation extends AccessorSynthTransformation {
     def Thicket(trees: List[Tree]) = Block(trees, EmptyTree)
 
-    def accessorInitialization(clazz: Symbol, templStats: List[Tree]): LazyAccessorSynth =
-      if (settings.checkInit) new CheckInitAccessorSynth(clazz, templStats)
-      else new LazyAccessorSynth(clazz, templStats)
+    def accessorInitialization(clazz: Symbol): LazyAccessorSynth =
+      if (settings.checkInit) new CheckInitAccessorSynth(clazz) else new LazyAccessorSynth(clazz)
 
 
     // note: we deal in getters here, not field symbols
-    protected class LazyAccessorSynth(clazz: Symbol, templStats: List[Tree]) extends AccessorSynth(clazz) with LazyInitSymbolSynth {
+    protected class LazyAccessorSynth(clazz: Symbol) extends AccessorSynth(clazz) with LazyInitSymbolSynth {
       def isUnitGetter(sym: Symbol) = sym.tpe.resultType.typeSymbol == UnitClass
       def thisRef    = gen.mkAttributedThis(clazz)
 
@@ -236,7 +235,8 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
       }
 
 
-      def expandLazyClassMember(lazyVar: Symbol, lazyAccessor: Symbol, transformedRhs: Tree): Tree = {
+      def expandLazyClassMember(lazyVar: Symbol, lazyAccessor: Symbol, transformedRhs: Tree, nullables: Map[Symbol, List[Symbol]]): Tree = {
+
         // The compute method (slow path) looks like:
         //
         // ```
@@ -271,7 +271,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         //
         // This way the inliner should optimize the fast path because the method body is small enough.
         def nullify(sym: Symbol) = Select(thisRef, sym.accessedOrSelf) === LIT(null)
-        val nulls = lazyValNullables.getOrElse(lazyAccessor, Nil) map nullify
+        val nulls = nullables.getOrElse(lazyAccessor, Nil) map nullify
 
         if (nulls.nonEmpty)
           log("nulling fields inside " + lazyAccessor + ": " + nulls)
@@ -294,61 +294,63 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         Thicket(List((DefDef(slowPathSym, slowPathRhs)), DefDef(lazyAccessor, accessorRhs)) map typedPos(lazyAccessor.pos.focus))
       }
 
-      /** Map lazy values to the fields they should null after initialization. */
-      lazy val lazyValNullables: Map[Symbol, List[Symbol]] = {
-        // if there are no lazy fields, take the fast path and save a traversal of the whole AST
-        if (!clazz.info.decls.exists(_.isLazy)) Map()
-        else {
-          // A map of single-use fields to the lazy value that uses them during initialization.
-          // Each field has to be private and defined in the enclosing class, and there must
-          // be exactly one lazy value using it.
-          //
-          // Such fields will be nulled after the initializer has memoized the lazy value.
-          val singleUseFields: Map[Symbol, List[Symbol]] = {
-            val usedIn = mutable.HashMap[Symbol, List[Symbol]]() withDefaultValue Nil
+    }
 
-            object SingleUseTraverser extends Traverser {
-              override def traverse(tree: Tree) {
-                tree match {
-                  case Assign(lhs, rhs) => traverse(rhs) // assignments don't count
-                  case _ =>
-                    if (tree.hasSymbolField && tree.symbol != NoSymbol) {
-                      val sym = tree.symbol
-                      if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod))
-                        && sym.isPrivate
-                        && !(currentOwner.isGetter && currentOwner.accessed == sym) // getter
-                        && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol)
-                        && sym.owner == clazz
-                        && !sym.isLazy
-                        && !tree.isDef) {
-                        debuglog("added use in: " + currentOwner + " -- " + tree)
-                        usedIn(sym) ::= currentOwner
-                      }
+
+    /** Map lazy values to the fields they should null after initialization. */
+    def lazyValNullables(clazz: Symbol, templStats: List[Tree]): Map[Symbol, List[Symbol]] = {
+      // if there are no lazy fields, take the fast path and save a traversal of the whole AST
+      if (!clazz.info.decls.exists(_.isLazy)) Map()
+      else {
+        // A map of single-use fields to the lazy value that uses them during initialization.
+        // Each field has to be private and defined in the enclosing class, and there must
+        // be exactly one lazy value using it.
+        //
+        // Such fields will be nulled after the initializer has memoized the lazy value.
+        val singleUseFields: Map[Symbol, List[Symbol]] = {
+          val usedIn = mutable.HashMap[Symbol, List[Symbol]]() withDefaultValue Nil
+
+          object SingleUseTraverser extends Traverser {
+            override def traverse(tree: Tree) {
+              tree match {
+                case Assign(lhs, rhs) => traverse(rhs) // assignments don't count
+                case _ =>
+                  if (tree.hasSymbolField && tree.symbol != NoSymbol) {
+                    val sym = tree.symbol
+                    if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod))
+                      && sym.isPrivate
+                      && !(currentOwner.isGetter && currentOwner.accessed == sym) // getter
+                      && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol)
+                      && sym.owner == clazz
+                      && !sym.isLazy
+                      && !tree.isDef) {
+                      debuglog("added use in: " + currentOwner + " -- " + tree)
+                      usedIn(sym) ::= currentOwner
                     }
-                    super.traverse(tree)
-                }
+                  }
+                  super.traverse(tree)
               }
             }
-            templStats foreach SingleUseTraverser.apply
-            debuglog("usedIn: " + usedIn)
-            usedIn filter {
-              case (_, member :: Nil) => member.isValue && member.isLazy
-              case _ => false
-            } toMap
           }
-
-          val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
-          // check what fields can be nulled for
-          for ((field, users) <- singleUseFields; lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
-            map(lazyFld) += field
-
-          map.mapValues(_.toList sortBy (_.id)).toMap
+          templStats foreach SingleUseTraverser.apply
+          debuglog("usedIn: " + usedIn)
+          usedIn filter {
+            case (_, member :: Nil) => member.isValue && member.isLazy
+            case _ => false
+          } toMap
         }
+
+        val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
+        // check what fields can be nulled for
+        for ((field, users) <- singleUseFields; lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
+          map(lazyFld) += field
+
+        map.mapValues(_.toList sortBy (_.id)).toMap
       }
     }
 
 
-    protected class CheckInitAccessorSynth(clazz: Symbol, templStats: List[Tree]) extends LazyAccessorSynth(clazz, templStats) {
+    protected class CheckInitAccessorSynth(clazz: Symbol) extends LazyAccessorSynth(clazz) {
       /** Does this field require an initialized bit?
         * Note: fields of classes inheriting DelayedInit are not checked.
         * This is because they are neither initialized in the constructor
