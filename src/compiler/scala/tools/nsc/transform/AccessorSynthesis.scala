@@ -3,10 +3,8 @@ package transform
 
 import symtab._
 import Flags._
-import scala.annotation.tailrec
 import scala.collection.mutable
 
-// TODO: move lazy vals bitmap creation to lazy vals phase now that lazy vals are mixed in during fields
 trait AccessorSynthesis extends Transform with ast.TreeDSL {
   import global._
   import definitions._
@@ -15,7 +13,8 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
   trait AccessorSynthTransformation {
     protected def typedPos(pos: Position)(tree: Tree): Tree
 
-    class AccessorSynth(protected val clazz: Symbol){
+    // used while we still need to synthesize some accessors in mixins: paramaccessors and presupers
+    class UncheckedAccessorSynth(protected val clazz: Symbol){
       protected val _newDefs = mutable.ListBuffer[Tree]()
 
       def newDefs = _newDefs.toList
@@ -88,7 +87,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
   private[this] val _bitmapInfo  = perRunCaches.newMap[Symbol, BitmapInfo]
   private[this] val _slowPathFor = perRunCaches.newMap[Symbol, Symbol]()
 
-  trait LazyInitSymbolSynth {
+  trait CheckedAccessorSymbolSynth {
     protected val clazz: Symbol
 
     protected def defaultPos = clazz.pos.focus
@@ -190,11 +189,12 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
     def Thicket(trees: List[Tree]) = Block(trees, EmptyTree)
 
     def accessorInitialization(clazz: Symbol): LazyAccessorSynth =
-      if (settings.checkInit) new CheckInitAccessorSynth(clazz) else new LazyAccessorSynth(clazz)
+      if (settings.checkInit) new CheckInitAccessorSynth(clazz) else new LazyAccessorSynthImpl(clazz)
 
+    class LazyAccessorSynthImpl(protected val clazz: Symbol) extends LazyAccessorSynth
 
     // note: we deal in getters here, not field symbols
-    protected class LazyAccessorSynth(clazz: Symbol) extends AccessorSynth(clazz) with LazyInitSymbolSynth {
+    trait LazyAccessorSynth extends CheckedAccessorSymbolSynth {
       def isUnitGetter(sym: Symbol) = sym.tpe.resultType.typeSymbol == UnitClass
       def thisRef    = gen.mkAttributedThis(clazz)
 
@@ -291,7 +291,9 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         // `if ((bitmap&n & MASK) == 0) this.l$compute() else l$`
         val accessorRhs = If(mkTest(lazyAccessor), Apply(Select(thisRef, slowPathSym), Nil), selectVar)
 
-        Thicket(List((DefDef(slowPathSym, slowPathRhs)), DefDef(lazyAccessor, accessorRhs)) map typedPos(lazyAccessor.pos.focus))
+        afterOwnPhase { // so that we can assign to vals
+          Thicket(List((DefDef(slowPathSym, slowPathRhs)), DefDef(lazyAccessor, accessorRhs)) map typedPos(lazyAccessor.pos.focus))
+        }
       }
 
     }
@@ -350,7 +352,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
     }
 
 
-    protected class CheckInitAccessorSynth(clazz: Symbol) extends LazyAccessorSynth(clazz) {
+    protected class CheckInitAccessorSynth(clazz: Symbol) extends UncheckedAccessorSynth(clazz) with LazyAccessorSynth {
       /** Does this field require an initialized bit?
         * Note: fields of classes inheriting DelayedInit are not checked.
         * This is because they are neither initialized in the constructor

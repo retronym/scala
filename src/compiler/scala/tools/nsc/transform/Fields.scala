@@ -353,7 +353,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             || (m.isLazy && !(m.info.isInstanceOf[ConstantType] || isUnitType(m.info))) // no need for ASF since we're in the defining class
           )
 
-        val lazies = new LazyInitSymbolSynth { val clazz = tp.typeSymbol }
+        val lazies = new CheckedAccessorSymbolSynth { val clazz = tp.typeSymbol }
         val bitmapSyms = lazies.computeBitmapInfos(oldDecls.toList)
 
         // expand module def in class/object (if they need it -- see modulesNeedingExpansion above)
