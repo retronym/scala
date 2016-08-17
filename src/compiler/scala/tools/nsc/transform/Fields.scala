@@ -354,10 +354,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           )
 
         val lazies = new CheckedAccessorSymbolSynth { val clazz = tp.typeSymbol }
-        val bitmapSyms = lazies.computeBitmapInfos(oldDecls.toList)
 
         // expand module def in class/object (if they need it -- see modulesNeedingExpansion above)
-        val expandedModulesAndLazyVals = bitmapSyms ++ (
+        val expandedModulesAndLazyVals = (
           modulesAndLazyValsNeedingExpansion flatMap { member =>
             if (member.isLazy) {
               List(newLazyVarMember(member), lazies.newSlowPathSymbol(member))
@@ -420,7 +419,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           else if (member hasFlag LAZY) {
             val mixedinLazy = cloneAccessor()
             val lazyVar = newLazyVarMember(mixedinLazy)
-            List(lazyVar, newSuperLazy(mixedinLazy, site, lazyVar))
+            List(lazyVar, lazies.newSlowPathSymbol(mixedinLazy), newSuperLazy(mixedinLazy, site, lazyVar))
           }
           else if (member.isGetter && fieldMemoizationIn(member, clazz).stored) {
             // add field if needed
@@ -436,7 +435,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           } else List(cloneAccessor()) // no field needed (constant-typed getter has constant as its RHS)
         }
 
-//        println(s"mixedInAccessorAndFields for $clazz: $mixedInAccessorAndFields")
+        //        println(s"mixedInAccessorAndFields for $clazz: $mixedInAccessorAndFields")
 
         // omit fields that are not memoized, retain all other members
         def omittableField(sym: Symbol) = sym.isValue && !sym.isMethod && !fieldMemoizationIn(sym, clazz).stored
@@ -453,10 +452,15 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             oldDecls foreach { d => if (!omittableField(d)) enter(d) }
             mixedInAccessorAndFields foreach enterAll
 
+            // both oldDecls and mixedInAccessorAndFields (a list of lists) contribute
+            val bitmapSyms = lazies.computeBitmapInfos(newDecls.toList)
+
+            bitmapSyms foreach enter
+
             newDecls
           }
 
-//        println(s"new decls for $clazz: $expandedModules ++ $mixedInAccessorAndFields")
+        //        println(s"new decls for $clazz: $expandedModules ++ $mixedInAccessorAndFields")
 
         if (newDecls eq oldDecls) tp
         else ClassInfoType(parents, newDecls, clazz)
@@ -487,54 +491,56 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
     // synth trees for accessors/fields and trait setters when they are mixed into a class
     def fieldsAndAccessors(clazz: Symbol): List[ValOrDefDef] = {
-      def fieldAccess(accessor: Symbol): Option[Tree] = {
+      def fieldAccess(accessor: Symbol): List[Tree] = {
         val fieldName = accessor.localName
         val field = clazz.info.decl(fieldName)
         // The `None` result denotes an error, but it's refchecks' job to report it (this fallback is for robustness).
         // This is the result of overriding a val with a def, so that no field is found in the subclass.
-        if (field.exists) Some(Select(This(clazz), field))
-        else None
+        if (field.exists) List(Select(This(clazz), field))
+        else Nil
       }
 
-      def getterBody(getter: Symbol): Option[Tree] = {
+      def getterBody(getter: Symbol): List[Tree] = {
         // accessor created by newMatchingModuleAccessor for a static module that does need an accessor
         // (because there's a matching member in a super class)
         if (getter.asTerm.referenced.isModule) {
-          Some(gen.mkAttributedRef(clazz.thisType, getter.asTerm.referenced))
+          List(gen.mkAttributedRef(clazz.thisType, getter.asTerm.referenced))
         } else {
           val fieldMemoization = fieldMemoizationIn(getter, clazz)
-          if (fieldMemoization.pureConstant) Some(gen.mkAttributedQualifier(fieldMemoization.tp)) // TODO: drop when we no longer care about producing identical bytecode
+          if (fieldMemoization.pureConstant) List(gen.mkAttributedQualifier(fieldMemoization.tp)) // TODO: drop when we no longer care about producing identical bytecode
           else fieldAccess(getter)
         }
       }
 
       //      println(s"accessorsAndFieldsNeedingTrees for $templateSym: $accessorsAndFieldsNeedingTrees")
-      def setterBody(setter: Symbol): Option[Tree] = {
+      def setterBody(setter: Symbol): List[Tree] = {
         // trait setter in trait
-        if (clazz.isTrait) Some(EmptyTree)
+        if (clazz.isTrait) List(EmptyThicket)
         // trait setter for overridden val in class
-        else if (checkAndClearOverriddenTraitSetter(setter)) Some(mkTypedUnit(setter.pos))
+        else if (checkAndClearOverriddenTraitSetter(setter)) List(mkTypedUnit(setter.pos))
         // trait val/var setter mixed into class
         else fieldAccess(setter) map (fieldSel => Assign(fieldSel, Ident(setter.firstParam)))
       }
 
-      def moduleAccessorBody(module: Symbol): Some[Tree] = Some(
+      def moduleAccessorBody(module: Symbol): List[Tree] = List(
         // added during synthFieldsAndAccessors using newModuleAccessor
         // a module defined in a trait by definition can't be static (it's a member of the trait and thus gets a new instance for every outer instance)
-        if (clazz.isTrait) EmptyTree
+        if (clazz.isTrait) EmptyThicket
         // symbol created by newModuleAccessor for a (non-trait) class
         else moduleInit(module)
       )
 
-      def superLazy(getter: Symbol): Some[Tree] = {
+      val accessorSynth = accessorInitialization(clazz)
+      def superLazy(getter: Symbol): List[ValOrDefDef] = {
         assert(!clazz.isTrait)
         // this contortion was the only way I can get the super select to be type checked correctly.. TODO: why does SelectSuper not work?
-        Some(gen.mkAssignAndReturn(moduleVarOf(getter), Apply(Select(Super(This(clazz), tpnme.EMPTY), getter.name), Nil)))
+        val rhs = Apply(Select(Super(This(clazz), tpnme.EMPTY), getter.name), Nil)
+        explodeThicket(accessorSynth.expandLazyClassMember(moduleVarOf(getter), getter, rhs, Map.empty)).asInstanceOf[List[ValOrDefDef]]
       }
 
       clazz.info.decls.toList.filter(checkAndClearNeedsTrees) flatMap {
         case module if module hasAllFlags (MODULE | METHOD) => moduleAccessorBody(module) map mkAccessor(module)
-        case getter if getter hasAllFlags (LAZY | METHOD)   => superLazy(getter) map mkAccessor(getter)
+        case getter if getter hasAllFlags (LAZY | METHOD)   => superLazy(getter)
         case setter if setter.isSetter                      => setterBody(setter) map mkAccessor(setter)
         case getter if getter.hasFlag(ACCESSOR)             => getterBody(getter) map mkAccessor(getter)
         case field  if !(field hasFlag METHOD)              => Some(mkField(field)) // vals/vars and module vars (cannot have flags PACKAGE | JAVA since those never receive NEEDS_TREES)
@@ -601,7 +607,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // drop the val for (a) constant (pure & not-stored) and (b) not-stored (but still effectful) fields
         case ValDef(mods, _, _, rhs) if (rhs ne EmptyTree) && !excludedAccessorOrFieldByFlags(statSym)
                                         && fieldMemoizationIn(statSym, clazz).pureConstant =>
-          EmptyTree
+          EmptyThicket
 
         case ModuleDef(_, _, impl) =>
           // ??? The typer doesn't take kindly to seeing this ClassDef; we have to set NoType so it will be ignored.
@@ -639,12 +645,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
       addedStats ::: (if (newStats eq stats) stats else {
         // check whether we need to flatten thickets and drop empty ones
-        if (newStats exists { case EmptyTree => true case Block(_, EmptyTree) => true case _ => false })
-          newStats flatMap {
-            case EmptyTree => Nil
-            case Block(thicket, EmptyTree) => thicket
-            case stat => stat :: Nil
-          }
+        if (newStats exists mustExplodeThicket)
+          newStats flatMap explodeThicket
         else newStats
       })
     }

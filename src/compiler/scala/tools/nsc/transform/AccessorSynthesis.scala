@@ -10,6 +10,18 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
   import definitions._
   import CODE._
 
+  val EmptyThicket = EmptyTree
+  def Thicket(trees: List[Tree]) =
+    if (trees.isEmpty) EmptyTree else Block(trees, EmptyTree)
+
+  def explodeThicket(tree: Tree): List[Tree] = tree match {
+    case EmptyTree                 => Nil
+    case Block(thicket, EmptyTree) => thicket
+    case stat                      => stat :: Nil
+  }
+
+  def mustExplodeThicket(tree: Tree): Boolean = tree match { case EmptyTree => true case Block(_, EmptyTree) => true case _ => false }
+
   trait AccessorSynthTransformation {
     protected def typedPos(pos: Position)(tree: Tree): Tree
 
@@ -186,7 +198,6 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
 
   trait CheckedAccessorSynthTransformation extends AccessorSynthTransformation {
-    def Thicket(trees: List[Tree]) = Block(trees, EmptyTree)
 
     def accessorInitialization(clazz: Symbol): LazyAccessorSynth =
       if (settings.checkInit) new CheckInitAccessorSynth(clazz) else new LazyAccessorSynthImpl(clazz)
