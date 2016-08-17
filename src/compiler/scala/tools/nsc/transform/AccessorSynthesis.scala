@@ -311,7 +311,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
 
     /** Map lazy values to the fields they should null after initialization. */
-    def lazyValNullables(clazz: Symbol, templStats: List[Tree]): Map[Symbol, List[Symbol]] = {
+    def lazyValNullables(clazz: Symbol, templStats: List[Tree]): Map[Symbol, List[Symbol]] = Map() /*{
       // if there are no lazy fields, take the fast path and save a traversal of the whole AST
       if (!clazz.info.decls.exists(_.isLazy)) Map()
       else {
@@ -360,7 +360,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
         map.mapValues(_.toList sortBy (_.id)).toMap
       }
-    }
+    }*/
 
 
     protected class CheckInitAccessorSynth(clazz: Symbol) extends UncheckedAccessorSynth(clazz) with LazyAccessorSynth {
