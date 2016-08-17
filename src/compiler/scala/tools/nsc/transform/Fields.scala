@@ -56,8 +56,8 @@ import symtab.Flags._
   *
   * TODO: check init support (or drop the -Xcheck-init flag??)
   */
-abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransformers {
-
+abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransformers with AccessorSynthesis {
+  import CODE._
   import global._
   import definitions._
 
@@ -223,6 +223,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   }
 
   private object synthFieldsAndAccessors extends TypeMap {
+
     private def newTraitSetter(getter: Symbol, clazz: Symbol) = {
       // Add setter for an immutable, memoizing getter
       // (can't emit during namers because we don't yet know whether it's going to be memoized or not)
@@ -352,14 +353,17 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             || (m.isLazy && !(m.info.isInstanceOf[ConstantType] || isUnitType(m.info))) // no need for ASF since we're in the defining class
           )
 
+        val lazies = new LazyInitSymbolSynth { val clazz = tp.typeSymbol }
+        val bitmapSyms = lazies.computeBitmapInfos(oldDecls.toList)
+
         // expand module def in class/object (if they need it -- see modulesNeedingExpansion above)
-        val expandedModulesAndLazyVals =
-          modulesAndLazyValsNeedingExpansion map { member =>
+        val expandedModulesAndLazyVals = bitmapSyms ++ (
+          modulesAndLazyValsNeedingExpansion flatMap { member =>
             if (member.isLazy) {
-              newLazyVarMember(member)
+              List(newLazyVarMember(member), lazies.newSlowPathSymbol(member))
             }
             // expanding module def (top-level or nested in static module)
-            else if (member.isStatic) { // implies m.isOverridingSymbol as per above filter
+            else List(if (member.isStatic) { // implies m.isOverridingSymbol as per above filter
               // Need a module accessor, to implement/override a matching member in a superclass.
               // Never a need for a module var if the module is static.
               newMatchingModuleAccessor(clazz, member)
@@ -368,8 +372,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
               // must reuse symbol instead of creating an accessor
               member setFlag NEEDS_TREES
               newModuleVarMember(member)
-            }
-          }
+            })
+          })
 
 //        println(s"expanded modules for $clazz: $expandedModules")
 
@@ -468,15 +472,18 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     if (!module.isStatic) module setFlag METHOD | STABLE
   }
 
-  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    def mkTypedUnit(pos: Position) = localTyper.typedPos(pos)(CODE.UNIT)
+  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with CheckedAccessorSynthTransformation {
+    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+
+    def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
     def deriveUnitDef(stat: Tree)  = deriveDefDef(stat)(_ => mkTypedUnit(stat.pos))
 
-    def mkAccessor(accessor: Symbol)(body: Tree) = localTyper.typedPos(accessor.pos)(DefDef(accessor, body)).asInstanceOf[DefDef]
+    def mkAccessor(accessor: Symbol)(body: Tree) = typedPos(accessor.pos)(DefDef(accessor, body)).asInstanceOf[DefDef]
 
-    def mkField(sym: Symbol) = localTyper.typedPos(sym.pos)(ValDef(sym)).asInstanceOf[ValDef]
-
-
+    def mkField(sym: Symbol) = {
+      val vd = if (isBitmapField(sym)) bitmapFieldDef(sym) else ValDef(sym)
+      typedPos(sym.pos)(vd).asInstanceOf[ValDef]
+    }
 
     // synth trees for accessors/fields and trait setters when they are mixed into a class
     def fieldsAndAccessors(clazz: Symbol): List[ValOrDefDef] = {
@@ -538,7 +545,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree =
       atOwner(newOwner)(super.transform(stat.rhs.changeOwner(stat.symbol -> newOwner)))
 
-    private def Thicket(trees: List[Tree]) = Block(trees, EmptyTree)
+
     override def transform(stat: Tree): Tree = {
       val clazz = currentOwner
       val statSym = stat.symbol
@@ -582,8 +589,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           val transformedRhs = atOwner(statSym)(transform(rhs))
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
-          else if (clazz.isTrait || notStored) mkAccessor(statSym)(transformedRhs)
-          else if (clazz.isClass) mkAccessor(statSym)(gen.mkAssignAndReturn(moduleVarOf(vd.symbol), transformedRhs))
+          else if (clazz.isTrait || (notStored && !vd.symbol.isLazy)) mkAccessor(statSym)(transformedRhs)
+          else if (clazz.isClass) accessorInit.expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs)
           else {
             // local lazy val (same story as modules: info transformer doesn't get here, so can't drive tree synthesis)
             val lazyVar = newLazyVarSymbol(currentOwner, statSym, statSym.info.resultType, extraFlags = 0, localLazyVal = true)
@@ -616,10 +623,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       if (stat.isTerm) atOwner(exprOwner)(transform(stat))
       else transform(stat)
 
+    private var accessorInit: LazyAccessorSynth = null
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
       val addedStats =
         if (!currentOwner.isClass) Nil
         else afterOwnPhase { fieldsAndAccessors(currentOwner) }
+
+      if (currentOwner.isClass && !(currentOwner.isPackageClass || currentOwner.isTrait))
+        accessorInit = accessorInitialization(currentOwner, stats)
 
       val newStats =
         stats mapConserve (if (exprOwner != currentOwner) transformTermsAtExprOwner(exprOwner) else transform)
