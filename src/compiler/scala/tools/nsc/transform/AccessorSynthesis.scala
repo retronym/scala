@@ -100,6 +100,11 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
   private[this] val _bitmapInfo  = perRunCaches.newMap[Symbol, BitmapInfo]
   private[this] val _slowPathFor = perRunCaches.newMap[Symbol, Symbol]()
 
+  def checkedAccessorSymbolSynth(clz: Symbol) =
+    if (settings.checkInit) new CheckInitAccessorSymbolSynth { val clazz = clz }
+    else new CheckedAccessorSymbolSynth { val clazz = clz }
+
+  // base trait, with enough functionality for lazy vals -- CheckInitAccessorSymbolSynth adds logic for -Xcheckinit
   trait CheckedAccessorSymbolSynth {
     protected val clazz: Symbol
 
@@ -140,10 +145,10 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
       def doCategory(fields: List[Symbol], category: Name) = {
         val nbFields = fields.length // we know it's > 0
         val (bitmapClass, bitmapCapacity) =
-        if (nbFields == 1)       (BooleanClass, 1)
-        else if (nbFields <= 8)  (ByteClass, 8)
-        else if (nbFields <= 32) (IntClass, 32)
-        else (LongClass, 64)
+          if (nbFields == 1)       (BooleanClass, 1)
+          else if (nbFields <= 8)  (ByteClass, 8)
+          else if (nbFields <= 32) (IntClass, 32)
+          else (LongClass, 64)
 
         // 0-based index of highest bit, divided by bits per bitmap
         // note that this is only ever > 0 when bitmapClass == LongClass
@@ -197,28 +202,58 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
   }
 
+  trait CheckInitAccessorSymbolSynth extends CheckedAccessorSymbolSynth {
+    /** Does this field require an initialized bit?
+      * Note: fields of classes inheriting DelayedInit are not checked.
+      * This is because they are neither initialized in the constructor
+      * nor do they have a setter (not if they are vals anyway). The usual
+      * logic for setting bitmaps does therefore not work for such fields.
+      * That's why they are excluded.
+      * Note: The `checkinit` option does not check if transient fields are initialized.
+      */
+    protected def needsInitFlag(sym: Symbol): Boolean =
+      sym.isGetter &&
+        !( sym.isInitializedToDefault
+        || isConstantType(sym.info.finalResultType) // SI-4742
+        || sym.hasFlag(PARAMACCESSOR | SPECIALIZED | LAZY)
+        || sym.accessed.hasFlag(PRESUPER)
+        || sym.isOuterAccessor
+        || (sym.owner isSubClass DelayedInitClass)
+        || (sym.accessed hasAnnotation TransientAttr))
+
+    /** Examines the symbol and returns a name indicating what brand of
+      * bitmap it requires.  The possibilities are the BITMAP_* vals
+      * defined in StdNames.  If it needs no bitmap, nme.NO_NAME.
+      *
+      * bitmaps for checkinit fields are not inherited
+      */
+    override protected def bitmapCategory(sym: Symbol): Name = {
+      import nme._
+
+      super.bitmapCategory(sym) match {
+        case NO_NAME if needsInitFlag(sym) && !sym.isDeferred =>
+          if (hasTransientAnnot(sym)) BITMAP_CHECKINIT_TRANSIENT else BITMAP_CHECKINIT
+        case category => category
+      }
+    }
+
+    override def needsBitmap(sym: Symbol): Boolean = super.needsBitmap(sym) || !(isTrait || sym.isDeferred) && needsInitFlag(sym)
+  }
+
 
   trait CheckedAccessorSynthTransformation extends AccessorSynthTransformation {
 
-    def accessorInitialization(clazz: Symbol): LazyAccessorSynth =
-      if (settings.checkInit) new CheckInitAccessorSynth(clazz) else new LazyAccessorSynthImpl(clazz)
-
-    class LazyAccessorSynthImpl(protected val clazz: Symbol) extends LazyAccessorSynth
-
     // note: we deal in getters here, not field symbols
-    trait LazyAccessorSynth extends CheckedAccessorSymbolSynth {
+    trait CheckedAccessorTreeSynth extends CheckedAccessorSymbolSynth {
       def isUnitGetter(sym: Symbol) = sym.tpe.resultType.typeSymbol == UnitClass
-      def thisRef    = gen.mkAttributedThis(clazz)
-
-      // overridden in CheckInitAccessorInitialization
-      def rhsWithOtherInitCheck(sym: Symbol)(rhs: Tree): Tree = rhs
+      def thisRef = gen.mkAttributedThis(clazz)
 
       /** Return an (untyped) tree of the form 'clazz.this.bitmapSym & mask (==|!=) 0', the
         * precise comparison operator depending on the value of 'equalToZero'.
         */
       def mkTest(field: Symbol, equalToZero: Boolean = true): Tree = {
         val bitmap = bitmapFor(field)
-        val bitmapTree  = thisRef DOT bitmap.symbol
+        val bitmapTree = thisRef DOT bitmap.symbol
 
         if (bitmap.storageClass == BooleanClass) {
           if (equalToZero) NOT(bitmapTree) else bitmapTree
@@ -229,7 +264,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         }
       }
 
-      /* Return an (untyped) tree of the form 'Clazz.this.bmp = Clazz.this.bmp | mask'. */
+      /** Return an (untyped) tree of the form 'Clazz.this.bmp = Clazz.this.bmp | mask'. */
       def mkSetFlag(valSym: Symbol): Tree = {
         val bitmap = bitmapFor(valSym)
         def x = thisRef DOT bitmap.symbol
@@ -245,43 +280,45 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
           }
         )
       }
+    }
 
-
+    class LazyAccessorTreeSynth(protected val clazz: Symbol) extends CheckedAccessorTreeSynth {
+      /**
+        * The compute method (slow path) looks like:
+        *
+        * ```
+        * def l$compute() = {
+        * synchronized(this) {
+        * if ((bitmap$n & MASK) == 0) {
+        * init // l$ = <rhs>
+        * bitmap$n = bimap$n | MASK
+        * }
+        * }
+        * ...
+        *   this.f1 = null
+        * ...
+        *   this.fn = null
+        * l$
+        * }
+        * ```
+        *
+        * `bitmap$n` is a byte, int or long value acting as a bitmap of initialized values.
+        * The kind of the bitmap determines how many bit indicators for lazy vals are stored in it.
+        * For Int bitmap it is 32 and then 'n' in the above code is: (offset / 32),
+        * the MASK is (1 << (offset % 32)).
+        *
+        * If the class contains only a single lazy val then the bitmap is
+        * represented as a Boolean and the condition checking is a simple bool test.
+        *
+        * Private fields used only in this initializer are subsequently set to null.
+        *
+        * For performance reasons the double-checked locking is split into two parts,
+        * the first (fast) path checks the bitmap without synchronizing, and if that
+        * fails it initializes the lazy val within the synchronization block (slow path).
+        *
+        * This way the inliner should optimize the fast path because the method body is small enough.
+        */
       def expandLazyClassMember(lazyVar: Symbol, lazyAccessor: Symbol, transformedRhs: Tree, nullables: Map[Symbol, List[Symbol]]): Tree = {
-
-        // The compute method (slow path) looks like:
-        //
-        // ```
-        // def l$compute() = {
-        //   synchronized(this) {
-        //     if ((bitmap$n & MASK) == 0) {
-        //      init // l$ = <rhs>
-        //      bitmap$n = bimap$n | MASK
-        //     }
-        //   }
-        //   ...
-        //   this.f1 = null
-        //   ...
-        //   this.fn = null
-        //   l$
-        // }
-        // ```
-        //
-        // `bitmap$n` is a byte, int or long value acting as a bitmap of initialized values.
-        // The kind of the bitmap determines how many bit indicators for lazy vals are stored in it.
-        // For Int bitmap it is 32 and then 'n' in the above code is: (offset / 32),
-        // the MASK is (1 << (offset % 32)).
-        //
-        // If the class contains only a single lazy val then the bitmap is
-        // represented as a Boolean and the condition checking is a simple bool test.
-        //
-        // Private fields used only in this initializer are subsequently set to null.
-        //
-        // For performance reasons the double-checked locking is split into two parts,
-        // the first (fast) path checks the bitmap without synchronizing, and if that
-        // fails it initializes the lazy val within the synchronization block (slow path).
-        //
-        // This way the inliner should optimize the fast path because the method body is small enough.
         def nullify(sym: Symbol) = Select(thisRef, sym.accessedOrSelf) === LIT(null)
         val nulls = nullables.getOrElse(lazyAccessor, Nil) map nullify
 
@@ -307,9 +344,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
           Thicket(List((DefDef(slowPathSym, slowPathRhs)), DefDef(lazyAccessor, accessorRhs)) map typedPos(lazyAccessor.pos.focus))
         }
       }
-
     }
-
 
     /** Map lazy values to the fields they should null after initialization. */
     // TODO: fix
@@ -365,53 +400,13 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
     }*/
 
 
-    protected class CheckInitAccessorSynth(clazz: Symbol) extends UncheckedAccessorSynth(clazz) with LazyAccessorSynth {
-      /** Does this field require an initialized bit?
-        * Note: fields of classes inheriting DelayedInit are not checked.
-        * This is because they are neither initialized in the constructor
-        * nor do they have a setter (not if they are vals anyway). The usual
-        * logic for setting bitmaps does therefore not work for such fields.
-        * That's why they are excluded.
-        * Note: The `checkinit` option does not check if transient fields are initialized.
-        */
-      private def needsInitFlag(sym: Symbol): Boolean = (
-        sym.isGetter
-          && !sym.isInitializedToDefault
-          && !isConstantType(sym.info.finalResultType) // SI-4742
-          && !sym.hasFlag(PARAMACCESSOR | SPECIALIZED | LAZY)
-          && !sym.accessed.hasFlag(PRESUPER)
-          && !sym.isOuterAccessor
-          && !(sym.owner isSubClass DelayedInitClass)
-          && !(sym.accessed hasAnnotation TransientAttr)
-        )
-
-      private def needsInitFlagAndHasBitmap(sym: Symbol) = hasBitmap(sym) && needsInitFlag(sym)
-
-      //      override protected def isFieldWithTransientBitmap(field: Symbol) =
-      //        super.isFieldWithTransientBitmap(field) || needsInitFlag(field) && !field.isDeferred && isTransientField(field)
-
-      /** Examines the symbol and returns a name indicating what brand of
-        * bitmap it requires.  The possibilities are the BITMAP_* vals
-        * defined in StdNames.  If it needs no bitmap, nme.NO_NAME.
-        *
-        * bitmaps for checkinit fields are not inherited
-        */
-      override protected def bitmapCategory(sym: Symbol): Name = {
-        import nme._
-
-        super.bitmapCategory(sym) match {
-          case NO_NAME if needsInitFlag(sym) && !sym.isDeferred =>
-            if (hasTransientAnnot(sym)) BITMAP_CHECKINIT_TRANSIENT else BITMAP_CHECKINIT
-          case category => category
-        }
-      }
-
-      object addInitBitsTransformer extends Transformer {
+    class CheckInitAccessorSynth(protected val clazz: Symbol) extends CheckedAccessorTreeSynth with CheckInitAccessorSymbolSynth {
+      private object addInitBitsTransformer extends Transformer {
         private def checkedGetter(lhs: Tree)(pos: Position) = {
-          val sym = clazz.info decl lhs.symbol.getterName suchThat (_.isGetter)
-          if (needsInitFlagAndHasBitmap(sym)) {
-            debuglog("adding checked getter for: " + sym + " " + lhs.symbol.flagString)
-            List(typedPos(pos)(mkSetFlag(sym)))
+          val getter = clazz.info decl lhs.symbol.getterName suchThat (_.isGetter)
+          if (hasBitmap(getter) && needsInitFlag(getter)) {
+            debuglog("adding checked getter for: " + getter + " " + lhs.symbol.flagString)
+            List(typedPos(pos)(mkSetFlag(getter)))
           }
           else Nil
         }
@@ -430,16 +425,13 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         }
       }
 
-
-      override def needsBitmap(sym: Symbol): Boolean = super.needsBitmap(sym) || !(isTrait || sym.isDeferred) && needsInitFlag(sym)
-
       /** Make getters check the initialized bit, and the class constructor & setters are changed to set the initialized bits. */
-      override def rhsWithOtherInitCheck(sym: Symbol)(rhs: Tree): Tree = {
+      def wrapRhsWithInitChecks(sym: Symbol)(rhs: Tree): Tree = {
         // Add statements to the body of a constructor to set the 'init' bit for each field initialized in the constructor
         if (sym.isConstructor) addInitBitsTransformer transform rhs
         else if (isTrait || rhs == EmptyTree) rhs
         // getter
-        else if (needsInitFlag(sym)) mkCheckedAccessor(if (isUnitGetter(sym)) UNIT else rhs, rhs.pos, sym)
+        else if (needsInitFlag(sym)) mkCheckedAccessorRhs(if (isUnitGetter(sym)) UNIT else rhs, rhs.pos, sym)
         else if (sym.isSetter) {
           val getter = sym.getterIn(clazz)
           if (needsInitFlag(getter)) Block(List(rhs, typedPos(rhs.pos.focus)(mkSetFlag(getter))), UNIT)
@@ -448,7 +440,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         else rhs
       }
 
-      def mkCheckedAccessor(retVal: Tree, pos: Position, getter: Symbol): Tree = {
+      private def mkCheckedAccessorRhs(retVal: Tree, pos: Position, getter: Symbol): Tree = {
         val msg = s"Uninitialized field: ${clazz.sourceFile}: ${pos.line}"
         val result =
           IF(mkTest(getter, equalToZero = false)).
@@ -456,17 +448,6 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
             ELSE(Throw(NewFromConstructor(UninitializedFieldConstructor, LIT(msg))))
 
         typedPos(pos)(BLOCK(result, retVal))
-      }
-
-      // TODO: need to run this on all accessor bodies (after fields refactoring, this is only run on accessors mixed in during mixins, which is only PRESUPER | PARAMACCESSOR)
-      override def getterBody(getter: Symbol) = {
-        if (!needsInitFlag(getter)) super.getterBody(getter)
-        else mkCheckedAccessor(super.getterBody(getter), getter.pos, getter)
-      }
-
-      override def setterBody(setter: Symbol, getter: Symbol) = {
-        if (!needsInitFlag(getter)) super.setterBody(setter, getter)
-        else Block(List(super.setterBody(setter, getter)), mkSetFlag(getter))
       }
     }
   }

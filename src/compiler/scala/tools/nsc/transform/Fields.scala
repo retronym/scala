@@ -353,7 +353,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             || (m.isLazy && !(fieldMemoizationIn(m, clazz).pureConstant || isUnitType(fieldMemoizationIn(m, clazz).tp)))
           )
 
-        val lazies = new CheckedAccessorSymbolSynth { val clazz = tp.typeSymbol }
+        val lazies = checkedAccessorSymbolSynth(tp.typeSymbol)
 
         // expand module def in class/object (if they need it -- see modulesNeedingExpansion above)
         val expandedModulesAndLazyVals = (
@@ -444,7 +444,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         def omittableField(sym: Symbol) = sym.isValue && !sym.isMethod && !fieldMemoizationIn(sym, clazz).stored
 
         val newDecls =
-          if (expandedModulesAndLazyVals.isEmpty && mixedInAccessorAndFields.isEmpty) oldDecls.filterNot(omittableField)
+          // under -Xcheckinit we generate all kinds of bitmaps, even when there are no lazy vals
+          if (expandedModulesAndLazyVals.isEmpty && mixedInAccessorAndFields.isEmpty && !settings.checkInit) oldDecls.filterNot(omittableField)
           else {
             // must not alter `decls` directly
             val newDecls = newScope
@@ -533,7 +534,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         else moduleInit(module)
       )
 
-      val accessorSynth = accessorInitialization(clazz)
+      val accessorSynth = new LazyAccessorTreeSynth(clazz)
       def superLazy(getter: Symbol): List[ValOrDefDef] = {
         assert(!clazz.isTrait)
         // this contortion was the only way I can get the super select to be type checked correctly.. TODO: why does SelectSuper not work?
@@ -603,7 +604,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
           else if (clazz.isTrait || notStored) mkAccessor(statSym)(transformedRhs)
-          else if (clazz.isClass) accessorInitialization(clazz).expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
+          else if (clazz.isClass) new LazyAccessorTreeSynth(clazz).expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
           else {
             // local lazy val (same story as modules: info transformer doesn't get here, so can't drive tree synthesis)
             val lazyVar = newLazyVarSymbol(currentOwner, statSym, statSym.info.resultType, extraFlags = 0, localLazyVal = true)
@@ -641,10 +642,11 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
       val addedStats =
-        if (!currentOwner.isClass) Nil
+        if (!currentOwner.isClass) Nil // TODO: || currentOwner.isPackageClass
         else afterOwnPhase { fieldsAndAccessors(currentOwner) }
 
-      if (currentOwner.isClass && !(currentOwner.isPackageClass || currentOwner.isTrait))
+      val inRealClass = currentOwner.isClass && !(currentOwner.isPackageClass || currentOwner.isTrait)
+      if (inRealClass)
         nullables(currentOwner) = lazyValNullables(currentOwner, stats)
 
       val newStats =
