@@ -350,7 +350,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         val modulesAndLazyValsNeedingExpansion =
           oldDecls.toList.filter(m =>
             (m.isModule && (!m.isStatic || m.isOverridingSymbol))
-            || (m.isLazy && !(m.info.isInstanceOf[ConstantType] || isUnitType(m.info))) // no need for ASF since we're in the defining class
+            || (m.isLazy && !(fieldMemoizationIn(m, clazz).pureConstant || isUnitType(fieldMemoizationIn(m, clazz).tp)))
           )
 
         val lazies = new CheckedAccessorSymbolSynth { val clazz = tp.typeSymbol }
@@ -418,8 +418,11 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           }
           else if (member hasFlag LAZY) {
             val mixedinLazy = cloneAccessor()
-            val lazyVar = newLazyVarMember(mixedinLazy)
-            List(lazyVar, lazies.newSlowPathSymbol(mixedinLazy), newSuperLazy(mixedinLazy, site, lazyVar))
+            if (fieldMemoizationIn(member, clazz).pureConstant) List(mixedinLazy)
+            else {
+              val lazyVar = newLazyVarMember(mixedinLazy)
+              List(lazyVar, lazies.newSlowPathSymbol(mixedinLazy), newSuperLazy(mixedinLazy, site, lazyVar))
+            }
           }
           else if (member.isGetter && fieldMemoizationIn(member, clazz).stored) {
             // add field if needed
@@ -591,11 +594,15 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           *      { z = <rhs>; z } where z can be an identifier or a field.
           */
         case vd@ValDef(mods, name, tpt, rhs) if vd.symbol.hasFlag(ACCESSOR) && treeInfo.noFieldFor(vd, clazz) =>
-          def notStored = {val resultType = statSym.info.resultType ; (resultType.isInstanceOf[ConstantType] || isUnitType(resultType))}
+          def notStored = {
+            val resultType = statSym.info.resultType
+            resultType.isInstanceOf[ConstantType] || isUnitType(resultType) && !vd.symbol.isLazy
+          }
+
           val transformedRhs = atOwner(statSym)(transform(rhs))
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
-          else if (clazz.isTrait || (notStored && !vd.symbol.isLazy)) mkAccessor(statSym)(transformedRhs)
+          else if (clazz.isTrait || notStored) mkAccessor(statSym)(transformedRhs)
           else if (clazz.isClass) accessorInitialization(clazz).expandLazyClassMember(moduleVarOf(statSym), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
           else {
             // local lazy val (same story as modules: info transformer doesn't get here, so can't drive tree synthesis)
