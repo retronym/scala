@@ -545,11 +545,11 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             If(cond,
               Block(
                 List(Apply(Ident(holderSym) DOT initializedSetter, TRUE :: Nil)),
-                if (isUnit) vd.rhs else Apply(Ident(holderSym) DOT valueSetter, vd.rhs :: Nil)),
+                if (isUnit) vd.rhs else Apply(Select(Ident(holderSym), valueSetter), vd.rhs :: Nil)),
               EmptyTree)), // else of inner If
           EmptyTree)       // else of outer If
         if (isUnit) checkAndInit
-        else Block(checkAndInit :: Nil, Ident(holderSym) DOT valueGetter)
+        else Block(checkAndInit :: Nil, Apply(Select(Ident(holderSym), valueGetter), Nil))
       }
 
       Thicket(holder :: accessor :: Nil)
