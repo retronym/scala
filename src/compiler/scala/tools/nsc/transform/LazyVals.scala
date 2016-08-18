@@ -15,8 +15,8 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
   private val FLAGS_PER_BYTE: Int = 8 // Byte
   private def bitmapKind = ByteClass
 
-  def newTransformer(unit: CompilationUnit): Transformer =
-    new LazyValues(unit)
+  def newTransformer(unit: CompilationUnit): Transformer = noopTransformer
+//    new LazyValues(unit)
 
   private def lazyUnit(sym: Symbol) = sym.tpe.resultType.typeSymbol == UnitClass
 
