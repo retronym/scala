@@ -114,16 +114,16 @@ abstract class LazyVals extends Transform with TypingTransformers with ast.TreeD
             val (rhs1, sDef) = mkLazyLocalDef(enclosingClassOrDummyOrMethod, transform(rhs), idx, sym)
             sym.resetFlag((if (lazyUnit(sym)) 0 else LAZY) | ACCESSOR)
             (rhs1, sDef)
-          } else if (sym.hasAllFlags(MODULE | METHOD) && !sym.owner.isTrait) {
-            rhs match {
-              case b @ Block((assign @ Assign(moduleRef, _)) :: Nil, expr) =>
-                def cond = Apply(Select(moduleRef, Object_eq), List(Literal(Constant(null))))
-                val (fastPath, slowPath) = mkDoubleCheckedLocking(sym.owner.enclClass, moduleRef.symbol, cond, transform(assign) :: Nil, Nil, transform(expr))
-                (localTyper.typedPos(tree.pos)(fastPath), localTyper.typedPos(tree.pos)(slowPath))
-              case rhs =>
-                global.reporter.error(tree.pos, "Unexpected tree on the RHS of a module accessor: " + rhs)
-                (rhs, EmptyTree)
-            }
+//          } else if (sym.hasAllFlags(MODULE | METHOD) && !sym.owner.isTrait) {
+//            rhs match {
+//              case b @ Block((assign @ Assign(moduleRef, _)) :: Nil, expr) =>
+//                def cond = Apply(Select(moduleRef, Object_eq), List(Literal(Constant(null))))
+//                val (fastPath, slowPath) = mkDoubleCheckedLocking(sym.owner.enclClass, moduleRef.symbol, cond, transform(assign) :: Nil, Nil, transform(expr))
+//                (localTyper.typedPos(tree.pos)(fastPath), localTyper.typedPos(tree.pos)(slowPath))
+//              case rhs =>
+//                global.reporter.error(tree.pos, "Unexpected tree on the RHS of a module accessor: " + rhs)
+//                (rhs, EmptyTree)
+//            }
           } else {
             (transform(rhs), EmptyTree)
           }
