@@ -315,7 +315,9 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         * This way the inliner should optimize the fast path because the method body is small enough.
         */
       def expandLazyClassMember(lazyVar: Symbol, lazyAccessor: Symbol, transformedRhs: Tree, nullables: Map[Symbol, List[Symbol]]): Tree = {
-        def nullify(sym: Symbol) = Select(thisRef, sym.accessedOrSelf) === LIT(null)
+        // use cast so that specialization can turn null.asInstanceOf[T] into null.asInstanceOf[Long]
+        def nullify(sym: Symbol) =
+          Select(thisRef, sym.accessedOrSelf) === gen.mkAsInstanceOf(NULL, sym.info.resultType)
         val nulls = nullables.getOrElse(lazyAccessor, Nil) map nullify
 
         if (nulls.nonEmpty)
