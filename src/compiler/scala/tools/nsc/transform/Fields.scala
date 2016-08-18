@@ -349,10 +349,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // a module does not need treatment here if it's static, unless it has a matching member in a superclass
         // a non-static method needs a module var
         val modulesAndLazyValsNeedingExpansion =
-          oldDecls.toList.filter(m =>
-            (m.isModule && (!m.isStatic || m.isOverridingSymbol))
-            || (m.isLazy && !fieldMemoizationIn(m, clazz).pureConstant)
-          )
+          oldDecls.toList.filter(m => (m.isModule && (!m.isStatic || m.isOverridingSymbol)) || (m.isLazy && fieldMemoizationIn(m, clazz).stored))
 
         val lazies = checkedAccessorSymbolSynth(tp.typeSymbol)
 
@@ -599,12 +596,12 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         else moduleInit(module)
       )
 
-      val accessorSynth = new LazyAccessorTreeSynth(clazz)
+      val synthAccessorInClass = new LazyAccessorTreeSynth(clazz)
       def superLazy(getter: Symbol): List[ValOrDefDef] = {
         assert(!clazz.isTrait)
         // this contortion was the only way I can get the super select to be type checked correctly.. TODO: why does SelectSuper not work?
         val rhs = Apply(Select(Super(This(clazz), tpnme.EMPTY), getter.name), Nil)
-        explodeThicket(accessorSynth.expandLazyClassMember(moduleVarOf(getter), getter, rhs, Map.empty)).asInstanceOf[List[ValOrDefDef]]
+        explodeThicket(synthAccessorInClass.expandLazyClassMember(moduleVarOf(getter), getter, rhs, Map.empty)).asInstanceOf[List[ValOrDefDef]]
       }
 
       clazz.info.decls.toList.filter(checkAndClearNeedsTrees) flatMap {
@@ -649,25 +646,22 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
                                            && fieldMemoizationIn(statSym, clazz).pureConstant =>
           deriveDefDef(stat)(_ => gen.mkAttributedQualifier(rhs.tpe))
 
-        /** Normalize ValDefs to corresponding accessors + field
-          *
-          * ValDef in trait --> getter DefDef
-          * Lazy val receives field with a new symbol (if stored) and the ValDef's symbol is moved to a DefDef (the lazy accessor):
-          *    - for lazy values of type Unit and all lazy fields inside traits,
-          *      the rhs is the initializer itself, because we'll just "compute" the result on every access
-          *     ("computing" unit / constant type is free -- the side-effect is still only run once, using the init bitmap)
-          *    - for all other lazy values z the accessor is a block of this form:
-          *      { z = <rhs>; z } where z can be an identifier or a field.
-          */
+        // deferred val, trait val, lazy val (in class), or local lazy val
         case vd@ValDef(mods, name, tpt, rhs) if vd.symbol.hasFlag(ACCESSOR) && treeInfo.noFieldFor(vd, clazz) =>
           val transformedRhs = atOwner(statSym)(transform(rhs))
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
           else if (clazz.isTrait || !fieldMemoizationIn(statSym, clazz).stored) mkAccessor(statSym)(transformedRhs)
-          else if (clazz.isClass) new LazyAccessorTreeSynth(clazz).expandLazyClassMember(moduleVarOf.getOrElse(statSym, NoSymbol), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
           else {
             assert(statSym.isLazy, s"Found non-lazy <accessor> ValDef: $statSym in ${statSym.owner}")
-            mkLazyLocalDef(vd)
+            if (!clazz.isClass) mkLazyLocalDef(vd)
+            else {
+              // TODO: make `synthAccessorInClass` a field and update it in atOwner?
+              // note that `LazyAccessorTreeSynth` is pretty lightweight
+              // (it's just a bunch of methods that all take a `clazz` parameter, which is thus stored as a field)
+              val synthAccessorInClass = new LazyAccessorTreeSynth(clazz)
+              synthAccessorInClass.expandLazyClassMember(moduleVarOf.getOrElse(statSym, NoSymbol), statSym, transformedRhs, nullables.getOrElse(clazz, Map.empty))
+            }
           }
 
         // drop the val for (a) constant (pure & not-stored) and (b) not-stored (but still effectful) fields
