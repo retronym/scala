@@ -647,7 +647,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
           else if (clazz.isTrait) mkAccessor(statSym)(transformedRhs)
-          else if (!clazz.isClass) mkLazyLocalDef(vd.symbol, rhs)
+          else if (!clazz.isClass) mkLazyLocalDef(vd.symbol, transformedRhs)
           else {
             // TODO: make `synthAccessorInClass` a field and update it in atOwner?
             // note that `LazyAccessorTreeSynth` is pretty lightweight
