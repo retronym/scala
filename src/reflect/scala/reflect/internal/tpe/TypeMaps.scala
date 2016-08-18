@@ -1046,6 +1046,36 @@ private[internal] trait TypeMaps {
       arg
     }
   }
+  class DealisingContainsCollector(sym: Symbol) extends TypeCollector(false) {
+    def traverse(tp: Type) {
+      if (!result) {
+        tp match {
+          case _: ExistentialType =>
+            // ExistentialType#normalize internally calls contains, which leads to exponential performance
+            // for types like: `A[_ <: B[_ <: ... ]]`. Example: pos/existential-contains.scala.
+            //
+            // We can just map over the components and wait until we see the underlying type before we call
+            // normalize.
+            mapOver(tp)
+          case _ =>
+            tp.dealias match {
+              case TypeRef(_, sym1, _) if (sym == sym1) => result = true
+              case SingleType(_, sym1) if (sym == sym1) => result = true
+              case _ => mapOver(tp)
+            }
+        }
+      }
+    }
+    override def mapOver(arg: Tree) = {
+      for (t <- arg) {
+        traverse(t.tpe)
+        if (t.symbol == sym)
+          result = true
+      }
+      arg
+    }
+  }
+
 
   /** A map to implement the `filter` method. */
   class FilterTypeCollector(p: Type => Boolean) extends TypeCollector[List[Type]](Nil) {

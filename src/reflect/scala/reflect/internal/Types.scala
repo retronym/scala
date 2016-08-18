@@ -778,7 +778,11 @@ trait Types
     def exists(p: Type => Boolean): Boolean = !find(p).isEmpty
 
     /** Does this type contain a reference to this symbol? */
-    def contains(sym: Symbol): Boolean = new ContainsCollector(sym).collect(this)
+    def contains(sym: Symbol): Boolean =
+      new ContainsCollector(sym).collect(this)
+
+    def containsIncludingDealiasing(sym: Symbol): Boolean =
+      new DealisingContainsCollector(sym).collect(this)
 
     /** Is this type a subtype of that type? */
     def <:<(that: Type): Boolean = {
