@@ -513,35 +513,24 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       *  }
       * ```
       */
-    private def mkLazyLocalDef(vd: ValDef): Tree = {
-      val lazyVal = vd.symbol
-      val owner = lazyVal.owner
-
-      val name = lazyVal.name.toTermName.append(nme.LAZY_LOCAL_SUFFIX_STRING)
-      // TODO: also remove the LAZY flag?
-      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE)
+    private def mkLazyLocalDef(lazyVal: Symbol, rhs: Tree): Tree = {
       val lazyValType = lazyVal.tpe.resultType
-      val isUnit = lazyValType.typeSymbol == UnitClass
-      val refTpe =
-        if (isUnit) LazyUnitClass.tpe
-        else lazyHolders.get(lazyValType.typeSymbol) match {
-          case Some(lazyPrimitive) => lazyPrimitive.tpe
-          case _ => typeRef(LazyRefClass.owner.thisType, LazyRefClass, List(lazyValType))
-        }
-      val holderSym = owner.newValue(name, lazyVal.pos, flags) setInfo refTpe
-      val holder = mkField(holderSym, New(refTpe))
+      val refClass = lazyHolders.getOrElse(lazyValType.typeSymbol, LazyRefClass)
+      val refTpe = if (refClass != LazyRefClass) refClass.tpe else appliedType(refClass.typeConstructor, List(lazyValType))
 
-      // remove LAZY: prevent lazy expansion in mixin
-      // remove STABLE: prevent replacing accessor call of type Unit by BoxedUnit.UNIT in erasure
-      // remove ACCESSOR: prevent constructors from eliminating the method body if the lazy val is lifted into a trait (not sure about the details here)
-      lazyVal.resetFlag(LAZY | STABLE | ACCESSOR)
+      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE)
+      val name  = lazyVal.name.toTermName.append(nme.LAZY_LOCAL_SUFFIX_STRING)
+      val holderSym =
+        lazyVal.owner.newValue(name, lazyVal.pos, flags) setInfo refTpe
+
       val accessor = mkAccessor(lazyVal) {
         import CODE._
         val initializedGetter = refTpe.member(nme.initialized)
-        val setInitialized    = Apply(Select(Ident(holderSym), initializedGetter.setter), TRUE :: Nil)
+        val setInitialized    = Apply(Select(Ident(holderSym), initializedGetter.setterIn(refClass)), TRUE :: Nil)
+        val isUnit = refClass == LazyUnitClass
         val valueGetter = if (isUnit) NoSymbol else refTpe.member(nme.value)
-        val valueSetter = if (isUnit) NoSymbol else valueGetter.setter
-        val setValue    = if (isUnit) vd.rhs   else Apply(Select(Ident(holderSym), valueSetter), vd.rhs :: Nil)
+        val valueSetter = if (isUnit) NoSymbol else valueGetter.setterIn(refClass)
+        val setValue    = if (isUnit) rhs      else Apply(Select(Ident(holderSym), valueSetter), rhs :: Nil)
         val getValue    = if (isUnit) UNIT     else Apply(Select(Ident(holderSym), valueGetter), Nil)
         gen.mkSynchronized(Ident(holderSym),
           Block(List(
@@ -555,7 +544,14 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         // TODO: double-checked locking
       }
 
-      Thicket(holder :: accessor :: Nil)
+      // do last!
+      // remove LAZY: prevent lazy expansion in mixin
+      // remove STABLE: prevent replacing accessor call of type Unit by BoxedUnit.UNIT in erasure
+      // remove ACCESSOR: prevent constructors from eliminating the method body if the lazy val is
+      // lifted into a trait (TODO: not sure about the details here)
+      lazyVal.resetFlag(LAZY | STABLE | ACCESSOR)
+
+      Thicket(mkField(holderSym, New(refTpe)) :: accessor :: Nil)
     }
 
     // synth trees for accessors/fields and trait setters when they are mixed into a class
@@ -657,7 +653,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
           else if (clazz.isTrait || !(statSym.isLazy || fieldMemoizationIn(statSym, clazz).stored)) mkAccessor(statSym)(transformedRhs)
           else {
             assert(statSym.isLazy, s"Found non-lazy <accessor> ValDef: $statSym in ${statSym.owner}")
-            if (!clazz.isClass) mkLazyLocalDef(vd)
+            if (!clazz.isClass) mkLazyLocalDef(vd.symbol, rhs)
             else {
               // TODO: make `synthAccessorInClass` a field and update it in atOwner?
               // note that `LazyAccessorTreeSynth` is pretty lightweight
