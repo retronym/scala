@@ -584,23 +584,7 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
             annotatedInline   = methodSym.hasAnnotation(ScalaInlineClass),
             annotatedNoInline = methodSym.hasAnnotation(ScalaNoInlineClass))
 
-          if (needsStaticImplMethod(methodSym)) {
-            val staticName = traitImplMethodName(methodSym).toString
-            val selfParam = methodSym.newSyntheticValueParam(methodSym.owner.typeConstructor, nme.SELF)
-            val staticMethodType = methodSym.info match {
-              case mt @ MethodType(params, res) => copyMethodType(mt, selfParam :: params, res)
-            }
-            val staticMethodSignature = staticName + methodBTypeFromMethodType(staticMethodType, isConstructor = false)
-            val staticMethodInfo = MethodInlineInfo(
-              effectivelyFinal  = true,
-              annotatedInline   = info.annotatedInline,
-              annotatedNoInline = info.annotatedNoInline)
-            if (methodSym.isMixinConstructor)
-              List((staticMethodSignature, staticMethodInfo))
-            else
-              List((signature, info), (staticMethodSignature, staticMethodInfo))
-          } else
-            List((signature, info))
+          List((signature, info))
         }
     }).toMap
 

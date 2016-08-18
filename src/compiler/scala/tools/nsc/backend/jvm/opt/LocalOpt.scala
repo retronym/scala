@@ -7,10 +7,9 @@ package scala.tools.nsc
 package backend.jvm
 package opt
 
-import scala.annotation.{tailrec, switch}
-
+import scala.annotation.{switch, tailrec}
 import scala.tools.asm.Type
-import scala.tools.asm.tree.analysis.Frame
+import scala.tools.asm.tree.analysis.{AnalyzerException, Frame}
 import scala.tools.asm.Opcodes._
 import scala.tools.asm.tree._
 import scala.collection.mutable
@@ -201,7 +200,7 @@ class LocalOpt[BT <: BTypes](val btypes: BT) {
    *
    * Returns `true` if the bytecode of `method` was changed.
    */
-  def methodOptimizations(method: MethodNode, ownerClassName: InternalName): Boolean = {
+  def methodOptimizations(method: MethodNode, ownerClassName: InternalName): Boolean = try {
     if (method.instructions.size == 0) return false // fast path for abstract methods
 
     // unreachable-code also removes unused local variable nodes and empty exception handlers.
@@ -383,6 +382,9 @@ class LocalOpt[BT <: BTypes](val btypes: BT) {
     assert(nullOrEmpty(method.invisibleLocalVariableAnnotations), method.invisibleLocalVariableAnnotations)
 
     nullnessDceBoxesCastsCopypropPushpopOrJumpsChanged || localsRemoved || lineNumbersRemoved || labelsRemoved
+  } catch {
+    case ex: AnalyzerException =>
+      throw new AnalyzerException(ex.node, s"${ex.getMessage} + While optimizing: ${AsmUtils.textify(method)}", ex.getCause)
   }
 
   /**
