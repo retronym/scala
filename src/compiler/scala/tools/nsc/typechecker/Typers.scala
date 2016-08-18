@@ -3835,7 +3835,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def packSymbols(hidden: List[Symbol], tp: Type): Type = global.packSymbols(hidden, tp, context0.owner)
 
     def isReferencedFrom(ctx: Context, sym: Symbol): Boolean = (
-       ctx.owner.isTerm && (ctx.scope.exists { dcl => dcl.isInitialized && (dcl.info contains sym) }) || {
+       ctx.owner.isTerm && (ctx.scope.exists { dcl => dcl.isInitialized && (dcl.info.contains(sym) || new NormalizingContainsCollector(sym).collect(dcl.info)) }) || {
           var ctx1 = ctx.outer
           while ((ctx1 != NoContext) && (ctx1.scope eq ctx.scope))
             ctx1 = ctx1.outer

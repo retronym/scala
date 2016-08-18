@@ -1014,6 +1014,7 @@ private[internal] trait TypeMaps {
 
   /** A map to implement the `contains` method. */
   class ContainsCollector(sym: Symbol) extends TypeCollector(false) {
+    var sawAlias = false
     def traverse(tp: Type) {
       if (!result) {
         // JZ: Removed normalization that was added originally in e1c732db44 (tcpoly)
@@ -1032,6 +1033,9 @@ private[internal] trait TypeMaps {
             // SI-5294 Needed so that `typeOf[{def foo: Int}].baseTypeSeq(0).contain(IntClass)`
             mapOver(refined.sym.info)
           case SingleType(_, sym1) if (sym == sym1) => result = true
+          case _: AliasTypeRef if !sawAlias =>
+            sawAlias = true
+            mapOver(tp)
           case _ => mapOver(tp)
         }
       }
@@ -1046,6 +1050,27 @@ private[internal] trait TypeMaps {
       arg
     }
   }
+  class NormalizingContainsCollector(sym: Symbol) extends TypeCollector(false) {
+    def traverse(tp: Type) {
+      if (!result) {
+        tp.normalize match {
+          case TypeRef(_, sym1, _) if (sym == sym1) => result = true
+          case SingleType(_, sym1) if (sym == sym1) => result = true
+          case _ => mapOver(tp)
+        }
+      }
+    }
+
+    override def mapOver(arg: Tree) = {
+      for (t <- arg) {
+        traverse(t.tpe)
+        if (t.symbol == sym)
+          result = true
+      }
+      arg
+    }
+  }
+
 
   /** A map to implement the `filter` method. */
   class FilterTypeCollector(p: Type => Boolean) extends TypeCollector[List[Type]](Nil) {
