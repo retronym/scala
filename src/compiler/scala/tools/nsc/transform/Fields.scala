@@ -500,29 +500,26 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
     def mkField(sym: Symbol, rhs: Tree = EmptyTree) = typedPos(sym.pos)(ValDef(sym, rhs)).asInstanceOf[ValDef]
 
     /**
-     * Desugar a local `lazy val x: Int = rhs` into
-     * {{{
-     *   <artifact> val x$lzy = new scala.runtime.LazyInt()
-     *   def x(): Int = {
-     *     if (!x$lzy.initialized) {
-     *       x$lzy.synchronized {
-     *         if (!x$lzy.initialized) {
-     *           x$lzy.initialized = true
-     *           x$lzy.value = rhs
-     *         }
-     *       }
-     *     }
-     *     x$lzy.value
-     *   }
-     * }}}
-     */
+      * Desugar a local `lazy val x: Int = rhs` into
+      * ```
+      * val x$lzy = new scala.runtime.LazyInt()
+      * def x(): Int =
+      *   x$lzy.synchronized {
+      *     if (!x$lzy.initialized) {
+      *       x$lzy.initialized = true
+      *       x$lzy.value = rhs
+      *     }
+      *     x$lzy.value
+      *  }
+      * ```
+      */
     private def mkLazyLocalDef(vd: ValDef): Tree = {
       val lazyVal = vd.symbol
       val owner = lazyVal.owner
 
       val name = lazyVal.name.toTermName.append(nme.LAZY_LOCAL_SUFFIX_STRING)
       // TODO: also remove the LAZY flag?
-      val flags = (lazyVal.flags & FieldFlags | ARTIFACT) & ~(IMPLICIT | STABLE)
+      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE)
       val lazyValType = lazyVal.tpe.resultType
       val isUnit = lazyValType.typeSymbol == UnitClass
       val refTpe =
@@ -541,22 +538,21 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       val accessor = mkAccessor(lazyVal) {
         import CODE._
         val initializedGetter = refTpe.member(nme.initialized)
-        val initializedSetter: Symbol = initializedGetter.setter
+        val setInitialized    = Apply(Select(Ident(holderSym), initializedGetter.setter), TRUE :: Nil)
         val valueGetter = if (isUnit) NoSymbol else refTpe.member(nme.value)
-        val valueSetter: Symbol = if (isUnit) NoSymbol else valueGetter.setter
-        def cond = CODE.NOT(Ident(holderSym) DOT initializedGetter)
-        val setInit = Apply(Ident(holderSym) DOT initializedSetter, TRUE :: Nil)
-        val checkAndInit = If(
-          cond,
-          gen.mkSynchronized(Ident(holderSym),
-            If(cond,
-              Block(
-                List(Apply(Ident(holderSym) DOT initializedSetter, TRUE :: Nil)),
-                if (isUnit) vd.rhs else Apply(Select(Ident(holderSym), valueSetter), vd.rhs :: Nil)),
-              EmptyTree)), // else of inner If
-          EmptyTree)       // else of outer If
-        if (isUnit) checkAndInit
-        else Block(checkAndInit :: Nil, Apply(Select(Ident(holderSym), valueGetter), Nil))
+        val valueSetter = if (isUnit) NoSymbol else valueGetter.setter
+        val setValue    = if (isUnit) vd.rhs   else Apply(Select(Ident(holderSym), valueSetter), vd.rhs :: Nil)
+        val getValue    = if (isUnit) UNIT     else Apply(Select(Ident(holderSym), valueGetter), Nil)
+        gen.mkSynchronized(Ident(holderSym),
+          Block(List(
+            If(NOT(Ident(holderSym) DOT initializedGetter),
+              Block(List(
+                setInitialized),
+                setValue),
+              EmptyTree)),
+            getValue)) // must read the value within the synchronized block since it's not volatile
+        // (there's no happens-before relation with the read of the volatile initialized field)
+        // TODO: double-checked locking
       }
 
       Thicket(holder :: accessor :: Nil)
