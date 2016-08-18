@@ -211,7 +211,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       if (!localLazyVal) reflect.NameTransformer.LOCAL_SUFFIX_STRING
       else reflect.NameTransformer.LAZY_LOCAL_SUFFIX_STRING
 
-    // TODO: should end up final in bytecode
+    // the underlying field for a lazy val should not be final because we write to it outside of a constructor,
+    // so, set the MUTABLE flag
     val fieldFlags =
       if (!localLazyVal) flags & FieldFlags | PrivateLocal | MUTABLE
       else (flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE)
@@ -514,7 +515,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       val refClass = lazyHolders.getOrElse(lazyValType.typeSymbol, LazyRefClass)
       val refTpe = if (refClass != LazyRefClass) refClass.tpe else appliedType(refClass.typeConstructor, List(lazyValType))
 
-      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE)
+      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE) // TODO: why include MUTABLE???
       val name  = lazyVal.name.toTermName.append(nme.LAZY_LOCAL_SUFFIX_STRING)
       val holderSym =
         lazyVal.owner.newValue(name, lazyVal.pos, flags) setInfo refTpe
