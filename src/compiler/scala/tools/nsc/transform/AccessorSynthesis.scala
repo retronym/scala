@@ -348,7 +348,7 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
     /** Map lazy values to the fields they should null after initialization. */
     // TODO: fix
-    def lazyValNullables(clazz: Symbol, templStats: List[Tree]): Map[Symbol, List[Symbol]] = Map() /*{
+    def lazyValNullables(clazz: Symbol, templStats: List[Tree]): Map[Symbol, List[Symbol]] = {
       // if there are no lazy fields, take the fast path and save a traversal of the whole AST
       if (!clazz.info.decls.exists(_.isLazy)) Map()
       else {
@@ -363,41 +363,40 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
           object SingleUseTraverser extends Traverser {
             override def traverse(tree: Tree) {
               tree match {
-                case Assign(lhs, rhs) => traverse(rhs) // assignments don't count
-                case _ =>
-                  if (tree.hasSymbolField && tree.symbol != NoSymbol) {
-                    val sym = tree.symbol
-                    if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod))
-                      && sym.isPrivate
-                      && !(currentOwner.isGetter && currentOwner.accessed == sym) // getter
-                      && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol)
-                      && sym.owner == clazz
-                      && !sym.isLazy
-                      && !tree.isDef) {
-                      debuglog("added use in: " + currentOwner + " -- " + tree)
-                      usedIn(sym) ::= currentOwner
-                    }
+                // assignment targets don't count as a dereference -- only check the rhs
+                case Assign(_, rhs) => traverse(rhs)
+                case tree: RefTree if tree.symbol != NoSymbol =>
+                  val sym = tree.symbol
+                  // println(s"$sym in ${sym.owner} from $currentOwner ($tree)")
+                  if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
+                    && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
+                    && sym.owner == currentOwner.enclClass && !(currentOwner.isGetter && currentOwner.accessed == sym)) {
+
+                    // println("added use in: " + currentOwner + " -- " + tree)
+                    usedIn(sym) ::= currentOwner
                   }
                   super.traverse(tree)
+                case _ => super.traverse(tree)
               }
             }
           }
           templStats foreach SingleUseTraverser.apply
-          debuglog("usedIn: " + usedIn)
-          usedIn filter {
-            case (_, member :: Nil) => member.isValue && member.isLazy
-            case _ => false
-          } toMap
+          // println("usedIn: " + usedIn)
+
+          // only consider usages from non-transient lazy vals (SI-9365)
+          val singlyUsedIn = usedIn filter { case (_, member :: Nil) => member.isLazy && !member.accessed.hasAnnotation(TransientAttr) case _ => false } toMap
+
+          // println("singlyUsedIn: " + singlyUsedIn)
+          singlyUsedIn
         }
 
         val map = mutable.Map[Symbol, Set[Symbol]]() withDefaultValue Set()
-        // check what fields can be nulled for
-        for ((field, users) <- singleUseFields; lazyFld <- users if !lazyFld.accessed.hasAnnotation(TransientAttr))
-          map(lazyFld) += field
+        // invert the map to see which fields can be nulled for each non-transient lazy val
+        for ((field, users) <- singleUseFields; lazyFld <- users) map(lazyFld) += field
 
         map.mapValues(_.toList sortBy (_.id)).toMap
       }
-    }*/
+    }
 
 
     class CheckInitAccessorSynth(protected val clazz: Symbol) extends CheckedAccessorTreeSynth with CheckInitAccessorSymbolSynth {
