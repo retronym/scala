@@ -187,14 +187,13 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   private def moduleInit(module: Symbol) = {
 //    println(s"moduleInit for $module in ${module.ownerChain} --> ${moduleVarOf.get(module)}")
     val moduleVar = moduleVarOf(module)
-
-    def thisRef = gen.mkAttributedThis(moduleVar.owner.enclClass)
-    def moduleVarRef = gen.mkAttributedSelect(thisRef, moduleVar)
+    def moduleVarRef = gen.mkAttributedRef(moduleVar)
 
     val cond = Apply(Select(moduleVarRef, Object_eq), List(CODE.NULL))
     val init = Assign(moduleVarRef, gen.newModule(module, moduleVar.info))
 
-    Block(List(gen.mkSynchronizedCheck(thisRef, cond, List(init), Nil)), moduleVarRef)
+    // TODO: for local modules, this means we synchronize on the owner of the method that owns the module
+    Block(List(gen.mkSynchronizedCheck(This(moduleVar.owner.enclClass), cond, List(init), Nil)), moduleVarRef)
   }
 
 
