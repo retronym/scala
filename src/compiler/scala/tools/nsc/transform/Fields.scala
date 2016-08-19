@@ -515,7 +515,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       val refClass = lazyHolders.getOrElse(lazyValType.typeSymbol, LazyRefClass)
       val refTpe = if (refClass != LazyRefClass) refClass.tpe else appliedType(refClass.typeConstructor, List(lazyValType))
 
-      val flags = (lazyVal.flags & FieldFlags | ARTIFACT | MUTABLE) & ~(IMPLICIT | STABLE) // TODO: why include MUTABLE???
+      val flags = (lazyVal.flags & FieldFlags | ARTIFACT) & ~(IMPLICIT | STABLE)
       val name  = lazyVal.name.toTermName.append(nme.LAZY_LOCAL_SUFFIX_STRING)
       val holderSym =
         lazyVal.owner.newValue(name, lazyVal.pos, flags) setInfo refTpe
@@ -529,15 +529,16 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         val valueSetter = if (isUnit) NoSymbol else valueGetter.setterIn(refClass)
         val setValue    = if (isUnit) rhs      else Apply(Select(Ident(holderSym), valueSetter), rhs :: Nil)
         val getValue    = if (isUnit) UNIT     else Apply(Select(Ident(holderSym), valueGetter), Nil)
-        gen.mkSynchronized(Ident(holderSym),
+        val syncBlock = gen.mkSynchronized(Ident(holderSym),
           Block(List(
             If(NOT(Ident(holderSym) DOT initializedGetter),
               Block(List(
                 setInitialized),
                 setValue),
               EmptyTree)),
-            getValue)) // must read the value within the synchronized block since it's not volatile
+            Return(getValue))) // must read the value within the synchronized block since it's not volatile
         // (there's no happens-before relation with the read of the volatile initialized field)
+        Block(syncBlock :: Nil, Throw(Literal(Constant(null))))
         // TODO: double-checked locking
       }
 
