@@ -128,11 +128,8 @@ trait Unapplies extends ast.TreeDSL {
    */
   def factoryMeth(mods: Modifiers, name: TermName, cdef: ClassDef): DefDef = {
     val tparams   = constrTparamsInvariant(cdef)
-    // don't propagate e.g. @volatile annot to apply's argument
-    def valDefWithoutAnnots(vd: ValDef): ValDef =
-      treeCopy.ValDef(vd, vd.mods.mapAnnotations(_ => Nil), vd.name, vd.tpt, vd.rhs)
 
-    val cparamss  = constrParamss(cdef).mapConserve(_.mapConserve(valDefWithoutAnnots))
+    val cparamss  = constrParamss(cdef)
     def classtpe = classType(cdef, tparams)
     atPos(cdef.pos.focus)(
       DefDef(mods, name, tparams, cparamss, classtpe,
