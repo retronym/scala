@@ -344,14 +344,14 @@ trait Erasure {
 
   /**  The symbol's erased info. This is the type's erasure, except for the following symbols:
    *
-   *   - For $asInstanceOf      : [T]T
+   *   - For $asInstanceOf and synchronized      : [T]T
    *   - For $isInstanceOf      : [T]scala#Boolean
    *   - For class Array        : [T]C where C is the erased classinfo of the Array class.
    *   - For Array[T].<init>    : {scala#Int)Array[T]
    *   - For a type parameter   : A type bounds type consisting of the erasures of its bounds.
    */
   def transformInfo(sym: Symbol, tp: Type): Type = {
-    if (sym == Object_asInstanceOf)
+    if (sym == Object_asInstanceOf || sym == Object_synchronized || (sym.owner == Object_synchronized && sym.isTerm)) // synchronized's info and the info of its argument, but not the type param (needs Object upper bound)
       sym.info
     else if (sym == Object_isInstanceOf || sym == ArrayClass)
       PolyType(sym.info.typeParams, specialErasure(sym)(sym.info.resultType))

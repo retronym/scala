@@ -511,50 +511,53 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
       app match {
 
-        case Apply(TypeApply(fun, targs), _) =>
-
+        case Apply(TypeApply(fun, targs), args) =>
           val sym = fun.symbol
-          val cast = sym match {
-            case Object_isInstanceOf  => false
-            case Object_asInstanceOf  => true
-            case _                    => abort(s"Unexpected type application $fun[sym: ${sym.fullName}] in: $app")
-          }
+          if (sym == Object_synchronized) {
+            genApply(treeCopy.Apply(app, fun, args), tpeTK(targs.head))
+          } else {
+            val cast = sym match {
+              case Object_isInstanceOf  => false
+              case Object_asInstanceOf  => true
+              case _                    => abort(s"Unexpected type application $fun[sym: ${sym.fullName}] in: $app")
+            }
 
-          val Select(obj, _) = fun
-          val l = tpeTK(obj)
-          val r = tpeTK(targs.head)
+            val Select(obj, _) = fun
+            val l = tpeTK(obj)
+            val r = tpeTK(targs.head)
 
-          def genTypeApply(): BType = {
-            genLoadQualifier(fun)
+            def genTypeApply(): BType = {
+              genLoadQualifier(fun)
 
-            // TODO @lry make pattern match
-            if (l.isPrimitive && r.isPrimitive)
-              genConversion(l, r, cast)
-            else if (l.isPrimitive) {
-              bc drop l
-              if (cast) {
-                mnode.visitTypeInsn(asm.Opcodes.NEW, jlClassCastExceptionRef.internalName)
-                bc dup ObjectRef
-                emit(asm.Opcodes.ATHROW)
-              } else {
-                bc boolconst false
+              // TODO @lry make pattern match
+              if (l.isPrimitive && r.isPrimitive)
+                genConversion(l, r, cast)
+              else if (l.isPrimitive) {
+                bc drop l
+                if (cast) {
+                  mnode.visitTypeInsn(asm.Opcodes.NEW, jlClassCastExceptionRef.internalName)
+                  bc dup ObjectRef
+                  emit(asm.Opcodes.ATHROW)
+                } else {
+                  bc boolconst false
+                }
               }
-            }
-            else if (r.isPrimitive && cast) {
-              abort(s"Erasure should have added an unboxing operation to prevent this cast. Tree: $app")
-            }
-            else if (r.isPrimitive) {
-              bc isInstance boxedClassOfPrimitive(r.asPrimitiveBType)
-            }
-            else {
-              assert(r.isRef, r) // ensure that it's not a method
-              genCast(r.asRefBType, cast)
-            }
+              else if (r.isPrimitive && cast) {
+                abort(s"Erasure should have added an unboxing operation to prevent this cast. Tree: $app")
+              }
+              else if (r.isPrimitive) {
+                bc isInstance boxedClassOfPrimitive(r.asPrimitiveBType)
+              }
+              else {
+                assert(r.isRef, r) // ensure that it's not a method
+                genCast(r.asRefBType, cast)
+              }
 
-            if (cast) r else BOOL
-          } // end of genTypeApply()
+              if (cast) r else BOOL
+            } // end of genTypeApply()
 
-          generatedType = genTypeApply()
+            generatedType = genTypeApply()
+          }
 
         case Apply(fun @ Select(Super(_, _), _), args) =>
           def initModule() {
