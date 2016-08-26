@@ -13,6 +13,8 @@ package collection
 package immutable
 
 import java.io.{File, FileReader, Reader}
+
+import scala.annotation.tailrec
 import scala.reflect.ClassTag
 
 /** The `PagedSeq` object defines a lazy implementations of
@@ -44,18 +46,20 @@ object PagedSeq {
   /** Constructs a paged character sequence from a string iterator */
   def fromStrings(source: Iterator[String]): PagedSeq[Char] = {
     var current: String = ""
-    def more(data: Array[Char], start: Int, len: Int): Int =
+    @tailrec
+    def more(data: Array[Char], start: Int, len: Int, result: Int): Int = {
       if (current.length != 0) {
         val cnt = current.length min len
         current.getChars(0, cnt, data, start)
         current = current.substring(cnt)
-        if (cnt == len) cnt
-        else (more(data, start + cnt, len - cnt) max 0) + cnt
+        if (cnt == len) (result max 0) + cnt
+        else more(data, start + cnt, len - cnt, (result max 0) + cnt)
       } else if (source.hasNext) {
         current = source.next()
-        more(data, start, len)
-      } else -1
-    new PagedSeq(more(_: Array[Char], _: Int, _: Int))
+        more(data, start, len, result)
+      } else result
+    }
+    new PagedSeq((chars: Array[Char], i: Int, i1: Int) => more(chars, i, i1, -1))
   }
 
   /** Constructs a paged character sequence from a string iterable */
