@@ -2375,6 +2375,16 @@ trait Types
     // Suppressing case class copy method which risks subverting our single point of creation.
     private def copy = null
     override def kind = "TypeRef"
+    override def equals(other: Any) = {
+      if (this eq other.asInstanceOf[AnyRef]) true
+      else {
+        other match {
+          case other: TypeRef =>
+            sym == other.sym && pre == other.pre && equalsList(args, other.args)
+          case _ => false
+        }
+      }
+    }
   }
 
   // No longer defined as anonymous classes in `object TypeRef` to avoid an unnecessary outer pointer.

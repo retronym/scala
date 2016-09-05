@@ -60,6 +60,14 @@ trait Collections {
     }
     head
   }
+  final def equalsList[A <: AnyRef](as: List[A], bs: List[A]): Boolean = {
+    val asEmpty = as.isEmpty
+    val bsEmpty = bs.isEmpty
+    if (asEmpty && bsEmpty) true
+    else if (asEmpty || bsEmpty) false
+    else if (as.head != bs.head) false
+    else equalsList(as.tail, bs.tail)
+  }
 
   final def collectFirst[A, B](as: List[A])(pf: PartialFunction[A, B]): Option[B] = {
     @tailrec
