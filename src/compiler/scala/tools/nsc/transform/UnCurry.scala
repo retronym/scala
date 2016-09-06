@@ -83,8 +83,8 @@ abstract class UnCurry extends InfoTransform
           // impl restriction -- we currently use the boxed apply, so not really useful to allow specialized sam types (https://github.com/scala/scala/pull/4971#issuecomment-198119167)
           // specialization and LMF are at odds, since LMF implements the single abstract method,
           // but that's the one that specialization leaves generic, whereas we need to implement the specialized one to avoid boxing
-          !specializeTypes.isSpecializedIn(sam, userDefinedSamTp)
-
+          !specializeTypes.isSpecializedIn(sam, userDefinedSamTp) &&
+          sam.overrideChain.forall(sym => exitingErasure(sym.info =:= sam.info))
         case _ => true // our built-in FunctionN's are suitable for LambdaMetaFactory by construction
       })
 
