@@ -151,6 +151,7 @@ trait Definitions extends api.StandardDefinitions {
       FloatClass,
       DoubleClass
     )
+    lazy val ScalaValueClassesArray: Array[Symbol] = ScalaValueClasses.toArray
     def ScalaPrimitiveValueClasses: List[ClassSymbol] = ScalaValueClasses
 
     def underlyingOfValueClass(clazz: Symbol): Type =
@@ -1400,7 +1401,7 @@ trait Definitions extends api.StandardDefinitions {
     private lazy val boxedValueClassesSet = boxedClass.values.toSet[Symbol] + BoxedUnitClass
 
     /** Is symbol a value class? */
-    def isPrimitiveValueClass(sym: Symbol) = ScalaValueClasses contains sym
+    def isPrimitiveValueClass(sym: Symbol) = containReference(ScalaValueClassesArray, sym)
     def isPrimitiveValueType(tp: Type)     = isPrimitiveValueClass(tp.typeSymbol)
 
     /** Is symbol a boxed value class, e.g. java.lang.Integer? */

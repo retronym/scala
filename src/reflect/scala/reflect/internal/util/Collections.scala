@@ -275,6 +275,15 @@ trait Collections {
     true
   }
 
+  final def containReference[A <: AnyRef](as: Array[A], a: A): Boolean = {
+    var i = 0
+    while (i < as.length) {
+      if (as(i) eq a) return true
+      i += 1
+    }
+    false
+  }
+
   final def sequence[A](as: List[Option[A]]): Option[List[A]] = {
     if (as.exists (_.isEmpty)) None
     else Some(as.flatten)
