@@ -87,7 +87,7 @@ abstract class Pickler extends SubComponent {
     private lazy val nonClassRoot = findSymbol(root.ownersIterator)(!_.isClass)
 
     private def isRootSym(sym: Symbol) =
-      sym.name.toTermName == rootName && sym.owner == rootOwner
+      sym.name.start == rootName.start && sym.owner == rootOwner
 
     /** Returns usually symbol's owner, but picks classfile root instead
      *  for existentially bound variables that have a non-local owner.
