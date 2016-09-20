@@ -150,6 +150,15 @@ abstract class LambdaLift extends InfoTransform {
             changedFreeVars = true
             debuglog(s"$sym is free in $enclosure")
             if (sym.isVariable) sym setFlag CAPTURED
+            if (enclosure.isConstructor && enclosure.enclClass.isNonBottomSubClass(DelayedInitClass) && !enclosure.isTrait) {
+              val ss = symSet(free, enclosure.enclClass)
+              if (!ss(sym)) {
+                ss += sym
+                renamable += sym
+                changedFreeVars = true
+                debuglog(s"$sym is free in ${enclosure.enclClass}")
+              }
+            }
           }
           !enclosure.isClass
         }
@@ -287,8 +296,13 @@ abstract class LambdaLift extends InfoTransform {
         debuglog("searching for " + sym + "(" + sym.owner + ") in " + enclosure + " " + enclosure.logicallyEnclosingMember)
 
         val proxyName = proxyNames.getOrElse(sym, sym.name)
-        val ps = (proxies get enclosure.logicallyEnclosingMember).toList.flatten find (_.name == proxyName)
-        ps getOrElse searchIn(enclosure.skipConstructor.owner)
+        val enclMember = enclosure.logicallyEnclosingMember
+        if (enclMember.isPrimaryConstructor && enclMember.enclClass.isNonBottomSubClass(DelayedInitClass) && !enclMember.isTrait) {
+          searchIn(enclosure.skipConstructor.owner)
+        } else {
+          val ps = (proxies get enclMember).toList.flatten find (_.name == proxyName)
+          ps getOrElse searchIn(enclosure.skipConstructor.owner)
+        }
       }
       debuglog("proxy %s from %s has logical enclosure %s".format(
         sym.debugLocationString,

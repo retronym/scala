@@ -278,7 +278,7 @@ abstract class GenBCode extends BCodeSyncAndTry {
                   s"Could not write class ${item.plain.name} because it exceeds JVM code size limits. ${e.getMessage}")
               case ex: Throwable =>
                 ex.printStackTrace()
-                error(s"Error while emitting ${item.plain.name}\n${ex.getMessage}")
+                error(s"Error while emitting ${item.plain.name}\n${ex.getMessage}\n${AsmUtils.textify(item.plain)}")
             }
           }
         }

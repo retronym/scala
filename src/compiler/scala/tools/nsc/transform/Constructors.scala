@@ -270,7 +270,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
         }
       }
 
-      val method = UseParamAccessors.transform(delayedDD).asInstanceOf[DefDef]
+//      val method = UseParamAccessors.transform(delayedDD).asInstanceOf[DefDef]
+      val method = delayedDD.asInstanceOf[DefDef]
       val paramAccessors = UseParamAccessors.newParamAccessors.valuesIterator.map(sym => newValDef(sym, EmptyTree)()).toList
       val assigns = UseParamAccessors.newParamAccessors.map { case (param, accessor) =>
         localTyper.typedPos(clazz.primaryConstructor.pos)(gen.mkAssign(gen.mkAttributedRef(accessor), gen.mkAttributedRef(param)))
