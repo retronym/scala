@@ -244,7 +244,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
    *
    * */
   private trait DelayedInitHelper extends ConstructorTransformerBase {
-    private def delayedEndpointDef(stats: List[Tree]): DefDef = {
+    private def delayedEndpointDef(stats: List[Tree]): (DefDef, List[ValDef], List[Tree]) = {
       val methodName = currentUnit.freshTermName("delayedEndpoint$" + clazz.fullNameAsName('$').toString + "$")
       val methodSym  = clazz.newMethod(methodName, impl.pos, SYNTHETIC | FINAL)
       methodSym setInfoAndEnter MethodType(Nil, UnitTpe)
@@ -253,7 +253,29 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       val blk       = Block(stats, gen.mkZero(UnitTpe)).changeOwner(impl.symbol -> methodSym)
       val delayedDD = localTyper typed { DefDef(methodSym, Nil, blk) }
 
-      delayedDD.asInstanceOf[DefDef]
+      // SD-225
+      object UseParamAccessors extends TypingTransformer(unit) {
+        currentOwner = delayedDD.symbol
+        val newParamAccessors = mutable.LinkedHashMap[Symbol, Symbol]()
+        override def transform(tree: Tree): Tree = tree match {
+          case Ident(_) if tree.symbol.owner == clazz.primaryConstructor =>
+            def newParamAccessor = {
+              val sym = clazz.newValue(tree.symbol.name.toTermName, tree.symbol.pos, PARAMACCESSOR | PrivateLocal | SYNTHETIC | ARTIFACT).setInfo(tree.symbol.info)
+              clazz.info.decls.enter(sym)
+              sym
+            }
+            val accessor = newParamAccessors.getOrElseUpdate(tree.symbol, newParamAccessor)
+            localTyper.typedPos(tree.pos)(gen.mkAttributedRef(accessor))
+          case _ => super.transform(tree)
+        }
+      }
+
+      val method = UseParamAccessors.transform(delayedDD).asInstanceOf[DefDef]
+      val paramAccessors = UseParamAccessors.newParamAccessors.valuesIterator.map(sym => newValDef(sym, EmptyTree)()).toList
+      val assigns = UseParamAccessors.newParamAccessors.map { case (param, accessor) =>
+        localTyper.typedPos(clazz.primaryConstructor.pos)(gen.mkAssign(gen.mkAttributedRef(accessor), gen.mkAttributedRef(param)))
+      }
+      (method, paramAccessors, assigns.toList)
     }
 
     private def delayedInitClosure(delayedEndPointSym: MethodSymbol): ClassDef = {
@@ -305,8 +327,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     /** For a DelayedInit subclass, wrap remainingConstrStats into a DelayedInit closure. */
     def delayedInitDefsAndConstrStats(defs: List[Tree], remainingConstrStats: List[Tree]): (List[Tree], List[Tree]) = {
-      val delayedHook     = delayedEndpointDef(remainingConstrStats)
-      val delayedHookSym  = delayedHook.symbol.asInstanceOf[MethodSymbol]
+      val (delayedHook, extraParamAccessors, assigns) = delayedEndpointDef(remainingConstrStats)
+      val delayedHookSym = delayedHook.symbol.asInstanceOf[MethodSymbol]
 
       // transform to make the closure-class' default constructor assign the outer instance to its param-accessor field.
       val hookCallerClass = (new ConstructorTransformer(unit)) transform delayedInitClosure(delayedHookSym)
@@ -314,7 +336,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
         gen.mkMethodCall(This(clazz), delayedInitMethod, Nil, List(New(hookCallerClass.symbol.tpe, This(clazz))))
       }
 
-      (List(delayedHook, hookCallerClass), List(delayedInitCall))
+      (List(delayedHook, hookCallerClass) ++ extraParamAccessors, assigns :+ delayedInitCall)
     }
 
   } // DelayedInitHelper
