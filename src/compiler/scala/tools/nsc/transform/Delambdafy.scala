@@ -287,6 +287,22 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
           dd.symbol.removeAttachment[mixer.NeedStaticImpl.type]
         }
         super.transform(tree)
+      case dd: DefDef if dd.name.containsName(nme.LAZY_SLOW_SUFFIX) =>
+        explicitOuter.nullables.getOrElse(dd.symbol, Nil) match {
+          case Nil =>
+            super.transform(tree)
+          case nullables =>
+            deriveDefDef(super.transform(dd)) {
+              case blk @ Block(stats, expr) =>
+                def nullify(sym: Symbol) = localTyper.typedPos(dd.pos)(
+                  gen.mkAssign(gen.mkAttributedRef(sym.accessedOrSelf), gen.mkAsInstanceOf(Literal(Constant(null)), sym.info.resultType))
+                )
+                treeCopy.Block(blk, stats ::: nullables.sortBy(_.id).map(nullify), expr)
+              case tree =>
+                devWarning("Unexpected tree shape in lazy slow path, unable to nullify: " + nullables)
+                tree
+            }
+        }
       case Apply(fun, outer :: rest) if shouldElideOuterArg(fun.symbol, outer) =>
         val nullOuter = gen.mkZero(outer.tpe)
         treeCopy.Apply(tree, transform(fun), nullOuter :: transformTrees(rest))

@@ -635,7 +635,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
         assert(!clazz.isTrait)
         // this contortion was the only way I can get the super select to be type checked correctly.. TODO: why does SelectSuper not work?
         val rhs = Apply(Select(Super(This(clazz), tpnme.EMPTY), getter.name), Nil)
-        explodeThicket(synthAccessorInClass.expandLazyClassMember(lazyVarOf(getter), getter, rhs, Map.empty)).asInstanceOf[List[ValOrDefDef]]
+        explodeThicket(synthAccessorInClass.expandLazyClassMember(lazyVarOf(getter), getter, rhs)).asInstanceOf[List[ValOrDefDef]]
       }
 
       clazz.info.decls.toList.filter(checkAndClearNeedsTrees) flatMap {
@@ -691,7 +691,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
             // note that `LazyAccessorTreeSynth` is pretty lightweight
             // (it's just a bunch of methods that all take a `clazz` parameter, which is thus stored as a field)
             val synthAccessorInClass = new SynthLazyAccessorsIn(currOwner)
-            synthAccessorInClass.expandLazyClassMember(lazyVarOf(statSym), statSym, transformedRhs, nullables.getOrElse(currOwner, Map.empty))
+            synthAccessorInClass.expandLazyClassMember(lazyVarOf(statSym), statSym, transformedRhs)
           }
 
         // drop the val for (a) constant (pure & not-stored) and (b) not-stored (but still effectful) fields
@@ -719,16 +719,10 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       if (stat.isTerm) atOwner(exprOwner)(transform(stat))
       else transform(stat)
 
-    private val nullables = perRunCaches.newMap[Symbol, Map[Symbol, List[Symbol]]]
-
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
       val addedStats =
         if (!currentOwner.isClass || currentOwner.isPackageClass) Nil
         else afterOwnPhase { fieldsAndAccessors(currentOwner) }
-
-      val inRealClass = currentOwner.isClass && !(currentOwner.isPackageClass || currentOwner.isTrait)
-      if (inRealClass)
-        nullables(currentOwner) = lazyValNullables(currentOwner, stats)
 
       val newStats =
         stats mapConserve (if (exprOwner != currentOwner) transformTermsAtExprOwner(exprOwner) else transform)

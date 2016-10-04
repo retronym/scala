@@ -8,7 +8,8 @@ package tools.nsc
 package transform
 
 import symtab._
-import Flags.{ CASE => _, _ }
+import Flags.{CASE => _, _}
+import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 
 /** This class ...
@@ -65,6 +66,29 @@ abstract class ExplicitOuter extends InfoTransform
     assert(result != NoSymbol, "no outer field in "+clazz+" at "+phase)
 
     result
+  }
+
+  sealed abstract class UsedIn
+  case class Single(site: Symbol) extends UsedIn
+  case object Multiple extends UsedIn
+  private val usedIn = perRunCaches.newAnyRefMap[Symbol, UsedIn]()
+  def markUsedIn(sym: Symbol, currentOwner: Symbol) = {
+    usedIn.getOrNull(sym) match {
+      case null =>
+        usedIn(sym) = Single(currentOwner)
+      case o @ Single(site) =>
+        if (currentOwner == site) o
+        else Multiple
+      case Multiple => Multiple
+    }
+  }
+  /** Map from lazy initializers to fields that they are statically known to use exclusively and hence
+    * should null out. May only be called after the explicitouter phase has run.
+    */
+  lazy val nullables: Map[Symbol, List[Symbol]] = {
+    assert(globalPhase.explicitOutered)
+    // only consider usages from non-transient lazy vals (SI-9365)
+    groupByMulti(usedIn.iterator.collect { case (sym, Single(site)) if sym.isPrivate && !site.accessedOrSelf.hasAnnotation(TransientAttr) => (site, sym)})
   }
 
   class RemoveBindingsTransformer(toRemove: Set[Symbol]) extends Transformer {
@@ -427,6 +451,13 @@ abstract class ExplicitOuter extends InfoTransform
           if (sym.isProtected && //(4)
               (qsym.isTrait || !(qual.isInstanceOf[Super] || (qsym isSubClass currentClass))))
             sym setFlag notPROTECTED
+          if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
+            && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
+            && sym.owner == currentOwner.enclClass && !(currentOwner.isGetter && currentOwner.accessedOrSelf == sym)) {
+                  // println("added use in: " + currentOwner + " -- " + tree)
+            markUsedIn(sym, currentOwner)
+          }
+
           super.transform(tree)
 
         case Apply(sel @ Select(qual, nme.CONSTRUCTOR), args) if isInner(sel.symbol.owner) =>

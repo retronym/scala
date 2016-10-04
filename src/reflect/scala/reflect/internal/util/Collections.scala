@@ -184,6 +184,18 @@ trait Collections {
   final def linkedMapFrom[A, A1 >: A, B](xs: List[A])(f: A => B): mutable.LinkedHashMap[A1, B] = {
     mutable.LinkedHashMap[A1, B](xs map (x => (x, f(x))): _*)
   }
+  final def groupByMulti[A <: AnyRef, B](xs: TraversableOnce[(A, B)]): Map[A, List[B]] = {
+    val m = mutable.AnyRefMap.empty[A, mutable.ListBuffer[B]]
+    for ((key, value) <- xs) {
+      val bldr = m.getOrElseUpdate(key, mutable.ListBuffer())
+      bldr += value
+    }
+    val b = immutable.Map.newBuilder[A, List[B]]
+    for ((k, v) <- m)
+      b += ((k, v.result))
+
+    b.result
+  }
 
   final def mapWithIndex[A, B](xs: List[A])(f: (A, Int) => B): List[B] = {
     val lb = new ListBuffer[B]
