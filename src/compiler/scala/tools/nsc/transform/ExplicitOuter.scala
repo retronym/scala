@@ -68,10 +68,12 @@ abstract class ExplicitOuter extends InfoTransform
     result
   }
 
-  sealed abstract class UsedIn
-  case class Single(site: Symbol) extends UsedIn
-  case object Multiple extends UsedIn
+  private sealed abstract class UsedIn
+  private case class Single(site: Symbol) extends UsedIn
+  private case object Multiple extends UsedIn
+  // Classes that include one or more lazy vals
   private val hasLazy = perRunCaches.newSet[Symbol]
+  // Reference counts for each private field in
   private val usedIn = perRunCaches.newAnyRefMap[Symbol, UsedIn]()
   private def markUsedIn(sym: Symbol, currentOwner: Symbol) = {
     usedIn.getOrNull(sym) match {
@@ -394,6 +396,18 @@ abstract class ExplicitOuter extends InfoTransform
         if (sym.isPrivate) sym setFlag notPRIVATE
         if (sym.isProtected) sym setFlag notPROTECTED
       }
+      def markUsedIn1() = {
+        if (isScalaClass(sym.owner) && sym.isParamAccessor) {
+          sym.owner.info // populate hasLazy(sym.owner)
+          if (hasLazy(sym.owner)) {
+            if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
+              && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
+              && sym.owner == currentOwner.enclClass // access from other classes will make this notPRIVATE, which we'll check before nullifying
+              && !(currentOwner.isGetter && currentOwner.accessed == sym) // exclude reference from the getter
+            ) markUsedIn(sym, currentOwner)
+          }
+        }
+      }
       tree match {
         case Template(parents, self, decls) =>
           val newDefs = new ListBuffer[Tree]
@@ -457,18 +471,7 @@ abstract class ExplicitOuter extends InfoTransform
           if (sym.isProtected && //(4)
               (qsym.isTrait || !(qual.isInstanceOf[Super] || (qsym isSubClass currentClass))))
             sym setFlag notPROTECTED
-          if (isScalaClass(sym.owner) && sym.isParamAccessor) {
-            sym.owner.info // populate hasLazy(sym.owner)
-            if (hasLazy(sym.owner)) {
-              val field = sym.accessedOrSelf
-              if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
-                && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
-                && sym.owner == currentOwner.enclClass && !(currentOwner.isGetter && currentOwner.accessedOrSelf == sym)) {
-                markUsedIn(sym, currentOwner)
-              }
-            }
-          }
-
+          markUsedIn1()
           super.transform(tree)
 
         case Apply(sel @ Select(qual, nme.CONSTRUCTOR), args) if isInner(sel.symbol.owner) =>
