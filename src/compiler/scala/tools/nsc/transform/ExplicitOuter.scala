@@ -71,8 +71,9 @@ abstract class ExplicitOuter extends InfoTransform
   sealed abstract class UsedIn
   case class Single(site: Symbol) extends UsedIn
   case object Multiple extends UsedIn
+  private val hasLazy = perRunCaches.newSet[Symbol]
   private val usedIn = perRunCaches.newAnyRefMap[Symbol, UsedIn]()
-  def markUsedIn(sym: Symbol, currentOwner: Symbol) = {
+  private def markUsedIn(sym: Symbol, currentOwner: Symbol) = {
     usedIn.getOrNull(sym) match {
       case null =>
         usedIn(sym) = Single(currentOwner)
@@ -85,11 +86,13 @@ abstract class ExplicitOuter extends InfoTransform
   /** Map from lazy initializers to fields that they are statically known to use exclusively and hence
     * should null out. May only be called after the explicitouter phase has run.
     */
-  lazy val nullables: Map[Symbol, List[Symbol]] = {
+  val nullables: () => Map[Symbol, List[Symbol]] = perRunCaches.newGeneric({
     assert(globalPhase.explicitOutered)
     // only consider usages from non-transient lazy vals (SI-9365)
-    groupByMulti(usedIn.iterator.collect { case (sym, Single(site)) if sym.isPrivate && !site.accessedOrSelf.hasAnnotation(TransientAttr) => (site, sym)})
-  }
+    groupByMulti(usedIn.iterator.collect {
+      case (sym, Single(site)) if sym.isPrivate && !site.accessedOrSelf.hasAnnotation(TransientAttr) => (site, sym)
+    })
+  })
 
   class RemoveBindingsTransformer(toRemove: Set[Symbol]) extends Transformer {
     override def transform(tree: Tree) = tree match {
@@ -213,6 +216,7 @@ abstract class ExplicitOuter extends InfoTransform
           }
         }
       }
+      if (isScalaClass(clazz) && decls1.exists(_.isLazy)) hasLazy += clazz
       if (decls1 eq decls) tp else ClassInfoType(parents, decls1, clazz)
     case PolyType(tparams, restp) =>
       val restp1 = transformInfo(sym, restp)
@@ -221,6 +225,8 @@ abstract class ExplicitOuter extends InfoTransform
     case _ =>
       tp
   }
+
+  private def isScalaClass(sym: Symbol) = !sym.hasFlag(JAVA | TRAIT | PACKAGE) && sym.isClass
 
   /** A base class for transformers that maintain outerParam
    *  values for outer parameters of constructors.
@@ -451,11 +457,16 @@ abstract class ExplicitOuter extends InfoTransform
           if (sym.isProtected && //(4)
               (qsym.isTrait || !(qual.isInstanceOf[Super] || (qsym isSubClass currentClass))))
             sym setFlag notPROTECTED
-          if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
-            && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
-            && sym.owner == currentOwner.enclClass && !(currentOwner.isGetter && currentOwner.accessedOrSelf == sym)) {
-                  // println("added use in: " + currentOwner + " -- " + tree)
-            markUsedIn(sym, currentOwner)
+          if (isScalaClass(sym.owner) && sym.isParamAccessor) {
+            sym.owner.info // populate hasLazy(sym.owner)
+            if (hasLazy(sym.owner)) {
+              val field = sym.accessedOrSelf
+              if ((sym.hasAccessorFlag || (sym.isTerm && !sym.isMethod)) && sym.isPrivate && !sym.isLazy // non-lazy private field or its accessor
+                && !definitions.isPrimitiveValueClass(sym.tpe.resultType.typeSymbol) // primitives don't hang on to significant amounts of heap
+                && sym.owner == currentOwner.enclClass && !(currentOwner.isGetter && currentOwner.accessedOrSelf == sym)) {
+                markUsedIn(sym, currentOwner)
+              }
+            }
           }
 
           super.transform(tree)

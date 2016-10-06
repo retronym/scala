@@ -288,7 +288,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         }
         super.transform(tree)
       case dd: DefDef if dd.name.containsName(nme.LAZY_SLOW_SUFFIX) =>
-        explicitOuter.nullables.getOrElse(dd.symbol, Nil) match {
+        explicitOuter.nullables().getOrElse(dd.symbol, Nil) match {
           case Nil =>
             super.transform(tree)
           case nullables =>

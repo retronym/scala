@@ -325,10 +325,6 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
         * This way the inliner should optimize the fast path because the method body is small enough.
         */
       def expandLazyClassMember(lazyVar: Symbol, lazyAccessor: Symbol, transformedRhs: Tree): Tree = {
-        // use cast so that specialization can turn null.asInstanceOf[T] into null.asInstanceOf[Long]
-        def nullify(sym: Symbol) =
-          Select(thisRef, sym.accessedOrSelf) === gen.mkAsInstanceOf(NULL, sym.info.resultType)
-
         val slowPathSym  = slowPathFor(lazyAccessor)
         val rhsAtSlowDef = transformedRhs.changeOwner(lazyAccessor -> slowPathSym)
 
