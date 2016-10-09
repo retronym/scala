@@ -325,7 +325,7 @@ class ClosureOptimizer[BT <: BTypes](val btypes: BT) {
         insns.insertBefore(invocation, new InsnNode(DUP))
         INVOKESPECIAL
     }
-    val isInterface = bodyOpcode == INVOKEINTERFACE
+    val isInterface = classBTypeFromInternalName(lambdaBodyHandle.getOwner).isInterface.getOrElse(bodyOpcode == INVOKEINTERFACE) // TODO
     val bodyInvocation = new MethodInsnNode(bodyOpcode, lambdaBodyHandle.getOwner, lambdaBodyHandle.getName, lambdaBodyHandle.getDesc, isInterface)
     ownerMethod.instructions.insertBefore(invocation, bodyInvocation)
 
