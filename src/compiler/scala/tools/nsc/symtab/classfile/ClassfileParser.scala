@@ -69,6 +69,11 @@ abstract class ClassfileParser {
   protected var srcfile0 : Option[AbstractFile] = None
   protected def moduleClass: Symbol = staticModule.moduleClass
   private var sawPrivateConstructor = false
+  private var moduleId: ModuleIdConstant = null
+  private var moduleRequires: List[ModuleRequirement] = null
+  private var modulePermits: List[ModuleIdConstant] = null
+  private var moduleProvides: List[ModuleIdConstant] = null
+  private var moduleExports: List[ModuleIdConstant] = null
 
   private def ownerForFlags(jflags: JavaAccFlags) = if (jflags.isStatic) moduleClass else clazz
 
@@ -182,6 +187,7 @@ abstract class ClassfileParser {
           case CONSTANT_NAMEANDTYPE | CONSTANT_INTEGER | CONSTANT_FLOAT        => in skip 4
           case CONSTANT_INVOKEDYNAMIC                                          => in skip 4
           case CONSTANT_LONG | CONSTANT_DOUBLE                                 => in skip 8 ; i += 1
+          case CONSTANT_MODULE_ID                                              => in skip 4
           case _                                                               => errorBadTag(in.bp - 1)
         }
       }
@@ -309,6 +315,19 @@ abstract class ClassfileParser {
         case sym: Symbol      => Constant(sym.tpe_*)
         case tpe: Type        => Constant(tpe)
         case _                => recordAtIndex(createConstant(index), index)
+      }
+    )
+    def getModuleIdConstant(index: Int): ModuleIdConstant = (
+      if (index <= 0 || len <= index) errorBadIndex(index)
+      else values(index) match {
+        case m @ (_: String, _: String) => m
+        case _                =>
+          val start = starts(index)
+          val tag = in.buf(start)
+          require(tag == CONSTANT_MODULE_ID, tag)
+          val name = getConstant(in.buf(start + 1)).stringValue
+          val version = in.buf(start + 3) match { case 0 => None case i => Some(getConstant(i).stringValue)}
+          recordAtIndex(ModuleIdConstant(name, version), index)
       }
     )
 
@@ -886,6 +905,26 @@ abstract class ClassfileParser {
             log(s"$sym in ${sym.owner} is a java8+ default method.")
           }
           in.skip(attrLen)
+        case tpnme.ModuleATTR =>
+          this.moduleId = pool.getModuleIdConstant(u2)
+        case tpnme.ModuleRequiresATTR =>
+          val requiresLen = u4
+          moduleRequires = List.tabulate(requiresLen) { _ =>
+            val m = pool.getModuleIdConstant(u2)
+            val flags = u1
+            val optional = (flags & 0x01) != 0
+            ModuleRequirement(m, optional)
+          }
+        case tpnme.ModulePermitsATTR =>
+          val requiresLen = u4
+          modulePermits = List.tabulate(requiresLen) { _ =>
+            pool.getModuleIdConstant(u2)
+          }
+        case tpnme.ModuleProvidesATTR =>
+          val requiresLen = u4
+          moduleProvides = List.tabulate(requiresLen) { _ =>
+            pool.getModuleIdConstant(u2)
+          }
         case _ =>
           in.skip(attrLen)
       }

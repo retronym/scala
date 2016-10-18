@@ -55,6 +55,7 @@ object ClassfileConstants {
   final val JAVA_ACC_INTERFACE    = 0x0200   //   X
   final val JAVA_ACC_ABSTRACT     = 0x0400   //   X                X
   final val JAVA_ACC_STRICT       = 0x0800   //                    X
+  final val JAVA_ACC_MODULE       = 0x0800   //   X
   final val JAVA_ACC_SYNTHETIC    = 0x1000   //   X       X        X
   final val JAVA_ACC_ANNOTATION   = 0x2000   //   X
   final val JAVA_ACC_ENUM         = 0x4000   //   X       X
@@ -75,6 +76,10 @@ object ClassfileConstants {
   final val CONSTANT_METHODHANDLE  = 15
   final val CONSTANT_METHODTYPE    = 16
   final val CONSTANT_INVOKEDYNAMIC = 18
+  final val CONSTANT_MODULE_ID     = 19
+  final case class ModuleIdConstant(name: String, version: Option[String])
+  final case class ModuleRequirement(module: ModuleIdConstant, optional: Boolean)
+  final case class ModuleExport(module: ModuleIdConstant, optional: Boolean)
 
   // tags describing the type of a literal in attribute values
   final val BYTE_TAG   = 'B'

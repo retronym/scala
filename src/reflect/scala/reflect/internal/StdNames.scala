@@ -295,6 +295,13 @@ trait StdNames {
     final val ExceptionsATTR: NameType             = "Exceptions"
     final val InnerClassesATTR: NameType           = "InnerClasses"
     final val MethodParametersATTR: NameType       = "MethodParameters"
+    final val ModuleATTR: NameType                 = "Module"
+    final val ModuleRequiresATTR: NameType         = "ModuleRequires"
+    final val ModuleProvidesATTR: NameType         = "ModuleProvides"
+    final val ModulePermitsATTR: NameType          = "ModulePermits"
+    final val ModuleExportsATTR: NameType          = "ModuleExports"
+    final val ModuleClassATTR: NameType            = "ModuleClass"
+    final val ModuleDataATTR: NameType             = "ModuleData"
     final val RuntimeAnnotationATTR: NameType      = "RuntimeVisibleAnnotations"   // RetentionPolicy.RUNTIME
     final val ScalaATTR: NameType                  = "Scala"
     final val ScalaSignatureATTR: NameType         = "ScalaSig"
