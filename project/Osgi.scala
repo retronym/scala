@@ -37,8 +37,10 @@ object Osgi {
     },
     jarlist := false,
     bundle <<= Def.task {
-      val res = (products in Compile in packageBin).value
-      bundleTask(headers.value.toMap, jarlist.value, (products in Compile in packageBin).value,
+      val cp = (products in Compile in packageBin).value
+      // bnd doesn't take resources from JARs, it would include the JAR itself as a resource (https://github.com/scala/scala-dev/issues/254)
+      val res = cp.filterNot(_.name.endsWith(".jar"))
+      bundleTask(headers.value.toMap, jarlist.value, cp,
         (artifactPath in (Compile, packageBin)).value, res, streams.value)
     },
     packagedArtifact in (Compile, packageBin) <<= (artifact in (Compile, packageBin), bundle).identityMap,
