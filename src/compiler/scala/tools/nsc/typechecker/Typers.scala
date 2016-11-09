@@ -13,7 +13,7 @@ package scala
 package tools.nsc
 package typechecker
 
-import scala.collection.{mutable, immutable}
+import scala.collection.{immutable, mutable}
 import scala.reflect.internal.util.{ Statistics, ListOfNil }
 import mutable.ListBuffer
 import symtab.Flags._
@@ -5048,7 +5048,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (sameLength(tparams, args)) {
             // @M: kind-arity checking is done here and in adapt, full kind-checking is in checkKindBounds (in Infer)
             val args1 = map2Conserve(args, tparams) { (arg, tparam) =>
-              def ptParams = Kind.FromParams(tparam.typeParams)
+              def ptParams = if (tparam.hasAnnotation(UncheckedClass)) Kind.Wildcard else Kind.FromParams(tparam.typeParams)
 
               // if symbol hasn't been fully loaded, can't check kind-arity except when we're in a pattern,
               // where we can (we can't take part in F-Bounds) and must (SI-8023)

@@ -215,15 +215,17 @@ trait Kinds {
         // @M must use the typeParams of the *type* targ, not of the *symbol* of targ!!
         val tparamsHO = targ.typeParams
         if (targ.isHigherKinded || tparam.typeParams.nonEmpty) {
-          // NOTE: *not* targ.typeSymbol, which normalizes
-          val kindErrors = checkKindBoundsHK(
-            tparamsHO, targ.typeSymbolDirect, tparam,
-            tparam.owner, tparam.typeParams, tparamsHO
-          )
-          if (kindErrors.isEmpty) Nil else {
-            if (explainErrors) List((targ, tparam, kindErrors))
-            // Return as soon as an error is seen if there's nothing to explain.
-            else return List((NoType, NoSymbol, NoKindErrors))
+          if (tparam.hasAnnotation(UncheckedClass)) Nil else {
+            // NOTE: *not* targ.typeSymbol, which normalizes
+            val kindErrors = checkKindBoundsHK(
+              tparamsHO, targ.typeSymbolDirect, tparam,
+              tparam.owner, tparam.typeParams, tparamsHO
+            )
+            if (kindErrors.isEmpty) Nil else {
+              if (explainErrors) List((targ, tparam, kindErrors))
+              // Return as soon as an error is seen if there's nothing to explain.
+              else return List((NoType, NoSymbol, NoKindErrors))
+            }
           }
         }
         else Nil
