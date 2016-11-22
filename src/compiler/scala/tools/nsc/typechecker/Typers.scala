@@ -3270,47 +3270,87 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def duplErrorTree(err: AbsTypeError) = { context.issue(err); duplErrTree }
 
       def preSelectOverloaded(fun: Tree): Tree = {
-        if (fun.hasSymbolField && fun.symbol.isOverloaded) {
-          // remove alternatives with wrong number of parameters without looking at types.
-          // less expensive than including them in inferMethodAlternative (see below).
-          def shapeType(arg: Tree): Type = arg match {
-            case Function(vparams, body) =>
-              // No need for phasedAppliedType, as we don't get here during erasure --
-              // overloading resolution happens during type checking.
-              // During erasure, the condition above (fun.symbol.isOverloaded) is false.
-              functionType(vparams map (_ => AnyTpe), shapeType(body))
-            case AssignOrNamedArg(Ident(name), rhs) =>
-              NamedType(name, shapeType(rhs))
-            case _ =>
-              NothingTpe
-          }
-          val argtypes = args map shapeType
-          val pre = fun.symbol.tpe.prefix
-          var sym = fun.symbol filter { alt =>
-            // must use pt as expected type, not WildcardType (a tempting quick fix to #2665)
-            // now fixed by using isWeaklyCompatible in exprTypeArgs
-            // TODO: understand why exactly -- some types were not inferred anymore (`ant clean quick.bin` failed)
-            // (I had expected inferMethodAlternative to pick up the slack introduced by using WildcardType here)
-            //
-            // @PP responds: I changed it to pass WildcardType instead of pt and only one line in
-            // trunk (excluding scalacheck, which had another) failed to compile. It was this line in
-            // Types: "refs = Array(Map(), Map())".  I determined that inference fails if there are at
-            // least two invariant type parameters. See the test case I checked in to help backstop:
-            // pos/isApplicableSafe.scala.
-            isApplicableSafe(context.undetparams, followApply(pre memberType alt), argtypes, pt)
-          }
-          if (sym.isOverloaded) {
+        // remove alternatives with wrong number of parameters without looking at types.
+        // less expensive than including them in inferMethodAlternative (see below).
+        def shapeType(arg: Tree): Type = arg match {
+          case Function(vparams, body) =>
+            // No need for phasedAppliedType, as we don't get here during erasure --
+            // overloading resolution happens during type checking.
+            // During erasure, the condition above (fun.symbol.isOverloaded) is false.
+            functionType(vparams map (_ => AnyTpe), shapeType(body))
+          case AssignOrNamedArg(Ident(name), rhs) =>
+            NamedType(name, shapeType(rhs))
+          case _ =>
+            NothingTpe
+        }
+        fun match {
+          case tap @ TypeApply(fun0, targs) if fun0.hasSymbolField && fun.tpe.isInstanceOf[OverloadedType] =>
+            val overloadedTpe = fun.tpe.asInstanceOf[OverloadedType]
+            val argtypes = args map shapeType
+            val pre = fun.symbol.tpe.prefix
+            var filteredAlts = overloadedTpe.alternatives.filter { alt =>
+              // must use pt as expected type, not WildcardType (a tempting quick fix to #2665)
+              // now fixed by using isWeaklyCompatible in exprTypeArgs
+              // TODO: understand why exactly -- some types were not inferred anymore (`ant clean quick.bin` failed)
+              // (I had expected inferMethodAlternative to pick up the slack introduced by using WildcardType here)
+              //
+              // @PP responds: I changed it to pass WildcardType instead of pt and only one line in
+              // trunk (excluding scalacheck, which had another) failed to compile. It was this line in
+              // Types: "refs = Array(Map(), Map())".  I determined that inference fails if there are at
+              // least two invariant type parameters. See the test case I checked in to help backstop:
+              // pos/isApplicableSafe.scala.
+              isApplicableSafe(context.undetparams, followApply(pre memberType alt), argtypes, pt)
+            }
+            if (filteredAlts.lengthCompare(1) > 0) {
               // eliminate functions that would result from tupling transforms
               // keeps alternatives with repeated params
-            val sym1 = sym filter (alt =>
-                 isApplicableBasedOnArity(pre memberType alt, argtypes.length, varargsStar = false, tuplingAllowed = false)
-              || alt.tpe.params.exists(_.hasDefault)
-            )
-            if (sym1 != NoSymbol) sym = sym1
-          }
-          if (sym == NoSymbol) fun
-          else adaptAfterOverloadResolution(fun setSymbol sym setType pre.memberType(sym), mode.forFunMode)
-        } else fun
+              val filteredAlts1 = filteredAlts filter (alt =>
+                isApplicableBasedOnArity(pre memberType alt, argtypes.length, varargsStar = false, tuplingAllowed = false)
+                  || alt.tpe.params.exists(_.hasDefault)
+                )
+              if (filteredAlts1 != Nil) filteredAlts = filteredAlts1
+            }
+            if (filteredAlts == Nil) fun
+            else {
+              val filteredFun0Alts = flatMap2(overloadedTpe.alternatives, fun0.symbol.alternatives) {
+                (a, b) => if (filteredAlts.contains(a)) List(b) else Nil
+              }
+              val sym = fun0.symbol.filter(filteredFun0Alts.contains)
+              val pre0 = fun0.symbol.tpe.prefix.asInstanceOf[AntiPolyType].pre
+              fun0 setSymbol sym setType pre0.memberType(sym)
+              tap.setType(overloadedType(overloadedTpe.prefix, filteredAlts))
+              adaptAfterOverloadResolution(tap, mode.forFunMode)
+            }
+          case _ if fun.hasSymbolField && fun.symbol.isOverloaded =>
+            val argtypes = args map shapeType
+            val pre = fun.symbol.tpe.prefix
+            var sym = fun.symbol filter { alt =>
+              // must use pt as expected type, not WildcardType (a tempting quick fix to #2665)
+              // now fixed by using isWeaklyCompatible in exprTypeArgs
+              // TODO: understand why exactly -- some types were not inferred anymore (`ant clean quick.bin` failed)
+              // (I had expected inferMethodAlternative to pick up the slack introduced by using WildcardType here)
+              //
+              // @PP responds: I changed it to pass WildcardType instead of pt and only one line in
+              // trunk (excluding scalacheck, which had another) failed to compile. It was this line in
+              // Types: "refs = Array(Map(), Map())".  I determined that inference fails if there are at
+              // least two invariant type parameters. See the test case I checked in to help backstop:
+              // pos/isApplicableSafe.scala.
+              isApplicableSafe(context.undetparams, followApply(pre memberType alt), argtypes, pt)
+            }
+            if (sym.isOverloaded) {
+              // eliminate functions that would result from tupling transforms
+              // keeps alternatives with repeated params
+              val sym1 = sym filter (alt =>
+                isApplicableBasedOnArity(pre memberType alt, argtypes.length, varargsStar = false, tuplingAllowed = false)
+                  || alt.tpe.params.exists(_.hasDefault)
+                )
+              if (sym1 != NoSymbol) sym = sym1
+            }
+            if (sym == NoSymbol) fun
+            else adaptAfterOverloadResolution(fun setSymbol sym setType pre.memberType(sym), mode.forFunMode)
+          case _ =>
+            fun
+        }
       }
 
       val fun = preSelectOverloaded(fun0)
