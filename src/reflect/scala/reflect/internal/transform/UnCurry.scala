@@ -72,33 +72,30 @@ trait UnCurry {
     def apply(tp0: Type): Type = {
       val tp = expandAlias(tp0)
       tp match {
-        case ClassInfoType(parents, decls, clazz) =>
+        case ClassInfoType(parents, decls, clazz) if !clazz.isJavaDefined =>
           val parents1 = parents mapConserve uncurry
+          val varargOverloads = mutable.ListBuffer.empty[Symbol]
 
-          if (clazz.isJavaDefined) tp
-          else {
-            val varargOverloads = mutable.ListBuffer.empty[Symbol]
-
-            // Not using `hasAnnotation` here because of dreaded cyclic reference errors:
-            // it may happen that VarargsClass has not been initialized yet and we get here
-            // while processing one of its superclasses (such as java.lang.Object). Since we
-            // don't need the more precise `matches` semantics, we only check the symbol, which
-            // is anyway faster and safer
-            for (decl <- decls if decl.annotations.exists(_.symbol == VarargsClass)) {
-              if (mexists(decl.paramss)(sym => definitions.isRepeatedParamType(sym.tpe))) {
-                val forwarderSym = varargForwarderSym(clazz, decl, exitingPhase(phase)(decl.info))
-                varargOverloads += forwarderSym
-              }
+          // Not using `hasAnnotation` here because of dreaded cyclic reference errors:
+          // it may happen that VarargsClass has not been initialized yet and we get here
+          // while processing one of its superclasses (such as java.lang.Object). Since we
+          // don't need the more precise `matches` semantics, we only check the symbol, which
+          // is anyway faster and safer
+          for (decl <- decls if decl.annotations.exists(_.symbol == VarargsClass)) {
+            if (mexists(decl.paramss)(sym => definitions.isRepeatedParamType(sym.tpe))) {
+              varargOverloads += varargForwarderSym(clazz, decl, exitingPhase(phase)(decl.info))
             }
-            if ((parents1 eq parents) && varargOverloads.isEmpty) tp
-            else {
-              val newDecls = decls.cloneScope
-              varargOverloads.foreach(newDecls.enter)
-              ClassInfoType(parents1, newDecls, clazz)
-            } // @MAT normalize in decls??
           }
+          if ((parents1 eq parents) && varargOverloads.isEmpty) tp
+          else {
+            val newDecls = decls.cloneScope
+            varargOverloads.foreach(newDecls.enter)
+            ClassInfoType(parents1, newDecls, clazz)
+          } // @MAT normalize in decls??
+
         case PolyType(_, _) =>
           mapOver(tp)
+
         case _ =>
           tp
       }
