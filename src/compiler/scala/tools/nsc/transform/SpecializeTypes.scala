@@ -298,7 +298,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
   val specializedType = new TypeMap {
     override def apply(tp: Type): Type = tp match {
-      case TypeRef(pre, sym, args) if args.nonEmpty =>
+      case TypeRef(pre, sym, args) if !sym.isJavaDefined && args.nonEmpty =>
         val pre1 = this(pre)
         // when searching for a specialized class, take care to map all
         // type parameters that are subtypes of AnyRef to AnyRef
@@ -308,7 +308,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         )
         specializedClass.get((sym, TypeEnv.fromSpecialization(sym, args1))) match {
           case Some(sym1) => typeRef(pre1, sym1, survivingArgs(sym, args))
-          case None       => typeRef(pre1, sym, args)
+          case None       =>
+            if (pre1 eq pre) tp
+            else typeRef(pre1, sym, args)
         }
       case _ => tp
     }
