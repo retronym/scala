@@ -146,7 +146,8 @@ trait UnCurry {
    * @MAT: starting with this phase, the info of every symbol will be normalized
    */
   def transformInfo(sym: Symbol, tp: Type): Type =
-    if (sym.isType) uncurryType(tp)
+    if (sym.isJavaDefined) tp
+    else if (sym.isType) uncurryType(tp)
     else if ((sym hasFlag MODULE) && !sym.isStatic) { // see Fields::nonStaticModuleToMethod
       sym setFlag METHOD | STABLE
       MethodType(Nil, uncurry(tp))
