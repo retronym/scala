@@ -14,5 +14,8 @@ trait PostErasure {
     }
   }
 
-  def transformInfo(sym: Symbol, tp: Type) = elimErasedValueType(tp)
+  // This is confusingly named method, it doesn't implement `InfoTransform#transformInfo`.
+  def transformInfo(sym: Symbol, tp: Type) =
+    if (sym.isPackageClass || sym.isJavaDefined) tp
+    else elimErasedValueType(tp)
 }
