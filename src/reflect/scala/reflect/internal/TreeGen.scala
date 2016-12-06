@@ -314,7 +314,7 @@ abstract class TreeGen {
     case tree :: Nil if flattenUnary =>
       tree
     case _ =>
-      Apply(scalaDot(TupleClass(elems.length).name.toTermName), elems)
+      Apply(Ident(TupleClass(elems.length).companionModule), elems)
   }
 
   def mkLiteralUnit: Literal = Literal(Constant(()))
@@ -322,11 +322,11 @@ abstract class TreeGen {
 
   def mkTupleType(elems: List[Tree], flattenUnary: Boolean = true): Tree = elems match {
     case Nil =>
-      scalaDot(tpnme.Unit)
+      Ident(UnitClass)
     case List(tree) if flattenUnary =>
       tree
     case _ =>
-      AppliedTypeTree(scalaDot(TupleClass(elems.length).name), elems)
+      AppliedTypeTree(Ident(TupleClass(elems.length)), elems)
   }
 
   // tree1 AND tree2
@@ -431,8 +431,8 @@ abstract class TreeGen {
   }
 
   def mkParents(ownerMods: Modifiers, parents: List[Tree], parentPos: Position = NoPosition) =
-    if (ownerMods.isCase) parents ::: List(scalaDot(tpnme.Product), scalaDot(tpnme.Serializable))
-    else if (parents.isEmpty) atPos(parentPos)(scalaAnyRefConstr) :: Nil
+    if (ownerMods.isCase) parents ::: List(Ident(definitions.ProductRootClass), Ident(definitions.SerializableClass))
+    else if (parents.isEmpty) atPos(parentPos)(Ident(definitions.AnyRefClass)) :: Nil
     else parents
 
   def mkClassDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], templ: Template): ClassDef = {
@@ -448,7 +448,7 @@ abstract class TreeGen {
   def mkNew(parents: List[Tree], self: ValDef, stats: List[Tree],
             npos: Position, cpos: Position): Tree =
     if (parents.isEmpty)
-      mkNew(List(scalaAnyRefConstr), self, stats, npos, cpos)
+      mkNew(List(Ident(definitions.AnyRefClass)), self, stats, npos, cpos)
     else if (parents.tail.isEmpty && stats.isEmpty) {
       // `Parsers.template` no longer differentiates tpts and their argss
       // e.g. `C()` will be represented as a single tree Apply(Ident(C), Nil)
@@ -478,7 +478,7 @@ abstract class TreeGen {
 
   /** Create a tree representing the function type (argtpes) => restpe */
   def mkFunctionTypeTree(argtpes: List[Tree], restpe: Tree): Tree =
-    AppliedTypeTree(rootScalaDot(newTypeName("Function" + argtpes.length)), argtpes ::: List(restpe))
+    AppliedTypeTree(Ident(definitions.FunctionClass.apply(argtpes.length)), argtpes ::: List(restpe))
 
   /** Create a literal unit tree that is inserted by the compiler but not
    *  written by end user. It's important to distinguish the two so that
@@ -923,7 +923,7 @@ abstract class TreeGen {
   def mkUnchecked(expr: Tree): Tree = atPos(expr.pos) {
     // This can't be "Annotated(New(UncheckedClass), expr)" because annotations
     // are very picky about things and it crashes the compiler with "unexpected new".
-    Annotated(New(scalaDot(tpnme.unchecked), Nil), expr)
+    Annotated(New(Ident(definitions.UncheckedClass), Nil), expr)
   }
 
   def mkSyntheticParam(pname: TermName) =

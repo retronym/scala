@@ -1352,10 +1352,10 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   // We need to force a number of symbols that might be touched by a parser.
   // Otherwise thread safety property of parseTree method would be violated.
   protected def forceSymbolsUsedByParser(): Unit = {
-    val symbols =
-      Set(UnitClass, BooleanClass, ByteClass,
+    val symbols: Set[Symbol] =
+      Set[Symbol](UnitClass, BooleanClass, ByteClass,
           ShortClass, IntClass, LongClass, FloatClass,
-          DoubleClass, NilModule, ListClass) ++ TupleClass.seq
+          DoubleClass, NilModule, OptionClass, ListClass, ProductRootClass, SerializableClass) ++ TupleClass.seq ++ FunctionClass.seq
     symbols.foreach(_.initialize)
   }
 
