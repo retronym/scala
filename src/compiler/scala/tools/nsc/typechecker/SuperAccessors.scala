@@ -80,7 +80,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
 
     private def storeAccessorDefinition(clazz: Symbol, tree: Tree) = {
       val buf = accDefs.getOrElse(clazz, sys.error("no acc def buf for "+clazz))
-      buf += typers(clazz) typed tree
+      buf += typers.find(_.context.owner == clazz).get typed tree
     }
     private def ensureAccessor(sel: Select, mixName: TermName = nme.EMPTY) = {
       val Select(qual, name) = sel
@@ -399,7 +399,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
     }
 
     /** a typer for each enclosing class */
-    private var typers = immutable.Map[Symbol, analyzer.Typer]()
+    private var typers: List[analyzer.Typer] = Nil
 
     /** Specialized here for performance; the previous blanked
      *  introduction of typers in TypingTransformer caused a >5%
@@ -410,11 +410,11 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       if (owner.isClass) validCurrentOwner = true
       val savedLocalTyper = localTyper
       localTyper = localTyper.atOwner(tree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
-      typers = typers updated (owner, localTyper)
+      typers ::= localTyper
       val result = super.atOwner(tree, owner)(trans)
       localTyper = savedLocalTyper
       validCurrentOwner = savedValid
-      typers -= owner
+      typers = typers.tail
       result
     }
 
