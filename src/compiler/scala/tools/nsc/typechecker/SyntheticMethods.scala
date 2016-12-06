@@ -143,13 +143,17 @@ trait SyntheticMethods extends ast.TreeDSL {
      * are both .isInstanceOf[Foo], but the one does not match as the other.
      */
     def thatTest(eqmeth: Symbol): Tree = {
-      Match(
-        Ident(eqmeth.firstParam),
-        List(
-          CaseDef(Typed(Ident(nme.WILDCARD), TypeTree(clazz.tpe)), EmptyTree, TRUE),
-          CaseDef(Ident(nme.WILDCARD), EmptyTree, FALSE)
+      if (clazz.isStatic)
+        gen.mkIsInstanceOf(Ident(eqmeth.firstParam), clazz.tpe, wrapInApply = false)
+      else {
+        Match(
+          Ident(eqmeth.firstParam),
+          List(
+            CaseDef(Typed(Ident(nme.WILDCARD), TypeTree(clazz.tpe)), EmptyTree, TRUE),
+            CaseDef(Ident(nme.WILDCARD), EmptyTree, FALSE)
+          )
         )
-      )
+      }
     }
 
     /* (that.asInstanceOf[this.C])
