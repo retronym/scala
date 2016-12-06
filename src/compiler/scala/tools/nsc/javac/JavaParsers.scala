@@ -109,7 +109,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     def javaLangObject(): Tree = javaLangDot(tpnme.Object)
 
     def arrayOf(tpt: Tree) =
-      AppliedTypeTree(scalaDot(tpnme.Array), List(tpt))
+      AppliedTypeTree(Ident(definitions.ArrayClass), List(tpt))
 
     def blankExpr = EmptyTree
 

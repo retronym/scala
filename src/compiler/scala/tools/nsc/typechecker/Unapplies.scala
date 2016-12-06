@@ -157,10 +157,10 @@ trait Unapplies extends ast.TreeDSL {
       }
       constrParamss(cdef) match {
         case Nil | Nil :: _ =>
-          gen.rootScalaDot(tpnme.Boolean)
+          Ident(definitions.BooleanClass)
         case params :: _ =>
           val constrParamTypes = params.map(param => repeatedToSeq(param.tpt))
-          AppliedTypeTree(gen.rootScalaDot(tpnme.Option), List(treeBuilder.makeTupleType(constrParamTypes)))
+          AppliedTypeTree(Ident(OptionClass), List(treeBuilder.makeTupleType(constrParamTypes)))
       }
     }
     val ifNull     = if (constrParamss(cdef).head.isEmpty) FALSE else REF(NoneModule)
