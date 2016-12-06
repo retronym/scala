@@ -2052,7 +2052,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               else subst(tpt1.tpe.typeArgs(0))
             else subst(tpt1.tpe)
           } else tpt1.tpe
-          transformedOrTyped(vdef.rhs, EXPRmode | BYVALmode, tpt2)
+          transformedOrTyped(vdef.rhs, vdef.tpt, EXPRmode | BYVALmode, tpt2)
         }
       treeCopy.ValDef(vdef, typedMods, sym.name, tpt1, checkDead(rhs1)) setType NoType
     }
@@ -2271,7 +2271,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           // that's why we employ our custom typing scheme orchestrated outside of the typer
           transformedOr(ddef.rhs, typedMacroBody(this, ddef))
         } else {
-          transformedOrTyped(ddef.rhs, EXPRmode, tpt1.tpe)
+          transformedOrTyped(ddef.rhs, ddef.tpt, EXPRmode, tpt1.tpe)
         }
 
       if (meth.isClassConstructor && !isPastTyper && !meth.owner.isSubClass(AnyValClass) && !meth.isJava) {
@@ -5725,9 +5725,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       case _           => op
     }
 
-    def transformedOrTyped(tree: Tree, mode: Mode, pt: Type): Tree = transformed remove tree match {
-      case Some(tree1) => tree1
-      case _           => typed(tree, mode, pt)
+    def transformedOrTyped(tree: Tree, tpt: Tree, mode: Mode, pt: Type): Tree = {
+      if (tpt == EmptyTree) // OPT: avoid map lookup for Val/Def-defs with explicit return types
+        typed(tree, mode, pt)
+      else transformed remove tree match {
+        case Some(tree1) => tree1
+        case _           => typed(tree, mode, pt)
+      }
     }
   }
 }
