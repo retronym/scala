@@ -559,7 +559,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         debug.patmat("combining cases: "+ (casesNoSubstOnly.map(_.mkString(" >> ")).mkString("{", "\n", "}")))
 
         val (suppression, requireSwitch): (Suppression, Boolean) =
-          if (settings.XnoPatmatAnalysis) (Suppression.FullSuppression, false)
+          if (settings.XnoPatmatAnalysis || (owner.isSynthetic && owner.name == nme.equals_)) (Suppression.FullSuppression, false)
           else scrut match {
             case Typed(tree, tpt) =>
               val suppressExhaustive = tpt.tpe hasAnnotation UncheckedClass
