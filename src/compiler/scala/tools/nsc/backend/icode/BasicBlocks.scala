@@ -7,9 +7,10 @@ package scala.tools.nsc
 package backend
 package icode
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import mutable.ListBuffer
 import backend.icode.analysis.ProgramPoint
+import scala.Range
 import scala.language.postfixOps
 
 trait BasicBlocks {
@@ -158,6 +159,7 @@ trait BasicBlocks {
      */
     private var instructionList: List[Instruction] = Nil
     private var instrs: Array[Instruction] = _
+    def indices: scala.collection.immutable.Range = instrs.indices
 
     def take(n: Int): Seq[Instruction] =
       if (closed) instrs take n else instructionList takeRight n reverse

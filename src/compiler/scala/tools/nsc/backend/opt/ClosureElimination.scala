@@ -93,9 +93,9 @@ abstract class ClosureElimination extends SubComponent {
     val cpp = new copyPropagation.CopyAnalysis
 
     import copyPropagation._
-
+    private def hasMonitor(m: IMethod) = m.blocks.exists(_.iterator.exists(x => x.isInstanceOf[MONITOR_ENTER] || x.isInstanceOf[MONITOR_EXIT]))
     /* Some embryonic copy propagation. */
-    def analyzeMethod(m: IMethod): Unit = try {if (m.hasCode) {
+    def analyzeMethod(m: IMethod): Unit = try {if (m.hasCode && !hasMonitor(m)) {
       cpp.init(m)
       cpp.run()
 
