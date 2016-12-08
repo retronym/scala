@@ -192,30 +192,15 @@ trait BasicBlocks {
     /** Apply a function to all the instructions of the block. */
     final def foreach[U](f: Instruction => U) = {
       if (!closed) dumpMethodAndAbort(method, this)
-      else instrs foreach f
-
-      // !!! If I replace "instrs foreach f" with the following:
-      // var i = 0
-      // val len = instrs.length
-      // while (i < len) {
-      //   f(instrs(i))
-      //   i += 1
-      // }
-      //
-      // Then when compiling under -optimise, quick.plugins fails as follows:
-      //
-      // quick.plugins:
-      //     [mkdir] Created dir: /scratch/trunk6/build/quick/classes/continuations-plugin
-      // [scalacfork] Compiling 5 files to /scratch/trunk6/build/quick/classes/continuations-plugin
-      // [scalacfork] error: java.lang.VerifyError: (class: scala/tools/nsc/typechecker/Implicits$ImplicitSearch, method: typedImplicit0 signature: (Lscala/tools/nsc/typechecker/Implicits$ImplicitInfo;Z)Lscala/tools/nsc/typechecker/Implicits$SearchResult;) Incompatible object argument for function call
-      // [scalacfork]   at scala.tools.nsc.typechecker.Implicits$class.inferImplicit(Implicits.scala:67)
-      // [scalacfork]   at scala.tools.nsc.Global$$anon$1.inferImplicit(Global.scala:419)
-      // [scalacfork]   at scala.tools.nsc.typechecker.Typers$Typer.wrapImplicit$1(Typers.scala:170)
-      // [scalacfork]   at scala.tools.nsc.typechecker.Typers$Typer.inferView(Typers.scala:174)
-      // [scalacfork]   at scala.tools.nsc.typechecker.Typers$Typer.adapt(Typers.scala:963)
-      // [scalacfork]   at scala.tools.nsc.typechecker.Typers$Typer.typed(Typers.scala:4378)
-      //
-      // This is bad and should be understood/eliminated.
+      else {
+        val instrArray = instrs // need to capture this as `instrs` is a var and can be mutated by `f`
+        var i = 0
+        val len = instrArray.length
+        while (i < len) {
+          f(instrArray(i))
+          i += 1
+        }
+      }
     }
 
     /** The number of instructions in this basic block so far. */
