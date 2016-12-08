@@ -108,15 +108,21 @@ trait MatchTranslation {
         |unsupported pattern: ${tree.shortClass} / $this (this is a scalac bug.)
         |""".trim
 
+      private var extractorStepCalled = false
+      private var typeTestComputeCalled = false
       // example check: List[Int] <:< ::[Int]
       private def extractorStep(): TranslationStep = {
+        assert(!extractorStepCalled); extractorStepCalled = true
         def paramType = extractor.aligner.wholeType
         import extractor.treeMaker
         // chain a type-testing extractor before the actual extractor call
         // it tests the type, checks the outer pointer and casts to the expected type
         // TODO: the outer check is mandated by the spec for case classes, but we do it for user-defined unapplies as well [SPEC]
         // (the prefix of the argument passed to the unapply must equal the prefix of the type of the binder)
-        lazy val typeTest = TypeTestTreeMaker(binder, binder, paramType, paramType)(pos, extractorArgTypeTest = true)
+        lazy val typeTest = {
+          assert(!typeTestComputeCalled); typeTestComputeCalled = true
+          TypeTestTreeMaker(binder, binder, paramType, paramType)(pos, extractorArgTypeTest = true)
+        }
         // check whether typetest implies binder is not null,
         // even though the eventual null check will be on typeTest.nextBinder
         // it'll be equal to binder casted to paramType anyway (and the type test is on binder)
