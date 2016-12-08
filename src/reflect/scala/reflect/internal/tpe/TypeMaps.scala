@@ -3,9 +3,9 @@ package reflect
 package internal
 package tpe
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import Flags._
-import scala.annotation.tailrec
+import scala.annotation.{switch, tailrec}
 import Variance._
 
 private[internal] trait TypeMaps {
@@ -105,8 +105,9 @@ private[internal] trait TypeMaps {
     def variance = _variance
 
     /** Map this function over given type */
-    def mapOver(tp: Type): Type = tp match {
-      case tr @ TypeRef(pre, sym, args) =>
+    def mapOver(tp: Type): Type = {
+      def mapOverTypeRef(tr: TypeRef): Type = {
+        import tr._
         val pre1 = this(pre)
         val args1 = (
           if (trackVariance && args.nonEmpty && !variance.isInvariant && sym.typeParams.nonEmpty)
@@ -116,80 +117,165 @@ private[internal] trait TypeMaps {
           )
         if ((pre1 eq pre) && (args1 eq args)) tp
         else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
-      case ThisType(_) => tp
-      case SingleType(pre, sym) =>
+      }
+      def mapOverSingleType(single: SingleType): Type = {
+        import single._
         if (sym.isPackageClass) tp // short path
         else {
           val pre1 = this(pre)
           if (pre1 eq pre) tp
           else singleType(pre1, sym)
         }
-      case MethodType(params, result) =>
+      }
+      def mapOverMethodType(mt: MethodType): Type = {
+        import mt._
         val params1 = flipped(mapOver(params))
-        val result1 = this(result)
-        if ((params1 eq params) && (result1 eq result)) tp
-        else copyMethodType(tp, params1, result1.substSym(params, params1))
-      case PolyType(tparams, result) =>
-        val tparams1 = flipped(mapOver(tparams))
-        val result1 = this(result)
-        if ((tparams1 eq tparams) && (result1 eq result)) tp
-        else PolyType(tparams1, result1.substSym(tparams, tparams1))
-      case NullaryMethodType(result) =>
-        val result1 = this(result)
-        if (result1 eq result) tp
+        val resultType1 = this(resultType)
+        if ((params1 eq params) && (resultType1 eq resultType)) tp
+        else copyMethodType(tp, params1, resultType1.substSym(params, params1))
+      }
+      def mapOverPolyType(poly: PolyType): Type = {
+        import poly._
+        val tparams1 = flipped(mapOver(typeParams))
+        val result1 = this(resultType)
+        if ((tparams1 eq typeParams) && (result1 eq resultType)) tp
+        else PolyType(tparams1, result1.substSym(typeParams, tparams1))
+      }
+      def mapOverNullaryMethodType(nullary: NullaryMethodType): Type = {
+        import nullary._
+        val result1 = this (resultType)
+        if (result1 eq resultType) tp
         else NullaryMethodType(result1)
-      case ConstantType(_) => tp
-      case SuperType(thistp, supertp) =>
+      }
+      def mapOverSuperType(superType: SuperType): Type = {
+        val thistp = superType.prefix
+        val supertp = superType.supertpe
         val thistp1 = this(thistp)
         val supertp1 = this(supertp)
         if ((thistp1 eq thistp) && (supertp1 eq supertp)) tp
         else SuperType(thistp1, supertp1)
-      case TypeBounds(lo, hi) =>
+      }
+      def mapOverTypeBounds(bounds: TypeBounds): Type = {
+        import bounds._
         val lo1 = flipped(this(lo))
         val hi1 = this(hi)
         if ((lo1 eq lo) && (hi1 eq hi)) tp
         else TypeBounds(lo1, hi1)
-      case BoundedWildcardType(bounds) =>
+      }
+      def mapOverBoundedWildcardType(bwt: BoundedWildcardType): Type = {
+        import bwt._
         val bounds1 = this(bounds)
         if (bounds1 eq bounds) tp
         else BoundedWildcardType(bounds1.asInstanceOf[TypeBounds])
-      case rtp @ RefinedType(parents, decls) =>
+      }
+      def mapOverRefinedType(rtp: RefinedType): Type = {
+        import rtp._
         val parents1 = parents mapConserve this
         val decls1 = mapOver(decls)
         copyRefinedType(rtp, parents1, decls1)
-      case ExistentialType(tparams, result) =>
-        val tparams1 = mapOver(tparams)
+      }
+      def mapOverExistentialType(existential: ExistentialType): Type = {
+        val ExistentialType(typeParams, result) = existential
+        val tparams1 = mapOver(typeParams)
         val result1 = this(result)
-        if ((tparams1 eq tparams) && (result1 eq result)) tp
-        else newExistentialType(tparams1, result1.substSym(tparams, tparams1))
-      case OverloadedType(pre, alts) =>
+        if ((tparams1 eq typeParams) && (result1 eq result)) tp
+        else newExistentialType(tparams1, result1.substSym(typeParams, tparams1))
+      }
+      def mapOverOverloadedType(overloaded: OverloadedType): Type = {
+        import overloaded._
         val pre1 = if (pre.isInstanceOf[ClassInfoType]) pre else this(pre)
         if (pre1 eq pre) tp
-        else OverloadedType(pre1, alts)
-      case AntiPolyType(pre, args) =>
+        else OverloadedType(pre1, alternatives)
+      }
+      def mapOverAntiPolyType(anti: AntiPolyType): Type = {
+        import anti._
         val pre1 = this(pre)
-        val args1 = args mapConserve this
-        if ((pre1 eq pre) && (args1 eq args)) tp
-        else AntiPolyType(pre1, args1)
-      case tv@TypeVar(_, constr) =>
+        val targs1 = targs mapConserve this
+        if ((pre1 eq pre) && (targs1 eq targs)) tp
+        else AntiPolyType(pre1, targs1)
+      }
+      def mapOverTypeVar(tv: TypeVar): Type = {
+        import tv._
         if (constr.instValid) this(constr.inst)
         else tv.applyArgs(mapOverArgs(tv.typeArgs, tv.params))  //@M !args.isEmpty implies !typeParams.isEmpty
-      case AnnotatedType(annots, atp) =>
+      }
+      def mapOverAnnotatedType(annotated: AnnotatedType): Type = {
+        val AnnotatedType(annots, atp) = annotated
         val annots1 = mapOverAnnotations(annots)
         val atp1 = this(atp)
         if ((annots1 eq annots) && (atp1 eq atp)) tp
         else if (annots1.isEmpty) atp1
         else AnnotatedType(annots1, atp1)
-      /*
-            case ErrorType => tp
-            case WildcardType => tp
-            case NoType => tp
-            case NoPrefix => tp
-            case ErasedSingleType(sym) => tp
-      */
-      case _ =>
-        tp
-      // throw new Error("mapOver inapplicable for " + tp);
+      }
+
+      if (tp.isInstanceOf[TypeRef]) mapOverTypeRef(tp.asInstanceOf[TypeRef])
+      else if (tp eq null) tp
+      else {
+        val cls: Class[_ <: Type] = tp.getClass
+        val hashCode = cls.getName.hashCode
+        (hashCode : @switch) match {
+          case 116901420 =>
+            if (cls eq classOf[UniqueThisType]) tp
+            else tp
+          case 2088966614 =>
+            if (cls eq classOf[UniqueSingleType]) mapOverSingleType(tp.asInstanceOf[UniqueSingleType])
+            else tp
+          case 1145862526 =>
+            if (cls eq classOf[MethodType]) mapOverMethodType(tp.asInstanceOf[MethodType])
+            else tp
+          case 630760384 =>
+            if (cls eq classOf[JavaMethodType]) mapOverMethodType(tp.asInstanceOf[JavaMethodType])
+            else tp
+          case -969775191 =>
+            if (cls eq classOf[PolyType]) mapOverPolyType(tp.asInstanceOf[PolyType])
+            else tp
+          case 544747257 =>
+            if (cls eq classOf[NullaryMethodType]) mapOverNullaryMethodType(tp.asInstanceOf[NullaryMethodType])
+            else tp
+          case -183062990 =>
+            if (cls eq classOf[UniqueConstantType]) tp
+            else tp
+          case -433475423 =>
+            if (cls eq classOf[UniqueSuperType]) mapOverSuperType(tp.asInstanceOf[UniqueSuperType])
+            else tp
+          case -738618173 =>
+            if (cls eq classOf[UniqueTypeBounds]) mapOverTypeBounds(tp.asInstanceOf[UniqueTypeBounds])
+            else tp
+          case -1555121906 =>
+            if (cls eq classOf[BoundedWildcardType]) mapOverBoundedWildcardType(tp.asInstanceOf[BoundedWildcardType])
+            else tp
+          case 1199355406 =>
+            if (cls eq classOf[RefinedType]) mapOverRefinedType(tp.asInstanceOf[RefinedType])
+            else tp
+          case -1474688030 =>
+            if (cls eq classOf[RefinedType0]) mapOverRefinedType(tp.asInstanceOf[RefinedType0])
+            else tp
+          case 1467907767 =>
+            if (cls eq classOf[ExistentialType]) mapOverExistentialType(tp.asInstanceOf[ExistentialType])
+            else tp
+          case 1161974006 =>
+            if (cls eq classOf[OverloadedType]) mapOverOverloadedType(tp.asInstanceOf[OverloadedType])
+            else tp
+          case -1315499093 =>
+            if (cls eq classOf[AntiPolyType]) mapOverAntiPolyType(tp.asInstanceOf[AntiPolyType])
+            else tp
+          case 1591365290 =>
+            if (cls eq classOf[TypeVar]) mapOverTypeVar(tp.asInstanceOf[TypeVar])
+            else tp
+          case -1881312621 =>
+            if (cls eq classOf[AppliedTypeVar]) mapOverTypeVar(tp.asInstanceOf[AppliedTypeVar])
+            else tp
+          case -835170041 =>
+            if (cls eq classOf[HKTypeVar]) mapOverTypeVar(tp.asInstanceOf[HKTypeVar])
+            else tp
+          case 1859696463 =>
+            if (cls eq classOf[AnnotatedType]) mapOverAnnotatedType(tp.asInstanceOf[AnnotatedType])
+            else tp
+          case _ =>
+            tp
+
+        }
+      }
     }
 
     def withVariance[T](v: Variance)(body: => T): T = {
