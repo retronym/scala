@@ -110,6 +110,7 @@ trait MatchTranslation {
 
       // example check: List[Int] <:< ::[Int]
       private def extractorStep(): TranslationStep = {
+        println(s"BoundTree($binder).extractorStep()")
         def paramType = extractor.aligner.wholeType
         import extractor.treeMaker
         // chain a type-testing extractor before the actual extractor call
