@@ -20,7 +20,7 @@ case $prDryRun in
     parseScalaProperties buildcharacter.properties # produce maven_version_number
 
 
-    $SBT_CMD --warn "setupPublishCore $prRepoUrl" publish
+    $SBT_CMD $antBuildArgs --warn "setupPublishCore $prRepoUrl" publish
 
     mv buildcharacter.properties jenkins.properties # parsed by the jenkins job
     ;;
