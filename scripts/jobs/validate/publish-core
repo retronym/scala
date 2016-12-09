@@ -19,16 +19,8 @@ case $prDryRun in
     $SBT_CMD --warn "setupPublishCore $prRepoUrl" generateBuildCharacterPropertiesFile
     parseScalaProperties buildcharacter.properties # produce maven_version_number
 
-    echo ">>> Checking availability of Scala ${maven_version_number} in $prRepoUrl."
-    checkAvailability "org.scala-lang" "scala-library"  "${maven_version_number}" $prRepoUrl; libraryAvailable=$RES
-    checkAvailability "org.scala-lang" "scala-reflect"  "${maven_version_number}" $prRepoUrl; reflectAvailable=$RES
-    checkAvailability "org.scala-lang" "scala-compiler" "${maven_version_number}" $prRepoUrl; compilerAvailable=$RES
 
-    if $libraryAvailable && $reflectAvailable && $compilerAvailable; then
-      echo "Scala core already built!"
-    else
-      $SBT_CMD --warn "setupPublishCore $prRepoUrl" publish
-    fi
+    $SBT_CMD --warn "setupPublishCore $prRepoUrl" publish
 
     mv buildcharacter.properties jenkins.properties # parsed by the jenkins job
     ;;
