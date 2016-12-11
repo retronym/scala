@@ -8,13 +8,15 @@ package reflect
 package io
 
 import java.net.URL
-import java.io.{ IOException, InputStream, ByteArrayInputStream, FilterInputStream }
-import java.io.{ File => JFile }
-import java.util.zip.{ ZipEntry, ZipFile, ZipInputStream }
+import java.io.{ByteArrayInputStream, FilterInputStream, IOException, InputStream}
+import java.io.{File => JFile}
+import java.util.zip.{ZipEntry, ZipFile, ZipInputStream}
 import java.util.jar.Manifest
+
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.annotation.tailrec
+import scala.sys.BooleanProp
 
 /** An abstraction for zip files and streams.  Everything is written the way
  *  it is for performance: we come through here a lot on every run.  Be careful
@@ -120,40 +122,63 @@ abstract class ZipArchive(override val file: JFile) extends AbstractFile with Eq
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class FileZipArchive(file: JFile) extends ZipArchive(file) {
+  private[this] def openZipFile(): ZipFile = try {
+    new ZipFile(file)
+  } catch {
+    case ioe: IOException => throw new IOException("Error accessing " + file.getPath, ioe)
+  }
+  private val closeZipFileAfterEachEntry = true
+
   lazy val (root, allDirs) = {
+    class LazyEntry(name: String, time: Long, size: Int) extends Entry(name) {
+      override def lastModified: Long = time // could be stale
+      override def input: InputStream = {
+        val zipFile  = openZipFile()
+        val entry    = zipFile.getEntry(name)
+        val delegate = zipFile.getInputStream(entry)
+        new FilterInputStream(delegate) {
+          override def close(): Unit = { zipFile.close() }
+        }
+      }
+      override def sizeOption: Option[Int] = Some(size) // could be stale
+    }
+    class StrictEntry(zipFile: ZipFile, zipEntry: ZipEntry) extends Entry(zipEntry.getName) {
+      override def getArchive   = zipFile
+      override def lastModified = zipEntry.getTime()
+      override def input        = getArchive getInputStream zipEntry
+      override def sizeOption   = Some(zipEntry.getSize().toInt)
+    }
+
     val root = new DirEntry("/")
     val dirs = mutable.HashMap[String, DirEntry]("/" -> root)
-    val zipFile = try {
-      new ZipFile(file)
-    } catch {
-      case ioe: IOException => throw new IOException("Error accessing " + file.getPath, ioe)
-    }
-
+    val zipFile = openZipFile()
     val enum    = zipFile.entries()
 
-    while (enum.hasMoreElements) {
-      val zipEntry = enum.nextElement
-      val dir = getDir(dirs, zipEntry)
-      if (zipEntry.isDirectory) dir
-      else {
-        class FileEntry() extends Entry(zipEntry.getName) {
-          override def getArchive   = zipFile
-          override def lastModified = zipEntry.getTime()
-          override def input        = getArchive getInputStream zipEntry
-          override def sizeOption   = Some(zipEntry.getSize().toInt)
+    try {
+      while (enum.hasMoreElements) {
+        val zipEntry = enum.nextElement
+        val dir = getDir(dirs, zipEntry)
+        if (zipEntry.isDirectory) dir
+        else {
+          val entry = if (closeZipFileAfterEachEntry)
+            new LazyEntry(
+              zipEntry.getName(),
+              zipEntry.getTime(),
+              zipEntry.getSize().toInt
+            )
+          else new StrictEntry(zipFile, zipEntry)
+          dir.entries(entry.name) = entry
         }
-        val f = new FileEntry()
-        dir.entries(f.name) = f
       }
-    }
+    } finally zipFile.close()
     (root, dirs)
   }
 
   def iterator: Iterator[Entry] = root.iterator
 
-  def name         = file.getName
-  def path         = file.getPath
-  def input        = File(file).inputStream()
+  def name = file.getName
+  def path = file.getPath
+  def input = File(file).inputStream()
   def lastModified = file.lastModified
 
   override def sizeOption = Some(file.length.toInt)
