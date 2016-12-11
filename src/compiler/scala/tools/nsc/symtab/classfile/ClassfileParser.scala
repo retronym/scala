@@ -175,6 +175,8 @@ abstract class ClassfileParser {
     protected val starts       = new Array[Int](len)
     protected val values       = new Array[AnyRef](len)
     protected val internalized = new Array[Name](len)
+    private var in: AbstractFileReader = ClassfileParser.this.in
+    private var lastIndex: Int = _
 
     { var i = 1
       while (i < starts.length) {
@@ -191,6 +193,12 @@ abstract class ClassfileParser {
           case _                                                               => errorBadTag(in.bp - 1)
         }
       }
+      lastIndex = in.bp
+    }
+
+    def trimIn(): Unit = {
+      val trimmedBuf = java.util.Arrays.copyOfRange(in.buf, 0, lastIndex)
+      in = new AbstractFileReader(in.file, trimmedBuf)
     }
 
     def recordAtIndex[T <: AnyRef](value: T, idx: Int): T = {
@@ -446,8 +454,12 @@ abstract class ClassfileParser {
     val classInfo = ClassInfoType(parseParents, instanceScope, clazz)
     val staticInfo = ClassInfoType(List(), staticScope, moduleClass)
 
-    if (!isScala && !isScalaRaw)
+    if (!isScala && !isScalaRaw) {
       enterOwnInnerClasses()
+      // Give `pool` a copy of the range of the bytes it needs, so we can refer to the constant pool from
+      // type completers without retaining the entireity of the classfile.
+      pool.trimIn()
+    }
 
     val curbp = in.bp
     skipMembers() // fields
@@ -475,6 +487,7 @@ abstract class ClassfileParser {
         )
         if (needsConstructor)
           instanceScope enter clazz.newClassConstructor(NoPosition)
+        in = null // TypeCompleters retaining the outer `ClassFileParser` instance should be written so as not to
       }
 
       loaders.pendingLoadActions ::= (queueLoad _)
@@ -485,6 +498,7 @@ abstract class ClassfileParser {
           item()
         }
       }
+      // require then entire file content. See `ConstantPool#trimIn`.
     } else
       parseAttributes(clazz, isVarargs = false)
   }
