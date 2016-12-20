@@ -127,7 +127,7 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
   } catch {
     case ioe: IOException => throw new IOException("Error accessing " + file.getPath, ioe)
   }
-  private val closeZipFileAfterEachEntry = true
+  private val closeZipFileAfterEachEntry = BooleanProp.valueIsTrue("scala.classpath.closeZip").value // TODO comnfigure with -Y
 
   lazy val (root, allDirs) = {
     class LazyEntry(name: String, time: Long, size: Int) extends Entry(name) {
