@@ -27,7 +27,7 @@ case $prDryRun in
     if $libraryAvailable && $reflectAvailable && $compilerAvailable; then
       echo "Scala core already built!"
     else
-      $SBT_CMD -J-XX:+TieredCompilation -J-XX:TieredStopAtLevel=4 -J-XX:+UnlockDiagnosticVMOptions \
+      $SBT_CMD -J-XX:+TieredCompilation -J-XX:TieredStopAtLevel=4 -J-XX:+UnlockDiagnosticVMOptions -J-XX:ReservedCodeCacheSize=128M \
                '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$TypeTestTreeMaker::*' \
                '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$CondTreeMaker::*' \
                '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTranslation$MatchTranslator$BoundTree::*' \
