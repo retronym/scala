@@ -1120,7 +1120,8 @@ trait Infer extends Checkable {
     // the changes are rolled back by restoreTypeBounds, but might be unintentionally observed in the mean time
     def instantiateTypeVar(tvar: TypeVar) {
       val tparam                    = tvar.origin.typeSymbol
-      val TypeBounds(lo0, hi0)      = tparam.info.bounds
+      val GenPolyType(tparams, resultType) = tparam.info
+      val TypeBounds(lo0, hi0)      = resultType.bounds
       val tb @ TypeBounds(lo1, hi1) = instBounds(tvar)
       val enclCase                  = context.enclosingCaseDef
       def enclCase_s                = enclCase.toString.replaceAll("\\n", " ").take(60)
@@ -1139,7 +1140,7 @@ trait Infer extends Checkable {
           log(s"cyclical bounds: discarding TypeBounds($lo1, $hi1) for $tparam because $tparam appears as bounds")
         else {
           enclCase pushTypeBounds tparam
-          tparam setInfo logResult(s"updated bounds: $tparam from ${tparam.info} to")(tb)
+          tparam setInfo logResult(s"updated bounds: $tparam from ${tparam.info} to")(GenPolyType(tparams, tb))
         }
       }
       else log(s"inconsistent bounds: discarding TypeBounds($lo1, $hi1)")

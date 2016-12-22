@@ -211,7 +211,7 @@ private[internal] trait TypeConstraints {
         })
         if (!cyclic) {
           if (up) {
-            if (bound.typeSymbol != AnyClass) {
+            if (bound.typeSymbol != AnyClass || bound.isHigherKinded) {
               debuglog(s"$tvar addHiBound $bound.instantiateTypeParams($tparams, $tvars)")
               tvar addHiBound bound.instantiateTypeParams(tparams, tvars)
             }
@@ -223,7 +223,7 @@ private[internal] trait TypeConstraints {
                 case _ =>
               }
           } else {
-            if (bound.typeSymbol != NothingClass && bound.typeSymbol != tparam) {
+            if ((bound.typeSymbol != NothingClass || bound.isHigherKinded) && bound.typeSymbol != tparam) {
               debuglog(s"$tvar addLoBound $bound.instantiateTypeParams($tparams, $tvars)")
               tvar addLoBound bound.instantiateTypeParams(tparams, tvars)
             }
