@@ -27,7 +27,10 @@ case $prDryRun in
     if $libraryAvailable && $reflectAvailable && $compilerAvailable; then
       echo "Scala core already built!"
     else
-      $SBT_CMD --warn "setupPublishCore $prRepoUrl" publish
+      $SBT_CMD -J-XX:-TieredCompilation -J-XX:+UnlockDiagnosticVMOptions -J-XX:ReservedCodeCacheSize=128M \
+               '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$TypeTestTreeMaker::*' \
+               '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$CondTreeMaker::*' \
+               --warn "setupPublishCore $prRepoUrl" publish
     fi
 
     mv buildcharacter.properties jenkins.properties # parsed by the jenkins job
