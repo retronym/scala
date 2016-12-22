@@ -28,7 +28,7 @@ case $prDryRun in
       echo "Scala core already built!"
     else
       $SBT_CMD -J-XX:-TieredCompilation -J-XX:+UnlockDiagnosticVMOptions -J-XX:ReservedCodeCacheSize=128M \
-               '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$TypeTestTreeMaker::*' \
+               '-J-XX:CompileCommand=exclude scala.tools.nsc.transform.patmat.MatchTreeMaking$TreeMakers$TypeTestTreeMaker::renderCondition' \
                --warn "setupPublishCore $prRepoUrl" publish
     fi
 
