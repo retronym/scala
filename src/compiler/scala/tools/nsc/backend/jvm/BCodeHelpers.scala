@@ -226,7 +226,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
    * global.reporter (it's a var) to store errors.
    */
   def completeSilentlyAndCheckErroneous(sym: Symbol): Boolean =
-    if (sym.hasCompleteInfo) false
+    if (sym.hasRawInfo && !(sym.validTo < currentPeriod) && sym.rawInfo.isComplete) false
     else {
       val originalReporter = global.reporter
       val storeReporter = new reporters.StoreReporter()
