@@ -49,7 +49,7 @@ class BTypesFromClassfileTest extends BytecodeTesting {
       // Nested class symbols can undergo makeNotPrivate (ExplicitOuter). But this is only applied
       // for symbols of class symbols that are being compiled, not those read from a pickle.
       // So a class may be public in bytecode, but the symbol still says private.
-      if (fromSym.nestedInfo.isEmpty) fromSym.flags == fromClassfile.flags
+      if (fromSym.nestedInfo.force.isEmpty) fromSym.flags == fromClassfile.flags
       else (fromSym.flags | ACC_PRIVATE | ACC_PUBLIC) == (fromClassfile.flags | ACC_PRIVATE | ACC_PUBLIC)
     }, s"class flags differ\n$fromSym\n$fromClassfile")
 
@@ -67,12 +67,12 @@ class BTypesFromClassfileTest extends BytecodeTesting {
     //   and anonymous classes as members of the outer class. But not for unpickled symbols).
     // The fromClassfile info has all nested classes, including anonymous and local. So we filter
     // them out: member classes are identified by having the `outerName` defined.
-    val memberClassesFromClassfile = fromClassfile.nestedClasses.filter(_.info.get.nestedInfo.get.outerName.isDefined)
+    val memberClassesFromClassfile = fromClassfile.nestedClasses.force.filter(_.info.get.nestedInfo.force.get.outerName.isDefined)
     // Sorting is required: the backend sorts all InnerClass entries by internalName before writing
     // them to the classfile (to make it deterministic: the entries are collected in a Set during
     // code generation).
-    val chk3 = sameBTypes(fromSym.nestedClasses.sortBy(_.internalName), memberClassesFromClassfile.sortBy(_.internalName), chk2)
-    sameBTypes(fromSym.nestedInfo.map(_.enclosingClass), fromClassfile.nestedInfo.map(_.enclosingClass), chk3)
+    val chk3 = sameBTypes(fromSym.nestedClasses.force.sortBy(_.internalName), memberClassesFromClassfile.sortBy(_.internalName), chk2)
+    sameBTypes(fromSym.nestedInfo.force.map(_.enclosingClass), fromClassfile.nestedInfo.force.map(_.enclosingClass), chk3)
   }
 
   def check(classSym: Symbol): Unit = duringBackend {

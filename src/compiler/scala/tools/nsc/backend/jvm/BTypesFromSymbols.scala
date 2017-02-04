@@ -437,9 +437,9 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
       } else true
     })
 
-    val nestedClasses = nestedClassSymbolsNoJavaModuleClasses.map(classBTypeFromSymbol)
+    val nestedClasses = Lazy(nestedClassSymbolsNoJavaModuleClasses.map(classBTypeFromSymbol))
 
-    val nestedInfo = buildNestedInfo(classSym)
+    val nestedInfo = Lazy(buildNestedInfo(classSym))
 
     val inlineInfo = buildInlineInfo(classSym, classBType.internalName)
 
@@ -629,13 +629,13 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
     classBTypeFromInternalName.getOrElse(internalName, {
       val c = ClassBType(internalName)
       // class info consistent with BCodeHelpers.genMirrorClass
-      val nested = exitingPickler(memberClassesForInnerClassTable(moduleClassSym)) map classBTypeFromSymbol
+      val nested = Lazy(exitingPickler(memberClassesForInnerClassTable(moduleClassSym)) map classBTypeFromSymbol)
       c.info = Right(ClassInfo(
         superClass = Some(ObjectRef),
         interfaces = Nil,
         flags = asm.Opcodes.ACC_SUPER | asm.Opcodes.ACC_PUBLIC | asm.Opcodes.ACC_FINAL,
         nestedClasses = nested,
-        nestedInfo = None,
+        nestedInfo = Lazy(None),
         inlineInfo = EmptyInlineInfo.copy(isEffectivelyFinal = true))) // no method inline infos needed, scala never invokes methods on the mirror class
       c
     })
@@ -649,8 +649,8 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
         superClass = Some(sbScalaBeanInfoRef),
         interfaces = Nil,
         flags = javaFlags(mainClass),
-        nestedClasses = Nil,
-        nestedInfo = None,
+        nestedClasses = Lazy(Nil),
+        nestedInfo = Lazy(None),
         inlineInfo = EmptyInlineInfo))
       c
     })
