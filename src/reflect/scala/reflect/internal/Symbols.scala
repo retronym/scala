@@ -808,8 +808,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def isClassLocalToConstructor = false
 
     final def isDerivedValueClass =
-      isClass && !hasFlag(PACKAGE | TRAIT) &&
-      !phase.erasedTypes && info.firstParent.typeSymbol == AnyValClass && !isPrimitiveValueClass
+      isClass && !hasFlag(PACKAGE | TRAIT) && hasFlag(FINAL) &&
+      !phase.erasedTypes && enteringPhaseNotLaterThan(picklerPhase)(info).firstParent.typeSymbol == AnyValClass && !isPrimitiveValueClass
 
     final def isMethodWithExtension =
       isMethod && owner.isDerivedValueClass && !isParamAccessor && !isConstructor && !hasFlag(SUPERACCESSOR) && !isMacro && !isSpecialized
