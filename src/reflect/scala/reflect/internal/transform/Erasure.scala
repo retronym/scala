@@ -111,7 +111,7 @@ trait Erasure {
 
     protected def eraseDerivedValueClassRef(tref: TypeRef): Type = erasedValueClassArg(tref)
 
-    def apply(tp: Type): Type = tp match {
+    def apply(tp: Type): Type = tp.dealias match {
       case ConstantType(ct) =>
         // erase classOf[List[_]] to classOf[List]. special case for classOf[Unit], avoid erasing to classOf[BoxedUnit].
         if (ct.tag == ClazzTag && ct.typeValue.typeSymbol != UnitClass) ConstantType(Constant(apply(ct.typeValue)))
@@ -327,7 +327,7 @@ trait Erasure {
         // treat arrays specially
         arrayType(
           intersectionDominator(
-            parents filter (_.typeSymbol == ArrayClass) map (_.typeArgs.head)))
+            parents filter (_.typeSymbol == ArrayClass) map (_.baseType(ArrayClass).typeArgs.head)))
       } else {
         // implement new spec for erasure of refined types.
         def isUnshadowed(psym: Symbol) =
