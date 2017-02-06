@@ -4231,7 +4231,9 @@ trait Types
     }
 
   /** A function implementing `tp1` matches `tp2`. */
-  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean =
+    matchesType(tp1, tp2, alwaysMatchSimple, ignoreImplicit = false)
+  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean, ignoreImplicit: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)
@@ -4252,7 +4254,7 @@ trait Types
         tp2 match {
           case mt2 @ MethodType(params2, res2) =>
             // sameLength(params1, params2) was used directly as pre-screening optimization (now done by matchesQuantified -- is that ok, performancewise?)
-            mt1.isImplicit == mt2.isImplicit &&
+            (ignoreImplicit || mt1.isImplicit == mt2.isImplicit) &&
             matchingParams(params1, params2, mt1.isJava, mt2.isJava) &&
             matchesQuantified(params1, params2, res1, res2)
           case NullaryMethodType(res2) =>

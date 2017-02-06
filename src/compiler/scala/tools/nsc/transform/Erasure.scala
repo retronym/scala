@@ -466,6 +466,7 @@ abstract class Erasure extends InfoTransform
 
     val opc = enteringExplicitOuter {
       new overridingPairs.Cursor(root) {
+        override val matchesTypeIgnoreImplciit: Boolean = false
         override def parents              = List(root.info.firstParent)
         override def exclude(sym: Symbol) = !sym.isMethod || super.exclude(sym)
       }
@@ -871,6 +872,7 @@ abstract class Erasure extends InfoTransform
     private def checkNoDoubleDefs(root: Symbol) {
       checkNoDeclaredDoubleDefs(root)
       object opc extends Cursor(root) {
+        override val matchesTypeIgnoreImplciit: Boolean = true
         // specialized members have no type history before 'specialize', causing double def errors for curried defs
         override def exclude(sym: Symbol): Boolean = (
              sym.isType

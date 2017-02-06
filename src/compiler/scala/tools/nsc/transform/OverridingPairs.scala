@@ -18,6 +18,9 @@ abstract class OverridingPairs extends SymbolPairs {
   import global._
 
   class Cursor(base: Symbol) extends super.Cursor(base) {
+    // TODO make this true in refchecks and add a specific check for pairs
+    //      that disagree over implicit-ness of param lists.
+    val matchesTypeIgnoreImplciit = false
     /** Symbols to exclude: Here these are constructors and private/artifact symbols,
      *  including bridges. But it may be refined in subclasses.
      */
@@ -35,7 +38,7 @@ abstract class OverridingPairs extends SymbolPairs {
          (lo.owner != high.owner)     // don't try to form pairs from overloaded members
       && !high.isPrivate              // private or private[this] members never are overridden
       && !exclude(lo)                 // this admits private, as one can't have a private member that matches a less-private member.
-      && ((self memberType lo) matches (self memberType high))
+      && (matchesType((self memberType lo), (self memberType high), !phase.erasedTypes, matchesTypeIgnoreImplciit))
     ) // TODO we don't call exclude(high), should we?
   }
 }
