@@ -14,6 +14,7 @@ import scala.tools.asm.{Handle, Type}
 import scala.tools.nsc.backend.jvm.BTypes._
 import scala.tools.nsc.backend.jvm.GenBCode._
 import scala.tools.nsc.backend.jvm.opt.BytecodeUtils._
+import scala.tools.nsc.symtab.classfile.JavaSignatureWalker
 
 /**
  * This component hosts tools and utilities used in the backend that require access to a `BTypes`
@@ -266,6 +267,15 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
       if (t.isNestedClass.get) innerClasses += t
     }
 
+    object sigWalker extends JavaSignatureWalker {
+      override def visitName(internalName: CharSequence): Unit = {
+        visitInternalName(internalName.toString)
+      }
+      override def raiseError(msg: String): Unit = {
+        // don't crash on invalid generic signatures
+      }
+    }
+
     // either an internal/Name or [[Linternal/Name; -- there are certain references in classfiles
     // that are either an internal name (without the surrounding `L;`) or an array descriptor
     // `[Linternal/Name;`.
@@ -301,6 +311,9 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
       case _ => // skip over primitive types
     }
 
+    def visitSignature(sig: String) =
+      if (sig != null) sigWalker.walk(sig)
+
     def visitConstant(const: AnyRef): Unit = const match {
       case t: Type => visitDescriptor(t.getDescriptor)
       case _ =>
@@ -328,6 +341,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
 
     visitInternalName(classNode.superName)
     classNode.interfaces.asScala foreach visitInternalName
+    visitSignature(classNode.signature)
     visitInternalName(classNode.outerClass)
 
     visitAnnotations(classNode.visibleAnnotations)
@@ -337,6 +351,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
 
     for (f <- classNode.fields.asScala) {
       visitDescriptor(f.desc)
+      visitSignature(f.signature)
       visitAnnotations(f.visibleAnnotations)
       visitAnnotations(f.visibleTypeAnnotations)
       visitAnnotations(f.invisibleAnnotations)
@@ -345,7 +360,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
 
     for (m <- classNode.methods.asScala) {
       visitDescriptor(m.desc)
-
+      visitSignature(m.signature)
       visitAnnotations(m.visibleAnnotations)
       visitAnnotations(m.visibleTypeAnnotations)
       visitAnnotations(m.invisibleAnnotations)
