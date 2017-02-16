@@ -773,7 +773,7 @@ trait Namers extends MethodSynthesis {
 
       val annotations = annotSig(tree.mods.annotations)
 
-      val tp = typeSig(tree, annotations)
+      val tp = typdeSig(tree, annotations)
 
       findCyclicalLowerBound(tp) andAlso { sym =>
         if (needsCycleCheck) {

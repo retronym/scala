@@ -3388,6 +3388,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
   class PackageClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position, name0: TypeName)
   extends ModuleClassSymbol(owner0, pos0, name0) {
+    private[scala] val unlinkedInners: collection.mutable.Map[Name, Symbol] = collection.mutable.AnyRefMap[Name, Symbol]()
     override def sourceModule = companionModule
     override def enclClassChain = Nil
     override def isPackageClass = true

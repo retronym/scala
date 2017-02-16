@@ -6,8 +6,11 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 import scala.tools.asm.Opcodes._
+import scala.tools.asm.tree.ClassNode
+import scala.tools.nsc.io.AbstractFile
+import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.partest.ASMConverters._
-import scala.tools.testing.BytecodeTesting
+import scala.tools.testing.{BytecodeTesting, TempDir}
 import scala.tools.testing.BytecodeTesting._
 
 @RunWith(classOf[JUnit4])
@@ -194,5 +197,58 @@ class BytecodeTest extends BytecodeTesting {
     val m = compileMethod(code)
     val List(ExceptionHandler(_, _, _, desc)) = m.handlers
     assert(desc == None, desc)
+  }
+
+  @Test
+  def inconsistentGenericSignatures(): Unit = {
+    def `interface Test1 { public static C$D foo() }`(): Array[Byte] = {
+      import scala.tools.asm._
+      val cw = new ClassWriter(0)
+      cw.visit(52, ACC_PUBLIC + ACC_SUPER, "p1/Test1", null, null, null)
+      val mv = cw.visitMethod(ACC_PUBLIC + ACC_STATIC, "foo", "()LC$D;", null, null)
+      mv.visitEnd()
+      cw.visitEnd()
+      cw.toByteArray
+    }
+    def `interface Test2 { public static void accept(C$D d) }`(): Array[Byte] = {
+      import scala.tools.asm._
+      val cw = new ClassWriter(0)
+      cw.visit(52, ACC_PUBLIC + ACC_SUPER, "p1/Test2", null, null, null)
+      val mv = cw.visitMethod(ACC_PUBLIC + ACC_STATIC, "accept", "(LC$D;)V", null, null)
+      mv.visitEnd()
+      cw.visitEnd()
+      cw.toByteArray
+    }
+
+    val outDir = AbstractFile.getDirectory(TempDir.createTempDir())
+    val outDirPath = outDir.canonicalPath
+    val argsWithOutDir = s" -d $outDirPath -cp $outDirPath"
+
+    def writeClass(name: String, content: Array[Byte]): Unit = {
+      import java.nio.file.Files
+      val classFile = outDir.file.toPath.resolve(s"$name.class")
+      Files.createDirectories(classFile.getParent)
+      Files.write(classFile, content)
+    }
+
+    writeClass("p1/Test1", `interface Test1 { public static C$D foo() }`())
+    writeClass("p1/Test2", `interface Test2 { public static void accept(C$D d) }`())
+
+    // Here, C.D is jointly compiled with the code that refers to a third party class using the
+    // flat name C$D
+    val compiler = newCompilerWithoutVirtualOutdir(extraArgs = argsWithOutDir)
+    val scalaClientSource = "class ScalaClient { p1.Test2.accept(p1.Test1.foo()) }"
+    new compiler.global.Run().compileSources(makeSourceFile(scalaClientSource, "ScalaClient.scala") :: makeSourceFile("class C { class D }", "C.scala") :: Nil)
+
+    // This time, C.D is separately compiled with the code that refers to a third party class using the
+    // flat name C$D
+    val compiler2 = newCompilerWithoutVirtualOutdir(extraArgs = argsWithOutDir)
+    new compiler2.global.Run().compileSources(makeSourceFile(scalaClientSource, "ScalaClient.scala") :: Nil)
+
+    compiler.checkReport()
+    compiler2.checkReport()
+
+    outDir.delete()
+
   }
 }

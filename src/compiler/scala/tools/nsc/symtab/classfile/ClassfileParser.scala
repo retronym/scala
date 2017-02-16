@@ -394,7 +394,21 @@ abstract class ClassfileParser {
     case _: FatalError =>
       // getClassByName can throw a MissingRequirementError (which extends FatalError)
       // definitions.getMember can throw a FatalError, for example in pos/t5165b
-      stubClassSymbol(name)
+      val (pack, flatName) =
+        if (name containsChar '.') {
+          val pack = rootMirror.getPackageIfDefined(name.subName(0, name.lastIndexOf('.')).toTermName).moduleClass
+          (pack, name.subName(name.lastIndexOf('.'), name.length))
+        }
+        else {
+          (rootMirror.EmptyPackageClass, name)
+        }
+
+        pack match {
+          case sym: PackageClassSymbol =>
+            sym.unlinkedInners.getOrElse(flatName.toTypeName, stubClassSymbol(name))
+          case _ =>
+            stubClassSymbol(name)
+        }
   }
 
   /** Return the class symbol of the given name. */
@@ -1071,11 +1085,20 @@ abstract class ClassfileParser {
       scope enter innerClass
       scope enter innerModule
 
-      val decls = innerClass.enclosingPackage.info.decls
+      val enclosingPackage = innerClass.enclosingPackage
+      val decls = enclosingPackage.info.decls
       def unlinkIfPresent(name: Name) = {
         val e = decls lookupEntry name
-        if (e ne null)
+        if (e ne null) {
           decls unlink e
+          enclosingPackage.moduleClass match {
+            case sym: PackageClassSymbol =>
+              if (!sym.hasTransOwner(JavaLangPackageClass))
+                println("here")
+              sym.unlinkedInners(name) = if (name.isTermName) innerModule else innerClass
+            case _ =>
+          }
+        }
       }
 
       val cName = className(entry.externalName)

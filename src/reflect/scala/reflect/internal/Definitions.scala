@@ -415,7 +415,10 @@ trait Definitions extends api.StandardDefinitions {
     }
 
     // wrapping and unwrapping
-    def dropByName(tp: Type): Type = elementExtract(ByNameParamClass, tp) orElse tp
+    def dropByName(tp: Type): Type = {
+      if (tp.typeSymbolDirect.isInstanceOf[StubSymbol]) tp
+      else elementExtract(ByNameParamClass, tp) orElse tp
+    }
     def dropRepeated(tp: Type): Type = (
       if (isJavaRepeatedParamType(tp)) elementExtract(JavaRepeatedParamClass, tp) orElse tp
       else if (isScalaRepeatedParamType(tp)) elementExtract(RepeatedParamClass, tp) orElse tp

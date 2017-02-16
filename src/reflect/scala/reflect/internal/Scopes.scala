@@ -121,6 +121,10 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     /** enter a symbol
      */
     def enter[T <: Symbol](sym: T): T = {
+      if (sym.name.string_==("C"))
+        println("here")
+      if (sym.name.string_==("C$D"))
+        println("here")
       enterEntry(newScopeEntry(sym, this))
       sym
     }
