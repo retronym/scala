@@ -135,6 +135,10 @@ trait Erasure {
         apply(restpe)
       case ExistentialType(tparams, restpe) =>
         apply(restpe)
+      case MethodType(params1, MethodType(params2, restpe)) =>
+        val params2Clones = cloneSymbolsAndModify(params2, ErasureMap.this)
+        val substitutedResult = restpe.substSym(params2, params2Clones)
+        apply(MethodType(params1 ::: params2Clones, substitutedResult))
       case mt @ MethodType(params, restpe) =>
         MethodType(
           cloneSymbolsAndModify(params, ErasureMap.this),
@@ -223,6 +227,10 @@ trait Erasure {
         specialConstructorErasure(clazz, restpe)
       case ExistentialType(tparams, restpe) =>
         specialConstructorErasure(clazz, restpe)
+      case mt @ MethodType(params1, MethodType(params2, restpe)) =>
+        val params2Clones = cloneSymbolsAndModify(params2, specialScalaErasure(_))
+        val substitutedResult = restpe.substSym(params2, params2Clones)
+        specialConstructorErasure(clazz, MethodType(params1 ::: params2Clones, substitutedResult))
       case mt @ MethodType(params, restpe) =>
         MethodType(
           cloneSymbolsAndModify(params, specialScalaErasure),

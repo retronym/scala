@@ -559,34 +559,23 @@ abstract class UnCurry extends InfoTransform
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 
-        case dd @ DefDef(_, _, _, vparamss0, _, rhs0) =>
+        case dd @ DefDef(_, _, _, vparamss0, _, rhs) =>
           val ddSym = dd.symbol
-          val (newParamss, newRhs): (List[List[ValDef]], Tree) =
-            if (dependentParamTypeErasure isDependent dd)
-              dependentParamTypeErasure erase dd
-            else {
-              val vparamss1 = vparamss0 match {
-                case _ :: Nil => vparamss0
-                case _        => vparamss0.flatten :: Nil
-              }
-              (vparamss1, rhs0)
-            }
-
           // A no-arg method with ConstantType result type can safely be reduced to the corresponding Literal
           // (only pure methods are typed as ConstantType). We could also do this for methods with arguments,
           // after ensuring the arguments are not referenced.
           val literalRhsIfConst =
-            if (newParamss.head.isEmpty) { // We know newParamss.length == 1 from above
+            if (ddSym.firstParam == NoSymbol) {
               ddSym.info.resultType match {
-                case tp@ConstantType(value) => Literal(value) setType tp setPos newRhs.pos // inlining of gen.mkAttributedQualifier(tp)
-                case _ => newRhs
+                case tp@ConstantType(value) => Literal(value) setType tp setPos rhs.pos // inlining of gen.mkAttributedQualifier(tp)
+                case _ => rhs
               }
-            } else newRhs
+            } else rhs
 
           val flatdd = copyDefDef(dd)(
-            vparamss = newParamss,
+            vparamss = vparamss0,
             rhs = nonLocalReturnKeys get ddSym match {
-              case Some(k) => atPos(newRhs.pos)(nonLocalReturnTry(literalRhsIfConst, k, ddSym))
+              case Some(k) => atPos(rhs.pos)(nonLocalReturnTry(literalRhsIfConst, k, ddSym))
               case None    => literalRhsIfConst
             }
           )
@@ -602,9 +591,6 @@ abstract class UnCurry extends InfoTransform
           if (tree.catches exists (cd => !treeInfo.isCatchCase(cd)))
             devWarning("VPM BUG - illegal try/catch " + tree.catches)
           tree
-
-        case Apply(Apply(fn, args), args1) =>
-          treeCopy.Apply(tree, fn, args ::: args1)
 
         case Ident(name) =>
           assert(name != tpnme.WILDCARD_STAR, tree)
