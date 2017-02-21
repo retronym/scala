@@ -559,34 +559,23 @@ abstract class UnCurry extends InfoTransform
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 
-        case dd @ DefDef(_, _, _, vparamss0, _, rhs0) =>
+        case dd @ DefDef(_, _, _, vparamss0, _, rhs) =>
           val ddSym = dd.symbol
-          val (newParamss, newRhs): (List[List[ValDef]], Tree) =
-            if (dependentParamTypeErasure isDependent dd)
-              dependentParamTypeErasure erase dd
-            else {
-              val vparamss1 = vparamss0 match {
-                case _ :: Nil => vparamss0
-                case _        => vparamss0.flatten :: Nil
-              }
-              (vparamss1, rhs0)
-            }
-
           // A no-arg method with ConstantType result type can safely be reduced to the corresponding Literal
           // (only pure methods are typed as ConstantType). We could also do this for methods with arguments,
           // after ensuring the arguments are not referenced.
           val literalRhsIfConst =
-            if (newParamss.head.isEmpty) { // We know newParamss.length == 1 from above
+            if (ddSym.firstParam == NoSymbol) {
               ddSym.info.resultType match {
-                case tp@ConstantType(value) => Literal(value) setType tp setPos newRhs.pos // inlining of gen.mkAttributedQualifier(tp)
-                case _ => newRhs
+                case tp@ConstantType(value) => Literal(value) setType tp setPos rhs.pos // inlining of gen.mkAttributedQualifier(tp)
+                case _ => rhs
               }
-            } else newRhs
+            } else rhs
 
           val flatdd = copyDefDef(dd)(
-            vparamss = newParamss,
+            vparamss = if (vparamss0.isEmpty) ListOfNil else vparamss0,
             rhs = nonLocalReturnKeys get ddSym match {
-              case Some(k) => atPos(newRhs.pos)(nonLocalReturnTry(literalRhsIfConst, k, ddSym))
+              case Some(k) => atPos(rhs.pos)(nonLocalReturnTry(literalRhsIfConst, k, ddSym))
               case None    => literalRhsIfConst
             }
           )
@@ -604,6 +593,8 @@ abstract class UnCurry extends InfoTransform
           tree
 
         case Apply(Apply(fn, args), args1) =>
+          // TODO get rid of this case
+          // (but first we need to adapt this phase further to avoid double application of nullary methods.)
           treeCopy.Apply(tree, fn, args ::: args1)
 
         case Ident(name) =>
@@ -618,135 +609,6 @@ abstract class UnCurry extends InfoTransform
           tree
         case _ =>
           if (tree.isType) TypeTree(tree.tpe) setPos tree.pos else tree
-      }
-    }
-
-    /**
-     * When we concatenate parameter lists, formal parameter types that were dependent
-     * on prior parameter values will no longer be correctly scoped.
-     *
-     * For example:
-     *
-     * {{{
-     *   def foo(a: A)(b: a.B): a.type = {b; b}
-     *   // after uncurry
-     *   def foo(a: A, b: a/* NOT IN SCOPE! */.B): a.B = {b; b}
-     * }}}
-     *
-     * This violates the principle that each compiler phase should produce trees that
-     * can be retyped (see [[scala.tools.nsc.typechecker.TreeCheckers]]), and causes
-     * a practical problem in `erasure`: it is not able to correctly determine if
-     * such a signature overrides a corresponding signature in a parent. (SI-6443).
-     *
-     * This transformation erases the dependent method types by:
-     *   - Widening the formal parameter type to existentially abstract
-     *     over the prior parameters (using `packSymbols`). This transformation
-     *     is performed in the `InfoTransform`er [[scala.reflect.internal.transform.UnCurry]].
-     *   - Inserting casts in the method body to cast to the original,
-     *     precise type.
-     *
-     * For the example above, this results in:
-     *
-     * {{{
-     *   def foo(a: A, b: a.B forSome { val a: A }): a.B = { val b$1 = b.asInstanceOf[a.B]; b$1; b$1 }
-     * }}}
-     */
-    private object dependentParamTypeErasure {
-      sealed abstract class ParamTransform {
-        def param: ValDef
-      }
-      final case class Identity(param: ValDef) extends ParamTransform
-      final case class Packed(param: ValDef, tempVal: ValDef) extends ParamTransform
-
-      def isDependent(dd: DefDef): Boolean =
-        enteringUncurry {
-          val methType = dd.symbol.info
-          methType.isDependentMethodType && mexists(methType.paramss)(_.info exists (_.isImmediatelyDependent))
-        }
-
-      /**
-       * @return (newVparamss, newRhs)
-       */
-      def erase(dd: DefDef): (List[List[ValDef]], Tree) = {
-        import dd.{ vparamss, rhs }
-        val paramTransforms: List[ParamTransform] =
-          map2(vparamss.flatten, dd.symbol.info.paramss.flatten) { (p, infoParam) =>
-            val packedType = infoParam.info
-            if (packedType =:= p.symbol.info) Identity(p)
-            else {
-              // The Uncurry info transformer existentially abstracted over value parameters
-              // from the previous parameter lists.
-
-              // Change the type of the param symbol
-              p.symbol updateInfo packedType
-
-              // Create a new param tree
-              val newParam: ValDef = copyValDef(p)(tpt = TypeTree(packedType))
-
-              // Within the method body, we'll cast the parameter to the originally
-              // declared type and assign this to a synthetic val. Later, we'll patch
-              // the method body to refer to this, rather than the parameter.
-              val tempVal: ValDef = {
-                // SI-9442: using the "uncurry-erased" type (the one after the uncurry phase) can lead to incorrect
-                // tree transformations. For example, compiling:
-                // ```
-                //   def foo(c: Ctx)(l: c.Tree): Unit = {
-                //     val l2: c.Tree = l
-                //   }
-                // ```
-                // Results in the following AST:
-                // ```
-                //   def foo(c: Ctx, l: Ctx#Tree): Unit = {
-                //     val l$1: Ctx#Tree = l.asInstanceOf[Ctx#Tree]
-                //     val l2: c.Tree = l$1 // no, not really, it's not.
-                //   }
-                // ```
-                // Of course, this is incorrect, since `l$1` has type `Ctx#Tree`, which is not a subtype of `c.Tree`.
-                //
-                // So what we need to do is to use the pre-uncurry type when creating `l$1`, which is `c.Tree` and is
-                // correct. Now, there are two additional problems:
-                // 1. when varargs and byname params are involved, the uncurry transformation desugars these special
-                //    cases to actual typerefs, eg:
-                //    ```
-                //           T*  ~> Seq[T] (Scala-defined varargs)
-                //           T*  ~> Array[T] (Java-defined varargs)
-                //           =>T ~> Function0[T] (by name params)
-                //    ```
-                //    we use the DesugaredParameterType object (defined in scala.reflect.internal.transform.UnCurry)
-                //    to redo this desugaring manually here
-                // 2. the type needs to be normalized, since `gen.mkCast` checks this (no HK here, just aliases have
-                //    to be expanded before handing the type to `gen.mkAttributedCast`, which calls `gen.mkCast`)
-                val info0 =
-                  enteringUncurry(p.symbol.info) match {
-                    case DesugaredParameterType(desugaredTpe) =>
-                      desugaredTpe
-                    case tpe =>
-                      tpe
-                  }
-                val info = info0.normalize
-                val tempValName = unit freshTermName (p.name + "$")
-                val newSym = dd.symbol.newTermSymbol(tempValName, p.pos, SYNTHETIC).setInfo(info)
-                atPos(p.pos)(ValDef(newSym, gen.mkAttributedCast(Ident(p.symbol), info)))
-              }
-              Packed(newParam, tempVal)
-            }
-          }
-
-        val allParams = paramTransforms map (_.param)
-        val (packedParams, tempVals) = paramTransforms.collect {
-          case Packed(param, tempVal) => (param, tempVal)
-        }.unzip
-
-        val rhs1 = if (rhs == EmptyTree || tempVals.isEmpty) rhs else {
-          localTyper.typedPos(rhs.pos) {
-            // Patch the method body to refer to the temp vals
-            val rhsSubstituted = rhs.substituteSymbols(packedParams map (_.symbol), tempVals map (_.symbol))
-            // The new method body: { val p$1 = p.asInstanceOf[<dependent type>]; ...; <rhsSubstituted> }
-            Block(tempVals, rhsSubstituted)
-          }
-        }
-
-        (allParams :: Nil, rhs1)
       }
     }
 

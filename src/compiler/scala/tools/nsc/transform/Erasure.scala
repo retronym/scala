@@ -1116,6 +1116,9 @@ abstract class Erasure extends InfoTransform
       }
 
       def preErase(tree: Tree): Tree = tree match {
+        case Apply(Apply(fn, args), args1) =>
+          preErase(treeCopy.Apply(tree, fn, args ::: args1))
+
         case tree: Apply =>
           preEraseApply(tree)
 
@@ -1179,8 +1182,8 @@ abstract class Erasure extends InfoTransform
         case ClassDef(_,_,_,_) =>
           debuglog("defs of " + tree.symbol + " = " + tree.symbol.info.decls)
           copyClassDef(tree)(tparams = Nil)
-        case DefDef(_,_,_,_,_,_) =>
-          copyDefDef(tree)(tparams = Nil)
+        case dd @ DefDef(_,_,_,_,_,_) =>
+          copyDefDef(tree)(tparams = Nil, vparamss = dd.vparamss.flatten :: Nil)
         case TypeDef(_, _, _, _) =>
           EmptyTree
 
