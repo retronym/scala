@@ -4282,7 +4282,7 @@ trait Types
         tp2 match {
           case mt2 @ MethodType(params2, res2) =>
             // sameLength(params1, params2) was used directly as pre-screening optimization (now done by matchesQuantified -- is that ok, performance-wise?)
-            mt1.isImplicit == mt2.isImplicit &&
+            (mt1.isImplicit == mt2.isImplicit || phase.erasedTypes) &&
             matchingParams(params1, params2, mt1.isJava, mt2.isJava) &&
             matchesQuantified(params1, params2, res1, res2)
           case NullaryMethodType(res2) =>
