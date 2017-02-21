@@ -4282,7 +4282,6 @@ trait Types
         tp2 match {
           case mt2 @ MethodType(params2, res2) =>
             // sameLength(params1, params2) was used directly as pre-screening optimization (now done by matchesQuantified -- is that ok, performance-wise?)
-            (mt1.isImplicit == mt2.isImplicit || phase.erasedTypes) &&
             matchingParams(params1, params2, mt1.isJava, mt2.isJava) &&
             matchesQuantified(params1, params2, res1, res2)
           case NullaryMethodType(res2) =>
@@ -4297,7 +4296,7 @@ trait Types
         }
       case mt1 @ NullaryMethodType(res1) =>
         tp2 match {
-          case mt2 @ MethodType(Nil, res2)  => // could never match if params nonEmpty, and !mt2.isImplicit is implied by empty param list
+          case mt2 @ MethodType(Nil, res2)  => // could never match if params nonEmpty
             matchesType(res1, res2, alwaysMatchSimple)
           case NullaryMethodType(res2) =>
             matchesType(res1, res2, alwaysMatchSimple)
@@ -4350,7 +4349,6 @@ trait Types
         params1.length == params2.length && // useful pre-screening optimization
         matchingParams(params1, params2, tp1.isInstanceOf[JavaMethodType], tp2.isInstanceOf[JavaMethodType]) &&
         matchesType(res1, res2, alwaysMatchSimple) &&
-        tp1.isImplicit == tp2.isImplicit
       case (PolyType(tparams1, res1), PolyType(tparams2, res2)) =>
         matchesQuantified(tparams1, tparams2, res1, res2)
       case (NullaryMethodType(rtp1), MethodType(List(), rtp2)) =>

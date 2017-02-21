@@ -420,8 +420,14 @@ abstract class RefChecks extends Transform {
             ((!isRootOrNone(ob) && ob.hasTransOwner(mb)) ||  // m relaxes o's access boundary
               other.isJavaDefined)                           // overriding a protected java member, see #3946
           }
+          val memberIsImplicit = isImplicitMethodType(member.info)
+          val otherIsImplicit = isImplicitMethodType(other.info)
           if (!isOverrideAccessOK) {
             overrideAccessError()
+          } else if (memberIsImplicit && !otherIsImplicit) {
+            overrideError("is declared implicit but overides a non-implicit method")
+          } else if (!memberIsImplicit && otherIsImplicit) {
+            overrideError("is not declared implicit but overides a implicit method")
           } else if (other.isClass) {
             overrideError("cannot be used here - class definitions cannot be overridden")
           } else if (!other.isDeferred && member.isClass) {

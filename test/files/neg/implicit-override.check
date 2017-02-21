@@ -1,13 +1,9 @@
-implicit-override.scala:7: error: name clash between defined and inherited member:
-def foo(i: Int): Unit in trait C and
-def foo(implicit i: Int): Unit at line 7
-have same type after erasure: (i: Int)Unit
+implicit-override.scala:7: error: overriding method foo in trait C of type (i: Int)Unit;
+ method foo is declared implicit but overides a non-implicit method
   def foo(implicit i: Int): Unit
       ^
-implicit-override.scala:8: error: name clash between defined and inherited member:
-def bar(implicit i: Int): Unit in trait C and
-def bar(i: Int): Unit at line 8
-have same type after erasure: (implicit i: Int)Unit
+implicit-override.scala:8: error: overriding method bar in trait C of type (implicit i: Int)Unit;
+ method bar is not declared implicit but overides a implicit method
   def bar(i: Int): Unit
       ^
 two errors found

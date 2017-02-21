@@ -1,0 +1,5 @@
+implicit-override-generic.scala:2: error: overriding method foo in class C of type (a: String)String;
+ method foo is declared implicit but overides a non-implicit method
+ class D extends C[String] { def foo(implicit s: String) = "d" }
+                                 ^
+one error found
