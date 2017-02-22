@@ -212,6 +212,8 @@ abstract class SymbolLoaders {
         val currentphase = phase
         doComplete(root)
         phase = currentphase
+        if (description.contains("SeqForwarder"))
+          println("here")
         informTime("loaded " + description, start)
         ok = true
         setSource(root)

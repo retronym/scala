@@ -17,9 +17,9 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
   import scala.language.implicitConversions
   import treeInfo.Applied
 
-  def contains(symbol: Symbol): Boolean = fastTrackCache().contains(symbol)
-  def apply(symbol: Symbol): FastTrackEntry = fastTrackCache().apply(symbol)
-  def get(symbol: Symbol): Option[FastTrackEntry] = fastTrackCache().get(symbol)
+  def contains(symbol: Symbol): Boolean = fastTrackFor(symbol) != null
+  def apply(symbol: Symbol): FastTrackEntry = { val result = fastTrackFor(symbol); if (result == null) throw new NoSuchElementException(symbol.defString) else result }
+  def get(symbol: Symbol): Option[FastTrackEntry] = Option(fastTrackFor(symbol))
 
   private implicit def context2taggers(c0: MacroContext): Taggers { val c: c0.type } =
     new { val c: c0.type = c0 } with Taggers
@@ -27,10 +27,10 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
     new { val c: c0.type = c0 } with FormatInterpolator
   private implicit def context2quasiquote(c0: MacroContext): QuasiquoteImpls { val c: c0.type } =
     new { val c: c0.type = c0 } with QuasiquoteImpls
-  private def makeBlackbox(sym: Symbol)(pf: PartialFunction[Applied, MacroContext => Tree]) =
-    sym -> new FastTrackEntry(pf, isBlackbox = true)
-  private def makeWhitebox(sym: Symbol)(pf: PartialFunction[Applied, MacroContext => Tree]) =
-    sym -> new FastTrackEntry(pf, isBlackbox = false)
+  private def makeBlackbox(owner: Symbol, name: Name)(pf: PartialFunction[Applied, MacroContext => Tree]) =
+    (owner, name, new FastTrackEntry(pf, isBlackbox = true))
+  private def makeWhitebox(owner: Symbol, name: Name)(pf: PartialFunction[Applied, MacroContext => Tree]) =
+    (owner, name, new FastTrackEntry(pf, isBlackbox = false))
 
   final class FastTrackEntry(pf: PartialFunction[Applied, MacroContext => Tree], val isBlackbox: Boolean) extends (MacroArgs => Any) {
     def validate(tree: Tree) = pf isDefinedAt Applied(tree)
@@ -41,19 +41,32 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
     }
   }
 
-  /** A map from a set of pre-established macro symbols to their implementations. */
-  private val fastTrackCache = perRunCaches.newGeneric[Map[Symbol, FastTrackEntry]] {
-    val runDefinitions = currentRun.runDefinitions
-    import runDefinitions._
-    Map[Symbol, FastTrackEntry](
-      makeBlackbox(        materializeClassTag) { case Applied(_, ttag :: Nil, _)                 => _.materializeClassTag(ttag.tpe) },
-      makeBlackbox(     materializeWeakTypeTag) { case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = false) },
-      makeBlackbox(         materializeTypeTag) { case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = true) },
-      makeBlackbox(           ApiUniverseReify) { case Applied(_, ttag :: Nil, (expr :: _) :: _)  => c => c.materializeExpr(c.prefix.tree, EmptyTree, expr) },
-      makeBlackbox(            StringContext_f) { case _                                          => _.interpolate },
-      makeBlackbox(ReflectRuntimeCurrentMirror) { case _                                          => c => currentMirror(c).tree },
-      makeWhitebox(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
-      makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
-    )
+  private[this] val materializeClassTagEntry = new FastTrackEntry({    case Applied(_, ttag :: Nil, _)                 => _.materializeClassTag(ttag.tpe) }, isBlackbox = true)
+  private[this] val materializeWeakTypeTagEntry = new FastTrackEntry({ case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = false) }, isBlackbox = true)
+  private[this] val materializeTypeTagEntry = new FastTrackEntry({     case Applied(_, ttag :: Nil, (u :: _) :: _)     => _.materializeTypeTag(u, EmptyTree, ttag.tpe, concrete = true) }, isBlackbox = true)
+  private[this] val reifyEntry = new FastTrackEntry({                  case Applied(_, ttag :: Nil, (expr :: _) :: _)  => c => c.materializeExpr(c.prefix.tree, EmptyTree, expr) }, isBlackbox = true)
+  private[this] val stringContextFEntry = new FastTrackEntry({         case _                                          => _.interpolate }, isBlackbox = true)
+  private[this] val currentMirrorEntry = new FastTrackEntry({          case _                                          => c => currentMirror(c).tree }, isBlackbox = true)
+  private[this] val quasiquoteApplyEntry = new FastTrackEntry({        case _                                          => _.expandQuasiquote }, isBlackbox = false)
+  private[this] val quasiquoteUnapplyEntry = new FastTrackEntry({      case _                                          => _.expandQuasiquote }, isBlackbox = false)
+
+  private def fastTrackFor(sym: Symbol): FastTrackEntry = {
+    if (!sym.hasTransOwner(ScalaPackageClass)) null
+    else {
+      val topLevelOwner = sym.enclosingTopLevelClass
+      val name = sym.name
+      if (topLevelOwner == ReflectPackage.moduleClass && name == nme.materializeClassTag) materializeClassTagEntry
+      else if (topLevelOwner == ReflectApiPackage.moduleClass && name == nme.materializeWeakTypeTag) materializeWeakTypeTagEntry
+      else if (topLevelOwner == ReflectApiPackage.moduleClass && name == nme.materializeTypeTag) materializeTypeTagEntry
+      else if (topLevelOwner == ApiUniverseClass && name == nme.reify) reifyEntry
+      else if (topLevelOwner == StringContextClass && name == nme.f) stringContextFEntry
+      else if (topLevelOwner == ReflectRuntimePackage.moduleClass && name == nme.currentMirror) currentMirrorEntry
+      else if (topLevelOwner == ApiUniverseClass && sym.owner.name == tpnme.Quasiquote) {
+        if (name == nme.apply) quasiquoteApplyEntry
+        else if (name == nme.unapply) quasiquoteApplyEntry
+        else null
+      }
+      else null
+    }
   }
 }
