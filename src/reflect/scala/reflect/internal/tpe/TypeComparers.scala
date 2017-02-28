@@ -350,10 +350,12 @@ trait TypeComparers {
 
   // @assume tp1.isHigherKinded || tp2.isHigherKinded
   def isHKSubType(tp1: Type, tp2: Type, depth: Depth): Boolean = {
-    def isSub(ntp1: Type, ntp2: Type) = (ntp1.withoutAnnotations, ntp2.withoutAnnotations) match {
-      case (TypeRef(_, AnyClass, _), _)                                     => false                    // avoid some warnings when Nothing/Any are on the other side
-      case (_, TypeRef(_, NothingClass, _))                                 => false
+    def isSub(ntp1: Type, ntp2: Type): Boolean = (ntp1.withoutAnnotations, ntp2.withoutAnnotations) match {
       case (pt1: PolyType, pt2: PolyType)                                   => isPolySubType(pt1, pt2)  // @assume both .isHigherKinded (both normalized to PolyType)
+      case (tp1 @ TypeRef(_, AnyClass, _), tp2 @ PolyType(tparams, result)) =>
+        isSub(PolyType(cloneSymbols(tparams), tp1), tp2)
+      case (PolyType(tparams, result), tp2 @ TypeRef(_, NothingClass, _))   =>
+        isSub(PolyType(cloneSymbols(tparams), tp1), tp2)
       case (_: PolyType, MethodType(ps, _)) if ps exists (_.tpe.isWildcard) => false                    // don't warn on HasMethodMatching on right hand side
       case _                                                                =>                          // @assume !(both .isHigherKinded) thus cannot be subtypes
         def tp_s(tp: Type): String = f"$tp%-20s ${util.shortClassOfInstance(tp)}%s"

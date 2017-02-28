@@ -1131,7 +1131,12 @@ trait Infer extends Checkable {
           log(s"cyclical bounds: discarding TypeBounds($lo1, $hi1) for $tparam because $tparam appears as bounds")
         else {
           enclCase pushTypeBounds tparam
-          tparam setInfo logResult(s"updated bounds: $tparam from ${tparam.info} to")(tb)
+          val tb1 = if (tparam.info.isHigherKinded) {
+            val tparams = cloneSymbols(tparam.info.typeParams)
+            def inst(tp: Type) = if (tp.isHigherKinded) tp.resultType.instantiateTypeParams(tp.typeParams, tparams.map(_.tpeHK)) else tp
+            PolyType(tparams, TypeBounds(inst(lo1), inst(hi1)))
+          } else tb
+          tparam setInfo logResult(s"updated bounds: $tparam from ${tparam.info} to")(tb1)
         }
       }
       else log(s"inconsistent bounds: discarding TypeBounds($lo1, $hi1)")
