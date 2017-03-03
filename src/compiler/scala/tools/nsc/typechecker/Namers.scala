@@ -662,31 +662,61 @@ trait Namers extends MethodSynthesis {
           // or recursive if it turned out we should unlink our synthetic method (matching sig).
           // In any case, error out. We don't unlink the symbol so that `symWasOverloaded` says yes,
           // which would be wrong if the method is in fact recursive, but it seems less confusing.
-          val scopePartiallyCompleted = new HasMember(ownerInfo, sym.name, BridgeFlags | SYNTHETIC, LOCKED).apply()
 
-          // Check `scopePartiallyCompleted` first to rule out locked symbols from the owner.info.member call,
-          // as FindMember will call info on a locked symbol (while checking type matching to assemble an overloaded type),
-          // and throw a TypeError, so that we are aborted.
-          // Do not consider deferred symbols, as suppressing our concrete implementation would be an error regardless
-          // of whether the signature matches (if it matches, we omitted a valid implementation, if it doesn't,
-          // we would get an error for the missing implementation it isn't implemented by some overload other than our synthetic one)
-          val suppress = scopePartiallyCompleted || {
-            // can't exclude deferred members using DEFERRED flag here (TODO: why?)
-            val userDefined = ownerInfo.memberBasedOnName(sym.name, BridgeFlags | SYNTHETIC)
+          val syntheticFirstParams = sym.info.params
 
-            (userDefined != NoSymbol) && {
-              assert(userDefined != sym)
-              val alts = userDefined.alternatives // could be just the one, if this member isn't overloaded
-              // don't compute any further `memberInfo`s if there's an error somewhere
-              alts.exists(_.isErroneous) || {
-                val self = companionContext.owner.thisType
-                val memberInfo = self.memberInfo(sym)
-                alts.exists(alt => !alt.isDeferred && (self.memberInfo(alt) matches memberInfo))
+          val prefix = companionContext.owner.thisType
+          val symMemberType = prefix.memberType(sym)
+
+          // A variant of `findMember` that seeks members that conflict with `sym`, and avoids forcing info of
+          // other same-named members.
+          object findMatching extends FindMemberBase[Unit](prefix, sym.name, BridgeFlags | SYNTHETIC | DEFERRED, 0L) {
+            var foundLocked = false
+            var foundMatching = false
+            var foundErroneous = false
+            override protected def result: Unit = ()
+
+            protected def shortCircuit(sym: Symbol): Boolean = foundLocked || foundMatching || foundErroneous
+
+            protected def addMemberIfNew(candidate: Symbol): Unit = {
+              val potentiallyMatches = candidate.rawInfo.isComplete || {
+                candidate.rawInfo match {
+                  case tc: TypeCompleter =>
+                    tc.tree match {
+                      case DefDef(_, _, _, Nil, _, _) if !syntheticFirstParams.isEmpty => false
+                      case DefDef(_, _, _, head :: _, _, _) if !sameLength(head, syntheticFirstParams) => false
+                      case mod: ModuleDef if !syntheticFirstParams.isEmpty => false
+                      case mod: ValDef if !syntheticFirstParams.isEmpty => false
+                      case _ => true
+                    }
+                  case _ => true
+                }
+              }
+              if (potentiallyMatches) {
+                if (candidate.hasFlag(LOCKED))
+                  foundLocked = true
+                else if (candidate.isErroneous) // time to force sym.info
+                  foundErroneous = true
+                else {
+                  val matches = symMemberType.matches(memberTypeHi(candidate))
+                  if (matches) {
+                    // Do not consider inherited deferred symbols, as suppressing our concrete implementation would be an error regardless
+                    // of whether the signature matches (if it matches, we omitted a valid implementation, if it doesn't,
+                    // we would get an error for the missing implementation it isn't implemented by some overload other than our synthetic one)
+                    if (sym.owner == candidate.owner || !candidate.isDeferred)
+                      foundMatching = true
+                  }
+                }
               }
             }
           }
 
-          if (suppress) {
+          // Do not consider deferred symbols, as suppressing our concrete implementation would be an error regardless
+          // of whether the signature matches (if it matches, we omitted a valid implementation, if it doesn't,
+          // we would get an error for the missing implementation it isn't implemented by some overload other than our synthetic one)
+          findMatching.apply()
+
+          if (findMatching.foundMatching || findMatching.foundErroneous || findMatching.foundLocked) {
             sym setInfo ErrorType
             sym setFlag IS_ERROR
 
@@ -698,7 +728,7 @@ trait Namers extends MethodSynthesis {
             // are in the complete for that symbol, and thus the locked symbol has not yet received enough info;
             // I hesitate to provide more info, because it would involve a WildCard or something for its result type,
             // which could upset other code paths)
-            if (!scopePartiallyCompleted)
+            if (!findMatching.foundLocked)
               companionContext.scope.unlink(sym)
           }
         }

@@ -13,7 +13,7 @@ trait FindMembers {
   this: SymbolTable =>
 
   /** Implementation of `Type#{findMember, findMembers}` */
-  private[internal] abstract class FindMemberBase[T](tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long) {
+  private[scala] abstract class FindMemberBase[T](tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long) {
     protected val initBaseClasses: List[Symbol] = tpe.baseClasses
 
     // The first base class, or the symbol of the ThisType
@@ -285,18 +285,4 @@ trait FindMembers {
       initBaseClasses.head.newOverloaded(tpe, members)
     }
   }
-
-  private[scala] final class HasMember(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long) extends FindMemberBase[Boolean](tpe, name, excludedFlags, requiredFlags) {
-    private[this] var _result = false
-    override protected def result: Boolean = _result
-
-    protected def shortCircuit(sym: Symbol): Boolean = {
-      _result = true
-      true // prevents call to addMemberIfNew
-    }
-
-    // Not used
-    protected def addMemberIfNew(sym: Symbol): Unit = {}
-  }
-
 }
