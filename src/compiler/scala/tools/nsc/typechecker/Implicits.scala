@@ -1130,7 +1130,7 @@ trait Implicits {
         case None =>
           val start = if (Statistics.canEnable) Statistics.startTimer(subtypeETNanos) else null
           //        val implicitInfoss = companionImplicits(pt)
-          val implicitInfoss1 = companionImplicitMap(pt).valuesIterator.toList
+          val implicitInfoss1 = companionImplicitMap(pt).valuesIterator.filterNot(_.isEmpty).toList
           //        val is1 = implicitInfoss.flatten.toSet
           //        val is2 = implicitInfoss1.flatten.toSet
           //        for (i <- is1)
