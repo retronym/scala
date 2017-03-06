@@ -55,9 +55,9 @@ class ListBenchmark {
     values.filter(v => v.value == last.value)
   }
 
-  @Setup(Level.Trial) def initKeys(): Unit = {
-    values = List.tabulate(size)(n => if (n == size / 2) "mid" else "")
-  }
+  // @Setup(Level.Trial) def initKeys(): Unit = {
+  //   values = List.tabulate(size)(n => if (n == size / 2) "mid" else "")
+  // }
 
   @Benchmark def mapConserve_identity: Any = {
     values.mapConserve(x => x)
