@@ -1,9 +1,9 @@
 package scala.tools.nsc.profile;
 
 import javax.management.ObjectName;
+import java.lang.management.ManagementFactory;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
-import java.lang.management.ManagementFactory;
 import java.lang.reflect.Method;
 
 @SuppressWarnings("unused")
@@ -286,7 +286,7 @@ class SunThreadMxBean extends ExtendedThreadMxBean {
     }
 
     public long getThreadAllocatedBytes(long l) throws Exception {
-        return (long) getThreadAllocatedBytesMethod1.invoke(real,l);
+        return (long) getThreadAllocatedBytesMethod1.invoke(real, l);
     }
 
     public long[] getThreadAllocatedBytes(long[] longs) throws Exception {
