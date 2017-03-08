@@ -151,7 +151,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     override def transformUnit(unit: CompilationUnit): Unit = {}
   }
 
-  override protected def xtransform(transformer: super.Transformer, tree: Tree): Tree = tree match {
+  override def xtransform(transformer: super.Transformer, tree: Tree): Tree = tree match {
     case DocDef(comment, definition) =>
       transformer.treeCopy.DocDef(tree, comment, transformer.transform(definition))
     case SelectFromArray(qualifier, selector, erasure) =>

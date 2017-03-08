@@ -1418,7 +1418,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     && originalClass(clazz).parentSymbols.exists(p => hasSpecializedParams(p) && !p.isTrait)
   )
 
-  def specializeCalls(unit: CompilationUnit) = new TypingTransformer(unit) {
+  def specializeCalls(unit: CompilationUnit) = new BaseTypingTransformer(unit) {
     /** Map a specializable method to its rhs, when not deferred. */
     val body = perRunCaches.newMap[Symbol, Tree]()
 

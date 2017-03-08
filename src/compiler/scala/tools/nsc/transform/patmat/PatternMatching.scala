@@ -54,7 +54,7 @@ trait PatternMatching extends Transform
 
   def newTransformer(unit: CompilationUnit): Transformer = new MatchTransformer(unit)
 
-  class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class MatchTransformer(unit: CompilationUnit) extends BaseTypingTransformer(unit) {
     override def transform(tree: Tree): Tree = tree match {
       case Match(sel, cases) =>
         val origTp = tree.tpe

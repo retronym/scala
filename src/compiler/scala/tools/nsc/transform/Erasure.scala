@@ -933,7 +933,7 @@ abstract class Erasure extends InfoTransform
      *   - Remove all instance creations new C(arg) where C is an inlined class.
      *   - Reset all other type attributes to null, thus enforcing a retyping.
      */
-    private val preTransformer = new TypingTransformer(unit) {
+    private val preTransformer = new BaseTypingTransformer(unit) {
 
       private def preEraseNormalApply(tree: Apply) = {
         val fn = tree.fun
