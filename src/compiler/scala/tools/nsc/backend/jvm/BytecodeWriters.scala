@@ -52,11 +52,11 @@ trait BytecodeWriters {
       (clsName.substring(0, index), clsName.substring(index + 1))
     } else ("", clsName)
     val directory = base.file.toPath.resolve(packageName)
-    try {
-      Files.createDirectories(directory)
-    } catch {
-      case _: FileAlreadyExistsException => throw new FileConflictException(s"${base.path}/$clsName$suffix: ${base.path} is not a directory", base)
-    }
+//    try {
+//      Files.createDirectories(directory)
+//    } catch {
+//      case _: FileAlreadyExistsException => throw new FileConflictException(s"${base.path}/$clsName$suffix: ${base.path} is not a directory", base)
+//    }
     new PlainNioFile(directory.resolve(simpleName + suffix))
   }
   def getFile(sym: Symbol, clsName: String, suffix: String): AbstractFile =
@@ -140,10 +140,20 @@ trait BytecodeWriters {
     def writeClass(label: String, jclassName: String, jclassBytes: Array[Byte], outfile: AbstractFile) {
       assert(outfile != null,
              "Precisely this override requires its invoker to hand out a non-null AbstractFile.")
-      val outstream = new DataOutputStream(outfile.bufferedOutput)
+      if (outfile.file != null) {
+        try {
+          Files.write(outfile.file.toPath, jclassBytes)
+        } catch {
+          case _: java.nio.file.NoSuchFileException =>
+            Files.createDirectories(outfile.file.toPath.getParent)
+            Files.write(outfile.file.toPath, jclassBytes)
+        }
+      } else {
+        val outstream = new DataOutputStream(outfile.bufferedOutput)
+        try outstream.write(jclassBytes, 0, jclassBytes.length)
+        finally outstream.close()
+      }
 
-      try outstream.write(jclassBytes, 0, jclassBytes.length)
-      finally outstream.close()
       informProgress("wrote '" + label + "' to " + outfile)
     }
   }
