@@ -1208,8 +1208,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       tpe
     } else tpe.resultType match {
       case cinfo @ ClassInfoType(parents, decls, clazz) if !unspecializableClass(cinfo) =>
-        if (isPast(ownPhase)) {
-          assert(!currentRun.compiles(sym), sym)
+        if (!currentRun.compiles(sym) && isPast(ownPhase)) {
           // Skip specialization info transform for third party classes that aren't referenced directly
           // from the tree or by the specialization info transform itself that are run up to the end of
           // the specialization phase.
