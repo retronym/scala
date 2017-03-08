@@ -50,6 +50,8 @@ private[hashing] class MurmurHash3 {
 
   /** Compute the hash of a product */
   final def productHash(x: Product, seed: Int): Int = {
+    // DUPLICATED to UniqueType.computeHashCode
+
     val arr = x.productArity
     // Case objects have the hashCode inlined directly into the
     // synthetic hashCode method, but this method should still give

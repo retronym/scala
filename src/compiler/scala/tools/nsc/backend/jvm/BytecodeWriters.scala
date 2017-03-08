@@ -6,10 +6,15 @@
 package scala.tools.nsc
 package backend.jvm
 
-import java.io.{ DataOutputStream, FileOutputStream, IOException, File => JFile }
+import java.io.{DataOutputStream, FileOutputStream, IOException, File => JFile}
+import java.nio.file.{FileAlreadyExistsException, Files}
+import java.nio.file.attribute.BasicFileAttributes
+
 import scala.tools.nsc.io._
 import java.util.jar.Attributes.Name
+
 import scala.language.postfixOps
+import scala.reflect.io.PlainNioFile
 
 /** Can't output a file due to the state of the file system. */
 class FileConflictException(msg: String, val file: AbstractFile) extends IOException(msg)
@@ -29,13 +34,30 @@ trait BytecodeWriters {
    * @param clsName cls.getName
    */
   def getFile(base: AbstractFile, clsName: String, suffix: String): AbstractFile = {
-    def ensureDirectory(dir: AbstractFile): AbstractFile =
-      if (dir.isDirectory) dir
-      else throw new FileConflictException(s"${base.path}/$clsName$suffix: ${dir.path} is not a directory", dir)
-    var dir = base
-    val pathParts = clsName.split("[./]").toList
-    for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
-    ensureDirectory(dir) fileNamed pathParts.last + suffix
+    if (base.file != null) {
+      fastGetFile(base, clsName, suffix)
+    } else {
+      def ensureDirectory(dir: AbstractFile): AbstractFile =
+        if (dir.isDirectory) dir
+        else throw new FileConflictException(s"${base.path}/$clsName$suffix: ${dir.path} is not a directory", dir)
+      var dir = base
+      val pathParts = clsName.split("[./]").toList
+      for (part <- pathParts.init) dir = ensureDirectory(dir) subdirectoryNamed part
+      ensureDirectory(dir) fileNamed pathParts.last + suffix
+    }
+  }
+  private def fastGetFile(base: AbstractFile, clsName: String, suffix: String) = {
+    val index = clsName.lastIndexOf('/')
+    val (packageName, simpleName) = if (index > 0) {
+      (clsName.substring(0, index), clsName.substring(index + 1))
+    } else ("", clsName)
+    val directory = base.file.toPath.resolve(packageName)
+    try {
+      Files.createDirectories(directory)
+    } catch {
+      case _: FileAlreadyExistsException => throw new FileConflictException(s"${base.path}/$clsName$suffix: ${base.path} is not a directory", base)
+    }
+    new PlainNioFile(directory.resolve(simpleName + suffix))
   }
   def getFile(sym: Symbol, clsName: String, suffix: String): AbstractFile =
     getFile(outputDirectory(sym), clsName, suffix)
