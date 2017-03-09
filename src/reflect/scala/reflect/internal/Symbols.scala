@@ -854,7 +854,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Conditions where we omit the prefix when printing a symbol, to avoid
      *  unpleasantries like Predef.String, $iw.$iw.Foo and <empty>.Bippy.
      */
-    final def isOmittablePrefix = /*!settings.debug.value &&*/ (
+    final def isOmittablePrefix = /*!settings.debug.value &&*/ isDefinitionsInitialized && (
+
          UnqualifiedOwners(skipPackageObject)
       || isEmptyPrefix
     )
@@ -3069,9 +3070,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (tpeCache eq NoType)
         throw CyclicReference(this, typeConstructor)
 
-      if (isInitialized)
+      if ( isInitialized)
         tpePeriod = currentPeriod
-
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
       tpeCache = newTypeRef(
