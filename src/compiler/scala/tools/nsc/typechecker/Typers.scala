@@ -627,7 +627,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def isGetClassCall = isGetClass(sym) && pre.typeSymbol.isPublic
 
       def narrowIf(tree: Tree, condition: Boolean) =
-        if (condition) tree setType singleType(pre, sym) else tree
+        if (condition) tree modifyType (tp => if (tp.isInstanceOf[ModuleTypeRef]) tp.narrow else singleType(pre, sym)) else tree
 
       def checkStable(tree: Tree): Tree =
         if (treeInfo.isStableIdentifierPattern(tree)) tree
