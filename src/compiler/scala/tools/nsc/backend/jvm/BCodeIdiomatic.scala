@@ -641,7 +641,7 @@ abstract class BCodeIdiomatic extends SubComponent {
    *
    */
   class LabelDefsFinder extends Traverser {
-    val result = mutable.Map.empty[Tree, List[LabelDef]]
+    val result = mutable.AnyRefMap.empty[Tree, List[LabelDef]]
     var acc: List[LabelDef] = Nil
 
     /*
