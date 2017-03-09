@@ -461,10 +461,10 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       locals.reset(isStaticMethod = methSymbol.isStaticMember)
       jumpDest = immutable.Map.empty[ /* LabelDef */ Symbol, asm.Label ]
       // populate labelDefsAtOrUnder
-      val ldf = new LabelDefsFinder
+      val ldf = new LabelDefsFinder(dd.rhs)
       ldf.traverse(dd.rhs)
       labelDefsAtOrUnder = ldf.result
-      labelDef = labelDefsAtOrUnder.getOrElse(dd.rhs, Nil).map(ld => (ld.symbol -> ld)).toMap
+      labelDef = ldf.directResult.map(ld => (ld.symbol -> ld)).toMap
       // check previous invocation of genDefDef exited as many varsInScope as it entered.
       assert(varsInScope == null, "Unbalanced entering/exiting of GenBCode's genBlock().")
       // check previous invocation of genDefDef unregistered as many cleanups as it registered.
