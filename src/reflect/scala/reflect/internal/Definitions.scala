@@ -108,7 +108,7 @@ trait Definitions extends api.StandardDefinitions {
     )
 
     /** Is symbol a numeric value class? */
-    def isNumericValueClass(sym: Symbol) = sym.rawowner == ScalaPackageClass && ScalaNumericValueClasses.contains(sym)
+    def isNumericValueClass(sym: Symbol) = sym.rawowner == ScalaPackageClass && containsRef(ScalaNumericValueClasses, sym)
 
     def isGetClass(sym: Symbol) = (
          sym.name == nme.getClass_ // this condition is for performance only, this is called from `Typer#stabilize`.
@@ -1397,7 +1397,7 @@ trait Definitions extends api.StandardDefinitions {
     private lazy val boxedValueClassesSet = boxedClass.values.toSet[Symbol] + BoxedUnitClass
 
     /** Is symbol a value class? */
-    def isPrimitiveValueClass(sym: Symbol) = sym.rawowner == ScalaPackageClass && ScalaValueClasses.contains(sym)
+    def isPrimitiveValueClass(sym: Symbol) = sym.rawowner == ScalaPackageClass && containsRef(ScalaValueClasses, sym)
     def isPrimitiveValueType(tp: Type)     = isPrimitiveValueClass(tp.typeSymbol)
 
     /** Is symbol a boxed value class, e.g. java.lang.Integer? */

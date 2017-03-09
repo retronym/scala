@@ -61,6 +61,16 @@ trait Collections {
     head
   }
 
+  def containsRef[A <: AnyRef](as: List[A], elem: A): Boolean = {
+    var as1 = as
+    while (!as1.isEmpty) {
+      val a = as1.head
+      if (a eq elem) return true
+      as1 = as1.tail
+    }
+    false
+  }
+
   final def sameElementsEquals(thiss: List[AnyRef], that: List[AnyRef]): Boolean = {
     // Probably immutable, so check reference identity first (it's quick anyway)
     (thiss eq that) || {
