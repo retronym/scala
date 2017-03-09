@@ -2389,6 +2389,7 @@ trait Types
       s"$lstr ${sym.decodedName} $rstr"
     }
     private def customToString = sym match {
+      case _ if !(isDefinitionsInitialized && sym.hasCompleteInfo) => ""
       case RepeatedParamClass | JavaRepeatedParamClass => args.head + "*"
       case ByNameParamClass   => "=> " + args.head
       case _                  =>
