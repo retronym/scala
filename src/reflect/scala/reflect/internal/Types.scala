@@ -3633,10 +3633,19 @@ trait Types
     case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.name == sym.name =>
       if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
         throw new RecoverableCyclicReference(sym)
-
-      TypeRef(pre, sym, args)
+      if (args eq Nil) {
+        val tp = sym.tpeHK
+        if (tp.prefix eq pre) tp // opt
+        else TypeRef(pre, sym, args)
+      }
+      else TypeRef(pre, sym, args)
     case _ =>
-      typeRef(pre, sym, args)
+      if (args eq Nil) {
+        val tp = sym.tpeHK
+        if (tp.prefix eq pre) tp // opt
+        else typeRef(pre, sym, args)
+      }
+      else typeRef(pre, sym, args)
   }
 
   /** The canonical creator for implicit method types */
