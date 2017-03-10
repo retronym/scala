@@ -48,7 +48,20 @@ trait TypingTransformers {
 
   abstract class BaseTypingTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
-    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
+    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = {
+      val prevOwner = currentOwner
+      currentOwner = owner
+
+      val savedLocalTyper = localTyper
+      localTyper = localTyper.atOwner(curTree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
+
+      val result = trans
+
+      localTyper = savedLocalTyper
+      currentOwner = prevOwner
+
+      result
+    }
 
     @inline override final def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
       val prevOwner = currentOwner
