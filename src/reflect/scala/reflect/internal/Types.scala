@@ -677,12 +677,16 @@ trait Types
         )
         if (trivial) this
         else {
-          val m     = new AsSeenFromMap(pre.normalize, clazz)
-          val tp    = m(this)
-          val tp1   = existentialAbstraction(m.capturedParams, tp)
+          if (pre.typeSymbolDirect.isStatic && pre.typeSymbolDirect.isModuleClass && pre.typeSymbolDirect == clazz)
+            this
+          else {
+            val m = new AsSeenFromMap(pre.normalize, clazz)
+            val tp = m(this)
+            val tp1 = existentialAbstraction(m.capturedParams, tp)
 
-          if (m.capturedSkolems.isEmpty) tp1
-          else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
+            if (m.capturedSkolems.isEmpty) tp1
+            else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
+          }
         }
       } finally if (Statistics.canEnable) Statistics.popTimer(typeOpsStack, start)
     }
