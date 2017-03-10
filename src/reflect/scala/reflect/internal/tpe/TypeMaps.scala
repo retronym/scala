@@ -678,7 +678,8 @@ private[internal] trait TypeMaps {
         else
           captureThis(pre1, clazz)
       }
-      loop(seenFromPrefix, seenFromClass)
+      if (tp.typeSymbolDirect.isStatic && seenFromPrefix.typeSymbolDirect.isStatic && tp =:= seenFromPrefix) tp // opt avoid rewriting ThisType to SingleType 
+      else loop(seenFromPrefix, seenFromClass)
     }
 
     private def singleTypeAsSeen(tp: SingleType): Type = {
