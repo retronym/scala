@@ -3639,16 +3639,18 @@ trait Types
       if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
         throw new RecoverableCyclicReference(sym)
       if (args eq Nil) {
-        val tp = sym.tpeHK
-        if (tp.prefix eq pre) tp // opt
-        else TypeRef(pre, sym, args)
+        sym.tpeHK match {
+          case tr @ TypeRef(pre1, sym1, _) if (pre1 eq pre) && (sym1 eq sym) => tr
+          case _ => TypeRef(pre, sym, args)
+        }
       }
       else TypeRef(pre, sym, args)
     case _ =>
       if (args eq Nil) {
-        val tp = sym.tpeHK
-        if (tp.prefix eq pre) tp // opt
-        else typeRef(pre, sym, args)
+        sym.tpeHK match {
+          case tr @ TypeRef(pre1, sym1, _) if (pre1 eq pre) && (sym1 eq sym) => tr
+          case _ => typeRef(pre, sym, args)
+        }
       }
       else typeRef(pre, sym, args)
   }
