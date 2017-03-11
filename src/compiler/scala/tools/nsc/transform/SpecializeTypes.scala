@@ -2006,7 +2006,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     map2(fun.info.paramTypes, vparams)((tp, arg) => gen.maybeMkAsInstanceOf(Ident(arg), tp, arg.tpe))
   )
 
-  class SpecializationTransformer(unit: CompilationUnit) extends Transformer {
+  class SpecializationTransformer(unit: CompilationUnit) extends BaseTransformer {
     informProgress("specializing " + unit)
     override def transform(tree: Tree) = {
       val resultTree = if (settings.nospecialization) tree

@@ -1723,7 +1723,7 @@ trait Trees extends api.Trees {
 
   //OPT ordered according to frequency to speed it up.
 
-  private def mclass(sym: Symbol) = sym map (_.asModule.moduleClass)
+  protected def mclass(sym: Symbol) = sym map (_.asModule.moduleClass)
 
   // --- specific traversers and transformers
 

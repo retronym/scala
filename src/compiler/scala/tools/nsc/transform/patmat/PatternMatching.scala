@@ -212,7 +212,7 @@ trait Interface extends ast.TreeDSL {
           case _          => false
         }
         val toSyms = to.map(_.symbol)
-        object substIdentsForTrees extends Transformer {
+        object substIdentsForTrees extends BaseTransformer {
           private def typedIfOrigTyped(to: Tree, origTp: Type): Tree =
             if (origTp == null || origTp == NoType) to
             // important: only type when actually substituting and when original tree was typed

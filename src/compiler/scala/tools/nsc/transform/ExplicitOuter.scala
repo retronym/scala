@@ -67,7 +67,7 @@ abstract class ExplicitOuter extends InfoTransform
     result
   }
 
-  class RemoveBindingsTransformer(toRemove: Set[Symbol]) extends Transformer {
+  class RemoveBindingsTransformer(toRemove: Set[Symbol]) extends BaseTransformer {
     override def transform(tree: Tree) = tree match {
       case Bind(_, body) if toRemove(tree.symbol) => super.transform(body)
       case _                                      => super.transform(tree)
