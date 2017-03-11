@@ -247,7 +247,7 @@ quant)
     }
   }
 
-  private var _enabled = false
+  private var _enabled = true
   private val qs = new mutable.HashMap[String, Quantity]
 
   /** replace with
@@ -256,7 +256,7 @@ quant)
    *
    *  to remove all Statistics code from build
    */
-  final val canEnable = _enabled
+  final val canEnable = true
 
   /** replace with
    *
