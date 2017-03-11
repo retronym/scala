@@ -174,7 +174,8 @@ class Flags extends ModifierFlags {
   final val SYNTHESIZE_IMPL_IN_SUBCLASS = 1L << 50 // used in fields phase to indicate this accessor should receive an implementation in a subclass
 
   // flags used strictly internally in the Fields phase (info/tree transform):
-  final val NEEDS_TREES   = 1L << 59           // this symbol needs a tree. (distinct from SYNTHESIZE_IMPL_IN_SUBCLASS)
+  final val NEEDS_TREES     = 1L << 59    // this symbol needs a tree. (distinct from SYNTHESIZE_IMPL_IN_SUBCLASS)
+  final val IS_MONOMORPHIC  = 1L << 60    // `Cooking` has been tried on this symbol
 
   // ------- shift definitions -------------------------------------------------------
   //
@@ -192,10 +193,10 @@ class Flags extends ModifierFlags {
   // Late and negative flags are only enabled after certain phases, implemented by the phaseNewFlags
   // method of the SubComponent, so they implement a bit of a flag history.
   //
-  // The flags (1L << 59) to (1L << 63) are currently unused. If added to the InitialFlags mask,
+  // The flags (1L << 59)  are currently unused. If added to the InitialFlags mask,
   // they could be used as normal flags.
 
-  final val InitialFlags  = 0x0007FFFFFFFFFFFFL // normal flags, enabled from the first phase: 1L to (1L << 50)
+  final val InitialFlags  = 0x1007FFFFFFFFFFFFL // normal flags, enabled from the first phase: 1L to (1L << 50)
   final val LateFlags     = 0x00F8000000000000L // flags that override flags in (1L << 4) to (1L << 8): DEFERRED, FINAL, INTERFACE, METHOD, MODULE
   final val AntiFlags     = 0x0700000000000000L // flags that cancel flags in 1L to (1L << 2): PROTECTED, OVERRIDE, PRIVATE
   final val LateShift     = 47
