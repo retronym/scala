@@ -247,7 +247,7 @@ quant)
     }
   }
 
-  private var _enabled = true
+  private var _enabled = false
   private val qs = new mutable.HashMap[String, Quantity]
 
   /** replace with
