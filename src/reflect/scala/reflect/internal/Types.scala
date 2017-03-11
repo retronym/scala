@@ -3836,7 +3836,7 @@ trait Types
     }
     val result = (uniques findEntryOrUpdate tp).asInstanceOf[T]
 
-    if (Statistics.canEnable && (result ne tp)) Statistics.incCounter(rawTypeNewEntries)
+    if (Statistics.canEnable && (result eq tp)) Statistics.incCounter(rawTypeNewEntries)
     result
   }
 
