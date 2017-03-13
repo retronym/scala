@@ -1430,7 +1430,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     class CollectMethodBodies extends Traverser {
       override def traverse(tree: Tree) = tree match {
         case DefDef(_, _, _, vparams :: Nil, _, rhs) =>
-          if (concreteSpecMethods(tree.symbol) || tree.symbol.isConstructor) {
+          if (concreteSpecMethods(tree.symbol)) {
             // debuglog("!!! adding body of a defdef %s, symbol %s: %s".format(tree, tree.symbol, rhs))
             body(tree.symbol) = rhs
             //          body(tree.symbol) = tree // whole method
@@ -1442,6 +1442,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           body(tree.symbol) = rhs
           // log("!!! adding body of a valdef " + tree.symbol + ": " + rhs)
           //super.traverse(tree)
+        case _: ImplDef =>
+          // don't go into nested classes/objects
         case _ =>
           super.traverse(tree)
       }
@@ -1644,7 +1646,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           def transformTemplate = {
           val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: (implSpecClasses(body) map localTyper.typed)
           if (!symbol.isPackageClass)
-            (new CollectMethodBodies)(tree)
+            (new CollectMethodBodies).traverseTrees(body)
           val parents1 = map2(currentOwner.info.parents, parents)((tpe, parent) =>
             TypeTree(tpe) setPos parent.pos)
 
