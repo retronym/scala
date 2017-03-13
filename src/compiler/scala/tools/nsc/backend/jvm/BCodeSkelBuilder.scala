@@ -127,14 +127,16 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
       val bType = classBTypeFromSymbol(claszSymbol)
       val superClass = bType.info.get.superClass.getOrElse(ObjectRef).internalName
-      val interfaceNames = bType.info.get.interfaces.map(_.internalName)
+      val interfaces = bType.info.get.interfaces
+      val interfaceNamesArray = new Array[String](interfaces.length)
+      val interfaceNames = interfaces.iterator.map(_.internalName).copyToArray(interfaceNamesArray) // opt
 
       val flags = javaFlags(claszSymbol)
 
       val thisSignature = getGenericSignature(claszSymbol, claszSymbol.owner)
       cnode.visit(classfileVersion, flags,
                   thisBType.internalName, thisSignature,
-                  superClass, interfaceNames.toArray)
+                  superClass, interfaceNamesArray)
 
       if (emitSource) {
         cnode.visitSource(cunit.source.toString, null /* SourceDebugExtension */)
