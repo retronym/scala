@@ -911,17 +911,25 @@ trait Types
      */
     def baseTypeIndex(sym: Symbol): Int = {
       val bts = baseTypeSeq
-      var lo = 0
-      var hi = bts.length - 1
-      while (lo <= hi) {
-        val mid = (lo + hi) / 2
-        val btssym = bts.typeSymbol(mid)
-        if (sym == btssym) return mid
-        else if (sym isLess btssym) hi = mid - 1
-        else if (btssym isLess sym) lo = mid + 1
-        else abort("sym is neither `sym == btssym`, `sym isLess btssym` nor `btssym isLess sym`")
+      var i = 0
+      val len = bts.length
+      while (i < len) {
+        if (bts.typeSymbol(i) eq sym) return i
+        i += 1
       }
       -1
+
+//      var lo = 0
+//      var hi = bts.length - 1
+//      while (lo <= hi) {
+//        val mid = (lo + hi) / 2
+//        val btssym = bts.typeSymbol(mid)
+//        if (sym == btssym) return mid
+//        else if (sym isLess btssym) hi = mid - 1
+//        else if (btssym isLess sym) lo = mid + 1
+//        else abort("sym is neither `sym == btssym`, `sym isLess btssym` nor `btssym isLess sym`")
+//      }
+//      -1
     }
 
     /** If this is a ExistentialType, PolyType or MethodType, a copy with cloned type / value parameters

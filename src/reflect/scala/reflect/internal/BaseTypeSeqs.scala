@@ -233,7 +233,6 @@ trait BaseTypeSeqs {
   class MappedBaseTypeSeq(orig: BaseTypeSeq, f: Type => Type) extends BaseTypeSeq(orig.parents map f, orig.elems) {
     override def apply(i: Int) = f(orig.apply(i))
     override def rawElem(i: Int) = f(orig.rawElem(i))
-    override def typeSymbol(i: Int) = orig.typeSymbol(i)
     override def toList = orig.toList map f
     override def copy(head: Type, offset: Int) = (orig map f).copy(head, offset)
     override def map(g: Type => Type) = lateMap(g)
