@@ -74,7 +74,7 @@ extends AbstractMap[A, B]
 
   override def getOrElseUpdate(key: A, defaultValue: => B): B = {
     val hash = elemHashCode(key)
-    val i = index(hash)
+    val i = indexInlined(hash)
     val entry = findEntry(key, i)
     if (entry != null) entry.value
     else {
@@ -82,11 +82,14 @@ extends AbstractMap[A, B]
       val default = defaultValue
       // Avoid recomputing index if the `defaultValue()` hasn't triggered
       // a table resize.
-      val newEntryIndex = if (table0 eq table) i else index(hash)
+      val newEntryIndex = if (table0 eq table) i else indexInlined(hash)
       addEntry(createNewEntry(key, default), newEntryIndex)
     }
   }
 
+
+  override protected def findEntry(key: A): Entry =
+    findEntry(key, indexInlined(elemHashCode(key)))
   /* inlined HashTable.findEntry0 to preserve its visibility */
   private[this] def findEntry(key: A, h: Int): Entry = {
     var e = table(h).asInstanceOf[Entry]
@@ -94,6 +97,7 @@ extends AbstractMap[A, B]
       e = e.next
     e
   }
+  override protected def elemHashCode(key: A) = key.##
   private[this] def notFound(key: A, e: Entry): Boolean = (e != null) && !elemEquals(e.key, key)
 
   /* inlined HashTable.addEntry0 to preserve its visibility */
@@ -109,6 +113,16 @@ extends AbstractMap[A, B]
     table(h) = e
     tableSize += 1
     nnSizeMapAdd(h)
+  }
+
+  private def indexInlined(hcode: Int): Int = {
+    val ones = table.length - 1
+    val exponent = Integer.numberOfLeadingZeros(ones)
+    (improveInlined(hcode, seedvalue) >>> exponent) & ones
+  }
+  private def improveInlined(hcode: Int, seed: Int): Int = {
+    import java.lang.Integer.rotateRight
+    rotateRight(scala.util.hashing.byteswap32(hcode), seed)
   }
 
   override def put(key: A, value: B): Option[B] = {
