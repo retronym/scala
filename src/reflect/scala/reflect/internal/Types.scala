@@ -27,6 +27,7 @@ import util.ThreeValues._
 import Variance._
 import Depth._
 import TypeConstants._
+import scala.util.hashing.MurmurHash3
 
 /* A standard type pattern match:
   case ErrorType =>
@@ -1080,7 +1081,26 @@ trait Types
    */
   abstract class UniqueType extends Type with Product {
     final override val hashCode = computeHashCode
-    protected def computeHashCode = scala.runtime.ScalaRunTime._hashCode(this)
+    // DUPLICATED from MurmurHash3.productHash to replace ## with hashCode
+    protected def computeHashCode: Int = {
+      val seed = MurmurHash3.productSeed
+      val arr = productArity
+      val result = if (arr == 0) {
+        productPrefix.hashCode
+      }
+      else {
+        var h = seed
+        var i = 0
+        while (i < arr) {
+          val elementHashCode = productElement(i).hashCode()
+          if (elementHashCode == PoisonHashCode) return PoisonHashCode
+          h = MurmurHash3.mix(h, productElement(i).hashCode())
+          i += 1
+        }
+        MurmurHash3.finalizeHash(h, arr)
+      }
+      avoidPoisonHashCode(result)
+    }
   }
 
  /** A base class for types that defer some operations
@@ -2102,19 +2122,21 @@ trait Types
     private var normalized: Type                       = _
 
     //OPT specialize hashCode
-    override final def computeHashCode = {
+    override final def computeHashCode: Int = {
       import scala.util.hashing.MurmurHash3._
       var h = productSeed
       h = mix(h, pre.hashCode)
       h = mix(h, sym.hashCode)
-      var length = 2
-      var elems = args
-      while (elems ne Nil) {
-        h = mix(h, elems.head.hashCode())
-        elems = elems.tail
-        length += 1
+      var i = 0
+      var elem = args
+      while (elem ne Nil) {
+        val elemHashCode = elem.head.hashCode()
+        if (elemHashCode == PoisonHashCode) return PoisonHashCode
+        h = mix(h, elemHashCode)
+        elem = elem.tail
+        i += 1
       }
-      finalizeHash(h, length)
+      avoidPoisonHashCode(finalizeHash(h, 2 + i))
     }
     //OPT specialize equals
     override final def equals(other: Any): Boolean = {
@@ -3005,6 +3027,8 @@ trait Types
     }
   }
 
+  final private val PoisonHashCode = Int.MinValue
+  final private def avoidPoisonHashCode(code: Int): Int = if (code == PoisonHashCode) code + 1 else code
   /** A class representing a type variable: not used after phase `typer`.
    *
    *  A higher-kinded TypeVar has params (Symbols) and typeArgs (Types).
@@ -3021,7 +3045,7 @@ trait Types
 
     // We don't want case class equality/hashing as TypeVar-s are mutable,
     // and TypeRefs based on them get wrongly `uniqued` otherwise. See scala/bug#7226.
-    override def hashCode(): Int = System.identityHashCode(this)
+    override def hashCode(): Int = PoisonHashCode
     override def equals(other: Any): Boolean = this eq other.asInstanceOf[AnyRef]
 
     def untouchable = false   // by other typevars
@@ -3820,7 +3844,7 @@ trait Types
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
-  protected def unique[T <: Type](tp: T): T =  {
+  protected def unique[T <: Type](tp: T): T = if (tp.hashCode() == PoisonHashCode) tp else{
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(rawTypeCount)
     if (uniqueRunId != currentRunId) {
       uniques = util.WeakHashSet[Type](initialUniquesCapacity)
