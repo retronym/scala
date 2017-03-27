@@ -73,9 +73,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     /** size and mask of hash tables
      */
     private val INIT_HASHSIZE = 0x80
-    private def HASHMASK = INIT_HASHSIZE * factor - 1
-    private def RESIZE_THRESHOLD = 1.5
     private var factor = 1
+    private var hashmask = INIT_HASHSIZE * factor - 1
+    private def RESIZE_THRESHOLD = 1.5
 
     /** the threshold number of entries from which a hashtable is constructed.
      */
@@ -119,7 +119,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     private def enterInHash(e: ScopeEntry): Unit = {
-      val i = e.sym.name.start & HASHMASK
+      val i = e.sym.name.start & hashmask
       e.tail = hashtable(i)
       hashtable(i) = e
       hashtableEntries += 1
@@ -128,6 +128,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     private def resize(currrentSize: Int): Unit = {
       assert(hashtable != null)
       factor *= 2
+      hashmask = INIT_HASHSIZE * factor - 1
       hashtable = new Array[ScopeEntry](INIT_HASHSIZE * factor)
       flushElemsCache()
       val buffer = new collection.mutable.ArrayBuffer[ScopeEntry](currrentSize)
@@ -186,7 +187,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     def rehash(sym: Symbol, newname: Name) {
       if (hashtable ne null) {
-        val index = sym.name.start & HASHMASK
+        val index = sym.name.start & hashmask
         var e1 = hashtable(index)
         var e: ScopeEntry = null
         if (e1 != null) {
@@ -202,7 +203,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
           }
         }
         if (e != null) {
-          val newindex = newname.start & HASHMASK
+          val newindex = newname.start & hashmask
           e.tail = hashtable(newindex)
           hashtable(newindex) = e
         }
@@ -220,7 +221,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         e1.next = e.next
       }
       if (hashtable ne null) {
-        val index = e.sym.name.start & HASHMASK
+        val index = e.sym.name.start & hashmask
         var e1 = hashtable(index)
         if (e1 == e) {
           hashtable(index) = e.tail
@@ -324,7 +325,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     def lookupEntry(name: Name): ScopeEntry = {
       var e: ScopeEntry = null
       if (hashtable ne null) {
-        e = hashtable(name.start & HASHMASK)
+        e = hashtable(name.start & hashmask)
         while ((e ne null) && e.sym.name != name) {
            e = e.tail
         }
