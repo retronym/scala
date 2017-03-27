@@ -190,7 +190,7 @@ abstract class SymbolTable extends macros.Universe
 
   final def phase_=(p: Phase) {
     //System.out.println("setting phase to " + p)
-    assert((p ne null) && p != NoPhase, p)
+    // assert((p ne null) && p != NoPhase, p)
     ph = p
     per = period(currentRunId, p.id)
   }
@@ -268,8 +268,8 @@ abstract class SymbolTable extends macros.Universe
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) infoTransformers.nextFrom(pid).pid >= phase.id
-      else infoTransformers.nextFrom(phase.id).pid >= pid
+      if (phase.id > pid) nextFrom(pid).pid >= phase.id
+      else nextFrom(phase.id).pid >= pid
     }
 
   final def isValidForBaseClasses(period: Period): Boolean = {
@@ -279,8 +279,8 @@ abstract class SymbolTable extends macros.Universe
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) noChangeInBaseClasses(infoTransformers.nextFrom(pid), phase.id)
-      else noChangeInBaseClasses(infoTransformers.nextFrom(phase.id), pid)
+      if (phase.id > pid) noChangeInBaseClasses(nextFrom(pid), phase.id)
+      else noChangeInBaseClasses(nextFrom(phase.id), pid)
     }
   }
 
@@ -411,6 +411,7 @@ abstract class SymbolTable extends macros.Universe
     val changesBaseClasses = true
     def transform(sym: Symbol, tpe: Type): Type = tpe
   }
+  var nextFrom: Array[InfoTransformer] = null
 
   /** The phase which has given index as identifier. */
   val phaseWithId: Array[Phase]
