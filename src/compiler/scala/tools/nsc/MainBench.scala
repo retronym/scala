@@ -14,7 +14,8 @@ object MainBench extends Driver with EvalLoop {
 
   lazy val theCompiler = Global(settings, reporter)
 
-  override def newCompiler() = theCompiler
+  private val resident = System.getProperty("scala.benchmark.resident", "true").toBoolean
+  override def newCompiler() = if (resident) theCompiler else Global(settings, reporter)
 
   val NIter = System.getProperty("scala.benchmark.iterations", "50").toInt
   val NBest = 10
