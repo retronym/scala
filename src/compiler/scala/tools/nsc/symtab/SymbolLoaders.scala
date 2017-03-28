@@ -310,7 +310,7 @@ abstract class SymbolLoaders {
     }
 
     protected def description = {
-      "class file "+ classfile.toString + " (" + classfile.sizeOption.map(_.toString).getOrElse("?") + " bytes)"
+      "class file "+ classfile.toString
     }
 
     protected def doComplete(root: Symbol) {
