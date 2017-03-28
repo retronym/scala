@@ -195,9 +195,11 @@ private[internal] trait TypeMaps {
       try body finally variance = saved
     }
     @inline final def flipped[T](body: => T): T = {
-      if (trackVariance) variance = variance.flip
-      try body
-      finally if (trackVariance) variance = variance.flip
+      if (trackVariance) {
+        variance = variance.flip
+        try body
+        finally variance = variance.flip
+      } else body
     }
     protected def mapOverArgs(args: List[Type], tparams: List[Symbol]): List[Type] = (
       if (trackVariance)

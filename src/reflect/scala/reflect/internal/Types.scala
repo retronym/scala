@@ -2016,7 +2016,22 @@ trait Types
   trait AliasTypeRef extends NonClassTypeRef {
     require(sym.isAliasType, sym)
 
-    override def dealias    = if (typeParamsMatchArgs) betaReduce.dealias else super.dealias
+    private def dealiasImpl    = {
+      if (typeParamsMatchArgs) betaReduce.dealias else super.dealias
+    }
+    private var dealiased: Type = null
+    // TODO: test case that is compiled in a specific order and in different runs
+    final override def dealias: Type = {
+      // arises when argument-dependent types are approximated (see def depoly in implicits)
+      if (pre eq WildcardType) WildcardType
+      else if (phase.erasedTypes) dealiasImpl
+      else {
+        if (dealiased eq null)
+          dealiased = dealiasImpl
+        dealiased
+      }
+    }
+
     override def narrow     = normalize.narrow
     override def prefix     = if (this ne normalize) normalize.prefix else pre
     override def termSymbol = if (this ne normalize) normalize.termSymbol else super.termSymbol
