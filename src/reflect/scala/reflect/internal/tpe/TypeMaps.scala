@@ -721,10 +721,11 @@ private[internal] trait TypeMaps {
       else if (matches(from.head, sym)) toType(tp, to.head)
       else subst(tp, sym, from.tail, to.tail)
       )
+    private val contains = (sym: Symbol) => containsRef(from, sym) // opt
 
     def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
       val boundSyms             = tp0.boundSyms
-      val tp1                   = if (!boundSyms.isEmpty && boundSyms.exists(sym => containsRef(from, sym))) renameBoundSyms(tp0) else tp0
+      val tp1                   = if (!boundSyms.isEmpty && boundSyms.exists(contains)) renameBoundSyms(tp0) else tp0
       val tp                    = mapOver(tp1)
       def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
