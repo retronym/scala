@@ -64,7 +64,7 @@ class InlinerHeuristics[BT <: BTypes](val bTypes: BT) {
     }).filterNot(_._2.isEmpty).toMap
   }
 
-  private def isTraitStaticSuperAccessorName(s: String) = s.endsWith("$")
+  private def isTraitStaticSuperAccessorName(s: String) = s != "$init$" && s.endsWith("$")
   private def traitStaticSuperAccessorName(s: String) = s + "$"
 
   private def isTraitSuperAccessor(method: MethodNode, owner: ClassBType): Boolean = {
