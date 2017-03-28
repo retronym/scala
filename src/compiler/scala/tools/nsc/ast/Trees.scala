@@ -294,7 +294,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(tree)
   }
 
-  object resetPos extends Traverser {
+  object resetPos extends InternalTraverser {
     override def traverse(t: Tree) {
       if (t != EmptyTree) t.setPos(NoPosition)
       super.traverse(t)

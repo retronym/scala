@@ -274,7 +274,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
     override protected def isEligible(t: Tree) = super.isEligible(t) && t.tpe != null
   }
 
-  trait PosAssigner extends Traverser {
+  trait PosAssigner extends InternalTraverser {
     var pos: Position
   }
   protected[this] lazy val posAssigner: PosAssigner = new DefaultPosAssigner

@@ -640,7 +640,7 @@ abstract class BCodeIdiomatic extends SubComponent {
    * The entry-value for a LabelDef entry-key always contains the entry-key.
    *
    */
-  class LabelDefsFinder(rhs: Tree) extends Traverser {
+  class LabelDefsFinder(rhs: Tree) extends InternalTraverser {
     val result = mutable.AnyRefMap.empty[Tree, List[LabelDef]]
     var acc: List[LabelDef] = Nil
     var directResult: List[LabelDef] = Nil
