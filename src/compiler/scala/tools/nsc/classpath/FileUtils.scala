@@ -30,9 +30,9 @@ object FileUtils {
   }
 
   implicit class FileOps(val file: JFile) extends AnyVal {
-    def isPackage: Boolean = file.isDirectory && mayBeValidPackage(file.getName)
+    def isPackage: Boolean = mayBeValidPackage(file.getName) && file.isDirectory
 
-    def isClass: Boolean = file.isFile && file.getName.endsWith(".class")
+    def isClass: Boolean = file.getName.endsWith(".class") && file.isFile
   }
 
   def stripSourceExtension(fileName: String): String = {
