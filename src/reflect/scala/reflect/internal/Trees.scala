@@ -1014,6 +1014,7 @@ trait Trees extends api.Trees {
     def hasAccessBoundary = privateWithin != tpnme.EMPTY
     def hasAllFlags(mask: Long): Boolean = (flags & mask) == mask
     def hasFlag(flag: Long) = (flag & flags) != 0L
+    def hasRawFlag(flag: Long) = hasFlag(flag)
 
     def & (flag: Long): Modifiers = {
       val flags1 = flags & flag

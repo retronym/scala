@@ -53,6 +53,7 @@ trait HasFlags {
   /** Whether this entity has ANY of the flags in the given mask.
    */
   def hasFlag(flag: Long): Boolean
+  def hasRawFlag(flag: Long): Boolean
 
   /** Whether this entity has ALL of the flags in the given mask.
    */
@@ -88,7 +89,7 @@ trait HasFlags {
   def hasLocalFlag          = hasFlag(LOCAL)
   def isLocalToThis         = hasFlag(LOCAL)
   def hasModuleFlag         = hasFlag(MODULE)
-  def hasPackageFlag        = hasFlag(PACKAGE)
+  def hasPackageFlag        = hasRawFlag(PACKAGE)
   def hasStableFlag         = hasFlag(STABLE)
   def hasStaticFlag         = hasFlag(STATIC)
   def isAbstractOverride    = hasFlag(ABSOVERRIDE)
@@ -100,7 +101,7 @@ trait HasFlags {
   def isArtifact            = hasFlag(ARTIFACT)
   def isImplicit            = hasFlag(IMPLICIT)
   def isInterface           = hasFlag(INTERFACE)
-  def isJavaDefined         = hasFlag(JAVA)
+  def isJavaDefined         = hasRawFlag(JAVA)
   def isLabel               = hasAllFlags(LABEL | METHOD) && !hasAccessorFlag
   def isLazy                = hasFlag(LAZY)
   def isLifted              = hasFlag(LIFTED)

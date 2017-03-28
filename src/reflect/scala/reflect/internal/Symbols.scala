@@ -728,6 +728,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (!isCompilerUniverse && !isThreadsafe(purpose = FlagOps(mask))) initialize
       (flags & mask) != 0
     }
+    /** Does symbol have ANY raw flag in `mask` set? */
+    final def hasRawFlag(mask: Long): Boolean = {
+      (rawflags & mask) != 0
+    }
     def hasFlag(mask: Int): Boolean = hasFlag(mask.toLong)
 
     /** Does symbol have ALL the flags in `mask` set? */
@@ -804,7 +808,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     final def isInitializedToDefault = !isType && hasAllFlags(DEFAULTINIT | ACCESSOR)
     final def isThisSym = isTerm && owner.thisSym == this
-    final def isError = hasFlag(IS_ERROR)
+    final def isError = hasRawFlag(IS_ERROR) // opt use raw flags, ERROR is never Late- or Anti-flagged
     final def isErroneous = isError || isInitialized && tpe_*.isErroneous
 
     def isHigherOrderTypeParameter = owner.isTypeParameterOrSkolem
@@ -1690,7 +1694,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def cookJavaRawInfo(): this.type = {
       // only try once...
-      if (phase.erasedTypes || (this hasFlag TRIEDCOOKING))
+      if (phase.erasedTypes || (this hasRawFlag TRIEDCOOKING))
         return this
 
       this setFlag TRIEDCOOKING
@@ -3070,7 +3074,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
 
-    private def newPrefix = if (this hasFlag EXISTENTIAL | PARAM) NoPrefix else owner.thisType
+    private def newPrefix = if (this hasRawFlag EXISTENTIAL | PARAM) NoPrefix else owner.thisType
     private def newTypeRef(targs: List[Type]) = newPrefix match {
       case NoPrefix => TypeRef(NoPrefix, this, targs) //opt
       case _        => typeRef(newPrefix, this, targs)
@@ -3240,7 +3244,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def isCaseClass               = this hasFlag CASE
     override def isClassLocalToConstructor = this hasFlag INCONSTRUCTOR
     override def isModuleClass             = this hasFlag MODULE
-    override def isPackageClass            = this hasFlag PACKAGE
+    override def isPackageClass            = this hasRawFlag PACKAGE // opt PACKAGE is never Late- or Anti-flagged
     override def isTrait                   = this hasFlag TRAIT
 
     override def isAnonOrRefinementClass = isAnonymousClass || isRefinementClass
