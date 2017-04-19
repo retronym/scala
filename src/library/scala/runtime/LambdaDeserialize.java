@@ -11,6 +11,7 @@ public final class LambdaDeserialize {
     private final HashMap<String, MethodHandle> cache = new HashMap<>();
     private final LambdaDeserializer$ l = LambdaDeserializer$.MODULE$;
     private final HashMap<String, MethodHandle> targetMethodMap;
+    /* non public*/ static final String NO_STACK_TRACE_DUMMY_KEY = null;
 
     private LambdaDeserialize(MethodHandles.Lookup lookup, MethodHandle[] targetMethods) {
         this.lookup = lookup;
@@ -29,7 +30,9 @@ public final class LambdaDeserialize {
     public static CallSite bootstrap(MethodHandles.Lookup lookup, String invokedName,
                                      MethodType invokedType, MethodHandle... targetMethods) throws Throwable {
         MethodHandle deserializeLambda = lookup.findVirtual(LambdaDeserialize.class, "deserializeLambda", DESERIALIZE_LAMBDA_MT);
-        MethodHandle exact = deserializeLambda.bindTo(new LambdaDeserialize(lookup, targetMethods)).asType(invokedType);
+        LambdaDeserialize lambdaDeserialize = new LambdaDeserialize(lookup, targetMethods);
+        if (invokedName.equals("lambdaDeserializeNoStackTrace")) lambdaDeserialize.targetMethodMap.put(NO_STACK_TRACE_DUMMY_KEY, null);
+        MethodHandle exact = deserializeLambda.bindTo(lambdaDeserialize).asType(invokedType);
         return new ConstantCallSite(exact);
     }
     public static String nameAndDescriptorKey(String name, String descriptor) {

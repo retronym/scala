@@ -103,12 +103,14 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
     val implMethodsArray = implMethods.toArray
 
     val mv = cw.visitMethod(ACC_PRIVATE + ACC_STATIC + ACC_SYNTHETIC, "$deserializeLambda$", serlamObjDesc, null, null)
-    def emitLambdaDeserializeIndy(targetMethods: Seq[Handle]) {
+    def emitLambdaDeserializeIndy(noStackHint: Boolean, targetMethods: Seq[Handle]) {
       mv.visitVarInsn(ALOAD, 0)
-      mv.visitInvokeDynamicInsn("lambdaDeserialize", serlamObjDesc, lambdaDeserializeBootstrapHandle, targetMethods: _*)
+      val invokedName = "lambdaDeserialize" + (if (noStackHint) "NoStackTrace" else "")
+      mv.visitInvokeDynamicInsn(invokedName, serlamObjDesc, lambdaDeserializeBootstrapHandle, targetMethods: _*)
     }
 
-    val targetMethodGroupLimit = 255 - 1 - 3 // JVM limit. See See MAX_MH_ARITY in CallSite.java
+    val numNonVarargParamsInBootstrapMethod = 3
+    val targetMethodGroupLimit = 255 - 1 - numNonVarargParamsInBootstrapMethod // JVM limit. See See MAX_MH_ARITY in CallSite.java
     val groups: Array[Array[Handle]] = implMethodsArray.grouped(targetMethodGroupLimit).toArray
     val numGroups = groups.length
 
@@ -122,7 +124,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
 
     for ((labels, i) <- labelss.iterator.zipWithIndex) {
       mv.visitLabel(labels(0))
-      emitLambdaDeserializeIndy(groups(i))
+      emitLambdaDeserializeIndy(noStackHint = true, groups(i))
       mv.visitLabel(labels(1))
       mv.visitInsn(ARETURN)
       mv.visitLabel(labels(2))
@@ -132,7 +134,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
       mv.visitJumpInsn(IFNULL, nextLabel(i))
     }
     mv.visitLabel(terminalLabel)
-    emitLambdaDeserializeIndy(groups(numGroups - 1))
+    emitLambdaDeserializeIndy(noStackHint = false, groups(numGroups - 1))
     mv.visitInsn(ARETURN)
   }
 

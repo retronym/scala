@@ -2,6 +2,8 @@ package scala.runtime
 
 import java.lang.invoke._
 
+import scala.util.control.NoStackTrace
+
 /**
  * This class is only intended to be called by synthetic `$deserializeLambda$` method that the Scala 2.12
  * compiler will add to classes hosting lambdas.
@@ -75,10 +77,17 @@ object LambdaDeserializer {
         if (targetMethodMap.containsKey(key)) {
           targetMethodMap.get(key)
         } else {
-          throw new IllegalArgumentException("Illegal lambda deserialization")
+          val suppressStackTrace = targetMethodMap.containsKey(LambdaDeserialize.NO_STACK_TRACE_DUMMY_KEY)
+          if (suppressStackTrace) {
+            // SI-10232 classes that host many lambdas use this exception in control flow in $deserializeLambda$.
+            // We omit the stack trace here for performance reasons.
+            throw new IllegalArgumentException("Illegal lambda deserialization") with NoStackTrace {}
+          } else {
+            throw new IllegalArgumentException("Illegal lambda deserialization")
+          }
         }
       } catch {
-        case e: ReflectiveOperationException => throw new IllegalArgumentException("Illegal lambda deserialization", e)
+        case e: ReflectiveOperationException => throw new IllegalArgumentException("Illegal lambda deserialization", e.getCause)
       }
 
       val flags: Int = LambdaMetafactory.FLAG_SERIALIZABLE | LambdaMetafactory.FLAG_MARKERS
