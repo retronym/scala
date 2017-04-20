@@ -74,7 +74,7 @@ object LambdaDeserializer {
       val implMethod: MethodHandle = if (targetMethodMap.containsKey(key)) {
         targetMethodMap.get(key)
       } else {
-        throw new IllegalArgumentException("Illegal lambda deserialization")
+        return null
       }
 
       val flags: Int = LambdaMetafactory.FLAG_SERIALIZABLE | LambdaMetafactory.FLAG_MARKERS
@@ -95,11 +95,14 @@ object LambdaDeserializer {
     }
 
     val factory: MethodHandle = if (cache == null) {
-      makeCallSite.getTarget
+      val callSite = makeCallSite
+      if (callSite == null) return null
+      callSite.getTarget
     } else cache.synchronized{
       cache.get(key) match {
         case null =>
           val callSite = makeCallSite
+          if (callSite == null) return null
           val temp = callSite.getTarget
           cache.put(key, temp)
           temp

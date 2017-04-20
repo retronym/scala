@@ -117,16 +117,28 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
     def nextLabel(i: Int) = if (i == numGroups - 2) terminalLabel else initialLabels(i + 1)
 
     for ((label, i) <- initialLabels.iterator.zipWithIndex) {
-      mv.visitTryCatchBlock(label, nextLabel(i), nextLabel(i), "java/lang/IllegalArgumentException")
-    }
-    for ((label, i) <- initialLabels.iterator.zipWithIndex) {
       mv.visitLabel(label)
       emitLambdaDeserializeIndy(groups(i))
+      mv.visitVarInsn(ASTORE, 1)
+      mv.visitVarInsn(ALOAD, 1)
+      mv.visitJumpInsn(IFNULL, nextLabel(i))
+      mv.visitVarInsn(ALOAD, 1)
       mv.visitInsn(ARETURN)
     }
     mv.visitLabel(terminalLabel)
     emitLambdaDeserializeIndy(groups(numGroups - 1))
+    mv.visitVarInsn(ASTORE, 1)
+    mv.visitVarInsn(ALOAD, 1)
+    val throwLabel = new Label
+    mv.visitJumpInsn(IFNULL, throwLabel)
+    mv.visitVarInsn(ALOAD, 1)
     mv.visitInsn(ARETURN)
+    mv.visitLabel(throwLabel)
+    mv.visitTypeInsn(NEW, "java/lang/IllegalArgumentException")
+    mv.visitInsn(DUP)
+    mv.visitLdcInsn("Illegal lambda deserialization")
+    mv.visitMethodInsn(INVOKESPECIAL, "java/lang/IllegalArgumentException", "<init>", "(Ljava/lang/String;)V", false)
+    mv.visitInsn(ATHROW)
   }
 
   /**
