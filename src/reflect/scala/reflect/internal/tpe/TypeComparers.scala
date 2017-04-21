@@ -180,7 +180,11 @@ trait TypeComparers {
     !settings.isScala211 || methodHigherOrderTypeParamsSameVariance(low, high) || low.variance.isInvariant
 
   def isSameType2(tp1: Type, tp2: Type): Boolean = {
-    def retry(lhs: Type, rhs: Type) = ((lhs ne tp1) || (rhs ne tp2)) && isSameType(lhs, rhs)
+    def retry(lhs: Type, rhs: Type) = ((lhs ne tp1) || (rhs ne tp2)) && {
+      def sameSyms(tp1: Type, tp2: Type) = tp1.typeSymbolDirect eq tp2.typeSymbolDirect
+      val skipRetry = lhs.isInstanceOf[PolyType] && rhs.isInstanceOf[PolyType] && sameSyms(tp1, lhs) && sameSyms(tp2, rhs)
+      !skipRetry && isSameType(lhs, rhs)
+    }
 
     /*  Here we highlight those unfortunate type-like constructs which
      *  are hidden bundles of mutable state, cruising the type system picking
@@ -360,10 +364,18 @@ trait TypeComparers {
         devWarning(s"HK subtype check on $tp1 and $tp2, but both don't normalize to polytypes:\n  tp1=${tp_s(ntp1)}\n  tp2=${tp_s(ntp2)}")
         false
     }
+    def isTrivialTypeRef(tp: Type) = tp match {
+      case TypeRef(pre, sym, Nil) if pre.isTrivial && !sym.isAliasType => true
+      case _ => false
+    }
 
     (    (tp1.typeSymbol eq NothingClass)       // @M Nothing is subtype of every well-kinded type
       || (tp2.typeSymbol eq AnyClass)           // @M Any is supertype of every well-kinded type (@PP: is it? What about continuations plugin?)
-      || isSub(tp1.normalize, tp2.normalize) && annotationsConform(tp1, tp2)  // @M! normalize reduces higher-kinded case to PolyType's
+      || (if (isTrivialTypeRef(tp1) && isTrivialTypeRef(tp2))
+            tp1.typeSymbolDirect.isNonBottomSubClass(tp2.typeSymbolDirect) // OPT faster than comparing eta-expanded types
+          else
+            isSub(tp1.normalize, tp2.normalize) && annotationsConform(tp1, tp2)  // @M! normalize reduces higher-kinded case to PolyType's
+         )
     )
   }
 

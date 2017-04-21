@@ -3067,7 +3067,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def tpeHK: Type = typeConstructor
 
     private def tyconCacheNeedsUpdate = (tyconCache eq null) || tyconRunId != currentRunId
-    private def setTyconCache(tycon: Type) {
+    private[Symbols] def setTyconCache(tycon: Type) {
       tyconCache = tycon
       tyconRunId = currentRunId
       assert(tyconCache ne null, this)
