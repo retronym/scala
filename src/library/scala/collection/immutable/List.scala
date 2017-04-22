@@ -424,6 +424,7 @@ sealed abstract class List[+A] extends AbstractSeq[A]
 @SerialVersionUID(0 - 8256821097970055419L)
 case object Nil extends List[Nothing] {
   override def isEmpty = true
+  override def nonEmpty: Boolean = false
   override def head: Nothing =
     throw new NoSuchElementException("head of empty list")
   override def tail: List[Nothing] =
@@ -447,6 +448,7 @@ case object Nil extends List[Nothing] {
 final case class ::[B](override val head: B, private[scala] var tl: List[B]) extends List[B] {
   override def tail : List[B] = tl
   override def isEmpty: Boolean = false
+  override def nonEmpty: Boolean = true
 }
 
 /** $factoryInfo
