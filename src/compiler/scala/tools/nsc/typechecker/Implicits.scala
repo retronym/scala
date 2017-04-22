@@ -565,7 +565,7 @@ trait Implicits {
                       as = as.tail
                     }
                   }
-                  ps.isEmpty && as.nonEmpty && {
+                  ps.isEmpty && !as.isEmpty && {
                     val lastArg = as.head
                     as.tail.isEmpty && loop(restpe, lastArg)
                   }

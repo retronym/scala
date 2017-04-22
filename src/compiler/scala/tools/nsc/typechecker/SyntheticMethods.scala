@@ -175,7 +175,7 @@ trait SyntheticMethods extends ast.TreeDSL {
       val tests     = if (clazz.isDerivedValueClass || clazz.isFinal && syntheticCanEqual) pairwise else pairwise :+ canEq
 
       thatTest(eqmeth) AND Block(
-        ValDef(otherSym, thatCast(eqmeth)),
+        ValDef(otherSym, thatCast(eqmeth)) :: Nil,
         AND(tests: _*)
       )
     }
