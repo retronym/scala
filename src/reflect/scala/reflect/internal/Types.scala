@@ -1185,6 +1185,13 @@ trait Types
       else super.safeToString
     override def narrow: Type = this
     override def kind = "ThisType"
+    override protected def computeHashCode: Int = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 1)
+    }
+
   }
 
   final class UniqueThisType(sym: Symbol) extends ThisType(sym) { }
@@ -1224,19 +1231,27 @@ trait Types
 
     // more precise conceptually, but causes cyclic errors:    (paramss exists (_ contains sym))
     override def isImmediatelyDependent = (sym ne NoSymbol) && (sym.owner.isMethod && sym.isValueParameter)
-/*
-    override def narrow: Type = {
-      if (phase.erasedTypes) this
-      else {
-        val thissym = refinedType(List(this), sym.owner, EmptyScope).typeSymbol
-        if (sym.owner != NoSymbol) {
-          //Console.println("narrowing module " + sym + thissym.owner);
-          thissym.typeOfThis = this
-        }
-        thissym.thisType
-      }
+
+    override protected def computeHashCode: Int = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, pre.hashCode)
+      h = mix(h, sym.hashCode)
+      finalizeHash(h, 2)
     }
-*/
+    /*
+        override def narrow: Type = {
+          if (phase.erasedTypes) this
+          else {
+            val thissym = refinedType(List(this), sym.owner, EmptyScope).typeSymbol
+            if (sym.owner != NoSymbol) {
+              //Console.println("narrowing module " + sym + thissym.owner);
+              thissym.typeOfThis = this
+            }
+            thissym.thisType
+          }
+        }
+    */
     override def narrow: Type = this
 
     override def termSymbol = sym
@@ -1324,6 +1339,14 @@ trait Types
       else "(%s, %s)" format (typeString(lo), typeString(hi))
     }
     override def kind = "TypeBoundsType"
+    override protected def computeHashCode: Int = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, lo.hashCode)
+      h = mix(h, hi.hashCode)
+      finalizeHash(h, 2)
+    }
+
   }
 
   final class UniqueTypeBounds(lo: Type, hi: Type) extends TypeBounds(lo, hi)

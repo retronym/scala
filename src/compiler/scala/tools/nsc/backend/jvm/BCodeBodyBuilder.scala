@@ -1353,7 +1353,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val (capturedParams, lambdaParams) = lambdaTarget.paramss.head.splitAt(lambdaTarget.paramss.head.length - arity)
 
       // OPT avoid .toArray
-      val argTypes = new Array[asm.Type](1 + capturedParams.length)
+      val argTypes = new Array[asm.Type](receiver.length + capturedParams.length)
       (receiver ::: capturedParams).iterator.map(sym => typeToBType(sym.info).toASMType).copyToArray(argTypes)
 
       val invokedType = asm.Type.getMethodDescriptor(asmType(functionalInterface), argTypes: _*)
