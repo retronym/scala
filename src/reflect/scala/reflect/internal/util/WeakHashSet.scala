@@ -120,11 +120,11 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
    */
   private[this] def resize() {
     val oldTable = table
-    table = new Array[Entry[A]](oldTable.size * 2)
+    table = new Array[Entry[A]](oldTable.length * 2)
     threshold = computeThreshold
 
     @tailrec
-    def tableLoop(oldBucket: Int): Unit = if (oldBucket < oldTable.size) {
+    def tableLoop(oldBucket: Int): Unit = if (oldBucket < oldTable.length) {
       @tailrec
       def linkedListLoop(entry: Entry[A]): Unit = entry match {
         case null => ()
