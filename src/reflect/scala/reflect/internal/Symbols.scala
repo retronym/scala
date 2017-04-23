@@ -1016,7 +1016,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
          (this hasFlag FINAL | PACKAGE)
       || isModuleOrModuleClass && (isTopLevel || !settings.overrideObjects)
       || isTerm && (isPrivate || isLocalToBlock || (hasAllFlags(notPRIVATE | METHOD) && !hasFlag(DEFERRED)))
-      || isClass && originalOwner.isTerm && children.isEmpty // we track known subclasses of term-owned classes, use that infer finality
+      || isClass && children.isEmpty && originalOwner.isTerm // we track known subclasses of term-owned classes, use that infer finality
     )
     /** Is this symbol effectively final or a concrete term member of sealed class whose children do not override it */
     final def isEffectivelyFinalOrNotOverridden: Boolean = isEffectivelyFinal || (isTerm && !isDeferred && isNotOverridden)
@@ -2521,7 +2521,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** If this is a sealed or local class, its known direct subclasses.
      *  Otherwise, the empty set.
      */
-    def children: Set[Symbol] = Set()
+    def children: Set[Symbol] = Set.empty
     final def sealedChildren: Set[Symbol] = if (!isSealed) Set.empty else children
 
     /** Recursively assemble all children of this symbol.
