@@ -1039,7 +1039,7 @@ trait Contexts { self: Analyzer =>
       }
 
       def lookupInScope(scope: Scope) =
-        (scope lookupUnshadowedEntries name filter (e => qualifies(e.sym))).toList
+        (scope lookupUnshadowedEntries name filter (e => qualifies(e.sym)))
 
       def newOverloaded(owner: Symbol, pre: Type, entries: List[ScopeEntry]) =
         logResult(s"overloaded symbol in $pre")(owner.newOverloaded(pre, entries map (_.sym)))
@@ -1049,7 +1049,7 @@ trait Contexts { self: Analyzer =>
       if (name == nme.CONSTRUCTOR) return {
         val enclClassSym = cx.enclClass.owner
         val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
-        val constructorSym = lookupInScope(scope) match {
+        val constructorSym = lookupInScope(scope).toList match {
           case Nil       => NoSymbol
           case hd :: Nil => hd.sym
           case entries   => newOverloaded(enclClassSym, cx.enclClass.prefix, entries)
@@ -1060,13 +1060,18 @@ trait Contexts { self: Analyzer =>
       // cx.scope eq null arises during FixInvalidSyms in Duplicators
       while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
         pre    = cx.enclClass.prefix
-        defSym = lookupInScope(cx.scope) match {
-          case Nil                  => searchPrefix
-          case entries @ (hd :: tl) =>
-            // we have a winner: record the symbol depth
-            symbolDepth = (cx.depth - cx.scope.nestingLevel) + hd.depth
-            if (tl.isEmpty) hd.sym
-            else newOverloaded(cx.owner, pre, entries)
+
+        // OPT avoid Iterator.toList for common cases of 0, 1 results.
+        val iterator = lookupInScope(cx.scope)
+        val defSym = if (!iterator.hasNext) NoSymbol
+        else {
+          val hd = iterator.next()
+          // we have a winner: record the symbol depth
+          symbolDepth = (cx.depth - cx.scope.nestingLevel) + hd.depth
+          if (!iterator.hasNext) hd.sym
+          else {
+            newOverloaded(cx.owner, pre, hd :: iterator.toList)
+          }
         }
         if (!defSym.exists)
           cx = cx.outer // push further outward
