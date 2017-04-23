@@ -2494,10 +2494,8 @@ trait Trees { self: Universe =>
 
     /** Traverses a list of trees with a given owner symbol. */
     def traverseStats(stats: List[Tree], exprOwner: Symbol) {
-      stats foreach (stat =>
-        if (exprOwner != currentOwner) atOwner(exprOwner)(traverse(stat))
-        else traverse(stat)
-      )
+      if (exprOwner != currentOwner) atOwner(exprOwner)(stats foreach traverse)
+      else stats foreach traverse
     }
 
     /** Performs a traversal with a given owner symbol. */
