@@ -813,7 +813,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     final def isInitializedToDefault = !isType && hasAllFlags(DEFAULTINIT | ACCESSOR)
     final def isThisSym = isTerm && owner.thisSym == this
-    final def isError = hasFlag(IS_ERROR)
+    final def isError = (rawflags & IS_ERROR) != 0 // OPT faster than hasFlag(IS_ERROR)
     final def isErroneous = isError || isInitialized && tpe_*.isErroneous
 
     def isHigherOrderTypeParameter = owner.isTypeParameterOrSkolem
