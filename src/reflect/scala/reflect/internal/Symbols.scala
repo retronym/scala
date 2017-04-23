@@ -9,10 +9,10 @@ package internal
 
 import scala.collection.immutable
 import scala.collection.mutable.ListBuffer
-import util.{ Statistics, shortClassOfInstance }
+import util.{Statistics, TriState, shortClassOfInstance}
 import Flags._
 import scala.annotation.tailrec
-import scala.reflect.io.{ AbstractFile, NoAbstractFile }
+import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import Variance._
 
 trait Symbols extends api.Symbols { self: SymbolTable =>
@@ -890,7 +890,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       isType && {
         val info = originalInfo
         (    (info eq null)
-          || (info.isComplete && !info.isHigherKinded)
+          || (if (info.isComplete) !info.isHigherKinded else info.isMonomorphicTypeCompleter == TriState.True)
         )
       }
 

@@ -7,13 +7,13 @@ package scala
 package reflect
 package internal
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import scala.ref.WeakReference
 import mutable.ListBuffer
 import Flags._
 import scala.util.control.ControlThrowable
 import scala.annotation.tailrec
-import util.Statistics
+import util.{Statistics, TriState}
 import util.ThreeValues._
 import Variance._
 import Depth._
@@ -269,6 +269,7 @@ trait Types
     /** Is this type higher-kinded, i.e., is it a type constructor @M */
     def isHigherKinded: Boolean = false
     def takesTypeArgs: Boolean = this.isHigherKinded
+    def isMonomorphicTypeCompleter: TriState = TriState.Unknown
 
     /** Does this type denote a stable reference (i.e. singleton type)? */
     final def isStable: Boolean = definitions isStable this

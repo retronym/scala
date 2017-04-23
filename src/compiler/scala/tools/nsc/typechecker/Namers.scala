@@ -10,7 +10,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable
 import symtab.Flags._
 import scala.language.postfixOps
-import scala.reflect.internal.util.ListOfNil
+import scala.reflect.internal.util.{ListOfNil, TriState}
 
 /** This trait declares methods to create symbols and to enter them into scopes.
  *
@@ -820,6 +820,7 @@ trait Namers extends MethodSynthesis {
 
     def monoTypeCompleter(tree: MemberDef) = new MonoTypeCompleter(tree)
     class MonoTypeCompleter(tree: MemberDef) extends TypeCompleterBase(tree) {
+      override def isMonomorphicTypeCompleter: TriState = TriState.True
       override def completeImpl(sym: Symbol): Unit = {
         // this early test is there to avoid infinite baseTypes when
         // adding setters and getters --> bug798
@@ -1951,6 +1952,7 @@ trait Namers extends MethodSynthesis {
     // @M. If `owner` is an abstract type member, `typeParams` are all NoSymbol (see comment in `completerOf`),
     // otherwise, the non-skolemized (external) type parameter symbols
     override val typeParams = tparams map (_.symbol)
+    override def isMonomorphicTypeCompleter: TriState = TriState.False
 
     /* The definition tree (poly ClassDef, poly DefDef or HK TypeDef) */
     override val tree = restp.tree
