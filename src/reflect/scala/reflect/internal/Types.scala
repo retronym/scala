@@ -902,7 +902,14 @@ trait Types
      *  @return    the index of given class symbol in the BaseTypeSeq of this type,
      *             or -1 if no base type with given class symbol exists.
      */
-    def baseTypeIndex(sym: Symbol): Int = baseTypeSeq.baseTypeIndex(sym)
+    def baseTypeIndex(sym: Symbol): Int = {
+      val result = baseTypeSeq.baseTypeIndex(sym)
+      Statistics.incCounter(BaseTypeSeqsStats.baseTypeIndexResult, if (result == -1) -baseTypeSeq.length else result)
+      if (result == -1 && sym == definitions.LongClass)
+        getClass
+
+      result
+    }
 
     /** If this is a ExistentialType, PolyType or MethodType, a copy with cloned type / value parameters
      *  owned by `owner`. Identity for all other types.

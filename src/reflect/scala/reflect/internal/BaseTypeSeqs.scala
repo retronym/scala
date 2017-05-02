@@ -44,6 +44,7 @@ trait BaseTypeSeqs {
   self =>
     if (Statistics.canEnable) Statistics.incCounter(baseTypeSeqCount)
     if (Statistics.canEnable) Statistics.incCounter(baseTypeSeqLenTotal, elems.length)
+    if (Statistics.canEnable) Statistics.incCounter(baseTypeSeqLengths, elems.length)
     private[this] val typeSymbols = {
       val tmp = new Array[Int](elems.length)
       var i = 0
@@ -268,4 +269,6 @@ trait BaseTypeSeqs {
 object BaseTypeSeqsStats {
   val baseTypeSeqCount = Statistics.newCounter("#base type seqs")
   val baseTypeSeqLenTotal = Statistics.newRelCounter("avg base type seq length", baseTypeSeqCount)
+  val baseTypeSeqLengths = Statistics.newQuantMap[Int, Statistics.Counter]("  baseTypeSeq length")(Statistics.newCounter(""))
+  val baseTypeIndexResult = Statistics.newQuantMap[Int, Statistics.Counter]("  baseTypeIndex result")(Statistics.newCounter(""))
 }
