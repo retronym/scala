@@ -550,7 +550,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     // Lock a symbol, using the handler if the recursion depth becomes too great.
-    private[scala] def lock(handler: => Unit): Boolean = {
+    private[scala] final def lock(handler: => Unit): Boolean = {
       if ((_rawflags & LOCKED) != 0L) {
         if (settings.Yrecursion.value != 0) {
           recursionTable get this match {
