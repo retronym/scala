@@ -120,13 +120,19 @@ extends AbstractMap[K, V]
   override def contains(key: K): Boolean = seekEntry(hashOf(key), key) >= 0
 
   override def get(key: K): Option[V] = {
-    val i = seekEntry(hashOf(key), key)
-    if (i < 0) None else Some(_values(i).asInstanceOf[V])
+    if (_size == 0) None
+    else {
+      val i = seekEntry(hashOf(key), key)
+      if (i < 0) None else Some(_values(i).asInstanceOf[V])
+    }
   }
 
   override def getOrElse[V1 >: V](key: K, default: => V1): V1 = {
-    val i = seekEntry(hashOf(key), key)
-    if (i < 0) default else _values(i).asInstanceOf[V]
+    if (_size == 0) default
+    else {
+      val i = seekEntry(hashOf(key), key)
+      if (i < 0) default else _values(i).asInstanceOf[V]
+    }
   }
 
   override def getOrElseUpdate(key: K, defaultValue: => V): V = {
@@ -165,8 +171,11 @@ extends AbstractMap[K, V]
    *  pairs that do exist, `apply` (i.e. `map(key)`) is equally fast.
    */
   def getOrNull(key: K): V = {
-    val i = seekEntry(hashOf(key), key)
-    (if (i < 0) null else _values(i)).asInstanceOf[V]
+    if (_size == 0) null.asInstanceOf[V]
+    else {
+      val i = seekEntry(hashOf(key), key)
+      (if (i < 0) null else _values(i)).asInstanceOf[V]
+    }
   }
 
   /** Retrieves the value associated with a key.
