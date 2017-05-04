@@ -6,11 +6,11 @@
 package scala.tools.nsc
 package typechecker
 
-import scala.reflect.internal.util.StringOps.{ countElementsAsString, countAsString }
+import scala.reflect.internal.util.StringOps.{countAsString, countElementsAsString}
 import scala.compat.Platform.EOL
 import scala.reflect.runtime.ReflectionUtils
 import scala.reflect.macros.runtime.AbortMacroException
-import scala.util.control.NonFatal
+import scala.util.control.{NoStackTrace, NonFatal}
 import scala.tools.nsc.util.stackTraceString
 import scala.reflect.io.NoAbstractFile
 import scala.reflect.internal.util.NoSourceFile
@@ -21,7 +21,7 @@ trait ContextErrors {
   import global._
   import definitions._
 
-  sealed abstract class AbsTypeError extends Throwable {
+  sealed abstract class AbsTypeError extends Throwable with NoStackTrace {
     def errPos: Position
     def errMsg: String
     override def toString() = "[Type error at:" + errPos + "] " + errMsg
