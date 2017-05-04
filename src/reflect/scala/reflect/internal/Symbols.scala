@@ -2654,8 +2654,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       id_s + owner_s
     }
 
-    override def hashCode: Int = id
-
     /** String representation, including symbol's kind e.g., "class Foo", "method Bar".
      *  If hasMeaninglessName is true, uses the owner's name to disambiguate identity.
      */
