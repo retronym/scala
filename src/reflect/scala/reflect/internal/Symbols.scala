@@ -1707,7 +1707,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isJavaDefined || isType && owner.isJavaDefined)
         this modifyInfo rawToExistential
       else if (isOverloaded)
-        alternatives withFilter (_.isJavaDefined) foreach (_ modifyInfo rawToExistential)
+        alternatives withFilter (sym => sym.isJavaDefined && sym.hasFlag(TRIEDCOOKING)) foreach (_.setFlag(TRIEDCOOKING).modifyInfo(rawToExistential))
 
       this
     }
