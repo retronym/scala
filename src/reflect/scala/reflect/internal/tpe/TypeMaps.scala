@@ -1043,7 +1043,7 @@ private[internal] trait TypeMaps {
   }
 
   /** A map to implement the `contains` method. */
-  class ContainsCollector(sym: Symbol) extends TypeCollector(false) {
+  class ContainsCollector(sym: Symbol, normalize: Boolean = true) extends TypeCollector(false) {
     def traverse(tp: Type) {
       if (!result) {
         tp match {
@@ -1055,7 +1055,8 @@ private[internal] trait TypeMaps {
             // normalize.
             mapOver(tp)
           case _ =>
-            tp.normalize match {
+            val tp1 = if (normalize) tp.normalize else tp
+            tp1 match {
               case TypeRef(_, sym1, _) if (sym == sym1) => result = true
               case refined: RefinedType =>
                 mapOver(tp.prefix)

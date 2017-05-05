@@ -4771,7 +4771,7 @@ trait Types
   }
 
   @tailrec private def typesContain(tps: List[Type], sym: Symbol): Boolean = tps match {
-    case tp :: rest => (tp contains sym) || typesContain(rest, sym)
+    case tp :: rest => new ContainsCollector(sym, normalize = false).collect(tp) || typesContain(rest, sym)
     case _ => false
   }
 
