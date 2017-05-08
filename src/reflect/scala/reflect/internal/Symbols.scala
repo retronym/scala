@@ -550,28 +550,31 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     // Lock a symbol, using the handler if the recursion depth becomes too great.
-    private[scala] def lock(handler: => Unit): Boolean = {
+    @inline private[scala] def lock(handler: => Unit): Boolean = {
       if ((_rawflags & LOCKED) != 0L) {
         if (settings.Yrecursion.value != 0) {
-          recursionTable get this match {
-            case Some(n) =>
-              if (n > settings.Yrecursion.value) {
-                handler
-                false
-              } else {
-                recursionTable += (this -> (n + 1))
-                true
-              }
-            case None =>
-              recursionTable += (this -> 1)
-              true
-          }
+          lockRecusive(handler)
         } else { handler; false }
       } else {
         _rawflags |= LOCKED
         true
 //        activeLocks += 1
 //        lockedSyms += this
+      }
+    }
+    private[scala] def lockRecusive(handler: => Unit): Boolean = {
+      recursionTable get this match {
+        case Some(n) =>
+          if (n > settings.Yrecursion.value) {
+            handler
+            false
+          } else {
+            recursionTable += (this -> (n + 1))
+            true
+          }
+        case None =>
+          recursionTable += (this -> 1)
+          true
       }
     }
 
@@ -1508,15 +1511,20 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def info: Type = try {
       var cnt = 0
+      val symtab: Symbols.this.type = Symbols.this
       while (validTo == NoPeriod) {
-        assert(infos ne null, this.name)
-        assert(infos.prev eq null, this.name)
+        def validate() {
+          assert(infos ne null, this.name)
+          assert(infos.prev eq null, this.name)
+        }
+        validate()
+
         val tp = infos.info
 
         if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
           lock {
-            setInfo(ErrorType)
-            throw CyclicReference(this, tp)
+            setInfo(symtab.ErrorType)
+            throw symtab.CyclicReference(this, tp)
           }
         } else {
           _rawflags |= LOCKED
@@ -1526,8 +1534,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         }
         val current = phase
         try {
-          assertCorrectThread()
-          phase = phaseOf(infos.validFrom)
+          symtab.assertCorrectThread()
+          phase = symtab.phaseOf(infos.validFrom)
           tp.complete(this)
         } finally {
           unlock()
@@ -1536,13 +1544,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         cnt += 1
         // allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        if (cnt == 3) abort(s"no progress in completing $this: $tp")
+        if (cnt == 3) symtab.abort(s"no progress in completing $this: $tp")
       }
       rawInfo
     }
     catch {
-      case ex: CyclicReference =>
-        devWarning("... hit cycle trying to complete " + this.fullLocationString)
+      case ex: symtab.CyclicReference =>
+        symtab..devWarning("... hit cycle trying to complete " + this.fullLocationString)
         throw ex
     }
 
@@ -3693,7 +3701,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
 
   /** A class for type histories */
-  private case class TypeHistory(var validFrom: Period, info: Type, prev: TypeHistory) {
+  private case class TypeHistory(final var validFrom: Period, info: Type, prev: TypeHistory) {
     assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
     assert(validFrom != NoPeriod, this)
 
