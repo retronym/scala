@@ -22,22 +22,34 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     override def isDef = definition.isDef
     override def isTerm = definition.isTerm
     override def isType = definition.isType
+    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
+      treeCopy.DocDef(this, comment, transformer.transform(definition))
   }
 
  /** Array selection `<qualifier> . <name>` only used during erasure */
   case class SelectFromArray(qualifier: Tree, name: Name, erasure: Type)
-       extends RefTree with TermTree
+       extends RefTree with TermTree {
+   override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
+     treeCopy.SelectFromArray(
+       this, transformer.transform(qualifier), name, erasure)
+ }
 
   /** Derived value class injection (equivalent to: `new C(arg)` after erasure); only used during erasure.
    *  The class `C` is stored as a tree attachment.
    */
   case class InjectDerivedValue(arg: Tree)
-       extends SymTree with TermTree
+       extends SymTree with TermTree {
+    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
+      treeCopy.InjectDerivedValue(this, transformer.transform(arg))
+  }
 
   class PostfixSelect(qual: Tree, name: Name) extends Select(qual, name)
 
   /** emitted by typer, eliminated by refchecks */
-  case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree
+  case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree {
+    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
+      treeCopy.TypeTreeWithDeferredRefCheck(this)
+  }
 
   // --- factory methods ----------------------------------------------------------
 
@@ -135,6 +147,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     }
   }
 
+  type InternalTransformer = super.Transformer
   class Transformer extends super.Transformer {
     def transformUnit(unit: CompilationUnit) {
       try unit.body = transform(unit.body)
@@ -149,19 +162,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   // used when a phase is disabled
   object noopTransformer extends Transformer {
     override def transformUnit(unit: CompilationUnit): Unit = {}
-  }
-
-  override protected def xtransform(transformer: super.Transformer, tree: Tree): Tree = tree match {
-    case DocDef(comment, definition) =>
-      transformer.treeCopy.DocDef(tree, comment, transformer.transform(definition))
-    case SelectFromArray(qualifier, selector, erasure) =>
-      transformer.treeCopy.SelectFromArray(
-        tree, transformer.transform(qualifier), selector, erasure)
-    case InjectDerivedValue(arg) =>
-      transformer.treeCopy.InjectDerivedValue(
-        tree, transformer.transform(arg))
-    case TypeTreeWithDeferredRefCheck() =>
-      transformer.treeCopy.TypeTreeWithDeferredRefCheck(tree)
   }
 
   object resetPos extends Traverser {

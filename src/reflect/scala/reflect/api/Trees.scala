@@ -174,6 +174,8 @@ trait Trees { self: Universe =>
      */
     def duplicate: this.type
 
+    def transform(treeCopy: TreeCopier, transformer: Transformer): Tree
+
     /** Obtains string representation of a tree */
     override def toString: String = treeToString(this)
   }
@@ -2552,7 +2554,7 @@ trait Trees { self: Universe =>
 //    protected def currentPackage = currentOwner.enclosingTopLevelClass.owner
 
     /** Transforms a single tree. */
-    def transform(tree: Tree): Tree = itransform(this, tree)
+    def transform(tree: Tree): Tree = tree.transform(treeCopy, this)
 
     /** Transforms a list of trees. */
     def transformTrees(trees: List[Tree]): List[Tree] =
