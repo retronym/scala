@@ -12,7 +12,11 @@ import scala.compat.Platform.EOL
 trait Trees extends scala.reflect.internal.Trees { self: Global =>
   // --- additional cases --------------------------------------------------------
   /** Only used during parsing */
-  case class Parens(args: List[Tree]) extends Tree
+  case class Parens(args: List[Tree]) extends Tree {
+    override def traverse(traverser: Traverser): Unit = {
+      traverser.traverseTrees(args)
+    }
+  }
 
   /** Documented definition, eliminated by analyzer */
   case class DocDef(comment: DocComment, definition: Tree)
@@ -24,6 +28,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     override def isType = definition.isType
     override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
       treeCopy.DocDef(this, comment, transformer.transform(definition))
+    override def traverse(traverser: Traverser): Unit = {
+      traverser.traverse(definition)
+    }
   }
 
  /** Array selection `<qualifier> . <name>` only used during erasure */
@@ -32,6 +39,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
      treeCopy.SelectFromArray(
        this, transformer.transform(qualifier), name, erasure)
+   override def traverse(traverser: Traverser): Unit = {
+     traverser.traverse(qualifier)
+   }
  }
 
   /** Derived value class injection (equivalent to: `new C(arg)` after erasure); only used during erasure.
@@ -41,6 +51,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
        extends SymTree with TermTree {
     override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
       treeCopy.InjectDerivedValue(this, transformer.transform(arg))
+    override def traverse(traverser: Traverser): Unit = {
+      traverser.traverse(arg)
+    }
   }
 
   class PostfixSelect(qual: Tree, name: Name) extends Select(qual, name)
@@ -49,6 +62,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree {
     override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
       treeCopy.TypeTreeWithDeferredRefCheck(this)
+    override def traverse(traverser: Traverser): Unit = {
+      // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
+    }
   }
 
   // --- factory methods ----------------------------------------------------------
@@ -87,20 +103,6 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   } with TreeInfo
 
   // --- additional cases in operations ----------------------------------
-
-  override protected def xtraverse(traverser: Traverser, tree: Tree): Unit = tree match {
-    case Parens(ts) =>
-      traverser.traverseTrees(ts)
-    case DocDef(comment, definition) =>
-      traverser.traverse(definition)
-    case SelectFromArray(qualifier, selector, erasure) =>
-      traverser.traverse(qualifier)
-    case InjectDerivedValue(arg) =>
-      traverser.traverse(arg)
-    case TypeTreeWithDeferredRefCheck() =>
-      // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
-    case _ => super.xtraverse(traverser, tree)
-  }
 
   trait TreeCopier extends super.InternalTreeCopierOps {
     def DocDef(tree: Tree, comment: DocComment, definition: Tree): DocDef
