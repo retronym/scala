@@ -651,16 +651,16 @@ private[internal] trait TypeMaps {
       else subst(tp, sym, from.tail, to.tail)
       )
 
+    private def fromContains(sym: Symbol): Boolean = {
+      // OPT Try cheap checks based on the range of symbol ids in from first.
+      //     Equivalent to `from.contains(sym)`
+      val symId = sym.id
+      val fromMightContainSym = symId >= fromMin && symId <= fromMax
+      fromMightContainSym && (
+        symId == fromMin || symId == fromMax || (fromSize > 2 && from.contains(sym))
+      )
+    }
     private def fromContains(syms: List[Symbol]): Boolean = {
-      def fromContains(sym: Symbol): Boolean = {
-        // OPT Try cheap checks based on the range of symbol ids in from first.
-        //     Equivalent to `from.contains(sym)`
-        val symId = sym.id
-        val fromMightContainSym = symId >= fromMin && symId <= fromMax
-        fromMightContainSym && (
-          symId == fromMin || symId == fromMax || (fromSize > 2 && from.contains(sym))
-        )
-      }
       var syms1 = syms
       while (syms1 ne Nil) {
         val sym = syms1.head
@@ -686,11 +686,11 @@ private[internal] trait TypeMaps {
         // we must replace the a in Iterable[a] by (a,b)
         // (must not recurse --> loops)
         // 3) replacing m by List in m[Int] should yield List[Int], not just List
-        case TypeRef(NoPrefix, sym, args) =>
+        case TypeRef(NoPrefix, sym, args) if fromContains(sym) =>
           val tcon = substFor(sym)
           if ((tp eq tcon) || args.isEmpty) tcon
           else appliedType(tcon.typeConstructor, args)
-        case SingleType(NoPrefix, sym) =>
+        case SingleType(NoPrefix, sym) if fromContains(sym) =>
           substFor(sym)
         case ClassInfoType(parents, decls, sym) =>
           def substClassInfo(): Type = {
