@@ -1549,8 +1549,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       rawInfo
     }
     catch {
-      case ex: symtab.CyclicReference =>
-        symtab.devWarning("... hit cycle trying to complete " + this.fullLocationString)
+      case ex: CyclicReference =>
+        devWarning("... hit cycle trying to complete " + this.fullLocationString)
         throw ex
     }
 
