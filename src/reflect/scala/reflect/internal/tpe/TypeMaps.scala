@@ -671,7 +671,7 @@ private[internal] trait TypeMaps {
     }
 
     def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
-      val tp                    = mapOver(renameBoundSyms(tp0))
+      val tp                    = renameBoundSyms(tp0).mapOver(this)
       def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
       tp match {
