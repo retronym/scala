@@ -9,7 +9,9 @@
 package scala
 package collection
 
-import immutable.{ List, Range }
+import java.util.stream.Collectors
+
+import immutable.{List, Range}
 import generic._
 import parallel.ParSeq
 import scala.math.Ordering
@@ -232,7 +234,13 @@ trait SeqLike[+A, +Repr] extends Any with IterableLike[A, Repr] with GenSeqLike[
       if (idx < 0)
         _hasNext = false
       else {
-        var sum = nums.slice(idx + 1, nums.length).sum + 1
+        // OPT: hand rolled version of `sum = nums.view(idx + 1, nums.length).sum + 1`
+        var sum = 1
+        var i = idx + 1
+        while (i < nums.length) {
+          sum += nums(i)
+          i += 1
+        }
         nums(idx) -= 1
         for (k <- (idx+1) until nums.length) {
           nums(k) = sum min cnts(k)
