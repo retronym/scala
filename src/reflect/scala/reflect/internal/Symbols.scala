@@ -1550,7 +1550,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     catch {
       case ex: symtab.CyclicReference =>
-        symtab..devWarning("... hit cycle trying to complete " + this.fullLocationString)
+        symtab.devWarning("... hit cycle trying to complete " + this.fullLocationString)
         throw ex
     }
 
