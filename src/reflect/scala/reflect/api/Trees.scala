@@ -174,6 +174,9 @@ trait Trees { self: Universe =>
      */
     def duplicate: this.type
 
+    def transform(treeCopy: TreeCopier, transformer: Transformer): Tree
+    def traverse(traverser: Traverser): Unit
+
     /** Obtains string representation of a tree */
     override def toString: String = treeToString(this)
   }
@@ -2472,7 +2475,7 @@ trait Trees { self: Universe =>
     def traverseModifiers(mods: Modifiers): Unit          = traverseAnnotations(mods.annotations)
 
     /** Traverses a single tree. */
-    def traverse(tree: Tree): Unit              = itraverse(this, tree)
+    def traverse(tree: Tree): Unit              = tree.traverse(this)
     def traversePattern(pat: Tree): Unit        = traverse(pat)
     def traverseGuard(guard: Tree): Unit        = traverse(guard)
     def traverseTypeAscription(tpt: Tree): Unit = traverse(tpt)
@@ -2517,12 +2520,14 @@ trait Trees { self: Universe =>
    *  because pattern matching on abstract types we have here degrades performance.
    *  @group Traversal
    */
+  @deprecated("2.12.3", "Use Tree#traverse instead")
   protected def itraverse(traverser: Traverser, tree: Tree): Unit = throw new MatchError(tree)
 
   /** Provides an extension hook for the traversal strategy.
    *  Future-proofs against new node types.
    *  @group Traversal
    */
+  @deprecated("2.12.3", "Use Tree#traverse instead")
   protected def xtraverse(traverser: Traverser, tree: Tree): Unit = throw new MatchError(tree)
 
   /** A class that implement a default tree transformation strategy: breadth-first component-wise cloning.
@@ -2552,7 +2557,7 @@ trait Trees { self: Universe =>
 //    protected def currentPackage = currentOwner.enclosingTopLevelClass.owner
 
     /** Transforms a single tree. */
-    def transform(tree: Tree): Tree = itransform(this, tree)
+    def transform(tree: Tree): Tree = tree.transform(treeCopy, this)
 
     /** Transforms a list of trees. */
     def transformTrees(trees: List[Tree]): List[Tree] =
