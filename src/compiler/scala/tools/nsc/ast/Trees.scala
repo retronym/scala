@@ -26,8 +26,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     override def isDef = definition.isDef
     override def isTerm = definition.isTerm
     override def isType = definition.isType
-    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
-      treeCopy.DocDef(this, comment, transformer.transform(definition))
+    override def transform(transformer: InternalTransformer): Tree =
+      transformer.treeCopy.DocDef(this, comment, transformer.transform(definition))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(definition)
     }
@@ -36,8 +36,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
  /** Array selection `<qualifier> . <name>` only used during erasure */
   case class SelectFromArray(qualifier: Tree, name: Name, erasure: Type)
        extends RefTree with TermTree {
-   override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
-     treeCopy.SelectFromArray(
+   override def transform(transformer: InternalTransformer): Tree =
+     transformer.treeCopy.SelectFromArray(
        this, transformer.transform(qualifier), name, erasure)
    override def traverse(traverser: Traverser): Unit = {
      traverser.traverse(qualifier)
@@ -49,8 +49,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
    */
   case class InjectDerivedValue(arg: Tree)
        extends SymTree with TermTree {
-    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
-      treeCopy.InjectDerivedValue(this, transformer.transform(arg))
+    override def transform(transformer: InternalTransformer): Tree =
+      transformer.treeCopy.InjectDerivedValue(this, transformer.transform(arg))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(arg)
     }
@@ -60,8 +60,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
 
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree {
-    override def transform(treeCopy: TreeCopier, transformer: InternalTransformer): Tree =
-      treeCopy.TypeTreeWithDeferredRefCheck(this)
+    override def transform(transformer: InternalTransformer): Tree =
+      transformer.treeCopy.TypeTreeWithDeferredRefCheck(this)
     override def traverse(traverser: Traverser): Unit = {
       // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
     }
