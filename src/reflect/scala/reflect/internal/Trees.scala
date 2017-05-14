@@ -493,7 +493,7 @@ trait Trees extends api.Trees {
 
   case class Block(stats: List[Tree], expr: Tree)
        extends TermTree with BlockApi {
-    def transform(treeCopy: TreeCopier, transformer: Transformer): Tree =
+    override def transform(transformer: Transformer): Tree =
       treeCopy.Block(this, transformer.transformStats(stats, transformer.currentOwner), transformer.transform(expr))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseTrees(stats)
