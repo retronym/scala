@@ -289,7 +289,7 @@ private[internal] trait TypeMaps {
       *  All other types pass through unchanged.
       */
     def apply(tp: Type): Type = {
-      val tp1 = tp.mapOver(this)
+      val tp1 = mapOver(tp)
       if (variance.isInvariant) tp1
       else tp1 match {
         case TypeRef(pre, sym, args) if tparams contains sym =>
