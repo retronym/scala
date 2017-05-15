@@ -151,6 +151,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
 
   type InternalTransformer = super.Transformer
   class Transformer extends super.Transformer {
+    override def transform(tree: Tree): Tree = tree.transform(this)
     def transformUnit(unit: CompilationUnit) {
       try unit.body = transform(unit.body)
       catch {
