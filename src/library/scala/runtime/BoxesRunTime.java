@@ -117,22 +117,22 @@ public final class BoxesRunTime
     /* COMPARISON ... COMPARISON ... COMPARISON ... COMPARISON ... COMPARISON ... COMPARISON */
 
     public static boolean equals(Object x, Object y) {
-        if (x == y) return true;
-        return equals2(x, y);
+        return x == y || x != null && x.equals(y);
     }
 
     /** Since all applicable logic has to be present in the equals method of a ScalaNumber
      *  in any case, we dispatch to it as soon as we spot one on either side.
      */
     public static boolean equals2(Object x, Object y) {
-        if (x instanceof java.lang.Number)
-            return equalsNumObject((java.lang.Number)x, y);
-        if (x instanceof java.lang.Character)
-            return equalsCharObject((java.lang.Character)x, y);
-        if (x == null)
-            return y == null;
-
         return x.equals(y);
+//        if (x instanceof java.lang.Number)
+//            return equalsNumObject((java.lang.Number)x, y);
+//        if (x instanceof java.lang.Character)
+//            return equalsCharObject((java.lang.Character)x, y);
+//        if (x == null)
+//            return y == null;
+//
+//        return x.equals(y);
     }
 
     public static boolean equalsNumObject(java.lang.Number xn, Object y) {
