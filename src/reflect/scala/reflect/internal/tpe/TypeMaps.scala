@@ -736,13 +736,13 @@ private[internal] trait TypeMaps {
     }
 
 
-    @tailrec private def substTypeRef(tp: TypeRef, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
+    @tailrec protected final def substTypeRef(tp: TypeRef, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
       if (from.isEmpty) tp
       // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(tp, from))
       else if (matches(from.head, sym)) toTypeRef(tp, to.head)
       else substTypeRef(tp, sym, from.tail, to.tail)
     )
-    @tailrec private def substSingleType(tp: SingleType, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
+    @tailrec protected final  def substSingleType(tp: SingleType, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
       if (from.isEmpty) tp
       // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(tp, from))
       else if (matches(from.head, sym)) toSingleType(tp, to.head)
@@ -822,13 +822,41 @@ private[internal] trait TypeMaps {
         case TypeRef(pre, sym, args) if pre ne NoPrefix =>
           val newSym = substFor(sym)
           // mapOver takes care of subst'ing in args
-          mapOver ( if (sym eq newSym) tp else copyTypeRef(tp, pre, newSym, args) )
+          mapOver(if (sym eq newSym) tp else copyTypeRef(tp, pre, newSym, args))
         // assert(newSym.typeParams.length == sym.typeParams.length, "typars mismatch in SubstSymMap: "+(sym, sym.typeParams, newSym, newSym.typeParams))
         case SingleType(pre, sym) if pre ne NoPrefix =>
           val newSym = substFor(sym)
-          mapOver( if (sym eq newSym) tp else singleType(pre, newSym) )
+          mapOver(if (sym eq newSym) tp else singleType(pre, newSym))
         case _ =>
-          super.apply(tp)
+          val tp1 = mapOver(renameBoundSyms(tp))
+
+          tp1 match {
+            // @M
+            // 1) arguments must also be substituted (even when the "head" of the
+            // applied type has already been substituted)
+            // example: (subst RBound[RT] from [type RT,type RBound] to
+            // [type RT&,type RBound&]) = RBound&[RT&]
+            // 2) avoid loops (which occur because alpha-conversion is
+            // not performed properly imo)
+            // e.g. if in class Iterable[a] there is a new Iterable[(a,b)],
+            // we must replace the a in Iterable[a] by (a,b)
+            // (must not recurse --> loops)
+            // 3) replacing m by List in m[Int] should yield List[Int], not just List
+            case tr@TypeRef(NoPrefix, sym, args) =>
+              val tcon = substTypeRef(tr, sym, from, to)
+              if ((tp1 eq tcon) || args.isEmpty) tcon
+              else appliedType(tcon.typeConstructor, args)
+            case st@SingleType(NoPrefix, sym) =>
+              substSingleType(st, sym, from, to)
+            case ClassInfoType(parents, decls, sym) =>
+              val parents1 = parents mapConserve this
+              // We don't touch decls here; they will be touched when an enclosing TreeSubstituter
+              // transforms the tree that defines them.
+              if (parents1 eq parents) tp1
+              else ClassInfoType(parents1, decls, sym)
+            case _ =>
+              tp1
+          }
       }
       )
 
