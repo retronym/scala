@@ -819,45 +819,38 @@ private[internal] trait TypeMaps {
     override def apply(tp: Type): Type = (
       if (from.isEmpty) tp
       else tp match {
-        case TypeRef(pre, sym, args) if pre ne NoPrefix =>
-          val newSym = substFor(sym)
-          // mapOver takes care of subst'ing in args
-          mapOver(if (sym eq newSym) tp else copyTypeRef(tp, pre, newSym, args))
-        // assert(newSym.typeParams.length == sym.typeParams.length, "typars mismatch in SubstSymMap: "+(sym, sym.typeParams, newSym, newSym.typeParams))
-        case SingleType(pre, sym) if pre ne NoPrefix =>
-          val newSym = substFor(sym)
-          mapOver(if (sym eq newSym) tp else singleType(pre, newSym))
+        case TypeRef(pre, sym, args) =>
+          if (pre ne NoPrefix) {
+            val newSym = substFor(sym)
+            // mapOver takes care of subst'ing in args
+            mapOver(if (sym eq newSym) tp else copyTypeRef(tp, pre, newSym, args))
+            // assert(newSym.typeParams.length == sym.typeParams.length, "typars mismatch in SubstSymMap: "+(sym, sym.typeParams, newSym, newSym.typeParams))
+          } else {
+            val tp1 = mapOver(tp).asInstanceOf[TypeRef]
+            val tcon = substTypeRef(tp1, sym, from, to)
+            if ((tp1 eq tcon) || args.isEmpty) tcon
+            else appliedType(tcon.typeConstructor, args)
+          }
+        case SingleType(pre, sym) =>
+          if (pre ne NoPrefix) {
+            val newSym = substFor(sym)
+            mapOver(if (sym eq newSym) tp else singleType(pre, newSym))
+          } else {
+            val tp1 = mapOver(tp).asInstanceOf[SingleType]
+            substSingleType(tp1, sym, from, to)
+          }
         case _ =>
-          val tp1 = mapOver(renameBoundSyms(tp))
-
-          tp1 match {
-            // @M
-            // 1) arguments must also be substituted (even when the "head" of the
-            // applied type has already been substituted)
-            // example: (subst RBound[RT] from [type RT,type RBound] to
-            // [type RT&,type RBound&]) = RBound&[RT&]
-            // 2) avoid loops (which occur because alpha-conversion is
-            // not performed properly imo)
-            // e.g. if in class Iterable[a] there is a new Iterable[(a,b)],
-            // we must replace the a in Iterable[a] by (a,b)
-            // (must not recurse --> loops)
-            // 3) replacing m by List in m[Int] should yield List[Int], not just List
-            case tr@TypeRef(NoPrefix, sym, args) =>
-              val tcon = substTypeRef(tr, sym, from, to)
-              if ((tp1 eq tcon) || args.isEmpty) tcon
-              else appliedType(tcon.typeConstructor, args)
-            case st@SingleType(NoPrefix, sym) =>
-              substSingleType(st, sym, from, to)
+          tp match {
             case ClassInfoType(parents, decls, sym) =>
               val parents1 = parents mapConserve this
               // We don't touch decls here; they will be touched when an enclosing TreeSubstituter
               // transforms the tree that defines them.
-              if (parents1 eq parents) tp1
+              if (parents1 eq parents) tp
               else ClassInfoType(parents1, decls, sym)
             case _ =>
-              tp1
+              mapOver(renameBoundSyms(tp))
           }
-      }
+        }
       )
 
     object mapTreeSymbols extends TypeMapTransformer {
