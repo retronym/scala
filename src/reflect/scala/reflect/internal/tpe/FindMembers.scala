@@ -85,22 +85,43 @@ trait FindMembers {
       while (!bcs.isEmpty) {
         val currentBaseClass = bcs.head
         val decls = currentBaseClass.info.decls
-        var entry = if (findAll) decls.elems else decls.lookupEntry(name)
-        while (entry ne null) {
-          val sym = entry.sym
-          val flags = sym.flags
-          val meetsRequirements = (flags & required) == required
-          if (meetsRequirements) {
-            val excl: Long = flags & excluded
-            val isExcluded: Boolean = excl != 0L
-            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinementParents)) {
-              if (shortCircuit(sym)) return false
-              else addMemberIfNew(sym)
-            } else if (excl == DEFERRED) {
-              deferredSeen = true
+        if (findAll) {
+          // DUPLICATED with below for performance
+          var entry = decls.elems
+          while (entry ne null) {
+            val sym = entry.sym
+            val flags = sym.flags
+            val meetsRequirements = (flags & required) == required
+            if (meetsRequirements) {
+              val excl: Long = flags & excluded
+              val isExcluded: Boolean = excl != 0L
+              if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinementParents)) {
+                addMemberIfNew(sym)
+              } else if (excl == DEFERRED) {
+                deferredSeen = true
+              }
             }
+            entry = if (findAll) entry.next else decls lookupNextEntry entry
           }
-          entry = if (findAll) entry.next else decls lookupNextEntry entry
+        } else {
+          // DUPLICATED from above for performance
+          var entry = decls.lookupEntry(name)
+          while (entry ne null) {
+            val sym = entry.sym
+            val flags = sym.flags
+            val meetsRequirements = (flags & required) == required
+            if (meetsRequirements) {
+              val excl: Long = flags & excluded
+              val isExcluded: Boolean = excl != 0L
+              if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinementParents)) {
+                if (shortCircuit(sym)) return false
+                else addMemberIfNew(sym)
+              } else if (excl == DEFERRED) {
+                deferredSeen = true
+              }
+            }
+            entry = if (findAll) entry.next else decls lookupNextEntry entry
+          }
         }
 
         // SLS 5.2 The private modifier can be used with any definition or declaration in a template.
