@@ -111,6 +111,12 @@ private[internal] trait TypeMaps {
             args mapConserve this
           }
         )
+        if (pre1 eq pre) {
+          if (args1 eq args) tp
+          else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
+        } else {
+          copyTypeRef(tp, pre1, sym, args1)
+        }
         if ((pre1 eq pre) && (args1 eq args)) tp
         else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
       case ThisType(_) => tp
