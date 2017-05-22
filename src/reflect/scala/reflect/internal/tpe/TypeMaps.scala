@@ -719,7 +719,8 @@ private[internal] trait TypeMaps {
     protected def matches(sym: Symbol, sym1: Symbol): Boolean = sym eq sym1
 
     /** Map target to type, can be tuned by subclasses */
-    protected def toType(fromtp: Type, tp: T): Type
+    protected def toSingleType(fromtp: SingleType, tp: T): Type
+    protected def toTypeRef(fromtp: TypeRef, tp: T): Type
 
     // We don't need to recurse into the `restpe` below because we will encounter
     // them in the next level of recursion, when the result of this method is passed to `mapOver`.
@@ -734,12 +735,19 @@ private[internal] trait TypeMaps {
         tp
     }
 
-    @tailrec private def subst(tp: Type, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
+
+    @tailrec private def substTypeRef(tp: TypeRef, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
       if (from.isEmpty) tp
       // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(tp, from))
-      else if (matches(from.head, sym)) toType(tp, to.head)
-      else subst(tp, sym, from.tail, to.tail)
-      )
+      else if (matches(from.head, sym)) toTypeRef(tp, to.head)
+      else substTypeRef(tp, sym, from.tail, to.tail)
+    )
+    @tailrec private def substSingleType(tp: SingleType, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
+      if (from.isEmpty) tp
+      // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(tp, from))
+      else if (matches(from.head, sym)) toSingleType(tp, to.head)
+      else substSingleType(tp, sym, from.tail, to.tail)
+    )
 
     private def fromContains(syms: List[Symbol]): Boolean = {
       def fromContains(sym: Symbol): Boolean = {
@@ -762,7 +770,6 @@ private[internal] trait TypeMaps {
 
     def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
       val tp                    = mapOver(renameBoundSyms(tp0))
-      def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
       tp match {
         // @M
@@ -776,12 +783,12 @@ private[internal] trait TypeMaps {
         // we must replace the a in Iterable[a] by (a,b)
         // (must not recurse --> loops)
         // 3) replacing m by List in m[Int] should yield List[Int], not just List
-        case TypeRef(NoPrefix, sym, args) =>
-          val tcon = substFor(sym)
+        case tr @ TypeRef(NoPrefix, sym, args) =>
+          val tcon = substTypeRef(tr, sym, from, to)
           if ((tp eq tcon) || args.isEmpty) tcon
           else appliedType(tcon.typeConstructor, args)
-        case SingleType(NoPrefix, sym) =>
-          substFor(sym)
+        case st @ SingleType(NoPrefix, sym) =>
+          substSingleType(st, sym, from, to)
         case ClassInfoType(parents, decls, sym) =>
           val parents1 = parents mapConserve this
           // We don't touch decls here; they will be touched when an enclosing TreeSubstituter
@@ -798,16 +805,15 @@ private[internal] trait TypeMaps {
   class SubstSymMap(from: List[Symbol], to: List[Symbol]) extends SubstMap(from, to) {
     def this(pairs: (Symbol, Symbol)*) = this(pairs.toList.map(_._1), pairs.toList.map(_._2))
 
-    protected def toType(fromtp: Type, sym: Symbol) = fromtp match {
-      case TypeRef(pre, _, args) => copyTypeRef(fromtp, pre, sym, args)
-      case SingleType(pre, _) => singleType(pre, sym)
-    }
+    protected def toTypeRef(fromtp: TypeRef, sym: Symbol): Type = copyTypeRef(fromtp, fromtp.pre, sym, fromtp.args)
+    protected def toSingleType(fromtp: SingleType, sym: Symbol): Type = singleType(fromtp.pre, sym)
+
     @tailrec private def subst(sym: Symbol, from: List[Symbol], to: List[Symbol]): Symbol = (
       if (from.isEmpty) sym
       // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(sym, from))
-      else if (matches(from.head, sym)) to.head
+      else if (from.head eq sym) to.head
       else subst(sym, from.tail, to.tail)
-      )
+    )
     private def substFor(sym: Symbol) = subst(sym, from, to)
 
     override def apply(tp: Type): Type = (
@@ -863,8 +869,9 @@ private[internal] trait TypeMaps {
   }
 
   /** A map to implement the `subst` method. */
-  class SubstTypeMap(val from: List[Symbol], val to: List[Type]) extends SubstMap(from, to) {
-    protected def toType(fromtp: Type, tp: Type) = tp
+  class SubstTypeMap(val from: List[Symbol], val to: List[Type]) extends SubstMap[Type](from, to) {
+    protected def toSingleType(fromtp: SingleType, tp: Type): Type = tp
+    protected def toTypeRef(fromtp: TypeRef, tp: Type): Type = tp
 
     override def mapOver(tree: Tree, giveup: () => Nothing): Tree = {
       object trans extends TypeMapTransformer {
