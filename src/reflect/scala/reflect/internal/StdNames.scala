@@ -91,6 +91,13 @@ trait StdNames {
 
     def flattenedName(segments: Name*): NameType =
       compactify(segments mkString NAME_JOIN_STRING)
+    def flattenedName(name1: Name, name2: Name): NameType = {
+      val builder = new java.lang.StringBuilder(name1.length + name2.length + NAME_JOIN_STRING.length)
+      builder.append(name1)
+      builder.append(NAME_JOIN_STRING)
+      builder.append(name2)
+      compactify(builder.toString)
+    }
 
     // TODO: what is the purpose of all this duplication!?!?!
     // I made these constants because we cannot change them without bumping our major version anyway.
