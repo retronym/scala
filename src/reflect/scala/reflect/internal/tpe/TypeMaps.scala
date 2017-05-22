@@ -104,13 +104,19 @@ private[internal] trait TypeMaps {
           if (trackVariance && args.nonEmpty && !variance.isInvariant) {
             val tparams = sym.typeParams
             if (tparams.isEmpty)
-              args mapConserve this
+              mapConserveThis(args)
             else
               mapOverArgs(args, tparams)
           } else {
-            args mapConserve this
+            mapConserveThis(args)
           }
         )
+        if (pre1 eq pre) {
+          if (args1 eq args) tp
+          else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
+        } else {
+          copyTypeRef(tp, pre1, sym, args1)
+        }
         if ((pre1 eq pre) && (args1 eq args)) tp
         else copyTypeRef(tp, pre1, tr.coevolveSym(pre1), args1)
       case ThisType(_) => tp
@@ -151,7 +157,7 @@ private[internal] trait TypeMaps {
         if (bounds1 eq bounds) tp
         else BoundedWildcardType(bounds1.asInstanceOf[TypeBounds])
       case rtp @ RefinedType(parents, decls) =>
-        val parents1 = parents mapConserve this
+        val parents1 = mapConserveThis(parents)
         val decls1 = mapOver(decls)
         copyRefinedType(rtp, parents1, decls1)
       case ExistentialType(tparams, result) =>
@@ -165,7 +171,7 @@ private[internal] trait TypeMaps {
         else OverloadedType(pre1, alts)
       case AntiPolyType(pre, args) =>
         val pre1 = this(pre)
-        val args1 = args mapConserve this
+        val args1 = mapConserveThis(args)
         if ((pre1 eq pre) && (args1 eq args)) tp
         else AntiPolyType(pre1, args1)
       case tv@TypeVar(_, constr) =>
@@ -187,6 +193,48 @@ private[internal] trait TypeMaps {
       case _ =>
         tp
       // throw new Error("mapOver inapplicable for " + tp);
+    }
+
+    // Workaround for https://github.com/scala/scala-dev/issues/388
+    private def mapConserveThis(as: List[Type]): List[Type] = {
+      // Note to developers: there exists a duplication between this function and `reflect.internal.util.Collections#map2Conserve`.
+      // If any successful optimization attempts or other changes are made, please rehash them there too.
+      @tailrec
+      def loop(mappedHead: List[Type] = Nil, mappedLast: ::[Type], unchanged: List[Type], pending: List[Type]): List[Type] =
+      if (pending.isEmpty) {
+        if (mappedHead eq null) unchanged
+        else {
+          mappedLast.tl = unchanged
+          mappedHead
+        }
+      }
+      else {
+        val head0 = pending.head
+        val head1 = apply(head0)
+
+        if (head1 eq head0.asInstanceOf[AnyRef])
+          loop(mappedHead, mappedLast, unchanged, pending.tail)
+        else {
+          var xc = unchanged
+          var mappedHead1: List[Type] = mappedHead
+          var mappedLast1: ::[Type] = mappedLast
+          while (xc ne pending) {
+            val next = new ::[Type](xc.head, Nil)
+            if (mappedHead1 eq null) mappedHead1 = next
+            if (mappedLast1 ne null) mappedLast1.tl = next
+            mappedLast1 = next
+            xc = xc.tail
+          }
+          val next = new ::(head1, Nil)
+          if (mappedHead1 eq null) mappedHead1 = next
+          if (mappedLast1 ne null) mappedLast1.tl = next
+          mappedLast1 = next
+          val tail0 = pending.tail
+          loop(mappedHead1, mappedLast1, tail0, tail0)
+
+        }
+      }
+      loop(null, null, as, as)
     }
 
     def withVariance[T](v: Variance)(body: => T): T = {
