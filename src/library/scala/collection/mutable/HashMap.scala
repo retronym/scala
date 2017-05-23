@@ -74,7 +74,7 @@ extends AbstractMap[A, B]
 
   override def getOrElseUpdate(key: A, defaultValue: => B): B = {
     val hash = elemHashCode(key)
-    val i = index(hash)
+    val i = index0(hash)
     val entry = findEntry(key, i)
     if (entry != null) entry.value
     else {
@@ -82,7 +82,7 @@ extends AbstractMap[A, B]
       val default = defaultValue
       // Avoid recomputing index if the `defaultValue()` hasn't triggered
       // a table resize.
-      val newEntryIndex = if (table0 eq table) i else index(hash)
+      val newEntryIndex = if (table0 eq table) i else index0(hash)
       addEntry(createNewEntry(key, default), newEntryIndex)
     }
   }
@@ -112,10 +112,32 @@ extends AbstractMap[A, B]
   }
 
   override def put(key: A, value: B): Option[B] = {
-    val e = findOrAddEntry(key, value)
+    val e = findOrAddEntry0(key, value)
     if (e eq null) None
     else { val v = e.value; e.value = value; Some(v) }
   }
+
+  private def findOrAddEntry0[B](key: A, value: B): Entry = {
+    val h = index0(elemHashCode(key))
+    val e = findEntry0(key, h)
+    if (e ne null) e else { addEntry(createNewEntry(key, value), h); null }
+  }
+
+  private def index0(hcode: Int): Int = {
+    val ones = table.length - 1
+    val exponent = Integer.numberOfLeadingZeros(ones)
+    (improve(hcode, seedvalue) >>> exponent) & ones
+  }
+  private def improve0(hcode: Int, seed: Int): Int = {
+    Integer.rotateRight(util.hashing.byteswap32(hcode), seed)
+  }
+
+  private[this] def findEntry0(key: A, h: Int): Entry = {
+    var e = table(h).asInstanceOf[Entry]
+    while (e != null && !elemEquals(e.key, key)) e = e.next
+    e
+  }
+
 
   override def update(key: A, value: B): Unit = put(key, value)
 
@@ -126,7 +148,7 @@ extends AbstractMap[A, B]
   }
 
   def += (kv: (A, B)): this.type = {
-    val e = findOrAddEntry(kv._1, kv._2)
+    val e = findOrAddEntry0(kv._1, kv._2)
     if (e ne null) e.value = kv._2
     this
   }
