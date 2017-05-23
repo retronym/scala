@@ -30,6 +30,20 @@ class HashMapBenchmark {
       case 3 => i.toInt
     }).toArray
     missingKeys = (size to 2 * size).toArray
+    val linked = new mutable.LinkedHashMap[String, String]()
+    for (i <- 1 to 10000) {
+      linked.clear()
+      for (j <- 1 to 100) {
+        linked.put("key" + j, "")
+      }
+      for (j <- 1 to 100) {
+        linked.get("key" + j)
+        linked.getOrElse("key" + j, "")
+        linked.getOrElse("otherKey" + j, "")
+        linked.getOrElseUpdate("key" + j, "")
+        linked.getOrElseUpdate("otherKey" + j, "")
+      }
+    }
   }
 
   var map = new mutable.HashMap[Any, Any]
