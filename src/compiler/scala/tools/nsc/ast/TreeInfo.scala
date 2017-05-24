@@ -44,13 +44,6 @@ abstract class TreeInfo extends scala.reflect.internal.TreeInfo {
     def isValueClass(tpe: Type)                  = enteringErasure(tpe.typeSymbol.isDerivedValueClass)
     def valueUnbox(tpe: Type)                    = enteringErasure(tpe.typeSymbol.derivedValueClassUnbox)
 
-    // B.unbox. Returns B.
-    object Unbox {
-      def unapply(t: Tree): Option[Tree] = t match {
-        case Apply(sel @ Select(ref, _), Nil) if valueUnbox(ref.tpe) == sel.symbol => Some(ref)
-        case _                                                                     => None
-      }
-    }
     // new B(v). Returns B and v.
     object Box {
       def unapply(t: Tree): Option[(Tree, Type)] = t match {
@@ -61,7 +54,7 @@ abstract class TreeInfo extends scala.reflect.internal.TreeInfo {
     // (new B(v)).unbox. returns v.
     object BoxAndUnbox {
       def unapply(t: Tree): Option[Tree] = t match {
-        case Unbox(Box(v, tpe)) if isValueClass(tpe) => Some(v)
+        case Apply(sel @ Select(ref @ Box(v, tpe), _), Nil) if isValueClass(tpe) && valueUnbox(ref.tpe) == sel.symbol => Some(v)
         case _                                       => None
       }
     }
