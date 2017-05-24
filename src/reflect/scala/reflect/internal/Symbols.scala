@@ -1507,6 +1507,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  ensuring that symbol is initialized (i.e. type is completed).
      */
     def info: Type = {
+      if (this.isInstanceOf[NoSymbol]) return NoType
       var cnt = 0
       def completeInfo(): Unit = {
         assert(infos ne null, this.name)
@@ -1598,6 +1599,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
+      if (this.isInstanceOf[NoSymbol]) return NoType
+
       var infos = this.infos
       assert(infos != null)
       val curPeriod = currentPeriod
@@ -3509,8 +3512,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // in all the scenarios we're trying to keep from failing.
     override def originalInfo    = NoType
     override def associatedFile  = owner.associatedFile
-    override def info            = fail(NoType)
-    override def rawInfo         = fail(NoType)
+//    override def info            = fail(NoType)
+//    override def rawInfo         = fail(NoType)
     override def companionSymbol = fail(NoSymbol)
   }
   class StubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String) extends ClassSymbol(owner0, owner0.pos, name0) with StubSymbol
@@ -3577,9 +3580,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def ownersIterator: Iterator[Symbol] = Iterator.empty
     override def alternatives: List[Symbol] = List()
     override def reset(completer: Type): this.type = this
-    override def info: Type = NoType
     override def existentialBound: Type = NoType
-    override def rawInfo: Type = NoType
     override def accessBoundary(base: Symbol): Symbol = enclosingRootClass
     def cloneSymbolImpl(owner: Symbol, newFlags: Long) = abort("NoSymbol.clone()")
   }
