@@ -1506,9 +1506,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Get type info associated with symbol at current phase, after
      *  ensuring that symbol is initialized (i.e. type is completed).
      */
-    def info: Type = try {
+    def info: Type = {
       var cnt = 0
-      while (validTo == NoPeriod) {
+      def completeInfo(): Unit = {
         assert(infos ne null, this.name)
         assert(infos.prev eq null, this.name)
         val tp = infos.info
@@ -1521,8 +1521,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         } else {
           _rawflags |= LOCKED
           // TODO another commented out lines - this should be solved in one way or another
-//          activeLocks += 1
- //         lockedSyms += this
+          //          activeLocks += 1
+          //         lockedSyms += this
         }
         val current = phase
         try {
@@ -1533,17 +1533,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           unlock()
           phase = current
         }
+      }
+      def giveUp(): Unit = {
+        abort(s"no progress in completing $this: ${infos.info}")
+      }
+
+      while (validTo == NoPeriod) {
+        completeInfo()
         cnt += 1
         // allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        if (cnt == 3) abort(s"no progress in completing $this: $tp")
+        if (cnt == 3) giveUp()
       }
       rawInfo
-    }
-    catch {
-      case ex: CyclicReference =>
-        devWarning("... hit cycle trying to complete " + this.fullLocationString)
-        throw ex
     }
 
     def info_=(info: Type) {
@@ -1607,37 +1609,44 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           infos = infos.prev
 
         if (validTo < curPeriod) {
-          assertCorrectThread()
-          // adapt any infos that come from previous runs
-          val current = phase
-          try {
-            infos = adaptInfos(infos)
+          def transformInfo(th: TypeHistory): Type = {
+            var infos = th
+            assertCorrectThread()
+            // adapt any infos that come from previous runs
+            val current = phase
+            try {
+              infos = adaptInfos(infos)
 
-            //assert(runId(validTo) == currentRunId, name)
-            //assert(runId(infos.validFrom) == currentRunId, name)
+              //assert(runId(validTo) == currentRunId, name)
+              //assert(runId(infos.validFrom) == currentRunId, name)
 
-            if (validTo < curPeriod) {
-              var itr = infoTransformers.nextFrom(phaseId(validTo))
-              infoTransformers = itr; // caching optimization
-              while (itr.pid != NoPhase.id && itr.pid < current.id) {
-                phase = phaseWithId(itr.pid)
-                val info1 = itr.transform(this, infos.info)
-                if (info1 ne infos.info) {
-                  infos = TypeHistory(currentPeriod + 1, info1, infos)
-                  this.infos = infos
+              if (validTo < curPeriod) {
+                var itr = infoTransformers.nextFrom(phaseId(validTo))
+                infoTransformers = itr; // caching optimization
+                while (itr.pid != NoPhase.id && itr.pid < current.id) {
+                  phase = phaseWithId(itr.pid)
+                  val info1 = itr.transform(this, infos.info)
+                  if (info1 ne infos.info) {
+                    infos = TypeHistory(currentPeriod + 1, info1, infos)
+                    this.infos = infos
+                  }
+                  _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
+                  itr = itr.next
                 }
-                _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
-                itr = itr.next
+                _validTo = if (itr.pid == NoPhase.id) curPeriod
+                else period(currentRunId, itr.pid)
               }
-              _validTo = if (itr.pid == NoPhase.id) curPeriod
-                         else period(currentRunId, itr.pid)
+            } finally {
+              phase = current
             }
-          } finally {
-            phase = current
+            infos.info
           }
-        }
+          transformInfo(infos)
+        } else
+          infos.info
+      } else {
+        infos.info
       }
-      infos.info
     }
 
     // adapt to new run in fsc.
