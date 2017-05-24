@@ -123,24 +123,18 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
     table = new Array[Entry[A]](oldTable.size * 2)
     threshold = computeThreshold
 
-    @tailrec
-    def tableLoop(oldBucket: Int): Unit = if (oldBucket < oldTable.size) {
-      @tailrec
-      def linkedListLoop(entry: Entry[A]): Unit = entry match {
-        case null => ()
-        case _ => {
-          val bucket = bucketFor(entry.hash)
-          val oldNext = entry.tail
-          entry.tail = table(bucket)
-          table(bucket) = entry
-          linkedListLoop(oldNext)
-        }
+    var oldBucket = 0
+    while (oldBucket < oldTable.length) {
+      var entry = oldTable(oldBucket)
+      while (entry != null) {
+        val bucket = bucketFor(entry.hash)
+        val oldNext = entry.tail
+        entry.tail = table(bucket)
+        table(bucket) = entry
+        entry = oldNext
       }
-      linkedListLoop(oldTable(oldBucket))
-
-      tableLoop(oldBucket + 1)
+      oldBucket += 1
     }
-    tableLoop(0)
   }
 
   // from scala.reflect.internal.Set, find an element or null if it isn't contained
@@ -180,17 +174,13 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
         elem
       }
 
-      @tailrec
-      def linkedListLoop(entry: Entry[A]): A = entry match {
-        case null                    => add()
-        case _                       => {
-          val entryElem = entry.get
-          if (elem.equals(entryElem)) entryElem
-          else linkedListLoop(entry.tail)
-        }
+      var entry = oldHead
+      while (entry != null) {
+        val entryElem = entry.get
+        if (elem.equals(entryElem)) return entryElem
+        entry = entry.tail
       }
-
-      linkedListLoop(oldHead)
+      add()
     }
   }
 
