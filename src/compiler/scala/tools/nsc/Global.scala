@@ -1146,6 +1146,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       curRun = this
       phase = SomePhase
       phaseWithId(phase.id) = phase
+      clearUniquesMap()
       definitions.init()
 
       // the components to use, omitting those named by -Yskip and stopping at the -Ystop phase
