@@ -1115,7 +1115,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     val ownerTpe = tree.tpe match {
       case ImportType(expr) => expr.tpe
       case null => pre
-      case MethodType(List(), rtpe) => rtpe
+      case MethodType(Nil, rtpe) => rtpe
       case _ => tree.tpe
     }
 

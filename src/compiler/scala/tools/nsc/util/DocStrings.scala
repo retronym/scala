@@ -90,7 +90,7 @@ object DocStrings {
     indices = mergeInheritdocSections(str, indices)
 
     indices match {
-      case List() => List()
+      case Nil => Nil
       case idxs   => idxs zip (idxs.tail ::: List(str.length - 2))
     }
   }

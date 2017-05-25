@@ -1649,7 +1649,7 @@ trait Types
         typeParams,
         RefinedType(
           parents map {
-            case TypeRef(pre, sym, List()) => TypeRef(pre, sym, dummyArgs)
+            case TypeRef(pre, sym, Nil) => TypeRef(pre, sym, dummyArgs)
             case p => p
           },
           decls,
@@ -4051,7 +4051,7 @@ trait Types
   /*
   todo: change to:
   def normalizePlus(tp: Type) = tp match {
-    case TypeRef(pre, sym, List()) =>
+    case TypeRef(pre, sym, Nil) =>
       if (!sym.isInitialized) sym.rawInfo.load(sym)
       if (sym.isJavaDefined && !sym.typeParams.isEmpty) rawToExistential(tp)
       else tp.normalize

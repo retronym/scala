@@ -825,8 +825,8 @@ trait Contexts { self: Analyzer =>
 
       val pre = qual.tpe
       def collect(sels: List[ImportSelector]): List[ImplicitInfo] = sels match {
-        case List() =>
-          List()
+        case Nil =>
+          Nil
         case List(ImportSelector(nme.WILDCARD, _, _, _)) =>
           // Using pre.implicitMembers seems to exposes a problem with out-dated symbols in the IDE,
           // see the example in https://www.assembla.com/spaces/scala-ide/tickets/1002552#/activity/ticket
@@ -1475,8 +1475,8 @@ trait Contexts { self: Analyzer =>
       importableMembers(qual.tpe) flatMap (transformImport(tree.selectors, _))
 
     private def transformImport(selectors: List[ImportSelector], sym: Symbol): List[Symbol] = selectors match {
-      case List() => List()
-      case List(ImportSelector(nme.WILDCARD, _, _, _)) => List(sym)
+      case Nil => Nil
+      case List(ImportSelector(nme.WILDCARD, _, _, _)) => sym :: Nil
       case ImportSelector(from, _, to, _) :: _ if from == sym.name =>
         if (to == nme.WILDCARD) List()
         else List(sym.cloneSymbol(sym.owner, sym.rawflags, to))

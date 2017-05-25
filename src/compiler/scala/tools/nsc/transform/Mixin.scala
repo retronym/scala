@@ -570,7 +570,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL with AccessorSynthes
           if (ifaceGetter == NoSymbol) abort("No getter for " + sym + " in " + sym.owner)
           else typedPos(tree.pos)((qual DOT ifaceGetter)())
 
-        case Assign(Apply(lhs @ Select(qual, _), List()), rhs) =>
+        case Assign(Apply(lhs @ Select(qual, _), Nil), rhs) =>
           // assign to fields in some trait via an abstract setter in the interface.
           // Note that the case above has added the empty application.
           val setter = lhs.symbol.setterIn(lhs.symbol.owner.tpe.typeSymbol) setPos lhs.pos

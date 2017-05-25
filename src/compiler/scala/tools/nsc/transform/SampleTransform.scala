@@ -25,7 +25,7 @@ abstract class SampleTransform extends Transform {
     override def transform(tree: Tree): Tree = {
       val tree1 = super.transform(tree);      // transformers always maintain `currentOwner`.
       tree1 match {
-        case Block(List(), expr) =>           // a simple optimization
+        case Block(Nil, expr) =>           // a simple optimization
           expr
         case Block(defs, sup @ Super(qual, mix)) => // A hypothetical transformation, which replaces
                                                     // {super} by {super.sample}

@@ -93,7 +93,7 @@ trait Placeholders { self: Quasiquotes =>
       case name: Name => name
       case Ident(name) => name
       case Bind(name, Ident(nme.WILDCARD)) => name
-      case TypeDef(_, name, List(), TypeBoundsTree(EmptyTree, EmptyTree)) => name
+      case TypeDef(_, name, Nil, TypeBoundsTree(EmptyTree, EmptyTree)) => name
     }
   }
 

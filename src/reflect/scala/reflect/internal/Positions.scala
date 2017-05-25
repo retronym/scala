@@ -127,7 +127,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
             }
 
           findOverlapping(tree.children flatMap solidDescendants) match {
-            case List() => ;
+            case Nil => ;
             case xs => {
               positionError("Overlapping trees "+xs.map { case (x, y) => (x.id, y.id) }.mkString("", ", ", "")) {
                 reportTree("Ancestor", tree)
@@ -167,7 +167,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
    *  otherwise add conflicting trees to `conflicting`.
    */
   private def insert(rs: List[Range], t: Tree, conflicting: ListBuffer[Tree]): List[Range] = rs match {
-    case List() =>
+    case Nil =>
       assert(conflicting.nonEmpty)
       rs
     case r :: rs1 =>

@@ -438,7 +438,7 @@ trait DocComments { self: Global =>
 
       def getSite(name: Name): Type = {
         def findIn(sites: List[Symbol]): Type = sites match {
-          case List() => NoType
+          case Nil => NoType
           case site :: sites1 => select(site.thisType, name, findIn(sites1))
         }
         // Previously, searching was taking place *only* in the current package and in the root package

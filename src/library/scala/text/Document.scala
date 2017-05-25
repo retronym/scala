@@ -47,7 +47,7 @@ abstract class Document {
     def fits(w: Int, state: List[FmtState]): Boolean = state match {
       case _ if w < 0 =>
         false
-      case List() =>
+      case Nil =>
         true
       case (_, _, DocNil) :: z =>
         fits(w, z)
@@ -75,7 +75,7 @@ abstract class Document {
     }
 
     def fmt(k: Int, state: List[FmtState]): Unit = state match {
-      case List() => ()
+      case Nil => ()
       case (_, _, DocNil) :: z =>
         fmt(k, z)
       case (i, b, DocCons(h, t)) :: z =>

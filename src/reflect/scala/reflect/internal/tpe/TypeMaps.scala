@@ -322,7 +322,7 @@ private[internal] trait TypeMaps {
   def rawToExistential = new TypeMap {
     private var expanded = immutable.Set[Symbol]()
     def apply(tp: Type): Type = tp match {
-      case TypeRef(pre, sym, List()) if isRawIfWithoutArgs(sym) =>
+      case TypeRef(pre, sym, Nil) if isRawIfWithoutArgs(sym) =>
         if (expanded contains sym) AnyRefTpe
         else try {
           expanded += sym
@@ -341,7 +341,7 @@ private[internal] trait TypeMaps {
       def apply(tp: Type): Type = tp match {
         // any symbol that occurs in a java sig, not just java symbols
         // see https://github.com/scala/bug/issues/2454#issuecomment-292371833
-        case TypeRef(pre, sym, List()) if !sym.typeParams.isEmpty =>
+        case TypeRef(pre, sym, Nil) if !sym.typeParams.isEmpty =>
           val eparams = typeParamsToExistentials(sym, sym.typeParams)
           existentialAbstraction(eparams, TypeRef(pre, sym, eparams map (_.tpe)))
         case _ =>

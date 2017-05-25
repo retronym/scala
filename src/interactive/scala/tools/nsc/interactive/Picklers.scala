@@ -108,7 +108,7 @@ trait Picklers { self: Global =>
       buf
     }
     def makeSymbol(root: Symbol, names: List[Name]): Symbol = names match {
-      case List() =>
+      case Nil =>
         root
       case name :: rest =>
         val sym = root.info.decl(name)

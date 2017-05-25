@@ -1452,14 +1452,14 @@ trait Scanners extends ScannersCommon {
     }
 
     def insertPatch(patches: List[BracePatch], patch: BracePatch): List[BracePatch] = patches match {
-      case List() => List(patch)
+      case Nil => List(patch)
       case bp :: bps => if (patch.off < bp.off) patch :: patches
                         else bp :: insertPatch(bps, patch)
     }
 
     def insertRBrace(): List[BracePatch] = {
       def insert(bps: List[BracePair]): List[BracePatch] = bps match {
-        case List() => patches
+        case Nil => patches
         case (bp @ BracePair(loff, lindent, roff, rindent, nested)) :: bps1 =>
           if (lindent <= rindent) insert(bps1)
           else {
@@ -1486,7 +1486,7 @@ trait Scanners extends ScannersCommon {
 
     def deleteRBrace(): List[BracePatch] = {
       def delete(bps: List[BracePair]): List[BracePatch] = bps match {
-        case List() => patches
+        case Nil => patches
         case BracePair(loff, lindent, roff, rindent, nested) :: bps1 =>
           if (lindent >= rindent) delete(bps1)
           else {

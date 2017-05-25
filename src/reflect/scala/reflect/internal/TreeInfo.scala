@@ -183,7 +183,7 @@ abstract class TreeInfo {
     case Apply(Select(free @ Ident(_), nme.apply), _) if free.symbol.name endsWith nme.REIFY_FREE_VALUE_SUFFIX =>
       // see a detailed explanation of this trick in `GenSymbols.reifyFreeTerm`
       free.symbol.hasStableFlag && isExprSafeToInline(free)
-    case Apply(fn, List()) =>
+    case Apply(fn, Nil) =>
       // Note: After uncurry, field accesses are represented as Apply(getter, Nil),
       // so an Apply can also be pure.
       // However, before typing, applications of nullary functional values are also

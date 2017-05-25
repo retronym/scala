@@ -92,8 +92,8 @@ trait Printers extends api.Printers { self: SymbolTable =>
 
     def printSeq[a](ls: List[a])(printelem: a => Unit)(printsep: => Unit): Unit =
       ls match {
-        case List() =>
-        case List(x) => printelem(x)
+        case Nil =>
+        case x :: Nil => printelem(x)
         case x :: rest => printelem(x); printsep; printSeq(rest)(printelem)(printsep)
       }
 
@@ -966,7 +966,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
             // case for untypechecked trees
             case Annotated(annot, arg) if (expr ne null) && (arg ne null) && expr.equalsStructure(arg) => printTp() // remove double arg - 5: 5: @unchecked
             case tt: TypeTree if tt.original.isInstanceOf[Annotated] => printTp()
-            case Function(List(), EmptyTree) => print("(", expr, " _)") //func _
+            case Function(Nil, EmptyTree) => print("(", expr, " _)") //func _
             // parentheses required when (a match {}) : Type
             case _ => print("((", expr, "): ", tp, ")")
           }

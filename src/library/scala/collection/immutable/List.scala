@@ -51,7 +51,7 @@ import java.io.{ObjectOutputStream, ObjectInputStream}
  *  days match {
  *    case firstDay :: otherDays =>
  *      println("The first day of the week is: " + firstDay)
- *    case List() =>
+ *    case Nil =>
  *      println("There don't seem to be any week days.")
  *  }
  *  }}}

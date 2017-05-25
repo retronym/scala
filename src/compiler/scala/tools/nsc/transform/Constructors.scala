@@ -519,7 +519,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       private def canBeSupplanted(sym: Symbol) = !isDelayedInitSubclass && isStationaryParamRef(sym) && !specializeTypes.possiblySpecialized(sym)
 
       override def transform(tree: Tree): Tree = tree match {
-        case Apply(Select(This(_), _), List()) =>
+        case Apply(Select(This(_), _), Nil) =>
           // references to parameter accessor methods of own class become references to parameters
           // outer accessors become references to $outer parameter
           // println(s"to param ref in $clazz for ${tree.symbol} ${tree.symbol.debugFlagString} / ${tree.symbol.outerSource} / ${canBeSupplanted(tree.symbol)}")

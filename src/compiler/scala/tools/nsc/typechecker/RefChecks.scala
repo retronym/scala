@@ -67,9 +67,9 @@ abstract class RefChecks extends Transform {
   )
 
   def overridesTypeInPrefix(tp1: Type, tp2: Type, prefix: Type, isModuleOverride: Boolean): Boolean = (tp1.dealiasWiden, tp2.dealiasWiden) match {
-    case (MethodType(List(), rtp1), NullaryMethodType(rtp2)) =>
+    case (MethodType(Nil, rtp1), NullaryMethodType(rtp2)) =>
       rtp1 <:< rtp2
-    case (NullaryMethodType(rtp1), MethodType(List(), rtp2)) =>
+    case (NullaryMethodType(rtp1), MethodType(Nil, rtp2)) =>
       rtp1 <:< rtp2
 
     // all this module business would be so much simpler if we moduled^w modelled a module as a class and an accessor, like we do for fields
@@ -275,7 +275,7 @@ abstract class RefChecks extends Transform {
 
       def printMixinOverrideErrors() {
         mixinOverrideErrors.toList match {
-          case List() =>
+          case Nil =>
           case List(MixinOverrideError(_, msg)) =>
             reporter.error(clazz.pos, msg)
           case MixinOverrideError(member, msg) :: others =>

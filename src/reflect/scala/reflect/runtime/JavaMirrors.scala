@@ -878,9 +878,9 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
 
       clazz.info.decl(newTermName(jname)) orElse {
         (clazz.info.decls.iterator filter (approximateMatch(_, jname))).toList match {
-          case List()    => NoSymbol
-          case List(sym) => sym
-          case alts      => clazz.newOverloaded(alts.head.tpe.prefix, alts)
+          case Nil        => NoSymbol
+          case sym :: Nil => sym
+          case alts       => clazz.newOverloaded(alts.head.tpe.prefix, alts)
         }
       }
     }
