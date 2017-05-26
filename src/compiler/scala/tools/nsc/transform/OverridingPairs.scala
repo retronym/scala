@@ -35,7 +35,15 @@ abstract class OverridingPairs extends SymbolPairs {
          (low.owner != high.owner)     // don't try to form pairs from overloaded members
       && !high.isPrivate               // private or private[this] members never are overridden
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
-      && (lowMemberType matches (self memberType high))
+      && fastMatches(high)
     ) // TODO we don't call exclude(high), should we?
+
+    private def fastMatches(high: Symbol): Boolean = {
+      val mightMatch = matchesTypeApprox(lowMemberType, high.info, !phase.erasedTypes, approx = true)
+      if (mightMatch)
+        lowMemberType matches (self memberType high)
+      else
+        false
+    }
   }
 }

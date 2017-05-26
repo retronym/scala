@@ -155,9 +155,17 @@ trait FindMembers {
         && (    (member.owner eq other.owner)                         // same owner, therefore overload
              || (member.flags & PRIVATE) != 0                         // (unqualified) private members never participate in overriding
              || (other.flags & PRIVATE) != 0                          // ... as overrider or overridee.
-             || !(memberTypeLow(member) matches memberTypeHi(other))  // do the member types match? If so, it's an override. Otherwise it's an overload.
+             || (other.flags & PRIVATE) != 0                          // ... as overrider or overridee.
+             || !matches(member, other)  // do the member types match? If so, it's an override. Otherwise it's an overload.
            )
       )
+    private def matches(member: Symbol, other: Symbol): Boolean = {
+      val mightMatch = matchesTypeApprox(member.info, other.info, alwaysMatchSimple = !phase.erasedTypes, approx = true)
+      if (mightMatch) {
+        memberTypeLow(member).matches(memberTypeHi(other))
+      } else
+        false
+    }
 
     // Cache for the member type of a candidate member when comparing against multiple, already-found existing members
     //
