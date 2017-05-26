@@ -2151,6 +2151,10 @@ trait Types
       import scala.util.hashing.MurmurHash3._
       var h = productSeed
       h = mix(h, pre.hashCode)
+
+      if (sym.hasFlag(ARTIFACT))
+        return PoisonHashCode // don't uniquecloned symbols.
+
       h = mix(h, sym.hashCode)
       var i = 0
       var elem = args
@@ -4314,21 +4318,23 @@ trait Types
     }
 
   /** A function implementing `tp1` matches `tp2`. */
-  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = matchesTypeApprox(tp1, tp2, alwaysMatchSimple, approx = false)
+
+  final def matchesTypeApprox(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean, approx: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
-      matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)
+        matchesTypeApprox(res1, if (approx) res2 else res2.substSym(tparams2, tparams1), alwaysMatchSimple, approx)
     )
     def lastTry =
       tp2 match {
         case ExistentialType(_, res2) if alwaysMatchSimple =>
-          matchesType(tp1, res2, alwaysMatchSimple = true)
+          matchesTypeApprox(tp1, res2, alwaysMatchSimple = true, approx)
         case MethodType(_, _) =>
           false
         case PolyType(_, _) =>
           false
         case _ =>
-          alwaysMatchSimple || tp1 =:= tp2
+          alwaysMatchSimple || approx || tp1 =:= tp2
       }
     tp1 match {
       case mt1 @ MethodType(params1, res1) =>
@@ -4336,11 +4342,11 @@ trait Types
           case mt2 @ MethodType(params2, res2) =>
             // sameLength(params1, params2) was used directly as pre-screening optimization (now done by matchesQuantified -- is that ok, performance-wise?)
             mt1.isImplicit == mt2.isImplicit &&
-            matchingParams(params1, params2, mt1.isJava, mt2.isJava) &&
+            (if (approx) sameLength(params1, params2) else matchingParams(params1, params2, mt1.isJava, mt2.isJava)) &&
             matchesQuantified(params1, params2, res1, res2)
           case NullaryMethodType(res2) =>
-            if (params1.isEmpty) matchesType(res1, res2, alwaysMatchSimple)
-            else matchesType(tp1, res2, alwaysMatchSimple)
+            if (params1.isEmpty) matchesTypeApprox(res1, res2, alwaysMatchSimple, approx)
+            else matchesTypeApprox(tp1, res2, alwaysMatchSimple, approx)
           case ExistentialType(_, res2) =>
             alwaysMatchSimple && matchesType(tp1, res2, alwaysMatchSimple = true)
           case TypeRef(_, sym, Nil) =>
@@ -4351,25 +4357,25 @@ trait Types
       case mt1 @ NullaryMethodType(res1) =>
         tp2 match {
           case mt2 @ MethodType(Nil, res2)  => // could never match if params nonEmpty, and !mt2.isImplicit is implied by empty param list
-            matchesType(res1, res2, alwaysMatchSimple)
+            matchesTypeApprox(res1, res2, alwaysMatchSimple, approx)
           case NullaryMethodType(res2) =>
-            matchesType(res1, res2, alwaysMatchSimple)
+            matchesTypeApprox(res1, res2, alwaysMatchSimple, approx)
           case ExistentialType(_, res2) =>
-            alwaysMatchSimple && matchesType(tp1, res2, alwaysMatchSimple = true)
+            alwaysMatchSimple && matchesTypeApprox(tp1, res2, alwaysMatchSimple = true, approx)
           case TypeRef(_, sym, Nil) if sym.isModuleClass =>
-            matchesType(res1, tp2, alwaysMatchSimple)
+            matchesTypeApprox(res1, tp2, alwaysMatchSimple, approx)
           case _ =>
-            matchesType(res1, tp2, alwaysMatchSimple)
+            matchesTypeApprox(res1, tp2, alwaysMatchSimple, approx)
         }
       case PolyType(tparams1, res1) =>
         tp2 match {
           case PolyType(tparams2, res2) =>
             if ((tparams1 corresponds tparams2)(_ eq _))
-              matchesType(res1, res2, alwaysMatchSimple)
+              matchesTypeApprox(res1, res2, alwaysMatchSimple, approx)
             else
               matchesQuantified(tparams1, tparams2, res1, res2)
           case ExistentialType(_, res2) =>
-            alwaysMatchSimple && matchesType(tp1, res2, alwaysMatchSimple = true)
+            alwaysMatchSimple && matchesTypeApprox(tp1, res2, alwaysMatchSimple = true, approx)
           case _ =>
             false // remember that tparams1.nonEmpty is now an invariant of PolyType
         }
@@ -4378,13 +4384,13 @@ trait Types
           case ExistentialType(tparams2, res2) =>
             matchesQuantified(tparams1, tparams2, res1, res2)
           case _ =>
-            if (alwaysMatchSimple) matchesType(res1, tp2, alwaysMatchSimple = true)
+            if (alwaysMatchSimple) matchesTypeApprox(res1, tp2, alwaysMatchSimple = true, approx)
             else lastTry
         }
       case TypeRef(_, sym, Nil) if sym.isModuleClass =>
         tp2 match {
-          case MethodType(Nil, res2)   => matchesType(tp1, res2, alwaysMatchSimple)
-          case NullaryMethodType(res2) => matchesType(tp1, res2, alwaysMatchSimple)
+          case MethodType(Nil, res2)   => matchesTypeApprox(tp1, res2, alwaysMatchSimple, approx)
+          case NullaryMethodType(res2) => matchesTypeApprox(tp1, res2, alwaysMatchSimple, approx)
           case _                       => lastTry
         }
       case _ =>

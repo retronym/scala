@@ -1996,6 +1996,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (newName ne null)
         clone setName asNameType(newName)
 
+      clone.setFlag(ARTIFACT)
       clone
     }
 
