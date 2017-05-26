@@ -1202,7 +1202,7 @@ trait Types
 
   object ThisType extends ThisTypeExtractor {
     def apply(sym: Symbol): Type = (
-      if (!phase.erasedTypes) unique(new UniqueThisType(sym))
+      if (!phase.erasedTypes) new UniqueThisType(sym)
       else sym.tpe_*
     )
   }
@@ -1264,7 +1264,7 @@ trait Types
 
   object SingleType extends SingleTypeExtractor {
     def apply(pre: Type, sym: Symbol): Type = {
-      unique(new UniqueSingleType(pre, sym))
+      new UniqueSingleType(pre, sym)
     }
   }
 
@@ -1299,7 +1299,7 @@ trait Types
   object SuperType extends SuperTypeExtractor {
     def apply(thistp: Type, supertp: Type): Type = {
       if (phase.erasedTypes) supertp
-      else unique(new UniqueSuperType(thistp, supertp))
+      else new UniqueSuperType(thistp, supertp)
     }
   }
 
@@ -1344,7 +1344,7 @@ trait Types
     def upper(hi: Type): TypeBounds = apply(NothingTpe, hi)
     def lower(lo: Type): TypeBounds = apply(lo, AnyTpe)
     def apply(lo: Type, hi: Type): TypeBounds = {
-      unique(new UniqueTypeBounds(lo, hi)).asInstanceOf[TypeBounds]
+      new UniqueTypeBounds(lo, hi).asInstanceOf[TypeBounds]
     }
   }
 
@@ -1854,7 +1854,7 @@ trait Types
   final class UniqueConstantType(value: Constant) extends ConstantType(value)
 
   object ConstantType extends ConstantTypeExtractor {
-    def apply(value: Constant) = unique(new UniqueConstantType(value))
+    def apply(value: Constant) = new UniqueConstantType(value)
   }
 
   /* Syncnote: The `volatile` var and `pendingVolatiles` mutable set need not be protected
@@ -2431,7 +2431,7 @@ trait Types
   private final class ClassNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym)
 
   object TypeRef extends TypeRefExtractor {
-    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
+    def apply(pre: Type, sym: Symbol, args: List[Type]): Type = {
       if (args ne Nil) {
         if (sym.isAliasType)              new AliasArgsTypeRef(pre, sym, args)
         else if (sym.isAbstractType)      new AbstractArgsTypeRef(pre, sym, args)
@@ -2445,7 +2445,7 @@ trait Types
         else if (sym.isModuleClass)       new ModuleTypeRef(pre, sym)
         else                              new ClassNoArgsTypeRef(pre, sym)
       }
-    })
+    }
   }
 
   protected def defineParentsOfTypeRef(tpe: TypeRef) = {
@@ -3485,7 +3485,7 @@ trait Types
   object ErasedValueType {
     def apply(valueClazz: Symbol, erasedUnderlying: Type): Type = {
       assert(valueClazz ne NoSymbol, "ErasedValueType over NoSymbol")
-      unique(new UniqueErasedValueType(valueClazz, erasedUnderlying))
+      new UniqueErasedValueType(valueClazz, erasedUnderlying)
     }
   }
 
@@ -3804,8 +3804,9 @@ trait Types
 
   protected def unique[T <: Type](tp: T): T =  {
     if (Statistics.canEnable) Statistics.incCounter(rawTypeCount)
-    val tp1: Type = uniques.putIfAbsent(tp, tp)
-    if (tp1 == null) tp else tp1.asInstanceOf[T]
+    tp
+//    val tp1: Type = uniques.putIfAbsent(tp, tp)
+//    if (tp1 == null) tp else tp1.asInstanceOf[T]
   }
 
 // Helper Classes ---------------------------------------------------------
