@@ -1072,7 +1072,15 @@ trait Types
    *  A type that can be passed to unique(..) and be stored in the uniques map.
    */
   abstract class UniqueType extends Type with Product {
-    final override val hashCode = computeHashCode
+    private var _hashCode: Int = 0
+    final override def hashCode: Int = {
+      if (_hashCode == 0) {
+        val computed = computeHashCode
+        _hashCode = if (computed == 0) 1 else computed
+      }
+      _hashCode
+    }
+
     protected def computeHashCode = scala.runtime.ScalaRunTime._hashCode(this)
   }
 
