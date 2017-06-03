@@ -1074,16 +1074,23 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
       case Import(expr, _)                               => expr
       case t                                             => t
     }
-    val context = doLocateContext(pos)
     val shouldTypeQualifier = tree0.tpe match {
       case null           => true
       case mt: MethodType => mt.isImplicit
       case _              => false
     }
 
+    val context = doLocateContext(pos)
     // TODO: guard with try/catch to deal with ill-typed qualifiers.
     val tree = if (shouldTypeQualifier) analyzer newTyper context typedQualifier tree0 else tree0
+    typeMembersOfTreeContext(tree, context)
+  }
 
+  private def typeMembersOfTree(tree: Tree): Stream[List[TypeMember]] = {
+    val context = doLocateContext(tree.pos)
+    typeMembersOfTreeContext(tree, context)
+  }
+  private def typeMembersOfTreeContext(tree: Tree, context: Context): Stream[List[TypeMember]] = {
     debugLog("typeMembers at "+tree+" "+tree.tpe)
     val superAccess = tree.isInstanceOf[Super]
     val members = new Members[TypeMember]
@@ -1211,7 +1218,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     val focus1: Tree = typedTreeAt(pos)
     def typeCompletions(tree: Tree, qual: Tree, nameStart: Int, name: Name): CompletionResult = {
       val qualPos = qual.pos
-      val allTypeMembers = typeMembers(qualPos).toList.flatten
+      val allTypeMembers = (if (qual.tpe == null) typeMembers(qual.pos) else typeMembersOfTree(qual)).toList.flatten
       val positionDelta: Int = pos.start - nameStart
       val subName: Name = name.newName(new String(pos.source.content, nameStart, pos.start - nameStart)).encodedName
       CompletionResult.TypeMembers(positionDelta, qual, tree, allTypeMembers, subName)
