@@ -33,6 +33,20 @@ class Inliner[BT <: BTypes](val btypes: BT) {
   final case class InlineLogFail(request: InlineRequest, warning: CannotInlineWarning) extends InlineLog
   final case class InlineLogRollback(request: InlineRequest, warnings: List[CannotInlineWarning]) extends InlineLog
 
+  private val sideEffectFreeModules = Set.empty[String] ++ {
+    Iterable("Predef", "Array", "Console", "Function", "None", "Option",
+      "Boolean", "Byte", "Char", "Double", "Float", "Int", "Long", "Short", "Unit").map("scala/" + _ + "$")
+  }
+  private def isSideEffectFreeModuleDesc(s: String) = {
+    s.startsWith("L") && s.endsWith(";") && sideEffectFreeModules(s.substring(1, s.length - 1))
+  }
+  private def isSideEffectFreeModuleLoad(insn: AbstractInsnNode) = {
+    insn.getOpcode == GETSTATIC && {
+      val fi = insn.asInstanceOf[FieldInsnNode]
+      sideEffectFreeModules(fi.owner) && fi.name == "MODULE$" && isSideEffectFreeModuleDesc(fi.desc)
+    }
+  }
+
   object InlineLog {
     private def shouldLog(request: InlineRequest): Boolean = {
       def logEnabled = compilerSettings.YoptLogInline.isSetByUser

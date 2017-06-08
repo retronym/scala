@@ -6,10 +6,11 @@ import java.util
 
 import scala.annotation.switch
 import scala.tools.asm.{Opcodes, Type}
-import scala.tools.asm.tree.{AbstractInsnNode, LdcInsnNode, MethodInsnNode, MethodNode}
+import scala.tools.asm.tree._
 import scala.tools.asm.tree.analysis._
 import scala.tools.nsc.backend.jvm.opt.BytecodeUtils
 import BytecodeUtils._
+import scala.collection.JavaConverters._
 
 /**
  * See the package object `analysis` for details on the ASM analysis framework.
@@ -63,6 +64,74 @@ object NullnessValue {
   def unknown(insn: AbstractInsnNode) = if (BytecodeUtils.instructionResultSize(insn) == 2) UnknownValue2 else UnknownValue1
 }
 
+object ModulePurityAnalysis {
+
+  import Opcodes._
+  private val sideEffectFreeModules = Set.empty[String] ++ {
+    Iterable("Predef", "Predef$ArrowAssoc", "Predef$Ensuring", "Predef$StringFormat", "Predef$any2stringadd", "Predef$RichException", "Predef$SeqCharSequence",
+      "Predef$ArrayCharSequence", "Array", "Console", "Function", "None", "Option",
+      "Boolean", "Byte", "Char", "Double", "Float", "Int", "Long", "Short", "Unit").map("scala/" + _ + "$")
+  }
+  private def isSideEffectFreeModuleDesc(s: String) = {
+    s.startsWith("L") && s.endsWith(";") && sideEffectFreeModules(s.substring(1, s.length - 1))
+  }
+  def isSideEffectFreeModuleLoad(insn: AbstractInsnNode) = {
+    insn.getOpcode == Opcodes.GETSTATIC && {
+      val fi = insn.asInstanceOf[scala.tools.asm.tree.FieldInsnNode]
+      sideEffectFreeModules(fi.owner) && fi.name == "MODULE$" && isSideEffectFreeModuleDesc(fi.desc) // TODO.. isSideEffectFreeModuleClass
+    }
+  }
+  private def findMethods(classNode: ClassNode, name: String): List[MethodNode] = classNode.methods.asScala.find(_.name == name).toList
+
+  private def isModuleClassExtendingObject(classNode: ClassNode) = {
+    classNode.name.endsWith("$") &&
+      classNode.superName == "java/lang/Object" &&
+      classNode.attrs.asScala.exists(a => a.`type` == "Scala" || a.`type` == "ScalaSignature")
+  }
+
+  private def basicClassInit(classNode: ClassNode) = findMethods(classNode, GenBCode.CLASS_CONSTRUCTOR_NAME) match {
+    case List(m) => m.instructions.iterator.asScala.filter(_.getOpcode >= 0).toList match {
+      case List(n: TypeInsnNode, i: MethodInsnNode, r) =>
+        n.getOpcode == NEW && n.desc == classNode.name &&
+          i.getOpcode == INVOKESPECIAL && i.name == GenBCode.INSTANCE_CONSTRUCTOR_NAME &&
+          r.getOpcode == ARETURN
+
+      case _ => false
+    }
+    case _ => false
+  }
+
+  def basicSuperCall(classNode: ClassNode, onlyCheckSuperAndStore: Boolean) = findMethods(classNode, GenBCode.CLASS_CONSTRUCTOR_NAME) match {
+    case List(m) =>
+      val insns = m.instructions.iterator.asScala.filter(_.getOpcode >= 0)
+      val superAndStore = insns.take(4).toList match {
+        case List(l1: VarInsnNode, i: MethodInsnNode, l2: VarInsnNode, s: FieldInsnNode) =>
+          l1.getOpcode == ALOAD && l1.`var` == 0 &&
+            i.getOpcode == INVOKESPECIAL && i.name == GenBCode.INSTANCE_CONSTRUCTOR_NAME && i.owner == "java/lang/Object" &&
+            l2.getOpcode == ALOAD && l2.`var` == 0 &&
+            s.getOpcode == PUTSTATIC && s.name == "MODULE$" && s.owner == classNode.name
+
+        case _ => false
+      }
+      if (onlyCheckSuperAndStore) superAndStore else superAndStore && (insns.drop(4).toList match {
+        case List(r) => r.getOpcode == RETURN
+        case _ => false
+      })
+
+    case _ => false
+  }
+
+  private def isModuleWithBasicSuperCall(moduleClass: ClassNode): Boolean = {
+    isModuleClassExtendingObject(moduleClass) && basicClassInit(moduleClass) && basicSuperCall(moduleClass, onlyCheckSuperAndStore = true)
+  }
+
+  def hasOnlyModuleField(classNode: ClassNode) = !classNode.fields.asScala.exists(_.name != "MODULE$")
+
+  private def isSideEffectFreeModuleClass(moduleClass: ClassNode) = {
+    isModuleClassExtendingObject(moduleClass) && hasOnlyModuleField(moduleClass) && basicClassInit(moduleClass) && basicSuperCall(moduleClass, onlyCheckSuperAndStore = false)
+  }
+}
+
 final class NullnessInterpreter(bTypes: BTypes, method: MethodNode) extends Interpreter[NullnessValue](Opcodes.ASM5) {
   def newValue(tp: Type): NullnessValue = {
     // ASM loves giving semantics to null. The behavior here is the same as in SourceInterpreter,
@@ -95,11 +164,16 @@ final class NullnessInterpreter(bTypes: BTypes, method: MethodNode) extends Inte
 
     case Opcodes.LDC => insn.asInstanceOf[LdcInsnNode].cst match {
       case _: String | _: Type => NotNullValue
-      case _ => NullnessValue.unknown(insn)
+      case _ =>
+        NullnessValue.unknown(insn)
     }
 
     // for Opcodes.NEW, we use Unknown. The value will become NotNull after the constructor call.
-    case _ => NullnessValue.unknown(insn)
+    case _ =>
+      if (ModulePurityAnalysis.isSideEffectFreeModuleLoad(insn))
+        NotNullValue
+      else
+        NullnessValue.unknown(insn)
   }
 
   def copyOperation(insn: AbstractInsnNode, value: NullnessValue): NullnessValue = value

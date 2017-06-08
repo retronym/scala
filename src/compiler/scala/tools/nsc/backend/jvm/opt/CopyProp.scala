@@ -181,6 +181,7 @@ class CopyProp[BT <: BTypes](val btypes: BT) {
       val queue = mutable.Queue.empty[ProducedValue]
       // Contains constructor invocations for values that can be eliminated if unused.
       val sideEffectFreeConstructorCalls = mutable.ArrayBuffer.empty[MethodInsnNode]
+      val sideEffectFreeModuleLoads = mutable.ArrayBuffer.empty[FieldInsnNode]
 
       // instructions to remove (we don't change the bytecode while analyzing it. this allows
       // running the ProdConsAnalyzer only once.)
@@ -345,6 +346,7 @@ class CopyProp[BT <: BTypes](val btypes: BT) {
           case GETFIELD | GETSTATIC =>
             // TODO eliminate side-effect free module loads (https://github.com/scala/scala-dev/issues/16)
             if (isBoxedUnit(prod)) toRemove += prod
+            else if (ModulePurityAnalysis.isSideEffectFreeModuleLoad(prod)) toRemove += prod
             else popAfterProd() // keep potential class initialization (static field) or NPE (instance field)
 
           case INVOKEVIRTUAL | INVOKESPECIAL | INVOKESTATIC | INVOKEINTERFACE =>

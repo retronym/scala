@@ -177,31 +177,51 @@ class InlinerHeuristics[BT <: BTypes](val bTypes: BT) {
           else None
 
         case "default" =>
-          def reason = if (!compilerSettings.YoptLogInline.isSetByUser) null else {
-            if (callsite.isInlineAnnotated) {
-              val what = if (callee.annotatedInline) "callee" else "callsite"
-              s"the $what is annotated `@inline`"
-            } else {
-              val paramNames = Option(callee.callee.parameters).map(_.asScala.map(_.name).toVector)
-              def param(i: Int) = {
-                def syn = s"<param $i>"
-                paramNames.fold(syn)(v => v.applyOrElse(i, (_: Int) => syn))
+          def samReason = {
+            val paramNames = Option(callee.callee.parameters).map(_.asScala.map(_.name).toVector)
+            def param(i: Int) = {
+              def syn = s"<param $i>"
+              paramNames.fold(syn)(v => v.applyOrElse(i, (_: Int) => syn))
+            }
+            def samInfo(i: Int, sam: String, arg: String) = s"the argument for parameter (${param(i)}: $sam) is a $arg"
+            val argInfos = for ((i, sam) <- callee.samParamTypes; info <- callsite.argInfos.get(i)) yield {
+              val argKind = info match {
+                case FunctionLiteral => "function literal"
+                case ForwardedParam(_) => "parameter of the callsite method"
               }
-              def samInfo(i: Int, sam: String, arg: String) = s"the argument for parameter (${param(i)}: $sam) is a $arg"
-              val argInfos = for ((i, sam) <- callee.samParamTypes; info <- callsite.argInfos.get(i)) yield {
-                val argKind = info match {
-                  case FunctionLiteral => "function literal"
-                  case ForwardedParam(_) => "parameter of the callsite method"
-                }
-                samInfo(i, sam.internalName.split('/').last, argKind)
+              samInfo(i, sam.internalName.split('/').last, argKind)
+            }
+            s"the callee is a higher-order method, ${argInfos.mkString(", ")}"
+          }
+          def annotatedReason = {
+            val what = if (callee.annotatedInline) "callee" else "callsite"
+            s"the $what is annotated `@inline`"
+          }
+          def isImplicitValueClassFactory: Boolean = {
+            import BytecodeUtils._
+            // TODO refine this, move it to a util class
+            nextExecutableInstruction(callee.callee.instructions.getFirst) match {
+              case Some(i1) if isLoad(i1) => nextExecutableInstruction(i1) match {
+                case Some(i2) =>
+                  isReturn(i2) && BytecodeUtils.nextExecutableInstruction(i2).isEmpty
+                case None =>
+                  false
               }
-              s"the callee is a higher-order method, ${argInfos.mkString(", ")}"
+              case _ =>
+                false
             }
           }
+          val needReason = compilerSettings.YoptLogInline.isSetByUser
           def shouldInlineHO = callee.samParamTypes.nonEmpty && (callee.samParamTypes exists {
             case (index, _) => callsite.argInfos.contains(index)
           })
-          if (!callsite.isNoInlineAnnotated && (callsite.isInlineAnnotated || shouldInlineHO)) requestIfCanInline(callsite, reason)
+
+          if (!callsite.isNoInlineAnnotated) {
+            if (callsite.isInlineAnnotated) requestIfCanInline(callsite, if (needReason) annotatedReason else null)
+            else if (shouldInlineHO) requestIfCanInline(callsite, if (needReason) samReason else null)
+            else if (isImplicitValueClassFactory) requestIfCanInline(callsite, if (needReason) "implicit value class factory method" else null)
+            else None
+          }
           else None
       }
     }

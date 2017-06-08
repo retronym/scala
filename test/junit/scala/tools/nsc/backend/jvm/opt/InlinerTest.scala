@@ -1756,4 +1756,37 @@ class InlinerTest extends BytecodeTesting {
     assertDoesNotInvoke(i, "f")
     assertInvoke(i, "T", "T$_setter_$x_$eq")
   }
+
+  @Test
+  def arrowAssocInline(): Unit = {
+    val code =
+      """class C {
+        |  def t1 = "a" -> "b"
+        |  def t2 = 1 -> true // ArrowAssoc is not specialized, this creates a Tuple2
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    println(AsmUtils.textify(c))
+    assertDoesNotInvoke(getMethod(c, "t1"), "$minus$greater$extension")
+
+    assertDoesNotInvoke(getMethod(c, "t2"), "$minus$greater$extension")
+    assertInvoke(getMethod(c, "t2"), "scala/runtime/BoxesRunTime", "boxToInteger")
+
+    // TODO: should get rid of a lot more code.
+    //   - Predef.ArrowAssoc identity function is called
+    //   - null check on Predef.ArrowAssoc$.MODULE$
+  }
+  @Test
+  def implcitly(): Unit = {
+    val code =
+      """class C {
+        |  def t1(implicit i: String) = implicitly[String]
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    println(AsmUtils.textify(c))
+    // TODO: should get rid of a lot more code.
+    //   - Predef.ArrowAssoc identity function is called
+    //   - null check on Predef.ArrowAssoc$.MODULE$
+  }
 }
