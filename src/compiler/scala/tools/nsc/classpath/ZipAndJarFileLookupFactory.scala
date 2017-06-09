@@ -5,11 +5,15 @@ package scala.tools.nsc.classpath
 
 import java.io.File
 import java.net.URL
+import java.nio.file.{Files, Path}
+import java.nio.file.attribute.BasicFileAttributes
+
 import scala.annotation.tailrec
-import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources}
+import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources, ZipArchive}
 import scala.tools.nsc.util.ClassPath
 import scala.tools.nsc.Settings
 import FileUtils._
+import scala.reflect.internal.util.WeakCache
 
 /**
  * A trait providing an optional cache for classpath entries obtained from zip and jar files.
@@ -20,23 +24,27 @@ import FileUtils._
  * when there are a lot of projects having a lot of common dependencies.
  */
 sealed trait ZipAndJarFileLookupFactory {
-  private val cache = collection.mutable.Map.empty[AbstractFile, ClassPath]
+  private val cache = new WeakCache[Path, (Long, Object), ClassPath] {
+    override protected def create(k: Path): ClassPath = createForZipFile(AbstractFile.getFile(k.toFile))
+    override protected def stamp(k: Path): (Long, Object) =
+      (Files.getLastModifiedTime(k).toMillis, Files.readAttributes(k, classOf[BasicFileAttributes]).fileKey())
+    override protected def share(v: ClassPath): Unit = v match {
+      case z: ZipArchiveFileLookup[_] => z.addReference()
+      case _ =>
+    }
+  }
 
   def create(zipFile: AbstractFile, settings: Settings): ClassPath = {
     if (settings.YdisableFlatCpCaching) createForZipFile(zipFile)
-    else createUsingCache(zipFile, settings)
+    else {
+      val (isNewInstance, classpath) = cache.get(zipFile.file.toPath)
+      if (isNewInstance && settings.verbose || settings.Ylogcp)
+        println(s"$zipFile was not yet in the classpath cache")
+      classpath
+    }
   }
 
   protected def createForZipFile(zipFile: AbstractFile): ClassPath
-
-  private def createUsingCache(zipFile: AbstractFile, settings: Settings): ClassPath = cache.synchronized {
-    def newClassPathInstance = {
-      if (settings.verbose || settings.Ylogcp)
-        println(s"$zipFile is not yet in the classpath cache")
-      createForZipFile(zipFile)
-    }
-    cache.getOrElseUpdate(zipFile, newClassPathInstance)
-  }
 }
 
 /**

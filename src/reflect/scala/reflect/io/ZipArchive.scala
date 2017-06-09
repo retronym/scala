@@ -158,10 +158,17 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
     override def sizeOption: Option[Int] = Some(zipEntry.getSize.toInt)
   }
 
+  final def close() {
+    val file = zipFile
+    if (file != null)
+      file.close()
+  }
+  private var zipFile: ZipFile = _
+
   lazy val (root, allDirs) = {
     val root = new DirEntry("/")
     val dirs = mutable.HashMap[String, DirEntry]("/" -> root)
-    val zipFile = openZipFile()
+    zipFile = openZipFile()
     val enum    = zipFile.entries()
 
     try {

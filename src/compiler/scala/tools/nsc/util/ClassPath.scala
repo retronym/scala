@@ -19,6 +19,8 @@ import Jar.isJarOrZip
   * A representation of the compiler's class- or sourcepath.
   */
 trait ClassPath {
+  def close(): Unit = ()
+
   import scala.tools.nsc.classpath._
   def asURLs: Seq[URL]
 

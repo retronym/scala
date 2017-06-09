@@ -88,6 +88,8 @@ case class AggregateClassPath(aggregates: Seq[ClassPath]) extends ClassPath {
     ClassPathEntries(distinctPackages, distinctClassesAndSources)
   }
 
+  override def close(): Unit = aggregates.foreach(_.close())
+
   /**
    * Returns only one entry for each name. If there's both a source and a class entry, it
    * creates an entry containing both of them. If there would be more than one class or source

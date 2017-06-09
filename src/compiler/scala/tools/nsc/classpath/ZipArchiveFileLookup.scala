@@ -5,6 +5,8 @@ package scala.tools.nsc.classpath
 
 import java.io.File
 import java.net.URL
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.Seq
 import scala.reflect.io.AbstractFile
 import scala.reflect.io.FileZipArchive
@@ -65,4 +67,16 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
 
   protected def createFileEntry(file: FileZipArchive#Entry): FileEntryType
   protected def isRequiredFileType(file: AbstractFile): Boolean
+
+  private[this] final val refCount = new AtomicInteger(1)
+  final def addReference(): Unit = {
+    refCount.incrementAndGet()
+  }
+  override final def close(): Unit = {
+    val refs = refCount.decrementAndGet()
+    if (refs == 0) {
+      archive.close()
+    }
+
+  }
 }
