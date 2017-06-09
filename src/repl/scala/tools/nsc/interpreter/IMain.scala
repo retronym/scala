@@ -675,6 +675,9 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
    *  it is using.  The reporter's output gets flushed.
    */
   def close() {
+    val c = _compiler
+    if (c != null)
+      c.close()
     reporter.flush()
   }
 

@@ -32,7 +32,7 @@ final class PresentationCompilerThread(var compiler: Global, name: String = "")
     } catch {
       case ex @ ShutdownReq =>
         compiler.debugLog("exiting presentation compiler")
-        compiler.log.close()
+        compiler.close()
 
         // make sure we don't keep around stale instances
         compiler = null

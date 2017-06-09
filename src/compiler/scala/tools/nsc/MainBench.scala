@@ -15,6 +15,7 @@ object MainBench extends Driver with EvalLoop {
   lazy val theCompiler = Global(settings, reporter)
 
   override def newCompiler() = theCompiler
+  override protected def closeCompiler(compiler: Global): Unit = ()
 
   val NIter = 50
   val NBest = 10
@@ -36,5 +37,6 @@ object MainBench extends Driver with EvalLoop {
     }
     val avg = times.sorted.take(NBest).sum / NBest
     println(s"avg shortest $NBest times ${avg}ms")
+    theCompiler.close()
   }
 }

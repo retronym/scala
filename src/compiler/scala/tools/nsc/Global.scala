@@ -10,9 +10,10 @@ package nsc
 import java.io.{File, FileNotFoundException, IOException}
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, IllegalCharsetNameException, UnsupportedCharsetException}
+
 import scala.collection.{immutable, mutable}
 import io.{AbstractFile, Path, SourceReader}
-import reporters.Reporter
+import reporters.{ConsoleReporter, Reporter}
 import util.{ClassPath, StatisticsInfo, returning}
 import scala.reflect.ClassTag
 import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile}
@@ -1594,6 +1595,15 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   def getFile(clazz: Symbol, suffix: String): File = getFile(clazz.sourceFile, clazz.fullName split '.', suffix)
 
   def createJavadoc    = false
+
+  def close(): Unit = {
+    val run = currentRun
+    if (run != null) {
+      run.cancel()
+    }
+    perRunCaches.clearAll()
+    classPath.close()
+  }
 }
 
 object Global {
@@ -1602,8 +1612,11 @@ object Global {
   def apply(settings: Settings): Global = new Global(settings, reporter(settings))
 
   private def reporter(settings: Settings): Reporter = {
-    //val loader = ScalaClassLoader(getClass.getClassLoader)  // apply does not make delegate
-    val loader = new ClassLoader(getClass.getClassLoader) with ScalaClassLoader
-    loader.create[Reporter](settings.reporter.value, settings.errorFn)(settings)
+    if (settings.reporter.value == classOf[ConsoleReporter].getName) new ConsoleReporter(settings) // avoid dynamic classloader path for default case.
+    else {
+      //val loader = ScalaClassLoader(getClass.getClassLoader)  // apply does not make delegate
+      val loader = new ClassLoader(getClass.getClassLoader) with ScalaClassLoader
+      loader.create[Reporter](settings.reporter.value, settings.errorFn)(settings)
+    }
   }
 }

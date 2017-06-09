@@ -60,10 +60,14 @@ abstract class Driver {
             case FatalError(msg)  => // signals that we should fail compilation.
             case _                => throw ex // unexpected error, tell the outside world.
           }
+      } finally {
+        closeCompiler(compiler)
       }
     } else if (reporter.hasErrors) reporter.flush()
     !reporter.hasErrors
   }
+
+  protected def closeCompiler(compiler: Global): Unit = compiler.close()
 
   def main(args: Array[String]): Unit = sys.exit(if (process(args)) 0 else 1)
 }

@@ -133,10 +133,16 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
     else if (logName != "") new Logger(new FileWriter(logName))
     else NullLogger
 
+
+
   import log.logreplay
   debugLog(s"logger: ${log.getClass} writing to ${(new java.io.File(logName)).getAbsolutePath}")
   debugLog(s"classpath: $classPath")
 
+  override def close(): Unit = {
+    super.close()
+    log.close()
+  }
   private var curTime = System.nanoTime
   private def timeStep = {
     val last = curTime
