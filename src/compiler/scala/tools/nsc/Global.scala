@@ -1597,7 +1597,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   def createJavadoc    = false
 
   def close(): Unit = {
-    val run = currentRun
+    // val run = currentRun
     perRunCaches.clearAll()
     classPath.close()
   }

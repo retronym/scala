@@ -1,11 +1,15 @@
 package scala.tools.nsc
 package classpath
 
-import org.junit.Test
+import org.junit.{Assert, Test}
 import java.nio.file._
 import java.nio.file.attribute.FileTime
 
+import org.junit.Assert.{assertNotSame, assertSame}
+
+import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.util.ClassPath
+import scala.tools.testing.AssertUtil
 
 class ZipAndJarFileLookupFactoryTest {
   @Test def cacheInvalidation(): Unit = {
@@ -62,14 +66,20 @@ class ZipAndJarFileLookupFactoryTest {
 
     createZip(f, Array(), "p1/C.class")
     val cp1 = createCp
-    cp1.findClassFile("p1.C").get.toByteArray
-    cp1.close()
     val cp2 = createCp
-    cp2.findClassFile("p1.C").get.toByteArray
+    assertSame(cp1, cp2)
     cp1.close()
-    cp2.findClassFile("p1.C").get.toByteArray
-
+    val cp3 = createCp
+    assertSame(cp1, cp3)
     cp2.close()
+    cp3.close()
+    val cp4 = createCp
+    assertNotSame(cp1, cp4)
+    AssertUtil.assertThrows[IllegalStateException](cp1.findClassFile("p1.C").get.toByteArray, _.contains("Classpath entry closed"))
+    val found: AbstractFile = cp4.findClassFile("p1.C").get
+    found.toByteArray
+    cp4.close()
+    AssertUtil.assertThrows[IllegalStateException](found.toByteArray, _.contains("zip file closed"))
   }
 
   def createZip(zipLocation: Path, content: Array[Byte], internalPath: String): Unit = {

@@ -165,12 +165,17 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
       zipFile = null
     }
   }
-  private var zipFile: ZipFile = _
+  private var zipFile = if (ZipArchive.closeZipFile) null else openZipFile()
 
   lazy val (root, allDirs) = {
     val root = new DirEntry("/")
     val dirs = mutable.HashMap[String, DirEntry]("/" -> root)
-    zipFile = openZipFile()
+    val zipFile = if (ZipArchive.closeZipFile) openZipFile() else {
+      this.zipFile match {
+        case null => throw new IllegalStateException("Classpath entry closed")
+        case x => x
+      }
+    }
     val enum    = zipFile.entries()
 
     try {
