@@ -28,9 +28,9 @@ sealed trait ZipAndJarFileLookupFactory {
     override protected def create(k: Path): ClassPath = createForZipFile(AbstractFile.getFile(k.toFile))
     override protected def stamp(k: Path): (Long, Object) =
       (Files.getLastModifiedTime(k).toMillis, Files.readAttributes(k, classOf[BasicFileAttributes]).fileKey())
-    override protected def share(v: ClassPath): Unit = v match {
+    override protected def share(v: ClassPath): Boolean = v match {
       case z: ZipArchiveFileLookup[_] => z.addReference()
-      case _ =>
+      case _ => true
     }
   }
 

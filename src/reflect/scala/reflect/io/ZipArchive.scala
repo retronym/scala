@@ -158,10 +158,12 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
     override def sizeOption: Option[Int] = Some(zipEntry.getSize.toInt)
   }
 
-  final def close() {
+  final def close(): Unit = synchronized {
     val file = zipFile
-    if (file != null)
+    if (file != null) {
       file.close()
+      zipFile = null
+    }
   }
   private var zipFile: ZipFile = _
 

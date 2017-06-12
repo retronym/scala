@@ -6,7 +6,7 @@ private[scala] abstract class WeakCache[K, S, V] {
   private val cache = collection.mutable.WeakHashMap.empty[K, SoftReference[(S, V)]]
   protected def create(k: K): V
   protected def stamp(k: K): S
-  protected def share(v: V): Unit = ()
+  protected def share(v: V): Boolean = true
   final def apply(k: K): V = get(k)._2
   final def get(k: K): (Boolean, V) = synchronized {
     val currentStamp = stamp(k)
@@ -25,8 +25,10 @@ private[scala] abstract class WeakCache[K, S, V] {
           if (cachedStamp != currentStamp) {
             createEntry
           } else {
-            share(cachedValue)
-            (false, cachedValue)
+            if (share(cachedValue))
+              (false, cachedValue)
+            else
+              createEntry
           }
         }
       case None =>

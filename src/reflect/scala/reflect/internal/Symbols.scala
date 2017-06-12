@@ -1548,6 +1548,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def info_=(info: Type) {
       assert(info ne null)
+      if ((info eq ErrorType) && initName.containsName("StringBuilder"))
+        new Throwable().printStackTrace()
       infos = TypeHistory(currentPeriod, info, null)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod

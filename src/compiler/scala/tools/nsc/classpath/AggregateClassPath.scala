@@ -89,6 +89,7 @@ case class AggregateClassPath(aggregates: Seq[ClassPath]) extends ClassPath {
   }
 
   override def close(): Unit = aggregates.foreach(_.close())
+  override def addReference(): Boolean = aggregates.foldLeft(true){(z, cp) => {val b = cp.addReference(); b && z }}
 
   /**
    * Returns only one entry for each name. If there's both a source and a class entry, it

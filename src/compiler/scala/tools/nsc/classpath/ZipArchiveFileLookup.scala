@@ -68,15 +68,18 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
   protected def createFileEntry(file: FileZipArchive#Entry): FileEntryType
   protected def isRequiredFileType(file: AbstractFile): Boolean
 
-  private[this] final val refCount = new AtomicInteger(1)
-  final def addReference(): Unit = {
-    refCount.incrementAndGet()
+  private[this] final var refCount: Int = 1
+  override final def addReference(): Boolean = synchronized {
+    if (refCount == 0) false
+    else {
+      refCount += 1
+      true
+    }
   }
-  override final def close(): Unit = {
-    val refs = refCount.decrementAndGet()
-    if (refs == 0) {
+  override final def close(): Unit = synchronized {
+    refCount -= 1
+    if (refCount == 0) {
       archive.close()
     }
-
   }
 }

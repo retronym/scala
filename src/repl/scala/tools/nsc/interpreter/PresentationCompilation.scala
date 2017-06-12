@@ -57,7 +57,9 @@ trait PresentationCompilation {
   def newPresentationCompiler(): interactive.Global = {
     def mergedFlatClasspath = {
       val replOutClasspath = ClassPathFactory.newClassPath(replOutput.dir, settings)
-      AggregateClassPath(replOutClasspath :: global.platform.classPath :: Nil)
+      val cp = global.platform.classPath
+      assert(cp.addReference())
+      AggregateClassPath(replOutClasspath :: cp :: Nil)
     }
     def copySettings: Settings = {
       val s = new Settings(_ => () /* ignores "bad option -nc" errors, etc */)
