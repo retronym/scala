@@ -1598,9 +1598,6 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   def close(): Unit = {
     val run = currentRun
-    if (run != null) {
-      run.cancel()
-    }
     perRunCaches.clearAll()
     classPath.close()
   }
