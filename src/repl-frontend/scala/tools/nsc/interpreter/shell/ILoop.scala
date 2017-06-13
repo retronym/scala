@@ -19,7 +19,7 @@ import scala.tools.asm.ClassReader
 import scala.tools.util.PathResolver
 import scala.tools.nsc.Settings
 import scala.tools.nsc.util.{stackTraceString, stringFromStream}
-import scala.tools.nsc.interpreter.{AbstractOrMissingHandler, Repl, IMain, Phased, jline}
+import scala.tools.nsc.interpreter._
 import scala.tools.nsc.interpreter.Results.{Error, Incomplete, Success}
 import scala.tools.nsc.interpreter.StdReplTags._
 import scala.tools.nsc.interpreter.shell.Completion._
@@ -917,7 +917,7 @@ class ILoop(config: ShellConfig, inOverride: BufferedReader = null, protected va
   private def interpretPreamble = {
     // Bind intp somewhere out of the regular namespace where
     // we can get at it in generated code.
-    intp.quietBind(intp.namedParam[Repl]("$intp", intp)(tagOfRepl, classTag[Repl]))
+    intp.quietBind(NamedParam.fromMonomorphicClass[Repl]("$intp", intp))
 
     // Auto-run code via some setting.
     (config.replAutorunCode.option

@@ -42,7 +42,7 @@ Lost after 18/flatten {
 
 /** A class for methods to be injected into the intp in power mode.
  */
-class Power[ReplValsImpl <: ReplVals : ru.TypeTag: ClassTag](val intp: IMain, replVals: ReplValsImpl) {
+class Power(val intp: IMain, replVals: StdReplVals) {
   import intp.global._
   import intp.parse
 
@@ -140,7 +140,7 @@ class Power[ReplValsImpl <: ReplVals : ru.TypeTag: ClassTag](val intp: IMain, re
    */
   def unleash(): Unit = intp.reporter.withoutPrintingResults {
     // First we create the ReplVals instance and bind it to $r
-    intp.bind("$r", replVals)
+    intp.bind(NamedParam.fromMonomorphicClass[StdReplVals]("$r", replVals))
     // Then we import everything from $r.
     intp interpret s"import ${ intp.originalPath("$r") }._"
   }

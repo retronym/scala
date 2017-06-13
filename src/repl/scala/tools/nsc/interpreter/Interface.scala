@@ -122,10 +122,6 @@ trait Repl extends ReplCore {
 
   final def beQuietDuring(body: => Unit): Unit = reporter.withoutPrintingResults(body)
 
-
-
-  def namedParam[T: reflect.runtime.universe.TypeTag : ClassTag](name: String, value: T): NamedParam
-
   def quietBind(p: NamedParam): Result
 
   def bind(p: NamedParam): Result
@@ -140,7 +136,7 @@ trait Repl extends ReplCore {
     */
   def close(): Unit
 
-  val power: Power[StdReplVals]
+  val power: Power
 
 
   def requestDefining(name: String): Option[ReplRequest]

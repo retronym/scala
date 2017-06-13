@@ -14,7 +14,7 @@ import scala.reflect.internal.util.Position
 import scala.util.Properties.versionString
 import scala.tools.nsc.Settings
 import scala.tools.nsc.util.stringFromReader
-import scala.tools.nsc.interpreter.{ImportContextPreamble, ScriptedInterpreter, ScriptedRepl}
+import scala.tools.nsc.interpreter.{ImportContextPreamble, NamedParam, ScriptedInterpreter, ScriptedRepl}
 import scala.tools.nsc.interpreter.Results.Incomplete
 
 /* A REPL adaptor for the javax.script API. */
@@ -96,7 +96,7 @@ class Scripted(@BeanProperty val factory: ScriptEngineFactory, settings: Setting
     if (!dynRes) throw new ScriptException("Failed to compile dynamicBindings")
     intp.reporter.withoutPrintingResults {
       intp interpret s"val $ctx: _root_.scala.tools.nsc.interpreter.dynamicBindings.type = _root_.scala.tools.nsc.interpreter.dynamicBindings"
-      intp bind ("$engine" -> (this: ScriptEngine with Compilable))
+      intp bind NamedParam.fromCompoundMonomorphicClass("$engine", classOf[ScriptEngine] :: classOf[Compilable] :: Nil, this)
     }
   }
 

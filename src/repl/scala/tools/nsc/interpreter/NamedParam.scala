@@ -11,27 +11,16 @@ import scala.reflect.runtime.{universe => ru}
 import scala.tools.nsc.typechecker.TypeStrings
 
 trait NamedParamCreator {
-  import NamedParam._
-  protected def freshName: () => String
-
-  def apply[T: ru.TypeTag : ClassTag](name: String, x: T): NamedParam = new Typed[T](name, x)
-  def apply[T: ru.TypeTag : ClassTag](x: T): NamedParam = apply(freshName(), x)
-  def clazz(name: String, x: Any): NamedParam = new Untyped(name, x)
-
-  implicit def tuple[T: ru.TypeTag : ClassTag](pair: (String, T)): NamedParam       = apply(pair._1, pair._2)
 }
 
 object NamedParam extends NamedParamCreator {
-  class Typed[T: ru.TypeTag : ClassTag](val name: String, val value: T) extends NamedParam {
-    val tpe = TypeStrings.fromTag[T]
+  def fromMonomorphicClass[T](name: String, value: T)(implicit tag: ClassTag[T]) = {
+    fromCompoundMonomorphicClass(name, tag.runtimeClass :: Nil, value)
   }
-  class Untyped(val name: String, val value: Any) extends NamedParam {
-    val tpe = TypeStrings.fromValue(value)
-  }
-
-  protected val freshName = {
-    var counter = 0
-    () => { counter += 1; "p" + counter }
+  def fromCompoundMonomorphicClass(name: String, classes: Seq[Class[_]], value: Any) = {
+    assert(classes.forall(_.getTypeParameters.isEmpty), classes)
+    assert(classes.nonEmpty)
+    new NamedParamClass(name, classes.map(c => "_root_." + c.getName).mkString(" with "), value)
   }
 }
 

@@ -179,7 +179,7 @@ class ReplReporterImpl(val config: ShellConfig, val settings: Settings = new Set
 
         printMessage(indentation + posIn.lineContent)
         printMessage(indentation + posIn.lineCaret)
-        printMessage(s"$locationPrefix${posIn.line - preambleLineDelta}: $msgFirstLine")
+        printMessage(s"$locationPrefix${posIn.line - preambleLineDelta - 1}: $msgFirstLine")
         if (!msgRest.isEmpty) printMessage(indented(msgRest))
       }
     }

@@ -13,7 +13,6 @@ import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{ClassTag, classTag}
 import scala.reflect.internal.util.{AbstractFileClassLoader, BatchSourceFile, SourceFile}
 import scala.tools.nsc.{ConsoleWriter, Global, NewLinePrintWriter, Settings}
-import scala.tools.nsc.interpreter.StdReplTags.tagOfStdReplVals
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{Reporter, StoreReporter}
 import scala.tools.nsc.typechecker.{StructuredTypeStrings, TypeStrings}
@@ -620,9 +619,6 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     result
   }
   def directBind(p: NamedParam): Result                                    = directBind(p.name, p.tpe, p.value)
-  def directBind[T: ru.TypeTag : ClassTag](name: String, value: T): Result = directBind((name, value))
-
-  def namedParam[T: ru.TypeTag : ClassTag](name: String, value: T): NamedParam = NamedParam[T](name, value)
 
   def rebind(p: NamedParam): Result = {
     val name     = p.name
@@ -634,7 +630,6 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
   }
   override def quietBind(p: NamedParam): Result                               = reporter.withoutPrintingResults(bind(p))
   override def bind(p: NamedParam): Result                                    = bind(p.name, p.tpe, p.value)
-  def bind[T: ru.TypeTag : ClassTag](name: String, value: T): Result = bind((name, value))
 
   /** Reset this interpreter, forgetting all user-specified requests. */
   override def reset() {
@@ -653,7 +648,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     reporter.flush()
   }
 
-  override lazy val power = new Power(this, new StdReplVals(this))(tagOfStdReplVals, classTag[StdReplVals])
+  override lazy val power = new Power(this, new StdReplVals(this))
 
   /** Here is where we:
     *
@@ -688,7 +683,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
       val stackTrace = unwrapped stackTracePrefixString (!isWrapperInit(_))
 
       withLastExceptionLock[String]({
-        directBind[Throwable]("lastException", unwrapped)(StdReplTags.tagOfThrowable, classTag[Throwable])
+        directBind(NamedParam.fromMonomorphicClass[Throwable]("lastException", unwrapped))
         stackTrace
       }, stackTrace)
     }
