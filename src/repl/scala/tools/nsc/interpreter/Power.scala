@@ -46,73 +46,6 @@ class Power(val intp: IMain, replVals: StdReplVals) {
   import intp.global._
   import intp.parse
 
-  abstract class SymSlurper {
-    def isKeep(sym: Symbol): Boolean
-    def isIgnore(sym: Symbol): Boolean
-    def isRecur(sym: Symbol): Boolean
-    def isFinished(): Boolean
-
-    val keep = mutable.HashSet[Symbol]()
-    val seen = mutable.HashSet[Symbol]()
-    def processed = keep.size + seen.size
-    def discarded = seen.size - keep.size
-
-    def members(x: Symbol): List[Symbol] =
-      if (x.rawInfo.isComplete) x.info.members.toList
-      else Nil
-
-    var lastCount = -1
-    var pass = 0
-    val unseenHistory = new mutable.ListBuffer[Int]
-
-    def loop(todo: Set[Symbol]): Set[Symbol] = {
-      pass += 1
-      val (repeats, unseen) = todo partition seen
-      unseenHistory += unseen.size
-      if (settings.verbose) {
-        println("%3d  %s accumulated, %s discarded.  This pass: %s unseen, %s repeats".format(
-          pass, keep.size, discarded, unseen.size, repeats.size))
-      }
-      if (lastCount == processed || unseen.isEmpty || isFinished())
-        return keep.toSet
-
-      lastCount = processed
-      keep ++= (unseen filter isKeep filterNot isIgnore)
-      seen ++= unseen
-      loop(unseen filter isRecur flatMap members)
-    }
-
-    def apply(sym: Symbol): Set[Symbol] = {
-      keep.clear()
-      seen.clear()
-      loop(Set(sym))
-    }
-  }
-
-  class PackageSlurper(packageClass: Symbol) extends SymSlurper {
-    /** Looking for dwindling returns */
-    def droppedEnough() = unseenHistory.size >= 4 && {
-      unseenHistory takeRight 4 sliding 2 forall { it =>
-        val List(a, b) = it.toList
-        a > b
-      }
-    }
-
-    def isRecur(sym: Symbol)  = true
-    def isIgnore(sym: Symbol) = sym.isAnonOrRefinementClass || (sym.name.toString contains "$mc")
-    def isKeep(sym: Symbol)   = sym.hasTransOwner(packageClass)
-    def isFinished()          = droppedEnough()
-    def slurp()               = {
-      if (packageClass.isPackageClass)
-        apply(packageClass)
-      else {
-//        repldbg("Not a package class! " + packageClass)
-        Set()
-      }
-    }
-  }
-
-
   def classic = """
     |** Power User mode enabled - BEEP WHIR GYVE **
     |** :phase has been set to 'typer'.          **
@@ -146,7 +79,6 @@ class Power(val intp: IMain, replVals: StdReplVals) {
   }
 
   trait LowPriorityInternalInfo {
-    implicit def apply[T: ru.TypeTag : ClassTag] : InternalInfo[T] = new InternalInfo[T](None)
   }
   object InternalInfo extends LowPriorityInternalInfo { }
 
@@ -158,14 +90,14 @@ class Power(val intp: IMain, replVals: StdReplVals) {
    */
   trait LowPriorityInternalInfoWrapper { }
   class InternalInfoWrapper[T: ru.TypeTag : ClassTag](value: Option[T] = None) {
-    def ? : InternalInfo[T] = new InternalInfo[T](value)
+    def ? : InternalInfo[T] = new InternalInfo[T](value)(ru.typeTag[T].in(rootMirror).tpe, reflect.classTag[T])
   }
 
   /** Todos...
    *    translate tag type arguments into applied types
    *    customizable symbol filter (had to hardcode no-spec to reduce noise)
    */
-  class InternalInfo[T](value: Option[T] = None)(implicit typeEvidence: ru.TypeTag[T], runtimeClassEvidence: ClassTag[T]) {
+  class InternalInfo[T](value: Option[T] = None)(val tpe: Type, runtimeClassEvidence: ClassTag[T]) {
     private def isSpecialized(s: Symbol) = s.name.toString contains "$mc"
 
     /** Standard noise reduction filter. */
@@ -174,12 +106,10 @@ class Power(val intp: IMain, replVals: StdReplVals) {
       || s.isAnonOrRefinementClass
       || s.isAnonymousFunction
     )
-    def symbol            = definitions.compilerSymbolFromTag(tag)
-    def tpe               = definitions.compilerTypeFromTag(tag)
+    def symbol            = tpe.typeSymbol
     def members           = membersUnabridged filterNot excludeMember
     def membersUnabridged = tpe.members.toList
     def pkg               = symbol.enclosingPackage
-    def tag               = typeEvidence
     def runtimeClass      = runtimeClassEvidence.runtimeClass
     def shortClass        = runtimeClass.getName split "[$.]" last
     def baseClasses       = tpe.baseClasses
@@ -287,10 +217,9 @@ class Power(val intp: IMain, replVals: StdReplVals) {
   }
 
   trait ReplUtilities {
-    def module[T: ru.TypeTag] = ru.typeOf[T].typeSymbol.suchThat(_.isPackage)
-    def clazz[T: ru.TypeTag] = ru.typeOf[T].typeSymbol.suchThat(_.isClass)
-    def info[T: ru.TypeTag : ClassTag] = InternalInfo[T]
-    def ?[T: ru.TypeTag : ClassTag] = InternalInfo[T]
+    def summon[T](implicit ev: reflect.runtime.universe.TypeTag[T]): Type = ev.in(rootMirror).tpe
+    def info[T: ru.TypeTag : ClassTag] = new InternalInfo[T](None)(summon[T], reflect.classTag[T])
+    def ?[T: ru.TypeTag : ClassTag] = info[T]
     def sanitize(s: String): String = sanitize(s.getBytes())
     def sanitize(s: Array[Byte]): String = (s map {
       case x if x.toChar.isControl  => '?'

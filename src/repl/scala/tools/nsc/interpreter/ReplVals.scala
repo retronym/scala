@@ -36,45 +36,9 @@ class StdReplVals(final val intp: IMain) extends ReplVals {
   )
   def lastRequest = intp.lastRequest
 
-  class ReplImplicits extends power.Implicits2 {
-    import intp.global.Symbol
-
-    private val tagFn = ReplVals.mkCompilerTypeFromTag[intp.global.type](global)
-    implicit def mkCompilerTypeFromTag(sym: Symbol) = tagFn(sym)
-  }
+  class ReplImplicits extends power.Implicits2
 
   final lazy val replImplicits = new ReplImplicits
 
   def typed[T <: analyzer.global.Tree](tree: T): T = typer.typed(tree).asInstanceOf[T]
-}
-
-object ReplVals {
-  /** Latest attempt to work around the challenge of foo.global.Type
-   *  not being seen as the same type as bar.global.Type even though
-   *  the globals are the same.  Dependent method types to the rescue.
-   */
-  def mkCompilerTypeFromTag[T <: Global](global: T) = {
-    import global._
-
-    /** We can't use definitions.compilerTypeFromTag directly because we're passing
-     *  it to map and the compiler refuses to perform eta expansion on a method
-     *  with a dependent return type.  (Can this be relaxed?) To get around this
-     *  I have this forwarder which widens the type and then cast the result back
-     *  to the dependent type.
-     */
-    def compilerTypeFromTag(t: ApiUniverse # WeakTypeTag[_]): Global#Type =
-      definitions.compilerTypeFromTag(t)
-
-    class AppliedTypeFromTags(sym: Symbol) {
-      def apply[M](implicit m1: ru.TypeTag[M]): Type =
-        if (sym eq NoSymbol) NoType
-        else appliedType(sym, compilerTypeFromTag(m1).asInstanceOf[Type])
-
-      def apply[M1, M2](implicit m1: ru.TypeTag[M1], m2: ru.TypeTag[M2]): Type =
-        if (sym eq NoSymbol) NoType
-        else appliedType(sym, compilerTypeFromTag(m1).asInstanceOf[Type], compilerTypeFromTag(m2).asInstanceOf[Type])
-    }
-
-    (sym: Symbol) => new AppliedTypeFromTags(sym)
-  }
 }
