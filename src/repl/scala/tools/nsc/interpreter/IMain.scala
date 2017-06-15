@@ -733,14 +733,13 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     // When emitting errors, be careful not to refer to the synthetic code
     private val unit = new CompilationUnit(new BatchSourceFile(label, line))
     // a dummy position used for synthetic trees (needed for pres compiler to locate the trees for user input)
-    private val wholeUnit = Position.range(unit.source, 0, 0, line.length).makeTransparent
-    private def atSynthPos[T <: Tree](t: T): T = atPos(wholeUnit)(t)
+    private val wholeUnit = Position.range(unit.source, 0, 0, line.length)
 
     val trees: List[Tree] =
       origTrees.init :+ (origTrees.last match {
         case tree@(_: Assign) => tree
         case tree@(_: RefTree | _: TermTree) =>
-          atSynthPos(
+          atPos(tree.pos.makeTransparent)(
             ValDef(NoMods, newTermName(if (synthetic) freshInternalVarName() else freshUserVarName()), TypeTree(), tree))
         case tree => tree
       })
@@ -783,10 +782,18 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
     class Wrapper {
       private val SPLICE_MARKER = newTermName("WOELEWOELE")
       private object spliceUserCode extends Transformer {
+        var parents: List[Tree] = Nil
+        override def transform(tree: Tree): Tree = {
+          parents ::= tree
+          try super.transform(tree)
+          finally parents = parents.tail
+        }
         override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
           stats flatMap {
-            case Ident(SPLICE_MARKER) => trees
-            case t                    => List(super.transform(t))
+            case Ident(SPLICE_MARKER) =>
+              parents.foreach(p => p.setPos(wholeUnit))
+              trees
+            case t                    => List(transform(t))
           }
       }
 
@@ -795,7 +802,9 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
 
         def parseSynthetic(code: String): List[Tree] = {
           val preambleParser = newUnitParser(code, "<synthetic>")
-          preambleParser.parseStats()
+          val stats = preambleParser.parseStats()
+          stats.foreach(_.foreach(_.setPos(NoPosition)))
+          stats
         }
 
         val stats = ListBuffer.empty[Tree]
@@ -809,21 +818,20 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
         val wrappedStats =
           parseSynthetic(importsPreamble + SPLICE_MARKER + contributors.map(_ extraCodeToEvaluate Request.this).mkString("\n") + importsTrailer)
 
-        wrappedStats.foreach(_.foreach(_.setPos(wholeUnit))) // override positions so that pres compiler can locate our user code
-
         val wrapperBody =
-          atSynthPos(Template(if (isClassBased) List(gen.rootScalaDot(tpnme.Serializable)) else Nil, noSelfType, spliceUserCode.transformTrees(wrappedStats)))
+          Template(if (isClassBased) List(gen.rootScalaDot(tpnme.Serializable)) else Nil, noSelfType, wrappedStats)
 
-        stats += atSynthPos(
-          if (isClassBased) ClassDef(Modifiers(Flags.SEALED), readName.toTypeName, Nil, wrapperBody)
+        stats +=
+          (if (isClassBased) ClassDef(Modifiers(Flags.SEALED), readName.toTypeName, Nil, wrapperBody)
           else ModuleDef(NoMods, readName, wrapperBody))
 
         if (isClassBased)
           stats += q"""object $readName { val INSTANCE = new ${tq"""${readName.toTypeName}"""} }"""
 
-        unit.body = atSynthPos(PackageDef(Ident(lineRep.packageName), stats.toList))
-//        settings.Xprintpos.value = true
-//        println(unit.body)
+        val unspliced = PackageDef(Ident(lineRep.packageName), stats.toList)
+        // println(show(unspliced, printPositions = true))
+        unit.body = spliceUserCode.transform(unspliced)
+        // println(show(unit.body, printPositions = true))
         unit
       }
 

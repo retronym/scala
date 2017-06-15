@@ -50,6 +50,12 @@ class CompletionTest {
   }
 
   @Test
+  def foo(): Unit = {
+    val completer = setup()
+    checkExact(completer, "object x_y_z; import x_y")("x_y_z")
+  }
+
+  @Test
   def completions(): Unit = {
     val completer = setup()
     checkExact(completer, "object O { def x_y_z = 1 }; import O._; x_y")("x_y_z")
