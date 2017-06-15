@@ -4,33 +4,40 @@ set -e
 
 BASESHA=$1
 HEADSSHA=$2
-REPO=target/binary-diff
+REPO=binary-diff
 mkdir -p $REPO
 function g() {
-    git --git-dir "$REPO" "$@"
+    git --git-dir "$REPO/.git" "$@"
+}
+function fail() {
+    echo "$1" 1>&2
+    exit 1
 }
 g init
-git branch code
-git branch sigs
+g commit --allow-empty -m "dummy"
+g co master
+for b in code sigs; do
+  g branch -D -f $b || true
+  g branch $b
+done
 
 function jardiffPack() {
-    CP=$(ls "$1/*.jar" | paste -s -d :)
+    CP=$(find "build/pack/lib" -name '*.jar' | paste -s -d: -)
     g co code
-    jardiff -g $REPO "$CP"
+    jardiff -q -g $REPO "$CP"
     g co sigs
-    jardiff -c -g $REPO "$CP"
+    jardiff -q -c -g $REPO "$CP"
 }
 git checkout $BASESHA
-sbt setupPublishCore clean dist/mkPack
-jardiffPack
-git checkout -
+# sbt setupPublishCore clean dist/mkPack
+# jardiffPack
 
 git checkout $HEADSSHA
-sbt setupPublishCore clean dist/mkPack publishLocal
-V=$(cat target/version)
+sbt setupPublishCore clean version dist/mkPack publishLocal
+VERSION_FILE=target/version
+[[ -f "$VERSION_FILE" ]] || fail "$VERSION_FILE not written by the SBT build"
+V=$(cat "$VERSION_FILE")
 jardiffPack
 
 sbt -Dstarr.version=$V clean dist/mkPack
 jardiffPack
-git checkout -
-
