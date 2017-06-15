@@ -792,6 +792,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
           stats flatMap {
             case Ident(SPLICE_MARKER) =>
               parents.foreach(p => p.setPos(wholeUnit))
+              trees.foreach(_.updateAttachment(ReplUserTree()))
               trees
             case t                    => List(transform(t))
           }

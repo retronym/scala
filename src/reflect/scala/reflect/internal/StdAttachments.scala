@@ -93,4 +93,6 @@ trait StdAttachments {
     * error to indicate that the earlier observation was incomplete.
     */
   case object KnownDirectSubclassesCalled extends PlainAttachment
+
+  case class ReplUserTree() extends PlainAttachment
 }

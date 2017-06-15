@@ -100,12 +100,15 @@ trait PresentationCompilation { self: IMain =>
     }
 
     def tree: compiler.Tree = {
-      import compiler.{Locator, Template, Block}
       val offset = preambleLength
       val pos1 = unit.source.position(offset).withEnd(offset + buf.length)
-      new Locator(pos1) locateIn unit.body match {
-        case Template(_, _, constructor :: preambleEndMember :: (rest :+ last)) => if (rest.isEmpty) last else Block(rest, last)
-        case t => t
+      def stripValDef(t: compiler.Tree) = if (t.pos.isTransparent) t.children.last else t
+      val trees: List[compiler.Tree] = unit.body.collect {
+        case t if t.hasAttachment[compiler.ReplUserTree] => stripValDef(t)
+      }
+      trees match {
+        case t :: Nil => t
+        case ts => compiler.Block(ts: _*).setType(ts.last.tpe)
       }
     }
 
