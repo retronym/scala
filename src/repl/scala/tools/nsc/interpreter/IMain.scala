@@ -12,7 +12,7 @@ import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.{FatalError, Flags, MissingRequirementError, NoPhase}
 import scala.reflect.runtime.{universe => ru}
 import scala.reflect.{ClassTag, classTag}
-import scala.reflect.internal.util.{AbstractFileClassLoader, BatchSourceFile, SourceFile}
+import scala.reflect.internal.util.{AbstractFileClassLoader, BatchSourceFile, Position, SourceFile}
 import scala.tools.nsc.{ConsoleWriter, Global, NewLinePrintWriter, Settings}
 import scala.tools.nsc.interpreter.StdReplTags.tagOfStdReplVals
 import scala.tools.nsc.io.AbstractFile
@@ -728,11 +728,20 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
 
     def eval: Either[Throwable, AnyRef] = lineRep.evalEither
 
+    // The source file contents only has the code originally input by the user,
+    // with unit's body holding the synthetic trees.
+    // When emitting errors, be careful not to refer to the synthetic code
+    private val unit = new CompilationUnit(new BatchSourceFile(label, line))
+    // a dummy position used for synthetic trees (needed for pres compiler to locate the trees for user input)
+    private val wholeUnit = Position.range(unit.source, 0, 0, line.length).makeTransparent
+    private def atSynthPos[T <: Tree](t: T): T = atPos(wholeUnit)(t)
+
     val trees: List[Tree] =
       origTrees.init :+ (origTrees.last match {
         case tree@(_: Assign) => tree
         case tree@(_: RefTree | _: TermTree) =>
-          ValDef(NoMods, newTermName(if (synthetic) freshInternalVarName() else freshUserVarName()), TypeTree(), tree)
+          atSynthPos(
+            ValDef(NoMods, newTermName(if (synthetic) freshInternalVarName() else freshUserVarName()), TypeTree(), tree))
         case tree => tree
       })
 
@@ -793,28 +802,28 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
 
         stats ++= parseSynthetic(headerPreamble)
 
+
         // the imports logic builds up a nesting of object $iw wrappers :-S
         // (have to parse importsPreamble + ... + importsTrailer at once)
         // This will be simplified when we stop wrapping to begin with.
         val wrappedStats =
           parseSynthetic(importsPreamble + SPLICE_MARKER + contributors.map(_ extraCodeToEvaluate Request.this).mkString("\n") + importsTrailer)
 
-        val wrapperBody =
-          Template(if (isClassBased) List(gen.rootScalaDot(tpnme.Serializable)) else Nil, noSelfType, spliceUserCode.transformTrees(wrappedStats))
+        wrappedStats.foreach(_.foreach(_.setPos(wholeUnit))) // override positions so that pres compiler can locate our user code
 
-        stats += (
+        val wrapperBody =
+          atSynthPos(Template(if (isClassBased) List(gen.rootScalaDot(tpnme.Serializable)) else Nil, noSelfType, spliceUserCode.transformTrees(wrappedStats)))
+
+        stats += atSynthPos(
           if (isClassBased) ClassDef(Modifiers(Flags.SEALED), readName.toTypeName, Nil, wrapperBody)
           else ModuleDef(NoMods, readName, wrapperBody))
 
         if (isClassBased)
           stats += q"""object $readName { val INSTANCE = new ${tq"""${readName.toTypeName}"""} }"""
 
-        // The source file contents only has the code originally input by the user,
-        // with unit's body holding the synthetic trees.
-        // When emitting errors, be careful not to refer to the synthetic code
-        val unit = new CompilationUnit(new BatchSourceFile(label, line))
-        unit.body = PackageDef(Ident(lineRep.packageName), stats.toList)
-        println(unit.body)
+        unit.body = atSynthPos(PackageDef(Ident(lineRep.packageName), stats.toList))
+//        settings.Xprintpos.value = true
+//        println(unit.body)
         unit
       }
 
