@@ -143,8 +143,8 @@ trait Imports {
 
     // add code for a new object to hold some imports
     def addWrapper() {
-      code append (wrapper.prewrap format iw)
-      trailingBraces append wrapper.postwrap
+      code append (wrapper.wrapperDef(iw) + " {\n")
+      trailingBraces append "}\n"+ wrapper.postwrap +"\n"
       accessPath append s".$iw"
       currentImps.clear()
     }

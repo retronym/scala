@@ -31,13 +31,15 @@ trait PresentationCompilation { self: IMain =>
       val trees = compiler.newUnitParser(line1).parseStats()
       val importer = global.mkImporter(compiler)
       val request = new Request(line1, trees map (t => importer.importTree(t)), generousImports = true)
-      val wrappedCode: String = request.ObjectSourceCode(request.handlers)
-      val unit = compiler.newCompilationUnit(wrappedCode)
+      val origUnit = request.ObjectSourceCode.mkUnit(request.handlers)
+      val unit = new compiler.CompilationUnit(origUnit.source)
+      unit.body = compiler.mkImporter(global).importTree(origUnit.body)
       import compiler._
       val richUnit = new RichCompilationUnit(unit.source)
       unitOfFile(richUnit.source.file) = richUnit
+      richUnit.body = unit.body
       enteringTyper(typeCheck(richUnit))
-      val result = PresentationCompileResult(compiler)(cursor, buf, richUnit, request.ObjectSourceCode.preambleLength)
+      val result = PresentationCompileResult(compiler)(cursor, buf, richUnit, 0)
       Right(result)
     }
   }

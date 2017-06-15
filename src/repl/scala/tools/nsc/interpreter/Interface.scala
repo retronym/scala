@@ -110,7 +110,7 @@ trait Repl extends ReplCore {
 
   def translateEnclosingClass(n: String): Option[String]
 
-  def packaged(line: String): Boolean
+  def isPackaged(line: String): Boolean
 
   /** Compile an nsc SourceFile.  Returns true if there are
     * no compilation errors, or false otherwise.
@@ -263,8 +263,6 @@ trait ReplReporter extends Reporter {
 
 trait ReplRequest {
   def line: String
-  def originalLine: String
-  def preambleEndPos: Position
 
   def eval: Either[Throwable, AnyRef]
 }
