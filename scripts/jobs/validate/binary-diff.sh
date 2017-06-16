@@ -4,40 +4,47 @@ set -e
 
 BASESHA=$1
 HEADSSHA=$2
-REPO=binary-diff
-mkdir -p $REPO
-function g() {
-    git --git-dir "$REPO/.git" "$@"
-}
+DIR=jardiff
+mkdir -p $DIR
+REPO1=$DIR/sigs-repo
+REPO2=$DIR/code-repo
+
+rm -rf "$REPO1"
+rm -rf "$REPO2"
+
 function fail() {
     echo "$1" 1>&2
     exit 1
 }
-g init
-g commit --allow-empty -m "dummy"
-g co master
-for b in code sigs; do
-  g branch -D -f $b || true
-  g branch $b
-done
 
+function version() {
+    VERSION_FILE=target/version
+    [[ -f "$VERSION_FILE" ]] || fail "$VERSION_FILE not written by the SBT build"
+    cat "$VERSION_FILE"
+}
 function jardiffPack() {
     CP=$(find "build/pack/lib" -name '*.jar' | paste -s -d: -)
-    g co code
-    jardiff -q -g $REPO "$CP"
-    g co sigs
-    jardiff -q -c -g $REPO "$CP"
+    NAME=$1
+    if [[ "" -eq "$NAME" ]]; then
+        jardiff -q -c -g $REPO1 "$CP"
+        jardiff -q -g $REPO2 "$CP"        
+    else
+        jardiff    -c -g $REPO1 "$CP" > $DIR/sigs-$NAME.diff
+        jardiff    -g $REPO2 "$CP" > $DIR/code-$NAME.diff
+    fi
 }
+
 git checkout $BASESHA
-# sbt setupPublishCore clean dist/mkPack
-# jardiffPack
+
+sbt clean setupPublishCore publishLocal
+BASEVERSION=$(version)
+sbt -Dstarr.version=$BASEVERSION setupPublishCore clean dist/mkPack
+jardiffPack baseline
 
 git checkout $HEADSSHA
-sbt setupPublishCore clean version dist/mkPack publishLocal
-VERSION_FILE=target/version
-[[ -f "$VERSION_FILE" ]] || fail "$VERSION_FILE not written by the SBT build"
-V=$(cat "$VERSION_FILE")
-jardiffPack
+sbt -Dstarr.version=$BASEVERSION clean setupPublishCore dist/mkPack publishLocal
+HEADVERSION=$(version)
+jardiffPack regular
 
-sbt -Dstarr.version=$V clean dist/mkPack
-jardiffPack
+sbt -Dstarr.version=$HEADVERSION clean setupPublishCore dist/mkPack
+jardiffPack bootstrap
