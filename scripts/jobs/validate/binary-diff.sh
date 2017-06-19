@@ -19,9 +19,14 @@ function fail() {
 
 function version() {
     VERSION_FILE=target/version
-    [[ -f "$VERSION_FILE" ]] || fail "$VERSION_FILE not written by the SBT build"
-    cat "$VERSION_FILE"
+    if [[ -f "$VERSION_FILE" ]]; then
+        # Backwards compatibility with older revisions that don't write target/version
+        sbt setupPublishCore 'scala-dist/version' | tail -n 1 | sed 's/.* //'
+    else
+        cat "$VERSION_FILE"
+    fi
 }
+
 function jardiffPack() {
     CP=$(find "build/pack/lib" -name '*.jar' | paste -s -d: -)
     NAME=$1
