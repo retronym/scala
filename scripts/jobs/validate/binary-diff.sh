@@ -8,10 +8,16 @@ DIR=jardiff
 mkdir -p $DIR
 REPO1=$DIR/sigs-repo
 REPO2=$DIR/code-repo
+PACK_DIR=build/pack
+
+: ${CLEAN_CMD:=clean}
 
 rm -rf "$REPO1"
 rm -rf "$REPO2"
 
+function cleanPack() {
+    rm -rf "$PACK_DIR"
+}
 function fail() {
     echo "$1" 1>&2
     exit 1
@@ -40,16 +46,18 @@ function jardiffPack() {
 }
 
 git checkout $BASESHA
-
-sbt clean setupPublishCore publishLocal
+cleanPack
+sbt $CLEAN_CMD setupPublishCore publishLocal
 BASEVERSION=$(version)
-sbt -Dstarr.version=$BASEVERSION setupPublishCore clean dist/mkPack
+sbt -Dstarr.version=$BASEVERSION setupPublishCore $CLEAN_CMD dist/mkPack
 jardiffPack baseline
 
 git checkout $HEADSSHA
-sbt -Dstarr.version=$BASEVERSION clean setupPublishCore dist/mkPack publishLocal
+cleanPack
+sbt -Dstarr.version=$BASEVERSION $CLEAN_CMD setupPublishCore dist/mkPack publishLocal
 HEADVERSION=$(version)
 jardiffPack regular
 
-sbt -Dstarr.version=$HEADVERSION clean setupPublishCore dist/mkPack
+cleanPack
+sbt -Dstarr.version=$HEADVERSION $CLEAN_CMD setupPublishCore dist/mkPack
 jardiffPack bootstrap
