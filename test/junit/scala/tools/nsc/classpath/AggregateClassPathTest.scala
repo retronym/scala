@@ -45,6 +45,7 @@ class AggregateClassPathTest {
 
     // we'll ignore packages
     override def list(inPackage: String): ClassPathEntries = ClassPathEntries(Nil, classes(inPackage))
+    override private[nsc] def hasPackage(pkg: String) = true
   }
 
   private case class TestSourcePath(virtualPath: String, sourcesInPackage: EntryNamesInPackage*) extends TestClassPathBase {
@@ -59,6 +60,7 @@ class AggregateClassPathTest {
 
     // we'll ignore packages
     override def list(inPackage: String): ClassPathEntries = ClassPathEntries(Nil, sources(inPackage))
+    override private[nsc] def hasPackage(pkg: String) = true
   }
 
   private case class EntryNamesInPackage(inPackage: String)(val names: String*)
