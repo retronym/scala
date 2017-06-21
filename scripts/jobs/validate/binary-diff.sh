@@ -26,10 +26,10 @@ function fail() {
 function version() {
     VERSION_FILE=target/version
     if [[ -f "$VERSION_FILE" ]]; then
+        cat "$VERSION_FILE"
+    else
         # Backwards compatibility with older revisions that don't write target/version
         sbt setupPublishCore 'scala-dist/version' | tail -n 1 | sed 's/.* //'
-    else
-        cat "$VERSION_FILE"
     fi
 }
 
@@ -49,7 +49,7 @@ git checkout $BASESHA
 cleanPack
 sbt $CLEAN_CMD setupPublishCore publishLocal
 BASEVERSION=$(version)
-sbt -Dstarr.version=$BASEVERSION setupPublishCore $CLEAN_CMD dist/mkPack
+sbt -Dstarr.version=$BASEVERSION setupPublishCore $CLEAN_CMD scalaVersion dist/mkPack
 jardiffPack baseline
 
 git checkout $HEADSSHA
