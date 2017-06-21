@@ -39,6 +39,14 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepClassPathEntry] extends Flat
       entry <- dirEntry.iterator if isRequiredFileType(entry)
     } yield createFileEntry(entry)
 
+  protected def file(inPackage: String, name: String): Option[FileEntryType] =
+    for {
+      dirEntry <- findDirEntry(inPackage)
+      entry <- Option(dirEntry.lookupName(name, directory = false))
+      if isRequiredFileType(entry)
+    } yield createFileEntry(entry)
+
+  override private[nsc] def hasPackage(pkg: String) = findDirEntry(pkg).isDefined
   override private[nsc] def list(inPackage: String): FlatClassPathEntries = {
     val foundDirEntry = findDirEntry(inPackage)
 
@@ -58,7 +66,7 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepClassPathEntry] extends Flat
   }
 
   private def findDirEntry(pkg: String) = {
-    val dirName = s"${FileUtils.dirPath(pkg)}/"
+    val dirName = FileUtils.dirPath(pkg) + "/"
     archive.allDirs.get(dirName)
   }
 

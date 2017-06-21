@@ -15,6 +15,8 @@ import scala.tools.nsc.util.{ ClassFileLookup, ClassPath, ClassRepresentation }
  * This is an alternative design compared to scala.tools.nsc.util.ClassPath
  */
 trait FlatClassPath extends ClassFileLookup[AbstractFile] {
+  private[nsc] def hasPackage(pkg: String): Boolean
+
   /** Empty string represents root package */
   private[nsc] def packages(inPackage: String): Seq[PackageEntry]
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry]

@@ -44,6 +44,7 @@ class AggregateFlatClassPathTest {
 
     // we'll ignore packages
     override def list(inPackage: String): FlatClassPathEntries = FlatClassPathEntries(Nil, classes(inPackage))
+    override private[nsc] def hasPackage(pkg: String) = true
   }
 
   private case class TestSourcePath(virtualPath: String, sourcesInPackage: EntryNamesInPackage*) extends TestFlatClassPath {
@@ -58,6 +59,7 @@ class AggregateFlatClassPathTest {
 
     // we'll ignore packages
     override def list(inPackage: String): FlatClassPathEntries = FlatClassPathEntries(Nil, sources(inPackage))
+    override private[nsc] def hasPackage(pkg: String) = true
   }
 
   private case class EntryNamesInPackage(inPackage: String)(val names: String*)

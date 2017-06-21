@@ -5,8 +5,10 @@ package scala.tools.nsc.classpath
 
 import java.io.File
 import java.net.URL
+
 import scala.annotation.tailrec
 import scala.reflect.io.{ AbstractFile, FileZipArchive, ManifestResources }
+import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import scala.tools.nsc.Settings
 import FileUtils._
 
@@ -51,7 +53,11 @@ object ZipAndJarFlatClassPathFactory extends ZipAndJarFileLookupFactory {
 
     override def findClassFile(className: String): Option[AbstractFile] = {
       val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
-      classes(pkg).find(_.name == simpleClassName).map(_.file)
+      file(pkg, simpleClassName + ".class").map(_.file)
+    }
+    override def findClass(className: String): Option[ClassRepresentation[AbstractFile]] = {
+      val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
+      file(pkg, simpleClassName + ".class")
     }
 
     override private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
@@ -137,6 +143,8 @@ object ZipAndJarFlatClassPathFactory extends ZipAndJarFileLookupFactory {
         (for (file <- pkg if file.isClass) yield ClassFileEntryImpl(file))(collection.breakOut)
     }
 
+
+    override private[nsc] def hasPackage(pkg: String) = cachedPackages.contains(pkg)
     override private[nsc] def list(inPackage: String): FlatClassPathEntries = FlatClassPathEntries(packages(inPackage), classes(inPackage))
   }
 

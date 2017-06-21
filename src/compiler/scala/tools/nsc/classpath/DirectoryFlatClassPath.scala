@@ -63,6 +63,7 @@ trait DirectoryFileLookup[FileEntryType <: ClassRepClassPathEntry] extends FlatC
     entries
   }
 
+  override private[nsc] def hasPackage(pkg: String) = getDirectory(pkg).isDefined
   override private[nsc] def list(inPackage: String): FlatClassPathEntries = {
     val dirForPackage = getDirectory(inPackage)
     val files: Array[File] = dirForPackage match {

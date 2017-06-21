@@ -30,24 +30,23 @@ case class AggregateFlatClassPath(aggregates: Seq[FlatClassPath]) extends FlatCl
 
     find(aggregates)
   }
+  private[this] val packageIndex: collection.mutable.Map[String, Seq[FlatClassPath]] = collection.mutable.Map()
+  private def findEntries(pkg: String): Seq[FlatClassPath] = packageIndex.synchronized {
+    packageIndex.getOrElseUpdate(pkg, aggregates.filter(_.hasPackage(pkg)))
+  }
 
   override def findClass(className: String): Option[ClassRepresentation[AbstractFile]] = {
     val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
 
-    @tailrec
-    def findEntry(aggregates: Seq[FlatClassPath], isSource: Boolean): Option[ClassRepresentation[AbstractFile]] =
-      if (aggregates.nonEmpty) {
-        val entry = aggregates.head.findClass(className) match {
-          case s @ Some(_: SourceFileEntry) if isSource => s
-          case s @ Some(_: ClassFileEntry) if !isSource => s
-          case _ => None
-        }
-        if (entry.isDefined) entry
-        else findEntry(aggregates.tail, isSource)
-      } else None
+    def findEntry(isSource: Boolean): Option[ClassRepresentation[AbstractFile]] = {
+      findEntries(pkg).iterator.map(_.findClass(className)).collectFirst {
+        case Some(s: SourceFileEntry) if isSource => s
+        case Some(s: ClassFileEntry) if !isSource => s
+      }
+    }
 
-    val classEntry = findEntry(aggregates, isSource = false)
-    val sourceEntry = findEntry(aggregates, isSource = true)
+    val classEntry = findEntry(isSource = false)
+    val sourceEntry = findEntry(isSource = true)
 
     (classEntry, sourceEntry) match {
       case (Some(c: ClassFileEntry), Some(s: SourceFileEntry)) => Some(ClassAndSourceFilesEntry(c.file, s.file))
@@ -73,6 +72,7 @@ case class AggregateFlatClassPath(aggregates: Seq[FlatClassPath]) extends FlatCl
   override private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] =
     getDistinctEntries(_.sources(inPackage))
 
+  override private[nsc] def hasPackage(pkg: String) = aggregates.exists(_.hasPackage(pkg))
   override private[nsc] def list(inPackage: String): FlatClassPathEntries = {
     val (packages, classesAndSources) = aggregates.map(_.list(inPackage)).unzip
     val distinctPackages = packages.flatten.distinct
