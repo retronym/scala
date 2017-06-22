@@ -218,10 +218,10 @@ case class DirectoryClassPath(dir: File) extends JFileDirectoryLookup[ClassFileE
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 }
 
-case class DirectorySourcePath(dir: File) extends JFileDirectoryLookup[SourceFileEntryImpl] with NoClassPaths {
+case class DirectorySourcePath(dir: File) extends JFileDirectoryLookup[SourceFileEntry] with NoClassPaths {
   def asSourcePathString: String = asClassPathString
 
-  protected def createFileEntry(file: AbstractFile): SourceFileEntryImpl = SourceFileEntryImpl(file)
+  protected def createFileEntry(file: AbstractFile): SourceFileEntry = SourceFileEntryImpl(file)
   protected def isMatchingFile(f: File): Boolean = endsScalaOrJava(f.getName)
 
   override def findClass(className: String): Option[ClassRepresentation] = findSourceFile(className) map SourceFileEntryImpl

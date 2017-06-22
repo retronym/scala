@@ -46,7 +46,7 @@ sealed trait ZipAndJarFileLookupFactory {
  */
 object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
   private case class ZipArchiveClassPath(zipFile: File)
-    extends ZipArchiveFileLookup[ClassFileEntryImpl]
+    extends ZipArchiveFileLookup[ClassFileEntry]
     with NoSourcePaths {
 
     override def findClassFile(className: String): Option[AbstractFile] = {
@@ -61,7 +61,7 @@ object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
 
     override private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 
-    override protected def createFileEntry(file: FileZipArchive#Entry): ClassFileEntryImpl = ClassFileEntryImpl(file)
+    override protected def createFileEntry(file: FileZipArchive#Entry): ClassFileEntry = ClassFileEntryImpl(file)
     override protected def isRequiredFileType(file: AbstractFile): Boolean = file.isClass
   }
 
@@ -168,14 +168,14 @@ object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
  */
 object ZipAndJarSourcePathFactory extends ZipAndJarFileLookupFactory {
   private case class ZipArchiveSourcePath(zipFile: File)
-    extends ZipArchiveFileLookup[SourceFileEntryImpl]
+    extends ZipArchiveFileLookup[SourceFileEntry]
     with NoClassPaths {
 
     override def asSourcePathString: String = asClassPathString
 
     override private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = files(inPackage)
 
-    override protected def createFileEntry(file: FileZipArchive#Entry): SourceFileEntryImpl = SourceFileEntryImpl(file)
+    override protected def createFileEntry(file: FileZipArchive#Entry): SourceFileEntry = SourceFileEntryImpl(file)
     override protected def isRequiredFileType(file: AbstractFile): Boolean = file.isScalaOrJavaSource
   }
 
