@@ -44,11 +44,7 @@ trait Typers {
     // If there is an open implicit in the context, use its tree as the one for which the implicit needs to be inserted.
     // Otherwise, use the empty tree. This prevents false divergent implicit errors like the one in
     // https://github.com/scala/bug/issues/10398.
-    val tree = callsiteTyper.context.openImplicits match {
-      case oi :: _ => oi.tree
-      case _ => universe.EmptyTree
-    }
-    universe.analyzer.inferImplicit(tree, pt, false, callsiteTyper.context, silent, withMacrosDisabled, pos, (pos, msg) => throw TypecheckException(pos, msg))
+    universe.analyzer.inferImplicit(universe.EmptyTree, pt, false, callsiteTyper.context, silent, withMacrosDisabled, pos, (pos, msg) => throw TypecheckException(pos, msg))
   }
 
   def inferImplicitView(tree: Tree, from: Type, to: Type, silent: Boolean = true, withMacrosDisabled: Boolean = false, pos: Position = enclosingPosition): Tree = {
