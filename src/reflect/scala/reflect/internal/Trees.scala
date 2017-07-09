@@ -1589,7 +1589,6 @@ trait Trees extends api.Trees {
    */
   class TreeSymSubstituter(from: List[Symbol], to: List[Symbol]) extends Transformer {
     val symSubst = new SubstSymMap(from, to)
-    private var mutatedSymbols: List[Symbol] = Nil
     override def transform(tree: Tree): Tree = {
       def subst(from: List[Symbol], to: List[Symbol]) {
         if (!from.isEmpty)
@@ -1608,7 +1607,6 @@ trait Trees extends api.Trees {
                 |TreeSymSubstituter: updated info of symbol ${tree.symbol}
                 |  Old: ${showRaw(tree.symbol.info, printTypes = true, printIds = true)}
                 |  New: ${showRaw(newInfo, printTypes = true, printIds = true)}""")
-              mutatedSymbols ::= tree.symbol
               tree.symbol updateInfo newInfo
             }
           case _          =>
@@ -1629,9 +1627,7 @@ trait Trees extends api.Trees {
         super.transform(tree)
     }
     def apply[T <: Tree](tree: T): T = {
-      val tree1 = transform(tree)
-      invalidateTreeTpeCaches(tree1, mutatedSymbols)
-      tree1.asInstanceOf[T]
+      transform(tree).asInstanceOf[T]
     }
     override def toString() = "TreeSymSubstituter/" + substituterString("Symbol", "Symbol", from, to)
   }

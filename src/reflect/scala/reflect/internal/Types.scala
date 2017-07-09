@@ -261,7 +261,7 @@ trait Types
 
   /** The base class for all types */
   abstract class Type extends TypeApiImpl with Annotatable[Type] {
-    protected[scala] def cacheable = true
+    protected[scala] final var cacheable = true
     /** Types for which asSeenFrom always is the identity, no matter what
      *  prefix or owner.
      */
@@ -1181,7 +1181,7 @@ trait Types
       sym.failIfStub()
       abort(s"ThisType($sym) for sym which is not a class")
     }
-    override protected[scala] val cacheable = !sym.ownersIterator.takeWhile(!_.isPackageClass).exists(_.isTerm)
+    cacheable = !sym.initIsLocal
 
     override def isTrivial: Boolean = sym.isPackageClass
     override def typeSymbol = sym
@@ -1213,6 +1213,7 @@ trait Types
    *  Cannot be created directly; one should always use `singleType` for creation.
    */
   abstract case class SingleType(pre: Type, sym: Symbol) extends SingletonType with SingleTypeApi {
+    cacheable = pre.cacheable && !sym.initIsLocal
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN) trivial = fromBoolean(pre.isTrivial)
@@ -1228,7 +1229,7 @@ trait Types
     }
     override def underlying: Type = {
       val cache = underlyingCache
-      if (underlyingPeriod == currentPeriod && cache != null) cache
+      if (cacheable && underlyingPeriod == currentPeriod && cache != null) cache
       else {
         defineUnderlyingOfSingleType(this)
         underlyingCache
@@ -1375,7 +1376,7 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cached = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
+      if (cacheable && baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
         cached
       else {
         defineBaseTypeSeqOfCompoundType(this)
@@ -1682,6 +1683,7 @@ trait Types
     override val decls: Scope,
     override val typeSymbol: Symbol) extends CompoundType with ClassInfoTypeApi
   {
+    cacheable = !typeSymbol.initIsLocal
     validateClassInfo(this)
 
     /** refs indices */
@@ -1885,7 +1887,7 @@ trait Types
     require(sym.isModuleClass, sym)
     private[this] var narrowedCache: Type = _
     override def narrow = {
-      if (narrowedCache eq null)
+      if (!cacheable || (narrowedCache eq null))
         narrowedCache = singleType(pre, sym.sourceModule)
 
       narrowedCache
@@ -1963,7 +1965,7 @@ trait Types
 
     final override protected def relativeInfo = {
       val symInfo = sym.info
-      if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
+      if (!cacheable || (relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
         relativeInfoCache = super.relativeInfo
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
@@ -2103,7 +2105,7 @@ trait Types
    * @M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
   abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
-    override protected[scala] val cacheable = pre.cacheable && !sym.ownersIterator.takeWhile(!_.isPackageClass).exists(_.isTerm)
+    cacheable = pre.cacheable && !sym.initIsLocal
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2253,11 +2255,7 @@ trait Types
       else if (phase.erasedTypes) normalizeImpl
       else {
         if (cacheable) {
-          if (normalized eq null) {
-            normalized = normalizeImpl
-          } else {
-            assert(normalized =:= normalizeImpl, (this, normalized, normalizeImpl))
-          }
+          if (normalized eq null) normalized = normalizeImpl
           normalized
         } else normalizeImpl
       }
@@ -2294,7 +2292,7 @@ trait Types
 
     override def parents: List[Type] = {
       val cache = parentsCache
-      if (parentsPeriod == currentPeriod && cache != null) cache
+      if (cacheable && parentsPeriod == currentPeriod && cache != null) cache
       else {
         defineParentsOfTypeRef(this)
         parentsCache
@@ -2324,7 +2322,7 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cache = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
+      if (cacheable && baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
         cache
       else {
         defineBaseTypeSeqOfTypeRef(this)
