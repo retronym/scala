@@ -261,6 +261,7 @@ trait Types
 
   /** The base class for all types */
   abstract class Type extends TypeApiImpl with Annotatable[Type] {
+    protected[scala] def cacheable = true
     /** Types for which asSeenFrom always is the identity, no matter what
      *  prefix or owner.
      */
@@ -1180,6 +1181,7 @@ trait Types
       sym.failIfStub()
       abort(s"ThisType($sym) for sym which is not a class")
     }
+    override protected[scala] val cacheable = !sym.ownersIterator.takeWhile(!_.isPackageClass).exists(_.isTerm)
 
     override def isTrivial: Boolean = sym.isPackageClass
     override def typeSymbol = sym
@@ -1614,8 +1616,10 @@ trait Types
     final override def normalize: Type =
       if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) normalized = normalizeImpl
-        normalized
+        if (cacheable) {
+          if (normalized eq null) normalized = normalizeImpl
+          normalized
+        } else normalizeImpl
       }
 
     private var normalized: Type = _
@@ -2009,7 +2013,7 @@ trait Types
     override def decls: Scope = normalize.decls
 
     // beta-reduce, but don't do partial application -- cycles have been checked in typeRef
-    override protected def normalizeImpl =
+    override protected def normalizeImpl = {
       if (typeParamsMatchArgs) betaReduce.normalize
       else if (isHigherKinded) super.normalizeImpl
       else {
@@ -2021,6 +2025,7 @@ trait Types
         if (overriddenSym != NoSymbol) pre.memberType(overriddenSym).normalize
         else ErrorType
       }
+    }
 
     // isHKSubType introduces synthetic type params so that
     // betaReduce can first apply sym.info to typeArgs before calling
@@ -2098,6 +2103,7 @@ trait Types
    * @M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
   abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
+    override protected[scala] val cacheable = pre.cacheable && !sym.ownersIterator.takeWhile(!_.isPackageClass).exists(_.isTerm)
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2246,9 +2252,14 @@ trait Types
       if (pre eq WildcardType) WildcardType
       else if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null)
-          normalized = normalizeImpl
-        normalized
+        if (cacheable) {
+          if (normalized eq null) {
+            normalized = normalizeImpl
+          } else {
+            assert(normalized =:= normalizeImpl, (this, normalized, normalizeImpl))
+          }
+          normalized
+        } else normalizeImpl
       }
     }
 
@@ -4719,7 +4730,6 @@ trait Types
       case ct: CompoundType if ct.baseClasses.exists(updatedSyms.contains) => ct.invalidatedCompoundTypeCaches()
       case _ =>
     }
-
 
   val shorthands = Set(
     "scala.collection.immutable.List",
