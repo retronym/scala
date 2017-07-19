@@ -1,13 +1,12 @@
 package scala.tools.nsc.scaladoc
 
-import org.scalacheck._
-import org.scalacheck.Prop._
+import org.junit.Assert.assertEquals
+import org.junit.{Assert, Test}
 
-import scala.tools.nsc.Global
-import scala.tools.nsc.doc
 import scala.tools.nsc.doc.base.comment._
 import scala.tools.nsc.doc.model._
 import scala.tools.nsc.doc.model.diagram._
+import scala.tools.nsc.{Global, doc}
 
 class Factory(val g: Global, val s: doc.Settings)
   extends doc.model.ModelFactory(g, s) {
@@ -36,7 +35,7 @@ class Factory(val g: Global, val s: doc.Settings)
     parse(s, "", scala.tools.nsc.util.NoPosition, null).body
 }
 
-object CommentFactoryTest extends Properties("CommentFactory") {
+class CommentFactoryTest {
   val factory = {
     val settings = new doc.Settings((str: String) => {})
     val reporter = new scala.tools.nsc.reporters.ConsoleReporter(settings)
@@ -50,59 +49,54 @@ object CommentFactoryTest extends Properties("CommentFactory") {
       with MemberLookup)
   }
 
-  def parse(src: String, dst: Inline): Boolean = {
-    factory.parseComment(src) match {
-        case Some(inline) =>
-          inline == dst
-        case _ =>
-          false
-    }
+  def parse(src: String, dst: Inline): Unit = {
+    assertEquals(Some(dst), factory.parseComment(src))
   }
 
-  property("parse") = parse(
+  @Test def parse1(): Unit = parse(
       "/** One two three */",
       Text("One two three")
   )
-  property("parse") = parse(
+  @Test def parse2(): Unit = parse(
     "/** One `two` three */",
     Chain(List(Text("One "), Monospace(Text("two")), Text(" three")))
   )
 
-  property("parse") = parse(
+  @Test def parse3(): Unit = parse(
       """
 /** One two
   * three */""",
       Text("One two\nthree")
   )
-  property("parse") = parse(
+  @Test def parse4(): Unit = parse(
       """
 /** One `two`
   * three */""",
       Chain(List(Text("One "), Monospace(Text("two")), Text("\n"), Text("three")))
   )
 
-  property("parse") = parse(
+  @Test def parse5(): Unit = parse(
       """
 /** One `two`
  *  three */""",
       Chain(List(Text("One "), Monospace(Text("two")), Text("\n"), Text(" three")))
   )
 
-  property("parse") = parse(
+  @Test def parse6(): Unit = parse(
       """
 /** One
   * `two` three */""",
       Chain(List(Text("One"), Text("\n"), Monospace(Text("two")), Text(" three")))
   )
 
-  property("Trac #4361 - ^...^") = parse(
+  @Test def t4361_caretPair(): Unit = parse(
       """
 /**
  * hello ^world^ */""",
       Chain(List(Text("hello "), Superscript(Text("world"))))
   )
 
-  property("Trac #4361 - single ^ symbol") = parse(
+  @Test def t4361_caret(): Unit = parse(
       """
 /**
  * <pre>
@@ -116,7 +110,7 @@ object CommentFactoryTest extends Properties("CommentFactory") {
                  HtmlTag("<pre>\nhello ^world\n</pre>")))
   )
 
-  property("Trac #4366 - body") = {
+  @Test def t4366_body(): Unit = {
     val body = factory.createBody(
       """
  /**
@@ -124,13 +118,13 @@ object CommentFactoryTest extends Properties("CommentFactory") {
   */
       """
     )
-
-    body == Body(List(Paragraph(Chain(List(
+    assertEquals(Body(List(Paragraph(Chain(List(
       Summary(Chain(List(HtmlTag("<strong><code>foo</code> has been deprecated and will be removed in a future version. Please call <code>bar</code> instead.</strong>"), Text("\n"), Text(""))))
     )))))
+    , body)
   }
 
-  property("Trac #4366 - summary") = {
+  @Test def t4366_summary(): Unit = {
     val body = factory.createBody(
       """
  /**
@@ -138,10 +132,11 @@ object CommentFactoryTest extends Properties("CommentFactory") {
   */
       """
     )
-    body.summary == Some(Chain(List(HtmlTag("<strong><code>foo</code> has been deprecated and will be removed in a future version. Please call <code>bar</code> instead.</strong>"), Text("\n"), Text(""))))
+    assertEquals(Some(Chain(List(HtmlTag("<strong><code>foo</code> has been deprecated and will be removed in a future version. Please call <code>bar</code> instead.</strong>"), Text("\n"), Text(""))))
+      , body.summary)
   }
 
-  property("Trac #4358 - body") = {
+  @Test def t4358_body(): Unit = {
     factory.createBody(
       """
  /**
@@ -163,15 +158,14 @@ object CommentFactoryTest extends Properties("CommentFactory") {
         HtmlTag("<code>org.easymock.EasyMock</code>"),
         Text(")")
       )), Text(".")))), Text("\n")))))) =>
-        true
+          // okay
       case other => {
-        println(other)
-        false
+        Assert.fail(other.toString)
       }
     }
   }
 
-  property("Empty parameter text should be empty") = {
+  @Test def EmptyParameterTextShouldBeEmpty(): Unit = {
     // used to fail with
     // body == Body(List(Paragraph(Chain(List(Summary(Text('\n')))))))
     factory.getComment(
@@ -180,10 +174,9 @@ object CommentFactoryTest extends Properties("CommentFactory") {
   * @deprecated
   */
       """).deprecated match {
-      case Some(Body(l)) if l.isEmpty => true
+      case Some(Body(l)) if l.isEmpty => // okay
       case other =>
-        println(other)
-        false
+        Assert.fail(other.toString)
     }
   }
 }

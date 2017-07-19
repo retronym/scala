@@ -1,12 +1,11 @@
 package scala.tools.nsc.scaladoc
 
-import org.scalacheck._
-import org.scalacheck.Prop._
+import org.junit.{Assert, Test}
 
 import scala.tools.nsc.doc
 import scala.tools.nsc.doc.html.page.IndexScript
 
-object IndexScriptTest extends Properties("IndexScript") {
+class IndexScriptTest {
 
   val docFactory = {
     val settings = new doc.Settings({Console.err.println(_)})
@@ -30,19 +29,16 @@ object IndexScriptTest extends Properties("IndexScript") {
     }
   }
 
-  property("allPackages") = {
-    createIndexScript("src/scaladoc/scala/tools/nsc/doc/html/page/IndexScript.scala") match {
-      case Some(index) =>
-        index.allPackages.map(_.toString) == List(
-          "scala",
-          "scala.tools",
-          "scala.tools.nsc",
-          "scala.tools.nsc.doc",
-          "scala.tools.nsc.doc.html",
-          "scala.tools.nsc.doc.html.page"
-        )
-      case None =>
-        false
-    }
+  @Test def allPackages(): Unit = {
+    val created = createIndexScript("src/scaladoc/scala/tools/nsc/doc/html/page/IndexScript.scala").get.allPackages.map(_.toString)
+    val expected = List(
+      "scala",
+      "scala.tools",
+      "scala.tools.nsc",
+      "scala.tools.nsc.doc",
+      "scala.tools.nsc.doc.html",
+      "scala.tools.nsc.doc.html.page"
+    )
+    Assert.assertEquals(expected, created)
   }
 }

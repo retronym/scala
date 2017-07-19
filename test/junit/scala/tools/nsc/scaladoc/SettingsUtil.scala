@@ -4,11 +4,12 @@ import java.net.{URLClassLoader, URLDecoder}
 import java.nio.file.{Files, Path, Paths}
 
 import scala.tools.nsc.Settings
-import scala.tools.nsc.scaladoc.HtmlFactoryTest.RESOURCES
 
 object SettingsUtil {
+  final val RESOURCES = "test/scaladoc/resources/"
+
   def configureClassAndSourcePath(settings: Settings): Settings = {
-    val ourClassLoader = HtmlFactoryTest.getClass.getClassLoader
+    val ourClassLoader = SettingsUtil.getClass.getClassLoader
     Thread.currentThread.getContextClassLoader match {
       case loader: URLClassLoader =>
         val paths = loader.getURLs.map(u => URLDecoder.decode(u.getPath))
@@ -23,7 +24,7 @@ object SettingsUtil {
     // Don't assume the working dir is the root of the git checkout to make this work
     // by default in IntelliJ.
     val parents = Iterator.iterate(Paths.get(".").toAbsolutePath)(_.getParent).takeWhile(_ ne null).toList
-    val temp = parents.find(x => Files.exists(x.resolve(RESOURCES)))
+    val temp = parents.find(x => Files.exists(x.resolve(SettingsUtil.RESOURCES)))
     val checkoutRoot = temp.getOrElse(Paths.get("."))
     checkoutRoot.toAbsolutePath
   }
