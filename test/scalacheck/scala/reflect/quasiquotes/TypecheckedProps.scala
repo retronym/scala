@@ -1,9 +1,19 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._, internal.reificationSupport._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object TypecheckedProps extends QuasiquoteProperties("typechecked")
+import scala.reflect.runtime.universe._
+import Flag._
+import internal.reificationSupport._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class TypecheckedProps extends QuasiquoteProperties("typechecked")
                            with TypecheckedTypes {
   property("tuple term") = test {
     val q"(..$elements)" = typecheck(q"(1, 2)")

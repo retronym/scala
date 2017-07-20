@@ -1,8 +1,15 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
+import org.junit.runner.RunWith
 
-object ErrorProps extends QuasiquoteProperties("errors") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class ErrorProps extends QuasiquoteProperties("errors") {
   property("can't extract two .. rankinalities in a row") = fails(
     "Can't extract with .. here",
     """

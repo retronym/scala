@@ -1,9 +1,18 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object TermDeconstructionProps extends QuasiquoteProperties("term deconstruction") {
+import scala.reflect.runtime.universe._
+import Flag._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class TermDeconstructionProps extends QuasiquoteProperties("term deconstruction") {
   property("f(..x) = f") = test {
     // see scala/bug#8008
     assertThrows[MatchError] {

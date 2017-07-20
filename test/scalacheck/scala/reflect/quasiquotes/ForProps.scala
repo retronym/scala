@@ -1,9 +1,19 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._, internal.reificationSupport._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object ForProps extends QuasiquoteProperties("for") {
+import scala.reflect.runtime.universe._
+import Flag._
+import internal.reificationSupport._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class ForProps extends QuasiquoteProperties("for") {
   case class ForEnums(val value: List[Tree])
 
   def genSimpleBind: Gen[Bind] =

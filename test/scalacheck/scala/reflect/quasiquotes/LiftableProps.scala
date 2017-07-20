@@ -1,9 +1,18 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object LiftableProps extends QuasiquoteProperties("liftable") {
+import scala.reflect.runtime.universe._
+import Flag._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class LiftableProps extends QuasiquoteProperties("liftable") {
   property("unquote byte") = test {
     val c: Byte = 0
     assert(q"$c" ≈ Literal(Constant(c)))

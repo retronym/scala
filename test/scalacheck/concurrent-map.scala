@@ -1,11 +1,17 @@
 import java.util.concurrent._
+
+import org.junit.runner.RunWith
+
 import scala.collection._
 import scala.collection.JavaConverters._
 import org.scalacheck._
 import org.scalacheck.Prop._
 import org.scalacheck.Gen._
 
-object ConcurrentMapTest extends Properties("concurrent.TrieMap") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class ConcurrentMapTest extends Properties("concurrent.TrieMap") {
 
   case class Wrap(i: Int) {
     override def hashCode = i * 0x9e3775cd

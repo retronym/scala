@@ -1,9 +1,18 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object PatternDeconstructionProps extends QuasiquoteProperties("pattern deconstruction") {
+import scala.reflect.runtime.universe._
+import Flag._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class PatternDeconstructionProps extends QuasiquoteProperties("pattern deconstruction") {
   property("extract bind") = forAll { (bind: Bind) =>
     val pq"$bind0" = pq"$bind"
     bind0 ≈ bind

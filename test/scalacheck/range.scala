@@ -2,6 +2,9 @@ import org.scalacheck._
 import Prop._
 import Gen._
 import Arbitrary._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
 class Counter(r: Range) {
   var cnt = 0L
@@ -272,7 +275,8 @@ object SmallValuesRange extends RangeTest("smallValues") {
   override def myGen = genSmallRange
 }
 
-object TooLargeRange extends Properties("Too Large Range") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class TooLargeRange extends Properties("Too Large Range") {
   val genTooLargeStart = for {
     start <- choose(-Int.MinValue, 0)
   } yield start

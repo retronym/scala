@@ -2,10 +2,14 @@ import org.scalacheck._
 import Prop._
 import Gen._
 import Arbitrary._
+import org.junit.runner.RunWith
+
 import math._
 import concurrent.duration.Duration.fromNanos
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
-object DurationTest extends Properties("Division of Duration by Long") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class DurationTest extends Properties("Division of Duration by Long") {
 
   val weightedLong =
     frequency(

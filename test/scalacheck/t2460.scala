@@ -1,9 +1,13 @@
+import org.junit.runner.RunWith
 import org.scalacheck.Prop.forAll
 import org.scalacheck.Properties
 import org.scalacheck.{Test => SCTest}
 import org.scalacheck.Gen
 
-object SI2460Test extends Properties("Regex : Ticket 2460") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class SI2460Test extends Properties("Regex : Ticket 2460") {
 
   val vowel = Gen.oneOf("a", "z")
 

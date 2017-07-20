@@ -2,6 +2,7 @@ package scala.collection.mutable
 
 import java.io._
 
+import org.junit.runner.RunWith
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Prop.forAll
@@ -11,6 +12,7 @@ import scala.collection.immutable
 import scala.collection.mutable
 import scala.util.Try
 import scala.collection.mutable.{RedBlackTree => RB}
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
 trait Generators {
 
@@ -37,7 +39,8 @@ trait Generators {
   implicit def arbTreeMap[A: Arbitrary: Ordering, B: Arbitrary] = Arbitrary(genTreeMap[A, B])
 }
 
-object RedBlackTreeProperties extends Properties("mutable.RedBlackTree") with Generators {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class RedBlackTreeProperties extends Properties("mutable.RedBlackTree") with Generators {
   type K = String
   type V = Int
 
@@ -76,7 +79,8 @@ object RedBlackTreeProperties extends Properties("mutable.RedBlackTree") with Ge
   }
 }
 
-object MutableTreeMapProperties extends Properties("mutable.TreeMap") with Generators {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class MutableTreeMapProperties extends Properties("mutable.TreeMap") with Generators {
   type K = String
   type V = Int
 
@@ -194,7 +198,8 @@ object MutableTreeMapProperties extends Properties("mutable.TreeMap") with Gener
   }
 }
 
-object MutableTreeMapViewProperties extends Properties("mutable.TreeMapView") with Generators {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class MutableTreeMapViewProperties extends Properties("mutable.TreeMapView") with Generators {
   type K = String
   type V = Int
 

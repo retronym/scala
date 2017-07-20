@@ -1,9 +1,19 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._, internal.reificationSupport.SyntacticClassDef
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object DefinitionDeconstructionProps
+import scala.reflect.runtime.universe._
+import Flag._
+import internal.reificationSupport.SyntacticClassDef
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class DefinitionDeconstructionProps
   extends QuasiquoteProperties("definition deconstruction")
   with TraitDeconstruction
   with ClassDeconstruction

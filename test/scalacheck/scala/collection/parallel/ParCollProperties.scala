@@ -1,9 +1,12 @@
-// package here to be able access the package-private implementation and shutdown the pool
-package scala
+package scala.collection.parallel
 
+import org.junit.After
+import org.junit.runner.RunWith
 import org.scalacheck._
-import scala.collection.parallel._
 
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
 class ParCollProperties extends Properties("Parallel collections") {
 
   def includeAllTestsWith(support: TaskSupport, descriptor: String) {
@@ -38,8 +41,9 @@ class ParCollProperties extends Properties("Parallel collections") {
   val ectasks = new collection.parallel.ExecutionContextTaskSupport(ec)
   includeAllTestsWith(ectasks, "ectasks")
 
-  // no post test hooks in scalacheck, so cannot do:
-  // ec.shutdown()
+  @After def cleanup(): Unit = {
+    ec.shutdown()
+  }
 
 }
 

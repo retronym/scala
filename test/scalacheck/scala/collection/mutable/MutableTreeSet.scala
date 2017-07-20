@@ -2,6 +2,7 @@ package scala.collection.mutable
 
 import java.io._
 
+import org.junit.runner.RunWith
 import org.scalacheck._
 import org.scalacheck.Arbitrary._
 import org.scalacheck.Prop.forAll
@@ -9,9 +10,11 @@ import org.scalacheck.Prop.forAll
 import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable
 import scala.collection.mutable
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 import scala.util.Try
 
-object MutableTreeSetProperties extends Properties("mutable.TreeSet") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class MutableTreeSetProperties extends Properties("mutable.TreeSet") {
   type K = String
 
   property("size, isEmpty") = forAll { (elems: Set[K]) =>
@@ -103,7 +106,8 @@ object MutableTreeSetProperties extends Properties("mutable.TreeSet") {
   }
 }
 
-object MutableTreeSetViewProperties extends Properties("mutable.TreeSetView") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class MutableTreeSetViewProperties extends Properties("mutable.TreeSetView") {
   type K = String
 
   implicit val ord = implicitly[Ordering[K]]

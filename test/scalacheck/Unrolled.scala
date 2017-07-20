@@ -1,10 +1,13 @@
 import org.scalacheck._
 import Prop._
 import Gen._
+import org.junit.runner.RunWith
 
 import collection.mutable.UnrolledBuffer
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
-object UnrolledTest extends Properties("UnrolledBuffer") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class UnrolledTest extends Properties("UnrolledBuffer") {
 
   property("concat size") = forAll { (l1: List[Int], l2: List[Int]) =>
     val u1 = new UnrolledBuffer[Int]

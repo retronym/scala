@@ -1,9 +1,12 @@
+import org.junit.runner.RunWith
 import org.scalacheck.Properties
 import org.scalacheck.Prop._
 
 import scala.reflect.internal.util.Collections._
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
-object CheckCollectionsTest extends Properties("reflect.internal.util.Collections") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class CheckCollectionsTest extends Properties("reflect.internal.util.Collections") {
   def map2ConserveOld[A <: AnyRef, B](xs: List[A], ys: List[B])(f: (A, B) => A): List[A] =
     if (xs.isEmpty || ys.isEmpty) xs
     else {

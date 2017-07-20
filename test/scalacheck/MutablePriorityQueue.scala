@@ -2,8 +2,12 @@ import scala.collection.mutable.PriorityQueue
 import org.scalacheck._
 import Prop._
 import Arbitrary._
+import org.junit.runner.RunWith
 
-object MutablePriorityQueueTest extends Properties("PriorityQueue") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class MutablePriorityQueueTest extends Properties("PriorityQueue") {
   type E = Int // the element type used for most/all of the tests
 
   def checkInvariant[A](pq: PriorityQueue[A])(implicit ord: Ordering[A]): Boolean = {
@@ -98,5 +102,4 @@ object MutablePriorityQueueTest extends Properties("PriorityQueue") {
       x == list.max && pq.dequeueAll == list.sorted.reverse.tail
     }
   }
-
 }

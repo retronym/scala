@@ -3,9 +3,13 @@ import org.scalacheck._
 import Prop._
 import Gen._
 import Arbitrary._
+import org.junit.runner.RunWith
 import util._
 
-object TreeSetTest extends Properties("TreeSet") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class TreeSetTest extends Properties("TreeSet") {
   def genTreeSet[A: Arbitrary: Ordering]: Gen[TreeSet[A]] =
     for {
       elements <- listOf(arbitrary[A])

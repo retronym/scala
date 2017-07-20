@@ -5,8 +5,12 @@ import Gen._
 import Arbitrary._
 import util._
 import Buildable._
+import org.junit.runner.RunWith
 
-object TreeMapTest extends Properties("TreeMap") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class TreeMapTest extends Properties("TreeMap") {
   def genTreeMap[A: Arbitrary: Ordering, B: Arbitrary]: Gen[TreeMap[A, B]] =
     for {
       keys <- listOf(arbitrary[A])

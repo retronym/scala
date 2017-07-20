@@ -1,12 +1,13 @@
+import org.junit.runner.RunWith
 import org.scalacheck.Prop.{forAll, throws}
 import org.scalacheck.Properties
 import org.scalacheck.Gen
 
-
 import collection.mutable
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
-
-object SI4147Test extends Properties("Mutable TreeSet") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class SI4147Test extends Properties("Mutable TreeSet") {
 
   val generator = Gen.listOfN(1000, Gen.chooseNum(0, 1000))
 

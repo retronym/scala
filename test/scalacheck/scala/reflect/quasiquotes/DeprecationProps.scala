@@ -1,9 +1,16 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
+import org.junit.runner.RunWith
 
-object DeprecationProps extends QuasiquoteProperties("deprecation") {
+import scala.reflect.runtime.universe._
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class DeprecationProps extends QuasiquoteProperties("deprecation") {
   val tname = TypeName("Foo")
   val tpt = tq"Foo"
   val tpe = typeOf[Int]

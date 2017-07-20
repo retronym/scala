@@ -1,8 +1,11 @@
 import org.scalacheck._
 import Prop._
+import org.junit.runner.RunWith
 import org.scalacheck.Gen._
+
 import collection._
 import collection.concurrent.TrieMap
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
 
 
 
@@ -13,7 +16,8 @@ case class Wrap(i: Int) {
 
 /** A check mainly oriented towards checking snapshot correctness.
  */
-object CtrieTest extends Properties("concurrent.TrieMap") {
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class CtrieTest extends Properties("concurrent.TrieMap") {
 
   /* generators */
 

@@ -4,9 +4,13 @@ import Gen._
 import Arbitrary._
 import util._
 import Buildable._
-import scala.collection.mutable.ArraySeq
+import org.junit.runner.RunWith
 
-object ArrayOldTest extends Properties("Array") {
+import scala.collection.mutable.ArraySeq
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class ArrayOldTest extends Properties("Array") {
   /** At this moment the authentic scalacheck Array Builder/Arb bits are commented out.
    */
   implicit def arbArray[T](implicit a: Arbitrary[T], m: Manifest[T]): Arbitrary[Array[T]] =

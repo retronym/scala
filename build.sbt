@@ -579,9 +579,10 @@ lazy val scalacheck = project.in(file("test") / "scalacheck")
   .settings(disableDocs)
   .settings(disablePublishing)
   .settings(
-    fork in Test := false,
     javaOptions in Test += "-Xss1M",
-    libraryDependencies ++= Seq(scalacheckDep),
+    libraryDependencies ++= Seq(scalacheckDep, junitDep, junitInterfaceDep),
+    testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v"),
+    testFrameworks := TestFrameworks.JUnit :: Nil,
     unmanagedSourceDirectories in Compile := Nil,
     unmanagedSourceDirectories in Test := List(baseDirectory.value)
   )

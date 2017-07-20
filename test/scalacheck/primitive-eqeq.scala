@@ -1,8 +1,12 @@
 import org.scalacheck._
 import Prop._
 import Gen._
+import org.junit.runner.RunWith
 
-object PrimitiveEqEqTest extends Properties("==") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class PrimitiveEqEqTest extends Properties("==") {
   def equalObjectsEqualHashcodes(x: Any, y: Any) = (x != y) || (x == y && x.## == y.##)
 
   // ticket #2087

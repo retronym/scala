@@ -1,9 +1,18 @@
 package scala.reflect.quasiquotes
 
-import org.scalacheck._, Prop._, Gen._, Arbitrary._
-import scala.reflect.runtime.universe._, Flag._
+import org.scalacheck._
+import Prop._
+import Gen._
+import Arbitrary._
 
-object UnliftableProps extends QuasiquoteProperties("unliftable") {
+import scala.reflect.runtime.universe._
+import Flag._
+import org.junit.runner.RunWith
+
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class UnliftableProps extends QuasiquoteProperties("unliftable") {
   property("unlift name") = test {
     val termname0 = TermName("foo")
     val typename0 = TypeName("foo")

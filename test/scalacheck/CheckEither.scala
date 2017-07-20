@@ -1,11 +1,15 @@
-import org.scalacheck.{ Arbitrary, Prop, Properties }
-import org.scalacheck.Arbitrary.{arbitrary, arbThrowable}
+import org.junit.runner.RunWith
+import org.scalacheck.{Arbitrary, Prop, Properties}
+import org.scalacheck.Arbitrary.{arbThrowable, arbitrary}
 import org.scalacheck.Gen.oneOf
 import org.scalacheck.Prop._
 import org.scalacheck.Test.check
-import Function.tupled
 
-object CheckEitherTest extends Properties("Either") {
+import Function.tupled
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class CheckEitherTest extends Properties("Either") {
   implicit def arbitraryEither[X, Y](implicit xa: Arbitrary[X], ya: Arbitrary[Y]): Arbitrary[Either[X, Y]] =
     Arbitrary[Either[X, Y]](oneOf(arbitrary[X].map(Left(_)), arbitrary[Y].map(Right(_))))
 

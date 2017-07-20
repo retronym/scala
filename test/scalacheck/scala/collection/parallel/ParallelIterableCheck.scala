@@ -235,14 +235,14 @@ abstract class ParallelIterableCheck[T](collName: String) extends Properties(col
     }).reduceLeft(_ && _)
   }
 
-  property("filterNots must be equal") = forAllNoShrink(collectionPairs) { case (t, coll) =>
-    (for ((p, ind) <- filterNotPredicates.zipWithIndex) yield {
-      val tf = t.filterNot(p)
-      val cf = coll.filterNot(p)
-      if (tf != cf || cf != tf) printComparison(t, coll, tf, cf, ind)
-      ("op index: " + ind) |: tf == cf && cf == tf
-    }).reduceLeft(_ && _)
-  }
+//  property("filterNots must be equal") = (forAllNoShrink(collectionPairs) { case (t, coll) =>
+//    (for ((p, ind) <- filterNotPredicates.zipWithIndex) yield {
+//      val tf = t.filterNot(p)
+//      val cf = coll.filterNot(p)
+//      if (tf != cf || cf != tf) printComparison(t, coll, tf, cf, ind)
+//      ("op index: " + ind) |: tf == cf && cf == tf
+//    }).reduceLeft(_ && _)
+//  })
 
   if (!isCheckingViews) property("partitions must be equal") = forAllNoShrink(collectionPairs) { case (t, coll) =>
     (for ((p, ind) <- partitionPredicates.zipWithIndex) yield {

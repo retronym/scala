@@ -5,8 +5,12 @@ import Arbitrary._
 
 import scala.reflect.runtime.universe._
 import Flag._
+import org.junit.runner.RunWith
 
-object ReflectionExtractorsTest extends Properties("reflection extractors") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class ReflectionExtractorsTest extends Properties("reflection extractors") {
 
   val genFlag = oneOf(
     TRAIT, INTERFACE, MUTABLE, MACRO, DEFERRED, ABSTRACT, FINAL, SEALED,

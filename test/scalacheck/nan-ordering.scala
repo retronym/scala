@@ -1,8 +1,12 @@
 import org.scalacheck._
 import Gen._
 import Prop._
+import org.junit.runner.RunWith
 
-object NanOrderingTest extends Properties("NaN-Ordering") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class NanOrderingTest extends Properties("NaN-Ordering") {
 
   val specFloats: Gen[Float] = oneOf(
     Float.MaxValue,

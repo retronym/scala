@@ -1,6 +1,10 @@
+import org.junit.runner.RunWith
 import org.scalacheck._
 
-object SubstringTest extends Properties("String") {
+import scala.tools.nsc.ScalaCheckJUnitPropertiesRunner
+
+@RunWith(classOf[ScalaCheckJUnitPropertiesRunner])
+class SubstringTest extends Properties("String") {
   property("startsWith") = Prop.forAll((a: String, b: String) => (a+b).startsWith(a))
 
   property("endsWith") = Prop.forAll((a: String, b: String) => (a+b).endsWith(b))
