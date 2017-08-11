@@ -22,7 +22,12 @@ object VersionUtil {
     // Set the version properties globally (they are the same for all projects)
     versionProperties in Global := versionPropertiesImpl.value,
     gitProperties := gitPropertiesImpl.value,
-    version in Global := versionProperties.value.mavenVersion
+    version in Global := {
+      val result = versionProperties.value.mavenVersion
+      // write to disk for use in external scripts.
+      IO.write((target in LocalRootProject).value / "version", result)
+      result
+    }
   )
 
   lazy val generatePropertiesFileSettings = Seq[Setting[_]](
