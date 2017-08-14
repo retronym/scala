@@ -42,8 +42,6 @@ abstract class PostProcessor extends PerRunInit {
   }
 
   def postProcessAndSendToDisk(): Unit = {
-    runGlobalOptimizations()
-
     for (GeneratedClass(classNode, sourceFile, isArtifact) <- generatedClasses) {
       val bytes = try {
         if (!isArtifact) {
@@ -72,8 +70,6 @@ abstract class PostProcessor extends PerRunInit {
         classfileWriter.get.write(classNode.name, bytes, sourceFile)
       }
     }
-
-    classfileWriter.get.close()
   }
 
   def runGlobalOptimizations(): Unit = {

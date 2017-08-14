@@ -31,20 +31,34 @@ abstract class GenBCode extends SubComponent {
 
     override val erasedTypes = true
 
-    def apply(unit: CompilationUnit): Unit = codeGen.genUnit(unit)
+    private val writeClassesEarly = postProcessorFrontendAccess.compilerSettings.optNone
+
+    def apply(unit: CompilationUnit): Unit = {
+      val genStart = Statistics.startTimer(BackendStats.bcodeGenStat)
+      codeGen.genUnit(unit)
+      Statistics.stopTimer(BackendStats.bcodeGenStat, genStart)
+      if (writeClassesEarly) {
+        postProcessor.postProcessAndSendToDisk()
+        postProcessor.generatedClasses.clear()
+      }
+
+    }
 
     override def run(): Unit = {
       val bcodeStart = Statistics.startTimer(BackendStats.bcodeTimer)
+      try {
+        initialize()
 
-      initialize()
+        super.run() // invokes `apply` for each compilation unit
 
-      val genStart = Statistics.startTimer(BackendStats.bcodeGenStat)
-      super.run() // invokes `apply` for each compilation unit
-      Statistics.stopTimer(BackendStats.bcodeGenStat, genStart)
-
-      postProcessor.postProcessAndSendToDisk()
-
-      Statistics.stopTimer(BackendStats.bcodeTimer, bcodeStart)
+        if (!writeClassesEarly) {
+          postProcessor.runGlobalOptimizations()
+          postProcessor.postProcessAndSendToDisk()
+        }
+      } finally {
+        postProcessor.classfileWriter.get.close()
+        Statistics.stopTimer(BackendStats.bcodeTimer, bcodeStart)
+      }
     }
 
     /**
