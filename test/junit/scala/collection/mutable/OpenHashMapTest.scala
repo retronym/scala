@@ -1,7 +1,7 @@
 package scala.collection.mutable
 
 import org.junit.Assert._
-import org.junit.Test
+import org.junit.{Assume, Ignore, Test}
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.openjdk.jol.info.{GraphPathRecord, GraphVisitor, GraphWalker}
@@ -63,7 +63,13 @@ class OpenHashMapTest {
         instanceCount = 0
         val walker = new GraphWalker(obj)
         walker.addVisitor(this)
-        walker.walk
+        try {
+          walker.walk
+        } catch {
+          case ex: IllegalStateException =>
+            // GraphWalker only works on OpenJDK based JVMs, disable the test if we hit a failure.
+            Assume.assumeTrue(ex.getMessage, false)
+        }
         instanceCount
       }
 
