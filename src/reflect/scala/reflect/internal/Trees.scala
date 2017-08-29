@@ -38,7 +38,7 @@ trait Trees extends api.Trees {
     val id = nodeCount // TODO: add to attachment?
     nodeCount += 1
 
-    if (Statistics.canEnable) Statistics.incCounter(TreesStats.nodeByType, getClass)
+    //if (Statistics.canEnable) Statistics.incCounter(TreesStats.nodeByType, getClass)
 
     final override def pos: Position = rawatt.pos
 
@@ -1916,5 +1916,5 @@ trait Trees extends api.Trees {
 
 object TreesStats {
   // statistics
-  val nodeByType = Statistics.newByClass("#created tree nodes by type")(Statistics.newCounter(""))
+  //val nodeByType = Statistics.newByClass("#created tree nodes by type")(Statistics.newCounter(""))
 }
