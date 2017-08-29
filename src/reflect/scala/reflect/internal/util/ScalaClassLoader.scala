@@ -14,6 +14,7 @@ import java.net.{ URLClassLoader => JURLClassLoader }
 import java.net.URL
 
 import scala.reflect.runtime.ReflectionUtils.{ show, unwrapHandler }
+import scala.collection.immutable.ImmutableArray
 import ScalaClassLoader._
 import scala.util.control.Exception.{ catching }
 import scala.reflect.{ ClassTag, classTag }
@@ -113,7 +114,7 @@ object ScalaClassLoader {
    */
   implicit def apply(cl: JClassLoader): ScalaClassLoader = cl match {
     case cl: ScalaClassLoader => cl
-    case cl: JURLClassLoader  => new URLClassLoader(cl.getURLs.toSeq, cl.getParent)
+    case cl: JURLClassLoader  => new URLClassLoader(ImmutableArray.unsafeWrapArray(cl.getURLs), cl.getParent)
     case _                    => new JClassLoader(cl) with ScalaClassLoader
   }
   def contextLoader = apply(Thread.currentThread.getContextClassLoader)

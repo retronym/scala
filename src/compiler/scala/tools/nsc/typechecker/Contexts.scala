@@ -1597,5 +1597,5 @@ final class ContextMode private (val bits: Int) extends AnyVal {
 
   override def toString =
     if (bits == 0) "NOmode"
-    else (contextModeNameMap filterKeys inAll).values.toList.sorted mkString " "
+    else (contextModeNameMap filterKeys inAll).map(_._2).toList.sorted mkString " "
 }

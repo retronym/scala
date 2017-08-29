@@ -194,7 +194,7 @@ class Power[ReplValsImpl <: ReplVals : ru.TypeTag: ClassTag](val intp: IMain, re
       def show(x: Any): Unit = prettify(x) foreach println
       def prettify(x: Any): TraversableOnce[String] = x match {
         case x: Name                => List(x.decode)
-        case Tuple2(k, v)           => List(prettify(k).toIterator ++ Iterator("->") ++ prettify(v) mkString " ")
+        case Tuple2(k, v)           => List(prettify(k).iterator ++ Iterator("->") ++ prettify(v) mkString " ")
         case xs: Array[_]           => xs.iterator flatMap prettify
         case xs: TraversableOnce[_] => xs flatMap prettify
         case x                      => List(Prettifier.stringOf(x))

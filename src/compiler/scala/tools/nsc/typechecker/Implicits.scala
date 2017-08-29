@@ -1540,7 +1540,7 @@ trait Implicits {
       interpolate(msg, Map((typeParamNames zip typeArgs): _*)) // TODO: give access to the name and type of the implicit argument, etc?
 
     def validate: Option[String] = {
-      val refs  = Intersobralator.findAllMatchIn(msg).map(_ group 1).toSet
+      val refs  = Set.from(Intersobralator.findAllMatchIn(msg).map(_ group 1))
       val decls = typeParamNames.toSet
 
       (refs &~ decls) match {

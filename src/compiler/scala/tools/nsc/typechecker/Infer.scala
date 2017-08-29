@@ -744,7 +744,7 @@ trait Infer extends Checkable {
       def reorderedTypesCompatible = checkNames(argtpes0, mt.params) match {
         case (_, _, false)                                                                => false // names are not ok
         case (_, pos, _) if !allArgsArePositional(pos) && !sameLength(formals, mt.params) => false // different length lists and all args not positional
-        case (args, pos, _)                                                               => typesCompatible(reorderArgs(args, pos))
+        case (args, pos, _)                                                               => typesCompatible(reorderArgs(args, pos.apply))
       }
       compareLengths(argtpes0, formals) match {
         case 0 if containsNamedType(argtpes0) => reorderedTypesCompatible      // right number of args, wrong order

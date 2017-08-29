@@ -3503,7 +3503,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               } else {
                 checkNotMacro()
                 transformNamedApplication(Typer.this, mode, pt)(
-                                          treeCopy.Apply(tree, fun, namelessArgs), argPos)
+                                          treeCopy.Apply(tree, fun, namelessArgs), argPos.apply)
               }
             } else {
               // defaults are needed. they are added to the argument list in named style as

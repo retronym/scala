@@ -39,6 +39,10 @@ class Jar(file: File) extends Iterable[JarEntry] {
 
   lazy val manifest = withJarInput(s => Option(s.getManifest))
 
+  def iterableFactory: scala.collection.IterableFactoryLike[Iterable] = Iterable
+  protected[this] def fromSpecificIterable(coll: Iterable[JarEntry]): Iterable[JarEntry] = iterableFactory.from(coll)
+  protected[this] def newSpecificBuilder(): scala.collection.mutable.Builder[JarEntry, Iterable[JarEntry]] = iterableFactory.newBuilder()
+
   def mainClass     = manifest map (f => f(Name.MAIN_CLASS))
   /** The manifest-defined classpath String if available. */
   def classPathString: Option[String] =

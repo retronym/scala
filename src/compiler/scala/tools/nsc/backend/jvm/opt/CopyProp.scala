@@ -508,19 +508,19 @@ class CopyProp[BT <: BTypes](val btypes: BT) {
       case _ =>
     }
 
-    val pairStartStack = new mutable.Stack[(AbstractInsnNode, mutable.ListBuffer[RemovePairDependency])]
+    var pairStartStack: List[(AbstractInsnNode, mutable.ListBuffer[RemovePairDependency])] = Nil
 
     def push(insn: AbstractInsnNode) = {
-      pairStartStack push ((insn, mutable.ListBuffer.empty))
+      pairStartStack = ((insn, mutable.ListBuffer.empty[RemovePairDependency])) :: pairStartStack
     }
 
     def addDepends(dependency: RemovePairDependency) = if (pairStartStack.nonEmpty) {
-      val (_, depends) = pairStartStack.top
+      val (_, depends) = pairStartStack.head
       depends += dependency
     }
 
     def completesStackTop(load: AbstractInsnNode) = isLoad(load) && pairStartStack.nonEmpty && {
-      pairStartStack.top match {
+      pairStartStack.head match {
         case (store: VarInsnNode, _) => store.`var` == load.asInstanceOf[VarInsnNode].`var`
         case _ => false
       }
@@ -535,20 +535,24 @@ class CopyProp[BT <: BTypes](val btypes: BT) {
      */
     def tryToPairInstruction(insn: AbstractInsnNode): Unit = {
       @tailrec def emptyStack(): Unit = if (pairStartStack.nonEmpty) {
-        registerLiveVarsLabels(pairStartStack.pop()._1)
+        val insn = pairStartStack.head._1
+        pairStartStack = pairStartStack.tail
+        registerLiveVarsLabels(insn)
         emptyStack()
       }
 
       @tailrec def tryPairing(): Unit = {
         if (completesStackTop(insn)) {
-          val (store: VarInsnNode, depends) = pairStartStack.pop()
+          val (store: VarInsnNode, depends) = pairStartStack.head
+          pairStartStack = pairStartStack.tail
           addDepends(mkRemovePair(store, insn, depends.toList))
         } else if (pairStartStack.nonEmpty) {
-          val (top, topDepends) = pairStartStack.pop()
+          val (top, topDepends) = pairStartStack.head
+          pairStartStack = pairStartStack.tail
           if (pairStartStack.nonEmpty) {
-            (pairStartStack.top, top) match {
+            (pairStartStack.head, top) match {
               case ((ldNull: InsnNode, depends), store: VarInsnNode) if ldNull.getOpcode == ACONST_NULL && store.getOpcode == ASTORE =>
-                pairStartStack.pop()
+                pairStartStack = pairStartStack.tail
                 addDepends(mkRemovePair(store, ldNull, depends.toList))
                 // example: store; (null; store;) (store; load;) load
                 //                         s1^     ^^^^^p1^^^^^        // p1 is added to s1's depends

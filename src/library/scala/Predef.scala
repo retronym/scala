@@ -10,10 +10,9 @@ package scala
 
 import scala.language.implicitConversions
 
-import scala.collection.{ mutable, immutable, generic }
-import immutable.StringOps
-import mutable.ArrayOps
-import generic.CanBuildFrom
+import scala.collection.{ StringOps, StringView }
+import scala.collection.{ mutable, immutable, ArrayOps }
+import scala.collection.immutable.{ ImmutableArray, WrappedString }
 import scala.annotation.{ elidable, implicitNotFound }
 import scala.annotation.elidable.ASSERTION
 import scala.io.StdIn
@@ -329,15 +328,15 @@ object Predef extends LowPriorityImplicits {
     override def toString                               = arrayOfChars mkString ""
   }
 
-  implicit val StringCanBuildFrom: CanBuildFrom[String, Char, String] = new CanBuildFrom[String, Char, String] {
+  /*implicit val StringCanBuildFrom: CanBuildFrom[String, Char, String] = new CanBuildFrom[String, Char, String] {
     def apply(from: String) = apply()
     def apply()             = mutable.StringBuilder.newBuilder
-  }
+  }*/
 
   /** @group conversions-string */
   @inline implicit def augmentString(x: String): StringOps = new StringOps(x)
   /** @group conversions-string */
-  @inline implicit def unaugmentString(x: StringOps): String = x.repr
+  @inline implicit def unaugmentString(x: StringOps): String = x.s
 
   // printing -----------------------------------------------------------
 
@@ -382,7 +381,20 @@ object Predef extends LowPriorityImplicits {
   implicit def tuple2ToZippedOps[T1, T2](x: (T1, T2))                           = new runtime.Tuple2Zipped.Ops(x)
   implicit def tuple3ToZippedOps[T1, T2, T3](x: (T1, T2, T3))                   = new runtime.Tuple3Zipped.Ops(x)
 
-  implicit def genericArrayOps[T](xs: Array[T]): ArrayOps[T] = (xs match {
+  // Not specialized in the strawman, but we need all methods because the compiler emits direct calls to them
+  implicit def genericArrayOps[T](xs: Array[T]): ArrayOps[T] = collection.arrayToArrayOps[T](xs)
+  implicit def booleanArrayOps(xs: Array[Boolean]): ArrayOps[Boolean] = collection.arrayToArrayOps(xs)
+  implicit def byteArrayOps(xs: Array[Byte]): ArrayOps[Byte] = collection.arrayToArrayOps(xs)
+  implicit def charArrayOps(xs: Array[Char]): ArrayOps[Char] = collection.arrayToArrayOps(xs)
+  implicit def doubleArrayOps(xs: Array[Double]): ArrayOps[Double] = collection.arrayToArrayOps(xs)
+  implicit def floatArrayOps(xs: Array[Float]): ArrayOps[Float] = collection.arrayToArrayOps(xs)
+  implicit def intArrayOps(xs: Array[Int]): ArrayOps[Int] = collection.arrayToArrayOps(xs)
+  implicit def longArrayOps(xs: Array[Long]): ArrayOps[Long] = collection.arrayToArrayOps(xs)
+  implicit def refArrayOps[T <: AnyRef](xs: Array[T]): ArrayOps[T] = collection.arrayToArrayOps[T](xs)
+  implicit def shortArrayOps(xs: Array[Short]): ArrayOps[Short] = collection.arrayToArrayOps(xs)
+  implicit def unitArrayOps(xs: Array[Unit]): ArrayOps[Unit] = collection.arrayToArrayOps(xs)
+
+  /*implicit def genericArrayOps[T](xs: Array[T]): ArrayOps[T] = (xs match {
     case x: Array[AnyRef]  => refArrayOps[AnyRef](x)
     case x: Array[Boolean] => booleanArrayOps(x)
     case x: Array[Byte]    => byteArrayOps(x)
@@ -406,6 +418,7 @@ object Predef extends LowPriorityImplicits {
   implicit def refArrayOps[T <: AnyRef](xs: Array[T]): ArrayOps.ofRef[T] = new ArrayOps.ofRef[T](xs)
   implicit def shortArrayOps(xs: Array[Short]): ArrayOps.ofShort         = new ArrayOps.ofShort(xs)
   implicit def unitArrayOps(xs: Array[Unit]): ArrayOps.ofUnit            = new ArrayOps.ofUnit(xs)
+  */
 
   // "Autoboxing" and "Autounboxing" ---------------------------------------------------
 
@@ -550,7 +563,7 @@ object Predef extends LowPriorityImplicits {
 // compiled copy on the classpath.
 private[scala] abstract class LowPriorityImplicits {
   import mutable.WrappedArray
-  import immutable.WrappedString
+  //import immutable.WrappedString
 
   /** We prefer the java.lang.* boxed types to these wrappers in
    *  any potential conflicts.  Conflicts do exist because the wrappers
@@ -571,7 +584,6 @@ private[scala] abstract class LowPriorityImplicits {
   @inline implicit def doubleWrapper(x: Double)   = new runtime.RichDouble(x)
   @inline implicit def booleanWrapper(x: Boolean) = new runtime.RichBoolean(x)
 
-  /** @group conversions-array-to-wrapped-array */
   implicit def genericWrapArray[T](xs: Array[T]): WrappedArray[T] =
     if (xs eq null) null
     else WrappedArray.make(xs)
@@ -605,6 +617,9 @@ private[scala] abstract class LowPriorityImplicits {
   /** @group conversions-array-to-wrapped-array */
   implicit def wrapUnitArray(xs: Array[Unit]): WrappedArray[Unit] = if (xs ne null) new WrappedArray.ofUnit(xs) else null
 
+  implicit def stringToSeq(s: String): WrappedString = collection.stringToSeq(s)
+
+  /*
   /** @group conversions-string */
   implicit def wrapString(s: String): WrappedString = if (s ne null) new WrappedString(s) else null
   /** @group conversions-string */
@@ -615,4 +630,5 @@ private[scala] abstract class LowPriorityImplicits {
       def apply(from: String) = immutable.IndexedSeq.newBuilder[T]
       def apply() = immutable.IndexedSeq.newBuilder[T]
     }
+  */
 }

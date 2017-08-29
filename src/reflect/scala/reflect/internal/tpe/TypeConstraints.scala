@@ -3,8 +3,7 @@ package reflect
 package internal
 package tpe
 
-import scala.collection.{ generic }
-import generic.Clearable
+import scala.collection.mutable.Clearable
 
 private[internal] trait TypeConstraints {
   self: SymbolTable =>

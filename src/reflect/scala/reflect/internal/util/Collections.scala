@@ -54,7 +54,7 @@ trait Collections {
     var rest = as.tail
     while (rest ne Nil) {
       val next = new ::(f(rest.head), Nil)
-      tail.tl = next
+      tail.next = next
       tail = next
       rest = rest.tail
     }
@@ -148,7 +148,7 @@ trait Collections {
       ys1 = ys1.tail
       ys2 = ys2.tail
     }
-    if (lb eq null) Nil else lb.result
+    if (lb eq null) Nil else lb.toList
   }
 
   final def flatCollect[A, B](elems: List[A])(pf: PartialFunction[A, Traversable[B]]): List[B] = {

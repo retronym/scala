@@ -29,7 +29,7 @@ trait SymbolTables {
     def symAliases(sym: Symbol): List[TermName] =
       symName(sym) match {
         case name if name.isEmpty => Nil
-        case _ => (aliases.distinct groupBy (_._1) mapValues (_ map (_._2)))(sym)
+        case _ => aliases.distinct.groupBy (_._1).apply(sym).map(_._2)
       }
 
     def symBinding(sym: Symbol): Tree =
@@ -48,14 +48,14 @@ trait SymbolTables {
 
     def +(sym: Symbol, name: TermName, reification: Tree): SymbolTable = add(sym, name, reification)
     def +(symDef: Tree): SymbolTable = add(symDef)
-    def ++(symDefs: TraversableOnce[Tree]): SymbolTable = (this /: symDefs)((symtab, symDef) => symtab.add(symDef))
+    def ++(symDefs: IterableOnce[Tree]): SymbolTable = (this /: symDefs)((symtab, symDef) => symtab.add(symDef))
     def ++(symtab: SymbolTable): SymbolTable = { val updated = this ++ symtab.symtab.values; new SymbolTable(updated.symtab, updated.aliases ++ symtab.aliases) }
     def -(sym: Symbol): SymbolTable = remove(sym)
     def -(name: TermName): SymbolTable = remove(name)
     def -(symDef: Tree): SymbolTable = remove(reifyBinding(symDef).symbol)
-    def --(syms: GenTraversableOnce[Symbol]): SymbolTable = (this /: syms)((symtab, sym) => symtab.remove(sym))
-    def --(names: Iterable[TermName]): SymbolTable = (this /: names)((symtab, name) => symtab.remove(name))
-    def --(symDefs: TraversableOnce[Tree]): SymbolTable = this -- (symDefs map (reifyBinding(_)))
+    def --(syms: IterableOnce[Symbol]): SymbolTable = (this /: syms)((symtab, sym) => symtab.remove(sym))
+    def --(names: List[TermName]): SymbolTable = (this /: names)((symtab, name) => symtab.remove(name))
+    def --(symDefs: Iterable[Tree]): SymbolTable = this -- (symDefs map (reifyBinding(_)))
     def --(symtab: SymbolTable): SymbolTable = { val updated = this -- symtab.symtab.values; new SymbolTable(updated.symtab, updated.aliases diff symtab.aliases) }
     def filterSyms(p: Symbol => Boolean): SymbolTable = this -- (syms filterNot p)
     def filterAliases(p: (Symbol, TermName) => Boolean): SymbolTable = this -- (aliases filterNot (tuple => p(tuple._1, tuple._2)) map (_._2))

@@ -22,10 +22,10 @@ object VerifyClass {
     checkClass(x.getName.stripSuffix(".class").replace('/', '.'), cl)
   } toMap
 
-  def checkClassesInDir(name: String, cl: ClassLoader) = (for {
+  def checkClassesInDir(name: String, cl: ClassLoader) = Map.from(for {
     file <- Path(name).walk
     if file.name endsWith ".class"
-  } yield checkClass(name, cl)) toMap
+  } yield checkClass(name, cl))
 
   def checkClasses(name: String, cl: ClassLoader) =
     if (name endsWith ".jar")  checkClassesInJar(name, cl)
@@ -33,7 +33,7 @@ object VerifyClass {
 
   /** Attempts to load all classes on the classpath defined in the args string array.  This method is meant to be used via reflection from tools like sbt or Ant. */
   def run(args: Array[String]): java.util.Map[String, String] = {
-    val urls = args.map(Path.apply).map(_.toFile.toURI.toURL).toArray
+    val urls = args.map(s => Path(s)).map(_.toFile.toURI.toURL).toArray
     println("As urls: " + urls.mkString(","))
     val cl = URLClassLoader.newInstance(urls, null)
     val results = args.flatMap(n => checkClasses(n, cl)).toMap

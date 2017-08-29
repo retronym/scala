@@ -34,10 +34,15 @@ package object scala {
     override def toString = "object AnyRef"
   }
 
-  type TraversableOnce[+A] = scala.collection.TraversableOnce[A]
+  @deprecated("Use IterableOnce instead of TraversableOnce", "2.13.0")
+  type TraversableOnce[+A] = scala.collection.IterableOnce[A]
 
-  type Traversable[+A] = scala.collection.Traversable[A]
-  val Traversable = scala.collection.Traversable
+  type IterableOnce[+A] = scala.collection.IterableOnce[A]
+
+  @deprecated("Use Iterable instead of Traversable", "2.13.0")
+  type Traversable[+A] = scala.collection.Iterable[A]
+  @deprecated("Use Iterable instead of Traversable", "2.13.0")
+  val Traversable = scala.collection.Iterable
 
   type Iterable[+A] = scala.collection.Iterable[A]
   val Iterable = scala.collection.Iterable
@@ -61,18 +66,23 @@ package object scala {
   type ::[A] = scala.collection.immutable.::[A]
   val :: = scala.collection.immutable.::
 
-  val +: = scala.collection.+:
-  val :+ = scala.collection.:+
+  val +: = scala.collection.immutable.+:
+  val :+ = scala.collection.immutable.:+
 
-  type Stream[+A] = scala.collection.immutable.Stream[A]
-  val Stream = scala.collection.immutable.Stream
-  val #:: = scala.collection.immutable.Stream.#::
+  @deprecated("Use LazyList instead of Stream", "2.13.0")
+  type Stream[+A] = scala.collection.immutable.LazyList[A]
+  @deprecated("Use LazyList instead of Stream", "2.13.0")
+  val Stream = scala.collection.immutable.LazyList
+
+  type LazyList[+A] = scala.collection.immutable.LazyList[A]
+  val LazyList = scala.collection.immutable.LazyList
+  val #:: = scala.collection.immutable.LazyList.#::
 
   type Vector[+A] = scala.collection.immutable.Vector[A]
   val Vector = scala.collection.immutable.Vector
 
   type StringBuilder = scala.collection.mutable.StringBuilder
-  val StringBuilder = scala.collection.mutable.StringBuilder
+  //val StringBuilder = scala.collection.mutable.StringBuilder
 
   type Range = scala.collection.immutable.Range
   val Range = scala.collection.immutable.Range

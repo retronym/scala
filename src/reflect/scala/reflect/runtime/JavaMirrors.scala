@@ -6,6 +6,7 @@ import scala.language.existentials
 
 import scala.ref.WeakReference
 import scala.collection.mutable.WeakHashMap
+import scala.collection.immutable.ImmutableArray
 
 import java.lang.{Class => jClass, Package => jPackage}
 import java.lang.reflect.{
@@ -436,7 +437,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
           )
           i += 1
         }
-        jinvoke(args1)
+        jinvoke(ImmutableArray.unsafeWrapArray(args1))
       }
     }
 
@@ -622,7 +623,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
             loadBytes[Array[String]]("scala.reflect.ScalaLongSignature") match {
               case Some(slsig) =>
                 info(s"unpickling Scala $clazz and $module with long Scala signature")
-                val encoded = slsig flatMap (_.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                val encoded = slsig.flatMap(s => s.getBytes(java.nio.charset.StandardCharsets.UTF_8): IterableOnce[Byte])
                 val len = ByteCodecs.decode(encoded)
                 val decoded = encoded.take(len)
                 assignAssociatedFile(clazz, module, jclazz)

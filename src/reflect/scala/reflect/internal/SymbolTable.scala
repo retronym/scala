@@ -120,7 +120,7 @@ abstract class SymbolTable extends macros.Universe
   }
 
   @inline final def findSymbol(xs: TraversableOnce[Symbol])(p: Symbol => Boolean): Symbol = {
-    xs find p getOrElse NoSymbol
+    xs.iterator find p getOrElse NoSymbol
   }
 
   // For too long have we suffered in order to sort NAMES.
@@ -349,7 +349,7 @@ abstract class SymbolTable extends macros.Universe
   }
 
   object perRunCaches {
-    import scala.collection.generic.Clearable
+    import scala.collection.mutable.Clearable
 
     // Weak references so the garbage collector will take care of
     // letting us know when a cache is really out of commission.

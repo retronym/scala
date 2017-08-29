@@ -1,7 +1,7 @@
 package scala.tools.reflect
 
 import scala.reflect.macros.runtime.Context
-import scala.collection.mutable.{ ListBuffer, Stack }
+import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.util.Position
 import scala.PartialFunction.cond
 import scala.util.matching.Regex.Match
@@ -64,7 +64,7 @@ abstract class FormatInterpolator {
     val fstring  = new StringBuilder
     val evals    = ListBuffer[ValDef]()
     val ids      = ListBuffer[Ident]()
-    val argStack = Stack(args: _*)
+    var argStack = args
 
     // create a tmp val and add it to the ids passed to format
     def defval(value: Tree, tpe: Type): Unit = {
@@ -138,7 +138,8 @@ abstract class FormatInterpolator {
       def first = n == 0
       // a conversion for the arg is required
       if (!first) {
-        val arg = argStack.pop()
+        val arg = argStack.head
+        argStack = argStack.tail
         def s_%() = {
           fstring append "%s"
           defval(arg, AnyTpe)

@@ -34,7 +34,7 @@ trait StandardLiftables { self: Universe =>
     implicit def liftTypeTag[T <: WeakTypeTag[_]]: Liftable[T] = Liftable { ttag => TypeTree(ttag.tpe) }
     implicit def liftConstant[T <: Constant]: Liftable[T]      = Liftable { const => Literal(const) }
 
-    implicit def liftArray[T: Liftable]: Liftable[Array[T]]             = Liftable { arr => callScala(stdnme.Array)(arr.map(lift(_)).toList) }
+    implicit def liftArray[T: Liftable]: Liftable[Array[T]]             = Liftable { arr => callScala(stdnme.Array)(arr.map(lift[T](_)).toList) }
     implicit def liftVector[T: Liftable]: Liftable[Vector[T]]           = Liftable { vect => callCollection(stdnme.Vector)(vect.map(lift(_)).toList) }
     implicit def liftList[T: Liftable]: Liftable[List[T]]               = Liftable { lst => callCollection(stdnme.List)(lst.map(lift(_))) }
     implicit def liftNil: Liftable[Nil.type]                            = Liftable { _ => selectScala(stdnme.collection, stdnme.immutable, stdnme.Nil) }

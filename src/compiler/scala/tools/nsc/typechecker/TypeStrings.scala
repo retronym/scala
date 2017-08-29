@@ -198,7 +198,7 @@ trait TypeStrings {
     else scalaName(xs.head)
   }
   private def tparamString(clazz: JClass): String = {
-    brackets(clazz.getTypeParameters map tvarString: _*)
+    brackets(clazz.getTypeParameters.map((tv: TypeVariable[_] /* type ascription needed due to https://github.com/scala/bug/issues/10608 */) => tvarString(tv)): _*)
   }
 
   private def tparamString[T: ru.TypeTag] : String = {

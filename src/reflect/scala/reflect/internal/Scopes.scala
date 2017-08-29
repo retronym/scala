@@ -79,6 +79,10 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     private val MIN_HASH = 8
 
+    def iterableFactory = Iterable
+    protected[this] def fromSpecificIterable(coll: Iterable[Symbol]) = iterableFactory.fromSpecific(coll)
+    protected[this] def newSpecificBuilder() = iterableFactory.newBuilder()
+
     /** Returns a new scope with the same content as this one. */
     def cloneScope: Scope = newScopeWith(this.toList: _*)
 

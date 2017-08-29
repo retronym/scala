@@ -29,8 +29,7 @@ import scala.language.implicitConversions
  *  @since   2.9
  */
 class SystemProperties
-extends mutable.AbstractMap[String, String]
-   with mutable.Map[String, String] {
+extends mutable.AbstractMap[String, String] {
 
   override def empty = mutable.Map[String, String]()
   override def default(key: String): String = null
@@ -49,8 +48,14 @@ extends mutable.AbstractMap[String, String]
   override def contains(key: String) =
     wrapAccess(super.contains(key)) exists (x => x)
 
-  def -= (key: String): this.type = { wrapAccess(System.clearProperty(key)) ; this }
-  def += (kv: (String, String)): this.type = { wrapAccess(System.setProperty(kv._1, kv._2)) ; this }
+  protected[this] def fromSpecificIterable(coll: Iterable[(String, String)]) = mutable.HashMap.from(coll)
+  protected[this] def newSpecificBuilder() = mutable.HashMap.newBuilder()
+  def mapFactory: scala.collection.MapFactory[mutable.Map] = mutable.HashMap
+  protected[this] def mapFromIterable[K2, V2](it: Iterable[(K2, V2)]) = mutable.HashMap.from(it)
+
+  def clear(): Unit = wrapAccess(System.getProperties().clear())
+  def subtract (key: String): this.type = { wrapAccess(System.clearProperty(key)) ; this }
+  def add (kv: (String, String)): this.type = { wrapAccess(System.setProperty(kv._1, kv._2)) ; this }
 
   def wrapAccess[T](body: => T): Option[T] =
     try Some(body) catch { case _: AccessControlException => None }

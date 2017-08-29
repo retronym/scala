@@ -9,10 +9,10 @@
 package scala
 package runtime
 
-import scala.collection.{ TraversableView, AbstractIterator, GenIterable }
-import scala.collection.mutable.WrappedArray
-import scala.collection.immutable.{ StringLike, NumericRange }
-import scala.collection.generic.{ Sorted, IsTraversableLike }
+import scala.collection.{ View, AbstractIterator, SortedOps }
+import scala.collection.generic.IsIterableLike
+import scala.collection.immutable.{ NumericRange, StringView, StringOps }
+import scala.collection.mutable.{ StringBuilder, WrappedArray }
 import scala.reflect.{ ClassTag, classTag }
 import java.lang.{ Class => jClass }
 
@@ -30,8 +30,8 @@ object ScalaRunTime {
     clazz.isArray && (atLevel == 1 || isArrayClass(clazz.getComponentType, atLevel - 1))
 
   // A helper method to make my life in the pattern matcher a lot easier.
-  def drop[Repr](coll: Repr, num: Int)(implicit traversable: IsTraversableLike[Repr]): Repr =
-    traversable conversion coll drop num
+  def drop[Repr](coll: Repr, num: Int)(implicit iterable: IsIterableLike[Repr]): Repr =
+    iterable conversion coll drop num
 
   /** Return the class object representing an array with element class `clazz`.
    */
@@ -199,17 +199,17 @@ object ScalaRunTime {
       // Range/NumericRange have a custom toString to avoid walking a gazillion elements
       case _: Range | _: NumericRange[_] => true
       // Sorted collections to the wrong thing (for us) on iteration - ticket #3493
-      case _: Sorted[_, _]  => true
+      case _: SortedOps[_, _]  => true
       // StringBuilder(a, b, c) and similar not so attractive
-      case _: StringLike[_] => true
+      case _: StringView | _: StringOps | _: StringBuilder => true
       // Don't want to evaluate any elements in a view
-      case _: TraversableView[_, _] => true
+      case _: View[_] => true
       // Node extends NodeSeq extends Seq[Node] and MetaData extends Iterable[MetaData]
       // -> catch those by isXmlNode and isXmlMetaData.
       // Don't want to a) traverse infinity or b) be overly helpful with peoples' custom
       // collections which may have useful toString methods - ticket #3710
       // or c) print AbstractFiles which are somehow also Iterable[AbstractFile]s.
-      case x: Traversable[_] => !x.hasDefiniteSize || !isScalaClass(x) || isScalaCompilerClass(x) || isXmlNode(x.getClass) || isXmlMetaData(x.getClass)
+      case x: Iterable[_] => (x.knownSize == -1) || !isScalaClass(x) || isScalaCompilerClass(x) || isXmlNode(x.getClass) || isXmlMetaData(x.getClass)
       // Otherwise, nothing could possibly go wrong
       case _ => false
     }
@@ -225,7 +225,7 @@ object ScalaRunTime {
       if (x.getClass.getComponentType == classOf[BoxedUnit])
         0 until (array_length(x) min maxElements) map (_ => "()") mkString ("Array(", ", ", ")")
       else
-        WrappedArray make x take maxElements map inner mkString ("Array(", ", ", ")")
+        WrappedArray.make(x.asInstanceOf[Array[_]]) take maxElements map inner mkString ("Array(", ", ", ")")
     }
 
     // The recursively applied attempt to prettify Array printing.
@@ -238,9 +238,9 @@ object ScalaRunTime {
       case x: String                    => if (x.head.isWhitespace || x.last.isWhitespace) "\"" + x + "\"" else x
       case x if useOwnToString(x)       => x.toString
       case x: AnyRef if isArray(x)      => arrayToString(x)
-      case x: scala.collection.Map[_, _]      => x.iterator take maxElements map mapInner mkString (x.stringPrefix + "(", ", ", ")")
-      case x: GenIterable[_]            => x.iterator take maxElements map inner mkString (x.stringPrefix + "(", ", ", ")")
-      case x: Traversable[_]            => x take maxElements map inner mkString (x.stringPrefix + "(", ", ", ")")
+      case x: scala.collection.Map[_, _]      => x.iterator take maxElements map mapInner mkString (x.className + "(", ", ", ")")
+      case x: Iterable[_]               => x.iterator take maxElements map inner mkString (x.className + "(", ", ", ")")
+      case x: Iterator[_]               => x take maxElements map inner mkString ("Iterator(", ", ", ")")
       case x: Product1[_] if isTuple(x) => "(" + inner(x._1) + ",)" // that special trailing comma
       case x: Product if isTuple(x)     => x.productIterator map inner mkString ("(", ",", ")")
       case x                            => x.toString

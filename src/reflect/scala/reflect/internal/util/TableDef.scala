@@ -52,6 +52,11 @@ class TableDef[T](_cols: Column[T]*) {
     def allToSeq = headers ++ toFormattedSeq
 
     override def toString = allToSeq mkString "\n"
+
+    def iterableFactory = Seq
+    protected[this] def fromSpecificIterable(coll: Iterable[T]) = iterableFactory.fromSpecific(coll)
+    protected[this] def newSpecificBuilder() = iterableFactory.newBuilder()
+
   }
 
   def table(rows: Seq[T]) = new Table(rows)

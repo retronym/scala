@@ -224,7 +224,7 @@ class BoxUnbox[BT <: BTypes](val btypes: BT) {
         })
 
         if (canRewrite) {
-          val localSlots: Vector[(Int, Type)] = boxKind.boxedTypes.map(tp => (getLocal(tp.getSize), tp))(collection.breakOut)
+          val localSlots = Vector.from[(Int, Type)](boxKind.boxedTypes.iterator.map(tp => (getLocal(tp.getSize), tp)))
 
           // store boxed value(s) into localSlots
           val storeOps = localSlots.toList reverseMap { case (slot, tp) =>
@@ -235,9 +235,9 @@ class BoxUnbox[BT <: BTypes](val btypes: BT) {
             case None => storeOps
           }
           if (keepBox) {
-            val loadOps: List[VarInsnNode] = localSlots.map({ case (slot, tp) =>
+            val loadOps = List.from[VarInsnNode](localSlots.iterator.map({ case (slot, tp) =>
               new VarInsnNode(tp.getOpcode(ILOAD), slot)
-            })(collection.breakOut)
+            }))
             toInsertBefore(creation.valuesConsumer) = storeInitialValues ::: loadOps
           } else {
             toReplace(creation.valuesConsumer) = storeInitialValues
@@ -528,7 +528,7 @@ class BoxUnbox[BT <: BTypes](val btypes: BT) {
    * this iterator returns all copy operations (load, store, dup) that are in between.
    */
   class CopyOpsIterator(initialCreations: Set[BoxCreation], finalCons: Set[BoxConsumer], prodCons: ProdConsAnalyzer) extends Iterator[AbstractInsnNode] {
-    private var queue = mutable.Queue.empty[AbstractInsnNode] ++ initialCreations.iterator.flatMap(_.boxConsumers(prodCons, ultimate = false))
+    private var queue = mutable.Queue.empty[AbstractInsnNode] ++= initialCreations.iterator.flatMap(_.boxConsumers(prodCons, ultimate = false))
 
     // a single copy operation can consume multiple producers: val a = if (b) box(1) else box(2).
     // the `ASTORE a` has two producers (the two box operations). we need to handle it only once.

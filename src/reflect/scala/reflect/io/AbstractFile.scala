@@ -265,4 +265,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
   /** Returns the path of this abstract file. */
   override def toString() = path
 
+  def iterableFactory = Iterable
+  protected[this] def fromSpecificIterable(coll: Iterable[AbstractFile]) = iterableFactory.fromSpecific(coll)
+  protected[this] def newSpecificBuilder() = iterableFactory.newBuilder()
 }

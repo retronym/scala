@@ -1681,10 +1681,10 @@ trait Trees extends api.Trees {
   }
   trait TreeStackTraverser extends Traverser {
     import collection.mutable
-    val path: mutable.Stack[Tree] = mutable.Stack()
+    var path: List[Tree] = Nil
     abstract override def traverse(t: Tree) = {
-      path push t
-      try super.traverse(t) finally path.pop()
+      path = t :: path
+      try super.traverse(t) finally { path = path.tail }
     }
   }
 
@@ -1692,17 +1692,17 @@ trait Trees extends api.Trees {
   trait UnderConstructionTransformer extends Transformer {
     import collection.mutable
 
-    protected def isUnderConstruction(clazz: Symbol) = selfOrSuperCalls contains clazz
+    protected def isUnderConstruction(clazz: Symbol) = selfOrSuperCallsL contains clazz
 
     /** The stack of class symbols in which a call to this() or to the super
       * constructor, or early definition is active */
-    private val selfOrSuperCalls = mutable.Stack[Symbol]()
+    private var selfOrSuperCallsL: List[Symbol] = Nil
 
     abstract override def transform(tree: Tree) = {
       if ((treeInfo isSelfOrSuperConstrCall tree) || (treeInfo isEarlyDef tree)) {
-        selfOrSuperCalls push currentOwner.owner
+        selfOrSuperCallsL = currentOwner.owner :: selfOrSuperCallsL
         try super.transform(tree)
-        finally selfOrSuperCalls.pop()
+        finally selfOrSuperCallsL = selfOrSuperCallsL.tail
       } else super.transform(tree)
     }
   }

@@ -1,0 +1,4 @@
+[submodule "collection-strawman"]
+	path = collection-strawman
+	url = https://github.com/scala/collection-strawman.git
+	branch = scala-integration

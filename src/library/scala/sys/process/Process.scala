@@ -13,6 +13,8 @@ package process
 import processInternal._
 import ProcessBuilder._
 import scala.language.implicitConversions
+import scala.collection.immutable.ImmutableArray
+
 
 /** Represents a process that is running or has finished running.
  *  It may be a compound process with several underlying native processes (such as `a #&& b`).
@@ -63,7 +65,8 @@ trait ProcessCreation {
     *
     * @example {{{ apply("cat", files) }}}
     */
-  def apply(command: String, arguments: Seq[String]): ProcessBuilder = apply(command +: arguments, None)
+  def apply(command: String, arguments: Seq[String]): ProcessBuilder = apply(Seq(command) ++: arguments, None)
+  //TODO there should be a way to avoid wrapping `command` in `Seq`
 
   /** Creates a [[scala.sys.process.ProcessBuilder]] with working dir set to `File` and extra
     * environment variables.
@@ -87,7 +90,7 @@ trait ProcessCreation {
     * @example {{{ apply("java", params.get("cwd"), "CLASSPATH" -> "library.jar") }}}
     */
   def apply(command: String, cwd: Option[File], extraEnv: (String, String)*): ProcessBuilder = {
-    apply(command.split("""\s+"""), cwd, extraEnv : _*)
+    apply(ImmutableArray.unsafeWrapArray(command.split("""\s+""")), cwd, extraEnv : _*)
     // not smart to use this on windows, because CommandParser uses \ to escape ".
     /*CommandParser.parse(command) match {
       case Left(errorMsg) => error(errorMsg)
@@ -161,7 +164,8 @@ trait ProcessCreation {
     * cat(spde, dispatch, build) #| "grep -i scala" !
     * }}}
     */
-  def cat(file: Source, files: Source*): ProcessBuilder = cat(file +: files)
+  def cat(file: Source, files: Source*): ProcessBuilder = cat(Seq(file) ++: files)
+  //TODO change back to `cat(file +: files)` when we make varargs immutable
 
   /** Creates a [[scala.sys.process.ProcessBuilder]] from a non-empty sequence
     * of [[scala.sys.process.ProcessBuilder.Source]], which can then be

@@ -9,7 +9,7 @@
 package scala
 package reflect
 
-import scala.collection.mutable.{ WrappedArray, ArrayBuilder }
+import scala.collection.mutable.ArrayBuilder
 import java.lang.{ Class => jClass }
 
 @deprecated("use scala.reflect.ClassTag instead", "2.10.0")
@@ -116,11 +116,6 @@ trait ClassManifestDeprecatedApis[T] extends OptManifest[T] {
   def newArray5(len: Int): Array[Array[Array[Array[Array[T]]]]] =
     java.lang.reflect.Array.newInstance(arrayClass[Array[Array[Array[T]]]](arrayClass[Array[Array[T]]](arrayClass[Array[T]](arrayClass[T](runtimeClass)))), len)
       .asInstanceOf[Array[Array[Array[Array[Array[T]]]]]]
-
-  @deprecated("create WrappedArray directly instead", "2.10.0")
-  def newWrappedArray(len: Int): WrappedArray[T] =
-    // it's safe to assume T <: AnyRef here because the method is overridden for all value type manifests
-    new WrappedArray.ofRef[T with AnyRef](newArray(len).asInstanceOf[Array[T with AnyRef]]).asInstanceOf[WrappedArray[T]]
 
   @deprecated("use ArrayBuilder.make(this) instead", "2.10.0")
   def newArrayBuilder(): ArrayBuilder[T] =

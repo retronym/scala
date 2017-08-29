@@ -108,9 +108,9 @@ class ScriptSourceFile(underlying: BatchSourceFile, content: Array[Char], overri
 
 /** a file whose contents do not change over time */
 class BatchSourceFile(val file : AbstractFile, content0: Array[Char]) extends SourceFile {
-  def this(_file: AbstractFile)                 = this(_file, _file.toCharArray)
-  def this(sourceName: String, cs: Seq[Char])   = this(new VirtualFile(sourceName), cs.toArray)
-  def this(file: AbstractFile, cs: Seq[Char])   = this(file, cs.toArray)
+  def this(_file: AbstractFile)                      = this(_file, _file.toCharArray)
+  def this(sourceName: String, cs: Iterable[Char])   = this(new VirtualFile(sourceName), cs.toArray)
+  def this(file: AbstractFile, cs: Iterable[Char])   = this(file, cs.toArray)
 
   // If non-whitespace tokens run all the way up to EOF,
   // positions go wrong because the correct end of the last

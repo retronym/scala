@@ -355,7 +355,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
         r
       }
 
-      val subroutineRetTargets = new mutable.Stack[AbstractInsnNode]
+      var subroutineRetTargets: List[AbstractInsnNode] = Nil
 
       // for each instruction in the queue, contains the stack height at this instruction.
       // once an instruction has been treated, contains -1 to prevent re-enqueuing
@@ -410,7 +410,7 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
               if (j.getOpcode == JSR) {
                 val jsrTargetHeight = heightAfter + 1
                 if (jsrTargetHeight > maxStack) maxStack = jsrTargetHeight
-                subroutineRetTargets.push(j.getNext)
+                subroutineRetTargets = j.getNext :: subroutineRetTargets
                 enqInsn(j.label, jsrTargetHeight)
               } else {
                 enqInsn(j.label, heightAfter)
@@ -433,7 +433,9 @@ class BackendUtils[BT <: BTypes](val btypes: BT) {
               enqInsn(t.dflt, heightAfter)
 
             case r: VarInsnNode if r.getOpcode == RET =>
-              enqInsn(subroutineRetTargets.pop(), heightAfter)
+              val target = subroutineRetTargets.head
+              subroutineRetTargets = subroutineRetTargets.tail
+              enqInsn(target, heightAfter)
 
             case _ =>
               val opc = insn.getOpcode

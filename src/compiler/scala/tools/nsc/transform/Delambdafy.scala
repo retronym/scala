@@ -335,7 +335,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     private val thisReferringMethods = mutable.Set[Symbol]()
 
     // the set of lifted lambda body methods that each method refers to
-    private val liftedMethodReferences = mutable.Map[Symbol, Set[Symbol]]().withDefault(_ => mutable.Set())
+    private val liftedMethodReferences = mutable.Map[Symbol, mutable.Set[Symbol]]().withDefault(_ => mutable.Set())
 
     def methodReferencesThisIn(tree: Tree) = {
       traverse(tree)

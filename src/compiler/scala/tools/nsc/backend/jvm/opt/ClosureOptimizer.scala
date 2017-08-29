@@ -366,9 +366,10 @@ class ClosureOptimizer[BT <: BTypes](val btypes: BT) {
           samParamTypes = callGraph.samParamTypes(bodyMethodNode, bodyDeclClassType),
           calleeInfoWarning = None)
     })
-    val argInfos = closureInit.capturedArgInfos ++ originalCallsite.map(cs => cs.argInfos map {
+
+    val argInfos = closureInit.capturedArgInfos ++ originalCallsite.map(cs => cs.argInfos.map({
       case (index, info) => (index + numCapturedValues, info)
-    }).getOrElse(IntMap.empty)
+    }: ((Int, ArgInfo)) => (Int, ArgInfo)) /* Type annotation needed due to https://github.com/scala/bug/issues/10608 */).getOrElse(IntMap.empty)
     val bodyMethodCallsite = Callsite(
       callsiteInstruction = bodyInvocation,
       callsiteMethod = ownerMethod,
@@ -469,13 +470,13 @@ class ClosureOptimizer[BT <: BTypes](val btypes: BT) {
      */
     def fromTypes(firstLocal: Int, types: Array[Type]): LocalsList = {
       var sizeTwoOffset = 0
-      val locals: List[Local] = types.indices.map(i => {
+      val locals = List.from[Local](types.indices.iterator.map(i => {
         // The ASM method `type.getOpcode` returns the opcode for operating on a value of `type`.
         val offset = types(i).getOpcode(ILOAD) - ILOAD
         val local = Local(firstLocal + i + sizeTwoOffset, offset)
         if (local.size == 2) sizeTwoOffset += 1
         local
-      })(collection.breakOut)
+      }))
       LocalsList(locals)
     }
   }

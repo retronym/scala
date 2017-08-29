@@ -55,7 +55,7 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
     coreBTypes.setBTypes(new CoreBTypes[this.type](this))
   }
 
-  def recordPerRunCache[T <: collection.generic.Clearable](cache: T): T = perRunCaches.recordCache(cache)
+  def recordPerRunCache[T <: collection.mutable.Clearable](cache: T): T = perRunCaches.recordCache(cache)
 
   def compilerSettings: ScalaSettings = settings
 
@@ -277,14 +277,14 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
    *
    * Specialized classes are always considered top-level, see comment in BTypes.
    */
-  private def memberClassesForInnerClassTable(classSymbol: Symbol): List[Symbol] = classSymbol.info.decls.collect({
+  private def memberClassesForInnerClassTable(classSymbol: Symbol): List[Symbol] = List.from(classSymbol.info.decls.iterator.collect({
     case sym if sym.isClass && !considerAsTopLevelImplementationArtifact(sym) =>
       sym
     case sym if sym.isModule && !considerAsTopLevelImplementationArtifact(sym) =>
       val r = exitingPickler(sym.moduleClass)
       assert(r != NoSymbol, sym.fullLocationString)
       r
-  })(collection.breakOut)
+  }))
 
   private def setClassInfo(classSym: Symbol, classBType: ClassBType): ClassBType = {
     /**
@@ -592,7 +592,7 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
 
     // Primitive methods cannot be inlined, so there's no point in building a MethodInlineInfo. Also, some
     // primitive methods (e.g., `isInstanceOf`) have non-erased types, which confuses [[typeToBType]].
-    val methodInlineInfos = methods.flatMap({
+    val methodInlineInfos = Map.from(methods.iterator.flatMap({
       case methodSym =>
         if (completeSilentlyAndCheckErroneous(methodSym)) {
           // Happens due to scala/bug#9111. Just don't provide any MethodInlineInfo for that method, we don't need fail the compiler.
@@ -634,7 +634,7 @@ class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
           } else
             (signature, info) :: Nil
         }
-    }).toMap
+    }))
 
     InlineInfo(isEffectivelyFinal, sam, methodInlineInfos, warning)
   }

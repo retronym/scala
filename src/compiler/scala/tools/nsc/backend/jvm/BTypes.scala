@@ -63,7 +63,7 @@ abstract class BTypes {
   val backendReporting: BackendReporting
 
   // Allows to define per-run caches here and in the CallGraph component, which don't have a global
-  def recordPerRunCache[T <: collection.generic.Clearable](cache: T): T
+  def recordPerRunCache[T <: collection.mutable.Clearable](cache: T): T
 
   // Allows access to the compiler settings for backend components that don't have a global in scope
   def compilerSettings: ScalaSettings
@@ -143,13 +143,13 @@ abstract class BTypes {
         handle
       } else {
         var added = List.empty[asm.Handle]
-        handle foreach { h => if (set.add(h)) added ::= h}
+        handle foreach { h => if (set.insert(h)) added ::= h}
         added
       }
     }
   }
   def addIndyLambdaImplMethod(hostClass: InternalName, handle: asm.Handle): Boolean = {
-    indyLambdaImplMethods.getOrElseUpdate(hostClass, mutable.LinkedHashSet()).add(handle)
+    indyLambdaImplMethods.getOrElseUpdate(hostClass, mutable.LinkedHashSet()).insert(handle)
   }
   def removeIndyLambdaImplMethod(hostClass: InternalName, handle: Seq[asm.Handle]): Unit = {
     if (handle.nonEmpty)
@@ -241,9 +241,9 @@ abstract class BTypes {
       })
     }
 
-    def nestedClasses: List[ClassBType] = classNode.innerClasses.asScala.collect({
+    def nestedClasses: List[ClassBType] = List.from(classNode.innerClasses.iterator.asScala.collect({
       case i if nestedInCurrentClass(i) => classBTypeFromParsedClassfile(i.name)
-    })(collection.breakOut)
+    }))
 
     // if classNode is a nested class, it has an innerClass attribute for itself. in this
     // case we build the NestedInfo.
@@ -264,7 +264,7 @@ abstract class BTypes {
 
     val inlineInfo = inlineInfoFromClassfile(classNode)
 
-    val interfaces: List[ClassBType] = classNode.interfaces.asScala.map(classBTypeFromParsedClassfile)(collection.breakOut)
+    val interfaces: List[ClassBType] = List.from(classNode.interfaces.iterator.asScala.map(classBTypeFromParsedClassfile))
 
     classBType.info = Right(ClassInfo(superClass, interfaces, flags, Lazy(nestedClasses), Lazy(nestedInfo), inlineInfo))
     classBType
@@ -292,13 +292,13 @@ abstract class BTypes {
       // require special handling. Excluding is OK because they are never inlined.
       // Here we are parsing from a classfile and we don't need to do anything special. Many of these
       // primitives don't even exist, for example Any.isInstanceOf.
-      val methodInfos:Map[String,MethodInlineInfo] = classNode.methods.asScala.map(methodNode => {
+      val methodInfos:Map[String,MethodInlineInfo] = Map.from(classNode.methods.iterator.asScala.map(methodNode => {
         val info = MethodInlineInfo(
           effectivelyFinal                    = BytecodeUtils.isFinalMethod(methodNode),
           annotatedInline                     = false,
           annotatedNoInline                   = false)
         (methodNode.name + methodNode.desc, info)
-      })(scala.collection.breakOut)
+      }))
       InlineInfo(
         isEffectivelyFinal = BytecodeUtils.isFinalClass(classNode),
         sam = inlinerHeuristics.javaSam(classNode.name),

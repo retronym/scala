@@ -536,11 +536,11 @@ trait Printers extends api.Printers { self: SymbolTable =>
 
   // it's the printer for AST-based code generation
   class CodePrinter(out: PrintWriter, printRootPkg: Boolean) extends TreePrinter(out) {
-    protected val parentsStack = scala.collection.mutable.Stack[Tree]()
+    protected var parentsStackL: List[Tree] = Nil
 
-    protected def currentTree = if (parentsStack.nonEmpty) Some(parentsStack.top) else None
+    protected def currentTree = parentsStackL.headOption
 
-    protected def currentParent = if (parentsStack.length > 1) Some(parentsStack(1)) else None
+    protected def currentParent = if (parentsStackL.lengthCompare(1) > 0) Some(parentsStackL(1)) else None
 
     protected def printedName(name: Name, decoded: Boolean = true) = {
       import Chars._
@@ -729,11 +729,11 @@ trait Printers extends api.Printers { self: SymbolTable =>
     }
 
     override def printTree(tree: Tree): Unit = {
-      parentsStack.push(tree)
+      parentsStackL = tree :: parentsStackL
       try {
         processTreePrinting(tree)
         printTypesInfo(tree)
-      } finally parentsStack.pop()
+      } finally parentsStackL = parentsStackL.tail
     }
 
     def processTreePrinting(tree: Tree): Unit = {
@@ -922,7 +922,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
            * passing required type for checking
            */
           def insertBraces(body: => Unit): Unit =
-            if (parentsStack.nonEmpty && parentsStack.tail.exists(_.isInstanceOf[Match])) {
+            if (parentsStackL.nonEmpty && parentsStackL.tail.exists(_.isInstanceOf[Match])) {
               print("(")
               body
               print(")")

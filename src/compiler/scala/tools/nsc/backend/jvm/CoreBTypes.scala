@@ -128,11 +128,11 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   }
 
   private def srBoxesRuntimeMethods(getName: (String, String) => String): Map[BType, MethodNameAndType] = {
-    ScalaValueClassesNoUnit.map(primitive => {
+    Map.from(ScalaValueClassesNoUnit.iterator.map(primitive => {
       val bType = primitiveTypeToBType(primitive)
       val name = newTermName(getName(primitive.name.toString, boxedClass(primitive).name.toString))
       (bType, methodNameAndType(BoxesRunTimeClass, name))
-    })(collection.breakOut)
+    }))
   }
 
   // Z -> MethodNameAndType(boxToBoolean,(Z)Ljava/lang/Boolean;)
@@ -148,28 +148,28 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
 
   // java/lang/Boolean -> MethodNameAndType(valueOf,(Z)Ljava/lang/Boolean;)
   lazy val javaBoxMethods: Map[InternalName, MethodNameAndType] = {
-    ScalaValueClassesNoUnit.map(primitive => {
+    Map.from(ScalaValueClassesNoUnit.iterator.map(primitive => {
       val boxed = boxedClass(primitive)
       val method = methodNameAndType(boxed, newTermName("valueOf"), static = true, filterOverload = singleParamOfClass(primitive))
       (classBTypeFromSymbol(boxed).internalName, method)
-    })(collection.breakOut)
+    }))
   }
 
   // java/lang/Boolean -> MethodNameAndType(booleanValue,()Z)
   lazy val javaUnboxMethods: Map[InternalName, MethodNameAndType] = {
-    ScalaValueClassesNoUnit.map(primitive => {
+    Map.from(ScalaValueClassesNoUnit.iterator.map(primitive => {
       val boxed = boxedClass(primitive)
       val name = primitive.name.toString.toLowerCase + "Value"
       (classBTypeFromSymbol(boxed).internalName, methodNameAndType(boxed, newTermName(name)))
-    })(collection.breakOut)
+    }))
   }
 
   private def predefBoxingMethods(getName: (String, String) => String): Map[String, MethodBType] = {
-    ScalaValueClassesNoUnit.map(primitive => {
+    Map.from(ScalaValueClassesNoUnit.iterator.map(primitive => {
       val boxed = boxedClass(primitive)
       val name = getName(primitive.name.toString, boxed.name.toString)
       (name, methodNameAndType(PredefModule.moduleClass, newTermName(name)).methodType)
-    })(collection.breakOut)
+    }))
   }
 
   // boolean2Boolean -> (Z)Ljava/lang/Boolean;
@@ -179,8 +179,8 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
   lazy val predefAutoUnboxMethods: Map[String, MethodBType] = predefBoxingMethods((primitive, boxed) => boxed + "2" + primitive.toLowerCase)
 
   private def staticRefMethods(name: Name): Map[InternalName, MethodNameAndType] = {
-    allRefClasses.map(refClass =>
-      (classBTypeFromSymbol(refClass).internalName, methodNameAndType(refClass, name, static = true)))(collection.breakOut)
+    Map.from(allRefClasses.iterator.map(refClass =>
+      (classBTypeFromSymbol(refClass).internalName, methodNameAndType(refClass, name, static = true))))
   }
 
   // scala/runtime/BooleanRef -> MethodNameAndType(create,(Z)Lscala/runtime/BooleanRef;)
@@ -191,14 +191,14 @@ class CoreBTypes[BTFS <: BTypesFromSymbols[_ <: Global]](val bTypes: BTFS) {
 
   // java/lang/Boolean -> MethodNameAndType(<init>,(Z)V)
   lazy val primitiveBoxConstructors: Map[InternalName, MethodNameAndType] = {
-    ScalaValueClassesNoUnit.map(primitive => {
+    Map.from(ScalaValueClassesNoUnit.iterator.map(primitive => {
       val boxed = boxedClass(primitive)
       (classBTypeFromSymbol(boxed).internalName, methodNameAndType(boxed, nme.CONSTRUCTOR, filterOverload = singleParamOfClass(primitive)))
-    })(collection.breakOut)
+    }))
   }
 
   private def nonOverloadedConstructors(classes: Iterable[Symbol]): Map[InternalName, MethodNameAndType] = {
-    classes.map(cls => (classBTypeFromSymbol(cls).internalName, methodNameAndType(cls, nme.CONSTRUCTOR)))(collection.breakOut)
+    Map.from(classes.iterator.map(cls => (classBTypeFromSymbol(cls).internalName, methodNameAndType(cls, nme.CONSTRUCTOR))))
   }
 
   // scala/runtime/BooleanRef -> MethodNameAndType(<init>,(Z)V)

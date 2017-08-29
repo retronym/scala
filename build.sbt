@@ -32,6 +32,8 @@
  *   - to modularize the Scala compiler or library further
  */
 
+import java.nio.charset.Charset
+
 import scala.build._
 import VersionUtil._
 
@@ -328,7 +330,9 @@ lazy val library = configureAsSubproject(project)
     name := "scala-library",
     description := "Scala Standard Library",
     compileOrder := CompileOrder.Mixed, // needed for JFunction classes in scala.runtime.java8
-    scalacOptions in Compile ++= Seq[String]("-sourcepath", (scalaSource in Compile).value.toString),
+    scalacOptions in Compile ++= Seq[String]("-sourcepath",
+      (scalaSource in Compile).value.toString + java.io.File.pathSeparator + (sourceManaged in Compile).value.toString
+    ),
     scalacOptions in Compile in doc ++= {
       val libraryAuxDir = (baseDirectory in ThisBuild).value / "src/library-aux"
       Seq(
@@ -337,6 +341,30 @@ lazy val library = configureAsSubproject(project)
         "-doc-root-content", (sourceDirectory in Compile).value + "/rootdoc.txt"
       )
     },
+    // Convert current collection-strawman into scala.collection
+    sourceGenerators in Compile += Def.task {
+      val strawmanDir = (baseDirectory in ThisBuild).value / "collection-strawman/collections/src/main/scala/strawman/collection"
+      val outDir = (sourceManaged in Compile).value / "scala/collection"
+      val cs = Charset.forName("UTF-8")
+      (strawmanDir ** ("*.scala" || "*.java") pair rebase(strawmanDir, outDir)).flatMap { case (in, out) =>
+        val path = in.relativeTo(strawmanDir).get.getPath.dropRight(6).replace('/', '.').replace('\\', '.')
+        val s = augmentString(
+          IO.read(in, cs)
+            .replace("strawman.collection", "scala.collection")
+            .replace("package strawman", "package scala")
+            .replace("private[strawman]", "private[scala]")
+            .replace(".toStrawman", "")
+            .replace(".toClassic", "")
+            .replace("//@migration", "@scala.annotation.migration") // `migration` is private[scala], thus commented out in strawman
+        ).lines.map(_.replaceAll("^(import scala\\.[^.]*)$", "//$1").replaceAll("^(import scala\\.Predef\\.[^.]*)$", "//$1")).mkString("\n")
+        val code = path match {
+          case "package" => Some(s.replace("implicit ", "")) // no implicits here, we add forwarders in Predef for now
+          case _ => Some(s)
+        }
+        code.foreach(s2 => IO.write(out, s2, cs))
+        if(code.isDefined) Seq(out) else Seq.empty
+      }
+    }.taskValue,
     // macros in library+reflect are hard-wired to implementations with `FastTrack`.
     incOptions := incOptions.value.withRecompileOnMacroDef(false),
     includeFilter in unmanagedResources in Compile := "*.tmpl" | "*.xml" | "*.js" | "*.css" | "rootdoc.txt",

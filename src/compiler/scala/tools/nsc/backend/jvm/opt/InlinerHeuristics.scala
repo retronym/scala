@@ -209,13 +209,15 @@ class InlinerHeuristics[BT <: BTypes](val bTypes: BT) {
                 paramNames.fold(syn)(v => v.applyOrElse(i, (_: Int) => syn))
               }
               def samInfo(i: Int, sam: String, arg: String) = s"the argument for parameter (${param(i)}: $sam) is a $arg"
-              val argInfos = for ((i, sam) <- callee.samParamTypes; info <- callsite.argInfos.get(i)) yield {
-                val argKind = info match {
-                  case FunctionLiteral => "function literal"
-                  case ForwardedParam(_) => "parameter of the callsite method"
+              val argInfos = callee.samParamTypes.flatMap({ case (i, sam) =>
+                callsite.argInfos.get(i).map { info =>
+                  val argKind = info match {
+                    case FunctionLiteral => "function literal"
+                    case ForwardedParam(_) => "parameter of the callsite method"
+                  }
+                  samInfo(i, sam.internalName.split('/').last, argKind)
                 }
-                samInfo(i, sam.internalName.split('/').last, argKind)
-              }
+              }: (((Int, ClassBType)) => IterableOnce[String]) /* type ascription needed due to https://github.com/scala/bug/issues/10608 */)
               s"the callee is a higher-order method, ${argInfos.mkString(", ")}"
             }
           }

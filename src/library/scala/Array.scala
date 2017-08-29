@@ -8,30 +8,12 @@
 
 package scala
 
-import scala.collection.generic._
+//import scala.collection.generic._
 import scala.collection.{ mutable, immutable }
-import mutable.{ ArrayBuilder, ArraySeq }
+import mutable.ArrayBuilder
+import immutable.ImmutableArray
 import scala.reflect.ClassTag
 import scala.runtime.ScalaRunTime.{ array_apply, array_update }
-
-/** Contains a fallback builder for arrays when the element type
- *  does not have a class tag. In that case a generic array is built.
- */
-class FallbackArrayBuilding {
-
-  /** A builder factory that generates a generic array.
-   *  Called instead of `Array.newBuilder` if the element type of an array
-   *  does not have a class tag. Note that fallbackBuilder factory
-   *  needs an implicit parameter (otherwise it would not be dominated in
-   *  implicit search by `Array.canBuildFrom`). We make sure that
-   *  implicit search is always successful.
-   */
-  implicit def fallbackCanBuildFrom[T](implicit m: DummyImplicit): CanBuildFrom[Array[_], T, ArraySeq[T]] =
-    new CanBuildFrom[Array[_], T, ArraySeq[T]] {
-      def apply(from: Array[_]) = ArraySeq.newBuilder[T]
-      def apply() = ArraySeq.newBuilder[T]
-    }
-}
 
 /** Utility methods for operating on arrays.
  *  For example:
@@ -46,7 +28,7 @@ class FallbackArrayBuilding {
  *  @author Martin Odersky
  *  @version 1.0
  */
-object Array extends FallbackArrayBuilding {
+object Array {
   val emptyBooleanArray = new Array[Boolean](0)
   val emptyByteArray    = new Array[Byte](0)
   val emptyCharArray    = new Array[Char](0)
@@ -56,12 +38,6 @@ object Array extends FallbackArrayBuilding {
   val emptyLongArray    = new Array[Long](0)
   val emptyShortArray   = new Array[Short](0)
   val emptyObjectArray  = new Array[Object](0)
-
-  implicit def canBuildFrom[T](implicit t: ClassTag[T]): CanBuildFrom[Array[_], T, Array[T]] =
-    new CanBuildFrom[Array[_], T, Array[T]] {
-      def apply(from: Array[_]) = ArrayBuilder.make[T]()(t)
-      def apply() = ArrayBuilder.make[T]()(t)
-    }
 
   /**
    * Returns a new [[scala.collection.mutable.ArrayBuilder]].
@@ -439,7 +415,7 @@ object Array extends FallbackArrayBuilding {
    *  @return  sequence wrapped in a [[scala.Some]], if `x` is a Seq, otherwise `None`
    */
   def unapplySeq[T](x: Array[T]): Option[IndexedSeq[T]] =
-    if (x == null) None else Some(x.toIndexedSeq)
+    if (x == null) None else Some(x.to(ImmutableArray))
     // !!! the null check should to be necessary, but without it 2241 fails. Seems to be a bug
     // in pattern matcher.  @PP: I noted in #4364 I think the behavior is correct.
 }

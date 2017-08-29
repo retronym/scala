@@ -789,7 +789,7 @@ object LocalOptImpls {
     var _jumpTargets: Set[AbstractInsnNode] = null
     def jumpTargets = {
       if (_jumpTargets == null) {
-        _jumpTargets = jumpInsns.keysIterator.map(_.label).toSet
+        _jumpTargets = Set.from(jumpInsns.keysIterator.map(_.label))
       }
       _jumpTargets
     }
