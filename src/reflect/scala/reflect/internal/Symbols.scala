@@ -3702,7 +3702,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private def phaseString = {
       val phase = phaseOf(validFrom)
-      s"$phase: ${exitingPhase(phase)(info.toString)}"
+      s"$phase: ${exitingPhase(phase)(info.safeToString)}"
     }
     override def toString = toList reverseMap (_.phaseString) mkString ", "
 
