@@ -14,6 +14,7 @@ import java.util.regex.PatternSyntaxException
 
 import File.pathSeparator
 import Jar.isJarOrZip
+import scala.reflect.io.{FileZipArchive, VirtualFile}
 
 /**
   * A representation of the compiler's class- or sourcepath.

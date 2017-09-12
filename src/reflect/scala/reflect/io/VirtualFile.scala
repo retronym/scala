@@ -95,4 +95,9 @@ class VirtualFile(val name: String, override val path: String) extends AbstractF
    *  check that it exists.
    */
   def lookupNameUnchecked(name: String, directory: Boolean) = unsupported()
+
+
+  def userData_=(a: Any): Unit = _userData = a
+  def userData: Any = _userData
+  private var _userData: Any = _
 }

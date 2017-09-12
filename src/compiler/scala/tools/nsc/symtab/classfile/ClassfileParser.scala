@@ -16,7 +16,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.annotation.switch
 import scala.reflect.internal.JavaAccFlags
 import scala.reflect.internal.pickling.{ByteCodecs, PickleBuffer}
-import scala.reflect.io.NoAbstractFile
+import scala.reflect.io.{FileZipArchive, NoAbstractFile, VirtualFile}
 import scala.tools.nsc.util.ClassPath
 import scala.tools.nsc.io.AbstractFile
 import scala.util.control.NonFatal
@@ -65,6 +65,7 @@ abstract class ClassfileParser {
   protected var isScala: Boolean = _           // does class file describe a scala class?
   protected var isScalaAnnot: Boolean = _      // does class file describe a scala class with its pickled info in an annotation?
   protected var isScalaRaw: Boolean = _        // this class file is a scala class with no pickled info
+  protected var pickleBytes: Array[Byte] = _   // pickle bytes sourced from a cache
   protected var busy: Symbol = _               // lock to detect recursive reads
   protected var currentClass: Name = _         // JVM name of the current class
   protected var classTParams = Map[Name,Symbol]()
@@ -144,16 +145,30 @@ abstract class ClassfileParser {
   def parse(file: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol): Unit = {
     this.file = file
     pushBusy(clazz) {
-      this.in           = new AbstractFileReader(file)
       this.clazz        = clazz
       this.staticModule = module
-      this.isScala      = false
-
-      parseHeader()
-      this.pool = newConstantPool
-      parseClass()
+      cachedPickle(file) match {
+        case Some(bytes) =>
+          this.isScala = true
+          pickleBytes = bytes
+          unpickler.unpickle(bytes, 0, clazz, staticModule, file.name)
+        case None =>
+          this.in           = new AbstractFileReader(file)
+          this.isScala      = false
+          parseHeader()
+          this.pool = newConstantPool
+          parseClass()
+      }
     }
   }
+
+  private def cachedPickle(file: AbstractFile): Option[Array[Byte]] = file.underlyingSource match {
+    case Some(_: FileZipArchive) =>
+      Option(file.asInstanceOf[VirtualFile].userData.asInstanceOf[Array[Byte]])
+    case _ =>
+      None
+  }
+
 
   private def parseHeader() {
     val magic = u4
@@ -883,7 +898,12 @@ abstract class ClassfileParser {
               case Some(san: AnnotationInfo) =>
                 val bytes =
                   san.assocs.find({ _._1 == nme.bytes }).get._2.asInstanceOf[ScalaSigBytes].bytes
-
+                def cachePickle(file: AbstractFile, pickle: Array[Byte]): Unit = file.underlyingSource match {
+                  case Some(_: FileZipArchive) =>
+                    file.asInstanceOf[VirtualFile].userData_=(pickle)
+                  case _ =>
+                }
+                cachePickle(file, bytes)
                 unpickler.unpickle(bytes, 0, clazz, staticModule, in.file.name)
               case None =>
                 throw new RuntimeException("Scala class file does not contain Scala annotation")

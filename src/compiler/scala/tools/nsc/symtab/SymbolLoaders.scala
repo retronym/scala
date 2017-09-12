@@ -8,9 +8,11 @@ package symtab
 
 import classfile.ClassfileParser
 import java.io.IOException
+
 import scala.reflect.internal.MissingRequirementError
 import scala.reflect.internal.util.Statistics
-import scala.reflect.io.{AbstractFile, NoAbstractFile}
+import scala.reflect.io.{AbstractFile, FileZipArchive, NoAbstractFile, VirtualFile}
+import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 
 /** This class ...
@@ -313,6 +315,8 @@ abstract class SymbolLoaders {
 
     protected def doComplete(root: Symbol) {
       val start = if (Statistics.canEnable) Statistics.startTimer(classReadNanos) else null
+
+
       classfileParser.parse(classfile, clazz, module)
       if (root.associatedFile eq NoAbstractFile) {
         root match {
