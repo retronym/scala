@@ -1965,7 +1965,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else if (cond(this)) this
       else NoSymbol
 
-    def suchThat(cond: Symbol => Boolean): Symbol = {
+    final def suchThat(cond: Symbol => Boolean): Symbol = {
       val result = filter(cond)
       assert(!result.isOverloaded, result.alternatives)
       result

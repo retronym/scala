@@ -3630,8 +3630,13 @@ trait Types
       //         These appear after the fields phase eliminates ModuleDefs that implement an interface.
       //         Here, we exclude the module symbol, which allows us to bind to the accessor.
       // scala/bug#8054 We must only do this after fields, otherwise we exclude the module symbol which does not yet have an accessor!
-      val isModuleWithAccessor = phase.assignsFields && sym.isModuleNotMethod
-      sym.isType || (!isModuleWithAccessor && sym.isStable && !sym.hasVolatileType)
+      if (scala.util.Random.nextInt(100) == 0 && Thread.currentThread().getStackTrace.exists(_.getClassName == "TypeMaps$SubstMap"))
+        new Throwable().printStackTrace()
+
+      sym.isType || {
+        val isModuleWithAccessor = phase.assignsFields && sym.isModuleNotMethod
+        !isModuleWithAccessor && sym.isStable && !sym.hasVolatileType
+      }
     } orElse sym
   }
 
