@@ -156,7 +156,7 @@ trait Definitions extends api.StandardDefinitions {
       FloatClass,
       DoubleClass
     )
-    lazy val ScalaValueClassesRange: scala.Range = symbolRange(ScalaNumericValueClasses)
+    lazy val ScalaValueClassesRange: scala.Range = symbolRange(ScalaValueClasses)
     def ScalaPrimitiveValueClasses: List[ClassSymbol] = ScalaValueClasses
 
     def underlyingOfValueClass(clazz: Symbol): Type =
