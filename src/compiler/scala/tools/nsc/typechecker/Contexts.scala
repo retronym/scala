@@ -1312,7 +1312,7 @@ trait Contexts { self: Analyzer =>
         case INFO    => reporter.echo(pos, msg)
       }
 
-    final override def hasErrors = super.hasErrors || errorBuffer.nonEmpty
+    final override def hasErrors = super.hasErrors || (_errorBuffer != null && _errorBuffer.nonEmpty)
 
     // TODO: everything below should be pushed down to BufferingReporter (related to buffering)
     // Implicit relies on this most heavily, but there you know reporter.isInstanceOf[BufferingReporter]
