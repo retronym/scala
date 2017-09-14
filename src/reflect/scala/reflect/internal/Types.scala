@@ -4003,7 +4003,7 @@ trait Types
   def typeParamsToExistentials(clazz: Symbol): List[Symbol] =
     typeParamsToExistentials(clazz, clazz.typeParams)
 
-  def isRawIfWithoutArgs(sym: Symbol) = sym.isClass && sym.typeParams.nonEmpty && sym.isJavaDefined
+  def isRawIfWithoutArgs(sym: Symbol) = sym.isClass && !sym.typeParams.isEmpty && sym.isJavaDefined
   /** Is type tp a ''raw type''? */
   //  note: it's important to write the two tests in this order,
   //  as only typeParams forces the classfile to be read. See #400
