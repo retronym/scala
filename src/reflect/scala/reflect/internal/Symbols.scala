@@ -2815,8 +2815,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     override def isLocalDummy       = nme.isLocalDummyName(name)
 
-    override def isClassConstructor = name == nme.CONSTRUCTOR
-    override def isMixinConstructor = name == nme.MIXIN_CONSTRUCTOR
+    override def isClassConstructor = _rawname == nme.CONSTRUCTOR
+    override def isMixinConstructor = _rawname == nme.MIXIN_CONSTRUCTOR
     override def isConstructor      = isClassConstructor || isMixinConstructor
 
     override def isPackageObject    = isModule && (name == nme.PACKAGE)
