@@ -222,7 +222,7 @@ trait Contexts { self: Analyzer =>
 
     private var _undetparams: List[Symbol] = List()
 
-    protected def outerDepth = if (outerIsNoContext) 0 else outer.depth
+    protected final def outerDepth = if (outerIsNoContext) 0 else _outer.depth
 
     val depth: Int = {
       val increasesDepth = isRootImport || outerIsNoContext || (outer.scope != scope)
@@ -1285,8 +1285,8 @@ trait Contexts { self: Analyzer =>
 
     @inline final def withFreshErrorBuffer[T](expr: => T): T = {
       val previousBuffer = _errorBuffer
-      _errorBuffer = newBuffer
-      val res = expr // expr will read _errorBuffer
+      _errorBuffer = null // lazily created on first message issued
+      val res = expr // expr might read init and read _errorBuffer
       _errorBuffer = previousBuffer
       res
     }
