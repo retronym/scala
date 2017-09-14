@@ -439,7 +439,7 @@ abstract class Erasure extends InfoTransform
         case _ =>
           tree
       }
-      super.transform(tree1)
+      tree1.transform(this)
     }
   }
 
