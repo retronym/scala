@@ -1285,8 +1285,8 @@ trait Contexts { self: Analyzer =>
 
     @inline final def withFreshErrorBuffer[T](expr: => T): T = {
       val previousBuffer = _errorBuffer
-      _errorBuffer = newBuffer
-      val res = expr // expr will read _errorBuffer
+      _errorBuffer = null // lazily created on first message issued
+      val res = expr // expr might read init and read _errorBuffer
       _errorBuffer = previousBuffer
       res
     }
