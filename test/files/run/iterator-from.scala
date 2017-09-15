@@ -12,7 +12,7 @@ object Test extends App {
   val maxValue = 50
 
   def testSet[A <% Ordered[A]](set: SortedSet[A], list: List[A]) {
-    val distinctSorted = list.distinct.sorted
+    val distinctSorted = list.distinct.sorted(Ordering.ordered[A])
     assertEquals("Set size wasn't the same as list sze", set.size, distinctSorted.size)
 
     for(key <- distinctSorted) {
@@ -25,7 +25,7 @@ object Test extends App {
   }
 
   def testMap[A <% Ordered[A], B](map: SortedMap[A, B], list: List[(A, B)]) {
-    val distinctSorted = distinctByKey(list).sortBy(_._1)
+    val distinctSorted = distinctByKey(list).sortBy(_._1)(Ordering.ordered[A])
     assertEquals("Map size wasn't the same as list sze", map.size, distinctSorted.size)
 
     for(keyValue <- distinctSorted) {
