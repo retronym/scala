@@ -93,6 +93,7 @@ trait ClassPath {
   /** The whole sourcepath in the form of one String.
     */
   def asSourcePathString: String
+  def elements: Seq[ClassPath] = this :: Nil
 }
 
 object ClassPath {

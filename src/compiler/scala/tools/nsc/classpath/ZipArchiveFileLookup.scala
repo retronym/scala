@@ -26,6 +26,8 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
 
   private val archive = new FileZipArchive(zipFile)
 
+  def close(): Unit = archive.closeZip()
+
   override private[nsc] def packages(inPackage: String): Seq[PackageEntry] = {
     val prefix = PackageNameUtils.packagePrefix(inPackage)
     for {

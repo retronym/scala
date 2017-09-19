@@ -122,6 +122,12 @@ abstract class ZipArchive(override val file: JFile) extends AbstractFile with Eq
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class FileZipArchive(file: JFile) extends ZipArchive(file) {
+  def closeZip(): Unit = {
+    allDirs.foreach(_._2.foreach {
+      case e: SemiLazyEntry => e.clearZipFile()
+      case _ =>
+    })
+  }
   private[this] def openZipFile(): ZipFile = try {
     new ZipFile(file)
   } catch {
@@ -141,6 +147,28 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
       new FilterInputStream(delegate) {
         override def close(): Unit = { zipFile.close() }
       }
+    }
+    override def sizeOption: Option[Int] = Some(size) // could be stale
+  }
+
+  private[this] class SemiLazyEntry(
+    name: String,
+    time: Long,
+    size: Int
+  ) extends Entry(name) {
+    private[this] var _zipFile: ZipFile = _
+    private[FileZipArchive] def zipFile = this.synchronized {
+      if (_zipFile == null)
+        _zipFile = openZipFile()
+      _zipFile
+    }
+    private[FileZipArchive] def zipFile_=(other: ZipFile): Unit = _zipFile = other
+    def clearZipFile() = _zipFile = null
+    override def lastModified: Long = time // could be stale
+    override def input: InputStream = {
+      val zf = zipFile
+      val entry    = zf.getEntry(name)
+      zf.getInputStream(entry)
     }
     override def sizeOption: Option[Int] = Some(size) // could be stale
   }
@@ -171,14 +199,12 @@ final class FileZipArchive(file: JFile) extends ZipArchive(file) {
         if (zipEntry.isDirectory) dir
         else {
           val f =
-            if (ZipArchive.closeZipFile)
-              new LazyEntry(
-                zipEntry.getName(),
-                zipEntry.getTime(),
-                zipEntry.getSize().toInt
-              )
-            else
-              new LeakyEntry(zipFile, zipEntry)
+            new SemiLazyEntry(
+              zipEntry.getName(),
+              zipEntry.getTime(),
+              zipEntry.getSize().toInt
+            )
+          f.zipFile = zipFile
 
           dir.entries(f.name) = f
         }

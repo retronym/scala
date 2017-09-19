@@ -7,6 +7,7 @@ import java.io.File
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.attribute.{BasicFileAttributes, FileTime}
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
 import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources}
@@ -20,7 +21,20 @@ import FileUtils._
  * when there are a lot of projects having a lot of common dependencies.
  */
 sealed trait ZipAndJarFileLookupFactory {
-  private val cache = new FileBasedCache[ClassPath]
+  private val cache = new FileBasedCache[ClassPath] {
+    def close(classPath: ClassPath): Unit = classPath match {
+      case z: ZipArchiveFileLookup[_] => z.close()
+      case _ =>
+    }
+  }
+
+  def addReferences(zipFiles: Seq[java.nio.file.Path]): Unit = for (elem <- zipFiles) {
+    cache.addReference(elem.normalize())
+  }
+  def removeReferences(zipFiles: Seq[java.nio.file.Path]): Unit = for (elem <- zipFiles) {
+    cache.removeReference(elem.normalize())
+  }
+  def referenceCounts: Map[java.nio.file.Path, Int] = cache.referenceCounts
 
   def create(zipFile: AbstractFile, settings: Settings): ClassPath = {
     if (settings.YdisableFlatCpCaching || zipFile.file == null) createForZipFile(zipFile)
@@ -176,11 +190,35 @@ object ZipAndJarSourcePathFactory extends ZipAndJarFileLookupFactory {
   override protected def createForZipFile(zipFile: AbstractFile): ClassPath = ZipArchiveSourcePath(zipFile.file)
 }
 
-final class FileBasedCache[T] {
+abstract class FileBasedCache[T] {
   private case class Stamp(lastModified: FileTime, fileKey: Object)
   private val cache = collection.mutable.Map.empty[java.nio.file.Path, (Stamp, T)]
+  private val refCounts = collection.mutable.AnyRefMap.empty[java.nio.file.Path, AtomicInteger]
 
-  def getOrCreate(path: java.nio.file.Path, create: () => T): T = cache.synchronized {
+  protected def close(value: T): Unit
+  def addReference(file: java.nio.file.Path): Unit = synchronized {
+    refCounts.get(file) match {
+      case Some(x) => x.incrementAndGet()
+      case None => refCounts.put(file, new AtomicInteger(1))
+    }
+  }
+  def removeReference(file: java.nio.file.Path): Unit = synchronized {
+    refCounts.get(file) match {
+      case Some(x) =>
+        val count = x.decrementAndGet()
+        if (count == 0) {
+          refCounts.remove(file)
+          cache.get(file) match {
+            case Some((_, value)) =>
+              close(value)
+            case None =>
+          }
+        }
+      case None =>
+    }
+  }
+
+  def getOrCreate(path: java.nio.file.Path, create: () => T): T = synchronized {
     val attrs = Files.readAttributes(path, classOf[BasicFileAttributes])
     val lastModified = attrs.lastModifiedTime()
     // only null on some platforms, but that's okay, we just use the last modified timestamp as our stamp
@@ -193,6 +231,9 @@ final class FileBasedCache[T] {
         cache.put(path, (stamp, value))
         value
     }
+  }
+  def referenceCounts: Map[java.nio.file.Path, Int] = synchronized {
+    refCounts.iterator.map(x => (x._1, x._2.get())).toMap
   }
 
   def clear(): Unit = cache.synchronized {

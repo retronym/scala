@@ -1077,6 +1077,20 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
 
   def newJavaUnitParser(unit: CompilationUnit): JavaUnitParser = new JavaUnitParser(unit)
 
+  trait RunListener {
+    def compileStarted(): Unit
+    def beforePhase(phase: Phase): Unit
+    def compileFinished(): Unit
+  }
+  object RunListener extends RunListener {
+    private[this] var listeners: List[RunListener] = Nil
+    def notify(f: RunListener => Unit) = listeners.foreach(f)
+    def register(listener: RunListener) = listeners ::= listener
+
+    override def compileStarted(): Unit = notify(_.compileStarted())
+    override def beforePhase(phase: Phase): Unit = notify(_.beforePhase(phase))
+    override def compileFinished(): Unit = notify(_.compileFinished())
+  }
   /** A Run is a single execution of the compiler on a set of units.
    */
   class Run extends RunContextApi with RunReporting with RunParsing {
@@ -1418,78 +1432,87 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
     private def compileUnitsInternal(units: List[CompilationUnit], fromPhase: Phase) {
       def currentTime = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
 
-      units foreach addUnit
-      val startTime = currentTime
+      val zips = classPath.elements.collect { case cp: ZipArchiveFileLookup[_] => cp.zipFile.toPath }
+      ZipAndJarClassPathFactory.addReferences(zips)
 
-      reporter.reset()
-      warnDeprecatedAndConflictingSettings()
-      globalPhase = fromPhase
-
-      while (globalPhase.hasNext && !reporter.hasErrors) {
+      try {
+        RunListener.compileStarted()
+        units foreach addUnit
         val startTime = currentTime
-        phase = globalPhase
-        val profileBefore=profiler.beforePhase(phase)
-        globalPhase.run()
-        profiler.afterPhase(phase, profileBefore)
 
-        // progress update
-        informTime(globalPhase.description, startTime)
-        if ((settings.Xprint containsPhase globalPhase) || settings.printLate && runIsAt(cleanupPhase)) {
-          // print trees
-          if (settings.Xshowtrees || settings.XshowtreesCompact || settings.XshowtreesStringified) nodePrinters.printAll()
-          else printAllUnits()
+        reporter.reset()
+        warnDeprecatedAndConflictingSettings()
+        globalPhase = fromPhase
+
+        while (globalPhase.hasNext && !reporter.hasErrors) {
+          val startTime = currentTime
+          phase = globalPhase
+          val profileBefore = profiler.beforePhase(phase)
+          RunListener.beforePhase(phase)
+          globalPhase.run()
+          profiler.afterPhase(phase, profileBefore)
+
+          // progress update
+          informTime(globalPhase.description, startTime)
+          if ((settings.Xprint containsPhase globalPhase) || settings.printLate && runIsAt(cleanupPhase)) {
+            // print trees
+            if (settings.Xshowtrees || settings.XshowtreesCompact || settings.XshowtreesStringified) nodePrinters.printAll()
+            else printAllUnits()
+          }
+
+          // print the symbols presently attached to AST nodes
+          if (settings.Yshowsyms)
+            trackerFactory.snapshot()
+
+          // print members
+          if (settings.Yshow containsPhase globalPhase)
+            showMembers()
+
+          // browse trees with swing tree viewer
+          if (settings.browse containsPhase globalPhase)
+            treeBrowser browse(phase.name, units)
+
+          // move the pointer
+          globalPhase = globalPhase.next
+
+          // run tree checkers
+          if (settings.check containsPhase globalPhase.prev)
+            runCheckers()
+
+          // output collected statistics
+          if (settings.YstatisticsEnabled)
+            statistics.print(phase)
+
+          advancePhase()
         }
+        profiler.finished()
 
-        // print the symbols presently attached to AST nodes
-        if (settings.Yshowsyms)
-          trackerFactory.snapshot()
+        reporting.summarizeErrors()
 
-        // print members
-        if (settings.Yshow containsPhase globalPhase)
+        if (traceSymbolActivity)
+          units map (_.body) foreach (traceSymbols recordSymbolsInTree _)
+
+        // In case no phase was specified for -Xshow-class/object, show it now for sure.
+        if (settings.Yshow.isDefault)
           showMembers()
 
-        // browse trees with swing tree viewer
-        if (settings.browse containsPhase globalPhase)
-          treeBrowser browse (phase.name, units)
-
-        // move the pointer
-        globalPhase = globalPhase.next
-
-        // run tree checkers
-        if (settings.check containsPhase globalPhase.prev)
-          runCheckers()
-
-        // output collected statistics
-        if (settings.YstatisticsEnabled)
-          statistics.print(phase)
-
-        advancePhase()
-      }
-      profiler.finished()
-
-      reporting.summarizeErrors()
-
-      if (traceSymbolActivity)
-        units map (_.body) foreach (traceSymbols recordSymbolsInTree _)
-
-      // In case no phase was specified for -Xshow-class/object, show it now for sure.
-      if (settings.Yshow.isDefault)
-        showMembers()
-
-      if (reporter.hasErrors) {
-        for ((sym, file) <- symSource.iterator) {
-          if (file != null)
-            sym.reset(new loaders.SourcefileLoader(file))
-          if (sym.isTerm)
-            sym.moduleClass reset loaders.moduleClassLoader
+        if (reporter.hasErrors) {
+          for ((sym, file) <- symSource.iterator) {
+            if (file != null)
+              sym.reset(new loaders.SourcefileLoader(file))
+            if (sym.isTerm)
+              sym.moduleClass reset loaders.moduleClassLoader
+          }
         }
+        symSource.keys foreach (x => resetPackageClass(x.owner))
+        RunListener.compileFinished()
+        informTime("total", startTime)
+      } finally {
+        // Clear any sets or maps created via perRunCaches.
+        perRunCaches.clearAll()
+
+        ZipAndJarClassPathFactory.removeReferences(zips)
       }
-      symSource.keys foreach (x => resetPackageClass(x.owner))
-
-      informTime("total", startTime)
-
-      // Clear any sets or maps created via perRunCaches.
-      perRunCaches.clearAll()
     }
 
     /** Compile list of abstract files. */

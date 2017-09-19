@@ -1,10 +1,13 @@
 package scala.tools.nsc
 package classpath
 
-import org.junit.Test
+import org.junit.{Assert, Test}
 import java.nio.file._
 import java.nio.file.attribute.FileTime
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+
 import scala.reflect.io.AbstractFile
+import scala.tools.testing.BytecodeTesting
 
 class ZipAndJarFileLookupFactoryTest {
   @Test def cacheInvalidation(): Unit = {
@@ -42,6 +45,57 @@ class ZipAndJarFileLookupFactoryTest {
       assert(cp3.findClass("p1.C").isEmpty)
       assert(cp3.findClass("p1.D").isDefined)
     } finally Files.delete(f)
+  }
+
+  @Test def referenceCounting(): Unit = {
+    val f = Files.createTempFile("test-", ".jar")
+    Files.delete(f)
+    val pool = java.util.concurrent.Executors.newFixedThreadPool(8)
+    case class TestCompiler() {
+      val compiler = BytecodeTesting.newCompiler(extraArgs = s"-classpath $f")
+      val g = compiler.global
+      g.RunListener.register(new g.RunListener {
+        override def compileStarted(): Unit = runStartLatch.await(10, TimeUnit.SECONDS)
+        override def compileFinished(): Unit = runEndLatch.await(10, TimeUnit.SECONDS)
+      })
+      assert(!g.settings.YdisableFlatCpCaching.value) // we're testing with our JAR metadata caching enabled.
+
+      val runStartLatch = new CountDownLatch(1)
+      val runStartedLatch = new CountDownLatch(1)
+      val runEndLatch = new CountDownLatch(1)
+      def releaseRunStart() {runStartLatch.countDown()}
+      def releaseRunEndLatch() {runEndLatch.countDown()}
+      def compileOnThread(): Unit = {
+        val r: Runnable = () => {
+          compiler.compileClass("package p1; class Foo")
+        }
+        pool.submit(r)
+      }
+    }
+    try {
+      createZip(f, Array(), "p1/C.class")
+      createZip(f, Array(), "p2/X.class")
+      createZip(f, Array(), "p3/Y.class")
+      val g1 = new TestCompiler
+      val g2 = new TestCompiler
+      g1.compileOnThread()
+      g2.compileOnThread()
+      g1.releaseRunStart()
+      g2.releaseRunStart()
+      Thread.sleep(1000)
+      println(ZipAndJarClassPathFactory.referenceCounts)
+      Assert.assertEquals(2, ZipAndJarClassPathFactory.referenceCounts(f))
+      g2.releaseRunEndLatch()
+      Thread.sleep(1000)
+      Assert.assertEquals(1, ZipAndJarClassPathFactory.referenceCounts(f))
+      g1.releaseRunEndLatch()
+      Thread.sleep(1000)
+      Assert.assertEquals(0, ZipAndJarClassPathFactory.referenceCounts(f))
+    } finally {
+      pool.shutdown()
+      pool.awaitTermination(1, TimeUnit.MINUTES)
+      Files.delete(f)
+    }
   }
 
   def createZip(zipLocation: Path, content: Array[Byte], internalPath: String): Unit = {
