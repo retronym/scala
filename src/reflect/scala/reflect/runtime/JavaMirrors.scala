@@ -85,18 +85,31 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
 
 // ----------- Caching ------------------------------------------------------------------
 
-    private val classCache       = new TwoWayCache[jClass[_], ClassSymbol]
     private val packageCache     = new TwoWayCache[Package, ModuleSymbol]
-    private val methodCache      = new TwoWayCache[jMethod, MethodSymbol]
-    private val constructorCache = new TwoWayCache[jConstructor[_], MethodSymbol]
-    private val fieldCache       = new TwoWayCache[jField, TermSymbol]
-    private val tparamCache      = new TwoWayCache[jTypeVariable[_ <: GenericDeclaration], TypeSymbol]
 
-    private[runtime] def toScala[J: HasJavaClass, S](cache: TwoWayCache[J, S], key: J)(body: (JavaMirror, J) => S): S =
-      cache.toScala(key){
-        val jclazz = implicitly[HasJavaClass[J]] getClazz key
-        body(mirrorDefining(jclazz), key)
+    private val toScalaCache: ClassValue[ToScala] = new ClassValue[ToScala]() {
+      override def computeValue(`type`: jClass[_]): ToScala = new ToScala
+    }
+    class ToScala {
+      private def newMap[K, V] = java.util.Collections.synchronizedMap(new java.util.HashMap[K, V])
+      val classCache       = newMap[jClass[_], ClassSymbol]
+      val methodCache      = newMap[jMethod, MethodSymbol]
+      val constructorCache = newMap[jConstructor[_], MethodSymbol]
+      val fieldCache       = newMap[jField, TermSymbol]
+      val tparamCache      = newMap[jTypeVariable[_ <: GenericDeclaration], TypeSymbol]
+    }
+
+    private[runtime] def toScala[J: HasJavaClass, S](cacheSelector: ToScala => java.util.Map[J, S], key: J)(body: (JavaMirror, J) => S): S = {
+      val jclazz = implicitly[HasJavaClass[J]] getClazz key
+
+      val cache = cacheSelector(toScalaCache.get(jclazz))
+      cache.get(key) match {
+        case null =>
+          val value = gilSynchronized(body(mirrorDefining(jclazz), key))
+          cache.putIfAbsent(key, value)
+        case x => x
       }
+    }
 
     private implicit val classHasJavaClass: HasJavaClass[jClass[_]]        = new HasJavaClass(identity)
     private implicit val methHasJavaClass: HasJavaClass[jMethod]           = new HasJavaClass(_.getDeclaringClass)
@@ -652,7 +665,8 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       val tparam = sOwner(jtvar).newTypeParameter(newTypeName(jtvar.getName))
         .setInfo(new TypeParamCompleter(jtvar))
       markFlagsCompleted(tparam)(mask = AllFlags)
-      tparamCache enter (jtvar, tparam)
+      toScalaCache.get(declaringClassOrSelf(jtvar.asInstanceOf[GenericDeclaration])).tparamCache.put(jtvar, tparam)
+      tparam.asInstanceOf[SynchronizedSymbol].reflectionArtifact = jtvar
       tparam
     }
 
@@ -897,7 +911,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala method object that corresponds to `jmeth`.
      */
     def methodToScala(jmeth: jMethod): MethodSymbol =
-      toScala(methodCache, jmeth)(_ methodToScala1 _)
+      toScala(_.methodCache, jmeth)(_ methodToScala1 _)
 
     private def methodToScala1(jmeth: jMethod): MethodSymbol = {
       val jOwner = jmeth.getDeclaringClass
@@ -913,7 +927,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala method object that corresponds to `jconstr`.
      */
     def constructorToScala(jconstr: jConstructor[_]): MethodSymbol =
-      toScala(constructorCache, jconstr)(_ constructorToScala1 _)
+      toScala(_.constructorCache, jconstr)(_ constructorToScala1 _)
 
     private def constructorToScala1(jconstr: jConstructor[_]): MethodSymbol = {
       val owner = followStatic(classToScala(jconstr.getDeclaringClass), jconstr.javaFlags)
@@ -983,7 +997,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *          not available, wrapped from the Java reflection info.
      */
     def classToScala(jclazz: jClass[_]): ClassSymbol =
-      toScala(classCache, jclazz)(_ classToScala1 _)
+      toScala(_.classCache, jclazz)(_ classToScala1 _)
 
     private def classToScala1(jclazz: jClass[_]): ClassSymbol = {
       val jname = newTypeName(jclazz.getName)
@@ -1037,8 +1051,15 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @param jparam  The Java type parameter
      *  @return A Scala type parameter symbol that has the same owner and name as the Java type parameter
      */
-    def typeParamToScala(jparam: jTypeVariable[_ <: GenericDeclaration]): TypeSymbol =
-      toScala(tparamCache, jparam)(_ typeParamToScala1 _)
+    def typeParamToScala(jparam: jTypeVariable[_ <: GenericDeclaration]): TypeSymbol = {
+      toScala(_.tparamCache, jparam)(_ typeParamToScala1 _)
+    }
+
+    private def declaringClassOrSelf(g: GenericDeclaration): jClass[_] = g match {
+      case m : jMethod => m.getDeclaringClass
+      case c: jConstructor[_] => c.getDeclaringClass
+      case c: Class[_] => c
+    }
 
     private def typeParamToScala1(jparam: jTypeVariable[_ <: GenericDeclaration]): TypeSymbol = {
       val owner = genericDeclarationToScala(jparam.getGenericDeclaration)
@@ -1112,7 +1133,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala class symbol that wraps all reflection info of `jclazz`
      */
     private def jclassAsScala(jclazz: jClass[_]): ClassSymbol =
-      toScala(classCache, jclazz)(_ jclassAsScala1 _)
+      toScala(_.classCache, jclazz)(_ jclassAsScala1 _)
 
     private def jclassAsScala1(jclazz: jClass[_]): ClassSymbol = {
       val owner = sOwner(jclazz)
@@ -1129,14 +1150,14 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala value symbol that wraps all reflection info of `jfield`
      */
     private def jfieldAsScala(jfield: jField): TermSymbol =
-      toScala(fieldCache, jfield)(_ jfieldAsScala1 _)
+      toScala(_.fieldCache, jfield)(_ jfieldAsScala1 _)
 
     private def jfieldAsScala1(jfield: jField): TermSymbol = {
       val field = sOwner(jfield)
           .newValue(newTermName(jfield.getName), NoPosition, jfield.scalaFlags)
           .setInfo(typeToScala(jfield.getGenericType))
-
-      fieldCache.enter(jfield, field)
+      toScalaCache.get(jfield.getDeclaringClass).fieldCache.put(jfield, field)
+      field.asInstanceOf[SynchronizedSymbol].reflectionArtifact = jfield
       propagatePackageBoundary(jfield, field)
       copyAnnotations(field, jfield)
       markAllCompleted(field)
@@ -1154,12 +1175,13 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala method symbol that wraps all reflection info of `jmethod`
      */
     private def jmethodAsScala(jmeth: jMethod): MethodSymbol =
-      toScala(methodCache, jmeth)(_ jmethodAsScala1 _)
+      toScala(_.methodCache, jmeth)(_ jmethodAsScala1 _)
 
     private def jmethodAsScala1(jmeth: jMethod): MethodSymbol = {
       val clazz = sOwner(jmeth)
       val meth = clazz.newMethod(newTermName(jmeth.getName), NoPosition, jmeth.scalaFlags)
-      methodCache enter (jmeth, meth)
+      toScalaCache.get(declaringClassOrSelf(jmeth)).methodCache.put(jmeth, meth)
+      meth.asInstanceOf[SynchronizedSymbol].reflectionArtifact = jmeth
       val tparams = jmeth.getTypeParameters.toList map createTypeParameter
       val paramtpes = jmeth.getGenericParameterTypes.toList map typeToScala
       val resulttpe = typeToScala(jmeth.getGenericReturnType)
@@ -1179,13 +1201,14 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @return A Scala constructor symbol that wraps all reflection info of `jconstr`
      */
     private def jconstrAsScala(jconstr: jConstructor[_]): MethodSymbol =
-      toScala(constructorCache, jconstr)(_ jconstrAsScala1 _)
+      toScala(_.constructorCache, jconstr)(_ jconstrAsScala1 _)
 
     private def jconstrAsScala1(jconstr: jConstructor[_]): MethodSymbol = {
       // [Martin] Note: I know there's a lot of duplication wrt jmethodAsScala, but don't think it's worth it to factor this out.
       val clazz = sOwner(jconstr)
       val constr = clazz.newConstructor(NoPosition, jconstr.scalaFlags)
-      constructorCache enter (jconstr, constr)
+      toScalaCache.get(declaringClassOrSelf(jconstr)).constructorCache.put(jconstr, constr)
+      constr.asInstanceOf[SynchronizedSymbol].reflectionArtifact = jconstr
       val tparams = jconstr.getTypeParameters.toList map createTypeParameter
       val paramtpes = jconstr.getGenericParameterTypes.toList map typeToScala
       setMethType(constr, tparams, paramtpes, clazz.tpe_*)
@@ -1207,7 +1230,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
      *  @throws ClassNotFoundException for all Scala classes not in one of these categories.
      */
     @throws(classOf[ClassNotFoundException])
-    def classToJava(clazz: ClassSymbol): jClass[_] = classCache.toJava(clazz) {
+    def classToJava(clazz: ClassSymbol): jClass[_] = toJava(clazz) {
       def noClass = throw new ClassNotFoundException("no Java class corresponding to "+clazz+" found")
       //println("classToJava "+clazz+" "+clazz.owner+" "+clazz.owner.isPackageClass)//debug
       if (clazz.isPrimitiveValueClass)
@@ -1257,22 +1280,36 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       if (sym.isPrivate) nme.expandedName(sym.name.toTermName, sym.owner).toString
       else sym.name.toString
 
+    private def toJava[A](sym: Symbol)(compute: => A): A = {
+      sym match {
+        case sync: SynchronizedSymbol =>
+          var cached = sync.reflectionArtifact
+          if (cached == null) {
+            val value = compute
+            sync.reflectionArtifact = value
+            value
+          } else cached.asInstanceOf[A]
+        case _ => compute
+      }
+    }
     /** The Java field corresponding to a given Scala field.
      *  @param   fld The Scala field.
      */
-    def fieldToJava(fld: TermSymbol): jField = fieldCache.toJava(fld) {
-      val jclazz = classToJava(fld.owner.asClass)
-      val jname = fld.name.dropLocal.toString
-      try jclazz getDeclaredField jname
-      catch {
-        case ex: NoSuchFieldException => jclazz getDeclaredField expandedName(fld)
+    def fieldToJava(fld: TermSymbol): jField = {
+      toJava(fld) {
+        val jclazz = classToJava(fld.owner.asClass)
+        val jname = fld.name.dropLocal.toString
+        try jclazz getDeclaredField jname
+        catch {
+          case ex: NoSuchFieldException => jclazz getDeclaredField expandedName(fld)
+        }
       }
     }
 
     /** The Java method corresponding to a given Scala method.
      *  @param   meth The Scala method
      */
-    def methodToJava(meth: MethodSymbol): jMethod = methodCache.toJava(meth) {
+    def methodToJava(meth: MethodSymbol): jMethod = toJava(meth) {
       val jclazz = classToJava(meth.owner.asClass)
       val paramClasses = transformedType(meth).paramTypes map typeToJavaClass
       val jname = meth.name.dropLocal.toString
@@ -1286,7 +1323,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     /** The Java constructor corresponding to a given Scala constructor.
      *  @param   constr The Scala constructor
      */
-    def constructorToJava(constr: MethodSymbol): jConstructor[_] = constructorCache.toJava(constr) {
+    def constructorToJava(constr: MethodSymbol): jConstructor[_] = toJava(constr) {
       val jclazz = classToJava(constr.owner.asClass)
       val paramClasses = transformedType(constr).paramTypes map typeToJavaClass
       val effectiveParamClasses =
