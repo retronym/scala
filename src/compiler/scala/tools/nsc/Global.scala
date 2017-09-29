@@ -1279,7 +1279,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       statistics.initFromSettings(settings)
 
       // Report the overhead of statistics measurements per every run
-      if (StatisticsStatics.areSomeColdStatsEnabled)
+      if (statistics.areStatisticsLocallyEnabled)
         statistics.reportStatisticsOverhead(reporter)
 
       phase = first   //parserPhase
