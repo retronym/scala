@@ -99,7 +99,7 @@ class ScriptRunner extends HasCompileSocket {
 
       settings.outdir.value = compiledPath.path
 
-      if (settings.nc) {
+      if (!settings.useCompDaemon) {
         /* Setting settings.script.value informs the compiler this is not a
          * self contained compilation unit.
          */

@@ -10,6 +10,7 @@ import _root_.jline.console.history.PersistentHistory
 import scala.tools.nsc.interpreter
 import scala.reflect.io.{ File, Path }
 import scala.tools.nsc.Properties.{ propOrNone, userHome }
+import scala.reflect.internal.util.OwnerOnlyChmod
 
 /** TODO: file locking.
   */
@@ -87,7 +88,18 @@ object FileBackedHistory {
 
   final val defaultFileName = ".scala_history"
 
-  def defaultFile: File = File(
-    propOrNone("scala.shell.histfile") map (Path.apply) getOrElse (Path(userHome) / defaultFileName)
-  )
+  def defaultFile: File = File {
+    val chmod = OwnerOnlyChmod()
+    propOrNone("scala.shell.histfile") map (Path.apply) match {
+      case Some(p) =>
+        // only lock down permissions on custom history file if we're the ones
+        // creating it, otherwise responsibility for permissions is up to the caller.
+        if (p.exists) chmod.chmod(p.jfile)
+        p
+      case None =>
+        val result = Path(userHome) / defaultFileName
+        chmod.chmodOrCreateEmpty(result.jfile)
+        result
+    }
+  }
 }

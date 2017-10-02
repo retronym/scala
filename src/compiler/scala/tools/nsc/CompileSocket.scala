@@ -5,12 +5,15 @@
 
 package scala.tools.nsc
 
-import java.io.{ FileNotFoundException, PrintWriter, FileOutputStream }
+import java.io.FileNotFoundException
+import java.math.BigInteger
 import java.security.SecureRandom
-import io.{ File, Path, Directory, Socket }
-import scala.tools.util.CompileOutputCommon
+
+import scala.reflect.internal.util.OwnerOnlyChmod
 import scala.reflect.internal.util.StringOps.splitWhere
 import scala.sys.process._
+import scala.tools.nsc.io.{File, Path, Socket}
+import scala.tools.util.CompileOutputCommon
 
 trait HasCompileSocket {
   def compileSocket: CompileSocket
@@ -46,14 +49,14 @@ trait HasCompileSocket {
 class CompileSocket extends CompileOutputCommon {
   protected lazy val compileClient: StandardCompileClient = CompileClient
   def verbose = compileClient.verbose
-  
+
   /* Fixes the port where to start the server, 0 yields some free port */
   var fixPort = 0
 
   /** The prefix of the port identification file, which is followed
    *  by the port number.
    */
-  protected lazy val dirName = "scalac-compile-server-port"
+  protected lazy val dirName = ".scalac_compile_server_port"
   protected def cmdName = Properties.scalaCmd
 
   /** The vm part of the command to start a new scala compile server */
@@ -67,7 +70,7 @@ class CompileSocket extends CompileOutputCommon {
 
   /** The class name of the scala compile server */
   protected val serverClass     = "scala.tools.nsc.CompileServer"
-  protected def serverClassArgs = (if (verbose) List("-v") else Nil) ::: (if (fixPort > 0) List("-p", fixPort.toString) else Nil) 
+  protected def serverClassArgs = (if (verbose) List("-v") else Nil) ::: (if (fixPort > 0) List("-p", fixPort.toString) else Nil)
 
   /** A temporary directory to use */
   val tmpDir = {
@@ -76,13 +79,18 @@ class CompileSocket extends CompileOutputCommon {
 
     if (f.isDirectory && f.canWrite) {
       info("[Temp directory: " + f + "]")
+      OwnerOnlyChmod().chmod(f.jfile)
       f
     }
     else fatal("Could not find a directory for temporary files")
   }
 
   /* A directory holding port identification files */
-  val portsDir = (tmpDir / dirName).createDirectory()
+  val portsDir = {
+    val dir = (Path(Properties.userHome) / dirName).createDirectory()
+    OwnerOnlyChmod().chmod(dir.jfile)
+    dir
+  }
 
   /** The command which starts the compile server, given vm arguments.
     *
@@ -145,9 +153,14 @@ class CompileSocket extends CompileOutputCommon {
   /** Set the port number to which a scala compile server is connected */
   def setPort(port: Int) {
     val file    = portFile(port)
-    val secret  = new SecureRandom().nextInt.toString
+    val secretBytes = new Array[Byte](16)
+    new SecureRandom().nextBytes(secretBytes)
+    val secretDigits = new BigInteger(secretBytes).toString().getBytes("UTF-8")
 
-    try file writeAll secret catch {
+    try {
+      val permissioner = OwnerOnlyChmod()
+      OwnerOnlyChmod().chmodAndWrite(file.jfile, secretDigits)
+    } catch {
       case e @ (_: FileNotFoundException | _: SecurityException) =>
         fatal("Cannot create file: %s".format(file.path))
     }
@@ -196,7 +209,7 @@ class CompileSocket extends CompileOutputCommon {
     catch { case _: NumberFormatException => None }
 
   def getSocket(serverAdr: String): Option[Socket] = (
-    for ((name, portStr) <- splitWhere(serverAdr, _ == ':', doDropIndex = true) ; port <- parseInt(portStr)) yield    	
+    for ((name, portStr) <- splitWhere(serverAdr, _ == ':', doDropIndex = true) ; port <- parseInt(portStr)) yield
       getSocket(name, port)
   ) getOrElse fatal("Malformed server address: %s; exiting" format serverAdr)
 
@@ -205,7 +218,7 @@ class CompileSocket extends CompileOutputCommon {
     if (sock.isEmpty) warn("Unable to establish connection to server %s:%d".format(hostName, port))
     sock
   }
-  
+
   def getPassword(port: Int): String = {
     val ff  = portFile(port)
     val f   = ff.bufferedReader()
