@@ -14,6 +14,7 @@ import scala.reflect.internal.util.StringOps.splitWhere
 import scala.sys.process._
 import scala.tools.nsc.io.{File, Path, Socket}
 import scala.tools.util.CompileOutputCommon
+import scala.util.control.NonFatal
 
 trait HasCompileSocket {
   def compileSocket: CompileSocket
@@ -135,18 +136,29 @@ class CompileSocket extends CompileOutputCommon {
     var attempts = 0
     var port = pollPort()
 
+    var startedProcess: Process = null
+    val exited = new java.util.concurrent.atomic.AtomicBoolean
     if (port < 0) {
       info("No compile server running: starting one with args '" + vmArgs + "'")
-      startNewServer(vmArgs)
+      startedProcess = startNewServer(vmArgs)
+      val exitThread = new Thread {
+        override def run() = {
+          startedProcess.exitValue()
+          exited.set(true)
+        }
+      }
+      exitThread.setDaemon(true)
+      exitThread.start()
     }
     while (port < 0 && attempts < maxPolls) {
       attempts += 1
       Thread.sleep(sleepTime)
       port = pollPort()
+      if (exited.get()) throw new CompileDaemonStartupFailed("Unable to start compile daemon", null)
     }
     info("[Port number: " + port + "]")
     if (port < 0)
-      fatal("Could not connect to compilation daemon after " + attempts + " attempts.")
+      throw new CompileDaemonConnectFailed("Could not connect to compilation daemon after " + attempts + " attempts.", null)
     port
   }
 
@@ -241,3 +253,7 @@ class CompileSocket extends CompileOutputCommon {
 
 object CompileSocket extends CompileSocket {
 }
+
+class CompileDaemonFailure(msg: String, cause: Throwable) extends RuntimeException(msg, cause)
+class CompileDaemonStartupFailed(msg: String, cause: Throwable) extends CompileDaemonFailure(msg, cause)
+class CompileDaemonConnectFailed(msg: String, cause: Throwable) extends CompileDaemonFailure(msg, cause)

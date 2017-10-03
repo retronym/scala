@@ -43,6 +43,7 @@ object NoOpOwnerOnlyChmod extends OwnerOnlyChmod {
 object Java6UnixChmod extends OwnerOnlyChmod {
 
   def chmod(file: File): Unit = if (file.exists()) {
+    ???
     def clearAndSetOwnerOnly(f: (Boolean, Boolean) => Boolean): Unit = {
       def fail() = throw new IOException("Unable to modify permissions of " + file)
       // attribute = false, ownerOwnly = false

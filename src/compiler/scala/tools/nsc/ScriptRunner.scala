@@ -99,7 +99,7 @@ class ScriptRunner extends HasCompileSocket {
 
       settings.outdir.value = compiledPath.path
 
-      if (!settings.useCompDaemon) {
+      def compileInProcess = {
         /* Setting settings.script.value informs the compiler this is not a
          * self contained compilation unit.
          */
@@ -110,8 +110,18 @@ class ScriptRunner extends HasCompileSocket {
         new compiler.Run compile List(scriptFile)
         if (reporter.hasErrors) None else Some(compiledPath)
       }
-      else if (compileWithDaemon(settings, scriptFile)) Some(compiledPath)
-      else None
+      if (!settings.useCompDaemon) {
+        compileInProcess
+      } else {
+        try {
+          if (compileWithDaemon(settings, scriptFile)) Some(compiledPath)
+          else None
+        } catch {
+          case t: Throwable  =>
+            CompileSocket.info("Falling back to in-process compilation after problem with compilation daemon: " + t.getMessage)
+            compileInProcess
+        }
+      }
     }
 
     def hasClassToRun(d: Directory): Boolean = {
