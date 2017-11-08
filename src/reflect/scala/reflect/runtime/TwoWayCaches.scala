@@ -47,6 +47,7 @@ private[runtime] trait TwoWayCaches { self: SymbolTable =>
           v
         case _ =>
           val result = body
+          Unsafe.U.storeFence()
           enter(result, key)
           result
       }
@@ -58,6 +59,7 @@ private[runtime] trait TwoWayCaches { self: SymbolTable =>
           Some(v)
         case _ =>
           val result = body
+          Unsafe.U.storeFence()
           for (value <- result) enter(value, key)
           result
       }
