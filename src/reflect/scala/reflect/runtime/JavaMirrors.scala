@@ -1138,7 +1138,12 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     }
 
     private def setMethType(meth: Symbol, tparams: List[Symbol], paramtpes: List[Type], restpe: Type) = {
-      meth setInfo GenPolyType(tparams, MethodType(meth.owner.newSyntheticValueParams(paramtpes map objToAny), restpe))
+      val info = GenPolyType(tparams, MethodType(meth.owner.newSyntheticValueParams(paramtpes map objToAny), restpe))
+      if (meth.name.string_==("mystery")) {
+        println(s"!! JavaMirrors.setMethodType assigning $info to $meth")
+        new Throwable().printStackTrace()
+      }
+      meth setInfo info
     }
 
     /**

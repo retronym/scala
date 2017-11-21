@@ -1555,6 +1555,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       infos = TypeHistory(currentPeriod, info, null)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
+      if (initName.string_==("mystery")) {
+        println(s"<mystery>.info_=($info), called from:")
+        println(Thread.currentThread().getStackTrace.iterator.take(10).mkString("\n") + "\n\n")
+      }
+
     }
 
     /** Set initial info. */
