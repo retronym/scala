@@ -38,6 +38,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
   implicit val MirrorTag: ClassTag[Mirror] = ClassTag[Mirror](classOf[JavaMirror])
 
   override lazy val rootMirror: Mirror = createMirror(NoSymbol, rootClassLoader)
+  override final def isReflectUniverse = true
 
   // overridden by ReflectGlobal
   def rootClassLoader: ClassLoader = this.getClass.getClassLoader
