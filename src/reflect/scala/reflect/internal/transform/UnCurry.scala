@@ -49,8 +49,11 @@ trait UnCurry {
           apply(MethodType(List(), restpe))
         case DesugaredParameterType(desugaredTpe) =>
           apply(desugaredTpe)
-        case _ =>
-          expandAlias(tp.mapOver(this))
+        case tp1 =>
+          val tp2 = tp1.mapOver(this)
+          val tp3 = expandAlias(tp2)
+          assert(tp2 eq tp3) // checking that the double expandAlias is redundant
+          tp3
       }
     }
   }
