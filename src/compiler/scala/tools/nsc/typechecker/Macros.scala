@@ -575,8 +575,8 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
       if (macroDebugVerbose) println(s"macroExpand: ${summary()}")
       linkExpandeeAndDesugared(expandee, desugared)
 
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.macroExpandNanos) else null
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(statistics.macroExpandCount)
+      val start = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(statistics.macroExpandNanos) else null
+      if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(statistics.macroExpandCount)
       try {
         withInfoLevel(nodePrinters.InfoLevel.Quiet) { // verbose printing might cause recursive macro expansions
           if (expandee.symbol.isErroneous || (expandee exists (_.isErroneous))) {
@@ -609,7 +609,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
           }
         }
       } finally {
-        if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.macroExpandNanos, start)
+        if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.macroExpandNanos, start)
       }
     }
   }

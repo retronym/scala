@@ -2,10 +2,9 @@ package scala
 package reflect.internal.util
 
 import scala.collection.mutable
-
-import scala.reflect.internal.SymbolTable
+import scala.reflect.internal.{SymbolTable, util}
 import scala.reflect.internal.settings.MutableSettings
-import java.lang.invoke.{SwitchPoint, MethodHandle, MethodHandles, MethodType}
+import java.lang.invoke.{MethodHandle, MethodHandles, MethodType, SwitchPoint}
 
 abstract class Statistics(val symbolTable: SymbolTable, settings: MutableSettings) {
 
@@ -301,5 +300,15 @@ quant)
   final def timed[T](timer: Timer)(body: => T): T = {
     val start = startTimer(timer)
     try body finally stopTimer(timer, start)
+  }
+}
+
+object Statistics {
+  @inline final def areSomeColdStatsEnabled: Boolean = {
+    try {
+      (StatisticsStatics.COLD_STATS_GETTER.invokeExact() : BooleanContainer).isEnabledNow
+    } catch {
+      case e: Throwable => throw new AssertionError(e);
+    }
   }
 }

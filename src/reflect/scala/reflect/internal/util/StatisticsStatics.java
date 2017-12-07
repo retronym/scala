@@ -28,8 +28,8 @@ public final class StatisticsStatics extends BooleanContainer {
     }
   };
 
-  private static final MethodHandle COLD_STATS_GETTER = COLD_STATS.createGetter();
-  private static final MethodHandle HOT_STATS_GETTER = HOT_STATS.createGetter();
+  static final MethodHandle COLD_STATS_GETTER = COLD_STATS.createGetter();
+  static final MethodHandle HOT_STATS_GETTER = HOT_STATS.createGetter();
   
   public static boolean areSomeColdStatsEnabled() {
     try {

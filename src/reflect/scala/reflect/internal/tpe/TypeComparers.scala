@@ -6,7 +6,7 @@ package tpe
 import scala.collection.{ mutable }
 import util.TriState
 import scala.annotation.tailrec
-import scala.reflect.internal.util.StatisticsStatics
+import scala.reflect.internal.util.Statistics
 
 trait TypeComparers {
   self: SymbolTable =>
@@ -92,7 +92,7 @@ trait TypeComparers {
 
   /** Do `tp1` and `tp2` denote equivalent types? */
   def isSameType(tp1: Type, tp2: Type): Boolean = try {
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(sametypeCount)
+    if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(sametypeCount)
     subsametypeRecursions += 1
     //OPT cutdown on Function0 allocation
     //was:

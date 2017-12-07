@@ -42,8 +42,8 @@ trait BaseTypeSeqs {
    */
   class BaseTypeSeq protected[reflect] (private[BaseTypeSeqs] val parents: List[Type], private[BaseTypeSeqs] val elems: Array[Type]) {
   self =>
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqCount)
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqLenTotal, elems.length)
+    if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqCount)
+    if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqLenTotal, elems.length)
     private[this] val typeSymbols = {
       val tmp = new Array[Int](elems.length)
       var i = 0

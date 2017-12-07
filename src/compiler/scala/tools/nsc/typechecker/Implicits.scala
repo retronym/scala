@@ -83,10 +83,10 @@ trait Implicits {
     // Note that the isInvalidConversionTarget seems to make a lot more sense right here, before all the
     // work is performed, than at the point where it presently exists.
     val shouldPrint     = printTypings && !context.undetparams.isEmpty
-    val rawTypeStart    = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startCounter(rawTypeImpl) else null
-    val findMemberStart = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startCounter(findMemberImpl) else null
-    val subtypeStart    = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startCounter(subtypeImpl) else null
-    val start           = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(implicitNanos) else null
+    val rawTypeStart    = if (Statistics.areSomeColdStatsEnabled) statistics.startCounter(rawTypeImpl) else null
+    val findMemberStart = if (Statistics.areSomeColdStatsEnabled) statistics.startCounter(findMemberImpl) else null
+    val subtypeStart    = if (Statistics.areSomeColdStatsEnabled) statistics.startCounter(subtypeImpl) else null
+    val start           = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(implicitNanos) else null
     if (shouldPrint)
       typingStack.printTyping(tree, "typing implicit: %s %s".format(tree, context.undetparamsString))
     val implicitSearchContext = context.makeImplicit(reportAmbiguous)
@@ -104,10 +104,10 @@ trait Implicits {
     //         and then filter out any which *were* inferred and are part of the substitutor in the implicit search result.
     context.undetparams = ((context.undetparams ++ result.undetparams) filterNot result.subst.from.contains).distinct
 
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(implicitNanos, start)
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopCounter(rawTypeImpl, rawTypeStart)
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopCounter(findMemberImpl, findMemberStart)
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopCounter(subtypeImpl, subtypeStart)
+    if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(implicitNanos, start)
+    if (Statistics.areSomeColdStatsEnabled) statistics.stopCounter(rawTypeImpl, rawTypeStart)
+    if (Statistics.areSomeColdStatsEnabled) statistics.stopCounter(findMemberImpl, findMemberStart)
+    if (Statistics.areSomeColdStatsEnabled) statistics.stopCounter(subtypeImpl, subtypeStart)
 
     result
   }
@@ -373,7 +373,7 @@ trait Implicits {
     }
 
     import infer._
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(implicitSearchCount)
+    if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(implicitSearchCount)
 
     /** The type parameters to instantiate */
     val undetParams = if (isView) Nil else context.outer.undetparams
@@ -401,12 +401,12 @@ trait Implicits {
     /** Is implicit info `info1` better than implicit info `info2`?
      */
     def improves(info1: ImplicitInfo, info2: ImplicitInfo) = {
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(improvesCount)
+      if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(improvesCount)
       (info2 == NoImplicitInfo) ||
       (info1 != NoImplicitInfo) && {
         if (info1.sym.isStatic && info2.sym.isStatic) {
           improvesCache get ((info1, info2)) match {
-            case Some(b) => if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(improvesCachedCount); b
+            case Some(b) => if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(improvesCachedCount); b
             case None =>
               val result = isStrictlyMoreSpecific(info1.tpe, info2.tpe, info1.sym, info2.sym)
               improvesCache((info1, info2)) = result
@@ -522,14 +522,14 @@ trait Implicits {
      *  This method is performance critical: 5-8% of typechecking time.
      */
     private def matchesPt(tp: Type, pt: Type, undet: List[Symbol]): Boolean = {
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(matchesPtNanos) else null
+      val start = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(matchesPtNanos) else null
       val result = normSubType(tp, pt) || isView && {
         pt match {
           case Function1(arg1, arg2) => matchesPtView(tp, arg1, arg2, undet)
           case _                     => false
         }
       }
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(matchesPtNanos, start)
+      if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(matchesPtNanos, start)
       result
     }
     private def matchesPt(info: ImplicitInfo): Boolean = (
@@ -626,7 +626,7 @@ trait Implicits {
     }
 
     private def typedImplicit0(info: ImplicitInfo, ptChecked: Boolean, isLocalToCallsite: Boolean): SearchResult = {
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(plausiblyCompatibleImplicits)
+      if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(plausiblyCompatibleImplicits)
       val ok = ptChecked || matchesPt(info) && {
         def word = if (isLocalToCallsite) "local " else ""
         typingLog("match", s"$word$info")
@@ -636,7 +636,7 @@ trait Implicits {
     }
 
     private def typedImplicit1(info: ImplicitInfo, isLocalToCallsite: Boolean): SearchResult = {
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(matchingImplicits)
+      if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(matchingImplicits)
 
       // workaround for deficient context provided by ModelFactoryImplicitSupport#makeImplicitConstraints
       val isScaladoc = context.tree == EmptyTree
@@ -692,7 +692,7 @@ trait Implicits {
           case None      =>
         }
 
-        if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(typedImplicits)
+        if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(typedImplicits)
 
         val itree3 = if (isView) treeInfo.dissectApplied(itree2).callee
                      else adapt(itree2, EXPRmode, wildPt)
@@ -771,7 +771,7 @@ trait Implicits {
                 fail("typing TypeApply reported errors for the implicit tree: " + err.errMsg)
               case None      =>
                 val result = new SearchResult(unsuppressMacroExpansion(itree3), subst, context.undetparams)
-                if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(foundImplicits)
+                if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(foundImplicits)
                 typingLog("success", s"inferred value of type $ptInstantiated is $result")
                 result
             }
@@ -1017,11 +1017,11 @@ trait Implicits {
      *  @return                  map from infos to search results
      */
     def applicableInfos(iss: Infoss, isLocalToCallsite: Boolean): mutable.LinkedHashMap[ImplicitInfo, SearchResult] = {
-      val start       = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startCounter(subtypeAppInfos) else null
+      val start       = if (Statistics.areSomeColdStatsEnabled) statistics.startCounter(subtypeAppInfos) else null
       val computation = new ImplicitComputation(iss, isLocalToCallsite) { }
       val applicable  = computation.findAll()
 
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopCounter(subtypeAppInfos, start)
+      if (Statistics.areSomeColdStatsEnabled) statistics.stopCounter(subtypeAppInfos, start)
       applicable
     }
 
@@ -1161,13 +1161,13 @@ trait Implicits {
      *  such that some part of `tp` has C as one of its superclasses.
      */
     private def implicitsOfExpectedType: Infoss = {
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(implicitCacheAccs)
+      if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(implicitCacheAccs)
       implicitsCache get pt match {
         case Some(implicitInfoss) =>
-          if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(implicitCacheHits)
+          if (Statistics.areSomeColdStatsEnabled) statistics.incCounter(implicitCacheHits)
           implicitInfoss
         case None =>
-          val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(subtypeETNanos) else null
+          val start = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(subtypeETNanos) else null
           //        val implicitInfoss = companionImplicits(pt)
           val implicitInfoss1 = companionImplicitMap(pt).valuesIterator.toList
           //        val is1 = implicitInfoss.flatten.toSet
@@ -1176,7 +1176,7 @@ trait Implicits {
           //          if (!(is2 contains i)) println("!!! implicit infos of "+pt+" differ, new does not contain "+i+",\nold: "+implicitInfoss+",\nnew: "+implicitInfoss1)
           //        for (i <- is2)
           //          if (!(is1 contains i)) println("!!! implicit infos of "+pt+" differ, old does not contain "+i+",\nold: "+implicitInfoss+",\nnew: "+implicitInfoss1)
-          if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(subtypeETNanos, start)
+          if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(subtypeETNanos, start)
           implicitsCache(pt) = implicitInfoss1
           if (implicitsCache.size >= sizeLimit)
             implicitsCache -= implicitsCache.keysIterator.next
@@ -1403,7 +1403,7 @@ trait Implicits {
      *  If all fails return SearchFailure
      */
     def bestImplicit: SearchResult = {
-      val stats = StatisticsStatics.areSomeColdStatsEnabled
+      val stats = Statistics.areSomeColdStatsEnabled
       val failstart = if (stats) statistics.startTimer(inscopeFailNanos) else null
       val succstart = if (stats) statistics.startTimer(inscopeSucceedNanos) else null
 

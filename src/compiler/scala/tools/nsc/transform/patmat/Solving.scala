@@ -472,7 +472,7 @@ trait Solving extends Logic {
 
       debug.patmat(s"DPLL\n${cnfString(clauses)}")
 
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
+      val start = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
 
       val satisfiableWithModel: TseitinModel =
         if (clauses isEmpty) EmptyTseitinModel
@@ -508,7 +508,7 @@ trait Solving extends Logic {
             }
         }
 
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
+      if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
       satisfiableWithModel
     }
 

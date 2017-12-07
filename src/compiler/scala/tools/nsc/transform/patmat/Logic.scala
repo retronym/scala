@@ -331,7 +331,7 @@ trait Logic extends Debugging  {
     //       V1 = Nil implies -(V2 = Ci) for all Ci in V2's domain (i.e., it is unassignable)
     // may throw an AnalysisBudget.Exception
     def removeVarEq(props: List[Prop], modelNull: Boolean = false): (Prop, List[Prop]) = {
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaVarEq) else null
+      val start = if (Statistics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaVarEq) else null
 
       val vars = new mutable.HashSet[Var]
 
@@ -401,7 +401,7 @@ trait Logic extends Debugging  {
       debug.patmat(s"eqAxioms:\n${eqAxioms.mkString("\n")}")
       debug.patmat(s"pure:${pure.mkString("\n")}")
 
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaVarEq, start)
+      if (Statistics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaVarEq, start)
 
       (And(eqAxioms: _*), pure)
     }
