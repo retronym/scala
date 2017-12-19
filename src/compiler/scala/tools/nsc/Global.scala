@@ -10,12 +10,13 @@ package nsc
 import java.io.{File, FileNotFoundException, IOException}
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, IllegalCharsetNameException, UnsupportedCharsetException}
+
 import scala.collection.{immutable, mutable}
 import io.{AbstractFile, Path, SourceReader}
 import reporters.Reporter
 import util.{ClassPath, returning}
 import scala.reflect.ClassTag
-import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile}
+import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile, StatisticsStatics}
 import scala.reflect.internal.pickling.PickleBuffer
 import symtab.{Flags, SymbolTable, SymbolTrackers}
 import symtab.classfile.Pickler
@@ -26,9 +27,10 @@ import typechecker._
 import transform.patmat.PatternMatching
 import transform._
 import backend.{JavaPlatform, ScalaPrimitives}
-import backend.jvm.{GenBCode, BackendStats}
+import backend.jvm.GenBCode
 import scala.concurrent.Future
 import scala.language.postfixOps
+import scala.reflect.internal.settings.MutableSettings
 import scala.tools.nsc.ast.{TreeGen => AstTreeGen}
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.profile.Profiler
@@ -160,16 +162,65 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   // Components for collecting and generating output
 
   import scala.reflect.internal.util.Statistics
-  import scala.tools.nsc.transform.patmat.PatternMatchingStats
-  trait GlobalStats extends ReflectStats
-                       with TypersStats
-                       with ImplicitsStats
-                       with MacrosStats
-                       with BackendStats
-                       with PatternMatchingStats { self: Statistics => }
+  final class GlobalStats extends ReflectStats {
+    val typedIdentCount     = newCounter("#typechecked identifiers")
+    val typedSelectCount    = newCounter("#typechecked selections")
+    val typedApplyCount     = newCounter("#typechecked applications")
+    val rawTypeFailed       = newSubCounter ("  of which in failed", rawTypeCount)
+    val subtypeFailed       = newSubCounter("  of which in failed", subtypeCount)
+    val findMemberFailed    = newSubCounter("  of which in failed", findMemberCount)
+    val failedSilentNanos   = newSubTimer("time spent in failed", typerNanos)
+    val failedApplyNanos    = newSubTimer("  failed apply", typerNanos)
+    val failedOpEqNanos     = newSubTimer("  failed op=", typerNanos)
+    val isReferencedNanos   = newSubTimer("time spent ref scanning", typerNanos)
+    val visitsByType        = newByClass("#visits by tree node", "typer")(newCounter(""))
+    val byTypeNanos         = newByClass("time spent by tree node", "typer")(newStackableTimer("", typerNanos))
+    val byTypeStack         = newTimerStack()
+
+    val rawTypeImpl         = newSubCounter ("  of which in implicits", rawTypeCount)
+    val subtypeImpl         = newSubCounter("  of which in implicit", subtypeCount)
+    val findMemberImpl      = newSubCounter("  of which in implicit", findMemberCount)
+    val subtypeAppInfos     = newSubCounter("  of which in app impl", subtypeCount)
+    val implicitSearchCount = newCounter   ("#implicit searches", "typer")
+    val plausiblyCompatibleImplicits
+    = newSubCounter("  #plausibly compatible", implicitSearchCount)
+    val matchingImplicits   = newSubCounter("  #matching", implicitSearchCount)
+    val typedImplicits      = newSubCounter("  #typed", implicitSearchCount)
+    val foundImplicits      = newSubCounter("  #found", implicitSearchCount)
+    val improvesCount       = newSubCounter("implicit improves tests", implicitSearchCount)
+    val improvesCachedCount = newSubCounter("#implicit improves cached ", implicitSearchCount)
+    val inscopeImplicitHits = newSubCounter("#implicit inscope hits", implicitSearchCount)
+    val oftypeImplicitHits  = newSubCounter("#implicit oftype hits ", implicitSearchCount)
+    val implicitNanos       = newSubTimer  ("time spent in implicits", typerNanos)
+    val inscopeSucceedNanos = newSubTimer  ("  successful in scope", typerNanos)
+    val inscopeFailNanos    = newSubTimer  ("  failed in scope", typerNanos)
+    val oftypeSucceedNanos  = newSubTimer  ("  successful of type", typerNanos)
+    val oftypeFailNanos     = newSubTimer  ("  failed of type", typerNanos)
+    val subtypeETNanos      = newSubTimer  ("  assembling parts", typerNanos)
+    val matchesPtNanos      = newSubTimer  ("  matchesPT", typerNanos)
+    val implicitCacheAccs   = newCounter   ("implicit cache accesses", "typer")
+    val implicitCacheHits   = newSubCounter("implicit cache hits", implicitCacheAccs)
+
+    val macroExpandCount    = newCounter ("#macro expansions", "typer")
+    val macroExpandNanos    = newSubTimer("time spent in macroExpand", typerNanos)
+
+    val bcodeTimer      = newTimer("time in backend", "jvm")
+    val bcodeInitTimer  = newSubTimer("bcode initialization", bcodeTimer)
+    val bcodeGenStat    = newSubTimer("code generation", bcodeTimer)
+    val methodOptTimer  = newSubTimer("intra-method optimizations", bcodeTimer)
+    val bcodeWriteTimer = newSubTimer("classfile writing", bcodeTimer)
+
+    val patmatNanos         = newTimer     ("time spent in patmat", "patmat")
+    val patmatAnaDPLL       = newSubTimer  ("  of which DPLL", patmatNanos)
+    val patmatCNF           = newSubTimer  ("  of which in CNF conversion", patmatNanos)
+    val patmatCNFSizes      = newQuantMap[Int, Counter]("  CNF size counts", "patmat")(newCounter(""))
+    val patmatAnaVarEq      = newSubTimer  ("  of which variable equality", patmatNanos)
+    val patmatAnaExhaust    = newSubTimer  ("  of which in exhaustivity", patmatNanos)
+    val patmatAnaReach      = newSubTimer  ("  of which in unreachability", patmatNanos)
+  }
 
   /** Redefine statistics to include all known global + reflect stats. */
-  object statistics extends Statistics(Global.this, settings) with GlobalStats
+  final val statistics: GlobalStats = new GlobalStats
 
   // Components for collecting and generating output
 
@@ -1227,7 +1278,7 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
       statistics.initFromSettings(settings)
 
       // Report the overhead of statistics measurements per every run
-      if (statistics.canEnable)
+      if (StatisticsStatics.areSomeColdStatsEnabled)
         statistics.reportStatisticsOverhead(reporter)
 
       phase = first   //parserPhase

@@ -272,14 +272,3 @@ trait Interface extends ast.TreeDSL {
     }
   }
 }
-
-trait PatternMatchingStats {
-  self: Statistics =>
-  val patmatNanos         = newTimer     ("time spent in patmat", "patmat")
-  val patmatAnaDPLL       = newSubTimer  ("  of which DPLL", patmatNanos)
-  val patmatCNF           = newSubTimer  ("  of which in CNF conversion", patmatNanos)
-  val patmatCNFSizes      = newQuantMap[Int, Counter]("  CNF size counts", "patmat")(newCounter(""))
-  val patmatAnaVarEq      = newSubTimer  ("  of which variable equality", patmatNanos)
-  val patmatAnaExhaust    = newSubTimer  ("  of which in exhaustivity", patmatNanos)
-  val patmatAnaReach      = newSubTimer  ("  of which in unreachability", patmatNanos)
-}

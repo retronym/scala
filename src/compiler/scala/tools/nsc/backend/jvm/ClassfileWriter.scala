@@ -7,11 +7,12 @@ import java.util.jar.Attributes.Name
 
 import scala.reflect.internal.util.{NoPosition, Statistics}
 import scala.reflect.io._
+import scala.tools.nsc.Global
 import scala.tools.nsc.backend.jvm.BTypes.InternalName
 import scala.tools.nsc.io.{AbstractFile, Jar, JarWriter}
 
 class ClassfileWriter(frontendAccess: PostProcessorFrontendAccess,
-                      statistics: Statistics with BackendStats) {
+                      statistics: Global#GlobalStats) {
   import frontendAccess.{backendReporting, compilerSettings}
 
   // if non-null, asm text files are written to this directory

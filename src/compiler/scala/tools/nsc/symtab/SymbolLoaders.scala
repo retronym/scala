@@ -11,8 +11,7 @@ import java.io.IOException
 import scala.reflect.internal.MissingRequirementError
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
-import scala.reflect.internal.TypesStats
-import scala.reflect.internal.util.Statistics
+import scala.reflect.internal.util.StatisticsStatics
 
 /** This class ...
  *
@@ -314,7 +313,7 @@ abstract class SymbolLoaders {
     protected def description = "class file "+ classfile.toString
 
     protected def doComplete(root: Symbol) {
-      val start = if (statistics.canEnable) statistics.startTimer(statistics.classReadNanos) else null
+      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.classReadNanos) else null
       classfileParser.parse(classfile, clazz, module)
       if (root.associatedFile eq NoAbstractFile) {
         root match {
@@ -326,7 +325,7 @@ abstract class SymbolLoaders {
             debuglog("Not setting associatedFile to %s because %s is a %s".format(classfile, root.name, root.shortSymbolClass))
         }
       }
-      if (statistics.canEnable) statistics.stopTimer(statistics.classReadNanos, start)
+      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.classReadNanos, start)
     }
     override def sourcefile: Option[AbstractFile] = classfileParser.srcfile
   }

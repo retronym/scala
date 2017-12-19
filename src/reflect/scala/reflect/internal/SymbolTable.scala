@@ -11,6 +11,8 @@ import scala.annotation.elidable
 import scala.collection.mutable
 import util._
 import java.util.concurrent.TimeUnit
+
+import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 
 abstract class SymbolTable extends macros.Universe
@@ -51,14 +53,53 @@ abstract class SymbolTable extends macros.Universe
 
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
 
-  trait ReflectStats extends BaseTypeSeqsStats
-                        with TypesStats
-                        with SymbolTableStats
-                        with TreesStats
-                        with SymbolsStats { self: Statistics => }
+  class ReflectStats extends Statistics(this, settings) {
+    val baseTypeSeqCount = newCounter("#base type seqs")
+    val baseTypeSeqLenTotal = newRelCounter("avg base type seq length", baseTypeSeqCount)
+
+    val uniqueTypesView     = newView      ("#unique types")(symbolTable.howManyUniqueTypes)
+    val rawTypeCount        = newCounter   ("#raw type creations")
+    val subtypeCount        = newCounter   ("#subtype ops")
+    val sametypeCount       = newCounter   ("#sametype ops")
+    val lubCount            = newCounter   ("#toplevel lubs/glbs")
+    val nestedLubCount      = newCounter   ("#all lubs/glbs")
+    val findMemberCount     = newCounter   ("#findMember ops")
+    val findMembersCount    = newCounter   ("#findMembers ops")
+    val noMemberCount       = newSubCounter("  of which not found", findMemberCount)
+    val multMemberCount     = newSubCounter("  of which multiple overloaded", findMemberCount)
+    val typerNanos          = newTimer     ("time spent typechecking", "typer")
+    val lubNanos            = newStackableTimer("time spent in lubs", typerNanos)
+    val subtypeNanos        = newStackableTimer("time spent in <:<", typerNanos)
+    val findMemberNanos     = newStackableTimer("time spent in findmember", typerNanos)
+    val findMembersNanos    = newStackableTimer("time spent in findmembers", typerNanos)
+    val asSeenFromNanos     = newStackableTimer("time spent in asSeenFrom", typerNanos)
+    val baseTypeSeqNanos    = newStackableTimer("time spent in baseTypeSeq", typerNanos)
+    val baseClassesNanos    = newStackableTimer("time spent in baseClasses", typerNanos)
+    val compoundBaseTypeSeqCount = newSubCounter("  of which for compound types", baseTypeSeqCount)
+    val typerefBaseTypeSeqCount = newSubCounter("  of which for typerefs", baseTypeSeqCount)
+    val singletonBaseTypeSeqCount = newSubCounter("  of which for singletons", baseTypeSeqCount)
+    val typeOpsStack = newTimerStack()
+
+    val phaseCounter = newCounter("#phase calls")
+    // Defined here because `SymbolLoaders` is defined in `scala.tools.nsc`
+    // and only has access to the `statistics` definition from `scala.reflect`.
+    val classReadNanos = newSubTimer("time classfilereading", typerNanos)
+
+    val treeNodeCount = newView("#created tree nodes")(symbolTable.nodeCount)
+    val nodeByType = newByClass("#created tree nodes by type")(newCounter(""))
+    val retainedCount  = newCounter("#retained tree nodes")
+    val retainedByType = newByClass("#retained tree nodes by type")(newCounter(""))
+
+    val symbolsCount        = newView("#symbols")(symbolTable.getCurrentSymbolIdCount)
+    val typeSymbolCount     = newCounter("#type symbols")
+    val classSymbolCount    = newCounter("#class symbols")
+    val flagsCount          = newCounter("#flags ops")
+    val ownerCount          = newCounter("#owner ops")
+    val nameCount           = newCounter("#name ops")
+  }
 
   /** Some statistics (normally disabled) set with -Ystatistics */
-  val statistics: Statistics with ReflectStats
+  val statistics: ReflectStats
 
   def log(msg: => AnyRef): Unit
 
@@ -187,7 +228,7 @@ abstract class SymbolTable extends macros.Universe
 
   final def atPhaseStack: List[Phase] = List.tabulate(phStackIndex)(i => phStack(i))
   final def phase: Phase = {
-    if (statistics.canEnable)
+    if (StatisticsStatics.areSomeColdStatsEnabled)
       statistics.incCounter(statistics.phaseCounter)
     ph
   }
@@ -439,13 +480,4 @@ abstract class SymbolTable extends macros.Universe
    * Adds the `sm` String interpolator to a [[scala.StringContext]].
    */
   implicit val StringContextStripMarginOps: StringContext => StringContextStripMarginOps = util.StringContextStripMarginOps
-}
-
-trait SymbolTableStats {
-  self: TypesStats with Statistics =>
-
-  val phaseCounter = newCounter("#phase calls")
-  // Defined here because `SymbolLoaders` is defined in `scala.tools.nsc`
-  // and only has access to the `statistics` definition from `scala.reflect`.
-  val classReadNanos = newSubTimer("time classfilereading", typerNanos)
 }

@@ -13,7 +13,7 @@ import scala.tools.nsc.backend.jvm.opt._
  * Implements late stages of the backend that don't depend on a Global instance, i.e.,
  * optimizations, post-processing and classfile serialization and writing.
  */
-abstract class PostProcessor(statistics: Statistics with BackendStats) extends PerRunInit {
+abstract class PostProcessor(statistics: Global#GlobalStats) extends PerRunInit {
   self =>
   val bTypes: BTypes
 
