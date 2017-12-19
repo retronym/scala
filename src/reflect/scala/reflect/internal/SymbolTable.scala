@@ -54,52 +54,54 @@ abstract class SymbolTable extends macros.Universe
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
 
   class ReflectStats extends Statistics(this, settings) {
-    val baseTypeSeqCount = newCounter("#base type seqs")
-    val baseTypeSeqLenTotal = newRelCounter("avg base type seq length", baseTypeSeqCount)
+    final val baseTypeSeqCount = newCounter("#base type seqs")
+    final val baseTypeSeqLenTotal = newRelCounter("avg base type seq length", baseTypeSeqCount)
 
-    val uniqueTypesView     = newView      ("#unique types")(symbolTable.howManyUniqueTypes)
-    val rawTypeCount        = newCounter   ("#raw type creations")
-    val subtypeCount        = newCounter   ("#subtype ops")
-    val sametypeCount       = newCounter   ("#sametype ops")
-    val lubCount            = newCounter   ("#toplevel lubs/glbs")
-    val nestedLubCount      = newCounter   ("#all lubs/glbs")
-    val findMemberCount     = newCounter   ("#findMember ops")
-    val findMembersCount    = newCounter   ("#findMembers ops")
-    val noMemberCount       = newSubCounter("  of which not found", findMemberCount)
-    val multMemberCount     = newSubCounter("  of which multiple overloaded", findMemberCount)
-    val typerNanos          = newTimer     ("time spent typechecking", "typer")
-    val lubNanos            = newStackableTimer("time spent in lubs", typerNanos)
-    val subtypeNanos        = newStackableTimer("time spent in <:<", typerNanos)
-    val findMemberNanos     = newStackableTimer("time spent in findmember", typerNanos)
-    val findMembersNanos    = newStackableTimer("time spent in findmembers", typerNanos)
-    val asSeenFromNanos     = newStackableTimer("time spent in asSeenFrom", typerNanos)
-    val baseTypeSeqNanos    = newStackableTimer("time spent in baseTypeSeq", typerNanos)
-    val baseClassesNanos    = newStackableTimer("time spent in baseClasses", typerNanos)
-    val compoundBaseTypeSeqCount = newSubCounter("  of which for compound types", baseTypeSeqCount)
-    val typerefBaseTypeSeqCount = newSubCounter("  of which for typerefs", baseTypeSeqCount)
-    val singletonBaseTypeSeqCount = newSubCounter("  of which for singletons", baseTypeSeqCount)
-    val typeOpsStack = newTimerStack()
+    final val uniqueTypesView     = newView      ("#unique types")(symbolTable.howManyUniqueTypes)
+    final val rawTypeCount        = newCounter   ("#raw type creations")
+    final val subtypeCount        = newCounter   ("#subtype ops")
+    final val sametypeCount       = newCounter   ("#sametype ops")
+    final val lubCount            = newCounter   ("#toplevel lubs/glbs")
+    final val nestedLubCount      = newCounter   ("#all lubs/glbs")
+    final val findMemberCount     = newCounter   ("#findMember ops")
+    final val findMembersCount    = newCounter   ("#findMembers ops")
+    final val noMemberCount       = newSubCounter("  of which not found", findMemberCount)
+    final val multMemberCount     = newSubCounter("  of which multiple overloaded", findMemberCount)
+    final val typerNanos          = newTimer     ("time spent typechecking", "typer")
+    final val lubNanos            = newStackableTimer("time spent in lubs", typerNanos)
+    final val subtypeNanos        = newStackableTimer("time spent in <:<", typerNanos)
+    final val findMemberNanos     = newStackableTimer("time spent in findmember", typerNanos)
+    final val findMembersNanos    = newStackableTimer("time spent in findmembers", typerNanos)
+    final val asSeenFromNanos     = newStackableTimer("time spent in asSeenFrom", typerNanos)
+    final val baseTypeSeqNanos    = newStackableTimer("time spent in baseTypeSeq", typerNanos)
+    final val baseClassesNanos    = newStackableTimer("time spent in baseClasses", typerNanos)
+    final val compoundBaseTypeSeqCount = newSubCounter("  of which for compound types", baseTypeSeqCount)
+    final val typerefBaseTypeSeqCount = newSubCounter("  of which for typerefs", baseTypeSeqCount)
+    final val singletonBaseTypeSeqCount = newSubCounter("  of which for singletons", baseTypeSeqCount)
+    final val typeOpsStack = newTimerStack()
 
-    val phaseCounter = newCounter("#phase calls")
+    final val phaseCounter = newCounter("#phase calls")
     // Defined here because `SymbolLoaders` is defined in `scala.tools.nsc`
     // and only has access to the `statistics` definition from `scala.reflect`.
-    val classReadNanos = newSubTimer("time classfilereading", typerNanos)
+    final val classReadNanos = newSubTimer("time classfilereading", typerNanos)
 
-    val treeNodeCount = newView("#created tree nodes")(symbolTable.nodeCount)
-    val nodeByType = newByClass("#created tree nodes by type")(newCounter(""))
-    val retainedCount  = newCounter("#retained tree nodes")
-    val retainedByType = newByClass("#retained tree nodes by type")(newCounter(""))
+    final val treeNodeCount = newView("#created tree nodes")(symbolTable.nodeCount)
+    final val nodeByType = newByClass("#created tree nodes by type")(newCounter(""))
+    final val retainedCount  = newCounter("#retained tree nodes")
+    final val retainedByType = newByClass("#retained tree nodes by type")(newCounter(""))
 
-    val symbolsCount        = newView("#symbols")(symbolTable.getCurrentSymbolIdCount)
-    val typeSymbolCount     = newCounter("#type symbols")
-    val classSymbolCount    = newCounter("#class symbols")
-    val flagsCount          = newCounter("#flags ops")
-    val ownerCount          = newCounter("#owner ops")
-    val nameCount           = newCounter("#name ops")
+    final val symbolsCount        = newView("#symbols")(symbolTable.getCurrentSymbolIdCount)
+    final val typeSymbolCount     = newCounter("#type symbols")
+    final val classSymbolCount    = newCounter("#class symbols")
+    final val flagsCount          = newCounter("#flags ops")
+    final val ownerCount          = newCounter("#owner ops")
+    final val nameCount           = newCounter("#name ops")
   }
 
   /** Some statistics (normally disabled) set with -Ystatistics */
-  val statistics: ReflectStats
+  type Stats <: ReflectStats
+  val statistics: Stats = mkStats
+  protected def mkStats: Stats = new ReflectStats().asInstanceOf[Stats]
 
   def log(msg: => AnyRef): Unit
 

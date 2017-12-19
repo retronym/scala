@@ -20,7 +20,6 @@ class JavaUniverse extends InternalSymbolTable with JavaUniverseForce with Refle
   def erasurePhase = SomePhase
   lazy val settings = new Settings
 
-  override final val statistics = new ReflectStats
   private val isLogging = sys.props contains "scala.debug.reflect"
   def log(msg: => AnyRef): Unit = if (isLogging) Console.err.println("[reflect] " + msg)
 

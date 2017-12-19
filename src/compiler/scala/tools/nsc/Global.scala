@@ -220,7 +220,8 @@ class Global(var currentSettings: Settings, var reporter: Reporter)
   }
 
   /** Redefine statistics to include all known global + reflect stats. */
-  final val statistics: GlobalStats = new GlobalStats
+  type Stats = GlobalStats
+  override protected def mkStats = new GlobalStats
 
   // Components for collecting and generating output
 

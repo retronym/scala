@@ -74,8 +74,6 @@ class SymbolTableForUnitTesting extends SymbolTable {
     s
   }
 
-  override lazy val statistics = new ReflectStats(this, settings)
-
    // Members declared in scala.reflect.internal.Required
   def picklerPhase: scala.reflect.internal.Phase = SomePhase
   def erasurePhase: scala.reflect.internal.Phase = SomePhase
