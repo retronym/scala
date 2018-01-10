@@ -102,7 +102,6 @@ object VersionUtil {
     * suffix is used for releases. All other suffix values are treated as RC / milestone builds. The special suffix
     * value "SPLIT" is used to split the real suffix off from `baseVersion` instead and then apply the usual logic. */
   private lazy val versionPropertiesImpl: Def.Initialize[Versions] = Def.setting {
-    val log = sLog.value
     val (date, sha) = (gitProperties.value.date, gitProperties.value.sha)
 
     val (base, suffix) = {
