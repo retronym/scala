@@ -182,31 +182,35 @@ private[internal] trait GlbLubs {
         rest filter (t => !first.typeSymbol.isSubClass(t.typeSymbol)))
   }
 
+  /** From a list of types, retain only maximal types as determined by a `lteq` function. */
+  private def maxTypes(ts: List[Type])(lteq: (Type, Type) => Boolean): List[Type] = {
+    @tailrec def loop(t: Type, ts: List[Type], acc: List[Type]): List[Type] = ts match {
+      case t1 :: ts1 =>
+        if (lteq(t1, t)) loop(if (lteq(t, t1)) t1 else t, ts1, acc)
+        else if (lteq(t, t1)) loop(t1, acc reverse_::: ts1, Nil)
+        else loop(t, ts1, t1 :: acc)
+      case Nil =>
+        t :: acc.reverse
+    }
+
+    ts match {
+      case t1 :: ts1 => loop(t1, ts1, Nil)
+      case Nil => Nil
+    }
+  }
+
   /** Eliminate from list of types all elements which are a supertype
     *  of some other element of the list. */
-  private def elimSuper(ts: List[Type]): List[Type] = ts match {
-    case List() | List(_) => ts
-    case t :: ts1 =>
-      val rest = elimSuper(ts1 filter (t1 => !(t <:< t1)))
-      if (rest exists (t1 => t1 <:< t)) rest else t :: rest
-  }
+  private def elimSuper(ts: List[Type]): List[Type] =
+    maxTypes(ts)((t1, t2) => t2 <:< t1)
 
   /** Eliminate from list of types all elements which are a subtype
     *  of some other element of the list. */
-  private def elimSub(ts: List[Type], depth: Depth): List[Type] = {
-    def elimSub0(ts: List[Type]): List[Type] = ts match {
-      case List() => ts
-      case List(t) => ts
-      case t :: ts1 =>
-        val rest = elimSub0(ts1 filter (t1 => !isSubType(t1, t, depth.decr)))
-        if (rest exists (t1 => isSubType(t, t1, depth.decr))) rest else t :: rest
-    }
-    val ts0 = elimSub0(ts)
-    if (ts0.isEmpty || ts0.tail.isEmpty) ts0
-    else {
-      val ts1 = ts0 mapConserve (t => elimAnonymousClass(t.dealiasWiden))
-      if (ts1 eq ts0) ts0
-      else elimSub(ts1, depth)
+  @tailrec private def elimSub(ts: List[Type], depth: Depth): List[Type] = {
+    val ts1 = maxTypes(ts)(isSubType(_, _, depth.decr))
+    if (ts1.lengthCompare(1) <= 0) ts1 else {
+      val ts2 = ts1.mapConserve(t => elimAnonymousClass(t.dealiasWiden))
+      if (ts1 eq ts2) ts1 else elimSub(ts2, depth)
     }
   }
 
