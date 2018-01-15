@@ -186,7 +186,7 @@ private[internal] trait GlbLubs {
   private def maxTypes(ts: List[Type])(lteq: (Type, Type) => Boolean): List[Type] = {
     @tailrec def loop(t: Type, ts: List[Type], acc: List[Type]): List[Type] = ts match {
       case t1 :: ts1 =>
-        if (lteq(t1, t)) loop(if (lteq(t, t1)) t1 else t, ts1, acc)
+        if (lteq(t1, t)) loop(if (lteq(t, t1) && t.exists(_.isWildcard)) t1 else t, ts1, acc)
         else if (lteq(t, t1)) loop(t1, acc reverse_::: ts1, Nil)
         else loop(t, ts1, t1 :: acc)
       case Nil =>
