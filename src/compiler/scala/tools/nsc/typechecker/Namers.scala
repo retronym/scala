@@ -740,22 +740,26 @@ trait Namers extends MethodSynthesis {
 
     def enterTypeDef(tree: TypeDef) = assignAndEnterFinishedSymbol(tree)
 
-    def enterDefDef(tree: DefDef): Unit = tree match {
-      case DefDef(_, nme.CONSTRUCTOR, _, _, _, _) =>
-        assignAndEnterFinishedSymbol(tree)
-      case DefDef(mods, name, _, _, _, _) =>
-        val bridgeFlag = if (mods hasAnnotationNamed tpnme.bridgeAnnot) BRIDGE | ARTIFACT else 0
-        val sym = enterInScope(assignMemberSymbol(tree)) setFlag bridgeFlag
+    def enterDefDef(tree: DefDef): Unit = {
+      tree match {
+        case DefDef(_, nme.CONSTRUCTOR, _, _, _, _) =>
+          assignAndEnterFinishedSymbol(tree)
+        case DefDef(mods, name, _, _, _, _) =>
+          val bridgeFlag = if (mods hasAnnotationNamed tpnme.bridgeAnnot) BRIDGE | ARTIFACT else 0
+          val sym = enterInScope(assignMemberSymbol(tree)) setFlag bridgeFlag
 
-        val completer =
-          if (sym hasFlag SYNTHETIC) {
-            if (name == nme.copy) copyMethodCompleter(tree)
-            else if (sym hasFlag CASE) applyUnapplyMethodCompleter(tree, context)
-            else completerOf(tree)
-          } else completerOf(tree)
+          val completer =
+            if (sym hasFlag SYNTHETIC) {
+              if (name == nme.copy) copyMethodCompleter(tree)
+              else if (sym hasFlag CASE) applyUnapplyMethodCompleter(tree, context)
+              else completerOf(tree)
+            } else completerOf(tree)
 
-        sym setInfo completer
+          sym setInfo completer
       }
+      if (mexists(tree.vparamss)(_.mods.hasDefault))
+        enterDefaultGetters(tree.symbol, tree, tree.vparamss, tree.tparams)
+    }
 
     def enterClassDef(tree: ClassDef) {
       val ClassDef(mods, _, _, impl) = tree
@@ -1174,6 +1178,12 @@ trait Namers extends MethodSynthesis {
       val module = clazz.sourceModule
       for (cda <- module.attachments.get[ConstructorDefaultsAttachment]) {
         debuglog(s"Storing the template namer in the ConstructorDefaultsAttachment of ${module.debugLocationString}.")
+        if (cda.defaults.nonEmpty) {
+          for (sym <- cda.defaults) {
+            decls.enter(sym)
+          }
+          cda.defaults.clear()
+        }
         cda.companionModuleClassNamer = templateNamer
       }
       val classTp = ClassInfoType(parents, decls, clazz)
@@ -1427,6 +1437,76 @@ trait Namers extends MethodSynthesis {
     }
 
     /**
+     * For every default argument, insert a method symbol computing that default
+     */
+    private def enterDefaultGetters(meth: Symbol, ddef: DefDef, vparamss: List[List[ValDef]], tparams: List[TypeDef]) {
+      val methOwner  = meth.owner
+      val isConstr   = meth.isConstructor
+
+      // cache the namer used for entering the default getter symbols
+      var ownerNamer: Option[Namer] = None
+      var moduleNamer: Option[Namer] = None
+      var posCounter = 1
+
+      mforeach(vparamss){(vparam) =>
+        // true if the corresponding parameter of the base class has a default argument
+        if (vparam.mods.hasDefault) {
+          val name = nme.defaultGetterName(meth.name, posCounter)
+
+          def createAndEnter(f: Symbol => Symbol): Unit = {
+            if (isConstr) {
+              moduleNamer match {
+                case Some(namer) =>
+                  namer.enterInScope(f(namer.owner))
+                case None =>
+                  val module = companionSymbolOf(methOwner, context)
+                  val default = f(module.moduleClass)
+                  module.attachments.get[ConstructorDefaultsAttachment] match {
+                    case Some(cda) =>
+                      if (cda.companionModuleClassNamer != null)
+                        cda.companionModuleClassNamer.enterInScope(default)
+                      else
+                        // defer entry until the companion module body it type completed
+                        cda.defaults += default
+                    case _ =>
+                      // ignore error to fix #3649 (prevent crash in erroneous source code)
+                  }
+              }
+            } else {
+              val parentNamer: Namer = ownerNamer getOrElse {
+                val ctx = context.nextEnclosing(c => c.scope.toList.contains(meth)) // TODO use lookup rather than toList.contains
+                assert(ctx != NoContext, meth)
+                val nmr = newNamer(ctx)
+                ownerNamer = Some(nmr)
+                nmr
+              }
+              parentNamer.enterInScope(f(parentNamer.context.owner))
+            }
+          }
+
+          createAndEnter { owner: Symbol =>
+            methOwner.resetFlag(INTERFACE) // there's a concrete member now
+            val default = owner.newMethodSymbol(name, vparam.pos, paramFlagsToDefaultGetter(meth.flags))
+            default.setPrivateWithin(meth.privateWithin)
+            default.referenced = meth
+            if (meth.name == nme.apply && meth.hasAllFlags(CASE | SYNTHETIC)) {
+              val att = meth.attachments.get[CaseApplyDefaultGetters].getOrElse({
+                val a = new CaseApplyDefaultGetters()
+                meth.updateAttachment(a)
+                a
+              })
+              att.defaultGetters += default
+            }
+            if (default.owner.isTerm)
+              saveDefaultGetter(meth, default)
+            default
+          }
+        }
+        posCounter += 1
+      }
+    }
+
+    /**
      * For every default argument, insert a method computing that default
      *
      * Also adds the "override" and "defaultparam" (for inherited defaults) flags
@@ -1558,19 +1638,15 @@ trait Namers extends MethodSynthesis {
             val defaultTree = atPos(vparam.pos.focus) {
               DefDef(Modifiers(paramFlagsToDefaultGetter(meth.flags), ddef.mods.privateWithin) | oflag, name, defTparams, defVparamss, defTpt, defRhs)
             }
-            if (!isConstr)
-              methOwner.resetFlag(INTERFACE) // there's a concrete member now
-            val default = parentNamer.enterSyntheticSym(defaultTree)
-            if (meth.name == nme.apply && meth.hasAllFlags(CASE | SYNTHETIC)) {
-              val att = meth.attachments.get[CaseApplyDefaultGetters].getOrElse({
-                val a = new CaseApplyDefaultGetters()
-                meth.updateAttachment(a)
-                a
-              })
-              att.defaultGetters += default
+            def referencesThis(sym: Symbol) = sym match {
+              case term: TermSymbol => term.referenced == meth
+              case _ => false
             }
-            if (default.owner.isTerm)
-              saveDefaultGetter(meth, default)
+            val defaultGetterSym = parentNamer.context.scope.lookup(name).filter(referencesThis)
+            assert(defaultGetterSym != NoSymbol, (parentNamer.owner, name))
+            defaultTree.setSymbol(defaultGetterSym)
+            defaultGetterSym.setInfo(parentNamer.completerOf(defaultTree))
+            parentNamer.context.unit.synthetics(defaultGetterSym) = defaultTree
           }
           else if (baseHasDefault) {
             // the parameter does not have a default itself, but the

@@ -1220,11 +1220,15 @@ trait Contexts { self: Analyzer =>
       var res: Symbol = NoSymbol
       var ctx = this
       while (res == NoSymbol && ctx.outer != ctx) {
-        val s = ctx.scope lookup name
-        if (s != NoSymbol && s.owner == expectedOwner)
-          res = s
-        else
-          ctx = ctx.outer
+        ctx.scope.lookupUnshadowedEntries(name).filter(s => s.sym != NoSymbol && s.sym.owner == expectedOwner).toList match {
+          case found :: Nil =>
+            res = found.sym
+          case alt1 :: others =>
+            // TODO what to do here?
+            res = alt1.sym
+          case _ =>
+            ctx = ctx.outer
+        }
       }
       res
     }

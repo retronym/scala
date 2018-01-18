@@ -153,6 +153,35 @@ class DeterminismTest {
     test(List(List(macroCode), code))
   }
 
+  @Test def testDefaults(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |package demo
+          |
+          |class a {
+          |  def x(a: Any = "x") = {
+          |  }
+          |  def y(a: Any = "y") = {
+          |  }
+          |}
+          |
+      """.stripMargin),
+      source("b.scala",
+        """
+          |package demo
+          |
+          |class b {
+          |  def test: Unit = {
+          |    new a().y()
+          |  }
+          |}
+        """.stripMargin)
+
+    )
+    test(List(code))
+  }
+
   @Test def testParamAlias(): Unit = {
     def code = List[SourceFile](
       source("a.scala",
@@ -242,6 +271,97 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def testDefaultsStaticForwarders(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |package demo
+          |
+          |case class ToolBoxError(message: String, cause: Throwable = null) extends Throwable(message, cause)
+          |
+      """.stripMargin),
+      source("b.scala",
+        """
+          |package demo
+          |
+          |class b {
+          |   new ToolBoxError("")
+          |}
+        """.stripMargin),
+      source("c.scala",
+        """
+          |package demo
+          |
+          |class c {
+          |   ToolBoxError("")
+          |}
+        """.stripMargin)
+
+    )
+    test(List(code))
+  }
+
+  @Test def testDefaultsMixinForwarders(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |package demo
+          |
+          |trait a {
+          |  def x(a: Any = "x") = {
+          |  }
+          |  def y(a: Any = "y") = {
+          |  }
+          |}
+          |class sub extends a
+          |
+      """.stripMargin),
+      source("b.scala",
+        """
+          |package demo
+          |
+          |class b {
+          |  def test: Unit = {
+          |    (a: a) => a.y()
+          |  }
+          |}
+        """.stripMargin)
+
+    )
+    test(List(code))
+  }
+
+  @Test def testConstructorDefaults1(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class a1(x: Int = 42)
+          |object a1 {
+          |  def foo(y: Int = 42) = ()
+          |}
+          |
+      """.stripMargin),
+      source("b.scala", "class b { new a1() }"),
+      source("b.scala", "class d { a1.foo() }")
+    )
+    test(List(code))
+  }
+  @Test def testConstructorDefaults2(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class a2(x: Int = 42)
+          |object a2 {
+          |  def foo(y: Int = 42) = ()
+          |}
+          |
+      """.stripMargin),
+      source("b.scala", "class c { new a2() }"),
+      source("c.scala", "class e { a2.foo() }")
+    )
+    test(List(code))
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
   private def test(groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")
@@ -279,7 +399,7 @@ class DeterminismTest {
       val recompileOutput = Files.createTempDirectory("recompileOutput")
       copyRecursive(referenceOutput, recompileOutput)
       compile(recompileOutput, permutation)
-      assert(diff(referenceOutput, recompileOutput), s"Difference detected between $referenceOutput and $recompileOutput recompiling $permutation")
+      assert(diff(referenceOutput, recompileOutput), s"Difference detected between recompiling $permutation Run:\njardiff -r $referenceOutput $recompileOutput\n")
       deleteRecursive(recompileOutput)
     }
     deleteRecursive(referenceOutput)

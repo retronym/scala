@@ -211,7 +211,7 @@ abstract class Mixin extends InfoTransform with ast.TreeDSL with AccessorSynthes
 
     /* Mix in members of implementation class mixinClass into class clazz */
     def mixinTraitForwarders(mixinClass: Symbol) {
-      for (member <- mixinClass.info.decls ; if isImplementedStatically(member)) {
+      for (member <- mixinClass.info.decls.toList.sortBy(_.name) ; if isImplementedStatically(member)) {
         member overridingSymbol clazz match {
           case NoSymbol =>
             val isMemberOfClazz = clazz.info.findMember(member.name, 0, 0L, stableOnly = false).alternatives.contains(member)
