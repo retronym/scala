@@ -62,6 +62,7 @@ abstract class RefChecks extends Transform {
   val toScalaRepeatedParam = new SubstSymMap(JavaRepeatedParamClass -> RepeatedParamClass)
 
   def accessFlagsToString(sym: Symbol) = flagsToString(
+
     sym getFlag (PRIVATE | PROTECTED),
     if (sym.hasAccessBoundary) "" + sym.privateWithin.name else ""
   )

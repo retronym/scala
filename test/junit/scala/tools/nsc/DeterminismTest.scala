@@ -153,6 +153,27 @@ class DeterminismTest {
     test(List(List(macroCode), code))
   }
 
+  @Test def testParamAlias(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class a(val x: Int)
+        """.stripMargin),
+      source("b.scala",
+        """
+          |class b(x: Int) extends a(x)
+        """.stripMargin),
+      source("c.scala",
+        """
+          |class c(x: Int) extends b(x) {
+          |  def test = x
+          |}
+        """.stripMargin)
+
+    )
+    test(List(code))
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
   private def test(groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")

@@ -50,6 +50,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   // Symbols of ValDefs for right-associative operator desugaring which are passed by name and have been inlined
   private val inlinedRightAssocValDefs = new mutable.HashSet[Symbol]
 
+  /** A map from primary constructors symbols to the symbol of the super-constructor that they delegate to */
+  val superConstructorCalls: mutable.AnyRefMap[Symbol, collection.Map[Symbol, Symbol]] = perRunCaches.newAnyRefMap()
+
   // allows override of the behavior of the resetTyper method w.r.t comments
   def resetDocComments() = clearDocComments()
 
@@ -2080,7 +2083,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     /** Enter all aliases of local parameter accessors.
      */
-    def computeParamAliases(clazz: Symbol, vparamss: List[List[ValDef]], rhs: Tree) {
+    def computeParamAliases(meth: Symbol, vparamss: List[List[ValDef]], rhs: Tree) {
+      val clazz = meth.owner
       debuglog(s"computing param aliases for $clazz:${clazz.primaryConstructor.tpe}:$rhs")
       val pending = ListBuffer[AbsTypeError]()
 
@@ -2122,27 +2126,22 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         if (!superClazz.isJavaDefined) {
           val superParamAccessors = superClazz.constrParamAccessors
           if (sameLength(superParamAccessors, superArgs)) {
+            val accToSuperAcc = mutable.AnyRefMap[Symbol, Symbol]()
             for ((superAcc, superArg@Ident(name)) <- superParamAccessors zip superArgs) {
               if (mexists(vparamss)(_.symbol == superArg.symbol)) {
-                val alias = (
-                  superAcc.initialize.alias
-                  orElse (superAcc getterIn superAcc.owner)
-                  filter (alias => superClazz.info.nonPrivateMember(alias.name) == alias)
-                  )
-                if (alias.exists && !alias.accessed.isVariable && !isRepeatedParamType(alias.accessed.info)) {
-                  val ownAcc = clazz.info decl name suchThat (_.isParamAccessor) match {
-                    case acc if !acc.isDeferred && acc.hasAccessorFlag => acc.accessed
-                    case acc => acc
-                  }
-                  ownAcc match {
-                    case acc: TermSymbol if !acc.isVariable && !isByNameParamType(acc.info) =>
-                      debuglog(s"$acc has alias ${alias.fullLocationString}")
-                      acc setAlias alias
-                    case _ =>
-                  }
+                val ownAcc = clazz.info decl name suchThat (_.isParamAccessor) match {
+                  case acc if !acc.isDeferred && acc.hasAccessorFlag => acc.accessed
+                  case acc => acc
+                }
+                ownAcc match {
+                  case acc: TermSymbol if !acc.isVariable && !isByNameParamType(acc.info) =>
+                    accToSuperAcc(acc) = superAcc
+                  case _ =>
                 }
               }
             }
+            if (!accToSuperAcc.isEmpty)
+              superConstructorCalls(clazz) = accToSuperAcc
           }
         }
       }
@@ -2300,7 +2299,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         // would blow up in computeParamAliases; there's nothing to be computed for them
         // anyway.
         if (meth.isPrimaryConstructor)
-          computeParamAliases(meth.owner, vparamss1, rhs1)
+          computeParamAliases(meth, vparamss1, rhs1)
         else
           checkSelfConstructorArgs(ddef, meth.owner)
       }

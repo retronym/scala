@@ -8,8 +8,9 @@ package scala
 package tools.nsc
 package typechecker
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import mutable.ListBuffer
+import scala.tools.nsc.transform.InfoTransform
 import symtab.Flags._
 
 /** This phase performs the following functions, each of which could be split out in a
@@ -54,7 +55,7 @@ import symtab.Flags._
  *
  *  TODO: Rename phase to "Accessors" because it handles more than just super accessors
  */
-abstract class SuperAccessors extends transform.Transform with transform.TypingTransformers {
+abstract class SuperAccessors extends transform.Transform with InfoTransform with transform.TypingTransformers {
   import global._
   import definitions._
   import analyzer.restrictionError
@@ -64,6 +65,29 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
 
   /** The following flags may be set by this phase: */
   override def phaseNewFlags: Long = notPRIVATE
+
+  override def transformInfo(sym: global.Symbol, tpe: global.Type): global.Type = {
+    if (sym.isClass && !sym.isTrait && !sym.hasPackageFlag && !sym.isJavaDefined) {
+      afterOwnPhase(tpe.firstParent.typeSymbol.info) // force `setAlias` calls in superclass before reading it below.
+      for ((ownAcc, superAcc) <- analyzer.superConstructorCalls.getOrElse(sym, Nil)) {
+        val superClazz = sym.superClass
+        val alias = (
+          superAcc.initialize.alias
+            orElse (superAcc getterIn superAcc.owner)
+            filter (alias => superClazz.info.nonPrivateMember(alias.name) == alias)
+          )
+        if (alias.exists && !alias.accessed.isVariable && !isRepeatedParamType(alias.accessed.info)) {
+          ownAcc match {
+            case acc: TermSymbol if !acc.isVariable && !isByNameParamType(acc.info) =>
+              debuglog(s"$acc has alias ${alias.fullLocationString}")
+              acc setAlias alias
+            case _ =>
+          }
+        }
+      }
+    }
+    tpe
+  }
 
   protected def newTransformer(unit: CompilationUnit): Transformer =
     new SuperAccTransformer(unit)
@@ -307,6 +331,8 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
                 val pre = SuperType(sym.owner.tpe, qual.tpe)
                 localTyper.context.isAccessible(sym, pre, superAccess = true)
               }
+
+              afterOwnPhase(sym.owner.info)
 
               // Direct calls to aliases of param accessors to the superclass in order to avoid
               // duplicating fields.
