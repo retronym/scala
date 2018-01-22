@@ -174,6 +174,20 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def testMixinOuterAccesorPos(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class a { trait inner { def aa = a.this }}
+      """.stripMargin),
+      source("b.scala",
+        """
+          |class b extends a { class z extends inner}
+        """.stripMargin)
+    )
+    test(List(code))
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
   private def test(groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")
