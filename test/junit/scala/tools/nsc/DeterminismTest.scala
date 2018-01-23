@@ -220,6 +220,28 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def declOrder(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |object A {
+          |  trait AA {
+          |    def a(x: c, y: c.x) = ()
+          |    val b       = ()
+          |    case class c(); object c { class x }
+          |    val d        = ()
+          |  }
+          |}
+      """.stripMargin),
+      source("b.scala",
+        """
+          |class Test extends A.AA{
+          |}
+        """.stripMargin)
+    )
+    test(List(code))
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
   private def test(groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")

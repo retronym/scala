@@ -35,24 +35,50 @@ abstract class Pickler extends SubComponent {
   class PicklePhase(prev: Phase) extends StdPhase(prev) {
     def apply(unit: CompilationUnit) {
       def pickle(tree: Tree) {
-        def add(sym: Symbol, pickle: Pickle) = {
-          if (currentRun.compiles(sym) && !currentRun.symData.contains(sym)) {
-            debuglog("pickling " + sym)
-            pickle putSymbol sym
-            currentRun.symData(sym) = pickle
-          }
+        def add(sym: Symbol, pickle: Pickle) = withPickle(sym, pickle){ pickle =>
+          debuglog("pickling " + sym)
+          pickle putSymbol sym
+          currentRun.symData(sym) = pickle
         }
+
+        def withPickle(sym: Symbol, pickle: Pickle)(f: Pickle => Unit) =
+          if (currentRun.compiles(sym) && !currentRun.symData.contains(sym)) {
+            f(pickle)
+          }
 
         tree match {
           case PackageDef(_, stats) =>
             stats foreach pickle
           case ClassDef(_, _, _, _) | ModuleDef(_, _, _) =>
             val sym = tree.symbol
-            val pickle = new Pickle(sym)
-            add(sym, pickle)
-            add(sym.companionSymbol, pickle)
-            pickle.writeArray()
-            currentRun registerPickle sym
+
+            def shouldPickle(sym: Symbol) = currentRun.compiles(sym) && !currentRun.symData.contains(sym)
+            val shouldPickleSym = shouldPickle(sym)
+            if (shouldPickleSym) {
+              val pickle = new Pickle(sym)
+              def reserveDeclEntries(sym: Symbol): Unit = {
+                if (sym.isClass) {
+                  sym.info.decls.foreach(decl => pickle.reserveEntry(decl))
+                  sym.info.decls.foreach(reserveDeclEntries)
+                } else if (sym.isModule) {
+                  reserveDeclEntries(sym.moduleClass)
+                }
+              }
+              val companion = sym.companionSymbol.filter(_.owner == sym.owner) // exclude companionship between package- and package object-owned symbols.
+              val shouldPickleCompanion = shouldPickle(companion)
+              reserveDeclEntries(sym)
+              if (shouldPickleCompanion) reserveDeclEntries(companion)
+              pickle.putSymbol(sym)
+              currentRun.symData(sym) = pickle
+
+              if (shouldPickleCompanion) {
+                pickle.putSymbol(companion)
+                currentRun.symData(companion) = pickle
+              }
+
+              pickle.writeArray()
+              currentRun registerPickle sym
+            }
           case _ =>
         }
       }
@@ -121,23 +147,46 @@ abstract class Pickler extends SubComponent {
     private def isExternalSymbol(sym: Symbol): Boolean = (sym != NoSymbol) && !isLocalToPickle(sym)
 
     // Phase 1 methods: Populate entries/index ------------------------------------
+    private val reserved = mutable.AnyRefMap[Symbol, Int]()
+    def reserveEntry(sym: Symbol): Unit = {
+      reserved(sym) = ep
+      ep += 1
+    }
 
     /** Store entry e in index at next available position unless
      *  it is already there.
      *
-     *  @return      true iff entry is new.
+     *  @return      true iff entry is new
      */
     private def putEntry(entry: AnyRef): Boolean = index.get(entry) match {
       case Some(_) => false
       case None =>
-        if (ep == entries.length) {
-          val entries1 = new Array[AnyRef](ep * 2)
-          System.arraycopy(entries, 0, entries1, 0, ep)
-          entries = entries1
+        def ensureCapacity = {
+          if (ep >= entries.length) {
+            val entries1 = new Array[AnyRef](ep * 2)
+            System.arraycopy(entries, 0, entries1, 0, entries.length)
+            entries = entries1
+          }
         }
-        entries(ep) = entry
-        index(entry) = ep
-        ep = ep + 1
+        entry match {
+          case sym: Symbol =>
+            reserved.get(sym) match {
+              case Some(reservedId) =>
+                ensureCapacity
+                entries(reservedId) = entry
+                index(entry) = reservedId
+              case None =>
+                ensureCapacity
+                entries(ep) = entry
+                index(entry) = ep
+                ep = ep + 1
+            }
+          case _ =>
+            ensureCapacity
+            entries(ep) = entry
+            index(entry) = ep
+            ep = ep + 1
+        }
         true
     }
 
