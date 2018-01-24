@@ -563,6 +563,7 @@ abstract class Pickler extends SubComponent {
       // begin writeEntry
       // The picklerTag method can't determine if it's an external symbol reference
       val tag = entry match {
+        case null => // ignore this to guard against bugs in the way pickler reserves entries based on a decl walk before adding entries.
         case sym: Symbol if isExternalSymbol(sym) => if (sym.isModuleClass) EXTMODCLASSref else EXTref
         case _                                    => picklerTag(entry)
       }
