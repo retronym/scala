@@ -403,23 +403,45 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** Return all symbols as an iterator in the order they were entered in this scope.
      */
-    def iterator: Iterator[Symbol] = toList.iterator
+    def iterator: Iterator[Symbol] = {
+      new ScopeSymbolIterator() //.indeclOrder
+    }
+    private final class ScopeSymbolIterator extends Iterator[Symbol] {
+      def indeclOrder: Iterator[Symbol] = super.reversed.iterator
+      private var e = elems
+      override def hasNext: Boolean = {
+        (e ne null) && e.owner == Scope.this
+      }
+      override def next(): Symbol = {
+        val result = e.sym
+        e = e.next
+        result
+      }
+    }
 
-    override def foreach[U](p: Symbol => U): Unit = toList foreach p
+    override def foreach[U](p: Symbol => U): Unit = iterator foreach p
 
     override def filterNot(p: Symbol => Boolean): Scope = (
-      if (toList exists p) newScopeWith(toList filterNot p: _*)
+      if (iterator exists p) {
+        val scope = newScopeWith()
+        iterator.filterNot(p).foreach(scope.enter)
+        scope
+      }
       else this
     )
     override def filter(p: Symbol => Boolean): Scope = (
-      if (toList forall p) this
-      else newScopeWith(toList filter p: _*)
+      if (iterator forall p) this
+      else {
+        val scope = newScopeWith()
+        iterator.filter(p).foreach(scope.enter)
+        scope
+      }
     )
     @deprecated("use `toList.reverse` instead", "2.10.0") // Used in sbt 0.12.4
     def reverse: List[Symbol] = toList.reverse
 
     override def mkString(start: String, sep: String, end: String) =
-      toList.map(_.defString).mkString(start, sep, end)
+      iterator.map(_.defString).mkString(start, sep, end)
 
     override def toString(): String = mkString("Scope{\n  ", ";\n  ", "\n}")
   }

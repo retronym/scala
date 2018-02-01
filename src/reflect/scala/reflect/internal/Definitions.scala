@@ -1195,8 +1195,8 @@ trait Definitions extends api.StandardDefinitions {
       val sym = RuntimePackageClass.newClassSymbol(tpnme.AnnotationDefaultATTR, NoPosition, 0L)
       sym setInfo ClassInfoType(List(AnnotationClass.tpe), newScope, sym)
       markAllCompleted(sym)
-      RuntimePackageClass.info.decls.toList.filter(_.name == sym.name) match {
-        case existing :: _ =>
+      RuntimePackageClass.info.decls.find(_.name == sym.name) match {
+        case Some(existing) =>
           existing.asInstanceOf[ClassSymbol]
         case _ =>
           RuntimePackageClass.info.decls enter sym
