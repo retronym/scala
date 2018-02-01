@@ -296,6 +296,13 @@ trait Contexts { self: Analyzer =>
     /** ...or an Apply. */
     def enclosingApply = nextEnclosing(_.tree.isInstanceOf[Apply])
 
+    @tailrec
+    final def enclosingImport: Context = this match {
+      case _: ImportContext => this
+      case NoContext => this
+      case _ => outer.enclosingImport
+    }
+
     def siteString = {
       def what_s  = if (owner.isConstructor) "" else owner.kindString
       def where_s = if (owner.isClass) "" else "in " + enclClass.owner.decodedName
@@ -1105,8 +1112,9 @@ trait Contexts { self: Analyzer =>
       if (symbolDepth < 0)
         symbolDepth = cx.depth
 
+      var impSym: Symbol = NoSymbol
       val importsIterator = new ImportIterator(this, name)
-      import importsIterator.{impSym, imports, imp1, imp2, sameDepth, imp1Explicit, imp2Explicit}
+      import importsIterator.{imp1, imp2, sameDepth, imp1Explicit, imp2Explicit}
 
       def lookupImport(imp: ImportInfo, requireExplicit: Boolean) =
         importedAccessibleSymbol(imp, name, requireExplicit, record = true) filter qualifies
@@ -1132,7 +1140,7 @@ trait Contexts { self: Analyzer =>
       while (!impSym.exists && importsIterator.importsNonEmpty && depthOk(importsIterator.imp1)) {
         importsIterator.impSym = lookupImport(imp1, requireExplicit = false)
         if (!impSym.exists)
-          importsIterator.next()
+          importsIterator.advance()
       }
 
       if (defSym.exists && impSym.exists) {
@@ -1158,7 +1166,7 @@ trait Contexts { self: Analyzer =>
         //   - imp1 is a wildcard import, so all explicit imports from outer scopes must be checked
         def keepLooking = (
              lookupError == null
-          && importsIterator.imports.tail.nonEmpty
+          && importsIterator.importsTailNonEmpty
           && (sameDepth || !imp1Explicit)
         )
         // If we find a competitor imp2 which imports the same name, possible outcomes are:
@@ -1181,10 +1189,11 @@ trait Contexts { self: Analyzer =>
           val other = lookupImport(imp2, requireExplicit = !sameDepth)
 
           if (!other.exists) // imp1 wins; drop imp2 and continue.
-            importsIterator.imp1wins()
-          else if (sameDepth && !imp1Explicit && imp2Explicit) // imp2 wins; drop imp1 and continue.
-            importsIterator.imp2wins(other)
-          else resolveAmbiguousImport(name, imp1, imp2) match {
+            importsIterator.advanceImp2()
+          else if (sameDepth && !imp1Explicit && imp2Explicit) { // imp2 wins; drop imp1 and continue.
+            impSym = other
+            importsIterator.advance()
+          } else resolveAmbiguousImport(name, imp1, imp2) match {
             case Some(imp) => if (imp eq imp1) importsIterator.imp1wins() else importsIterator.imp2wins(other)
             case _         => lookupError = ambiguousImports(imp1, imp2)
           }
@@ -1502,18 +1511,21 @@ trait Contexts { self: Analyzer =>
   val ImportType = global.ImportType
 
   private class ImportIterator(var ctx: Context, name: Name) {
-    def next(): Unit = imports = imports.tail
-    var impSym: Symbol = NoSymbol
-    var imports        = ctx.imports
-    def importsNonEmpty = imports.nonEmpty
-    def imp1           = imports.head
-    def imp2           = imports.tail.head
+    private var imp1Ctx = ctx.enclosingImport
+    private var imp2Ctx = imp1Ctx.outer.enclosingImport
+    def advance(): Unit = {
+      imp1Ctx = imp2Ctx; imp2Ctx = imp1Ctx.outer.enclosingImport
+    }
+    def advanceImp2(): Unit = {
+      imp2Ctx = imp2Ctx.outer.enclosingImport
+    }
+    def importsNonEmpty = imp1Ctx.importOrNull != null
+    def importsTailNonEmpty = imp2Ctx.importOrNull != null
+    def imp1           = imp1Ctx.importOrNull
+    def imp2           = imp2Ctx.importOrNull
     def sameDepth      = imp1.depth == imp2.depth
     def imp1Explicit   = imp1 isExplicitImport name
     def imp2Explicit   = imp2 isExplicitImport name
-    def imp1wins() = { imports = imp1 :: imports.tail.tail }
-    def imp2wins(other: Symbol) = { impSym = other ; imports = imports.tail }
-
   }
 }
 
