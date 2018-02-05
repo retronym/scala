@@ -3,12 +3,17 @@
  */
 package scala.tools.nsc.classpath
 
+import java.net.URI
+import java.nio.file.{FileSystem, FileSystems, Files, Path}
+
 import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
 import org.junit.Assert._
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
+import scala.reflect.io.VirtualDirectory.id
 import scala.reflect.io.{AbstractFile, PlainNioFile, VirtualDirectory}
 import scala.tools.nsc.util.ClassPath
 
@@ -24,12 +29,29 @@ class VirtualDirectoryClassPathTest {
 
   @Test
   def testVirtualNioFilesystem(): Unit = {
-    val fileSystem = VirtualDirectory.newNioVirtualDirectory("base")
+    val (name, fileSystem) = VirtualDirectory.newNioVirtualDirectory("base")
     try {
       val root = fileSystem.getPath("/")
       test(new PlainNioFile(root), NioDirectoryClassPath(fileSystem.getPath("/")))
     } finally {
       fileSystem.close()
+    }
+  }
+
+  @Test
+  def testAnoymousVirtualNioFilesystem(): Unit = {
+    val fileSystem = VirtualDirectory.newAnonymousNioVirtualDirectory()
+    val root = fileSystem.getPath("/")
+    test(new PlainNioFile(root), NioDirectoryClassPath(fileSystem.getPath("/")))
+  }
+
+  @Test
+  def testAnoymousFileSystemDoesNotLeak(): Unit = {
+    val content = new Array[Byte](8 * 1024 * 1024)
+    (1 to 1024) foreach  { _ =>
+      val fileSystem = VirtualDirectory.newAnonymousNioVirtualDirectory()
+      val root: Path = fileSystem.getPath("/")
+      Files.write(root.resolve("data"), content)
     }
   }
 

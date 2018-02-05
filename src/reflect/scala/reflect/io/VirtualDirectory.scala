@@ -6,10 +6,13 @@ package scala
 package reflect
 package io
 
+import java.lang.reflect.Field
+import java.nio.file.spi.FileSystemProvider
 import java.util.concurrent.atomic.AtomicInteger
 
-import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
+import com.github.marschall.memoryfilesystem.{MemoryFileSystemBuilder, MemoryFileSystemProvider}
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.collection.mutable
 
 /**
@@ -79,7 +82,28 @@ extends AbstractFile {
 
 object VirtualDirectory {
   private val id = new AtomicInteger()
-  def newNioVirtualDirectory(name: String): java.nio.file.FileSystem = {
-    MemoryFileSystemBuilder.newEmpty().build(name + "$" + id.incrementAndGet())
+  private lazy val provider: FileSystemProvider = java.nio.file.spi.FileSystemProvider.installedProviders().iterator().asScala.find(_.getScheme == "memory").orNull
+
+  /** Creates a named virtual filesystem. The caller must close the filesystem to release resources. */
+  def newNioVirtualDirectory(namePrefix: String): (String, java.nio.file.FileSystem) = {
+    val name = namePrefix + "$" + id.incrementAndGet()
+    (name, MemoryFileSystemBuilder.newEmpty().build(name))
+  }
+
+  private lazy val MemoryFileSystem_fileSystems: Field = {
+    val field = classOf[MemoryFileSystemProvider].getDeclaredField("fileSystems")
+    field.setAccessible(true)
+    field
+  }
+
+  /** Creates a named virtual filesystem. The caller need not close this filesystem to release resources. Conversion from URIs to Paths in this filesystem is not supported. */
+  def newAnonymousNioVirtualDirectory(): java.nio.file.FileSystem = {
+    val (name, fs) = newNioVirtualDirectory("anonymous")
+    fs.provider().asInstanceOf[MemoryFileSystemProvider]
+    // TODO this is a workaround for https://github.com/marschall/memoryfilesystem/issues/95
+    //      maybe jimfs is a better option (pity that is drags in Guava transitively :( )
+    val map = MemoryFileSystem_fileSystems.get(fs.provider()).asInstanceOf[java.util.Map[String, _]]
+    map.remove(name)
+    fs
   }
 }
