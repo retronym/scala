@@ -197,12 +197,15 @@ abstract class UnPickler {
     protected def readName(): Name = {
       val tag = readByte()
       val len = readNat()
-      val bytes = new Array[Byte](len)
-      // TODO avoid the copy here?
-      _bytes.get(bytes)
+      val saved = _bytes.limit()
+      _bytes.limit(readIndex + len)
+      val cbuffer = UTF8.charSet.decode(_bytes)
+      _bytes.limit(saved)
+      val chars   = new Array[Char](cbuffer.remaining())
+      cbuffer get chars
       tag match {
-        case TERMname => newTermName(bytes, 0, len)
-        case TYPEname => newTypeName(bytes, 0, len)
+        case TERMname => newTermName(chars, 0, len)
+        case TYPEname => newTypeName(chars, 0, len)
         case _ => errorBadSignature("bad name tag: " + tag)
       }
     }
