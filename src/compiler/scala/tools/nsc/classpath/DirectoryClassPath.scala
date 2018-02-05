@@ -227,6 +227,11 @@ case class DirectoryClassPath(dir: File) extends JFileDirectoryLookup[ClassFileE
 case class NioDirectoryClassPath(dir: java.nio.file.Path) extends ClassPath with NoSourcePaths {
   import java.nio.file.Path, java.nio.file._
   type F = Path
+
+  // TODO Neither Scala 2.12, and Javac pre-indexed the package structure of directory classpath elements.
+  //      We have started caching a package index in AggregateClasspath. Sort out what the expectations are
+  //      around how eager we can be and when what we can and can't cache.
+  //
   // e.g. "java.lang" -> Seq("/modules/java.base")
   private val packageIndex = new mutable.AnyRefMap[String, Path]
 
