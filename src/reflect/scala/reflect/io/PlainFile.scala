@@ -94,7 +94,8 @@ class PlainFile(val givenPath: Path) extends AbstractFile {
     new PlainFile(givenPath / name)
 }
 
-private[scala] class PlainNioFile(nioPath: java.nio.file.Path) extends AbstractFile {
+private[scala] class PlainNioFile(val nioPath: java.nio.file.Path) extends AbstractFile {
+  assert(nioPath != null)
   import java.nio.file._
 
   assert(nioPath ne null)
@@ -113,7 +114,10 @@ private[scala] class PlainNioFile(nioPath: java.nio.file.Path) extends AbstractF
   private val fpath = nioPath.toAbsolutePath.toString
 
   /** Returns the name of this abstract file. */
-  def name = nioPath.getFileName.toString
+  def name: String = {
+    val fileName = nioPath.getFileName
+    if (fileName == null) "" else fileName.toString
+  }
 
   /** Returns the path of this abstract file. */
   def path = nioPath.toString

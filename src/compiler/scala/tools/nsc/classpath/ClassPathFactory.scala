@@ -3,7 +3,7 @@
  */
 package scala.tools.nsc.classpath
 
-import scala.reflect.io.{AbstractFile, VirtualDirectory}
+import scala.reflect.io.{AbstractFile, PlainNioFile, VirtualDirectory}
 import scala.reflect.io.Path.string2path
 import scala.tools.nsc.Settings
 import FileUtils.AbstractFileOps
@@ -74,9 +74,12 @@ object ClassPathFactory {
     case _ =>
       if (file.isJarOrZip)
         ZipAndJarClassPathFactory.create(file, settings)
-      else if (file.isDirectory)
-        DirectoryClassPath(file.file)
-      else
+      else if (file.isDirectory) {
+        file match {
+          case nf: PlainNioFile => NioDirectoryClassPath(nf.nioPath)
+          case _ => DirectoryClassPath(file.file)
+        }
+      } else
         sys.error(s"Unsupported classpath element: $file")
   }
 }

@@ -8,13 +8,12 @@ package interpreter
 
 import io.VirtualDirectory
 import settings.MutableSettings
-import scala.reflect.io.{ AbstractFile, PlainDirectory, Directory }
+import scala.reflect.io._
 import scala.collection.generic.Clearable
 
 /** Directory to save .class files to. */
 trait ReplDir extends AbstractFile with Clearable { }
 
-private class ReplVirtualDir() extends VirtualDirectory("(memory)", None) with ReplDir { }
 private class ReplRealDir(dir: Directory) extends PlainDirectory(dir) with ReplDir {
   def clear() = {
     dir.deleteRecursively()
@@ -25,10 +24,10 @@ private class ReplRealDir(dir: Directory) extends PlainDirectory(dir) with ReplD
 class ReplOutput(val dirSetting: MutableSettings#StringSetting) {
   // outdir for generated classfiles - may be in-memory (the default),
   // a generated temporary directory, or a specified outdir.
-  val dir: ReplDir = (
-    if (dirSetting.isDefault)
-      new ReplVirtualDir()
-    else if (dirSetting.value == "")
+  val dir: AbstractFile = (
+    if (dirSetting.isDefault) {
+      new PlainNioFile(VirtualDirectory.newAnonymousNioVirtualDirectory().getPath("/"))
+    } else if (dirSetting.value == "")
       new ReplRealDir(Directory.makeTemp("repl"))
     else
       new ReplRealDir(Directory(dirSetting.value))

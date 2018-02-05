@@ -98,7 +98,7 @@ object VirtualDirectory {
 
   /** Creates a named virtual filesystem. The caller need not close this filesystem to release resources. Conversion from URIs to Paths in this filesystem is not supported. */
   def newAnonymousNioVirtualDirectory(): java.nio.file.FileSystem = {
-    val (name, fs) = newNioVirtualDirectory("anonymous")
+    val (name, fs) = newNioVirtualDirectory("(memory)")
     fs.provider().asInstanceOf[MemoryFileSystemProvider]
     // TODO this is a workaround for https://github.com/marschall/memoryfilesystem/issues/95
     //      maybe jimfs is a better option (pity that is drags in Guava transitively :( )

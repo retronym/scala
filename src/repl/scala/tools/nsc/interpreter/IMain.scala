@@ -21,6 +21,8 @@ import scala.tools.nsc.util._
 import ScalaClassLoader.URLClassLoader
 import scala.tools.nsc.util.Exceptional.unwrap
 import java.net.URL
+
+import scala.collection.generic.Clearable
 import scala.tools.util.PathResolver
 import scala.util.{Try => Trying}
 
@@ -668,7 +670,10 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     resetAllCreators()
     prevRequests.clear()
     resetReplScope()
-    replOutput.dir.clear()
+    replOutput.dir match {
+      case cl: Clearable => cl.clear
+      case _ =>
+    }
   }
 
   /** This instance is no longer needed, so release any resources

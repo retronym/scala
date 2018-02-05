@@ -273,7 +273,7 @@ case class NioDirectoryClassPath(dir: java.nio.file.Path) extends NioDirectoryLo
   }
 
   protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
-  protected def isMatchingFile(f: F): Boolean = Files.isRegularFile(f) && f.getFileName.endsWith(SUFFIX_CLASS)
+  protected def isMatchingFile(f: F): Boolean = Files.isRegularFile(f) && AbstractFile.hasExtension(f.getFileName.toString, "class")
 
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
 

@@ -12,10 +12,16 @@ import scala.reflect.io.AbstractFile
  * Common methods related to Java files and abstract files used in the context of classpath
  */
 object FileUtils {
+  def isValidClassName(name: String): Boolean = {
+    name.length > 0 && Character.isJavaIdentifierStart(Character.codePointAt(name, 0)) && {
+      name.codePoints().skip(1).allMatch(Character.isJavaIdentifierPart(_)) // excludes module-info
+    }
+  }
+  def isValidClassFileName(fileName: String) = fileName != null && AbstractFile.hasExtension(fileName, "class") && isValidClassName(fileName.substring(0, fileName.length - ".class".length))
   implicit class AbstractFileOps(val file: AbstractFile) extends AnyVal {
     def isPackage: Boolean = file.isDirectory && mayBeValidPackage(file.name)
 
-    def isClass: Boolean = !file.isDirectory && file.hasExtension("class")
+    def isClass: Boolean = !file.isDirectory && isValidClassFileName(file.name)
 
     def isScalaOrJavaSource: Boolean = !file.isDirectory && (file.hasExtension("scala") || file.hasExtension("java"))
 

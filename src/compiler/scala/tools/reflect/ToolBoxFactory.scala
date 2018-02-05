@@ -10,10 +10,11 @@ import scala.reflect.internal.util.AbstractFileClassLoader
 import scala.reflect.internal.Flags._
 import scala.reflect.internal.util.NoSourceFile
 import java.lang.{Class => jClass}
+
 import scala.compat.Platform.EOL
 import scala.reflect.NameTransformer
 import scala.reflect.api.JavaUniverse
-import scala.reflect.io.NoAbstractFile
+import scala.reflect.io.{NoAbstractFile, PlainNioFile, VirtualDirectory}
 import scala.reflect.internal.FatalError
 
 abstract class ToolBoxFactory[U <: JavaUniverse](val u: U) { factorySelf =>
@@ -34,7 +35,9 @@ abstract class ToolBoxFactory[U <: JavaUniverse](val u: U) { factorySelf =>
     lazy val virtualDirectory =
       arguments.iterator.sliding(2).collectFirst{ case Seq("-d", dir) => dir } match {
         case Some(outDir) => AbstractFile.getDirectory(outDir)
-        case None => new VirtualDirectory("(memory)", None)
+        case None => {
+          new PlainNioFile(VirtualDirectory.newAnonymousNioVirtualDirectory().getPath("/"))
+        }
       }
 
     class ToolBoxGlobal(settings: scala.tools.nsc.Settings, reporter0: Reporter)

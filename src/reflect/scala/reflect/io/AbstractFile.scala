@@ -58,6 +58,8 @@ object AbstractFile {
     } else null
 
   def getResources(url: URL): AbstractFile = ZipArchive fromManifestURL url
+
+  def hasExtension(name: String, extension: String) = name != null && name.regionMatches(true, name.length - extension.length, extension, 0, extension.length) && name.charAt(name.length - extension.length - 1) == '.'
 }
 
 /**
@@ -98,8 +100,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
   def canonicalPath: String = if (file == null) path else file.getCanonicalPath
 
   /** Checks extension case insensitively. */
-  def hasExtension(other: String) = extension == other.toLowerCase
-  private lazy val extension: String = Path.extension(name)
+  def hasExtension(other: String) = AbstractFile.hasExtension(name, other)
 
   /** The absolute file, if this is a relative file. */
   def absolute: AbstractFile
@@ -120,7 +121,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
   }
 
   /** Does this abstract file represent something which can contain classfiles? */
-  def isClassContainer = isDirectory || (file != null && (extension == "jar" || extension == "zip"))
+  def isClassContainer = isDirectory || (file != null && (hasExtension("jar") || hasExtension("zip")))
 
   /** Create a file on disk, if one does not exist already. */
   def create(): Unit
