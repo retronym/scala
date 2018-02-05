@@ -173,4 +173,15 @@ private[scala] class PlainNioFile(nioPath: java.nio.file.Path) extends AbstractF
     */
   def lookupNameUnchecked(name: String, directory: Boolean): AbstractFile =
     new PlainNioFile(nioPath.resolve(name))
+
+  override protected def fileOrSubdirectoryNamed(name: String, isDir: Boolean): AbstractFile = {
+    val lookup = lookupName(name, isDir)
+    if (lookup != null) lookup
+    else {
+      val subPath = nioPath.resolve(name)
+      if (isDir) Files.createDirectories(subPath) else Files.createFile(subPath)
+      new PlainNioFile(subPath)
+    }
+  }
+
 }

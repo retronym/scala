@@ -6,6 +6,10 @@ package scala
 package reflect
 package io
 
+import java.util.concurrent.atomic.AtomicInteger
+
+import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
+
 import scala.collection.mutable
 
 /**
@@ -70,5 +74,12 @@ extends AbstractFile {
 
   def clear() {
     files.clear()
+  }
+}
+
+object VirtualDirectory {
+  private val id = new AtomicInteger()
+  def newNioVirtualDirectory(name: String): java.nio.file.FileSystem = {
+    MemoryFileSystemBuilder.newEmpty().build(name + "$" + id.incrementAndGet())
   }
 }

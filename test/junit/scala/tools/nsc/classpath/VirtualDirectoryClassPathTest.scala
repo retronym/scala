@@ -3,12 +3,14 @@
  */
 package scala.tools.nsc.classpath
 
+import com.github.marschall.memoryfilesystem.MemoryFileSystemBuilder
 import org.junit.Assert._
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
-import scala.reflect.io.VirtualDirectory
+import scala.reflect.io.{AbstractFile, PlainNioFile, VirtualDirectory}
+import scala.tools.nsc.util.ClassPath
 
 
 @RunWith(classOf[JUnit4])
@@ -17,13 +19,27 @@ class VirtualDirectoryClassPathTest {
   @Test
   def virtualDirectoryClassPath_findClassFile(): Unit = {
     val base = new VirtualDirectory("base", None)
+    test(base, VirtualDirectoryClassPath(base))
+  }
+
+  @Test
+  def testVirtualNioFilesystem(): Unit = {
+    val fileSystem = VirtualDirectory.newNioVirtualDirectory("base")
+    try {
+      val root = fileSystem.getPath("/")
+      test(new PlainNioFile(root), NioDirectoryClassPath(fileSystem.getPath("/")))
+    } finally {
+      fileSystem.close()
+    }
+  }
+
+  private def test(base: AbstractFile, classPath: ClassPath) {
     val p1 = base subdirectoryNamed "p1"
     val p1_Test_class = p1.fileNamed("Test.class")
     val p2 = base subdirectoryNamed "p2"
     val p3 = p2 subdirectoryNamed "p3"
     val p4 = p3 subdirectoryNamed "p4"
     val p4_Test1_class = p4.fileNamed("Test.class")
-    val classPath = VirtualDirectoryClassPath(base)
 
     assertEquals(Some(p1_Test_class), classPath.findClassFile("p1/Test"))
 

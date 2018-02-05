@@ -34,7 +34,7 @@ object FileUtils {
 
     def isClass: Boolean = file.isFile && endsClass(file.getName)
   }
-  private val SUFFIX_CLASS = ".class"
+  val SUFFIX_CLASS = ".class"
   private val SUFFIX_SCALA = ".scala"
   private val SUFFIX_JAVA = ".java"
 

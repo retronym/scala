@@ -5,6 +5,7 @@ package scala.tools.nsc.classpath
 
 import java.io.File
 import java.net.{URI, URL}
+import java.nio.file.attribute.BasicFileAttributeView
 import java.nio.file.{FileSystems, Files, SimpleFileVisitor}
 import java.util.function.IntFunction
 import java.util
@@ -13,7 +14,7 @@ import java.util.Comparator
 import scala.reflect.io.{AbstractFile, PlainFile, PlainNioFile}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import FileUtils._
-import scala.collection.JavaConverters._
+import scala.collection.JavaConverters.{asScalaIteratorConverter, _}
 
 /**
  * A trait allowing to look for classpath entries in directories. It provides common logic for
@@ -123,6 +124,49 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directo
   def asClassPathStrings: Seq[String] = Seq(dir.getPath)
 }
 
+
+object NioDirectoryLookup {
+  private val EmptyArray = Array[java.nio.file.Path]()
+}
+trait NioDirectoryLookup[FileEntryType <: ClassRepresentation] extends DirectoryLookup[FileEntryType] {
+  type F = java.nio.file.Path
+
+  protected def emptyFiles: Array[F] = NioDirectoryLookup.EmptyArray
+  protected def getSubDir(packageDirName: String): Option[F] = {
+    val packageDir = dir.resolve(packageDirName)
+    if (Files.isDirectory(packageDir)) Some(packageDir) else None
+  }
+  protected def listChildren(dir: F, filter: Option[F => Boolean]): Array[F] = {
+    val filter0 = filter.getOrElse((_: F) => true)
+    val files = Files.list(dir)
+    val listing: Array[F] = filter match {
+      case Some(f) => Files.list(dir).iterator.asScala.filter(filter0).toArray[F]
+      case None => Files.list(dir).toArray[F](new Array[F](_))
+    }
+
+    // Sort by file name for stable order of directory .class entries in package scope.
+    // This gives stable results ordering of base type sequences for unrelated classes
+    // with the same base type depth.
+    //
+    // Notably, this will stably infer`Product with Serializable`
+    // as the type of `case class C(); case class D(); List(C(), D()).head`, rather than the opposite order.
+    // On Mac, the HFS performs this sorting transparently, but on Linux the order is unspecified.
+    //
+    // Note this behaviour can be enabled in javac with `javac -XDsortfiles`, but that's only
+    // intended to improve determinism of the compiler for compiler hackers.
+    util.Arrays.sort(listing, (o1: F, o2: F) => o1.getFileName.compareTo(o2.getFileName))
+    listing
+  }
+  protected def getName(f: F): String = f.getFileName.toString
+  protected def toAbstractFile(f: F): AbstractFile = new PlainNioFile(f)
+  protected def isPackage(f: F): Boolean = Files.isDirectory(f) && mayBeValidPackage(f.getFileName.toString)
+
+  assert(dir != null, "Directory file in DirectoryFileLookup cannot be null")
+
+  def asURLs: Seq[URL] = if (dir.getFileSystem == FileSystems.getDefault) Seq(dir.toFile.toURI.toURL) else Nil
+  def asClassPathStrings: Seq[String] = if (dir.getFileSystem == FileSystems.getDefault) Seq(dir.toFile.getPath) else Nil
+}
+
 object JrtClassPath {
   import java.nio.file._, java.net.URI
   def apply(): Option[ClassPath] = {
@@ -211,11 +255,28 @@ case class DirectoryClassPath(dir: File) extends JFileDirectoryLookup[ClassFileE
       Some(abstractClassFile)
     } else None
   }
-
   protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
   protected def isMatchingFile(f: File): Boolean = f.isClass
 
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
+}
+
+case class NioDirectoryClassPath(dir: java.nio.file.Path) extends NioDirectoryLookup[ClassFileEntryImpl] with NoSourcePaths {
+  override def findClass(className: String): Option[ClassRepresentation] = findClassFile(className) map ClassFileEntryImpl
+
+  def findClassFile(className: String): Option[AbstractFile] = {
+    val relativePath = FileUtils.dirPath(className)
+    val classFile = dir.resolve(relativePath + ".class")
+    if (Files.exists(classFile)) {
+      Some(new PlainNioFile(classFile))
+    } else None
+  }
+
+  protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
+  protected def isMatchingFile(f: F): Boolean = Files.isRegularFile(f) && f.getFileName.endsWith(SUFFIX_CLASS)
+
+  private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = files(inPackage)
+
 }
 
 case class DirectorySourcePath(dir: File) extends JFileDirectoryLookup[SourceFileEntryImpl] with NoClassPaths {

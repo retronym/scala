@@ -10,6 +10,7 @@
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />
     <orderEntry type="module" module-name="library" />
+    <orderEntry type="library" name="reflect-deps" level="project" />
     <orderEntry type="library" name="starr" level="project" />
   </component>
 </module>

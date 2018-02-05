@@ -230,7 +230,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
     file
   }
 
-  private def fileOrSubdirectoryNamed(name: String, isDir: Boolean): AbstractFile = {
+  protected def fileOrSubdirectoryNamed(name: String, isDir: Boolean): AbstractFile = {
     val lookup = lookupName(name, isDir)
     if (lookup != null) lookup
     else {
