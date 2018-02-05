@@ -256,10 +256,12 @@ case class NioDirectoryClassPath(dir: java.nio.file.Path) extends ClassPath with
   /** Empty string represents root package */
   override private[nsc] def hasPackage(pkg: String) = packageIndex.contains(pkg)
   override private[nsc] def packages(inPackage: String): Seq[PackageEntry] = {
-    def matches(packageDottedName: String) =
-      if (packageDottedName.contains("."))
-        packageOf(packageDottedName) == inPackage
+    def matches(packageDottedName: String) = {
+      val dotIndex = packageDottedName.lastIndexOf('.')
+      if (dotIndex >= 0)
+        inPackage.length == dotIndex && packageDottedName.startsWith(inPackage)
       else inPackage == ""
+    }
     packageIndex.keysIterator.filter(matches).map(PackageEntryImpl(_)).toVector
   }
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = {
