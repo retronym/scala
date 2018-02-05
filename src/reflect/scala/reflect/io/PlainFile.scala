@@ -111,7 +111,7 @@ private[scala] class PlainNioFile(override val nioPath: java.nio.file.Path) exte
 
   override def underlyingSource  = Some(this)
 
-  private val fpath = nioPath.toAbsolutePath.toString
+  private lazy val fpath = nioPath.toAbsolutePath.toString
 
   /** Returns the name of this abstract file. */
   def name: String = {
