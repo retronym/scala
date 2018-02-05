@@ -75,9 +75,11 @@ object ClassPathFactory {
       if (file.isJarOrZip)
         ZipAndJarClassPathFactory.create(file, settings)
       else if (file.isDirectory) {
-        file match {
-          case nf: PlainNioFile => NioDirectoryClassPath(nf.nioPath)
-          case _ => DirectoryClassPath(file.file)
+        try {
+          NioDirectoryClassPath(file.nioPath)
+        } catch {
+          case _: java.nio.file.InvalidPathException =>
+            DirectoryClassPath(file.file)
         }
       } else
         sys.error(s"Unsupported classpath element: $file")
