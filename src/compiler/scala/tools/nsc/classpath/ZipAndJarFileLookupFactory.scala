@@ -147,6 +147,7 @@ object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
   }
 
   override protected def createForZipFile(zipFile: AbstractFile): ClassPath = {
+    // TODO pass in --release values here.
     val env = new java.util.HashMap[String, String]()
     val fs = archiveFsProvider.newFileSystem(zipFile.nioPath, env)
     new NioDirectoryClassPath(fs.getPath("/"))
