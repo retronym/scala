@@ -110,6 +110,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
 
   /** Returns the underlying File if any and null otherwise. */
   def file: JFile
+  def nioPath: java.nio.file.Path = file.toPath
 
   /** An underlying source, if known.  Mostly, a zip/jar file. */
   def underlyingSource: Option[AbstractFile] = None

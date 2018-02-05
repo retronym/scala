@@ -7,12 +7,14 @@ import java.io.File
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.attribute.{BasicFileAttributes, FileTime}
+import java.nio.file.spi.FileSystemProvider
 
 import scala.annotation.tailrec
 import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import scala.tools.nsc.Settings
 import FileUtils._
+import scala.collection.JavaConverters.{iterableAsScalaIterableConverter}
 
 /**
  * A trait providing an optional cache for classpath entries obtained from zip and jar files.
@@ -21,6 +23,7 @@ import FileUtils._
  */
 sealed trait ZipAndJarFileLookupFactory {
   private val cache = new FileBasedCache[ClassPath]
+  protected val archiveFsProvider = FileSystemProvider.installedProviders.asScala.find(_.getScheme == "jar").orNull
 
   def create(zipFile: AbstractFile, settings: Settings): ClassPath = {
     if (settings.YdisableFlatCpCaching || zipFile.file == null) createForZipFile(zipFile)
@@ -143,9 +146,11 @@ object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
     case class PackageInfo(packageName: String, subpackages: List[AbstractFile])
   }
 
-  override protected def createForZipFile(zipFile: AbstractFile): ClassPath =
-    if (zipFile.file == null) createWithoutUnderlyingFile(zipFile)
-    else ZipArchiveClassPath(zipFile.file)
+  override protected def createForZipFile(zipFile: AbstractFile): ClassPath = {
+    val env = new java.util.HashMap[String, String]()
+    val fs = archiveFsProvider.newFileSystem(zipFile.nioPath, env)
+    new NioDirectoryClassPath(fs.getPath("/"))
+  }
 
   private def createWithoutUnderlyingFile(zipFile: AbstractFile) = zipFile match {
     case manifestRes: ManifestResources =>

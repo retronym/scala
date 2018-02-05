@@ -157,7 +157,7 @@ trait NioDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directory
     util.Arrays.sort(listing, (o1: F, o2: F) => o1.getFileName.compareTo(o2.getFileName))
     listing
   }
-  protected def getName(f: F): String = f.getFileName.toString
+  protected def getName(f: F): String = f.getFileName.toString.stripSuffix("/")
   protected def toAbstractFile(f: F): AbstractFile = new PlainNioFile(f)
   protected def isPackage(f: F): Boolean = Files.isDirectory(f) && mayBeValidPackage(f.getFileName.toString)
 
