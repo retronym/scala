@@ -143,6 +143,11 @@ trait Names extends api.Names {
     val chars = Codec.fromUTF8(bs, offset, len)
     newTermName(chars, 0, chars.length)
   }
+  final def newTermName(cb: java.nio.CharBuffer, len: Int): TermName = {
+    val chars = new Array[Char](len)
+    cb.get(chars)
+    newTermName(chars, 0, chars.length)
+  }
 
   final def newTermNameCached(s: String): TermName =
     newTermName(s.toCharArray(), 0, s.length(), cachedString = s)

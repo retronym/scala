@@ -238,8 +238,12 @@ case class NioDirectoryClassPath(dir: java.nio.file.Path) extends ClassPath with
   {
     object visitor extends SimpleFileVisitor[Path] {
       override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes) = {
-        val pack = dir.relativize(dir).toString.replace('/', '.')
-        if (mayBeValidPackage(dir.getFileName().toString)) {
+        val pack = NioDirectoryClassPath.this.dir.relativize(dir).toString.stripSuffix("/").replace('/', '.')
+        val fileName = dir.getFileName()
+        if (fileName == null) {
+          packageIndex.put("", dir)
+          FileVisitResult.CONTINUE
+        } else if (mayBeValidPackage(fileName.toString)) {
           packageIndex.put(pack, dir)
           FileVisitResult.CONTINUE
         } else

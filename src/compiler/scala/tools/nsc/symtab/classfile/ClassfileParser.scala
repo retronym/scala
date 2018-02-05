@@ -8,14 +8,15 @@ package tools.nsc
 package symtab
 package classfile
 
-import java.io.{ByteArrayInputStream, DataInputStream, File, IOException}
+import java.io._
 import java.lang.Integer.toHexString
+import java.nio.ByteBuffer
 
 import scala.collection.{immutable, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.annotation.switch
 import scala.reflect.internal.JavaAccFlags
-import scala.reflect.internal.pickling.{ByteCodecs, PickleBuffer}
+import scala.reflect.internal.pickling.{ByteCodecs, PickleBuffer, PickleReader}
 import scala.reflect.io.NoAbstractFile
 import scala.reflect.internal.util.Collections._
 import scala.tools.nsc.util.ClassPath
@@ -199,7 +200,7 @@ abstract class ClassfileParser {
 
     def firstExpecting(index: Int, expected: Int): Int = {
       val start = starts(index)
-      val first = in.buf(start).toInt
+      val first = in.buf.get(start).toInt
       if (first == expected) start + 1
       else this errorBadTag start
     }
@@ -216,8 +217,13 @@ abstract class ClassfileParser {
       }
     )
 
-    private def fromMUTF8(bytes: Array[Byte], offset: Int, len: Int): String =
-      new DataInputStream(new ByteArrayInputStream(bytes, offset, len)).readUTF
+
+    private def fromMUTF8(bytes: ByteBuffer, offset: Int, len: Int): String = {
+      val dup = bytes.duplicate()
+      dup.position(offset)
+      dup.limit(offset + len)
+      new DataInputStream(new ByteBufferBackedInputStream(dup)).readUTF
+    }
 
     /** Return the name found at given index in the constant pool, with '/' replaced by '.'. */
     def getExternalName(index: Int): Name = {
@@ -300,7 +306,7 @@ abstract class ClassfileParser {
 
     private def createConstant(index: Int): Constant = {
       val start = starts(index)
-      Constant((in.buf(start).toInt: @switch) match {
+      Constant((in.buf.get(start).toInt: @switch) match {
         case CONSTANT_STRING  => getName(in.getChar(start + 1).toInt).toString
         case CONSTANT_INTEGER => in.getInt(start + 1)
         case CONSTANT_FLOAT   => in.getFloat(start + 1)
@@ -336,7 +342,13 @@ abstract class ClassfileParser {
           val start = firstExpecting(index, CONSTANT_UTF8)
           val len   = (in getChar start).toInt
           val bytes = new Array[Byte](len)
-          System.arraycopy(in.buf, start + 2, bytes, 0, len)
+          val saved = in.bp
+          try {
+            in.bp = start + 2
+            in.buf.get(bytes)
+          } finally {
+            in.bp = saved
+          }
           recordAtIndex(getSubArray(bytes), index)
       }
     )
@@ -350,7 +362,15 @@ abstract class ClassfileParser {
             if (index <= 0 || ConstantPool.this.len <= index) errorBadIndex(index)
             val start = firstExpecting(index, CONSTANT_UTF8)
             val len   = (in getChar start).toInt
-            in.buf drop start + 2 take len
+            val bytes = new Array[Byte](len)
+            val saved = in.bp
+            try {
+              in.bp = start + 2
+              in.buf.get(bytes)
+            } finally {
+              in.bp = saved
+            }
+            bytes
           }
           recordAtIndex(getSubArray(arr), head)
       }
@@ -362,7 +382,7 @@ abstract class ClassfileParser {
 
     /** Throws an exception signaling a bad tag at given address. */
     protected def errorBadTag(start: Int) =
-      abort(s"bad constant pool tag ${in.buf(start)} at byte $start")
+      abort(s"bad constant pool tag ${in.buf.get(start)} at byte $start")
   }
 
   def stubClassSymbol(name: Name): Symbol = {
@@ -862,7 +882,8 @@ abstract class ClassfileParser {
         case tpnme.ScalaSignatureATTR =>
           if (!isScalaAnnot) {
             devWarning(s"symbol ${sym.fullName} has pickled signature in attribute")
-            unpickler.unpickle(in.buf, in.bp, clazz, staticModule, in.file.name)
+            val dup = in.buf.duplicate()
+            unpickler.unpickle(dup, clazz, staticModule, in.file.name)
           }
           in.skip(attrLen)
         case tpnme.ScalaATTR =>
@@ -1189,7 +1210,9 @@ abstract class ClassfileParser {
       attrName match {
         case tpnme.ScalaSignatureATTR =>
           isScala = true
-          val pbuf = new PickleBuffer(in.buf, in.bp, in.bp + attrLen)
+          val dup = in.buf.duplicate()
+          dup.limit(dup.position() + attrLen)
+          val pbuf = new PickleReader(in.buf.duplicate())
           pbuf.readNat(); pbuf.readNat()
           if (pbuf.readNat == 0) // a scala signature attribute with no entries means that the actual scala signature
             isScalaAnnot = true    // is in a ScalaSignature annotation.

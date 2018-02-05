@@ -11,12 +11,14 @@ package pickling
 import java.io.IOException
 import java.lang.Float.intBitsToFloat
 import java.lang.Double.longBitsToDouble
+import java.nio.ByteBuffer
 
 import Flags._
 import PickleFormat._
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.annotation.switch
+import scala.io.Codec.UTF8
 import scala.util.control.NonFatal
 
 /** @author Martin Odersky
@@ -34,10 +36,13 @@ abstract class UnPickler {
    *  @param moduleRoot the top-level module which is unpickled
    *  @param filename   filename associated with bytearray, only used for error messages
    */
-  def unpickle(bytes: Array[Byte], offset: Int, classRoot: ClassSymbol, moduleRoot: ModuleSymbol, filename: String) {
+  def unpickle(bytes: Array[Byte], offset: Int, classRoot: ClassSymbol, moduleRoot: ModuleSymbol, filename: String): Unit = {
+    unpickle(ByteBuffer.wrap(bytes, offset, bytes.length - offset), classRoot, moduleRoot, filename)
+  }
+  def unpickle(bytes: ByteBuffer, classRoot: ClassSymbol, moduleRoot: ModuleSymbol, filename: String) {
     try {
       assert(classRoot != NoSymbol && moduleRoot != NoSymbol, s"The Unpickler expects a class and module symbol: $classRoot - $moduleRoot")
-      new Scan(bytes, offset, classRoot, moduleRoot, filename).run()
+      new Scan(bytes, classRoot, moduleRoot, filename).run()
     } catch {
       case NonFatal(ex) =>
         /*if (settings.debug.value)*/ ex.printStackTrace()
@@ -51,7 +56,7 @@ abstract class UnPickler {
     */
   private val completingStack = new mutable.ArrayBuffer[Symbol](24)
 
-  class Scan(_bytes: Array[Byte], offset: Int, classRoot: ClassSymbol, moduleRoot: ModuleSymbol, filename: String) extends PickleBuffer(_bytes, offset, -1) {
+  class Scan(_bytes: ByteBuffer, classRoot: ClassSymbol, moduleRoot: ModuleSymbol, filename: String) extends PickleReader(_bytes) {
     //println("unpickle " + classRoot + " and " + moduleRoot)//debug
 
     protected def debug = settings.debug.value
@@ -122,32 +127,32 @@ abstract class UnPickler {
 
     /** Does entry represent an (internal) symbol */
     protected def isSymbolEntry(i: Int): Boolean = {
-      val tag = bytes(index(i)).toInt
+      val tag = _bytes.get(index(i)).toInt
       (firstSymTag <= tag && tag <= lastSymTag &&
        (tag != CLASSsym || !isRefinementSymbolEntry(i)))
     }
 
     /** Does entry represent an (internal or external) symbol */
     protected def isSymbolRef(i: Int): Boolean = {
-      val tag = bytes(index(i))
+      val tag = _bytes.get(index(i))
       (firstSymTag <= tag && tag <= lastExtSymTag)
     }
 
     /** Does entry represent a name? */
     protected def isNameEntry(i: Int): Boolean = {
-      val tag = bytes(index(i)).toInt
+      val tag = _bytes.get(index(i)).toInt
       tag == TERMname || tag == TYPEname
     }
 
     /** Does entry represent a symbol annotation? */
     protected def isSymbolAnnotationEntry(i: Int): Boolean = {
-      val tag = bytes(index(i)).toInt
+      val tag = _bytes.get(index(i)).toInt
       tag == SYMANNOT
     }
 
     /** Does the entry represent children of a symbol? */
     protected def isChildrenEntry(i: Int): Boolean = {
-      val tag = bytes(index(i)).toInt
+      val tag = _bytes.get(index(i)).toInt
       tag == CHILDREN
     }
 
@@ -192,9 +197,12 @@ abstract class UnPickler {
     protected def readName(): Name = {
       val tag = readByte()
       val len = readNat()
+      val bytes = new Array[Byte](len)
+      // TODO avoid the copy here?
+      _bytes.get(bytes)
       tag match {
-        case TERMname => newTermName(bytes, readIndex, len)
-        case TYPEname => newTypeName(bytes, readIndex, len)
+        case TERMname => newTermName(bytes, 0, len)
+        case TYPEname => newTypeName(bytes, 0, len)
         case _ => errorBadSignature("bad name tag: " + tag)
       }
     }
@@ -453,7 +461,7 @@ abstract class UnPickler {
     /** Read an annotation argument, which is pickled either
      *  as a Constant or a Tree.
      */
-    protected def readAnnotArg(i: Int): Tree = bytes(index(i)) match {
+    protected def readAnnotArg(i: Int): Tree = _bytes.get(index(i)).toInt match {
       case TREE => at(i, readTree)
       case _    =>
         val const = at(i, readConstant)
@@ -467,7 +475,7 @@ abstract class UnPickler {
       val end = readEnd()
       until(end, () => readClassfileAnnotArg(readNat())).toArray(JavaArgumentTag)
     }
-    protected def readClassfileAnnotArg(i: Int): ClassfileAnnotArg = bytes(index(i)) match {
+    protected def readClassfileAnnotArg(i: Int): ClassfileAnnotArg = _bytes.get(index(i)).toInt match {
       case ANNOTINFO     => NestedAnnotArg(at(i, readAnnotation))
       case ANNOTARGARRAY => at(i, () => ArrayAnnotArg(readArrayAnnot()))
       case _             => LiteralAnnotArg(at(i, readConstant))
