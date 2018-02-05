@@ -196,7 +196,7 @@ trait Scanners extends ScannersCommon {
 
     /** A character buffer for literals
      */
-    val cbuf = new StringBuilder
+    val cbuf = new java.lang.StringBuilder
 
     /** append Unicode character to "cbuf" buffer
      */
@@ -212,8 +212,8 @@ trait Scanners extends ScannersCommon {
 
     /** Clear buffer and set name and token */
     private def finishNamed(idtoken: Token = IDENTIFIER): Unit = {
-      name = newTermName(cbuf.toString)
-      cbuf.clear()
+      name = newTermName(cbuf, 0, cbuf.length(), null)
+      cbuf.setLength(0)
       token = idtoken
       if (idtoken == IDENTIFIER) {
         val idx = name.start - kwOffset
@@ -232,7 +232,7 @@ trait Scanners extends ScannersCommon {
     /** Clear buffer and set string */
     private def setStrVal(): Unit = {
       strVal = cbuf.toString
-      cbuf.clear()
+      cbuf.setLength(0)
     }
 
     /** a stack of tokens which indicates whether line-ends can be statement separators
@@ -801,8 +801,8 @@ trait Scanners extends ScannersCommon {
             nextRawChar()
           } while (ch != SU && Character.isUnicodeIdentifierPart(ch))
           next.token = IDENTIFIER
-          next.name = newTermName(cbuf.toString)
-          cbuf.clear()
+          next.name = newTermName(cbuf, 0, cbuf.length(), null)
+          cbuf.setLength(0)
           val idx = next.name.start - kwOffset
           if (idx >= 0 && idx < kwArray.length) {
             next.token = kwArray(idx)
@@ -1066,7 +1066,7 @@ trait Scanners extends ScannersCommon {
       def restOfNumber(): Unit = {
         ch match {
           case 'e' | 'E' | 'f' | 'F' |
-               'd' | 'D' => if (cbuf.isEmpty) putChar('0'); restOfNonIntegralNumber()
+               'd' | 'D' => if (cbuf.length() == 0) putChar('0'); restOfNonIntegralNumber()
           case 'l' | 'L' => token = LONGLIT ; setStrVal() ; nextChar()
           case _         => token = INTLIT  ; setStrVal() ; checkNoLetter()
         }

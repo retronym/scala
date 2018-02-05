@@ -51,6 +51,13 @@ trait Names extends api.Names {
        cs(offset + len - 1) * 41 +
        cs(offset + (len >> 1)))
     else 0
+  private def hashValue(cs: CharSequence, offset: Int, len: Int): Int =
+    if (len > 0)
+      (len * (41 * 41 * 41) +
+       cs.charAt(offset) * (41 * 41) +
+       cs.charAt(offset + len - 1) * 41 +
+       cs.charAt(offset + (len >> 1)))
+    else 0
 
   /** Is (the ASCII representation of) name at given index equal to
    *  cs[offset..offset+len-1]?
@@ -58,6 +65,12 @@ trait Names extends api.Names {
   private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
     var i = 0
     while ((i < len) && (chrs(index + i) == cs(offset + i)))
+      i += 1
+    i == len
+  }
+  private def equals(index: Int, cs: CharSequence, offset: Int, len: Int): Boolean = {
+    var i = 0
+    while ((i < len) && (chrs(index + i) == cs.charAt(offset + i)))
       i += 1
     i == len
   }
@@ -72,6 +85,21 @@ trait Names extends api.Names {
         chrs = newchrs
       }
       chrs(nc + i) = cs(offset + i)
+      i += 1
+    }
+    if (len == 0) nc += 1
+    else nc = nc + len
+  }
+  /** Enter characters into chrs array. */
+  private def enterChars(cs: CharSequence, offset: Int, len: Int) {
+    var i = 0
+    while (i < len) {
+      if (nc + i == chrs.length) {
+        val newchrs = new Array[Char](chrs.length * 2)
+        java.lang.System.arraycopy(chrs, 0, newchrs, 0, chrs.length)
+        chrs = newchrs
+      }
+      chrs(nc + i) = cs.charAt(offset + i)
       i += 1
     }
     if (len == 0) nc += 1
@@ -126,13 +154,50 @@ trait Names extends api.Names {
     }
     if (synchronizeNames) nameLock.synchronized(body) else body
   }
+  /** Create a term name from the characters in cs[offset..offset+len-1].
+   *  TODO - have a mode where name validation is performed at creation time
+   *  (e.g. if a name has the string "$class" in it, then fail if that
+   *  string is not at the very end.)
+   *
+   *  @param len0 the length of the name. Negative lengths result in empty names.
+   */
+  final def newTermName(cs: CharSequence, offset: Int, len0: Int, cachedString: String): TermName = {
+    def body = {
+      require(offset >= 0, "offset must be non-negative, got " + offset)
+      val len = math.max(len0, 0)
+      val h = hashValue(cs, offset, len) & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+        n = n.next
+
+      if (n ne null) n
+      else {
+        // The logic order here is future-proofing against the possibility
+        // that name.toString will become an eager val, in which case the call
+        // to enterChars cannot follow the construction of the TermName.
+        var startIndex = nc
+        enterChars(cs, offset, len)
+        val next = termHashtable(h)
+        val termName =
+          if (cachedString ne null) new TermName_S(startIndex, len, next, cachedString)
+          else new TermName_R(startIndex, len, next)
+        // Add the new termName to the hashtable only after it's been fully constructed
+        termHashtable(h) = termName
+        termName
+      }
+    }
+    if (synchronizeNames) nameLock.synchronized(body) else body
+  }
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
 
+  final def newTypeName(cs: CharSequence, offset: Int, len: Int, cachedString: String): TypeName =
+    newTermName(cs, offset, len, cachedString).toTypeName
+
   /** Create a term name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
-  def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
+  def newTermName(s: String): TermName = newTermName(s : CharSequence, 0, s.length(), null)
 
   /** Create a type name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
