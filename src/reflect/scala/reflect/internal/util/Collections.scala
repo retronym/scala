@@ -66,7 +66,7 @@ trait Collections {
     var head: ::[A] = null
     var tail: ::[A] = null
 
-    var rest = as.tail
+    var rest = as
     var allMatch = true
     while (rest ne Nil) {
       val a = rest.head
@@ -83,8 +83,11 @@ trait Collections {
       } else {
         allMatch = false
       }
+      rest = rest.tail
     }
+    // TODO share the unfiltered tail
     if (allMatch) as
+    else if (tail eq null) Nil
     else {
       tail.tl = Nil
       head
