@@ -256,7 +256,7 @@ private[internal] trait TypeMaps {
     def mapOverAnnotations(annots: List[AnnotationInfo]): List[AnnotationInfo] = {
       val annots1 = annots mapConserve mapOver
       if (annots1 eq annots) annots
-      else annots1 filterNot (_ eq UnmappableAnnotation)
+      else filterList(annots1)(_ ne UnmappableAnnotation)
     }
 
     /** Map over a set of annotation arguments.  If any

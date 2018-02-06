@@ -420,7 +420,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    */
   private def specializations(tps: List[Symbol]): List[TypeEnv] = {
     // the keys in each TypeEnv
-    val keys: List[Symbol] = tps filter (_.isSpecialized)
+    val keys: List[Symbol] = filterList(tps)(_.isSpecialized)
     // creating each permutation of concrete types
     def loop(ctypes: List[List[Type]]): List[List[Type]] = ctypes match {
       case Nil         => Nil

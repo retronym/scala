@@ -61,6 +61,36 @@ trait Collections {
     head
   }
 
+  /** A version of List#filter, specialized for List, and optimized to avoid allocation if `as` is empty */
+  final def filterList[A](as: List[A])(f: A => Boolean): List[A] = if (as eq Nil) Nil else {
+    var head: ::[A] = null
+    var tail: ::[A] = null
+
+    var rest = as.tail
+    var allMatch = true
+    while (rest ne Nil) {
+      val a = rest.head
+      if (f(a)) {
+        val next = new ::[A](a, null)
+        if (head eq null) {
+          head = next
+          tail = head
+        }
+        else {
+          tail.tl = next
+          tail = next
+        }
+      } else {
+        allMatch = false
+      }
+    }
+    if (allMatch) as
+    else {
+      tail.tl = Nil
+      head
+    }
+  }
+
   final def sameElementsEquals(thiss: List[AnyRef], that: List[AnyRef]): Boolean = {
     // Probably immutable, so check reference identity first (it's quick anyway)
     (thiss eq that) || {

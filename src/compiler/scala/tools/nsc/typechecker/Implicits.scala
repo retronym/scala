@@ -924,7 +924,7 @@ trait Implicits {
        */
       val eligible = {
         val matches = iss flatMap { is =>
-          val result = is filter (info => checkValid(info.sym) && survives(info))
+          val result = filterList(is)(info => checkValid(info.sym) && survives(info))
           shadower addInfos is
           result
         }

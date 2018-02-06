@@ -3786,7 +3786,7 @@ trait Types
       val tpe      = normalizeAliases(tpe0)
       val tpe1     = new ExistentialExtrapolation(tparams) extrapolate tpe
       var tparams0 = tparams
-      var tparams1 = tparams0 filter tpe1.contains
+      var tparams1 = filterList(tparams0)(tpe1.contains)
 
       while (tparams1 != tparams0) {
         tparams0 = tparams1
@@ -4741,6 +4741,8 @@ trait Types
   private[scala] val typeIsSubTypeOfSerializable = (tp: Type) => tp <:< SerializableTpe
   private[scala] val typeIsNothing = (tp: Type) => tp.typeSymbolDirect eq NothingClass
   private[scala] val typeIsAny = (tp: Type) => tp.typeSymbolDirect eq AnyClass
+  private[scala] val typeIsNotNothing = (tp: Type) => tp.typeSymbolDirect ne NothingClass
+  private[scala] val typeIsNotAny = (tp: Type) => tp.typeSymbolDirect ne AnyClass
   private[scala] val typeIsHigherKinded = (tp: Type) => tp.isHigherKinded
 
   /** The maximum depth of type `tp` */

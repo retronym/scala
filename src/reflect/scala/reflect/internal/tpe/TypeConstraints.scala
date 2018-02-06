@@ -84,8 +84,8 @@ private[internal] trait TypeConstraints {
       *  guarding addLoBound/addHiBound somehow broke raw types so it
       *  only guards against being created with them.]
       */
-    private var lobounds = lo0 filterNot typeIsNothing
-    private var hibounds = hi0 filterNot typeIsAny
+    private var lobounds = filterList(lo0)(typeIsNotNothing)
+    private var hibounds = filterList(hi0)(typeIsNotAny)
     private var numlo = numlo0
     private var numhi = numhi0
     private var avoidWidening = avoidWidening0
