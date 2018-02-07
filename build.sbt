@@ -32,6 +32,10 @@
  *   - to modularize the Scala compiler or library further
  */
 
+import java.io.{PrintWriter, StringWriter}
+
+import sbt.TestResult
+
 import scala.build._
 import VersionUtil._
 
@@ -656,6 +660,7 @@ lazy val partestJavaAgent = Project("partest-javaagent", file(".") / "src" / "pa
 
 lazy val test = project
   .dependsOn(compiler, interactive, replJlineEmbedded, scalap, partestExtras, partestJavaAgent, scaladoc)
+  .disablePlugins(plugins.JUnitXmlReportPlugin)
   .configs(IntegrationTest)
   .settings(commonSettings)
   .settings(disableDocs)
@@ -707,6 +712,61 @@ lazy val test = project
         result.copy(overall = TestResult.Error)
       }
       else result
+    },
+    // The default JUnitXMLListener doesn't play well with partest: we end up clobbering the one-and-only partest.xml
+    // file on group of tests run by `testAll`, and the test names in the XML file don't seem to show the path to the
+    // test for tests defined in a single file.
+    //
+    // Let's roll our own to try to enable the Jenkins JUnit test reports.
+    testListeners in IntegrationTest += new TestsListener {
+      val delegate = new JUnitXmlTestsListener(target.value.getAbsolutePath)
+      import java.util.EnumSet
+      import sbt.testing.{Status => TStatus}
+      val errorStatus = EnumSet.of(TStatus.Error)
+      val failStatus = EnumSet.of(TStatus.Failure)
+      val skipStatus = EnumSet.of(TStatus.Skipped, TStatus.Ignored)
+
+      override def doInit(): Unit = ()
+      override def doComplete(finalResult: TestResult.Value): Unit = ()
+      override def endGroup(name: String, t: Throwable): Unit = ()
+      override def endGroup(name: String, result: TestResult.Value): Unit = ()
+      override def testEvent(event: TestEvent): Unit = {
+        // TODO get the test timings out, too.
+        event.detail.foreach { e =>
+          def count(statusSet: java.util.Set[sbt.testing.Status]) = if (statusSet.contains(e.status())) 1 else 0
+          val trace: String = if (e.throwable.isDefined) {
+            val stringWriter = new StringWriter()
+            val writer = new PrintWriter(stringWriter)
+            e.throwable.get.printStackTrace(writer)
+            writer.flush()
+            stringWriter.toString
+          } else {
+            ""
+          }
+          val result = <testsuite hostname={ delegate.hostname } name={ e.fullyQualifiedName()}
+                                  tests={ "test" } errors={ "" + count(errorStatus) } failures={ "" + count(failStatus) } skipped={ "" + count(skipStatus) } time="0">
+            { delegate.properties }
+            <testcase classname={ e.fullyQualifiedName().replaceAll("/", "_") } name="test" time="0">{
+              e.status match {
+                case TStatus.Error if (e.throwable.isDefined) => <error message={ e.throwable.get.getMessage } type={ e.throwable.get.getClass.getName }>{ trace }</error>
+                case TStatus.Error => <error message={ "No Exception or message provided" }/>
+                case TStatus.Failure if (e.throwable.isDefined) => <failure message={ e.throwable.get.getMessage } type={ e.throwable.get.getClass.getName }>{ trace }</failure>
+                case TStatus.Failure => <failure message={ "No Exception or message provided" }/>
+                case TStatus.Ignored | TStatus.Skipped | sbt.testing.Status.Pending => <skipped/>
+                case _ =>
+              }
+            }
+            </testcase>
+            <system-out><![CDATA[]]></system-out>
+            <system-err><![CDATA[]]></system-err>
+          </testsuite>
+          val partestTestReports = target.value / "test-reports" / "partest"
+          val xmlFile = (partestTestReports / (e.fullyQualifiedName() + ".xml"))
+          xmlFile.getParentFile.mkdirs()
+          scala.xml.XML.save(xmlFile.getAbsolutePath, result, "UTF-8", true, null)
+        }
+      }
+      override def startGroup(name: String): Unit = ()
     }
   )
 
