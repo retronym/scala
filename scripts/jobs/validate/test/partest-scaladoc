@@ -2,5 +2,31 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/runsbt "partest --srcpath scaladoc"
+. $scriptsDir/common
+
+generateRepositoriesConfig $prRepoUrl
+SBT="$SBT_CMD -Dsbt.override.build.repos=true -Dsbt.repository.config=$sbtRepositoryConfig"
+
+case $prDryRun in
+
+  yep)
+    echo "DRY RUN"
+    ;;
+
+  *)
+
+    # build quick using STARR built upstream, as specified by scalaVersion
+    # (in that sense it's locker, since it was built with starr by that upstream job);
+    # and run JUnit tests, ScalaCheck tests, partest, OSGi tests, MiMa and scaladoc
+    $SBT \
+       -Dstarr.version=$scalaVersion \
+       --warn \
+       "setupValidateTest $prRepoUrl" \
+       $testExtraArgs \
+       "--srcpath scaladoc"
+
+    ;;
+
+esac
+
 
