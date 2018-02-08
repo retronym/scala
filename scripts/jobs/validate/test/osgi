@@ -1,0 +1,6 @@
+#!/bin/bash -e -v -x
+
+baseDir=${WORKSPACE-`pwd`}
+scriptsDir="$baseDir/scripts"
+$scriptsDir/test-template osgiTestFelix/test osgiTestEclipse/test
+
