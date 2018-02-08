@@ -2,5 +2,5 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/test-template "partest --srcpath scaladoc"
+$scriptsDir/runsbt "partest --srcpath scaladoc"
 
