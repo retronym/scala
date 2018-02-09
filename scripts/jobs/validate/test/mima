@@ -2,5 +2,5 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/test-template "library/mimaReportBinaryIssues" "reflect/mimaReportBinaryIssues"
+$scriptsDir/runsbt "library/mimaReportBinaryIssues" "reflect/mimaReportBinaryIssues"
 

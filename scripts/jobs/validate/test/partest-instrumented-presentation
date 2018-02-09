@@ -2,5 +2,5 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/test-template "partest instrumented presentation"
+$scriptsDir/runsbt "partest instrumented presentation"
 

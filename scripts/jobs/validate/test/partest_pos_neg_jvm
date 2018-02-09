@@ -2,5 +2,5 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/test-template "partest pos neg jvm"
+$scriptsDir/runsbt "partest pos neg jvm"
 

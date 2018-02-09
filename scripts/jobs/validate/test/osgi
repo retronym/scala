@@ -2,5 +2,5 @@
 
 baseDir=${WORKSPACE-`pwd`}
 scriptsDir="$baseDir/scripts"
-$scriptsDir/test-template osgiTestFelix/test osgiTestEclipse/test
+$scriptsDir/runsbt osgiTestFelix/test osgiTestEclipse/test
 
