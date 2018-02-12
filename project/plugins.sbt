@@ -29,3 +29,5 @@ libraryDependencies ++= Seq(
 concurrentRestrictions in Global := Seq(
   Tags.limitAll(1) // workaround for https://github.com/sbt/sbt/issues/2970
 )
+
+addSbtPlugin("com.github.romanowski" % "hoarder" % "1.0.1-M3")
