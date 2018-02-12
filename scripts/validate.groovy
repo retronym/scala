@@ -18,7 +18,7 @@ stage('publish') {
                 . scripts/common
                 sbt -Dstarr.version=${scalaVersion} test:compile
             """
-            stash name: "build" includes: "build/**/*"
+            stash name: "build", includes: "build/**/*"
         } finally {
             archiveArtifacts artifacts: 'hs_err_*.log,jenkins.properties', allowEmptyArchive: true
         }
@@ -43,7 +43,7 @@ def sbt(name, args) {
                 ansiColor('xterm') {
                     sh """#!/bin/bash
                         . scripts/common
-                        sbt -Dstarr.version=${scalaVersion} 'set antStyle := true' "$args"
+                        sbt -Dstarr.version=${scalaVersion} 'set antStyle := true' update "$args"
                     """
                 }
             }
