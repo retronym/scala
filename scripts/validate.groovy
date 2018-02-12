@@ -6,7 +6,6 @@ def scalaVersion = ""
 stage('publish') {
     node("") {
         try {
-            setDisplayName()
             scalaCheckout()
             ansiColor('xterm') {
                 runScript("scripts/jobs/validate/publish-core")
@@ -63,10 +62,6 @@ def sbt(name, args) {
 // END OF BUILD PROPER
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-def setDisplayName() {
-    currentBuild.setDisplayName("[${currentBuild.number}] $repo_user/$repo_name#$_scabot_pr at ${repo_ref.take(6)}")
-}
 
 def scalaCheckout() {
     checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '${repo_ref}']], doGenerateSubmoduleConfigurations: false, extensions: [[$class: 'CleanCheckout']], submoduleCfg: [], userRemoteConfigs: [[name: '"https://github.com/${repo_user}/${repo_name}.git', refspec: '+refs/heads/*:refs/remotes/${repo_user}/* +refs/pull/*/head:refs/remotes/${repo_user}/pr/*/head']]]
