@@ -1,8 +1,9 @@
 package partest
 
-import java.io.File
+import java.io.{File, OutputStream}
+import java.lang.reflect.InvocationTargetException
 import java.nio.charset.Charset
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Paths, StandardOpenOption}
 import java.util.Properties
 
 import org.junit.Assert
@@ -20,7 +21,7 @@ class JUnitPartest {
     val here = Paths.get(".").toAbsolutePath
     val parents = collection.Iterator.iterate(here)(_.getParent).takeWhile(_ != null)
     def cannotFindFile(): Nothing = throw new IllegalArgumentException("Cannot resolve " + path + " from "  + here + " or any of its parents")
-    val testFile = parents.map(_.resolve(path)).find(Files.exists(_)).getOrElse(cannotFindFile()).toAbsolutePath()
+    val testFile = parents.map(_.resolve(path)).find(Files.exists(_)).getOrElse(cannotFindFile()).toAbsolutePath().normalize()
     val consoleRunner = new ConsoleRunner(RunnerSpec.forArgs(Array()))
     def execTestInProcess(classesDir: File, log: File, properties: Map[String, String]): Boolean = {
       for ((k, v) <- properties) System.setProperty(k, v)
@@ -29,8 +30,17 @@ class JUnitPartest {
         val cls = loader.loadClass("Test")
         val main = cls.getDeclaredMethod("main", classOf[Array[String]])
         withExtraProperties(properties) {
-          capturingOutErr(log.toPath) {
-            main.invoke(null, Array[String]("jvm"))
+          val out = Files.newOutputStream(log.toPath, StandardOpenOption.APPEND)
+          try {
+            capturingOutErr(out) {
+              try {
+                main.invoke(null, Array[String]("jvm"))
+              } catch {
+                case ite: InvocationTargetException => throw ite.getCause
+              }
+            }
+          } finally {
+            out.close()
           }
         }
       }
@@ -105,13 +115,13 @@ class JUnitPartest {
   }
 
 
-  private def capturingOutErr[A](output: java.nio.file.Path)(f: => A): A = {
+  private def capturingOutErr[A](output: OutputStream)(f: => A): A = {
     import java.io._
     val savedOut = System.out
     val savedErr = System.err
     try {
       val charset = Charset.defaultCharset()
-      val printStream = new PrintStream(output.toFile, charset.name())
+      val printStream = new PrintStream(output, true, charset.name())
       try {
         System.setOut(printStream)
         System.setErr(printStream)
