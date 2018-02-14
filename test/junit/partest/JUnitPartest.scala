@@ -59,7 +59,7 @@ class JUnitPartest {
         logFile.delete()
         val argsFile  = nsc.io.Path(testFile).changeExtension("javaopts").jfile
         val argString = file2String(argsFile)
-        if (argString != "")
+        if (!compileOnly && argString != "")
           super.run() // we need to fork execution of this test as it has custom JVM options
         else
           runTestCommon((if (compileOnly) true else execTestInProcess(outDir, logFile, propertyOptions) && diffIsOk))
