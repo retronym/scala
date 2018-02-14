@@ -15,6 +15,7 @@ import scala.tools.partest.{TestState, file2String, nest}
 import scala.tools.partest.nest.{ConsoleRunner, RunnerSpec}
 
 class JUnitPartest {
+  def compileOnly = false
   def runTest(path: String): Unit = {
     val methodName = Thread.currentThread().getStackTrace.apply(2).getMethodName
 
@@ -61,7 +62,7 @@ class JUnitPartest {
         if (argString != "")
           super.run() // we need to fork execution of this test as it has custom JVM options
         else
-          runTestCommon(execTestInProcess(outDir, logFile, propertyOptions) && diffIsOk)
+          runTestCommon((if (compileOnly) true else execTestInProcess(outDir, logFile, propertyOptions) && diffIsOk))
 
         lastState
       }
