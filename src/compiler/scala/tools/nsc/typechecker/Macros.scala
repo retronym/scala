@@ -759,8 +759,9 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
         else Skip(expanded)
       case (false, true) =>
         macroLogLite("macro expansion is delayed: %s".format(expandee))
-        delayed += expandee -> undetparams
-        expandee updateAttachment MacroRuntimeAttachment(delayed = true, typerContext = typer.context, macroContext = Some(macroArgs(typer, expandee).c))
+        val att = MacroRuntimeAttachment(delayed = true, typerContext = typer.context, macroContext = Some(macroArgs(typer, expandee).c), undetparams)
+        delayed.put(att, ())
+        expandee updateAttachment att
         Delay(expandee)
       case (false, false) =>
         import typer.TyperErrorGen._
@@ -853,24 +854,32 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
    *    1) type vars (tpe.isInstanceOf[TypeVar]) // [Eugene] this check is disabled right now, because TypeVars seem to be created from undetparams anyways
    *    2) undetparams (sym.isTypeParameter && !sym.isSkolem)
    */
-  var hasPendingMacroExpansions = false // JZ this is never reset to false. What is its purpose? Should it not be stored in Context?
-  def typerShouldExpandDeferredMacros: Boolean = hasPendingMacroExpansions && !delayed.isEmpty
+  def typerShouldExpandDeferredMacros: Boolean = !delayed.isEmpty
   private val forced = perRunCaches.newWeakSet[Tree]
-  private val delayed = perRunCaches.newWeakMap[Tree, scala.collection.mutable.Set[Int]]()
-  private def isDelayed(expandee: Tree) = delayed contains expandee
+  private val delayed = perRunCaches.newGeneric(new java.util.IdentityHashMap[MacroRuntimeAttachment, Unit])()
+  private def isDelayed(expandee: Tree) = expandee.attachments.get[MacroRuntimeAttachment] match {
+    case Some(att) =>
+      att.delayed && delayed.containsKey(att)
+    case _ => false
+  }
   def clearDelayed(): Unit = delayed.clear()
   private def calculateUndetparams(expandee: Tree): scala.collection.mutable.Set[Int] =
     if (forced(expandee)) scala.collection.mutable.Set[Int]()
-    else delayed.getOrElse(expandee, {
-      val calculated = scala.collection.mutable.Set[Symbol]()
-      expandee foreach (sub => {
-        def traverse(sym: Symbol) = if (sym != null && (undetparams contains sym.id)) calculated += sym
-        if (sub.symbol != null) traverse(sub.symbol)
-        if (sub.tpe != null) sub.tpe foreach (sub => traverse(sub.typeSymbol))
-      })
-      macroLogVerbose("calculateUndetparams: %s".format(calculated))
-      calculated map (_.id)
-    })
+    else {
+      expandee.attachments.get[MacroRuntimeAttachment] match {
+        case Some(att) => att.undetParams
+        case None =>
+          val calculated = scala.collection.mutable.Set[Symbol]()
+          expandee foreach (sub => {
+            def traverse(sym: Symbol) = if (sym != null && (undetparams contains sym.id)) calculated += sym
+
+            if (sub.symbol != null) traverse(sub.symbol)
+            if (sub.tpe != null) sub.tpe foreach (sub => traverse(sub.typeSymbol))
+          })
+          macroLogVerbose("calculateUndetparams: %s".format(calculated))
+          calculated map (_.id)
+      }
+    }
   private val undetparams = perRunCaches.newSet[Int]()
   def notifyUndetparamsAdded(newUndets: List[Symbol]): Unit = {
     undetparams ++= newUndets map (_.id)
@@ -880,12 +889,11 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
     undetparams --= undetNoMore map (_.id)
     if (macroDebugVerbose) (undetNoMore zip inferreds) foreach { case (sym, tpe) => println("undetParam inferred: %s as %s".format(sym, tpe))}
     if (!delayed.isEmpty)
-      delayed.toList foreach {
-        case (expandee, undetparams) if !undetparams.isEmpty =>
-          undetparams --= undetNoMore map (_.id)
-          if (undetparams.isEmpty) {
-            hasPendingMacroExpansions = true
-            macroLogVerbose(s"macro expansion is pending: $expandee")
+      delayed.keySet() forEach {
+        case att if !att.undetParams.isEmpty =>
+          att.undetParams --= undetNoMore map (_.id)
+          if (att.undetParams.isEmpty) {
+            macroLogVerbose(s"macro expansion is pending")
           }
         case _ =>
           // do nothing
@@ -900,13 +908,18 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
     new Transformer {
       override def transform(tree: Tree) = super.transform(tree match {
         // todo. expansion should work from the inside out
-        case tree if (delayed contains tree) && calculateUndetparams(tree).isEmpty && !tree.isErroneous =>
-          val context = tree.attachments.get[MacroRuntimeAttachment].get.typerContext
-          delayed -= tree
-          context.implicitsEnabled = typer.context.implicitsEnabled
-          context.enrichmentEnabled = typer.context.enrichmentEnabled
-          context.macrosEnabled = typer.context.macrosEnabled
-          macroExpand(newTyper(context), tree, EXPRmode, WildcardType)
+        case tree if (isDelayed(tree)) && calculateUndetparams(tree).isEmpty && !tree.isErroneous =>
+          if (tree.isErroneous) {
+            tree
+          } else {
+            val att = tree.attachments.get[MacroRuntimeAttachment].get
+            val context = att.typerContext
+            val removed = delayed.remove(att)
+            context.implicitsEnabled = typer.context.implicitsEnabled
+            context.enrichmentEnabled = typer.context.enrichmentEnabled
+            context.macrosEnabled = typer.context.macrosEnabled
+            macroExpand(newTyper(context), tree, EXPRmode, WildcardType)
+          }
         case _ =>
           tree
       })

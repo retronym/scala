@@ -132,6 +132,7 @@ abstract class BytecodeTest {
     import scala.tools.nsc.Settings
     // logic inspired by scala.tools.util.PathResolver implementation
     // `Settings` is used to check YdisableFlatCpCaching in ZipArchiveFlatClassPath
+    val settings = new Settings()
     val factory = new ClassPathFactory(new Settings())
     val containers = factory.classesInExpandedPath(Defaults.javaUserClassPath)
     new AggregateClassPath(containers)
