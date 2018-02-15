@@ -7,7 +7,7 @@ object Test {
     lazy val Singleton = new Singleton
 
     var i = 0
-    val threads = mutable.ListBuffer[Thread]()
+    val threads = collection.mutable.ListBuffer[Thread]()
     while (i < 4) {
       val t = new Thread(new Runnable {
         def run = Singleton.field
