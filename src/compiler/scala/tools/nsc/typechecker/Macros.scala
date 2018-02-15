@@ -918,7 +918,12 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
             context.implicitsEnabled = typer.context.implicitsEnabled
             context.enrichmentEnabled = typer.context.enrichmentEnabled
             context.macrosEnabled = typer.context.macrosEnabled
-            macroExpand(newTyper(context), tree, EXPRmode, WildcardType)
+            val expanded = typer.typerWithLocalContext(context)(localTyper =>
+              macroExpand(localTyper, tree, EXPRmode, WildcardType)
+            )
+            typer.context.reporter.errors.foreach(err => typer.context.reporter.issue(err)(typer.context))
+
+            expanded
           }
         case _ =>
           tree
