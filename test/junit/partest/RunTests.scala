@@ -17,6 +17,7 @@ import scala.tools.partest.nest.{ConsoleRunner, FileManager, RunnerSpec, SuiteRu
 import scala.tools.partest.{PartestDefaults, TestState, file2String, nest}
 
 class RunTests extends JUnitPartest {
+
   private def test(path: String): Unit = runTest("test/" + path.stripPrefix(".."))
 
   // for f in $((find . -maxdepth 1 -type d | grep -v .obj;  find . -maxdepth 1 -name '*.scala' -o -name '*.java') | sed 's|./||'); do echo "@Test def \`${f%.*}\`() = test(\"../../test/files/run/$f\")"; done | pbcopy

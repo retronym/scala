@@ -1,6 +1,6 @@
 package partest
 
-import java.io.{File, OutputStream}
+import java.io.{Closeable, File, OutputStream}
 import java.lang.reflect.InvocationTargetException
 import java.nio.charset.Charset
 import java.nio.file.{Files, Paths, StandardOpenOption}
@@ -13,8 +13,25 @@ import scala.tools.nsc
 import scala.tools.partest.TestState._
 import scala.tools.partest.{TestState, file2String, nest}
 import scala.tools.partest.nest.{ConsoleRunner, RunnerSpec}
+import scala.tools.testing.ClearAfterClass
+import scala.util.matching.Regex
 
-class JUnitPartest {
+class JUnitPartest extends ClearAfterClass {
+  private class Summary() extends Closeable {
+    private var failures = collection.mutable.ListBuffer[(File, String)]()
+    def registerFailure(name: File, methodName: String): Unit = {
+      failures.+=((name, methodName))
+    }
+    def close(): Unit = {
+      if (failures.nonEmpty) {
+        val testClass = JUnitPartest.this.getClass.getName
+        val regex = failures.map(_._2).map(Regex.quote(_)).mkString("|")
+        println(s"${failures.length} tests failed with ${testClass}, rerun with: \n  junit/testOnly ${JUnitPartest.this.getClass.getName} -- --tests=${regex}")
+      }
+    }
+  }
+  private val summary = cached("summary", () => new Summary())
+
   def compileOnly = false
   def runTest(path: String): Unit = {
     val methodName = Thread.currentThread().getStackTrace.apply(2).getMethodName
@@ -88,23 +105,28 @@ class JUnitPartest {
         "user.language" -> "en",
         "user.country" -> "US"
       )
-
     }
-    runner.run()
-    runner.lastState match {
-      case Pass(testFile) =>
-      case Uninitialized(testFile) =>
-        Assert.fail("Uninitialized")
-      case Updated(testFile) =>
-        println("updated")
-      case Skip(testFile, reason) =>
-        println("skipped")
-      case Fail(testFile, reason, transcript) =>
-        transcript.foreach(println)
-        Assert.fail(reason)
-      case Crash(testFile, caught, transcript) =>
-        transcript.foreach(println)
-        throw caught
+    try {
+      runner.run()
+      runner.lastState match {
+        case Pass(testFile) =>
+        case Uninitialized(testFile) =>
+          Assert.fail("Uninitialized")
+        case Updated(testFile) =>
+          println("updated")
+        case Skip(testFile, reason) =>
+          println("skipped")
+        case Fail(testFile, reason, transcript) =>
+          transcript.foreach(println)
+          Assert.fail(reason)
+        case Crash(testFile, caught, transcript) =>
+          transcript.foreach(println)
+          throw caught
+      }
+    } catch {
+      case t: Throwable =>
+        summary.registerFailure(testFile.toFile, Thread.currentThread().getStackTrace.apply(3).getMethodName)
+        throw t
     }
   }
 
