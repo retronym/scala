@@ -7,7 +7,7 @@ object TrapExit {
     override def getCause: Throwable = throw this
   }
 
-  def apply[A](action: () => A): Either[Int, A] = {
+  def apply[A](action: () => A): Either[(Int, Throwable), A] = {
     val saved = System.getSecurityManager
     System.setSecurityManager(new DelegatingSecurityManager(saved) {
       override def checkExit(status: Int): Unit = throw new TrapExitThrowable(status)
@@ -16,7 +16,7 @@ object TrapExit {
       Right(action())
     } catch {
       case te: TrapExitThrowable =>
-        Left(te.status)
+        Left((te.status, te))
     } finally {
       System.setSecurityManager(saved)
     }

@@ -47,7 +47,11 @@ class JUnitPartest {
       }
 
       TrapExit(() => run()) match {
-        case Left(status) if status != 0 => Assert.fail(s"System.exit(${status}) was called.")
+        case Left((status, throwable)) if status != 0 =>
+          Files.readAllLines(log.toPath).forEach(println(_))
+          val error = new AssertionError(s"System.exit(${status}) was called.")
+          error.setStackTrace(throwable.getStackTrace)
+          throw error
         case _ =>
       }
       true
