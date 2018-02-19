@@ -50,6 +50,11 @@ class MapNSetNKeyIdentityTest {
 
   }
 
+  // TODO test with Map.++, Map.+ etc that route through updated. Ditto for Set
+
+  // TODO what about union, etc? Should Set(k) union Set(_k) endeavour to keep the first encountered key?
+  // See immutable.HashSet1.union0
+
   private trait TestOps[T <: AnyRef] {
     def keySet(coll: T): Set[AnyRef]
     def updated(coll: T, k: AnyRef, v: AnyRef): T
