@@ -116,7 +116,7 @@ object Map extends ImmutableMapFactory[Map] {
       if (key == key1) value1 else default
     def iterator = Iterator((key1, value1))
     override def updated [V1 >: V] (key: K, value: V1): Map[K, V1] =
-      if (key == key1) new Map1(key1, value)
+      if (key == key1) new Map1(key, value)
       else new Map2(key1, value1, key, value)
     def + [V1 >: V](kv: (K, V1)): Map[K, V1] = updated(kv._1, kv._2)
     def - (key: K): Map[K, V] =
@@ -144,8 +144,8 @@ object Map extends ImmutableMapFactory[Map] {
       else default
     def iterator = Iterator((key1, value1), (key2, value2))
     override def updated [V1 >: V] (key: K, value: V1): Map[K, V1] =
-      if (key == key1) new Map2(key1, value, key2, value2)
-      else if (key == key2) new Map2(key1, value1, key2, value)
+      if (key == key1) new Map2(key, value, key2, value2)
+      else if (key == key2) new Map2(key1, value1, key, value)
       else new Map3(key1, value1, key2, value2, key, value)
     def + [V1 >: V](kv: (K, V1)): Map[K, V1] = updated(kv._1, kv._2)
     def - (key: K): Map[K, V] =
@@ -178,9 +178,9 @@ object Map extends ImmutableMapFactory[Map] {
       else default
     def iterator = Iterator((key1, value1), (key2, value2), (key3, value3))
     override def updated [V1 >: V] (key: K, value: V1): Map[K, V1] =
-      if (key == key1)      new Map3(key1, value, key2, value2, key3, value3)
-      else if (key == key2) new Map3(key1, value1, key2, value, key3, value3)
-      else if (key == key3) new Map3(key1, value1, key2, value2, key3, value)
+      if (key == key1)      new Map3(key, value, key2, value2, key3, value3)
+      else if (key == key2) new Map3(key1, value1, key, value, key3, value3)
+      else if (key == key3) new Map3(key1, value1, key2, value2, key, value)
       else new Map4(key1, value1, key2, value2, key3, value3, key, value)
     def + [V1 >: V](kv: (K, V1)): Map[K, V1] = updated(kv._1, kv._2)
     def - (key: K): Map[K, V] =
@@ -217,10 +217,10 @@ object Map extends ImmutableMapFactory[Map] {
       else default
     def iterator = Iterator((key1, value1), (key2, value2), (key3, value3), (key4, value4))
     override def updated [V1 >: V] (key: K, value: V1): Map[K, V1] =
-      if (key == key1)      new Map4(key1, value, key2, value2, key3, value3, key4, value4)
-      else if (key == key2) new Map4(key1, value1, key2, value, key3, value3, key4, value4)
-      else if (key == key3) new Map4(key1, value1, key2, value2, key3, value, key4, value4)
-      else if (key == key4) new Map4(key1, value1, key2, value2, key3, value3, key4, value)
+      if (key == key1)      new Map4(key, value, key2, value2, key3, value3, key4, value4)
+      else if (key == key2) new Map4(key1, value1, key, value, key3, value3, key4, value4)
+      else if (key == key3) new Map4(key1, value1, key2, value2, key, value, key4, value4)
+      else if (key == key4) new Map4(key1, value1, key2, value2, key3, value3, key, value)
       else (new HashMap).updated(key1,value1).updated(key2, value2).updated(key3, value3).updated(key4, value4).updated(key, value)
     def + [V1 >: V](kv: (K, V1)): Map[K, V1] = updated(kv._1, kv._2)
     def - (key: K): Map[K, V] =

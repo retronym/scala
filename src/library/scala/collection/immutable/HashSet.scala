@@ -262,7 +262,10 @@ object HashSet extends ImmutableSetFactory[HashSet] {
     }
 
     override private[collection] def updated0(key: A, hash: Int, level: Int): HashSet[A] =
-      if (hash == this.hash && key == this.key) this
+      if (hash == this.hash && key == this.key) {
+        if (key.asInstanceOf[AnyRef] eq this.key.asInstanceOf[AnyRef]) this
+        else new HashSet1[A](key, hash)
+      }
       else {
         if (hash != this.hash) {
           makeHashTrieSet(this.hash, this, hash, new HashSet1(key, hash), level)
@@ -332,7 +335,9 @@ object HashSet extends ImmutableSetFactory[HashSet] {
     }
 
     override private[collection] def updated0(key: A, hash: Int, level: Int): HashSet[A] =
-      if (hash == this.hash) new HashSetCollision1(hash, ks + key)
+      if (hash == this.hash) {
+        new HashSetCollision1(hash, ks - key + key)
+      }
       else makeHashTrieSet(this.hash, this, hash, new HashSet1(key, hash), level)
 
     override private[immutable] def union0(that: LeafHashSet[A], level: Int): HashSet[A] = that match {
