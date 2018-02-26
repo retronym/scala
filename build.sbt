@@ -208,16 +208,12 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
 
   // Lets us CTRL-C partest without exiting SBT entirely
   cancelable in Global := true,
-  // When we fork subprocesses, use the base directory as the working directory.
-  // This enables `sbt> partest test/files/run/t1.scala` or `sbt> scalac sandbox/test.scala`
-  baseDirectory in Compile := (baseDirectory in ThisBuild).value,
-  baseDirectory in Test := (baseDirectory in ThisBuild).value,
 
   // Don't log process output (e.g. of forked `compiler/runMain ...Main`), just pass it
   // directly to stdout
   outputStrategy in run := Some(StdoutOutput),
   Quiet.silenceScalaBinaryVersionWarning
-) ++ removePomDependencies
+) ++ removePomDependencies ++ setForkedWorkingDirectory
 
 /** Extra post-processing for the published POM files. These are needed to create POMs that
   * are equivalent to the ones from the Ant build. In the long term this should be removed and
@@ -331,6 +327,13 @@ def filterDocSources(ff: FileFilter): Seq[Setting[_]] = Seq(
 def regexFileFilter(s: String): FileFilter = new FileFilter {
   val pat = s.r.pattern
   def accept(f: File) = pat.matcher(f.getAbsolutePath.replace('\\', '/')).matches()
+}
+
+def setForkedWorkingDirectory: Seq[Setting[_]] = {
+  // When we fork subprocesses, use the base directory as the working directory.
+  // This“ enables `sbt> partest test/files/run/t1.scala` or `sbt> scalac sandbox/test.scala`
+  val setting = (forkOptions in Compile) := (forkOptions in Compile).value.withWorkingDirectory((baseDirectory in ThisBuild).value)
+  setting ++ inTask(run)(setting)
 }
 
 // This project provides the STARR scalaInstance for bootstrapping
