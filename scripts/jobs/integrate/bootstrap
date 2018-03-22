@@ -28,9 +28,13 @@ rm -rf build/
 
 buildModules
 
-buildQuick clean testAll publish
+sbtBuildTask=${sbtBuildTask:-testAll}
+buildQuick clean "$sbtBuildTask" publish
 
-testStability
+
+if [ "$testStability" != "no" ]; then
+  testStability
+fi
 
 if [ "$publishToSonatype" == "yes" ]; then
   publishSonatype
