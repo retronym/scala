@@ -24,7 +24,8 @@ abstract class ConstantFolder {
     def unapply(tree: Tree): Option[Constant] = tree match {
       case Literal(x) => Some(x)
       case term if term.symbol != null && !term.symbol.isLazy && (term.symbol.isVal || (term.symbol.isGetter && term.symbol.accessed.isVal)) =>
-        extractConstant(term.tpe)
+        if (treeInfo.isQualifierSafeToElide(term)) extractConstant(term.tpe)
+        else None
       case _ => None
     }
   }
@@ -72,6 +73,7 @@ abstract class ConstantFolder {
       case _ => apply(tree)
     }
   }
+
 
   private def fold(orig: Tree, folded: Constant, foldable: Boolean): Tree =
     if ((folded eq null) || folded.tag == UnitTag) orig
