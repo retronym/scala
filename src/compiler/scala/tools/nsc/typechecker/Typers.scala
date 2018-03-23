@@ -5074,7 +5074,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 SelectWithUnderlyingError(tree, err)
                 return tree
               case SilentResultValue((qual, pre)) =>
-                (stabilize(qual, pre, mode, pt), None)
+                (stabilize(constfold(qual), pre, mode, pt), None)
             }
 
             result match {
