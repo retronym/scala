@@ -49,8 +49,15 @@ object PathResolver {
   object Environment {
     import scala.collection.JavaConverters._
 
-    private def searchForBootClasspath =
-      System.getProperties.asScala collectFirst { case (k, v) if k endsWith ".boot.class.path" => v } getOrElse ""
+    private def searchForBootClasspath: String = {
+      val props = System.getProperties
+      // This formulation should be immune to ConcurrentModificationExceptions when system properties
+      // we're unlucky enough to witness a partially published result of System.setProperty or direct
+      // mutation of the System property map. stringPropertyNames internally uses the Enumeration interface,
+      // rather than Iterator, and this disables the fail-fast ConcurrentModificationException.
+      val propNames = props.stringPropertyNames()
+      propNames.asScala collectFirst { case k if k endsWith ".boot.class.path" => props.getProperty(k) } getOrElse ""
+    }
 
     /** Environment variables which java pays attention to so it
      *  seems we do as well.
@@ -236,7 +243,7 @@ final class PathResolver(settings: Settings) {
 
     // Assemble the elements!
     def basis = List[Traversable[ClassPath]](
-      JrtClassPath.apply(),                         // 0. The Java 9 classpath (backed by the jrt:/ virtual system, if available)
+      JrtClassPath.apply(settings.releaseValue),    // 0. The Java 9 classpath (backed by the jrt:/ virtual system, if available)
       classesInPath(javaBootClassPath),             // 1. The Java bootstrap class path.
       contentsOfDirsInPath(javaExtDirs),            // 2. The Java extension class path.
       classesInExpandedPath(javaUserClassPath),     // 3. The Java application class path.
