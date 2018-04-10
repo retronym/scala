@@ -612,7 +612,10 @@ def osgiTestProject(p: Project, framework: ModuleID) = p
       )
     },
     Keys.test in Test := (Keys.test in Test).dependsOn(packageBin in Compile).value,
+    Keys.testOnly in Test := (Keys.test in Test).dependsOn(packageBin in Compile).value,
     testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v", "-q"),
+    javaOptions in Test += "-Dscala.bundle.dir=" + (buildDirectory in ThisBuild).value / "osgi",
+    (forkOptions in Test in test) := (forkOptions in Test in test).value.withWorkingDirectory((baseDirectory in ThisBuild).value),
     unmanagedSourceDirectories in Test := List((baseDirectory in ThisBuild).value / "test" / "osgi" / "src"),
     unmanagedResourceDirectories in Compile := (unmanagedSourceDirectories in Test).value,
     includeFilter in unmanagedResources in Compile := "*.xml",
