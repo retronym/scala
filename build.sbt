@@ -176,32 +176,24 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
   apiURL := Some(url("http://www.scala-lang.org/api/" + versionProperties.value.mavenVersion + "/")),
   pomIncludeRepository := { _ => false },
   pomExtra := {
-    val base =
-      <scm>
-        <connection>scm:git:git://github.com/scala/scala.git</connection>
-        <url>https://github.com/scala/scala.git</url>
-      </scm>
-        <issueManagement>
-          <system>GitHub</system>
-          <url>https://github.com/scala/bug/issues</url>
-        </issueManagement>
-        <developers>
-          <developer>
-            <id>lamp</id>
-            <name>LAMP/EPFL</name>
-          </developer>
-          <developer>
-            <id>Lightbend</id>
-            <name>Lightbend, Inc.</name>
-          </developer>
-        </developers>
-    apiURL.value match {
-      case Some(url) => base ++
-        <properties>
-          <info.apiURL>{url.toString}</info.apiURL>
-        </properties>
-      case None => base
-    }
+    <scm>
+      <connection>scm:git:git://github.com/scala/scala.git</connection>
+      <url>https://github.com/scala/scala.git</url>
+    </scm>
+      <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/scala/bug/issues</url>
+      </issueManagement>
+      <developers>
+        <developer>
+          <id>lamp</id>
+          <name>LAMP/EPFL</name>
+        </developer>
+        <developer>
+          <id>Lightbend</id>
+          <name>Lightbend, Inc.</name>
+        </developer>
+      </developers>
   },
   // Remove auto-generated manifest attributes
   packageOptions in Compile in packageBin := Seq.empty,
