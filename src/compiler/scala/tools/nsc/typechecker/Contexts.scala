@@ -6,10 +6,11 @@
 package scala.tools.nsc
 package typechecker
 
-import scala.collection.{ immutable, mutable }
+import scala.collection.{immutable, mutable}
 import scala.annotation.tailrec
 import scala.reflect.internal.util.shortClassOfInstance
 import scala.reflect.internal.Reporter
+import scala.tools.nsc.util.JpmsClassPath
 
 /**
  *  @author  Martin Odersky
@@ -753,7 +754,19 @@ trait Contexts { self: Analyzer =>
       (pre == NoPrefix) || {
         val ab = sym.accessBoundary(sym.owner)
 
-        (  (ab.isTerm || ab == rootMirror.RootClass)
+        val jpmsCanAccess = global.classPath match {
+          case jcp: JpmsClassPath =>
+            def moduleNameOf(sym: Symbol) = sym.enclosingTopLevelClass match {
+              case cls: ClassSymbol => cls.jpmsModuleName
+              case _ => ""
+            }
+            val symModule = moduleNameOf(sym)
+            val thisModule = moduleNameOf(owner)
+            jcp.checkAccess(thisModule, symModule, sym.enclosingPackage.fullNameString)
+          case _ =>
+            true
+        }
+        jpmsCanAccess && (  (ab.isTerm || ab == rootMirror.RootClass)
         || (accessWithin(ab) || accessWithinLinked(ab)) &&
              (  !sym.isLocalToThis
              || sym.isProtected && isSubThisType(pre, sym.owner)

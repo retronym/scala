@@ -3263,6 +3263,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private[this] var thisTypeCache: Type      = _
     private[this] var thisTypePeriod           = NoPeriod
+    var jpmsModuleName: String = ""
 
     override def resolveOverloadedFlag(flag: Long) = flag match {
       case INCONSTRUCTOR => "<inconstructor>" // INCONSTRUCTOR / CONTRAVARIANT / LABEL

@@ -122,7 +122,7 @@ abstract class SymbolLoaders {
   /** Enter class and module with given `name` into scope of `root`
    *  and give them `completer` as type.
    */
-  def enterClassAndModule(root: Symbol, name: String, getCompleter: (ClassSymbol, ModuleSymbol) => SymbolLoader): Unit = {
+  def enterClassAndModule(root: Symbol, name: String, jpmsModuleName: String, getCompleter: (ClassSymbol, ModuleSymbol) => SymbolLoader): Unit = {
     val clazz0 = newClass(root, name)
     val module0 = newModule(root, name)
     val completer = getCompleter(clazz0, module0)
@@ -133,6 +133,8 @@ abstract class SymbolLoaders {
     // to reuse the symbols returned below.
     val clazz = enterClass(root, clazz0, completer)
     val module = enterModule(root, module0, completer)
+    clazz.asInstanceOf[ClassSymbol].jpmsModuleName = jpmsModuleName
+    module.moduleClass.asInstanceOf[ClassSymbol].jpmsModuleName = jpmsModuleName
     if (!clazz.isAnonymousClass) {
       // Diagnostic for scala/bug#7147
       def msg: String = {
@@ -153,7 +155,7 @@ abstract class SymbolLoaders {
    *  (overridden in interactive.Global).
    */
   def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile): Unit = {
-    enterClassAndModule(root, name, (_, _) => new SourcefileLoader(src))
+    enterClassAndModule(root, name, jpmsModuleName = "", (_, _) => new SourcefileLoader(src))
   }
 
   /** The package objects of scala and scala.reflect should always
@@ -179,7 +181,7 @@ abstract class SymbolLoaders {
         if (settings.verbose) inform("[symloader] no class, picked up source file for " + src.path)
         enterToplevelsFromSource(owner, classRep.name, src)
       case (Some(bin), _) =>
-        enterClassAndModule(owner, classRep.name, new ClassfileLoader(bin, _, _))
+        enterClassAndModule(owner, classRep.name, classRep.jpmsModuleName, new ClassfileLoader(bin, _, _))
     }
   }
 
@@ -264,7 +266,8 @@ abstract class SymbolLoaders {
       val classPathEntries = classPath.list(packageName)
 
       if (!root.isRoot)
-        for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
+        for (entry <- classPathEntries.classesAndSources)
+          initializeFromClassPath(root, entry)
       if (!root.isEmptyPackageClass) {
         for (pkg <- classPathEntries.packages) {
           val fullName = pkg.name
