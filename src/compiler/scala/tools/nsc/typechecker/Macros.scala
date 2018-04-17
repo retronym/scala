@@ -754,7 +754,15 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
   /** Expands a term macro used in apply role as `M(2)(3)` in `val x = M(2)(3)`.
    *  @see DefMacroExpander
    */
-  def macroExpand(typer: Typer, expandee: Tree, mode: Mode, pt: Type): Tree = pluginsMacroExpand(typer, expandee, mode, pt)
+  def macroExpand(typer: Typer, expandee: Tree, mode: Mode, pt: Type): Tree = {
+    val macroSym = expandee.symbol
+    currentRun.profiler.beforeMacroExpansion(macroSym)
+    try {
+      pluginsMacroExpand(typer, expandee, mode, pt)
+    } finally {
+      currentRun.profiler.afterMacroExpansion(macroSym)
+    }
+  }
 
   /** Default implementation of `macroExpand`.
    *  Can be overridden by analyzer plugins (see AnalyzerPlugins.pluginsMacroExpand for more details)
