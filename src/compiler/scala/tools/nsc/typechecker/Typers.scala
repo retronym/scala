@@ -1820,7 +1820,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
-    def typedClassDef(cdef: ClassDef): Tree = {
+    def typedClassDef(cdef: ClassDef): Tree = statistics.withContext(true, cdef.symbol, NoSymbol, NoSymbol) {
       val clazz = cdef.symbol
       val typedMods = typedModifiers(cdef.mods)
       assert(clazz != NoSymbol, cdef)
@@ -1856,7 +1856,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         .setType(NoType)
     }
 
-    def typedModuleDef(mdef: ModuleDef): Tree = {
+    def typedModuleDef(mdef: ModuleDef): Tree = statistics.withContext(true, mdef.symbol, NoSymbol, NoSymbol) {
       // initialize all constructors of the linked class: the type completer (Namer.methodSig)
       // might add default getters to this object. example: "object T; class T(x: Int = 1)"
       val linkedClass = companionSymbolOf(mdef.symbol, context)
@@ -2032,7 +2032,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedModifiers(mods: Modifiers): Modifiers =
       mods.copy(annotations = Nil) setPositions mods.positions
 
-    def typedValDef(vdef: ValDef): ValDef = {
+    def typedValDef(vdef: ValDef): ValDef = statistics.withContext(true, vdef.symbol, NoSymbol, NoSymbol) {
       val sym = vdef.symbol
       val valDefTyper = {
         val maybeConstrCtx =
@@ -2258,9 +2258,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         failStruct(ddef.tpt.pos, "a user-defined value class", where = "Result type")
     }
 
-    def typedDefDef(ddef: DefDef): DefDef = {
-      // an accessor's type completer may mutate a type inside `ddef` (`== context.unit.synthetics(ddef.symbol)`)
-      // concretely: it sets the setter's parameter type or the getter's return type (when derived from a valdef with empty tpt)
+    def typedDefDef(ddef: DefDef): DefDef = statistics.withContext(true, ddef.symbol, NoSymbol, NoSymbol) {
       val meth = ddef.symbol.initialize
 
       reenterTypeParams(ddef.tparams)
@@ -2293,9 +2291,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       var rhs1 =
         if (ddef.name == nme.CONSTRUCTOR && !ddef.symbol.hasStaticFlag) { // need this to make it possible to generate static ctors
           if (!meth.isPrimaryConstructor &&
-              (!meth.owner.isClass ||
-               meth.owner.isModuleClass ||
-               meth.owner.isAnonOrRefinementClass))
+            (!meth.owner.isClass ||
+              meth.owner.isModuleClass ||
+              meth.owner.isAnonOrRefinementClass))
             InvalidConstructorDefError(ddef)
           typed(ddef.rhs)
         } else if (meth.isMacro) {
@@ -2320,7 +2318,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         rhs1 = checkDead(rhs1)
 
       if (!isPastTyper && meth.owner.isClass &&
-          meth.paramss.exists(ps => ps.exists(_.hasDefault) && isRepeatedParamType(ps.last.tpe)))
+        meth.paramss.exists(ps => ps.exists(_.hasDefault) && isRepeatedParamType(ps.last.tpe)))
         StarWithDefaultError(meth)
 
       if (!isPastTyper) {

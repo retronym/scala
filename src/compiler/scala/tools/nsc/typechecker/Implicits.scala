@@ -80,6 +80,11 @@ trait Implicits {
    *  @return                        A search result
    */
   def inferImplicit(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean, pos: Position): SearchResult = {
+    statistics.withContext(hasLength(context.openImplicits, 0) && hasLength(openMacros, 0), context.owner, NoSymbol, pt.typeSymbol) {
+      inferImplicit1(tree, pt, reportAmbiguous, isView, context, saveAmbiguousDivergent, pos)
+    }
+  }
+  private def inferImplicit1(tree: Tree, pt: Type, reportAmbiguous: Boolean, isView: Boolean, context: Context, saveAmbiguousDivergent: Boolean, pos: Position): SearchResult = {
     // Note that the isInvalidConversionTarget seems to make a lot more sense right here, before all the
     // work is performed, than at the point where it presently exists.
     val shouldPrint     = printTypings && !context.undetparams.isEmpty

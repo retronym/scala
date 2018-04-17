@@ -10,12 +10,13 @@ package nsc
 import java.io.{File, FileNotFoundException, IOException}
 import java.net.URL
 import java.nio.charset.{Charset, CharsetDecoder, IllegalCharsetNameException, UnsupportedCharsetException}
+
 import scala.collection.{immutable, mutable}
 import io.{AbstractFile, Path, SourceReader}
 import reporters.Reporter
 import util.{ClassPath, returning}
 import scala.reflect.ClassTag
-import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile, StatisticsStatics}
+import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile, Statistics, StatisticsStatics}
 import scala.reflect.internal.pickling.PickleBuffer
 import symtab.{Flags, SymbolTable, SymbolTrackers}
 import symtab.classfile.Pickler
@@ -26,9 +27,11 @@ import typechecker._
 import transform.patmat.PatternMatching
 import transform._
 import backend.{JavaPlatform, ScalaPrimitives}
-import backend.jvm.{GenBCode, BackendStats}
+import backend.jvm.{BackendStats, GenBCode}
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.Future
 import scala.language.postfixOps
+import scala.reflect.io.Path
 import scala.tools.nsc.ast.{TreeGen => AstTreeGen}
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.profile.Profiler
@@ -1477,8 +1480,41 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
           runCheckers()
 
         // output collected statistics
-        if (settings.YstatisticsEnabled && settings.Ystatistics.contains(phase.name))
+        if (settings.YstatisticsEnabled && settings.Ystatistics.contains(phase.name)) {
           printStatisticsFor(phase)
+          if (phase == typerPhase) {
+            import java.nio.file._
+            val writer = Files.newBufferedWriter(java.nio.file.Paths.get("/tmp/output.csv"))
+            try {
+              for ((key @ statistics.StatsKey(sym, macroo, implicitPt), stats) <- statistics.statsMap if sym != NoSymbol) {
+                val ownerChain = sym.ownerChain.toArray
+                var i = ownerChain.length - 1
+                while (i >= 0) {
+                  writer.write(ownerChain(i).name.toString)
+                  if (i != 0) writer.write(";")
+                  i -= 1
+                }
+                if (macroo != NoSymbol) {
+                  writer.write(";")
+                  writer.write("<macro>;")
+                  writer.write(macroo.fullName)
+                }
+                if (implicitPt != NoSymbol) {
+                  writer.write(";")
+                  writer.write("<implicit>;")
+                  writer.write(implicitPt.fullName)
+                }
+                writer.write(" ")
+                writer.write(String.valueOf(stats.duration))
+                writer.write("\n")
+              }
+            } finally {
+              writer.close()
+            }
+          }
+        }
+
+
 
         advancePhase()
       }
@@ -1580,9 +1616,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     private val hotCounters =
       List(statistics.retainedCount, statistics.retainedByType, statistics.nodeByType)
     private val parserStats = {
-      import statistics.treeNodeCount
-      if (settings.YhotStatisticsEnabled) treeNodeCount :: hotCounters
-      else List(treeNodeCount)
+      if (settings.YhotStatisticsEnabled) statistics.treeNodeCount :: hotCounters
+      else List(statistics.treeNodeCount)
     }
 
     final def printStatisticsFor(phase: Phase) = {
@@ -1599,7 +1634,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         }
       }
 
-      val quants: Iterable[statistics.Quantity] =
+      val quants: Iterable[Statistics#Quantity] =
         if (phase.name == "parser") parserStats
         else if (settings.YhotStatisticsEnabled) statistics.allQuantities
         else statistics.allQuantities.filterNot(q => hotCounters.contains(q))
