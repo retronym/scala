@@ -769,6 +769,10 @@ trait Namers extends MethodSynthesis {
         val m = ensureCompanionObject(tree, caseModuleDef)
         m.moduleClass.updateAttachment(new ClassForCaseCompanionAttachment(tree))
       }
+      if (mods.hasAnnotationNamed(tpnme.EntityAnnot)) {
+        val m = ensureCompanionObject(tree, companionModuleDef(_))
+        m.moduleClass.updateAttachment(new ClassForCaseCompanionAttachment(tree))
+      }
       val hasDefault = impl.body exists treeInfo.isConstructorWithDefault
       if (hasDefault) {
         val m = ensureCompanionObject(tree)
@@ -975,6 +979,19 @@ trait Namers extends MethodSynthesis {
       }
     }
 
+    def propTypeCompleter(nodeDef: ValOrDefDef) = new PropTypeCompleter(nodeDef)
+    class PropTypeCompleter(nodeDef: ValOrDefDef) extends TypeCompleterBase(nodeDef) {
+      override def completeImpl(propSym: Symbol): Unit = {
+        val underlying = propSym.owner.companionClass.info.decl(propSym.name)
+        def toFunction(tpe: Type): Type = tpe match {
+          case NullaryMethodType(res) => toFunction(res)
+          case MethodType(params, res) => functionType(params.map(_.info), toFunction(res))
+          case tp => tp // TODO error on PolyType, dependent method types.
+        }
+        propSym.setInfo(NullaryMethodType(appliedType(definitions.OptionClass, toFunction(underlying.info))))
+      }
+    }
+
     // see scala.annotation.meta's package class for more info
     // Annotations on ValDefs can be targeted towards the following: field, getter, setter, beanGetter, beanSetter, param.
     // The defaults are:
@@ -1150,8 +1167,21 @@ trait Namers extends MethodSynthesis {
       if (clazz.isModuleClass) {
         clazz.attachments.get[ClassForCaseCompanionAttachment] foreach { cma =>
           val cdef = cma.caseClass
-          assert(cdef.mods.isCase, "expected case class: "+ cdef)
-          addApplyUnapply(cdef, templateNamer)
+          if (cdef.symbol.isCase) {
+            addApplyUnapply(cdef, templateNamer)
+          } else {
+            for (member <- cdef.impl.body) {
+              member match {
+                case vdd: ValOrDefDef =>
+                  if (vdd.mods.hasAnnotationNamed(tpnme.NodeAnnot)) {
+                    val propSym = templateNamer.context.owner.newMethod(vdd.name, vdd.pos.focus, 0L)
+                    propSym setInfo templateNamer.propTypeCompleter(vdd)
+                    templateNamer.enterInScope(propSym)
+                    templateNamer.context.unit.synthetics(propSym) = atPos(vdd.pos.focus)(DefDef(propSym, Literal(Constant(null))))
+                  }
+              }
+            }
+          }
         }
       }
 
