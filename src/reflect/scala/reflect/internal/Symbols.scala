@@ -1509,9 +1509,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Get type info associated with symbol at current phase, after
      *  ensuring that symbol is initialized (i.e. type is completed).
      */
-    def info: Type = try {
+    final def info: Type = {
+      if (_validTo == NoPeriod) {
+        completeInfo()
+      }
+      if (currentRunId == 1 && phase.id < infoTransformers.pid) {
+        infos.oldest.info
+      }
+      else rawInfo
+    }
+
+    protected def completeInfo(): Unit = try {
       var cnt = 0
-      while (validTo == NoPeriod) {
+      do {
         assert(infos ne null, this.name)
         assert(infos.prev eq null, this.name)
         val tp = infos.info
@@ -1540,8 +1550,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         // allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
         if (cnt == 3) abort(s"no progress in completing $this: $tp")
-      }
-      rawInfo
+      } while (validTo == NoPeriod)
     }
     catch {
       case ex: CyclicReference =>
@@ -3514,8 +3523,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // in all the scenarios we're trying to keep from failing.
     override def originalInfo    = NoType
     override def associatedFile  = owner.associatedFile
-    override def info            = fail(NoType)
-    override def rawInfo         = fail(NoType)
+    override def completeInfo()             = fail(NoType)
     override def companionSymbol = fail(NoSymbol)
   }
   class StubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String) extends ClassSymbol(owner0, owner0.pos, name0) with StubSymbol
@@ -3582,10 +3590,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def ownersIterator: Iterator[Symbol] = Iterator.empty
     override def alternatives: List[Symbol] = List()
     override def reset(completer: Type): this.type = this
-    override def info: Type = NoType
     override def existentialBound: Type = NoType
-    override def rawInfo: Type = NoType
     override def accessBoundary(base: Symbol): Symbol = enclosingRootClass
+    override protected def completeInfo(): Unit = ()
     def cloneSymbolImpl(owner: Symbol, newFlags: Long) = abort("NoSymbol.clone()")
   }
 
