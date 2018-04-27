@@ -1513,10 +1513,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (_validTo == NoPeriod) {
         completeInfo()
       }
-      if (currentRunId == 1 && phase.id < infoTransformers.pid) {
-        infos.oldest.info
-      }
-      else rawInfo
+      rawInfo
     }
 
     protected def completeInfo(): Unit = try {
@@ -1623,7 +1620,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           // adapt any infos that come from previous runs
           val current = phase
           try {
-            infos = adaptInfos(infos)
+            if (currentRunId > 1)
+              infos = adaptInfos(infos)
 
             //assert(runId(validTo) == currentRunId, name)
             //assert(runId(infos.validFrom) == currentRunId, name)
