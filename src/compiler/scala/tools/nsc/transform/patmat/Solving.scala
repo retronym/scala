@@ -6,8 +6,12 @@
 
 package scala.tools.nsc.transform.patmat
 
+import java.util
+import java.util.stream.Collectors
+
+import scala.collection.JavaConverters.iterableAsScalaIterableConverter
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{immutable,mutable}
+import scala.collection.{immutable, mutable}
 import scala.reflect.internal.util.Collections._
 import scala.reflect.internal.util.Position
 import scala.reflect.internal.util.StatisticsStatics
@@ -39,7 +43,13 @@ trait Solving extends Logic {
     type Clause  = Set[Lit]
 
     // a clause is a disjunction of distinct literals
-    def clause(l: Lit*): Clause = l.toSet
+    def clause(l: Lit, ls: Lit*): Clause = {
+      immutable.Set.empty[Lit] + l ++ ls
+    }
+    def clause(l: Lit): Clause = {
+      Set.empty[Lit] + l
+    }
+    def clause(): Clause = Set.empty[Lit]
 
     /** Conjunctive normal form (of a Boolean formula).
      *  A formula in this form is amenable to a SAT solver
@@ -453,14 +463,10 @@ trait Solving extends Logic {
      *  Clauses can be simplified by dropping the negation of the literal we're making true
      *  (since False \/ X == X)
      */
-    private def dropUnit(clauses: Array[Clause], unitLit: Lit): Array[Clause] = {
+    private def dropUnit(clauses: java.util.ArrayList[Clause], unitLit: Lit): Unit = {
       val negated = -unitLit
-      val simplified = new ArrayBuffer[Clause](clauses.length)
-      clauses foreach {
-        case trivial if trivial contains unitLit => // drop
-        case clause                              => simplified += clause - negated
-      }
-      simplified.toArray
+      clauses.removeIf(x => x.contains(unitLit))
+      clauses.replaceAll(_ - negated)
     }
 
     def findModelFor(solvable: Solvable): Model = {
@@ -469,16 +475,17 @@ trait Solving extends Logic {
 
     def findTseitinModelFor(clauses: Array[Clause]): TseitinModel = {
       debug.patmat(s"DPLL\n${cnfString(clauses)}")
+      val clausesList = new util.ArrayList[Clause](util.Arrays.asList[Clause](clauses: _*))
 
       val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
 
-      val satisfiableWithModel = findTseitinModel0((clauses, Set.empty[Lit]) :: Nil)
+      val satisfiableWithModel = findTseitinModel0((clausesList, Set.empty[Lit]) :: Nil)
 
       if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
       satisfiableWithModel
     }
 
-    type TseitinSearch = List[(Array[Clause], Set[Lit])]
+    type TseitinSearch = List[(java.util.ArrayList[Clause], Set[Lit])]
 
     /** An implementation of the DPLL algorithm for checking statisfiability
       * of a Boolean formula in CNF (conjunctive normal form).
@@ -518,16 +525,31 @@ trait Solving extends Logic {
         case Nil => NoTseitinModel
         case (clauses, assignments) :: rest =>
           if (clauses.isEmpty) assignments
-          else if (clauses exists (_.isEmpty)) findTseitinModel0(rest)
-          else clauses.find(_.size == 1) match {
-            case Some(unitClause) =>
-              val unitLit = unitClause.head
-              findTseitinModel0((dropUnit(clauses, unitLit), assignments + unitLit) :: rest)
-            case _ =>
+          else {
+            var unitLit: Lit = Lit(0)
+            var foundUnit = false
+            val it = clauses.iterator()
+            var foundEmpty = false
+            while (it.hasNext) {
+              val clause = it.next()
+              if (clause.isEmpty) foundEmpty = true
+              else if (clause.size == 1) {
+                if (!foundUnit) {
+                  unitLit = clause.head
+                  foundUnit = true
+                }
+              }
+            }
+            if (foundEmpty) findTseitinModel0(rest)
+            else if (foundUnit) {
+              dropUnit(clauses, unitLit)
+              findTseitinModel0((clauses, assignments + unitLit) :: rest)
+            } else {
+              val clausesAsScala = clauses.asScala
               // partition symbols according to whether they appear in positive and/or negative literals
               val pos = new mutable.BitSet()
               val neg = new mutable.BitSet()
-              mforeach(clauses)(lit => if (lit.positive) pos += lit.variable else neg += lit.variable)
+              mforeach(clausesAsScala)(lit => if (lit.positive) pos += lit.variable else neg += lit.variable)
 
               // appearing only in either positive/negative positions
               val pures = pos ^ neg
@@ -539,15 +561,20 @@ trait Solving extends Logic {
                 //  of the underlying symbol and its positivity, simply construct a new Lit)
                 val pureLit = Lit(if (neg(pureVar)) -pureVar else pureVar)
                 // debug.patmat("pure: "+ pureLit +" pures: "+ pures)
-                val simplified = clauses.filterNot(_.contains(pureLit))
-                findTseitinModel0((simplified, assignments + pureLit) :: rest)
+
+                clauses.removeIf(_.contains(pureLit))
+                findTseitinModel0((clauses, assignments + pureLit) :: rest)
               } else {
-                val split = clauses.head.head
+                val split = clauses.iterator().next().head
                 // debug.patmat("split: "+ split)
-                val pos = (clauses :+ clause(split), assignments)
-                val neg = (clauses :+ clause(-split), assignments)
-                findTseitinModel0(pos :: neg :: rest)
+                val neg = new util.ArrayList[Clause](clauses)
+                neg.add(clause(-split))
+
+                clauses.add(clause(split))
+                val pos = clauses
+                findTseitinModel0((pos, assignments) :: (neg, assignments) :: rest)
               }
+            }
           }
       }
     }
