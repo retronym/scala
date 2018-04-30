@@ -221,9 +221,44 @@ trait Implicits {
     private var tpeCache: Type = null
     private var isErroneousCache: TriState = TriState.Unknown
 
+    var paramTypeInfoss: List[Array[Type]] = Nil
+    var paramTypeSymss: List[Array[Symbol]] = Nil
+    var resultType: Type = null
+
     /** Computes member type of implicit from prefix `pre` (cached). */
     def tpe: Type = {
-      if (tpeCache eq null) tpeCache = pre.memberType(sym)
+      if (tpeCache eq null) {
+        tpeCache = pre.memberType(sym)
+        def loop(tp: Type): Unit = tp match {
+          case PolyType(_, res) => loop(res)
+          case mt @ MethodType(params, res) =>
+            if (mt.isImplicit) loop(res)
+            else {
+              loop(res)
+              val len = params.length
+              var i = 0
+              val paramTypeInfos = new Array[Type](len)
+              val paramTypeSyms = new Array[Symbol](len)
+              var ps = params
+              while (i < len) {
+                val paramTypeSym = ps.head.info match {
+                  case TypeRef(_, sym, _) if sym.isClass => sym
+                  case _ => NoSymbol
+                }
+                paramTypeInfos(i) = ps.head.info
+                paramTypeSyms(i) = paramTypeSym
+                i += 1
+                ps = ps.tail
+              }
+              paramTypeInfoss ::= paramTypeInfos
+              paramTypeSymss ::= paramTypeSyms
+              res.finalResultType
+            }
+          case tp =>
+            resultType = tp
+        }
+        loop(tpeCache.underlying)
+      }
       tpeCache
     }
 
@@ -386,9 +421,23 @@ trait Implicits {
     /** The type parameters to instantiate */
     val undetParams = if (isView) Nil else context.outer.undetparams
     val wildPt = approximate(pt)
-    private val ptFunctionArity: Int = {
-      val dealiased = pt.dealiasWiden
-      if (isFunctionTypeDirect(dealiased)) dealiased.typeArgs.length - 1 else -1
+    private var ptFunctionResult: Type = null
+    private val ptFunctionSig: List[Array[Type]] = {
+      var result: List[Array[Type]] = Nil
+      def loop(tp: Type): Unit = {
+        val dealiased = tp.dealiasWiden
+        if (isFunctionTypeDirect(dealiased)) {
+          val typeArgs = dealiased.typeArgs
+          loop(typeArgs.last)
+          val args = new Array[Type](typeArgs.length - 1)
+          typeArgs.copyToArray(args)
+          result ::= args
+        } else {
+          ptFunctionResult = tp
+        }
+      }
+      loop(pt)
+      result
     }
 
     private val stableRunDefsForImport = currentRun.runDefinitions
@@ -423,8 +472,8 @@ trait Implicits {
         } else isStrictlyMoreSpecific(info1.tpe, info2.tpe, info1.sym, info2.sym)
       }
     }
-    def isPlausiblyCompatible(tp: Type, pt: Type) = checkCompatibility(fast = true, tp, pt)
-    def normSubType(tp: Type, pt: Type) = checkCompatibility(fast = false, tp, pt)
+    def isPlausiblyCompatible(info: ImplicitInfo, pt: Type) = checkCompatibilityFast(info, info.tpe, pt)
+    def normSubType(tp: Type, pt: Type) = checkCompatibilitySlow(tp, pt)
 
     /** Does type `dtor` dominate type `dted`?
      *  This is the case if the stripped cores `dtor1` and `dted1` of both types are
@@ -547,7 +596,7 @@ trait Implicits {
     private def matchesPtView(tp: Type, ptarg: Type, ptres: Type, undet: List[Symbol]): Boolean = tp match {
       case MethodType(p :: _, restpe) if p.isImplicit => matchesPtView(restpe, ptarg, ptres, undet)
       case MethodType(p :: Nil, restpe)               => matchesArgRes(p.tpe, restpe, ptarg, ptres, undet)
-      case ExistentialType(_, qtpe)                   => matchesPtView(normalize(qtpe), ptarg, ptres, undet)
+      case ExistentialType(_, qtpe)                   => matchesPtView(qtpe, ptarg, ptres, undet)
       case Function1(arg1, res1)                      => matchesArgRes(arg1, res1, ptarg, ptres, undet)
       case _                                          => false
     }
@@ -569,7 +618,32 @@ trait Implicits {
      *  they are: perhaps someone more familiar with the intentional distinctions
      *  can examine the now much smaller concrete implementations below.
      */
-    private def checkCompatibility(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
+    private def checkCompatibilityFast(info: ImplicitInfo, tp0: Type, pt: Type): Boolean = {
+      pt match {
+        case tr @ TypeRef(pre, sym, args) =>
+          if (sym.isAliasType) checkCompatibilityFast(info, tp0, pt.dealias)
+          else if (sym.isAbstractType) checkCompatibilityFast(info, tp0, pt.bounds.lo)
+          else {
+            if (info.paramTypeInfoss == Nil)
+              isPlausiblySubType(tp0, pt)
+            else {
+              val len = info.paramTypeInfoss.length
+              val (ptFunctionSigPrefix, ptFunctionSigSuffix) = ptFunctionSig.splitAt(len)
+              val paramssCompatible = info.paramTypeInfoss.corresponds(ptFunctionSigPrefix) {
+                (infos, ptArgs) =>
+                  (infos.length == ptArgs.length) && infos.corresponds(ptArgs) { (info, ptArg) =>
+                    isPlausiblySubType(ptArg, info)
+                  }
+              }
+              val ptResidual = ptFunctionSigSuffix.foldRight(ptFunctionResult)((tps, res) => functionType(tps.toList, res))
+              paramssCompatible && isPlausiblySubType(info.resultType, ptResidual)
+            }
+          }
+        case _ => isPlausiblySubType(tp0, pt)
+      }
+    }
+
+    private def checkCompatibilitySlow(tp0: Type, pt0: Type): Boolean = {
       @tailrec def loop(tp: Type, pt: Type): Boolean = tp match {
         case mt @ MethodType(params, restpe) =>
           if (mt.isImplicit)
@@ -579,23 +653,15 @@ trait Implicits {
               if (sym.isAliasType) loop(tp, pt.dealias)
               else if (sym.isAbstractType) loop(tp, pt.bounds.lo)
               else {
-                ptFunctionArity > 0 && hasLength(params, ptFunctionArity) && {
+                hasLength(args, params.length + 1) && {
                   var ps = params
                   var as = args
-                  if (fast) {
-                    while (ps.nonEmpty && as.nonEmpty) {
-                      if (!isPlausiblySubType(as.head, ps.head.tpe))
-                        return false
-                      ps = ps.tail
-                      as = as.tail
-                    }
-                  } else {
-                    while (ps.nonEmpty && as.nonEmpty) {
-                      if (!(as.head <:< ps.head.tpe))
-                        return false
-                      ps = ps.tail
-                      as = as.tail
-                    }
+                  var i = 0
+                  while (ps.nonEmpty && as.nonEmpty) {
+                    if (!(as.head <:< ps.head.tpe))
+                      return false
+                    ps = ps.tail
+                    as = as.tail
                   }
                   ps.isEmpty && as.nonEmpty && {
                     val lastArg = as.head
@@ -604,12 +670,12 @@ trait Implicits {
                 }
               }
 
-            case _            => if (fast) false else tp <:< pt
+            case _            => tp <:< pt
           }
         case NullaryMethodType(restpe)  => loop(restpe, pt)
         case PolyType(_, restpe)        => loop(restpe, pt)
-        case ExistentialType(_, qtpe)   => if (fast) loop(qtpe, pt) else normalize(tp) <:< pt // is !fast case needed??
-        case _                          => if (fast) isPlausiblySubType(tp, pt) else tp <:< pt
+        case ExistentialType(_, qtpe)   => tp <:< pt
+        case _                          => tp <:< pt
       }
       loop(tp0, pt0)
     }
@@ -876,7 +942,7 @@ trait Implicits {
        */
       def survives(info: ImplicitInfo) = (
            !isIneligible(info)                      // cyclic, erroneous, shadowed, or specially excluded
-        && isPlausiblyCompatible(info.tpe, wildPt)  // optimization to avoid matchesPt
+        && isPlausiblyCompatible(info, wildPt)  // optimization to avoid matchesPt
         && !shadower.isShadowed(info.name)          // OPT rare, only check for plausible candidates
         && matchesPt(info)                          // stable and matches expected type
       )
