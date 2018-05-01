@@ -6,11 +6,12 @@
 
 package scala.tools.nsc.transform.patmat
 
+import java.util
+
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{immutable,mutable}
+import scala.collection.{immutable, mutable}
 import scala.reflect.internal.util.Collections._
-import scala.reflect.internal.util.Position
-import scala.reflect.internal.util.StatisticsStatics
+import scala.reflect.internal.util.{IntArraySet, Position, StatisticsStatics}
 
 // a literal is a (possibly negated) variable
 class Lit(val v: Int) extends AnyVal {
@@ -36,10 +37,28 @@ trait Solving extends Logic {
 
   trait CNF extends PropositionalLogic {
 
-    type Clause  = Set[Lit]
+    type Clause  = IntArraySet
 
     // a clause is a disjunction of distinct literals
-    def clause(l: Lit*): Clause = l.toSet
+    def clause(): Clause = new IntArraySet
+    def clause(l: Lit): Clause = {
+      val result = new IntArraySet
+      result += l.v
+      result
+    }
+    def clause(l: Lit, l2: Lit): Clause = {
+      val result = new IntArraySet
+      result += l.v
+      result += l2.v
+      result
+    }
+    def clause(l: Lit, l2: Lit, ls: Lit*): Clause = {
+      val result = new IntArraySet
+      result += l.v
+      result += l2.v
+      ls.foreach(l => result += l.v)
+      result
+    }
 
     /** Conjunctive normal form (of a Boolean formula).
      *  A formula in this form is amenable to a SAT solver
@@ -149,13 +168,23 @@ trait Solving extends Logic {
       def convertSym(sym: Sym): Lit = symbolMapping.lit(sym)
 
       def apply(p: Prop): Solvable = {
+        def mapProps(s: Set[Prop])(f: Prop => Option[Lit]): Clause = {
+          val result = new IntArraySet
+          for (prop <- s) {
+            f(prop) match {
+              case Some(lit) => result += lit.v
+              case None =>
+            }
+          }
+          result
+        }
 
         def convert(p: Prop): Option[Lit] = {
           p match {
             case And(fv)  =>
-              Some(and(fv.flatMap(convert)))
+              Some(and(mapProps(fv)(convert)))
             case Or(fv)   =>
-              Some(or(fv.flatMap(convert)))
+              Some(or(mapProps(fv)(convert)))
             case Not(a)   =>
               convert(a).map(not)
             case sym: Sym =>
@@ -172,39 +201,41 @@ trait Solving extends Logic {
           }
         }
 
-        def and(bv: Set[Lit]): Lit = {
+        def and(bv: Clause): Lit = {
           if (bv.isEmpty) {
             // this case can actually happen because `removeVarEq` could add no constraints
             constTrue
           } else if (bv.size == 1) {
-            bv.head
-          } else if (bv.contains(constFalse)) {
+            Lit(bv.head)
+          } else if (bv.contains(constFalse.v)) {
             constFalse
           } else {
             // op1 /\ op2 /\ ... /\ opx <==>
             // (o -> op1) /\ (o -> op2) ... (o -> opx) /\ (!op1 \/ !op2 \/... \/ !opx \/ o)
             // (!o \/ op1) /\ (!o \/ op2) ... (!o \/ opx) /\ (!op1 \/ !op2 \/... \/ !opx \/ o)
-            val new_bv = bv - constTrue // ignore `True`
+            bv -= constTrue.v // ignore `True`
             val o = newLiteral() // auxiliary Tseitin variable
-            new_bv.foreach(op => addClauseProcessed(clause(op, -o)))
+            bv.foreach(op => addClauseProcessed(clause(Lit(op), -o)))
             o
           }
         }
 
-        def or(bv: Set[Lit]): Lit = {
+        def or(bv: Clause): Lit = {
           if (bv.isEmpty) {
             constFalse
           } else if (bv.size == 1) {
-            bv.head
-          } else if (bv.contains(constTrue)) {
+            Lit(bv.head)
+          } else if (bv.contains(constTrue.v)) {
             constTrue
           } else {
             // op1 \/ op2 \/ ... \/ opx <==>
             // (op1 -> o) /\ (op2 -> o) ... (opx -> o) /\ (op1 \/ op2 \/... \/ opx \/ !o)
             // (!op1 \/ o) /\ (!op2 \/ o) ... (!opx \/ o) /\ (op1 \/ op2 \/... \/ opx \/ !o)
-            val new_bv = bv - constFalse // ignore `False`
+            val new_bv = bv.clone() // TODO can we skip this?
+            new_bv -= constFalse.v // ignore `False`
             val o = newLiteral() // auxiliary Tseitin variable
-            addClauseProcessed(new_bv + (-o))
+            new_bv += (-o.v)
+            addClauseProcessed(new_bv)
             o
           }
         }
@@ -262,7 +293,10 @@ trait Solving extends Logic {
         }
 
         // add intermediate variable since we want the formula to be SAT!
-        addClauseProcessed(convert(p).toSet)
+        convert(p) match {
+          case Some(lit) => addClauseProcessed(clause(lit))
+          case None =>
+        }
 
         Solvable(buildCnf, symbolMapping)
       }
@@ -281,13 +315,15 @@ trait Solving extends Logic {
       object ToDisjunction {
         def unapply(f: Prop): Option[Array[Clause]] = f match {
           case Or(fv)         =>
-            val cl = fv.foldLeft(Option(clause())) {
-              case (Some(clause), ToLiteral(lit)) =>
-                Some(clause + lit)
-              case (_, _)                         =>
-                None
+            val result = new IntArraySet
+            var it = fv.iterator
+            while (it.hasNext) {
+              it.next() match {
+                case ToLiteral(lit) => result += lit.v
+                case _ => return None
+              }
             }
-            cl.map(Array(_))
+            Some(Array(result))
           case True           => Some(Array()) // empty, no clauses needed
           case False          => Some(Array(clause())) // empty clause can't be satisfied
           case ToLiteral(lit) => Some(Array(clause(lit)))
@@ -373,7 +409,7 @@ trait Solving extends Logic {
     import scala.collection.mutable.ArrayBuffer
 
     def cnfString(f: Array[Clause]): String = {
-      val lits: Array[List[String]] = f map (_.map(_.toString).toList)
+      val lits: Array[List[String]] = f map (_.iterator.map(_.toString).toList)
       val xss: List[List[String]] = lits.toList
       val aligned: String = alignAcrossRows(xss, "\\/", " /\\\n")
       aligned
@@ -390,8 +426,8 @@ trait Solving extends Logic {
     val NoModel: Model = null
 
     // this model contains the auxiliary variables as well
-    type TseitinModel = Set[Lit]
-    val EmptyTseitinModel = Set.empty[Lit]
+    type TseitinModel = IntArraySet
+    val EmptyTseitinModel = new IntArraySet
     val NoTseitinModel: TseitinModel = null
 
     // returns all solutions, if any (TODO: better infinite recursion backstop -- detect fixpoint??)
@@ -408,8 +444,9 @@ trait Solving extends Logic {
       // (i.e. the blocking clause - used for ALL-SAT)
       def negateModel(m: TseitinModel) = {
         // filter out auxiliary Tseitin variables
-        val relevantLits = m.filter(l => relevantVars.contains(l.variable))
-        relevantLits.map(lit => -lit)
+        val result = new IntArraySet
+        m.iterator().filter((l: Int) => relevantVars.contains(Lit(l).variable)).foreach((lit: Int) => result += -Lit(lit).v)
+        result
       }
 
       final case class TseitinSolution(model: TseitinModel, unassigned: List[Int]) {
@@ -429,7 +466,7 @@ trait Solving extends Logic {
           if (model ne NoTseitinModel) {
             // note that we should not expand the auxiliary variables (from Tseitin transformation)
             // since they are existentially quantified in the final solution
-            val unassigned: List[Int] = (relevantVars -- model.map(lit => lit.variable)).toList
+            val unassigned: List[Int] = (relevantVars -- model.iterator().map(i => Lit(i).variable)).toList
             debug.patmat("unassigned "+ unassigned +" in "+ model)
 
             val solution = TseitinSolution(model, unassigned)
@@ -443,24 +480,30 @@ trait Solving extends Logic {
       tseitinSolutions.map(_.projectToSolution(solvable.symbolMapping.symForVar))
     }
 
-    private def withLit(res: TseitinModel, l: Lit): TseitinModel = {
-      if (res eq NoTseitinModel) NoTseitinModel else res + l
-    }
-
     /** Drop trivially true clauses, simplify others by dropping negation of `unitLit`.
      *
      *  Disjunctions that contain the literal we're making true in the returned model are trivially true.
      *  Clauses can be simplified by dropping the negation of the literal we're making true
      *  (since False \/ X == X)
      */
-    private def dropUnit(clauses: Array[Clause], unitLit: Lit): Array[Clause] = {
+    private def dropUnit(clauses: Array[Clause], unitLit: Lit): Unit = {
       val negated = -unitLit
-      val simplified = new ArrayBuffer[Clause](clauses.length)
-      clauses foreach {
-        case trivial if trivial contains unitLit => // drop
-        case clause                              => simplified += clause - negated
+      var i, j = 0
+      while (i < clauses.length) {
+        val clause = clauses(i)
+        if (clause == null) return
+        clauses(i) = null
+        if (!clause.contains(unitLit.v)) {
+          val simplifiedClause = if (clause.contains(negated.v)) {
+            val clone = clause.clone()
+            clone -= negated.v
+            clone
+          } else clause
+          clauses(j) = simplifiedClause
+          j += 1
+        }
+        i += 1
       }
-      simplified.toArray
     }
 
     def findModelFor(solvable: Solvable): Model = {
@@ -472,13 +515,13 @@ trait Solving extends Logic {
 
       val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
 
-      val satisfiableWithModel = findTseitinModel0((clauses, Set.empty[Lit]) :: Nil)
+      val satisfiableWithModel = findTseitinModel0((util.Arrays.copyOf(clauses, clauses.length), EmptyTseitinModel) :: Nil)
 
       if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
       satisfiableWithModel
     }
 
-    type TseitinSearch = List[(Array[Clause], Set[Lit])]
+    type TseitinSearch = List[(Array[Clause], IntArraySet)]
 
     /** An implementation of the DPLL algorithm for checking statisfiability
       * of a Boolean formula in CNF (conjunctive normal form).
@@ -517,17 +560,28 @@ trait Solving extends Logic {
       state match {
         case Nil => NoTseitinModel
         case (clauses, assignments) :: rest =>
-          if (clauses.isEmpty) assignments
-          else if (clauses exists (_.isEmpty)) findTseitinModel0(rest)
-          else clauses.find(_.size == 1) match {
+          if (clauses.isEmpty || clauses.head == null) assignments
+          else if (clauses exists (clause => clause != null && clause.isEmpty)) findTseitinModel0(rest)
+          else clauses.find(clause => clause != null && clause.size == 1) match {
             case Some(unitClause) =>
-              val unitLit = unitClause.head
-              findTseitinModel0((dropUnit(clauses, unitLit), assignments + unitLit) :: rest)
+              val unitLit = Lit(unitClause.head)
+              val newAssignments = assignments.clone()
+              newAssignments += unitLit.v
+              dropUnit(clauses, unitLit)
+              val tuples: TseitinSearch = (clauses, newAssignments) :: rest
+              findTseitinModel0(tuples)
             case _ =>
               // partition symbols according to whether they appear in positive and/or negative literals
               val pos = new mutable.BitSet()
               val neg = new mutable.BitSet()
-              mforeach(clauses)(lit => if (lit.positive) pos += lit.variable else neg += lit.variable)
+              for (clause <- clauses) {
+                if (clause != null) {
+                  clause.foreach { i: Int =>
+                    val lit = Lit(i)
+                    if (lit.positive) pos += lit.variable else neg += lit.variable
+                  }
+                }
+              }
 
               // appearing only in either positive/negative positions
               val pures = pos ^ neg
@@ -539,13 +593,28 @@ trait Solving extends Logic {
                 //  of the underlying symbol and its positivity, simply construct a new Lit)
                 val pureLit = Lit(if (neg(pureVar)) -pureVar else pureVar)
                 // debug.patmat("pure: "+ pureLit +" pures: "+ pures)
-                val simplified = clauses.filterNot(_.contains(pureLit))
-                findTseitinModel0((simplified, assignments + pureLit) :: rest)
+                val simplified = clauses.filterNot(clause => clause != null && clause.contains(pureLit.v))
+                val newAssignments = assignments.clone()
+                newAssignments += pureLit.v
+                findTseitinModel0((simplified, newAssignments) :: rest)
               } else {
-                val split = clauses.head.head
+                val split = Lit(clauses.find(_ != null).get.head)
                 // debug.patmat("split: "+ split)
-                val pos = (clauses :+ clause(split), assignments)
-                val neg = (clauses :+ clause(-split), assignments)
+                var i = 0
+                var nullIndex = -1
+                while (i < clauses.length && nullIndex == -1) {
+                  if (clauses(i) eq null) nullIndex = i
+                  i += 1
+                }
+
+                val effectiveLength = if (nullIndex == -1) clauses.length else nullIndex
+                val posClauses = util.Arrays.copyOf(clauses, effectiveLength + 1)
+                val negClauses = util.Arrays.copyOf(clauses, effectiveLength + 1)
+                posClauses(effectiveLength) = clause(split)
+                negClauses(effectiveLength) = clause(-split)
+
+                val pos = (posClauses, assignments)
+                val neg = (negClauses, assignments)
                 findTseitinModel0(pos :: neg :: rest)
               }
           }
@@ -556,8 +625,8 @@ trait Solving extends Logic {
       if (model == NoTseitinModel) NoModel
       else if (model == EmptyTseitinModel) EmptyModel
       else {
-        val mappedModels = model.toList collect {
-          case lit if symForVar isDefinedAt lit.variable => (symForVar(lit.variable), lit.positive)
+        val mappedModels = model.iterator().toList collect {
+          case lit if symForVar isDefinedAt Lit(lit).variable => (symForVar(Lit(lit).variable), Lit(lit).positive)
         }
         if (mappedModels.isEmpty) {
           // could get an empty model if mappedModels is a constant like `True`
