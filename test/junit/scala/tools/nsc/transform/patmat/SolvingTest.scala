@@ -6,7 +6,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 import scala.collection.mutable
-import scala.reflect.internal.util.Position
+import scala.reflect.internal.util.{IntArraySet, Position}
 import scala.tools.nsc.{Global, Settings}
 
 object TestSolver extends Logic with Solving {
@@ -140,7 +140,13 @@ object TestSolver extends Logic with Solving {
 
       def formula(c: Clause*): Formula = c.toArray
 
-      def merge(a: Clause, b: Clause) = a ++ b
+      def merge(a: Clause, b: Clause) = {
+        val result = new IntArraySet()
+        for (c <- List(a, b)) {
+          c.foreach((i: Int) => result += i)
+        }
+        result
+      }
 
       def negationNormalFormNot(p: Prop): Prop = p match {
         case And(ps) => Or(ps map negationNormalFormNot)
