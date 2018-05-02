@@ -21,10 +21,12 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) {
       val insertionPoint = -(index + 1)
       val src = data
       if (data.length == _size) {
-        this.data = new Array[Int](data.length * 2)
+        this.data = util.Arrays.copyOf(data, data.length * 2)
       }
       System.arraycopy(src, insertionPoint, data, insertionPoint + 1, _size - insertionPoint)
-      System.arraycopy(src, 0, data, 0, insertionPoint)
+      if (src ne data) {
+        System.arraycopy(src, 0, data, 0, insertionPoint)
+      }
       data(insertionPoint) = i
       _size += 1
     }
@@ -36,7 +38,7 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) {
       _size -= 1
     } else if (index >= 0) {
       System.arraycopy(data, index + 1, data, index, _size - index - 1)
-      data(_size - 1) = 0
+      data(_size - 1) = 0 // needed to support use of `Arrays.equals` in `def equals` below
       _size -= 1
       // could shrink the array here if occupancy size/data.length falls below 50%
     }
