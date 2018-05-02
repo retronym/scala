@@ -466,33 +466,9 @@ trait Names extends api.Names {
     def debugString = { val s = decode ; if (isTypeName) s + "!" else s }
   }
 
-  implicit def AnyNameOps(name: Name): NameOps[Name]          = new NameOps(name)
-  implicit def TermNameOps(name: TermName): NameOps[TermName] = new NameOps(name)
-  implicit def TypeNameOps(name: TypeName): NameOps[TypeName] = new NameOps(name)
-
-  /** FIXME: This is a good example of something which is pure "value class" but cannot
-   *  reap the benefits because an (unused) $outer pointer so it is not single-field.
-   */
-  final class NameOps[T <: Name](name: T) {
-    import NameTransformer._
-    def stripSuffix(suffix: String): T = if (name endsWith suffix) dropRight(suffix.length) else name // OPT avoid creating a Name with `suffix`
-    def stripSuffix(suffix: Name): T   = if (name endsWith suffix) dropRight(suffix.length) else name
-    def take(n: Int): T                = name.subName(0, n).asInstanceOf[T]
-    def drop(n: Int): T                = name.subName(n, name.length).asInstanceOf[T]
-    def dropRight(n: Int): T           = name.subName(0, name.length - n).asInstanceOf[T]
-    def dropLocal: TermName            = name.toTermName stripSuffix LOCAL_SUFFIX_STRING
-    def dropSetter: TermName           = name.toTermName stripSuffix SETTER_SUFFIX_STRING
-    def dropModule: T                  = this stripSuffix MODULE_SUFFIX_STRING
-    def localName: TermName            = getterName append LOCAL_SUFFIX_STRING
-    def setterName: TermName           = getterName append SETTER_SUFFIX_STRING
-    def getterName: TermName           = dropTraitSetterSeparator.dropSetter.dropLocal
-
-    private def dropTraitSetterSeparator: TermName =
-      name indexOf TRAIT_SETTER_SEPARATOR_STRING match {
-        case -1  => name.toTermName
-        case idx => name.toTermName drop idx drop TRAIT_SETTER_SEPARATOR_STRING.length
-      }
-  }
+  @inline implicit def AnyNameOps(name: Name): NameOps[this.type, Name]          = new NameOps[this.type, Name](name)
+  @inline implicit def TermNameOps(name: TermName): NameOps[this.type, TermName] = new NameOps[this.type, TermName](name)
+  @inline implicit def TypeNameOps(name: TypeName): NameOps[this.type, TypeName] = new NameOps[this.type, TypeName](name)
 
   implicit val NameTag = ClassTag[Name](classOf[Name])
 
@@ -608,4 +584,29 @@ trait Names extends api.Names {
     def apply(s: String) = newTypeName(s)
     def unapply(name: TypeName): Option[String] = Some(name.toString)
   }
+}
+
+
+/** FIXME: This is a good example of something which is pure "value class" but cannot
+  *  reap the benefits because an (unused) $outer pointer so it is not single-field.
+  */
+final class NameOps[G <: Names with Singleton, T <: G#Name](private val name: T) extends AnyVal {
+  import NameTransformer._
+  def stripSuffix(suffix: String): T = if (name endsWith suffix) dropRight(suffix.length) else name // OPT avoid creating a Name with `suffix`
+  def stripSuffix(suffix: G#Name): T   = if (name endsWith suffix) dropRight(suffix.length) else name
+  def take(n: Int): T                = name.subName(0, n).asInstanceOf[T]
+  def drop(n: Int): T                = name.subName(n, name.length).asInstanceOf[T]
+  def dropRight(n: Int): T           = name.subName(0, name.length - n).asInstanceOf[T]
+  def dropLocal: G#TermName            = new NameOps[G, G#TermName](name.toTermName).stripSuffix(LOCAL_SUFFIX_STRING)
+  def dropSetter: G#TermName           = new NameOps[G, G#TermName](name.toTermName).stripSuffix(SETTER_SUFFIX_STRING)
+  def dropModule: T                  = this stripSuffix MODULE_SUFFIX_STRING
+  def localName: G#TermName            = getterName append LOCAL_SUFFIX_STRING
+  def setterName: G#TermName           = getterName append SETTER_SUFFIX_STRING
+  def getterName: G#TermName           = new NameOps[G, G#Name](new NameOps[G, G#Name](dropTraitSetterSeparator).dropSetter).dropLocal
+
+  private def dropTraitSetterSeparator: G#TermName =
+    name indexOf TRAIT_SETTER_SEPARATOR_STRING match {
+      case -1  => name.toTermName
+      case idx => new NameOps[G, G#TermName](name.toTermName).drop(idx + TRAIT_SETTER_SEPARATOR_STRING.length)
+    }
 }
