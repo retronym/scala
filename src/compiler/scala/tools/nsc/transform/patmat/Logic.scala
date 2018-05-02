@@ -174,12 +174,32 @@ trait Logic extends Debugging  {
     def simplify(f: Prop): Prop = {
 
       // limit size to avoid blow up
-      def hasImpureAtom(ops: Seq[Prop]): Boolean = ops.size < 10 &&
-        ops.combinations(2).exists {
-          case Seq(a, Not(b)) if a == b => true
-          case Seq(Not(a), b) if a == b => true
-          case _                        => false
+      def hasImpureAtom(ops: IndexedSeq[Prop]): Boolean = ops.size < 10 && {
+        // HOT method, imperative rewrite of:
+        // ops.combinations(2).exists {
+        //   case Seq(a, Not(b)) if a == b => true
+        //   case Seq(Not(a), b) if a == b => true
+        //   case _                        => false
+        // }
+        var i = 0
+        val len = ops.length
+        while (i < len - 1) {
+          var j = i + 1
+          while (j < len) {
+            ops(j) match {
+              case Not(b) if ops(i) == b => return true
+              case _ =>
+                ops(i) match {
+                  case Not(a) if a == ops(j) => return true
+                  case _ =>
+                }
+            }
+            j += 1
+          }
+          i += 1
         }
+        false
+      }
 
       // push negation inside formula
       def negationNormalFormNot(p: Prop): Prop = p match {
@@ -204,13 +224,23 @@ trait Logic extends Debugging  {
       def simplifyProp(p: Prop): Prop = p match {
         case And(fv)     =>
           // recurse for nested And (pulls all Ands up)
-          val ops = fv.map(simplifyProp) - True // ignore `True`
-
           // build up Set in order to remove duplicates
-          val opsFlattened = ops.flatMap {
-            case And(fv) => fv
-            case f       => Set(f)
-          }.toSeq
+          val seen = new java.util.HashSet[Prop](fv.size)
+          val opsFlattened = new mutable.ArrayBuffer[Prop](fv.size)
+          for (prop <- fv) {
+            val simplified = simplifyProp(prop)
+            def add(prop: Prop): Unit = {
+              if (simplified != True) { // ignore `True`
+                if (seen.add(simplified)) {
+                  opsFlattened += simplified
+                }
+              }
+            }
+            simplified match {
+              case And(fv) => fv.foreach(add)
+              case f => add(f)
+            }
+          }
 
           if (hasImpureAtom(opsFlattened) || opsFlattened.contains(False)) {
             False
@@ -223,12 +253,22 @@ trait Logic extends Debugging  {
           }
         case Or(fv)      =>
           // recurse for nested Or (pulls all Ors up)
-          val ops = fv.map(simplifyProp) - False // ignore `False`
-
-          val opsFlattened = ops.flatMap {
-            case Or(fv) => fv
-            case f      => Set(f)
-          }.toSeq
+          var seen = new java.util.HashSet[Prop](fv.size)
+          val opsFlattened = new mutable.ArrayBuffer[Prop](fv.size)
+          for (prop <- fv) {
+            val simplified = simplifyProp(prop)
+            def add(prop: Prop): Unit = {
+              if (simplified != False) { // ignore `True`
+                if (seen.add(simplified)) {
+                  opsFlattened += simplified
+                }
+              }
+            }
+            simplified match {
+              case Or(fv) => fv.foreach(add)
+              case f => add(f)
+            }
+          }
 
           if (hasImpureAtom(opsFlattened) || opsFlattened.contains(True)) {
             True
