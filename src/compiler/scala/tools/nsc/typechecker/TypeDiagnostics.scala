@@ -715,7 +715,8 @@ trait TypeDiagnostics {
     }
 
     object checkDead {
-      private val exprStack: mutable.Stack[Symbol] = mutable.Stack(NoSymbol)
+      private[this] val enabled = settings.warnDeadCode.value
+      private val exprStack: mutable.Stack[Symbol] = if (enabled) mutable.Stack(NoSymbol) else null
       // The method being applied to `tree` when `apply` is called.
       private def expr = exprStack.top
 
@@ -729,13 +730,13 @@ trait TypeDiagnostics {
       }
 
       @inline def updateExpr[A](fn: Tree)(f: => A) = {
-        if (fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
+        if (enabled && fn.symbol != null && fn.symbol.isMethod && !fn.symbol.isConstructor) {
           exprStack push fn.symbol
           try f finally exprStack.pop()
         } else f
       }
       def apply(tree: Tree): Tree = {
-        if (settings.warnDeadCode && context.unit.exists && treeOK(tree) && exprOK)
+        if (enabled && context.unit.exists && treeOK(tree) && exprOK)
           context.warning(tree.pos, "dead code following this construct")
         tree
       }
