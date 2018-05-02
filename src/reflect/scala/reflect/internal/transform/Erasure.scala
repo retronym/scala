@@ -111,6 +111,12 @@ trait Erasure {
 
     protected def eraseDerivedValueClassRef(tref: TypeRef): Type = erasedValueClassArg(tref)
 
+    private[this] val UnitClass = definitions.UnitClass
+    private[this] val ArrayClass = definitions.ArrayClass
+    private[this] val BoxedUnitTpe = definitions.BoxedUnitTpe
+    private[this] val SingletonClass = definitions.SingletonClass
+    private[this] val ObjectTpe = definitions.ObjectTpe
+
     def apply(tp: Type): Type = tp match {
       case ConstantType(ct) =>
         // erase classOf[List[_]] to classOf[List]. special case for classOf[Unit], avoid erasing to classOf[BoxedUnit].
