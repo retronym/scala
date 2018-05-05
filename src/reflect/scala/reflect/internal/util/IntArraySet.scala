@@ -1,18 +1,41 @@
 package scala.reflect.internal.util
 
 import java.util
+import java.util.Objects
 import java.util.function.IntConsumer
+import java.util.stream.{IntStream, StreamSupport}
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.util.hashing.MurmurHash3
 
-final class IntArraySet private (var data: Array[Int], var _size: Int) {
+trait IntSet {
+  def size: Int
+  def isEmpty: Boolean
+  def nonEmpty: Boolean = !isEmpty
+  def head: Int
+  def +=(i: Int): Unit
+  def -=(i: Int): Unit
+  def contains(i: Int): Boolean
+  def foreach(f: IntConsumer)
+  def iterator(): Iterator[Int]
+  def intStream(): IntStream
+  def copy(): IntSet
+}
+
+
+object IntSet {
+  val HashSeed = "IntArraySet".hashCode()
+  def apply(): IntSet = new IntArraySet()
+}
+
+
+final class IntArraySet private (var data: Array[Int], var _size: Int) extends IntSet {
   def this() {
     this(Array.emptyIntArray, 0)
   }
   private final val MinSize = 8
   def size: Int = this._size
   def isEmpty: Boolean = size == 0
-  def nonEmpty: Boolean = !isEmpty
   def head = if (_size == 0) throw new NoSuchElementException else data.apply(0)
   def +=(i: Int): Unit = {
     val index = binarySearch(i)
@@ -54,7 +77,11 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) {
   def iterator(): Iterator[Int] = {
     data.iterator().slice(0, size)
   }
-  override def clone(): IntArraySet = {
+  def intStream(): IntStream = {
+    util.Arrays.stream(data, 0, size)
+  }
+
+  override def copy(): IntArraySet = {
     val newData = java.util.Arrays.copyOf(data, data.length)
     new IntArraySet(newData, _size)
   }
@@ -65,7 +92,7 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) {
   }
   override def hashCode: Int = {
     import MurmurHash3._
-    var h = IntArraySet.HashSeed
+    var h = IntSet.HashSeed
     var i = 0
     while (i < size) {
       h = mix(h, data(i).##)
@@ -93,6 +120,59 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) {
   private def binarySearch(i: Int) = java.util.Arrays.binarySearch(data, 0, _size, i)
 }
 
-object IntArraySet {
-  private val HashSeed = "IntArraySet".hashCode()
+class BitSetWithOverflow private(val pos: util.BitSet, val neg: util.BitSet, var _overflow: IntArraySet) extends IntSet {
+  private final val Threshold = 1024
+  private def overflow: IntArraySet = {
+    if (_overflow eq null) _overflow = new IntArraySet()
+    _overflow
+  }
+  override def size: Int = pos.cardinality() + neg.cardinality() + (if (_overflow eq null) 0 else _overflow.size)
+  override def isEmpty: Boolean = pos.isEmpty && neg.isEmpty && (if (_overflow eq null) true else _overflow.isEmpty)
+  override def nonEmpty: Boolean = !pos.isEmpty || !neg.isEmpty && (if (_overflow eq null) false else _overflow.nonEmpty)
+  override def head: Int = neg.nextSetBit(0) match { case -1 => throw new NoSuchElementException case x => x}
+  override def +=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow += i else if (i >= 0) pos.set(i) else neg.set(i)
+  override def -=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow -= i else if (i >= 0) pos.set(i) else neg.set(i)
+  override def contains(i: Int): Boolean = if (Math.abs(i) >= Threshold) if (_overflow eq null) false else _overflow.contains(i) else if (i >= 0) pos.get(i) else neg.get(i)
+  override def foreach(f: IntConsumer): Unit = {neg.stream().forEach(f); pos.stream().forEach(f); if (_overflow ne null) _overflow.foreach(f)}
+  override def iterator(): Iterator[Int] = {
+    val posNeg = (neg.stream().iterator().asScala ++ pos.stream().iterator().asScala).asInstanceOf[Iterator[Int]]
+    if (_overflow eq null) posNeg else posNeg ++ _overflow.iterator()
+  }
+  override def intStream(): IntStream = {
+    val posNeg = IntStream.concat(pos.stream(), neg.stream())
+    if (_overflow eq null) posNeg else IntStream.concat(posNeg, _overflow.intStream())
+  }
+
+  override def copy(): BitSetWithOverflow = {
+    new BitSetWithOverflow(pos.clone().asInstanceOf[util.BitSet], neg.clone().asInstanceOf[util.BitSet], if (_overflow eq null) null else _overflow.copy())
+  }
+
+  override def equals(other: Any): Boolean = other match {
+    case bs: BitSetWithOverflow => bs.pos.equals(pos) && bs.neg.equals(neg) && Objects.equals(bs._overflow, _overflow)
+    case _ => false
+  }
+  override def hashCode: Int = {
+    import MurmurHash3._
+    var h = IntSet.HashSeed
+    h = mix(h, pos.hashCode())
+    h = mix(h, neg.hashCode())
+    if (_overflow eq null) {
+      h = mix(h, _overflow.hashCode)
+      finalizeHash(h, 3)
+    } else {
+      finalizeHash(h, 2)
+    }
+  }
+
+  override def toString: String = {
+    if (size == 0) "BitSetWithOverflow()"
+    else {
+      val result = new java.lang.StringBuilder(size * 2)
+      result.append("BitSetWithOverflow(")
+      intStream.forEach(value => { result.append(value).append(", ")})
+      result.delete(result.length() - 2, result.length())
+      result.append(")")
+      result.toString
+    }
+  }
 }

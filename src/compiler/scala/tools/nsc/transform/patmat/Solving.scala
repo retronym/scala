@@ -11,7 +11,7 @@ import java.util
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{immutable, mutable}
 import scala.reflect.internal.util.Collections._
-import scala.reflect.internal.util.{IntArraySet, Position, StatisticsStatics}
+import scala.reflect.internal.util.{IntSet, Position, StatisticsStatics}
 
 // a literal is a (possibly negated) variable
 class Lit(val v: Int) extends AnyVal {
@@ -37,23 +37,23 @@ trait Solving extends Logic {
 
   trait CNF extends PropositionalLogic {
 
-    type Clause  = IntArraySet
+    type Clause  = IntSet
 
     // a clause is a disjunction of distinct literals
-    def clause(): Clause = new IntArraySet
+    def clause(): Clause = IntSet()
     def clause(l: Lit): Clause = {
-      val result = new IntArraySet
+      val result = IntSet()
       result += l.v
       result
     }
     def clause(l: Lit, l2: Lit): Clause = {
-      val result = new IntArraySet
+      val result = IntSet()
       result += l.v
       result += l2.v
       result
     }
     def clause(l: Lit, l2: Lit, ls: Lit*): Clause = {
-      val result = new IntArraySet
+      val result = IntSet()
       result += l.v
       result += l2.v
       ls.foreach(l => result += l.v)
@@ -169,7 +169,7 @@ trait Solving extends Logic {
 
       def apply(p: Prop): Solvable = {
         def mapProps(s: Set[Prop])(f: Prop => Option[Lit]): Clause = {
-          val result = new IntArraySet
+          val result = IntSet()
           for (prop <- s) {
             f(prop) match {
               case Some(lit) => result += lit.v
@@ -231,7 +231,7 @@ trait Solving extends Logic {
             // op1 \/ op2 \/ ... \/ opx <==>
             // (op1 -> o) /\ (op2 -> o) ... (opx -> o) /\ (op1 \/ op2 \/... \/ opx \/ !o)
             // (!op1 \/ o) /\ (!op2 \/ o) ... (!opx \/ o) /\ (op1 \/ op2 \/... \/ opx \/ !o)
-            val new_bv = bv.clone() // TODO can we skip this?
+            val new_bv = bv.copy() // TODO can we skip this?
             new_bv -= constFalse.v // ignore `False`
             val o = newLiteral() // auxiliary Tseitin variable
             new_bv += (-o.v)
@@ -315,7 +315,7 @@ trait Solving extends Logic {
       object ToDisjunction {
         def unapply(f: Prop): Option[Array[Clause]] = f match {
           case Or(fv)         =>
-            val result = new IntArraySet
+            val result = IntSet()
             var it = fv.iterator
             while (it.hasNext) {
               it.next() match {
@@ -426,8 +426,8 @@ trait Solving extends Logic {
     val NoModel: Model = null
 
     // this model contains the auxiliary variables as well
-    type TseitinModel = IntArraySet
-    val EmptyTseitinModel = new IntArraySet
+    type TseitinModel = IntSet
+    val EmptyTseitinModel = IntSet()
     val NoTseitinModel: TseitinModel = null
 
     // returns all solutions, if any (TODO: better infinite recursion backstop -- detect fixpoint??)
@@ -444,8 +444,8 @@ trait Solving extends Logic {
       // (i.e. the blocking clause - used for ALL-SAT)
       def negateModel(m: TseitinModel) = {
         // filter out auxiliary Tseitin variables
-        val result = new IntArraySet
-        m.iterator().filter((l: Int) => relevantVars.contains(Lit(l).variable)).foreach((lit: Int) => result += -Lit(lit).v)
+        val result = IntSet()
+        m.intStream().filter((l: Int) => relevantVars.contains(Lit(l).variable)).forEach((lit: Int) => result += -Lit(lit).v)
         result
       }
 
@@ -495,7 +495,7 @@ trait Solving extends Logic {
         clauses(i) = null
         if (!clause.contains(unitLit.v)) {
           val simplifiedClause = if (clause.contains(negated.v)) {
-            val clone = clause.clone()
+            val clone = clause.copy()
             clone -= negated.v
             clone
           } else clause
@@ -521,7 +521,7 @@ trait Solving extends Logic {
       satisfiableWithModel
     }
 
-    type TseitinSearch = List[(Array[Clause], IntArraySet)]
+    type TseitinSearch = List[(Array[Clause], IntSet)]
 
     /** An implementation of the DPLL algorithm for checking statisfiability
       * of a Boolean formula in CNF (conjunctive normal form).
@@ -565,7 +565,7 @@ trait Solving extends Logic {
           else clauses.find(clause => clause != null && clause.size == 1) match {
             case Some(unitClause) =>
               val unitLit = Lit(unitClause.head)
-              val newAssignments = assignments.clone()
+              val newAssignments = assignments.copy()
               newAssignments += unitLit.v
               dropUnit(clauses, unitLit)
               val tuples: TseitinSearch = (clauses, newAssignments) :: rest
@@ -594,7 +594,7 @@ trait Solving extends Logic {
                 val pureLit = Lit(if (neg(pureVar)) -pureVar else pureVar)
                 // debug.patmat("pure: "+ pureLit +" pures: "+ pures)
                 val simplified = clauses.filterNot(clause => clause != null && clause.contains(pureLit.v))
-                val newAssignments = assignments.clone()
+                val newAssignments = assignments.copy()
                 newAssignments += pureLit.v
                 findTseitinModel0((simplified, newAssignments) :: rest)
               } else {
