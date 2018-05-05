@@ -25,7 +25,7 @@ trait IntSet {
 
 object IntSet {
   val HashSeed = "IntArraySet".hashCode()
-  def apply(): IntSet = new IntArraySet()
+  def apply(): IntSet = new BitSetWithOverflow()
 }
 
 
@@ -121,6 +121,7 @@ final class IntArraySet private (var data: Array[Int], var _size: Int) extends I
 }
 
 class BitSetWithOverflow private(val pos: util.BitSet, val neg: util.BitSet, var _overflow: IntArraySet) extends IntSet {
+  def this() = this(new util.BitSet(), new util.BitSet(), null)
   private final val Threshold = 1024
   private def overflow: IntArraySet = {
     if (_overflow eq null) _overflow = new IntArraySet()
@@ -129,17 +130,17 @@ class BitSetWithOverflow private(val pos: util.BitSet, val neg: util.BitSet, var
   override def size: Int = pos.cardinality() + neg.cardinality() + (if (_overflow eq null) 0 else _overflow.size)
   override def isEmpty: Boolean = pos.isEmpty && neg.isEmpty && (if (_overflow eq null) true else _overflow.isEmpty)
   override def nonEmpty: Boolean = !pos.isEmpty || !neg.isEmpty && (if (_overflow eq null) false else _overflow.nonEmpty)
-  override def head: Int = neg.nextSetBit(0) match { case -1 => throw new NoSuchElementException case x => x}
-  override def +=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow += i else if (i >= 0) pos.set(i) else neg.set(i)
-  override def -=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow -= i else if (i >= 0) pos.set(i) else neg.set(i)
-  override def contains(i: Int): Boolean = if (Math.abs(i) >= Threshold) if (_overflow eq null) false else _overflow.contains(i) else if (i >= 0) pos.get(i) else neg.get(i)
-  override def foreach(f: IntConsumer): Unit = {neg.stream().forEach(f); pos.stream().forEach(f); if (_overflow ne null) _overflow.foreach(f)}
+  override def head: Int = neg.nextSetBit(0) match { case -1 => pos.nextSetBit(0) match { case -1 => throw new NoSuchElementException case x => x } case x => -x}
+  override def +=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow += i else if (i >= 0) pos.set(i) else neg.set(-i)
+  override def -=(i: Int): Unit = if (Math.abs(i) >= Threshold) overflow -= i else if (i >= 0) pos.set(i) else neg.set(-i)
+  override def contains(i: Int): Boolean = if (Math.abs(i) >= Threshold) if (_overflow eq null) false else _overflow.contains(i) else if (i >= 0) pos.get(i) else neg.get(-i)
+  override def foreach(f: IntConsumer): Unit = {neg.stream().forEach(x => f.accept(-x)); pos.stream().forEach(f); if (_overflow ne null) _overflow.foreach(f)}
   override def iterator(): Iterator[Int] = {
     val posNeg = (neg.stream().iterator().asScala ++ pos.stream().iterator().asScala).asInstanceOf[Iterator[Int]]
     if (_overflow eq null) posNeg else posNeg ++ _overflow.iterator()
   }
   override def intStream(): IntStream = {
-    val posNeg = IntStream.concat(pos.stream(), neg.stream())
+    val posNeg = IntStream.concat(pos.stream(), neg.stream().map(x => -x))
     if (_overflow eq null) posNeg else IntStream.concat(posNeg, _overflow.intStream())
   }
 
