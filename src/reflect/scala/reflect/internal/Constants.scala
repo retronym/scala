@@ -88,7 +88,7 @@ trait Constants extends api.Constants {
     // !!! In what circumstance could `equalHashValue == that.equalHashValue && tag != that.tag` be true?
     override def equals(other: Any): Boolean = other match {
       case that: Constant =>
-        this.tag == that.tag && equalHashValue == that.equalHashValue
+        this.tag == that.tag && equalHashValue.equals(that.equalHashValue)
       case _ => false
     }
 
@@ -259,10 +259,10 @@ trait Constants extends api.Constants {
      * constants in regular Scala code, but it is conceivable that you could
      * conjure them with a macro.
      */
-    private def equalHashValue: Any = value match {
-      case f: Float  => floatToRawIntBits(f)
-      case d: Double => doubleToRawLongBits(d)
-      case v         => v
+    private val equalHashValue: Any = tag match {
+      case FloatTag  => floatToRawIntBits(value.asInstanceOf[Float])
+      case DoubleTag => doubleToRawLongBits(value.asInstanceOf[Double])
+      case v         => value
     }
 
     override def hashCode: Int = {
@@ -270,7 +270,7 @@ trait Constants extends api.Constants {
       val seed = 17
       var h = seed
       h = mix(h, tag.##) // include tag in the hash, otherwise 0, 0d, 0L, 0f collide.
-      h = mix(h, equalHashValue.##)
+      h = mix(h, equalHashValue.hashCode())
       finalizeHash(h, length = 2)
     }
   }
