@@ -466,7 +466,7 @@ trait Solving extends Logic {
           if (model ne NoTseitinModel) {
             // note that we should not expand the auxiliary variables (from Tseitin transformation)
             // since they are existentially quantified in the final solution
-            val unassigned: List[Int] = relevantVars.iterator().filterNot(i => model.contains(i) || model.contains(-i)).toList
+            val unassigned: List[Int] = relevantVars.iterator.filterNot(i => model.contains(i) || model.contains(-i)).toList
             debug.patmat("unassigned "+ unassigned +" in "+ model)
 
             val solution = TseitinSolution(model, unassigned)
