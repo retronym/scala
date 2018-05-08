@@ -230,7 +230,7 @@ trait Logic extends Debugging  {
         case And(fv)     =>
           // recurse for nested And (pulls all Ands up)
           // build up Set in order to remove duplicates
-          val opsFlattenedBuilder = collection.immutable.Set.newBuilder[Prop]()
+          val opsFlattenedBuilder = collection.immutable.Set.newBuilder[Prop]
           for (prop <- fv) {
             val simplified = simplifyProp(prop)
             if (simplified != True) { // ignore `True`
@@ -254,7 +254,7 @@ trait Logic extends Debugging  {
         case Or(fv)      =>
           // recurse for nested Or (pulls all Ors up)
           // build up Set in order to remove duplicates
-          val opsFlattenedBuilder = collection.immutable.Set.newBuilder[Prop]()
+          val opsFlattenedBuilder = collection.immutable.Set.newBuilder[Prop]
           for (prop <- fv) {
             val simplified = simplifyProp(prop)
             if (simplified != False) { // ignore `False`
