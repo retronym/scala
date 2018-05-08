@@ -226,7 +226,7 @@ trait Interface extends ast.TreeDSL {
                   }
                 case _ =>
               }
-              tp.mapOver(this)
+              mapOver(tp)
             }
           }
         }
