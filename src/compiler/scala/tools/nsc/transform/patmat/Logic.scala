@@ -195,12 +195,12 @@ trait Logic extends Debugging  {
         if (size > 10) false // limit size to avoid blow up
         else if (size < 2) false // no combinations
         else if (size == 2) { // Specialized versions for size 2+3
-          val it = ops0.iterator()
+          val it = ops0.iterator
           val result = checkPair(it.next(), it.next())
           assert(!it.hasNext)
           result
         } else if (size == 3) {
-          val it = ops0.iterator()
+          val it = ops0.iterator
           val a = it.next()
           val b = it.next()
           val c = it.next()
