@@ -2166,20 +2166,28 @@ trait Types
    */
   abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
     override def mapOver(map: TypeMap): Type = {
-      val pre1 = map(pre)
-      val args1 = (
-        if (map.trackVariance && args.nonEmpty && !map.variance.isInvariant) {
-          val tparams = sym.typeParams
-          if (tparams.isEmpty)
-            args mapConserve map
-          else
-            map.mapOverArgs(args, tparams)
-        } else {
-          args mapConserve map
-        }
-      )
-      if ((pre1 eq pre) && (args1 eq args)) this
-      else copyTypeRef(this, pre1, this.coevolveSym(pre1), args1)
+      map match {
+        case _: TypeTraverser =>
+          map(pre)
+          args.foreach(map)
+          map
+          this
+        case _ =>
+          val pre1 = map(pre)
+          val args1 = (
+            if (map.trackVariance && args.nonEmpty && !map.variance.isInvariant) {
+              val tparams = sym.typeParams
+              if (tparams.isEmpty)
+                args mapConserve map
+              else
+                map.mapOverArgs(args, tparams)
+            } else {
+              args mapConserve map
+            }
+          )
+          if ((pre1 eq pre) && (args1 eq args)) this
+          else copyTypeRef(this, pre1, this.coevolveSym(pre1), args1)
+      }
     }
     private var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
