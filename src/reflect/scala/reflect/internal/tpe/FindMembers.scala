@@ -59,6 +59,8 @@ trait FindMembers {
       result
     }
 
+    var refinementBases: List[Symbol] = Nil
+
     /*
      * Walk up through the decls of each base class.
      *
@@ -93,7 +95,7 @@ trait FindMembers {
           if (meetsRequirements) {
             val excl: Long = flags & excluded
             val isExcluded: Boolean = excl != 0L
-            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinementParents)) {
+            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass)) {
               if (shortCircuit(sym)) return false
               else addMemberIfNew(sym)
             } else if (excl == DEFERRED) {
@@ -110,7 +112,7 @@ trait FindMembers {
           //           the component types T1, ..., Tn and the refinement {R }
           //
           //           => private members should be included from T1, ... Tn. (scala/bug#7475)
-          refinementParents :::= currentBaseClass.parentSymbols
+          refinementBases ::= currentBaseClass
         else if (currentBaseClass.isClass)
           seenFirstNonRefinementClass = true // only inherit privates of refinement parents after this point
 
@@ -130,7 +132,7 @@ trait FindMembers {
     // Q. When does a potential member fail to be an actual member?
     // A. if it is subsumed by an member in a subclass.
     private def isPotentialMember(sym: Symbol, flags: Long, owner: Symbol,
-                                  seenFirstNonRefinementClass: Boolean, refinementParents: List[Symbol]): Boolean = {
+                                  seenFirstNonRefinementClass: Boolean): Boolean = {
       // conservatively (performance wise) doing this with flags masks rather than `sym.isPrivate`
       // to avoid multiple calls to `Symbol#flags`.
       val isPrivate      = (flags & PRIVATE) == PRIVATE
@@ -142,7 +144,7 @@ trait FindMembers {
              !isPrivateLocal // private[this] only a member from within the selector class. (Optimization only? Does the spec back this up?)
           && (
                   !seenFirstNonRefinementClass
-               || refinementParents.contains(owner)
+               || refinementBases.exists(_.info.parents.exists(_.typeSymbol == owner))
              )
         )
 
