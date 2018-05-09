@@ -7,6 +7,7 @@ package scala.tools.nsc
 package backend.jvm
 
 import scala.collection.{concurrent, mutable}
+import scala.reflect.internal.util.OneElemCache
 import scala.tools.asm
 import scala.tools.asm.Opcodes
 import scala.tools.nsc.backend.jvm.BTypes.{InlineInfo, InternalName}
@@ -43,6 +44,7 @@ abstract class BTypes {
   // Note usage should be private to this file, except for tests
   val classBTypeCache: concurrent.Map[InternalName, ClassBType] = recordPerRunCache(FlatConcurrentHashMap.empty)
 
+  private[this] val btypeStringBuilderCache = new OneElemCache[java.lang.StringBuilder](() => new java.lang.StringBuilder)
   /**
    * A BType is either a primitive type, a ClassBType, an ArrayBType of one of these, or a MethodType
    * referring to BTypes.
@@ -50,8 +52,11 @@ abstract class BTypes {
   sealed trait BType {
     final override def toString: String = {
       val builder = new java.lang.StringBuilder(64)
-      buildString(builder)
-      builder.toString
+      btypeStringBuilderCache.use { builder =>
+        builder.setLength(0)
+        buildString(builder)
+        builder.toString
+      }
     }
 
     final def buildString(builder: java.lang.StringBuilder): Unit = this match {

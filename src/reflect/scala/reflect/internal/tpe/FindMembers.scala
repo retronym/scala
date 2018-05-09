@@ -5,7 +5,7 @@
 package scala.reflect.internal
 package tpe
 
-import util.StatisticsStatics
+import util.{OneElemCache, StatisticsStatics}
 import Flags._
 
 trait FindMembers {
@@ -13,8 +13,25 @@ trait FindMembers {
   import statistics._
 
   /** Implementation of `Type#{findMember, findMembers}` */
-  private[internal] abstract class FindMemberBase[T](tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long) {
-    protected val initBaseClasses: List[Symbol] = tpe.baseClasses
+  private[internal] abstract class FindMemberBase[T] {
+    var tpe: Type = null
+    var name: Name = null
+    var excludedFlags: Long = 0L
+    var requiredFlags: Long = 0L
+
+    protected var initBaseClasses: List[Symbol] = null
+
+    protected def init(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long): Unit = {
+      this.tpe = tpe
+      this.name = name
+      this.excludedFlags = excludedFlags
+      this.requiredFlags = requiredFlags
+      this.initBaseClasses = tpe.baseClasses
+      this._selectorClass = null
+      this._self = null
+      this._memberTypeHiCache = null
+      this._memberTypeHiCacheSym = null
+    }
 
     // The first base class, or the symbol of the ThisType
     // e.g in:
@@ -190,12 +207,16 @@ trait FindMembers {
     }
   }
 
-  private[reflect] final class FindMembers(tpe: Type, excludedFlags: Long, requiredFlags: Long)
-    extends FindMemberBase[Scope](tpe, nme.ANYname, excludedFlags, requiredFlags) {
+  private[reflect] final class FindMembers extends FindMemberBase[Scope] {
     private[this] var _membersScope: Scope   = null
     private def membersScope: Scope = {
       if (_membersScope eq null) _membersScope = newFindMemberScope
       _membersScope
+    }
+
+    def init(tpe: Type, excludedFlags: Long, requiredFlags: Long): Unit = {
+      super.init(tpe, nme.ANYname, excludedFlags, requiredFlags)
+      _membersScope = null
     }
 
     protected def shortCircuit(sym: Symbol): Boolean = false
@@ -215,13 +236,28 @@ trait FindMembers {
     }
   }
 
-  private[reflect] final class FindMember(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean)
-    extends FindMemberBase[Symbol](tpe, name, excludedFlags, requiredFlags) {
+  private[reflect] var _findMemberCache: OneElemCache[FindMember] = null
+  private[reflect] def findMemberCache: OneElemCache[FindMember] = {
+    if (_findMemberCache == null) _findMemberCache = new OneElemCache(() => new FindMember)
+    _findMemberCache
+  }
+
+  private[reflect] final class FindMember extends FindMemberBase[Symbol] {
+    private[this] var stableOnly: Boolean = false
     // Gathering the results into a hand rolled ListBuffer
     // TODO Try just using a ListBuffer to see if this low-level-ness is worth it.
     private[this] var member0: Symbol       = NoSymbol
     private[this] var members: List[Symbol] = null
     private[this] var lastM: ::[Symbol]     = null
+
+    def init(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Unit = {
+      super.init(tpe, name, excludedFlags, requiredFlags)
+      this.stableOnly = stableOnly
+      member0 = NoSymbol
+      members = null
+      lastM = null
+      _member0Tpe = null
+    }
 
     private def clearAndAddResult(sym: Symbol): Unit = {
       member0 = sym
@@ -286,8 +322,13 @@ trait FindMembers {
     }
   }
 
-  private[scala] final class HasMember(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long) extends FindMemberBase[Boolean](tpe, name, excludedFlags, requiredFlags) {
+  private[scala] final class HasMember extends FindMemberBase[Boolean] {
     private[this] var _result = false
+
+    override def init(tpe: Type, name: Name, excludedFlags: Long, requiredFlags: Long): Unit = {
+      super.init(tpe, name, excludedFlags, requiredFlags)
+      _result = false
+    }
     override protected def result: Boolean = _result
 
     protected def shortCircuit(sym: Symbol): Boolean = {

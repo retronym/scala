@@ -1438,7 +1438,8 @@ trait Infer extends Checkable {
           log(s"Attaching AntiPolyType-carrying overloaded type to $sym")
           // Multiple alternatives which are within bounds; spin up an
           // overloaded type which carries an "AntiPolyType" as a prefix.
-          val tparams = new AsSeenFromMap(pre, hd.owner) mapOver hd.typeParams
+          val map = new AsSeenFromMap; map.init(pre, hd.owner)
+          val tparams = map mapOver hd.typeParams
           val bounds  = tparams map (_.tpeHK) // see e.g., #1236
           val tpe     = PolyType(tparams, OverloadedType(AntiPolyType(pre, bounds), alts))
           finish(sym setInfo tpe, tpe)

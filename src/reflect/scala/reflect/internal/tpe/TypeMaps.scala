@@ -3,10 +3,11 @@ package reflect
 package internal
 package tpe
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import Flags._
 import scala.annotation.tailrec
 import Variance._
+import scala.reflect.internal.util.OneElemCache
 
 private[internal] trait TypeMaps {
   self: SymbolTable =>
@@ -447,14 +448,33 @@ private[internal] trait TypeMaps {
     )
 
   @deprecated("use new AsSeenFromMap instead", "2.12.0")
-  final def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap = new AsSeenFromMap(pre, clazz)
+  final def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap = {
+    val map = new AsSeenFromMap
+    map.init(pre, clazz)
+    map
+  }
+  private[reflect] val asSeenFromMapCache = new OneElemCache[AsSeenFromMap](() => new AsSeenFromMap)
 
   /** A map to compute the asSeenFrom method.
     */
-  class AsSeenFromMap(seenFromPrefix0: Type, seenFromClass: Symbol) extends TypeMap with KeepOnlyTypeConstraints {
-    private val seenFromPrefix: Type = if (seenFromPrefix0.typeSymbolDirect.hasPackageFlag && !seenFromClass.hasPackageFlag)
-      seenFromPrefix0.packageObject.typeOfThis
-    else seenFromPrefix0
+  class AsSeenFromMap extends TypeMap with KeepOnlyTypeConstraints {
+    private[this] var seenFromPrefix: Type = null
+    private[this] var seenFromClass: Symbol = null
+    private var _capturedSkolems: List[Symbol] = Nil
+    private var _capturedParams: List[Symbol]  = Nil
+    private var isStablePrefix = false
+
+    def init(seenFromPrefix0: Type, seenFromClass: Symbol): Unit = {
+      seenFromPrefix =
+        if (seenFromPrefix0.typeSymbolDirect.hasPackageFlag && !seenFromClass.hasPackageFlag)
+          seenFromPrefix0.packageObject.typeOfThis
+        else seenFromPrefix0
+      this.seenFromClass = seenFromClass
+      _capturedSkolems = Nil
+      _capturedParams = Nil
+      isStablePrefix = seenFromPrefix.isStable
+
+    }
     // Some example source constructs relevant in asSeenFrom:
     //
     // object CaptureThis {
@@ -483,10 +503,6 @@ private[internal] trait TypeMaps {
       case tp @ TypeRef(_, sym, _) if isTypeParamOfEnclosingClass(sym) => classParameterAsSeen(tp)
       case _                                                           => mapOver(tp)
     }
-
-    private var _capturedSkolems: List[Symbol] = Nil
-    private var _capturedParams: List[Symbol]  = Nil
-    private val isStablePrefix = seenFromPrefix.isStable
 
     // isBaseClassOfEnclosingClassOrInfoIsNotYetComplete would be a more accurate
     // but less succinct name.
@@ -699,20 +715,32 @@ private[internal] trait TypeMaps {
   }
 
   /** A base class to compute all substitutions */
-  abstract class SubstMap[T](from: List[Symbol], to: List[T]) extends TypeMap {
-    // OPT this check was 2-3% of some profiles, demoted to -Xdev
-    if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
+  abstract class SubstMap[T] extends TypeMap {
+    private[scala] var from: List[Symbol] = null
+    private[scala] var to: List[T] = null
 
     private[this] var fromHasTermSymbol = false
-    private[this] var fromMin = Int.MaxValue
-    private[this] var fromMax = Int.MinValue
-    private[this] var fromSize = 0
-    from.foreach {
-      sym =>
-        fromMin = math.min(fromMin, sym.id)
-        fromMax = math.max(fromMax, sym.id)
-        fromSize += 1
-        if (sym.isTerm) fromHasTermSymbol = true
+    private[this] var fromMin = -1
+    private[this] var fromMax = -1
+    private[this] var fromSize = -1
+    protected def init(from: List[Symbol], to: List[T]): Unit = {
+      this.from = from
+      this.to = to
+      fromHasTermSymbol = false
+      fromMin = Int.MaxValue
+      fromMax = Int.MinValue
+      fromSize = 0
+      from.foreach {
+        sym =>
+          fromMin = math.min(fromMin, sym.id)
+          fromMax = math.max(fromMax, sym.id)
+          fromSize += 1
+          if (sym.isTerm) fromHasTermSymbol = true
+      }
+      // OPT this check was 2-3% of some profiles, demoted to -Xdev
+      if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
+
+
     }
 
     /** Are `sym` and `sym1` the same? Can be tuned by subclasses. */
@@ -794,9 +822,19 @@ private[internal] trait TypeMaps {
     }
   }
 
+  object SubstSymMap {
+    val cache = new OneElemCache[SubstSymMap](() => new SubstSymMap)
+    def apply(from: List[Symbol], to: List[Symbol]) = {
+      val map = new SubstSymMap
+      map.init(from, to)
+      map
+    }
+  }
   /** A map to implement the `substSym` method. */
-  class SubstSymMap(from: List[Symbol], to: List[Symbol]) extends SubstMap(from, to) {
-    def this(pairs: (Symbol, Symbol)*) = this(pairs.toList.map(_._1), pairs.toList.map(_._2))
+  class SubstSymMap extends SubstMap[Symbol] {
+    override def init(from: List[Symbol], to: List[Symbol]): Unit = {
+      super.init(from, to)
+    }
 
     protected def toType(fromtp: Type, sym: Symbol) = fromtp match {
       case TypeRef(pre, _, args) => copyTypeRef(fromtp, pre, sym, args)
@@ -863,7 +901,8 @@ private[internal] trait TypeMaps {
   }
 
   /** A map to implement the `subst` method. */
-  class SubstTypeMap(val from: List[Symbol], val to: List[Type]) extends SubstMap(from, to) {
+  class SubstTypeMap(val from0: List[Symbol], val to0: List[Type]) extends SubstMap[Type] {
+    init(from0, to0)
     protected def toType(fromtp: Type, tp: Type) = tp
 
     override def mapOver(tree: Tree, giveup: () => Nothing): Tree = {
