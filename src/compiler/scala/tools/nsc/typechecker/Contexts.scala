@@ -1073,10 +1073,31 @@ trait Contexts { self: Analyzer =>
         found1
       }
 
-      def lookupInScope(scope: Scope) = {
-        val entries = scope lookupUnshadowedEntries name
-        val result = entries.filter(e => qualifies(e.sym)).toList
-        result
+      def lookupInScope(owner: Symbol, pre: Type, scope: Scope): Symbol = {
+        var e = scope.lookupEntry(name)
+        if (e == null) {
+          NoSymbol
+        } else {
+          val e1 = e
+          val e1Sym = e.sym
+          var syms: mutable.ListBuffer[Symbol] = null
+          e = scope.lookupNextEntry(e)
+          while (e ne null) {
+            if (e.depth == e1.depth && e.sym != e1Sym) {
+              if (syms eq null) {
+                syms = new mutable.ListBuffer[Symbol]
+                syms += e1Sym
+              }
+              syms += e.sym
+            }
+            e = scope.lookupNextEntry(e)
+          }
+          // we have a winner: record the symbol depth
+          symbolDepth = (cx.depth - cx.scope.nestingLevel) + e1.depth
+
+          if (syms eq null) e1Sym
+          else owner.newOverloaded(pre, syms.toList)
+        }
       }
 
       def newOverloaded(owner: Symbol, pre: Type, entries: List[ScopeEntry]) =
@@ -1087,24 +1108,17 @@ trait Contexts { self: Analyzer =>
       if (name == nme.CONSTRUCTOR) return {
         val enclClassSym = cx.enclClass.owner
         val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
-        val constructorSym = lookupInScope(scope) match {
-          case Nil       => NoSymbol
-          case hd :: Nil => hd.sym
-          case entries   => newOverloaded(enclClassSym, cx.enclClass.prefix, entries)
-        }
+        val constructorSym = lookupInScope(enclClassSym, cx.enclClass.prefix, scope)
+        symbolDepth = -1
         finishDefSym(constructorSym, cx.enclClass.prefix)
       }
 
       // cx.scope eq null arises during FixInvalidSyms in Duplicators
       while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
         pre    = cx.enclClass.prefix
-        defSym = lookupInScope(cx.scope) match {
-          case Nil                  => searchPrefix
-          case entries @ (hd :: tl) =>
-            // we have a winner: record the symbol depth
-            symbolDepth = (cx.depth - cx.scope.nestingLevel) + hd.depth
-            if (tl.isEmpty) hd.sym
-            else newOverloaded(cx.owner, pre, entries)
+        defSym = lookupInScope(cx.owner, cx.enclClass.prefix, cx.scope) match {
+          case NoSymbol                  => searchPrefix
+          case found                     => found
         }
         if (!defSym.exists)
           cx = cx.outer // push further outward
