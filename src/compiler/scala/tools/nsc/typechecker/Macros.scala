@@ -441,7 +441,8 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
       |paramss: $paramss
     """.trim)
 
-    import typer.TyperErrorGen._
+    val typerErrorGen = new TyperErrorGen(typer)
+    import typerErrorGen._
     val isNullaryArgsEmptyParams = argss.isEmpty && paramss == ListOfNil
     if (paramss.length < argss.length) MacroTooManyArgumentListsError(expandee)
     if (paramss.length > argss.length && !isNullaryArgsEmptyParams) MacroTooFewArgumentListsError(expandee)
@@ -636,7 +637,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
               case Failure(failure) => onFailure(failure)
             }
           } catch {
-            case typer.TyperErrorGen.MacroExpansionException => onFailure(expandee)
+            case MacroExpansionException => onFailure(expandee)
           }
         }
       } finally {
@@ -794,19 +795,18 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
         expandee updateAttachment MacroRuntimeAttachment(delayed = true, typerContext = typer.context, macroContext = Some(macroArgs(typer, expandee).c))
         Delay(expandee)
       case (false, false) =>
-        import typer.TyperErrorGen._
         macroLogLite("performing macro expansion %s at %s".format(expandee, expandee.pos))
         val args = macroArgs(typer, expandee)
         try {
           val numErrors    = reporter.ERROR.count
           def hasNewErrors = reporter.ERROR.count > numErrors
           val expanded = { pushMacroContext(args.c); runtime(args) }
-          if (hasNewErrors) MacroGeneratedTypeError(expandee)
+          if (hasNewErrors) typer.MacroGeneratedTypeError(expandee)
           def validateResultingTree(expanded: Tree) = {
             macroLogVerbose("original:")
             macroLogLite("" + expanded + "\n" + showRaw(expanded))
             val freeSyms = expanded.freeTerms ++ expanded.freeTypes
-            freeSyms foreach (sym => MacroFreeSymbolError(expandee, sym))
+            freeSyms foreach (sym => typer.MacroFreeSymbolError(expandee, sym))
             // Macros might have spliced arguments with range positions into non-compliant
             // locations, notably, under a tree without a range position. Or, they might
             // splice a tree that `resetAttrs` has assigned NoPosition.
@@ -836,17 +836,17 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
           expanded match {
             case expanded: Expr[_] if expandee.symbol.isTermMacro => validateResultingTree(expanded.tree)
             case expanded: Tree if expandee.symbol.isTermMacro => validateResultingTree(expanded)
-            case _ => MacroExpansionHasInvalidTypeError(expandee, expanded)
+            case _ => typer.MacroExpansionHasInvalidTypeError(expandee, expanded)
           }
         } catch {
           case ex: Throwable =>
             if (openMacros.nonEmpty) popMacroContext() // weirdly we started popping on an empty stack when refactoring fatalWarnings logic
             val realex = ReflectionUtils.unwrapThrowable(ex)
             realex match {
-              case ex: AbortMacroException => MacroGeneratedAbort(expandee, ex)
+              case ex: AbortMacroException => typer.MacroGeneratedAbort(expandee, ex)
               case ex: ControlThrowable => throw ex
-              case ex: TypeError => MacroGeneratedTypeError(expandee, ex)
-              case NonFatal(_) => MacroGeneratedException(expandee, realex)
+              case ex: TypeError => typer.MacroGeneratedTypeError(expandee, ex)
+              case NonFatal(_) => typer.MacroGeneratedException(expandee, realex)
               case fatal => throw fatal
             }
         } finally {
@@ -859,8 +859,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
    *  Meant for internal use within the macro infrastructure, don't use it elsewhere.
    */
   def macroExpandWithoutRuntime(typer: Typer, expandee: Tree): MacroStatus = {
-    import typer.TyperErrorGen._
-    val fallbackSym = expandee.symbol.nextOverriddenSymbol orElse MacroImplementationNotFoundError(expandee)
+    val fallbackSym = expandee.symbol.nextOverriddenSymbol orElse typer.MacroImplementationNotFoundError(expandee)
     macroLogLite(s"falling back to: $fallbackSym")
 
     def mkFallbackTree(tree: Tree): Tree = {

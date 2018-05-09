@@ -41,7 +41,6 @@ trait PatternTypers {
   trait PatternTyper {
     self: Typer =>
 
-    import TyperErrorGen._
     import infer._
 
     private def unit = context.unit
@@ -91,13 +90,13 @@ trait PatternTypers {
       if (canElide && caseClass.isCase && !member.isOverloaded)
         logResult(s"convertToCaseConstructor($fun, $caseClass, pt=$pt)")(convertToCaseConstructor(fun, caseClass, pt))
       else if (!reallyExists(member))
-        CaseClassConstructorError(fun, s"${fun.symbol} is not a case class, nor does it have an unapply/unapplySeq member")
+        this.CaseClassConstructorError(fun, s"${fun.symbol} is not a case class, nor does it have an unapply/unapplySeq member")
       else if (isOkay)
         fun
       else if (isEmptyType == NoType)
-        CaseClassConstructorError(fun, s"an unapply result must have a member `def isEmpty: Boolean")
+        this.CaseClassConstructorError(fun, s"an unapply result must have a member `def isEmpty: Boolean")
       else
-        CaseClassConstructorError(fun, s"an unapply result must have a member `def isEmpty: Boolean (found: def isEmpty: $isEmptyType)")
+        this.CaseClassConstructorError(fun, s"an unapply result must have a member `def isEmpty: Boolean (found: def isEmpty: $isEmptyType)")
     }
 
     def typedArgsForFormals(args: List[Tree], formals: List[Type], mode: Mode): List[Tree] = {
@@ -268,7 +267,7 @@ trait PatternTypers {
       def errorTree: Tree = treeCopy.Apply(tree, funOrig, args) setType ErrorType
 
       if (args.lengthCompare(MaxTupleArity) > 0) {
-        TooManyArgsPatternError(funOverloadResolved); errorTree
+        this.TooManyArgsPatternError(funOverloadResolved); errorTree
       } else {
         val extractorPos = funOverloadResolved.pos
         val extractorTp  = funOverloadResolved.tpe
@@ -286,8 +285,8 @@ trait PatternTypers {
               def freshArgType(tp: Type): Type = tp match {
                 case MethodType(param :: _, _) => param.tpe
                 case PolyType(tparams, restpe) => createFromClonedSymbols(tparams, freshArgType(restpe))(genPolyType)
-                case OverloadedType(_, _)      => OverloadedUnapplyError(funOverloadResolved); ErrorType
-                case _                         => UnapplyWithSingleArgError(funOverloadResolved); ErrorType
+                case OverloadedType(_, _)      => this.OverloadedUnapplyError(funOverloadResolved); ErrorType
+                case _                         => this.UnapplyWithSingleArgError(funOverloadResolved); ErrorType
               }
 
               val GenPolyType(freeVars, unappFormal) = freshArgType(unapplyType.skolemizeExistential(context.owner, tree))
@@ -311,8 +310,8 @@ trait PatternTypers {
 
         if (typedApplied.tpe.isErroneous || unapplyMethod.isMacro && !typedApplied.isInstanceOf[Apply]) {
           if (unapplyMethod.isMacro) {
-            if (isBlackbox(unapplyMethod)) BlackboxExtractorExpansion(tree)
-            else WrongShapeExtractorExpansion(tree)
+            if (isBlackbox(unapplyMethod)) self.BlackboxExtractorExpansion(tree)
+            else this.WrongShapeExtractorExpansion(tree)
           }
           errorTree
         } else {

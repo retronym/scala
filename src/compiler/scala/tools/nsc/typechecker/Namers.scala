@@ -554,7 +554,7 @@ trait Namers extends MethodSynthesis {
           if (isValid(from)) {
             // for Java code importing Scala objects
             if (!nme.isModuleName(from) || isValid(from.dropModule)) {
-              typer.TyperErrorGen.NotAMemberError(tree, expr, from)
+              typer.NotAMemberError(tree, expr, from)
             }
           }
           // Setting the position at the import means that if there is
@@ -1712,7 +1712,7 @@ trait Namers extends MethodSynthesis {
             // TODO should we change `typedIdent` not to expand to the `Ident` to a `This`?
           case _ if treeInfo.isStableIdentifierPattern(expr1) =>
           case _ =>
-            typer.TyperErrorGen.UnstableTreeError(expr1)
+            typer.UnstableTreeError(expr1)
         }
 
         val newImport = treeCopy.Import(imp, expr1, selectors).asInstanceOf[Import]

@@ -23,7 +23,7 @@ trait ScaladocAnalyzer extends Analyzer {
 
     override def canAdaptConstantTypeToLiteral = false
 
-    override protected def macroImplementationNotFoundMessage(name: Name): String = (
+    override def macroImplementationNotFoundMessage(name: Name): String = (
         super.macroImplementationNotFoundMessage(name)
       + "\nWhen generating scaladocs for multiple projects at once, consider using -Ymacro-no-expand to disable macro expansions altogether."
     )
