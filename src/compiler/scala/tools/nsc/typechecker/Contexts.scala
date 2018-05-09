@@ -1073,27 +1073,7 @@ trait Contexts { self: Analyzer =>
         found1
       }
 
-      def lookupConstructor(enclClassSym: Symbol, scope: Scope): Symbol = {
-        var e = scope.lookupEntry(name)
-        if (e == null) {
-          NoSymbol
-        } else {
-          val e1 = e
-          val e1Sym = e.sym
-          var syms: mutable.ListBuffer[Symbol] = null
-          e = scope.lookupNextEntry(e)
-          while (e ne null) {
-            if (e.depth == e1.depth && e.sym != e1Sym) {
-              if (syms eq null) syms = new mutable.ListBuffer[Symbol]
-              syms += e.sym
-            }
-            e = scope.lookupNextEntry(e)
-          }
-          if (syms eq null) e1Sym
-          else enclClassSym.newOverloaded(cx.enclClass.prefix, syms.toList)
-        }
-      }
-      def lookupInScope(enclClassSym: Symbol, scope: Scope): Symbol = {
+      def lookupInScope(owner: Symbol, pre: Type, scope: Scope): Symbol = {
         var e = scope.lookupEntry(name)
         if (e == null) {
           NoSymbol
@@ -1113,7 +1093,7 @@ trait Contexts { self: Analyzer =>
           symbolDepth = (cx.depth - cx.scope.nestingLevel) + e1.depth
 
           if (syms eq null) e1Sym
-          else enclClassSym.newOverloaded(cx.enclClass.prefix, syms.toList)
+          else owner.newOverloaded(pre, syms.toList)
         }
       }
 
@@ -1125,14 +1105,15 @@ trait Contexts { self: Analyzer =>
       if (name == nme.CONSTRUCTOR) return {
         val enclClassSym = cx.enclClass.owner
         val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
-        val constructorSym = lookupConstructor(enclClassSym, scope)
+        val constructorSym = lookupInScope(enclClassSym, cx.enclClass.prefix, scope)
+        symbolDepth = -1
         finishDefSym(constructorSym, cx.enclClass.prefix)
       }
 
       // cx.scope eq null arises during FixInvalidSyms in Duplicators
       while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
         pre    = cx.enclClass.prefix
-        defSym = lookupInScope(cx.owner, cx.scope) match {
+        defSym = lookupInScope(cx.owner, cx.enclClass.prefix, cx.scope) match {
           case NoSymbol                  => searchPrefix
           case found                     => found
         }
