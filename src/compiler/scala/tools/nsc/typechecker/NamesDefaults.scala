@@ -116,7 +116,6 @@ trait NamesDefaults { self: Analyzer =>
   def transformNamedApplication(typer: Typer, mode: Mode, pt: Type)
                                (tree: Tree, argPos: Int => Int): Tree = {
     import typer._
-    import typer.infer._
     val context = typer.context
     import context.unit
 

@@ -172,31 +172,15 @@ trait Infer extends Checkable {
     case _                                                       => tp // @MAT aliases already handled by subtyping
   }
 
-  private lazy val stdErrorClass = rootMirror.RootClass.newErrorClass(tpnme.ERROR)
-  private lazy val stdErrorValue = stdErrorClass.newErrorValue(nme.ERROR)
+  lazy val stdErrorClass = rootMirror.RootClass.newErrorClass(tpnme.ERROR)
+  lazy val stdErrorValue = stdErrorClass.newErrorValue(nme.ERROR)
 
   /** The context-dependent inferencer part */
   trait Inferencer extends InferCheckable {
     def context: Context
 
     /* -- Error Messages --------------------------------------------------- */
-    def setError[T <: Tree](tree: T): T = {
-      // scala/bug#7388, one can incur a cycle calling sym.toString
-      // (but it'd be nicer if that weren't so)
-      def name = {
-        val sym = tree.symbol
-        val nameStr = try sym.toString catch { case _: CyclicReference => sym.nameString }
-        newTermName(s"<error: $nameStr>")
-      }
-      def errorClass  = if (context.reportErrors) context.owner.newErrorClass(name.toTypeName) else stdErrorClass
-      def errorValue  = if (context.reportErrors) context.owner.newErrorValue(name) else stdErrorValue
-      def errorSym    = if (tree.isType) errorClass else errorValue
-
-      if (tree.hasSymbolField)
-        tree setSymbol errorSym
-
-      tree setType ErrorType
-    }
+    def setError[T <: Tree](tree: T): T = context.setError(tree)
 
     def getContext = context
 

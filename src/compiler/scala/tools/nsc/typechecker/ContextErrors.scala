@@ -1305,10 +1305,9 @@ trait ContextErrors {
   }
 
   object NamesDefaultsErrorsGen {
-    import typer.infer.setError
 
     def NameClashError(sym: Symbol, arg: Tree)(implicit context: Context) = {
-      setError(arg) // to distinguish it from ambiguous reference error
+      context.setError(arg) // to distinguish it from ambiguous reference error
 
       def errMsg =
         "%s definition needs %s because '%s' is used as a named argument in its body.".format(
@@ -1323,7 +1322,7 @@ trait ContextErrors {
         issueNormalTypeError(arg,
           "reference to "+ name +" is ambiguous; it is both a method parameter "+
           "and a variable in scope.")
-        setError(arg)
+        context.setError(arg)
       } else arg
     }
 
@@ -1339,7 +1338,7 @@ trait ContextErrors {
           s"\nNote that assignments in argument position are no longer allowed since Scala 2.13.\nTo express the assignment expression, wrap it in brackets, e.g., `{ $name = ... }`."
         else ""
       issueNormalTypeError(arg, s"unknown parameter name: $name$suffix")
-      setError(arg)
+      context.setError(arg)
     }
 
     def DoubleParamNamesDefaultError(arg: Tree, name: Name, pos: Int, otherName: Option[Name])(implicit context: Context) = {
@@ -1348,12 +1347,12 @@ trait ContextErrors {
         case None => ""
       }
       issueNormalTypeError(arg, "parameter '"+ name +"' is already specified at parameter position "+ pos + annex)
-      setError(arg)
+      context.setError(arg)
     }
 
     def PositionalAfterNamedNamesDefaultError(arg: Tree)(implicit context: Context) = {
       issueNormalTypeError(arg, "positional after named argument.")
-      setError(arg)
+      context.setError(arg)
     }
   }
 }

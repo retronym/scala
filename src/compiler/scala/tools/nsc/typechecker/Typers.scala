@@ -181,17 +181,15 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   }
 
 
-  abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper {
+  abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with Inferencer {
     import context0.unit
     import typeDebug.ptTree
 
     private def transformed: mutable.Map[Tree, Tree] = unit.transformed
 
-    val infer: Inferencer = new Inferencer {
-      def context = Typer.this.context
-      // See scala/bug#3281 re undoLog
-      override def isCoercible(tp: Type, pt: Type) = undoLog undo viewExists(tp, pt)
-    }
+    def infer: Inferencer = this
+    // See scala/bug#3281 re undoLog
+    override def isCoercible(tp: Type, pt: Type) = undoLog undo viewExists(tp, pt)
 
     /** Overridden to false in scaladoc and/or interactive. */
     def canAdaptConstantTypeToLiteral = true
@@ -310,8 +308,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         }
         result.tree
       }
-
-    import infer._
 
     private var namerCache: Namer = null
     def namer = {

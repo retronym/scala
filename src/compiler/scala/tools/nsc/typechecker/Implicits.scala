@@ -380,7 +380,6 @@ trait Implicits {
         typingStack.printTyping(f"[search #$searchId] $what $msg")
     }
 
-    import infer._
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(implicitSearchCount)
 
     /** The type parameters to instantiate */

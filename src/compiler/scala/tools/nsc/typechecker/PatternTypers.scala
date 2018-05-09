@@ -41,8 +41,6 @@ trait PatternTypers {
   trait PatternTyper {
     self: Typer =>
 
-    import infer._
-
     private def unit = context.unit
 
     // If the tree's symbol's type does not define an extractor, maybe the tree's type does.
