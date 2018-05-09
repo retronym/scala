@@ -593,7 +593,7 @@ trait Namers extends MethodSynthesis {
       def assignParamTypes(copyDef: DefDef, sym: Symbol) {
         val clazz = sym.owner
         val constructorType = clazz.primaryConstructor.tpe
-        val subst = new SubstSymMap(clazz.typeParams, copyDef.tparams map (_.symbol))
+        val subst = SubstSymMap(clazz.typeParams, copyDef.tparams map (_.symbol))
         val classParamss = constructorType.paramss
 
         map2(copyDef.vparamss, classParamss)((copyParams, classParams) =>
@@ -636,7 +636,9 @@ trait Namers extends MethodSynthesis {
           // or recursive if it turned out we should unlink our synthetic method (matching sig).
           // In any case, error out. We don't unlink the symbol so that `symWasOverloaded` says yes,
           // which would be wrong if the method is in fact recursive, but it seems less confusing.
-          val scopePartiallyCompleted = new HasMember(ownerInfo, sym.name, BridgeFlags | SYNTHETIC, LOCKED).apply()
+          val hasMember = new HasMember
+          hasMember.init(ownerInfo, sym.name, BridgeFlags | SYNTHETIC, LOCKED)
+          val scopePartiallyCompleted = hasMember.apply()
 
           // Check `scopePartiallyCompleted` first to rule out locked symbols from the owner.info.member call,
           // as FindMember will call info on a locked symbol (while checking type matching to assemble an overloaded type),

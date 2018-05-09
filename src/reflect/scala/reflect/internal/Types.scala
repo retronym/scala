@@ -631,7 +631,9 @@ trait Types
     def nonPrivateMember(name: Name): Symbol =
       memberBasedOnName(name, BridgeAndPrivateFlags)
     def hasNonPrivateMember(name: Name): Boolean = {
-      new HasMember(this, name, BridgeAndPrivateFlags, 0L).apply()
+      val hasMember = new HasMember
+      hasMember.init(this, name, BridgeAndPrivateFlags, 0L)
+      hasMember.apply()
     }
 
     def packageObject: Symbol = member(nme.PACKAGE)
@@ -689,12 +691,15 @@ trait Types
         )
         if (trivial) this
         else {
-          val m     = new AsSeenFromMap(pre.normalize, clazz)
-          val tp    = m(this)
-          val tp1   = existentialAbstraction(m.capturedParams, tp)
+          asSeenFromMapCache.use {
+            m =>
+              m.init(pre.normalize, clazz)
+              val tp    = m(this)
+              val tp1   = existentialAbstraction(m.capturedParams, tp)
 
-          if (m.capturedSkolems.isEmpty) tp1
-          else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
+              if (m.capturedSkolems.isEmpty) tp1
+              else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
+          }
         }
       } finally if (StatisticsStatics.areSomeColdStatsEnabled) statistics.popTimer(typeOpsStack, start)
     }
@@ -742,7 +747,11 @@ trait Types
      */
     def substSym(from: List[Symbol], to: List[Symbol]): Type =
       if ((from eq to) || from.isEmpty) this
-      else new SubstSymMap(from, to) apply this
+      else SubstSymMap.cache.use { map =>
+        map.init(from, to)
+        map(this)
+      }
+
 
     /** Substitute all occurrences of `ThisType(from)` in this type by `to`.
      *
@@ -1015,7 +1024,11 @@ trait Types
      *
      */
     def findMembers(excludedFlags: Long, requiredFlags: Long): Scope = {
-      def findMembersInternal = new FindMembers(this, excludedFlags, requiredFlags).apply()
+      def findMembersInternal = {
+        val findMembers = new FindMembers
+        findMembers.init(this, excludedFlags, requiredFlags)
+        findMembers.apply()
+      }
       if (this.isGround) findMembersInternal
       else suspendingTypeVars(typeVarsInType(this))(findMembersInternal)
     }
@@ -1030,7 +1043,14 @@ trait Types
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
-      def findMemberInternal = new FindMember(this, name, excludedFlags, requiredFlags, stableOnly).apply()
+      if (name.string_==("toString"))
+        getClass
+      def findMemberInternal = {
+        findMemberCache.use { findMember =>
+          findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
+          findMember.apply()
+        }
+      }
 
       if (this.isGround) findMemberInternal
       else suspendingTypeVars(typeVarsInType(this))(findMemberInternal)

@@ -393,10 +393,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *
      *    pre.memberType(m)
      */
-    final def newOverloaded(pre: Type, alternatives: List[Symbol]): TermSymbol = (
-      newTermSymbol(alternatives.head.name.toTermName, alternatives.head.pos, OVERLOADED)
-        setInfo OverloadedType(pre, alternatives)
-    )
+    final def newOverloaded(pre: Type, alternatives: List[Symbol]): TermSymbol = {
+      if (alternatives.head.name.string_==("toString"))
+        getClass
+      newTermSymbol(alternatives.head.name.toTermName, alternatives.head.pos, OVERLOADED) setInfo OverloadedType(pre, alternatives)
+    }
 
     final def newErrorValue(name: TermName): TermSymbol =
       newTermSymbol(name, pos, SYNTHETIC | IS_ERROR) setInfo ErrorType
@@ -3547,7 +3548,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def rawname = nme.NO_NAME
     def name = nme.NO_NAME
     override def name_=(n: Name) = abort("Cannot set NoSymbol's name to " + n)
-
     // Syncnote: no need to synchronize this, because NoSymbol's initialization is triggered by JavaUniverse.init
     // which is called in universe's constructor - something that's inherently single-threaded
     setInfo(NoType)

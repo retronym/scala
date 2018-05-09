@@ -58,8 +58,8 @@ abstract class RefChecks extends Transform {
   def newTransformer(unit: CompilationUnit): RefCheckTransformer =
     new RefCheckTransformer(unit)
 
-  val toJavaRepeatedParam  = new SubstSymMap(RepeatedParamClass -> JavaRepeatedParamClass)
-  val toScalaRepeatedParam = new SubstSymMap(JavaRepeatedParamClass -> RepeatedParamClass)
+  val toJavaRepeatedParam  = SubstSymMap(RepeatedParamClass :: Nil, JavaRepeatedParamClass :: Nil)
+  val toScalaRepeatedParam = SubstSymMap(JavaRepeatedParamClass :: Nil, RepeatedParamClass :: Nil)
 
   def accessFlagsToString(sym: Symbol) = flagsToString(
     sym getFlag (PRIVATE | PROTECTED),

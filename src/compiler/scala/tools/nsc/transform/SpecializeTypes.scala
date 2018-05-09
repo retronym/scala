@@ -1405,7 +1405,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
                               to: List[Symbol],
                               targetClass: Symbol,
                               addressFields: Boolean) extends TreeSymSubstituter(from, to) {
-    override val symSubst = new SubstSymMap(from, to) {
+    override val symSubst = new SubstSymMap {
+      init(from, to)
       override def matches(sym1: Symbol, sym2: Symbol) =
         if (sym2.isTypeSkolem) sym2.deSkolemize eq sym1
         else sym1 eq sym2
