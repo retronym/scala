@@ -176,9 +176,8 @@ trait Infer extends Checkable {
   private lazy val stdErrorValue = stdErrorClass.newErrorValue(nme.ERROR)
 
   /** The context-dependent inferencer part */
-  abstract class Inferencer extends InferencerContextErrors with InferCheckable {
+  trait Inferencer extends InferCheckable {
     def context: Context
-    import InferErrorGen._
 
     /* -- Error Messages --------------------------------------------------- */
     def setError[T <: Tree](tree: T): T = {
@@ -213,7 +212,7 @@ trait Infer extends Checkable {
         Console.println(tree)
         Console.println("" + pre + " " + sym.owner + " " + context.owner + " " + context.outer.enclClass.owner + " " + sym.owner.thisType + (pre =:= sym.owner.thisType))
       }
-      ErrorUtils.issueTypeError(AccessError(tree, sym, pre, context.enclClass.owner,
+      ErrorUtils.issueTypeError(this.AccessError(tree, sym, pre, context.enclClass.owner,
         if (settings.check.isDefault)
           analyzer.lastAccessCheckDetails
         else
@@ -251,7 +250,7 @@ trait Infer extends Checkable {
       def malformed(ex: MalformedType, instance: Type): Type = {
         val what    = if (ex.msg contains "malformed type") "is malformed" else s"contains a ${ex.msg}"
         val message = s"\n because its instance type $instance $what"
-        val error   = AccessError(tree, sym, pre, context.enclClass.owner, message)
+        val error   = this.AccessError(tree, sym, pre, context.enclClass.owner, message)
         ErrorUtils.issueTypeError(error)(context)
         ErrorType
       }
@@ -878,8 +877,8 @@ trait Infer extends Checkable {
 
     /** error if arguments not within bounds. */
     def checkBounds(tree: Tree, pre: Type, owner: Symbol, tparams: List[Symbol], targs: List[Type], prefix: String): Boolean = {
-      def issueBoundsError()                       = { NotWithinBounds(tree, prefix, targs, tparams, Nil) ; false }
-      def issueKindBoundErrors(errs: List[String]) = { KindBoundErrors(tree, prefix, targs, tparams, errs) ; false }
+      def issueBoundsError()                       = { this.NotWithinBounds(tree, prefix, targs, tparams, Nil) ; false }
+      def issueKindBoundErrors(errs: List[String]) = { this.KindBoundErrors(tree, prefix, targs, tparams, errs) ; false }
       //@M validate variances & bounds of targs wrt variances & bounds of tparams
       //@M TODO: better place to check this?
       //@M TODO: errors for getters & setters are reported separately
@@ -953,7 +952,7 @@ trait Infer extends Checkable {
     private def substExpr(tree: Tree, undetparams: List[Symbol], targs: List[Type], pt: Type) {
       if (targs eq null) {
         if (!tree.tpe.isErroneous && !pt.isErroneous)
-          PolymorphicExpressionInstantiationError(tree, undetparams, pt)
+          this.PolymorphicExpressionInstantiationError(tree, undetparams, pt)
       }
       else {
         new TreeTypeSubstituter(undetparams, targs).traverse(tree)
@@ -1001,7 +1000,7 @@ trait Infer extends Checkable {
           } else Nil
         }
         catch ifNoInstance { msg =>
-          NoMethodInstanceError(fn, args, msg); List()
+          this.NoMethodInstanceError(fn, args, msg); List()
         }
     }
 
@@ -1042,7 +1041,7 @@ trait Infer extends Checkable {
             Some(targs)
           } catch ifNoInstance { msg =>
             debuglog("NO INST "+ ((tvars, tvars map (_.constr))))
-            NoConstructorInstanceError(tree, resTp, pt, msg)
+            this.NoConstructorInstanceError(tree, resTp, pt, msg)
             None
           }
         } else {
@@ -1082,7 +1081,7 @@ trait Infer extends Checkable {
         case _ =>
           def not = if (isFullyDefined(pt)) "" else "not "
           devWarning(s"failed inferConstructorInstance for $tree: ${tree.tpe} undet=$undetparams, pt=$pt (${not}fully defined)")
-          ConstrInstantiationError(tree, resTp, pt)
+          this.ConstrInstantiationError(tree, resTp, pt)
       }
     }
 
@@ -1167,7 +1166,7 @@ trait Infer extends Checkable {
        * and is a "final type", meaning final + invariant in all type parameters.
        */
       if (pt.isFinalType && ptparams.isEmpty && !ptMatchesPattp) {
-        IncompatibleScrutineeTypeError(tree0, pattp, pt)
+        this.IncompatibleScrutineeTypeError(tree0, pattp, pt)
         return ErrorType
       }
 
@@ -1194,7 +1193,7 @@ trait Infer extends Checkable {
           if (isPopulated(tp, pt1) && isInstantiatable(tvars ++ ptvars) || pattpMatchesPt)
              ptvars foreach instantiateTypeVar
           else {
-            PatternTypeIncompatibleWithPtError1(tree0, pattp, pt)
+            this.PatternTypeIncompatibleWithPtError1(tree0, pattp, pt)
             return ErrorType
           }
         }
@@ -1218,7 +1217,7 @@ trait Infer extends Checkable {
         if (pat.tpe <:< pt1)
           ptvars foreach instantiateTypeVar
         else
-          PatternTypeIncompatibleWithPtError2(pat, pt1, pt)
+          this.PatternTypeIncompatibleWithPtError2(pat, pt1, pt)
       }
 
     object toOrigin extends TypeMap {
@@ -1291,8 +1290,8 @@ trait Infer extends Checkable {
               //         unless an error is issued. We're not issuing an error, in the assumption that it would be
               //         spurious in light of the erroneous expected type
               if (pt.isErroneous) setError(tree)
-              else AmbiguousExprAlternativeError(tree, pre, best, competing, pt, isSecondTry)
-            case _                                        => if (bests.isEmpty || alts0.isEmpty) NoBestExprAlternativeError(tree, pt, isSecondTry)
+              else Inferencer.this.AmbiguousExprAlternativeError(tree, pre, best, competing, pt, isSecondTry)
+            case _                                        => if (bests.isEmpty || alts0.isEmpty) Inferencer.this.NoBestExprAlternativeError(tree, pt, isSecondTry)
           }
         }
       }
@@ -1395,9 +1394,9 @@ trait Infer extends Checkable {
           val applicable  = overloadsToConsiderBySpecificity(alts filter isAltApplicable(pt), argtpes, varargsStar)
           val ranked      = bestAlternatives(applicable)(rankAlternatives)
           ranked match {
-            case best :: competing :: _ => AmbiguousMethodAlternativeError(tree, pre, best, competing, argtpes, pt, isLastTry) // ambiguous
+            case best :: competing :: _ => Inferencer.this.AmbiguousMethodAlternativeError(tree, pre, best, competing, argtpes, pt, isLastTry) // ambiguous
             case best :: Nil            => tree setSymbol best setType (pre memberType best)           // success
-            case Nil if pt.isWildcard   => NoBestMethodAlternativeError(tree, argtpes, pt, isLastTry)  // failed
+            case Nil if pt.isWildcard   => Inferencer.this.NoBestMethodAlternativeError(tree, argtpes, pt, isLastTry)  // failed
             case Nil                    => bestForExpectedType(WildcardType, isLastTry)                // failed, but retry with WildcardType
           }
         }
@@ -1427,7 +1426,7 @@ trait Infer extends Checkable {
         case NoSymbol                => PolyAlternativeErrorKind.WrongNumber       // wrong number of tparams
         case _                       => PolyAlternativeErrorKind.ArgsDoNotConform  // didn't conform to bounds
       }
-      def fail() = PolyAlternativeError(tree, argtypes, matchingLength, errorKind)
+      def fail() = this.PolyAlternativeError(tree, argtypes, matchingLength, errorKind)
       def finish(sym: Symbol, tpe: Type) = tree setSymbol sym setType tpe
       // Alternatives which conform to bounds
       def checkWithinBounds(sym: Symbol) = sym.alternatives match {

@@ -5102,10 +5102,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           case NoSymbol   => startContext.lookupSymbol(name, qualifies)
           case sym        => LookupSucceeded(EmptyTree, sym)
         }
-        import InferErrorGen._
         nameLookup match {
           case LookupAmbiguous(msg)         => issue(this.AmbiguousIdentError(tree, name, msg))
-          case LookupInaccessible(sym, msg) => issue(AccessError(tree, sym, context, msg))
+          case LookupInaccessible(sym, msg) => issue(infer.AccessError(tree, sym, context, msg))
           case LookupNotFound               =>
             inEmptyPackage orElse lookupInRoot(name) match {
               case NoSymbol => issue(this.SymbolNotFoundError(tree, name, context.owner, startContext))

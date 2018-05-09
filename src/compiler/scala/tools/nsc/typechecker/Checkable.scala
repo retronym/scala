@@ -307,7 +307,7 @@ trait Checkable {
       P match {
         // Prohibit top-level type tests for these, but they are ok nested (e.g. case Foldable[Nothing] => ... )
         case TypeRef(_, NothingClass | NullClass | AnyValClass, _) =>
-          InferErrorGen.TypePatternOrIsInstanceTestError(tree, P)
+          InferErrorGen(self).TypePatternOrIsInstanceTestError(tree, P)
         // If top-level abstract types can be checked using a classtag extractor, don't warn about them
         case TypeRef(_, sym, _) if sym.isAbstractType && canRemedy =>
           ;

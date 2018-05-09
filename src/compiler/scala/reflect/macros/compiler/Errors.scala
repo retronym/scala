@@ -11,7 +11,6 @@ trait Errors extends Traces {
   import analyzer._
   import definitions._
   import treeInfo._
-  import typer.infer.InferErrorGen._
   import runDefinitions._
   def globalSettings = global.settings
 
@@ -143,7 +142,7 @@ trait Errors extends Traces {
     }
 
     def MacroImplTargMismatchError(atargs: List[Type], atparams: List[Symbol]) =
-      compatibilityError(NotWithinBoundsErrorMessage("", atargs, atparams, macroDebugVerbose || settings.explaintypes.value))
+      compatibilityError(InferErrorGen(typer.infer).NotWithinBoundsErrorMessage("", atargs, atparams, macroDebugVerbose || settings.explaintypes.value))
 
     def MacroImplTparamInstantiationError(atparams: List[Symbol], e: NoInstance) = {
       val badps = atparams map (_.defString) mkString ", "

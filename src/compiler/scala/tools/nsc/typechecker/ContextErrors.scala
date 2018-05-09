@@ -900,9 +900,179 @@ trait ContextErrors {
       macroExpansionError(expandee, typer.macroImplementationNotFoundMessage(expandee.symbol.name))
   }
 
-  trait InferencerContextErrors {
-    self: Inferencer =>
+  object PolyAlternativeErrorKind extends Enumeration {
+    type ErrorType = Value
+    val WrongNumber, NoParams, ArgsDoNotConform = Value
+  }
 
+  implicit class InferErrorGen(infer: Inferencer) {
+    import infer.{setError, context}
+
+    implicit def contextInferErrorGen = infer.getContext
+
+
+    private def issueAmbiguousTypeErrorUnlessErroneous(pos: Position, pre: Type, sym1: Symbol, sym2: Symbol, rest: String): Unit = {
+      // To avoid stack overflows (scala/bug#8890), we MUST (at least) report when either `validTargets` OR `ambiguousSuppressed`
+      // More details:
+      // If `!context.ambiguousErrors`, `reporter.issueAmbiguousError` (which `context.issueAmbiguousError` forwards to)
+      // buffers ambiguous errors. In this case, to avoid looping, we must issue even if `!validTargets`. (TODO: why?)
+      // When not buffering (and thus reporting to the user), we shouldn't issue unless `validTargets`,
+      // otherwise we report two different errors that trace back to the same root cause,
+      // and unless `validTargets`, we don't know for sure the ambiguity is real anyway.
+      val validTargets = !(pre.isErroneous || sym1.isErroneous || sym2.isErroneous)
+      val ambiguousBuffered = !context.ambiguousErrors
+      if (validTargets || ambiguousBuffered)
+        context.issueAmbiguousError(
+          if (sym1.hasDefault && sym2.hasDefault && sym1.enclClass == sym2.enclClass) {
+            val methodName = nme.defaultGetterToMethod(sym1.name)
+            AmbiguousTypeError(sym1.enclClass.pos,
+              s"in ${sym1.enclClass}, multiple overloaded alternatives of $methodName define default arguments")
+
+          } else {
+            AmbiguousTypeError(pos,
+              "ambiguous reference to overloaded definition,\n" +
+                s"both ${sym1.fullLocationString} of type ${pre.memberType(sym1)}\n" +
+                s"and  ${sym2.fullLocationString} of type ${pre.memberType(sym2)}\n" +
+                s"match $rest")
+          })
+    }
+
+    def AccessError(tree: Tree, sym: Symbol, ctx: Context, explanation: String): AbsTypeError =
+      AccessError(tree, sym, ctx.enclClass.owner.thisType, ctx.enclClass.owner, explanation)
+
+    def AccessError(tree: Tree, sym: Symbol, pre: Type, owner0: Symbol, explanation: String): AbsTypeError = {
+      def errMsg = {
+        val location = if (sym.isClassConstructor) owner0 else pre.widen.directObjectString
+
+        underlyingSymbol(sym).fullLocationString + " cannot be accessed in " +
+          location + explanation
+      }
+      AccessTypeError(tree, errMsg)
+    }
+
+    def NoMethodInstanceError(fn: Tree, args: List[Tree], msg: String) =
+      issueNormalTypeError(fn,
+        "no type parameters for " +
+          applyErrorMsg(fn, " exist so that it can be applied to arguments ", args map (_.tpe.widen), WildcardType) +
+          "\n --- because ---\n" + msg)
+
+    // TODO: no test case
+    def NoConstructorInstanceError(tree: Tree, restpe: Type, pt: Type, msg: String) = {
+      issueNormalTypeError(tree,
+        "constructor of type " + restpe +
+          " cannot be uniquely instantiated to expected type " + pt +
+          "\n --- because ---\n" + msg)
+      setError(tree)
+    }
+
+    def ConstrInstantiationError(tree: Tree, restpe: Type, pt: Type) = {
+      issueNormalTypeError(tree,
+        "constructor cannot be instantiated to expected type" + foundReqMsg(restpe, pt))
+      setError(tree)
+    }
+
+    // side-effect on the tree, break the overloaded type cycle in infer
+    private def setErrorOnLastTry(lastTry: Boolean, tree: Tree) = if (lastTry) setError(tree)
+
+    def NoBestMethodAlternativeError(tree: Tree, argtpes: List[Type], pt: Type, lastTry: Boolean) = {
+      issueNormalTypeError(tree,
+        applyErrorMsg(tree, " cannot be applied to ", argtpes, pt))
+      // since inferMethodAlternative modifies the state of the tree
+      // we have to set the type of tree to ErrorType only in the very last
+      // fallback action that is done in the inference.
+      // This avoids entering infinite loop in doTypeApply.
+      setErrorOnLastTry(lastTry, tree)
+    }
+
+    def AmbiguousMethodAlternativeError(tree: Tree, pre: Type, best: Symbol,
+                                        firstCompeting: Symbol, argtpes: List[Type], pt: Type, lastTry: Boolean) = {
+
+      if (!(argtpes exists (_.isErroneous)) && !pt.isErroneous) {
+        val msg0 =
+          "argument types " + argtpes.mkString("(", ",", ")") +
+            (if (pt == WildcardType) "" else " and expected result type " + pt)
+        issueAmbiguousTypeErrorUnlessErroneous(tree.pos, pre, best, firstCompeting, msg0)
+        setErrorOnLastTry(lastTry, tree)
+      } else setError(tree) // do not even try further attempts because they should all fail
+      // even if this is not the last attempt (because of the SO's possibility on the horizon)
+
+    }
+
+    def NoBestExprAlternativeError(tree: Tree, pt: Type, lastTry: Boolean) = {
+      issueNormalTypeError(tree, withAddendum(tree.pos)(typeErrorMsg(context, tree.symbol.tpe, pt)))
+      setErrorOnLastTry(lastTry, tree)
+    }
+
+    def AmbiguousExprAlternativeError(tree: Tree, pre: Type, best: Symbol, firstCompeting: Symbol, pt: Type, lastTry: Boolean) = {
+      issueAmbiguousTypeErrorUnlessErroneous(tree.pos, pre, best, firstCompeting, "expected type " + pt)
+      setErrorOnLastTry(lastTry, tree)
+    }
+
+    // checkBounds
+    def KindBoundErrors(tree: Tree, prefix: String, targs: List[Type],
+                        tparams: List[Symbol], kindErrors: List[String]) = {
+      issueNormalTypeError(tree,
+        prefix + "kinds of the type arguments " + targs.mkString("(", ",", ")") +
+          " do not conform to the expected kinds of the type parameters "+
+          tparams.mkString("(", ",", ")") + tparams.head.locationString+ "." +
+          kindErrors.toList.mkString("\n", ", ", ""))
+    }
+
+    private[scala] def NotWithinBoundsErrorMessage(prefix: String, targs: List[Type], tparams: List[Symbol], explaintypes: Boolean) = {
+      if (explaintypes) {
+        val bounds = tparams map (tp => tp.info.instantiateTypeParams(tparams, targs).bounds)
+        (targs, bounds).zipped foreach ((targ, bound) => explainTypes(bound.lo, targ))
+        (targs, bounds).zipped foreach ((targ, bound) => explainTypes(targ, bound.hi))
+        ()
+      }
+
+      prefix + "type arguments " + targs.mkString("[", ",", "]") +
+        " do not conform to " + tparams.head.owner + "'s type parameter bounds " +
+        (tparams map (_.defString)).mkString("[", ",", "]")
+    }
+
+    def NotWithinBounds(tree: Tree, prefix: String, targs: List[Type],
+                        tparams: List[Symbol], kindErrors: List[String]) =
+      issueNormalTypeError(tree,
+        NotWithinBoundsErrorMessage(prefix, targs, tparams, settings.explaintypes))
+
+    //substExpr
+    def PolymorphicExpressionInstantiationError(tree: Tree, undetparams: List[Symbol], pt: Type) =
+      issueNormalTypeError(tree,
+        "polymorphic expression cannot be instantiated to expected type" +
+          foundReqMsg(GenPolyType(undetparams, skipImplicit(tree.tpe)), pt))
+
+    //checkCheckable
+    def TypePatternOrIsInstanceTestError(tree: Tree, tp: Type) =
+      issueNormalTypeError(tree, "type "+tp+" cannot be used in a type pattern or isInstanceOf test")
+
+    def PatternTypeIncompatibleWithPtError1(tree: Tree, pattp: Type, pt: Type) =
+      issueNormalTypeError(tree, "pattern type is incompatible with expected type" + foundReqMsg(pattp, pt))
+
+    def IncompatibleScrutineeTypeError(tree: Tree, pattp: Type, pt: Type) =
+      issueNormalTypeError(tree, "scrutinee is incompatible with pattern type" + foundReqMsg(pattp, pt))
+
+    def PatternTypeIncompatibleWithPtError2(pat: Tree, pt1: Type, pt: Type) =
+      issueNormalTypeError(pat,
+        "pattern type is incompatible with expected type"+ foundReqMsg(pat.tpe, pt) +
+          typePatternAdvice(pat.tpe.typeSymbol, pt1.typeSymbol))
+
+    def PolyAlternativeError(tree: Tree, argtypes: List[Type], sym: Symbol, err: PolyAlternativeErrorKind.ErrorType) = {
+      import PolyAlternativeErrorKind._
+      val msg =
+        err match {
+          case WrongNumber =>
+            "wrong number of type parameters for " + treeSymTypeMsg(tree)
+          case NoParams =>
+            treeSymTypeMsg(tree) + " does not take type parameters"
+          case ArgsDoNotConform =>
+            "type arguments " + argtypes.mkString("[", ",", "]") +
+              " conform to the bounds of none of the overloaded alternatives of\n "+sym+
+              ": "+sym.info
+        }
+      issueNormalTypeError(tree, msg)
+      ()
+    }
     private def applyErrorMsg(tree: Tree, msg: String, argtpes: List[Type], pt: Type) = {
       def asParams(xs: List[Any]) = xs.mkString("(", ", ", ")")
 
@@ -914,180 +1084,8 @@ trait ContextErrors {
         treeSymTypeMsg(tree) + msg + asParams(argtpes) + resType
       }
     }
-
-    object InferErrorGen {
-
-      implicit val contextInferErrorGen = getContext
-
-      object PolyAlternativeErrorKind extends Enumeration {
-        type ErrorType = Value
-        val WrongNumber, NoParams, ArgsDoNotConform = Value
-      }
-
-      private def issueAmbiguousTypeErrorUnlessErroneous(pos: Position, pre: Type, sym1: Symbol, sym2: Symbol, rest: String): Unit = {
-        // To avoid stack overflows (scala/bug#8890), we MUST (at least) report when either `validTargets` OR `ambiguousSuppressed`
-        // More details:
-        // If `!context.ambiguousErrors`, `reporter.issueAmbiguousError` (which `context.issueAmbiguousError` forwards to)
-        // buffers ambiguous errors. In this case, to avoid looping, we must issue even if `!validTargets`. (TODO: why?)
-        // When not buffering (and thus reporting to the user), we shouldn't issue unless `validTargets`,
-        // otherwise we report two different errors that trace back to the same root cause,
-        // and unless `validTargets`, we don't know for sure the ambiguity is real anyway.
-        val validTargets = !(pre.isErroneous || sym1.isErroneous || sym2.isErroneous)
-        val ambiguousBuffered = !context.ambiguousErrors
-        if (validTargets || ambiguousBuffered)
-          context.issueAmbiguousError(
-            if (sym1.hasDefault && sym2.hasDefault && sym1.enclClass == sym2.enclClass) {
-              val methodName = nme.defaultGetterToMethod(sym1.name)
-              AmbiguousTypeError(sym1.enclClass.pos,
-                s"in ${sym1.enclClass}, multiple overloaded alternatives of $methodName define default arguments")
-
-            } else {
-              AmbiguousTypeError(pos,
-                 "ambiguous reference to overloaded definition,\n" +
-                s"both ${sym1.fullLocationString} of type ${pre.memberType(sym1)}\n" +
-                s"and  ${sym2.fullLocationString} of type ${pre.memberType(sym2)}\n" +
-                s"match $rest")
-            })
-      }
-
-      def AccessError(tree: Tree, sym: Symbol, ctx: Context, explanation: String): AbsTypeError =
-        AccessError(tree, sym, ctx.enclClass.owner.thisType, ctx.enclClass.owner, explanation)
-
-      def AccessError(tree: Tree, sym: Symbol, pre: Type, owner0: Symbol, explanation: String): AbsTypeError = {
-        def errMsg = {
-          val location = if (sym.isClassConstructor) owner0 else pre.widen.directObjectString
-
-          underlyingSymbol(sym).fullLocationString + " cannot be accessed in " +
-          location + explanation
-        }
-        AccessTypeError(tree, errMsg)
-      }
-
-      def NoMethodInstanceError(fn: Tree, args: List[Tree], msg: String) =
-        issueNormalTypeError(fn,
-          "no type parameters for " +
-          applyErrorMsg(fn, " exist so that it can be applied to arguments ", args map (_.tpe.widen), WildcardType) +
-          "\n --- because ---\n" + msg)
-
-      // TODO: no test case
-      def NoConstructorInstanceError(tree: Tree, restpe: Type, pt: Type, msg: String) = {
-        issueNormalTypeError(tree,
-          "constructor of type " + restpe +
-          " cannot be uniquely instantiated to expected type " + pt +
-          "\n --- because ---\n" + msg)
-        setError(tree)
-      }
-
-      def ConstrInstantiationError(tree: Tree, restpe: Type, pt: Type) = {
-        issueNormalTypeError(tree,
-          "constructor cannot be instantiated to expected type" + foundReqMsg(restpe, pt))
-        setError(tree)
-      }
-
-      // side-effect on the tree, break the overloaded type cycle in infer
-      private def setErrorOnLastTry(lastTry: Boolean, tree: Tree) = if (lastTry) setError(tree)
-
-      def NoBestMethodAlternativeError(tree: Tree, argtpes: List[Type], pt: Type, lastTry: Boolean) = {
-        issueNormalTypeError(tree,
-          applyErrorMsg(tree, " cannot be applied to ", argtpes, pt))
-        // since inferMethodAlternative modifies the state of the tree
-        // we have to set the type of tree to ErrorType only in the very last
-        // fallback action that is done in the inference.
-        // This avoids entering infinite loop in doTypeApply.
-        setErrorOnLastTry(lastTry, tree)
-      }
-
-      def AmbiguousMethodAlternativeError(tree: Tree, pre: Type, best: Symbol,
-            firstCompeting: Symbol, argtpes: List[Type], pt: Type, lastTry: Boolean) = {
-
-        if (!(argtpes exists (_.isErroneous)) && !pt.isErroneous) {
-          val msg0 =
-            "argument types " + argtpes.mkString("(", ",", ")") +
-           (if (pt == WildcardType) "" else " and expected result type " + pt)
-          issueAmbiguousTypeErrorUnlessErroneous(tree.pos, pre, best, firstCompeting, msg0)
-          setErrorOnLastTry(lastTry, tree)
-        } else setError(tree) // do not even try further attempts because they should all fail
-                              // even if this is not the last attempt (because of the SO's possibility on the horizon)
-
-      }
-
-      def NoBestExprAlternativeError(tree: Tree, pt: Type, lastTry: Boolean) = {
-        issueNormalTypeError(tree, withAddendum(tree.pos)(typeErrorMsg(context, tree.symbol.tpe, pt)))
-        setErrorOnLastTry(lastTry, tree)
-      }
-
-      def AmbiguousExprAlternativeError(tree: Tree, pre: Type, best: Symbol, firstCompeting: Symbol, pt: Type, lastTry: Boolean) = {
-        issueAmbiguousTypeErrorUnlessErroneous(tree.pos, pre, best, firstCompeting, "expected type " + pt)
-        setErrorOnLastTry(lastTry, tree)
-      }
-
-      // checkBounds
-      def KindBoundErrors(tree: Tree, prefix: String, targs: List[Type],
-                          tparams: List[Symbol], kindErrors: List[String]) = {
-        issueNormalTypeError(tree,
-          prefix + "kinds of the type arguments " + targs.mkString("(", ",", ")") +
-          " do not conform to the expected kinds of the type parameters "+
-          tparams.mkString("(", ",", ")") + tparams.head.locationString+ "." +
-          kindErrors.toList.mkString("\n", ", ", ""))
-      }
-
-      private[scala] def NotWithinBoundsErrorMessage(prefix: String, targs: List[Type], tparams: List[Symbol], explaintypes: Boolean) = {
-        if (explaintypes) {
-          val bounds = tparams map (tp => tp.info.instantiateTypeParams(tparams, targs).bounds)
-          (targs, bounds).zipped foreach ((targ, bound) => explainTypes(bound.lo, targ))
-          (targs, bounds).zipped foreach ((targ, bound) => explainTypes(targ, bound.hi))
-          ()
-        }
-
-        prefix + "type arguments " + targs.mkString("[", ",", "]") +
-        " do not conform to " + tparams.head.owner + "'s type parameter bounds " +
-        (tparams map (_.defString)).mkString("[", ",", "]")
-      }
-
-      def NotWithinBounds(tree: Tree, prefix: String, targs: List[Type],
-                          tparams: List[Symbol], kindErrors: List[String]) =
-        issueNormalTypeError(tree,
-          NotWithinBoundsErrorMessage(prefix, targs, tparams, settings.explaintypes))
-
-      //substExpr
-      def PolymorphicExpressionInstantiationError(tree: Tree, undetparams: List[Symbol], pt: Type) =
-        issueNormalTypeError(tree,
-          "polymorphic expression cannot be instantiated to expected type" +
-          foundReqMsg(GenPolyType(undetparams, skipImplicit(tree.tpe)), pt))
-
-      //checkCheckable
-      def TypePatternOrIsInstanceTestError(tree: Tree, tp: Type) =
-        issueNormalTypeError(tree, "type "+tp+" cannot be used in a type pattern or isInstanceOf test")
-
-      def PatternTypeIncompatibleWithPtError1(tree: Tree, pattp: Type, pt: Type) =
-        issueNormalTypeError(tree, "pattern type is incompatible with expected type" + foundReqMsg(pattp, pt))
-
-      def IncompatibleScrutineeTypeError(tree: Tree, pattp: Type, pt: Type) =
-        issueNormalTypeError(tree, "scrutinee is incompatible with pattern type" + foundReqMsg(pattp, pt))
-
-      def PatternTypeIncompatibleWithPtError2(pat: Tree, pt1: Type, pt: Type) =
-        issueNormalTypeError(pat,
-          "pattern type is incompatible with expected type"+ foundReqMsg(pat.tpe, pt) +
-          typePatternAdvice(pat.tpe.typeSymbol, pt1.typeSymbol))
-
-      def PolyAlternativeError(tree: Tree, argtypes: List[Type], sym: Symbol, err: PolyAlternativeErrorKind.ErrorType) = {
-        import PolyAlternativeErrorKind._
-        val msg =
-          err match {
-            case WrongNumber =>
-              "wrong number of type parameters for " + treeSymTypeMsg(tree)
-            case NoParams =>
-              treeSymTypeMsg(tree) + " does not take type parameters"
-            case ArgsDoNotConform =>
-              "type arguments " + argtypes.mkString("[", ",", "]") +
-              " conform to the bounds of none of the overloaded alternatives of\n "+sym+
-              ": "+sym.info
-          }
-        issueNormalTypeError(tree, msg)
-        ()
-      }
-    }
   }
+
 
   trait NamerContextErrors {
     self: Namer =>
