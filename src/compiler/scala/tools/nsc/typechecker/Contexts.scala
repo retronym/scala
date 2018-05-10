@@ -279,10 +279,6 @@ trait Contexts { self: Analyzer =>
 
     def defaultModeForTyped: Mode = if (inTypeConstructorAllowed) Mode.NOmode else Mode.EXPRmode
 
-    /** To enrich error messages involving default arguments.
-        When extending the notion, group diagnostics in an object. */
-    var diagUsedDefaults: Boolean = false
-
     /** Saved type bounds for type parameters which are narrowed in a GADT. */
     var savedTypeBounds: List[(Symbol, Type)] = List()
 
@@ -491,7 +487,6 @@ trait Contexts { self: Analyzer =>
 
       // Fields that are directly propagated
       c.variance           = variance
-      c.diagUsedDefaults   = diagUsedDefaults
       c.openImplicits      = openImplicits
       c.contextMode        = contextMode // note: ConstructorSuffix, a bit within `mode`, is conditionally overwritten below.
 
@@ -1386,7 +1381,7 @@ trait Contexts { self: Analyzer =>
 
     protected def addDiagString(msg: String)(implicit context: Context): String = {
       val diagUsedDefaultsMsg = "Error occurred in an application involving default arguments."
-      if (context.diagUsedDefaults && !(msg endsWith diagUsedDefaultsMsg)) msg + "\n" + diagUsedDefaultsMsg
+      if (context.contextMode.inAny(ContextMode.DiagUsedDefaults) && !(msg endsWith diagUsedDefaultsMsg)) msg + "\n" + diagUsedDefaultsMsg
       else msg
     }
 
@@ -1622,6 +1617,9 @@ object ContextMode {
   /** Are unapplied type constructors allowed here? Formerly HKmode. */
   final val TypeConstructorAllowed: ContextMode   = 1 << 16
 
+  /** Were default arguments used? */
+  final val DiagUsedDefaults: ContextMode         = 1 << 18
+
   /** TODO: The "sticky modes" are EXPRmode, PATTERNmode, TYPEmode.
    *  To mimic the sticky mode behavior, when captain stickyfingers
    *  comes around we need to propagate those modes but forget the other
@@ -1645,7 +1643,8 @@ object ContextMode {
     StarPatterns           -> "StarPatterns",
     SuperInit              -> "SuperInit",
     SecondTry              -> "SecondTry",
-    TypeConstructorAllowed -> "TypeConstructorAllowed"
+    TypeConstructorAllowed -> "TypeConstructorAllowed",
+    DiagUsedDefaults       -> "DiagUsedDefaults"
   )
 }
 
