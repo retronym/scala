@@ -222,9 +222,6 @@ trait Contexts { self: Analyzer =>
       */
     var enclMethod: Context = _
 
-    /** Variance relative to enclosing class */
-    var variance: Variance = Variance.Invariant
-
     private var _undetparams: List[Symbol] = List()
 
     protected def outerDepth = if (outerIsNoContext) 0 else outer.depth
@@ -249,7 +246,9 @@ trait Contexts { self: Analyzer =>
     }
 
     /* For a named application block (`Tree`) the corresponding `NamedApplyInfo`. */
-    var namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
+    def namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
+    def namedApplyBlockInfo_=(info: Option[(Tree, NamedApplyInfo)]): Unit = ()
+
     var prefix: Type = NoPrefix
 
     def inSuperInit_=(value: Boolean)         = this(SuperInit) = value
@@ -487,7 +486,6 @@ trait Contexts { self: Analyzer =>
       }
 
       // Fields that are directly propagated
-      c.variance           = variance
       c.openImplicits      = openImplicits
       c.contextMode        = contextMode // note: ConstructorSuffix, a bit within `mode`, is conditionally overwritten below.
 
@@ -1134,6 +1132,7 @@ trait Contexts { self: Analyzer =>
 
   trait FullContext extends Context {
     override var savedTypeBounds: List[(Symbol, Type)] = List()
+    override var namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
 
     override var openImplicits: List[OpenImplicit] = List()
 
