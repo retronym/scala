@@ -242,7 +242,8 @@ trait Contexts { self: Analyzer =>
     def isRootImport: Boolean = false
 
     /** Types for which implicit arguments are currently searched */
-    var openImplicits: List[OpenImplicit] = List()
+    def openImplicits: List[OpenImplicit] = Nil
+    def openImplicits_=(other: List[OpenImplicit]): Unit = ()
     final def isSearchingForImplicitParam: Boolean = {
       openImplicits.nonEmpty && openImplicits.exists(x => !x.isView)
     }
@@ -1136,6 +1137,8 @@ trait Contexts { self: Analyzer =>
     Context(tree, owner, scope, unit, outer, reporter) with FullContext
 
   trait FullContext extends Context {
+    override var openImplicits: List[OpenImplicit] = List()
+
     //
     // Implicit collection
     //
