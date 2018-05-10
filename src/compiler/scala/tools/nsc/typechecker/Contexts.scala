@@ -280,7 +280,8 @@ trait Contexts { self: Analyzer =>
     def defaultModeForTyped: Mode = if (inTypeConstructorAllowed) Mode.NOmode else Mode.EXPRmode
 
     /** Saved type bounds for type parameters which are narrowed in a GADT. */
-    var savedTypeBounds: List[(Symbol, Type)] = List()
+    def savedTypeBounds: List[(Symbol, Type)] = Nil
+    def savedTypeBounds_=(bounds: List[(Symbol, Type)]): Unit = ()
 
     /** The next enclosing context (potentially `this`) that is owned by a class or method */
     def enclClassOrMethod: Context =
@@ -1132,6 +1133,8 @@ trait Contexts { self: Analyzer =>
     Context(tree, owner, scope, unit, outer, reporter) with FullContext
 
   trait FullContext extends Context {
+    override var savedTypeBounds: List[(Symbol, Type)] = List()
+
     override var openImplicits: List[OpenImplicit] = List()
 
     //
