@@ -226,6 +226,7 @@ trait Contexts { self: Analyzer =>
 
     protected def outerDepth = if (outerIsNoContext) 0 else outer.depth
 
+    // TODO try pushing this field along with logic dealing with imports into FullContext
     val depth: Int = {
       val increasesDepth = isRootImport || outerIsNoContext || (outer.scope != scope)
       ( if (increasesDepth) 1 else 0 ) + outerDepth
