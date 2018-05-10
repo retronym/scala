@@ -191,7 +191,7 @@ trait Contexts { self: Analyzer =>
     /** The next outer context whose tree is a template or package definition */
     var enclClass: Context = _
 
-    @inline private def savingEnclClass[A](c: Context)(a: => A): A = {
+    @inline protected final def savingEnclClass[A](c: Context)(a: => A): A = {
       val saved = enclClass
       enclClass = c
       try a finally enclClass = saved
@@ -480,10 +480,13 @@ trait Contexts { self: Analyzer =>
         else prefix
 
       // The blank canvas
-      val c = if (isImport)
-        new Context(tree, owner, scope, unit, this, reporter) with ImportContext
-      else
-        new Context(tree, owner, scope, unit, this, reporter)
+      val c = if (isImport) {
+        if (isPastTyper) new ContextWithImportContext(tree, owner, scope, unit, this, reporter)
+        else new ContextWithImportContextWithFullContext(tree, owner, scope, unit, this, reporter)
+      } else {
+        if (isPastTyper) new Context(tree, owner, scope, unit, this, reporter)
+        else new ContextWithFullContext(tree, owner, scope, unit, this, reporter)
+      }
 
       // Fields that are directly propagated
       c.variance           = variance
@@ -620,7 +623,7 @@ trait Contexts { self: Analyzer =>
     // conceptual scope is the context enclosing the blocks which
     // represent the constructor body (TODO: why is there more than one
     // such block in the outer chain?)
-    private def nextOuter = {
+    protected final def nextOuter = {
       // Drop the constructor body blocks, which come in varying numbers.
       // -- If the first statement is in the constructor, scopingCtx == (constructor definition)
       // -- Otherwise, scopingCtx == (the class which contains the constructor)
@@ -818,126 +821,9 @@ trait Contexts { self: Analyzer =>
       }
     }
 
-    //
-    // Implicit collection
-    //
+    def resetCache() {}
 
-    private var implicitsCache: List[ImplicitInfo] = null
-    private var implicitsRunId = NoRunId
-
-    def resetCache() {
-      implicitsRunId = NoRunId
-      implicitsCache = null
-      if (outer != null && outer != this) outer.resetCache()
-    }
-
-    /** A symbol `sym` qualifies as an implicit if it has the IMPLICIT flag set,
-     *  it is accessible, and if it is imported there is not already a local symbol
-     *  with the same names. Local symbols override imported ones. This fixes #2866.
-     */
-    private def isQualifyingImplicit(name: Name, sym: Symbol, pre: Type, imported: Boolean) =
-      sym.isImplicit &&
-      isAccessible(sym, pre) &&
-      !(imported && {
-        val e = scope.lookupEntry(name)
-        (e ne null) && (e.owner == scope) && (!settings.isScala212 || e.sym.exists)
-      })
-
-    /** Do something with the symbols with name `name` imported via the import in `imp`,
-     *  if any such symbol is accessible from this context and is a qualifying implicit.
-     */
-    private def withQualifyingImplicitAlternatives(imp: ImportInfo, name: Name, pre: Type)(f: Symbol => Unit) = for {
-      sym <- importedAccessibleSymbol(imp, name, requireExplicit = false, record = false).alternatives
-      if isQualifyingImplicit(name, sym, pre, imported = true)
-    } f(sym)
-
-    private def collectImplicits(syms: Scope, pre: Type, imported: Boolean = false): List[ImplicitInfo] =
-      for (sym <- syms.toList if isQualifyingImplicit(sym.name, sym, pre, imported)) yield
-        new ImplicitInfo(sym.name, pre, sym)
-
-    private def collectImplicitImports(imp: ImportInfo): List[ImplicitInfo] = {
-      val qual = imp.qual
-
-      val pre = qual.tpe
-      def collect(sels: List[ImportSelector]): List[ImplicitInfo] = sels match {
-        case List() =>
-          List()
-        case List(ImportSelector(nme.WILDCARD, _, _, _)) =>
-          // Using pre.implicitMembers seems to exposes a problem with out-dated symbols in the IDE,
-          // see the example in https://www.assembla.com/spaces/scala-ide/tickets/1002552#/activity/ticket
-          // I haven't been able to boil that down the an automated test yet.
-          // Looking up implicit members in the package, rather than package object, here is at least
-          // consistent with what is done just below for named imports.
-          collectImplicits(qual.tpe.implicitMembers, pre, imported = true)
-        case ImportSelector(from, _, to, _) :: sels1 =>
-          var impls = collect(sels1) filter (info => info.name != from)
-          if (to != nme.WILDCARD) {
-            withQualifyingImplicitAlternatives(imp, to, pre) { sym =>
-              impls = new ImplicitInfo(to, pre, sym) :: impls
-            }
-          }
-          impls
-      }
-      //debuglog("collect implicit imports " + imp + "=" + collect(imp.tree.selectors))//DEBUG
-      collect(imp.tree.selectors)
-    }
-
-    /* scala/bug#5892 / scala/bug#4270: `implicitss` can return results which are not accessible at the
-     * point where implicit search is triggered. Example: implicits in (annotations of)
-     * class type parameters (scala/bug#5892). The `context.owner` is the class symbol, therefore
-     * `implicitss` will return implicit conversions defined inside the class. These are
-     * filtered out later by `eligibleInfos` (scala/bug#4270 / 9129cfe9), as they don't type-check.
-     */
-    def implicitss: List[List[ImplicitInfo]] = {
-      val nextOuter = this.nextOuter
-      def withOuter(is: List[ImplicitInfo]): List[List[ImplicitInfo]] =
-        is match {
-          case Nil => nextOuter.implicitss
-          case _   => is :: nextOuter.implicitss
-        }
-
-      val CycleMarker = NoRunId - 1
-      if (implicitsRunId == CycleMarker) {
-        debuglog(s"cycle while collecting implicits at owner ${owner}, probably due to an implicit without an explicit return type. Continuing with implicits from enclosing contexts.")
-        withOuter(Nil)
-      } else if (implicitsRunId != currentRunId) {
-        implicitsRunId = CycleMarker
-        implicits(nextOuter) match {
-          case None =>
-            implicitsRunId = NoRunId
-            withOuter(Nil)
-          case Some(is) =>
-            implicitsRunId = currentRunId
-            implicitsCache = is
-            withOuter(is)
-        }
-      }
-      else withOuter(implicitsCache)
-    }
-
-    /** @return None if a cycle is detected, or Some(infos) containing the in-scope implicits at this context */
-    private def implicits(nextOuter: Context): Option[List[ImplicitInfo]] = {
-      val imports = this.imports
-      if (owner != nextOuter.owner && owner.isClass && !owner.isPackageClass && !inSelfSuperCall) {
-        if (!owner.isInitialized) None
-        else savingEnclClass(this) {
-          // !!! In the body of `class C(implicit a: A) { }`, `implicitss` returns `List(List(a), List(a), List(<predef..)))`
-          //     it handled correctly by implicit search, which considers the second `a` to be shadowed, but should be
-          //     remedied nonetheless.
-          Some(collectImplicits(owner.thisType.implicitMembers, owner.thisType))
-        }
-      } else if (scope != nextOuter.scope && !owner.isPackageClass) {
-        debuglog("collect local implicits " + scope.toList)//DEBUG
-        Some(collectImplicits(scope, NoPrefix))
-      } else if (firstImport != nextOuter.firstImport) {
-        assert(imports.tail.headOption == nextOuter.firstImport, (imports, nextOuter.imports))
-        Some(collectImplicitImports(imports.head))
-      } else if (owner.isPackageClass) {
-        // the corresponding package object may contain implicit members.
-        val pre = owner.packageObject.typeOfThis
-        Some(collectImplicits(pre.implicitMembers, pre))
-      } else Some(Nil)
-    }
+    def implicitss: List[List[ImplicitInfo]] = Nil
 
     //
     // Imports and symbol lookup
@@ -999,7 +885,7 @@ trait Contexts { self: Analyzer =>
     /** The symbol with name `name` imported via the import in `imp`,
      *  if any such symbol is accessible from this context.
      */
-    private def importedAccessibleSymbol(imp: ImportInfo, name: Name, requireExplicit: Boolean, record: Boolean): Symbol =
+    protected final def importedAccessibleSymbol(imp: ImportInfo, name: Name, requireExplicit: Boolean, record: Boolean): Symbol =
       imp.importedSymbol(name, requireExplicit, record) filter (s => isAccessible(s, imp.qual.tpe, superAccess = false))
 
     private def requiresQualifier(s: Symbol): Boolean = (
@@ -1242,6 +1128,134 @@ trait Contexts { self: Analyzer =>
     }
 
   } //class Context
+  private class ContextWithImportContext(tree: Tree, owner: Symbol, scope: Scope, unit: CompilationUnit, outer: Context, reporter: ContextReporter) extends
+    Context(tree, owner, scope, unit, outer, reporter) with ImportContext
+  private class ContextWithImportContextWithFullContext(tree: Tree, owner: Symbol, scope: Scope, unit: CompilationUnit, outer: Context, reporter: ContextReporter) extends
+    Context(tree, owner, scope, unit, outer, reporter) with ImportContext with FullContext
+  private class ContextWithFullContext(tree: Tree, owner: Symbol, scope: Scope, unit: CompilationUnit, outer: Context, reporter: ContextReporter) extends
+    Context(tree, owner, scope, unit, outer, reporter) with FullContext
+
+  trait FullContext extends Context {
+    //
+    // Implicit collection
+    //
+
+    private var implicitsCache: List[ImplicitInfo] = null
+    private var implicitsRunId = NoRunId
+
+    override def resetCache() {
+      implicitsRunId = NoRunId
+      implicitsCache = null
+      if (outer != null && outer != this) outer.resetCache()
+    }
+    /** A symbol `sym` qualifies as an implicit if it has the IMPLICIT flag set,
+      *  it is accessible, and if it is imported there is not already a local symbol
+      *  with the same names. Local symbols override imported ones. This fixes #2866.
+      */
+    private def isQualifyingImplicit(name: Name, sym: Symbol, pre: Type, imported: Boolean) =
+      sym.isImplicit &&
+        isAccessible(sym, pre) &&
+        !(imported && {
+          val e = scope.lookupEntry(name)
+          (e ne null) && (e.owner == scope) && (!settings.isScala212 || e.sym.exists)
+        })
+
+    /** Do something with the symbols with name `name` imported via the import in `imp`,
+      *  if any such symbol is accessible from this context and is a qualifying implicit.
+      */
+    private def withQualifyingImplicitAlternatives(imp: ImportInfo, name: Name, pre: Type)(f: Symbol => Unit) = for {
+      sym <- importedAccessibleSymbol(imp, name, requireExplicit = false, record = false).alternatives
+      if isQualifyingImplicit(name, sym, pre, imported = true)
+    } f(sym)
+
+    private def collectImplicits(syms: Scope, pre: Type, imported: Boolean = false): List[ImplicitInfo] =
+      for (sym <- syms.toList if isQualifyingImplicit(sym.name, sym, pre, imported)) yield
+        new ImplicitInfo(sym.name, pre, sym)
+
+    private def collectImplicitImports(imp: ImportInfo): List[ImplicitInfo] = {
+      val qual = imp.qual
+
+      val pre = qual.tpe
+      def collect(sels: List[ImportSelector]): List[ImplicitInfo] = sels match {
+        case List() =>
+          List()
+        case List(ImportSelector(nme.WILDCARD, _, _, _)) =>
+          // Using pre.implicitMembers seems to exposes a problem with out-dated symbols in the IDE,
+          // see the example in https://www.assembla.com/spaces/scala-ide/tickets/1002552#/activity/ticket
+          // I haven't been able to boil that down the an automated test yet.
+          // Looking up implicit members in the package, rather than package object, here is at least
+          // consistent with what is done just below for named imports.
+          collectImplicits(qual.tpe.implicitMembers, pre, imported = true)
+        case ImportSelector(from, _, to, _) :: sels1 =>
+          var impls = collect(sels1) filter (info => info.name != from)
+          if (to != nme.WILDCARD) {
+            withQualifyingImplicitAlternatives(imp, to, pre) { sym =>
+              impls = new ImplicitInfo(to, pre, sym) :: impls
+            }
+          }
+          impls
+      }
+      //debuglog("collect implicit imports " + imp + "=" + collect(imp.tree.selectors))//DEBUG
+      collect(imp.tree.selectors)
+    }
+    /* scala/bug#5892 / scala/bug#4270: `implicitss` can return results which are not accessible at the
+     * point where implicit search is triggered. Example: implicits in (annotations of)
+     * class type parameters (scala/bug#5892). The `context.owner` is the class symbol, therefore
+     * `implicitss` will return implicit conversions defined inside the class. These are
+     * filtered out later by `eligibleInfos` (scala/bug#4270 / 9129cfe9), as they don't type-check.
+     */
+    override def implicitss: List[List[ImplicitInfo]] = {
+      val nextOuter = this.nextOuter
+      def withOuter(is: List[ImplicitInfo]): List[List[ImplicitInfo]] =
+        is match {
+          case Nil => nextOuter.implicitss
+          case _   => is :: nextOuter.implicitss
+        }
+
+      val CycleMarker = NoRunId - 1
+      if (implicitsRunId == CycleMarker) {
+        debuglog(s"cycle while collecting implicits at owner ${owner}, probably due to an implicit without an explicit return type. Continuing with implicits from enclosing contexts.")
+        withOuter(Nil)
+      } else if (implicitsRunId != currentRunId) {
+        implicitsRunId = CycleMarker
+        implicits(nextOuter) match {
+          case None =>
+            implicitsRunId = NoRunId
+            withOuter(Nil)
+          case Some(is) =>
+            implicitsRunId = currentRunId
+            implicitsCache = is
+            withOuter(is)
+        }
+      }
+      else withOuter(implicitsCache)
+    }
+
+    /** @return None if a cycle is detected, or Some(infos) containing the in-scope implicits at this context */
+    private def implicits(nextOuter: Context): Option[List[ImplicitInfo]] = {
+      val imports = this.imports
+      if (owner != nextOuter.owner && owner.isClass && !owner.isPackageClass && !inSelfSuperCall) {
+        if (!owner.isInitialized) None
+        else savingEnclClass(this) {
+          // !!! In the body of `class C(implicit a: A) { }`, `implicitss` returns `List(List(a), List(a), List(<predef..)))`
+          //     it handled correctly by implicit search, which considers the second `a` to be shadowed, but should be
+          //     remedied nonetheless.
+          Some(collectImplicits(owner.thisType.implicitMembers, owner.thisType))
+        }
+      } else if (scope != nextOuter.scope && !owner.isPackageClass) {
+        debuglog("collect local implicits " + scope.toList)//DEBUG
+        Some(collectImplicits(scope, NoPrefix))
+      } else if (firstImport != nextOuter.firstImport) {
+        assert(imports.tail.headOption == nextOuter.firstImport, (imports, nextOuter.imports))
+        Some(collectImplicitImports(imports.head))
+      } else if (owner.isPackageClass) {
+        // the corresponding package object may contain implicit members.
+        val pre = owner.packageObject.typeOfThis
+        Some(collectImplicits(pre.implicitMembers, pre))
+      } else Some(Nil)
+    }
+
+  }
 
   /** A `Context` focussed on an `Import` tree */
   trait ImportContext extends Context {

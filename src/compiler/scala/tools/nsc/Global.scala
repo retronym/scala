@@ -971,7 +971,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   )
   override def isPastTyper = isPast(currentRun.typerPhase)
   def isPast(phase: Phase) = (
-       (curRun ne null)
+       (phase ne null)
+    && (curRun ne null)
     && isGlobalInitialized // defense against init order issues
     && (globalPhase.id > phase.id)
   )
