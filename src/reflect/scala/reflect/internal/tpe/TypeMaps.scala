@@ -965,7 +965,18 @@ private[internal] trait TypeMaps {
   class InstantiateDependentMap(params: List[Symbol], actuals0: List[Type]) extends TypeMap with KeepOnlyTypeConstraints {
     private val actuals      = actuals0.toIndexedSeq
     private val existentials = new Array[Symbol](actuals.size)
-    def existentialsNeeded: List[Symbol] = existentials.iterator.filter(_ ne null).toList
+    def existentialsNeeded: List[Symbol] = {
+      var builder: mutable.ListBuffer[Symbol] = null
+      var i = 0
+      while (i < existentials.length) {
+        val sym = existentials(i)
+        if (sym ne null) {
+          if (builder eq null) builder = new mutable.ListBuffer()
+          builder += sym
+        }
+      }
+      if (builder eq null) Nil else builder.toList
+    }
 
     private object StableArgTp {
       // type of actual arg corresponding to param -- if the type is stable
