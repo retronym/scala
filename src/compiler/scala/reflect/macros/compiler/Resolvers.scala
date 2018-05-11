@@ -16,11 +16,11 @@ trait Resolvers {
 
     lazy val looksCredible: Boolean = {
       val Applied(core, _, _) = untypedMacroImplRef
-      typer.silent(_.typed(markMacroImplRef(core)), reportAmbiguousErrors = false).nonEmpty
+      typer.silent(typer.typed(markMacroImplRef(core)), reportAmbiguousErrors = false).nonEmpty
     }
 
     lazy val (macroImplRef, isBlackbox, macroImplOwner, macroImpl, targs) =
-      typer.silent(_.typed(markMacroImplRef(untypedMacroImplRef)), reportAmbiguousErrors = false) match {
+      typer.silent(typer.typed(markMacroImplRef(untypedMacroImplRef)), reportAmbiguousErrors = false) match {
         case SilentResultValue(macroImplRef @ MacroImplReference(_, isBlackbox, owner, meth, targs)) => (macroImplRef, isBlackbox, owner, meth, targs)
         case SilentResultValue(macroImplRef) => MacroImplReferenceWrongShapeError()
         case SilentTypeError(err) => abort(err.errPos, err.errMsg)

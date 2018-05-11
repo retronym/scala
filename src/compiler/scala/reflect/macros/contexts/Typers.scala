@@ -23,7 +23,7 @@ trait Typers {
     def doTypecheck(wrapped: Tree): Tree =
       context.withImplicits(enabled = !withImplicitViewsDisabled) {
         context.withMacros(enabled = !withMacrosDisabled) {
-          callsiteTyper.silent(_.typed(universe.duplicateAndKeepPositions(wrapped), mode, pt), reportAmbiguousErrors = false) match {
+          callsiteTyper.silent(callsiteTyper.typed(universe.duplicateAndKeepPositions(wrapped), mode, pt), reportAmbiguousErrors = false) match {
             case universe.analyzer.SilentResultValue(result) =>
               macroLogVerbose(result)
               result

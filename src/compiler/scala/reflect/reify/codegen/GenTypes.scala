@@ -121,7 +121,7 @@ trait GenTypes {
           case _ =>
             EmptyTree
         }
-    val result = typer.silent(silentTyper => silentTyper.context.withMacrosDisabled(searchForManifest(silentTyper)))
+    val result = typer.silent(typer.context.withMacrosDisabled(searchForManifest(typer)))
     result match {
       case analyzer.SilentResultValue(result) => result
       case analyzer.SilentTypeError(_) => EmptyTree

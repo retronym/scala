@@ -70,7 +70,7 @@ abstract class DefaultMacroCompiler extends Resolvers
     }
 
     def reportMostAppropriateFailure() = {
-      typer.silent(_.typedTypeConstructor(maybeBundleRef)) match {
+      typer.silent(typer.typedTypeConstructor(maybeBundleRef)) match {
         case SilentResultValue(result) if looksLikeMacroBundleType(result.tpe) =>
           val bundle = result.tpe.typeSymbol
           if (!isMacroBundleType(bundle.tpe)) MacroBundleWrongShapeError()

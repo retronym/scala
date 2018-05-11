@@ -1371,6 +1371,9 @@ trait Contexts { self: Analyzer =>
     final protected def errorBuffer   = { if (_errorBuffer == null) _errorBuffer = newBuffer; _errorBuffer }
     final protected def warningBuffer = { if (_warningBuffer == null) _warningBuffer = newBuffer; _warningBuffer }
 
+    final def errorBufferRaw: mutable.LinkedHashSet[AbsTypeError] = _errorBuffer
+    final def errorBufferRaw_=(other: mutable.LinkedHashSet[AbsTypeError]) = _errorBuffer = other
+
     final def errors: immutable.Seq[Error]     = errorBuffer.toVector
     final def warnings: immutable.Seq[Warning] = warningBuffer.toVector
     final def firstError: Option[AbsTypeError] = errorBuffer.headOption
