@@ -274,22 +274,34 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** Returns an iterator yielding every symbol with given name in this scope.
      */
-    def lookupAll(name: Name): Iterator[Symbol] = new Iterator[Symbol] {
-      var e = lookupEntry(name)
-      def hasNext: Boolean = e ne null
-      def next(): Symbol = try e.sym finally e = lookupNextEntry(e)
+    def lookupAll(name: Name): Iterator[Symbol] = {
+      val firstEntry = lookupEntry(name)
+      if (firstEntry eq null) Iterator.empty
+      else new Iterator[Symbol] {
+        var e = firstEntry
+        def hasNext: Boolean = e ne null
+        def next(): Symbol = try e.sym finally e = lookupNextEntry(e)
+      }
     }
 
-    def lookupAllEntries(name: Name): Iterator[ScopeEntry] = new Iterator[ScopeEntry] {
-      var e = lookupEntry(name)
+    def lookupAllEntries(name: Name): Iterator[ScopeEntry] = {
+      val firstEntry = lookupEntry(name)
+      if (firstEntry eq null) Iterator.empty
+      else lookupAllEntries(name, firstEntry)
+    }
+
+    private def lookupAllEntries(name: Name, firstEntry: ScopeEntry): Iterator[ScopeEntry] = new Iterator[ScopeEntry] {
+      var e = firstEntry
       def hasNext: Boolean = e ne null
       def next(): ScopeEntry = try e finally e = lookupNextEntry(e)
     }
 
     def lookupUnshadowedEntries(name: Name): Iterator[ScopeEntry] = {
-      lookupEntry(name) match {
+      val entry = lookupEntry(name)
+      entry match {
         case null => Iterator.empty
-        case e    => lookupAllEntries(name) filter (e1 => (e eq e1) || (e.depth == e1.depth && e.sym != e1.sym))
+        case e    =>
+          lookupAllEntries(name, entry).filter(e1 => (e eq e1) || (e.depth == e1.depth && e.sym != e1.sym))
       }
     }
 
