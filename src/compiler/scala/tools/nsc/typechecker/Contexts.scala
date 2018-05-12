@@ -133,6 +133,17 @@ trait Contexts { self: Analyzer =>
     }
   }
 
+  // A struct of the data that is only needed in Context's used during the typer phase
+  // Separated to save space in the post-typer context.
+  private final class FullContext {
+    var openImplicits: List[OpenImplicit] = List()
+    var implicitsCache: List[ImplicitInfo] = null
+    var implicitsRunId = NoRunId
+    var savedTypeBounds: List[(Symbol, Type)] = List()
+    var namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
+    var undetparams: List[Symbol] = List()
+  }
+
   /**
    * A motley collection of the state and loosely associated behaviour of the type checker.
    * Each `Typer` has an associated context, and as it descends into the tree new `(Typer, Context)`
@@ -222,9 +233,13 @@ trait Contexts { self: Analyzer =>
       */
     var enclMethod: Context = _
 
-    private var _undetparams: List[Symbol] = List()
-
     protected def outerDepth = if (outerIsNoContext) 0 else outer.depth
+
+    private var _fullContext: FullContext = null
+    private def fullContext: FullContext = {
+      if (_fullContext eq null) _fullContext = new FullContext
+      _fullContext
+    }
 
     val depth: Int = {
       val increasesDepth = isRootImport || outerIsNoContext || (outer.scope != scope)
@@ -239,13 +254,16 @@ trait Contexts { self: Analyzer =>
     def isRootImport: Boolean = false
 
     /** Types for which implicit arguments are currently searched */
-    var openImplicits: List[OpenImplicit] = List()
+    def openImplicits: List[OpenImplicit] = if (_fullContext eq null) Nil else _fullContext.openImplicits
+    def openImplicits_=(opens: List[OpenImplicit]): Unit = if ((_fullContext eq null) && (opens eq Nil)) () else fullContext.openImplicits = opens
+
     final def isSearchingForImplicitParam: Boolean = {
       openImplicits.nonEmpty && openImplicits.exists(x => !x.isView)
     }
 
     /* For a named application block (`Tree`) the corresponding `NamedApplyInfo`. */
-    var namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = None
+    def namedApplyBlockInfo: Option[(Tree, NamedApplyInfo)] = if (_fullContext eq null) None else _fullContext.namedApplyBlockInfo
+    def namedApplyBlockInfo_=(info: Option[(Tree, NamedApplyInfo)]) = if ((_fullContext eq null) && (info eq None)) () else fullContext.namedApplyBlockInfo = info
     var prefix: Type = NoPrefix
 
     def inSuperInit_=(value: Boolean)         = this(SuperInit) = value
@@ -276,7 +294,8 @@ trait Contexts { self: Analyzer =>
     def defaultModeForTyped: Mode = if (inTypeConstructorAllowed) Mode.NOmode else Mode.EXPRmode
 
     /** Saved type bounds for type parameters which are narrowed in a GADT. */
-    var savedTypeBounds: List[(Symbol, Type)] = List()
+    def savedTypeBounds: List[(Symbol, Type)] = if (_fullContext eq null) Nil else _fullContext.savedTypeBounds
+    def savedTypeBounds_=(bounds: List[(Symbol, Type)]) = if ((_fullContext eq null) && (bounds eq Nil)) () else fullContext.savedTypeBounds = bounds
 
     /** The next enclosing context (potentially `this`) that is owned by a class or method */
     def enclClassOrMethod: Context =
@@ -308,8 +327,8 @@ trait Contexts { self: Analyzer =>
       if (undetparams.isEmpty) ""
       else undetparams.mkString("undetparams=", ", ", "")
     /** Undetermined type parameters. See `Infer#{inferExprInstance, adjustTypeArgs}`. Not inherited to child contexts */
-    def undetparams: List[Symbol] = _undetparams
-    def undetparams_=(ps: List[Symbol]) = { _undetparams = ps }
+    def undetparams: List[Symbol] = if (_fullContext eq null) Nil else _fullContext.undetparams
+    def undetparams_=(ps: List[Symbol]): Unit = if ((_fullContext eq null) && (ps eq Nil)) () else fullContext.undetparams = ps
 
     /** Return and clear the undetermined type parameters */
     def extractUndetparams(): List[Symbol] = {
@@ -813,12 +832,16 @@ trait Contexts { self: Analyzer =>
     // Implicit collection
     //
 
-    private var implicitsCache: List[ImplicitInfo] = null
-    private var implicitsRunId = NoRunId
+    private def implicitsCache: List[ImplicitInfo] = if (_fullContext eq null) Nil else _fullContext.implicitsCache
+    private def implicitsCache_=(infos: List[ImplicitInfo]): Unit = fullContext.implicitsCache = infos
+    private def implicitsRunId: Int = if (_fullContext eq null) NoRunId else _fullContext.implicitsRunId
+    private def implicitsRunId_=(runId: Int): Unit = fullContext.implicitsRunId = runId
 
     def resetCache(): Unit = {
-      implicitsRunId = NoRunId
-      implicitsCache = null
+      if (_fullContext ne null) {
+        _fullContext.implicitsRunId = NoRunId
+        _fullContext.implicitsCache = null
+      }
       if (outer != null && outer != this) outer.resetCache()
     }
 

@@ -4552,6 +4552,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           val tpt0 = typedTypeConstructor(tpt) modifyType (_.dealias)
           if (checkStablePrefixClassType(tpt0))
             if (tpt0.hasSymbolField && !tpt0.symbol.typeParams.isEmpty) {
+              if (isPastTyper)
+                getClass
               context.undetparams = cloneSymbols(tpt0.symbol.typeParams)
               notifyUndetparamsAdded(context.undetparams)
               TypeTree().setOriginal(tpt0)
