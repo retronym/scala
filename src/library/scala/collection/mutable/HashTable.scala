@@ -36,11 +36,22 @@ import java.lang.Integer
  *
  *  @tparam A     type of the elements contained in this hash table.
  */
-private[mutable] abstract class HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] extends HashTable.HashUtils[A] {
+private[mutable] abstract class HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] {
   // Replacing Entry type parameter by abstract type member here allows to not expose to public
   // implementation-specific entry classes such as `DefaultEntry` or `LinkedEntry`.
   // However, I'm afraid it's too late now for such breaking change.
   import HashTable._
+
+  // START: copy/paste inheritance of HashUtils for performance reasons.
+  protected final def sizeMapBucketBitSize = 5
+  // so that:
+  protected final def sizeMapBucketSize = 1 << sizeMapBucketBitSize
+
+  protected[collection] def elemHashCode(key: A) = key.##
+
+  protected final def improve(hcode: Int, seed: Int): Int = rotateRight(byteswap32(hcode), seed)
+  // END
+
 
   protected var _loadFactor = defaultLoadFactor
 
@@ -376,6 +387,8 @@ private[collection] object HashTable {
 
   private[collection] final def capacity(expectedSize: Int) = nextPositivePowerOfTwo(expectedSize)
 
+  // Used by scala-parallel-collections. These utility methods have been copy/paste inherited into HashTable
+  // to avoid interface call overhead
   trait HashUtils[KeyType] {
     protected final def sizeMapBucketBitSize = 5
     // so that:
