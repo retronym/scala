@@ -1699,11 +1699,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         return this
 
       this setFlag TRIEDCOOKING
-      info  // force the current info
+      val info = this.info  // force the current info
       if (isJavaDefined || isType && owner.isJavaDefined)
-        this modifyInfo rawToExistential
-      else if (isOverloaded)
-        alternatives withFilter (_.isJavaDefined) foreach (_ modifyInfo rawToExistential)
+        this.setInfo(rawToExistential(info))
+      else if (isOverloaded) {
+        for (alt <- info.asInstanceOf[OverloadedType].alternatives) {
+          if (alt.isJavaDefined)
+            alt.modifyInfo(rawToExistential)
+        }
+      }
 
       this
     }
