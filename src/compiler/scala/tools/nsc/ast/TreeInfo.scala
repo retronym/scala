@@ -6,7 +6,8 @@
 package scala.tools.nsc
 package ast
 
-import scala.reflect.internal.MacroAnnotionTreeInfo
+import scala.reflect.internal.Flags.PARAMACCESSOR
+import scala.reflect.internal.{Flags, MacroAnnotionTreeInfo}
 
 /** This class ...
  *
@@ -43,14 +44,16 @@ abstract class TreeInfo extends scala.reflect.internal.TreeInfo with MacroAnnoti
 
   // Extractors for value classes.
   object ValueClass {
-    def isValueClass(tpe: Type)                  = enteringErasure(tpe.typeSymbol.isDerivedValueClass)
-    def valueUnbox(tpe: Type)                    = enteringErasure(tpe.typeSymbol.derivedValueClassUnbox)
+    def isValueClass(tpe: Type): Boolean = enteringErasure(tpe.typeSymbol.isDerivedValueClass)
+    def valueUnbox(tpe: Type, candidate: Symbol): Boolean = {
+      candidate.hasAllFlags(PARAMACCESSOR | Flags.METHOD) && enteringErasure(tpe.typeSymbol.derivedValueClassUnbox) == candidate
+    }
 
     // B.unbox. Returns B.
     object Unbox {
       def unapply(t: Tree): Option[Tree] = t match {
-        case Apply(sel @ Select(ref, _), Nil) if valueUnbox(ref.tpe) == sel.symbol => Some(ref)
-        case _                                                                     => None
+        case Apply(sel @ Select(ref, _), Nil) if valueUnbox(ref.tpe, sel.symbol) => Some(ref)
+        case _                                                                   => None
       }
     }
     // new B(v). Returns B and v.
