@@ -102,14 +102,31 @@ class LinkedHashMap[K, V]
     val e = table.removeEntry(key)
     if (e eq null) None
     else {
-      if (e.earlier eq null) firstEntry = e.later
-      else e.earlier.later = e.later
-      if (e.later eq null) lastEntry = e.earlier
-      else e.later.earlier = e.earlier
-      e.earlier = null // Null references to prevent nepotism
-      e.later = null
+      unlink(e)
       Some(e.value)
     }
+  }
+
+  override def filterInPlace(p: ((K, V)) => Boolean): this.type = {
+    var e = firstEntry
+    while (e ne null) {
+      val retain = p((e.key, e.value))
+      if (!retain) {
+        table.removeEntry(e.key)
+        unlink(e)
+      }
+      e = e.later
+    }
+    this
+  }
+
+  private def unlink(e: Entry): Unit = {
+    if (e.earlier eq null) firstEntry = e.later
+    else e.earlier.later = e.later
+    if (e.later eq null) lastEntry = e.earlier
+    else e.later.earlier = e.earlier
+    e.earlier = null // Null references to prevent nepotism
+    e.later = null
   }
 
   def addOne(kv: (K, V)): this.type = { put(kv._1, kv._2); this }

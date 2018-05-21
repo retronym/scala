@@ -1193,8 +1193,7 @@ trait Implicits {
 
       val infoMap = new InfoMap
       getParts(tp)(infoMap, new mutable.HashSet(), Set())
-      val emptyInfos = infoMap.iterator.filter(_._2.exists(_.isSearchedPrefix)).map(_._1)
-      emptyInfos.foreach(infoMap.remove)
+      infoMap.filterInPlace(tuple => !tuple._2.exists(_.isSearchedPrefix))
       if (infoMap.nonEmpty)
         printTyping(tree, infoMap.size + " implicits in companion scope")
 
