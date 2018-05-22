@@ -1505,8 +1505,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def info: Type = try {
       var cnt = 0
       while (validTo == NoPeriod) {
-        assert(infos ne null, this.name)
-        assert(infos.prev eq null, this.name)
         val tp = infos.info
 
         if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
@@ -1593,7 +1591,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
       var infos = this.infos
-      assert(infos != null)
       val curPeriod = currentPeriod
       val curPid = phaseId(curPeriod)
 
@@ -3692,7 +3689,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    *  @return           the newly created, info-adjusted symbols
    */
   def cloneSymbolsAndModify(syms: List[Symbol], infoFn: Type => Type): List[Symbol] =
-    mapList(cloneSymbols(syms))(_ modifyInfo infoFn)
+    mapList(cloneSymbols(syms))(sym => { val info = sym.info; val info1 = infoFn(info); if (info1 ne info) { sym.setInfo(info1) }; sym })
   def cloneSymbolsAtOwnerAndModify(syms: List[Symbol], owner: Symbol, infoFn: Type => Type): List[Symbol] =
     mapList(cloneSymbolsAtOwner(syms, owner))(_ modifyInfo infoFn)
 
