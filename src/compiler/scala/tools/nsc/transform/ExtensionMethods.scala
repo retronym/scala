@@ -24,8 +24,12 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
   /** the following two members override abstract members in Transform */
   val phaseName: String = "extmethods"
 
-  def newTransformer(unit: CompilationUnit): Transformer =
-    new Extender(unit)
+  def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new Extender(unit)
+    new Transformer {
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
 
   /** Generate stream of possible names for the extension version of given instance method `imeth`.
    *  If the method is not overloaded, this stream consists of just "extension$imeth".
@@ -122,7 +126,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       stpe
   }
 
-  class Extender(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class Extender(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     private val extensionDefs = mutable.Map[Symbol, mutable.ListBuffer[Tree]]()
 
     def checkNonCyclic(pos: Position, seen: Set[Symbol], clazz: Symbol): Unit =
