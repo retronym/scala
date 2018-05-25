@@ -49,7 +49,7 @@ trait TypingTransformers {
   }
 
   abstract class TypingTransformerFast(unit: CompilationUnit) extends TransformerFast {
-    val localTyper =
+    var localTyper =
       if (phase.erasedTypes)
         erasure.newTyper(erasure.rootContextPostTyper(unit, EmptyTree)).asInstanceOf[analyzer.Typer]
       else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??

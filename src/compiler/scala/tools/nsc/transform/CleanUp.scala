@@ -24,10 +24,14 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
   private val entryPoints = perRunCaches.newSet[Symbol]() // : List[Symbol] = Nil
   def getEntryPoints: List[String] = entryPoints.toList.map(_.fullName('.')).sorted
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new CleanUpTransformer(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new CleanUpTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
 
-  class CleanUpTransformer(unit: CompilationUnit) extends StaticsTransformer {
+  class CleanUpTransformer(unit: CompilationUnit) extends Transformer {
     private val newStaticMembers      = mutable.Buffer.empty[Tree]
     private val newStaticInits        = mutable.Buffer.empty[Tree]
     private val symbolsStoredAsStatic = mutable.Map.empty[String, Symbol]
@@ -43,7 +47,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       val templ   = deriveTemplate(tree)(_ => transformTrees(newStaticMembers.toList) ::: newBody)
       try
         if (newStaticInits.isEmpty) templ
-        else deriveTemplate(templ)(body => staticConstructor(body, localTyper, templ.pos)(newStaticInits.toList) :: body)
+        else deriveTemplate(templ)(body => staticConstructor(currentClass, body, localTyper, templ.pos)(newStaticInits.toList) :: body)
       finally clearStatics()
     }
     private def mkTerm(prefix: String): TermName = unit.freshTermName(prefix)
