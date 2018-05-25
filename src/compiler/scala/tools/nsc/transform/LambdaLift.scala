@@ -45,8 +45,19 @@ abstract class LambdaLift extends InfoTransform {
     if (sym.isCapturedVariable) capturedVariableType(sym, tpe = lifted(tp), erasedTypes = true)
     else lifted(tp)
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new LambdaLifter(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new LambdaLifter(unit)
+    new Transformer {
+      override def transformUnit(unit: CompilationUnit): Unit = {
+        delegate.computeFreeVars()
+        afterOwnPhase {
+          super.transformUnit(unit)
+        }
+        assert(delegate.liftedDefs.isEmpty, delegate.liftedDefs.keys mkString ", ")
+      }
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
 
   class LambdaLifter(unit: CompilationUnit) extends explicitOuter.OuterPathTransformer(unit) {
 
@@ -102,7 +113,7 @@ abstract class LambdaLift extends InfoTransform {
     private var changedFreeVars: Boolean = _
 
     /** Buffers for lifted out classes and methods */
-    private val liftedDefs = new LinkedHashMap[Symbol, List[Tree]]
+    val liftedDefs = new LinkedHashMap[Symbol, List[Tree]]
 
     val delayedInitDummies = new mutable.HashMap[Symbol, Symbol]
 
@@ -231,7 +242,7 @@ abstract class LambdaLift extends InfoTransform {
      *  value/variable/let that are free in some function or class, and to
      *  all class/function symbols that are owned by some function.
      */
-    private def computeFreeVars(): Unit = {
+    def computeFreeVars(): Unit = {
       freeVarTraverser.traverse(unit.body)
 
       do {
@@ -565,14 +576,6 @@ abstract class LambdaLift extends InfoTransform {
           stat
       }
       super.transformStats(stats, exprOwner) map addLifted
-    }
-
-    override def transformUnit(unit: CompilationUnit): Unit = {
-      computeFreeVars()
-      afterOwnPhase {
-        super.transformUnit(unit)
-      }
-      assert(liftedDefs.isEmpty, liftedDefs.keys mkString ", ")
     }
   } // class LambdaLifter
 

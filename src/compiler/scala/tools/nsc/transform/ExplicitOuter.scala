@@ -33,8 +33,15 @@ abstract class ExplicitOuter extends InfoTransform
   /** This class does not change linearization */
   override def changesBaseClasses = false
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new ExplicitOuterTransformer(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new ExplicitOuterTransformer(unit)
+    new Transformer {
+      override def transformUnit(unit: CompilationUnit): Unit = {
+        exitingExplicitOuter(super.transformUnit(unit))
+      }
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
 
   /** Is given clazz an inner class? */
   private def isInner(clazz: Symbol) =
@@ -202,7 +209,7 @@ abstract class ExplicitOuter extends InfoTransform
    *  values for outer parameters of constructors.
    *  The class provides methods for referencing via outer.
    */
-  abstract class OuterPathTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  abstract class OuterPathTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     /** The directly enclosing outer parameter, if we are in a constructor */
     protected var outerParam: Symbol = NoSymbol
 
@@ -380,7 +387,8 @@ abstract class ExplicitOuter extends InfoTransform
       tree match {
         case Template(parents, self, decls) =>
           val newDefs = new ListBuffer[Tree]
-          atOwner(tree, currentOwner) {
+          pushOwner(tree, currentOwner)
+          try {
             if (!currentClass.isInterface) {
               if (isInner(currentClass)) {
                 if (hasOuterField(currentClass))
@@ -392,7 +400,7 @@ abstract class ExplicitOuter extends InfoTransform
                   if (outerAccessor(mc) != NoSymbol && !skipMixinOuterAccessor(currentClass, mc))
                     newDefs += mixinOuterAccessorDef(mc)
             }
-          }
+          } finally popOwner()
           super.transform(
             deriveTemplate(tree)(decls =>
               if (newDefs.isEmpty) decls
@@ -479,11 +487,6 @@ abstract class ExplicitOuter extends InfoTransform
           if (x.tpe eq null) x
           else x setType transformInfo(currentOwner, x.tpe)
       }
-    }
-
-    /** The transformation method for whole compilation units */
-    override def transformUnit(unit: CompilationUnit): Unit = {
-      exitingExplicitOuter(super.transformUnit(unit))
     }
   }
 
