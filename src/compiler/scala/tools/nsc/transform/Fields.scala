@@ -696,7 +696,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
     def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree = {
       pushOwner(newOwner)
-      try super.transform(stat.rhs.changeOwner(stat.symbol -> newOwner)
+      try super.transform(stat.rhs.changeOwner(stat.symbol -> newOwner))
       finally popOwner()
     }
 
