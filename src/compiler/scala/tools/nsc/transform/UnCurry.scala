@@ -61,14 +61,19 @@ abstract class UnCurry extends InfoTransform
 
   val phaseName: String = "uncurry"
 
-  def newTransformer(unit: CompilationUnit): Transformer = new UnCurryTransformer(unit)
+  def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new UnCurryTransformer(unit)
+    new Transformer {
+      override def transform(tree: global.Tree): global.Tree = delegate.transform(tree)
+    }
+  }
   override def changesBaseClasses = false
 
 // ------ Type transformation --------------------------------------------------------
 
 // uncurry and uncurryType expand type aliases
 
-  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     private val forceExpandFunction = settings.Ydelambdafy.value == "inline"
     private var needTryLift       = false
     private var inConstructorFlag = 0L
@@ -361,10 +366,10 @@ abstract class UnCurry extends InfoTransform
       }
     }
 
-    private def isSelfSynchronized(ddef: DefDef) = ddef.rhs match {
+    private def isSelfSynchronized(sym: Symbol, rhs: Tree) = rhs match {
       case Apply(fn @ TypeApply(Select(sel, _), _), _) =>
-        fn.symbol == Object_synchronized && sel.symbol == ddef.symbol.enclClass && !ddef.symbol.enclClass.isTrait &&
-          !ddef.symbol.isDelambdafyTarget /* these become static later, unsuitable for ACC_SYNCHRONIZED */
+        fn.symbol == Object_synchronized && sel.symbol == sym.enclClass && !sym.enclClass.isTrait &&
+          !sym.isDelambdafyTarget /* these become static later, unsuitable for ACC_SYNCHRONIZED */
       case _ => false
     }
 
@@ -376,12 +381,12 @@ abstract class UnCurry extends InfoTransform
      *  replace `this.synchronized` with `$this.synchronized` now that it emits
      *  all lambda impl methods as static.
      */
-    private def translateSynchronized(tree: Tree) = tree match {
-      case dd @ DefDef(_, _, _, _, _, Apply(fn, body :: Nil)) if isSelfSynchronized(dd) =>
-        log("Translating " + dd.symbol.defString + " into synchronized method")
-        dd.symbol setFlag SYNCHRONIZED
-        deriveDefDef(dd)(_ => body)
-      case _ => tree
+    private def translateSynchronized(sym: Symbol, rhs: Tree) = rhs match {
+      case Apply(fn, body :: Nil) if isSelfSynchronized(sym, rhs) =>
+        log("Translating " + sym.defString + " into synchronized method")
+        sym setFlag SYNCHRONIZED
+        body
+      case _ => rhs
     }
     def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || currentOwner.isLazy || currentOwner.isAnonymousFunction
 
@@ -420,7 +425,7 @@ abstract class UnCurry extends InfoTransform
       def isLiftedLambdaMethod(funSym: Symbol) =
         funSym.isArtifact && funSym.name.containsName(nme.ANON_FUN_NAME) && funSym.isLocalToBlock
 
-      def checkIsElidable(sym: Symbol): Boolean = (sym ne null) && sym.elisionLevel.exists { level =>
+      def checkIsElidable(sym: Symbol): Boolean = settings.elidebelow.isSetByUser && (sym ne null) && sym.elisionLevel.exists { level =>
           if (sym.isMethod) level < settings.elidebelow.value
           else {
             // TODO: report error? It's already done in RefChecks. https://github.com/scala/scala/pull/5539#issuecomment-331376887
@@ -432,8 +437,9 @@ abstract class UnCurry extends InfoTransform
       val result =
         if (checkIsElidable(sym))
           replaceElidableTree(tree)
-        else translateSynchronized(tree) match {
-          case dd @ DefDef(mods, name, tparams, _, tpt, rhs) =>
+        else tree match {
+          case dd @ DefDef(mods, name, tparams, _, tpt, rhs0) =>
+            val rhs = translateSynchronized(sym, rhs0)
             // Remove default argument trees from parameter ValDefs, scala/bug#4812
             val vparamssNoRhs = dd.vparamss mapConserve (_ mapConserve {p =>
               treeCopy.ValDef(p, p.mods, p.name, p.tpt, EmptyTree)
@@ -443,7 +449,8 @@ abstract class UnCurry extends InfoTransform
 
             withNeedLift(needLift = false) {
               if (dd.symbol.isClassConstructor) {
-                atOwner(sym) {
+                pushOwner(sym)
+                try {
                   val rhs1 = (rhs: @unchecked) match {
                     case Block(stats, expr) =>
                       def transformInConstructor(stat: Tree) =
@@ -457,7 +464,7 @@ abstract class UnCurry extends InfoTransform
                   treeCopy.DefDef(
                     dd, mods, name, transformTypeDefs(tparams),
                     transformValDefss(vparamssNoRhs), transform(tpt), rhs1)
-                }
+                } finally popOwner()
               } else {
                 super.transform(treeCopy.DefDef(dd, mods, name, tparams, vparamssNoRhs, tpt, rhs))
               }
@@ -563,11 +570,11 @@ abstract class UnCurry extends InfoTransform
          * - synthetic Java varargs forwarders for repeated parameters
          */
         case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
-          useNewMembers(currentClass) {
+          pushOwner(tree, currentClass)
+          try useNewMembers(currentClass) {
             newMembers =>
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
-          }
+          } finally popOwner()
 
         case dd @ DefDef(_, _, _, vparamss0, _, rhs0) =>
           val ddSym = dd.symbol
