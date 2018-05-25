@@ -8,7 +8,9 @@ package scala
 package tools.nsc
 package typechecker
 
-import scala.collection.{ mutable, immutable }
+import java.util
+
+import scala.collection.{immutable, mutable}
 import mutable.ListBuffer
 import symtab.Flags._
 
@@ -65,22 +67,35 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
   /** The following flags may be set by this phase: */
   override def phaseNewFlags: Long = notPRIVATE
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new SuperAccTransformer(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new SuperAccTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): global.Tree = delegate.transform(tree)
+    }
+  }
 
-  class SuperAccTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class SuperAccTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     /** validCurrentOwner arrives undocumented, but I reverse engineer it to be
      *  a flag for needsProtectedAccessor which is false while transforming either
      *  a by-name argument block or a closure.  This excludes them from being
      *  considered able to access protected members via subclassing (why?) which in turn
      *  increases the frequency with which needsProtectedAccessor will be true.
      */
-    private var validCurrentOwner = true
+    private[this] val validCurrentOwners = mutable.ArrayBuffer[Boolean](true)
+
+    private def validCurrentOwner = {
+      validCurrentOwners.last
+    }
     private val accDefs = mutable.Map[Symbol, ListBuffer[Tree]]()
 
     private def storeAccessorDefinition(clazz: Symbol, tree: Tree) = {
       val buf = accDefs.getOrElse(clazz, abort(s"no acc def buf for $clazz"))
-      buf += typers(clazz) typed tree
+      buf += {
+        val saved = localTyper.context
+        localTyper.context = typers(clazz)
+        try localTyper.typed(tree)
+        finally localTyper.context = saved
+      }
     }
     private def ensureAccessor(sel: Select, mixName: TermName = nme.EMPTY) = {
       val Select(qual, name) = sel
@@ -253,7 +268,8 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
           // that one is iterating through parents (and we dont want that here)
           // we need to inline it.
           curTree = tree
-          val body1 = atOwner(currentOwner)(transformTrees(body))
+          pushOwner(currentOwner)
+          val body1 = try transformTrees(body) finally popOwner()
           accDefs -= currentOwner
           ownAccDefs ++= body1
           deriveTemplate(tree)(_ => ownAccDefs.toList)
@@ -407,30 +423,26 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
     }
 
     /** a typer for each enclosing class */
-    private var typers = immutable.Map[Symbol, analyzer.Typer]()
+    private var typers = immutable.Map[Symbol, analyzer.Context]()
 
-    /** Specialized here for performance; the previous blanked
-     *  introduction of typers in TypingTransformer caused a >5%
-     *  performance hit for the compiler as a whole.
-     */
-    override def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
-      val savedValid = validCurrentOwner
-      if (owner.isClass) validCurrentOwner = true
-      val savedLocalTyper = localTyper
-      localTyper = localTyper.atOwner(tree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
-      typers = typers updated (owner, localTyper)
-      val result = super.atOwner(tree, owner)(trans)
-      localTyper = savedLocalTyper
-      validCurrentOwner = savedValid
-      typers -= owner
-      result
+    override def pushOwner(tree: Tree, owner: Symbol): Unit = {
+      super.pushOwner(tree, owner)
+      if (owner.isClass) validCurrentOwners += true
+      typers = typers updated (owner, contexts.last)
     }
 
-    private def withInvalidOwner[A](trans: => A): A = {
-      val saved = validCurrentOwner
-      validCurrentOwner = false
+    override def popOwner(): Unit = {
+      if (currentOwner.isClass) validCurrentOwners.remove(validCurrentOwners.length - 1)
+      typers -= currentOwner
+      super.popOwner()
+    }
+
+    @inline private def withInvalidOwner[A](trans: => A): A = {
+      validCurrentOwners += false
       try trans
-      finally validCurrentOwner = saved
+      finally {
+        validCurrentOwners.remove(validCurrentOwners.length - 1)
+      }
     }
 
     /** Add a protected accessor, if needed, and return a tree that calls
