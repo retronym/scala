@@ -20,13 +20,17 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
   /** the following two members override abstract members in Transform */
   val phaseName: String = "constructors"
 
-  protected def newTransformer(unit: CompilationUnit): Transformer =
-    new ConstructorTransformer(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new ConstructorTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
 
   private val guardedCtorStats: mutable.Map[Symbol, List[Tree]] = perRunCaches.newMap[Symbol, List[Tree]]()
   private val ctorParams: mutable.Map[Symbol, List[Symbol]] = perRunCaches.newMap[Symbol, List[Symbol]]()
 
-  class ConstructorTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class ConstructorTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     /*
      * Inspect for obvious out-of-order initialization; concrete, eager vals or vars, declared in this class,
      * for which a reference to the member precedes its definition.
