@@ -231,6 +231,7 @@ trait Trees extends api.Trees {
         )
     }
     def transform(transformer: Transformer): Tree = xtransform(transformer, this)
+    def transformFast(transformer: TransformerFast): Tree = this
     def traverse(traverser: Traverser): Unit = xtraverse(traverser, this)
   }
 
@@ -298,6 +299,15 @@ trait Trees extends api.Trees {
           transformer.transformStats(stats, transformer.currentOwner)
         }
       )
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.PackageDef(
+        this, transformer.transform(pid).asInstanceOf[RefTree],
+        {
+          transformer.pushOwner(mclass(this.symbol))
+          try transformer.transformStats(stats, transformer.currentOwner)
+          finally transformer.popOwner()
+        }
+      )
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(pid)
       traverser.traverseStats(stats, mclass(this.symbol))
@@ -316,6 +326,12 @@ trait Trees extends api.Trees {
         transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
           transformer.transformTypeDefs(tparams), transformer.transformTemplate(impl))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(this.symbol)
+      try transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
+          transformer.transformTypeDefs(tparams), transformer.transformTemplate(impl))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -351,6 +367,12 @@ trait Trees extends api.Trees {
         transformer.treeCopy.ModuleDef(this, transformer.transformModifiers(mods),
           name, transformer.transformTemplate(impl))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(mclass(this.symbol))
+      try transformer.treeCopy.ModuleDef(this, transformer.transformModifiers(mods),
+          name, transformer.transformTemplate(impl))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(mclass(symbol)) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -388,6 +410,12 @@ trait Trees extends api.Trees {
         transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
           name, transformer.transform(tpt), transformer.transform(rhs))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(this.symbol)
+      try transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
+        name, transformer.transform(tpt), transformer.transform(rhs))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -408,6 +436,13 @@ trait Trees extends api.Trees {
           transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
           transformer.transform(tpt), transformer.transform(rhs))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(this.symbol)
+      try transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
+        transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
+        transformer.transform(tpt), transformer.transform(rhs))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -433,6 +468,12 @@ trait Trees extends api.Trees {
         transformer.treeCopy.TypeDef(this, transformer.transformModifiers(mods), name,
           transformer.transformTypeDefs(tparams), transformer.transform(rhs))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(this.symbol)
+      try transformer.treeCopy.TypeDef(this, transformer.transformModifiers(mods), name,
+        transformer.transformTypeDefs(tparams), transformer.transform(rhs))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -449,6 +490,8 @@ trait Trees extends api.Trees {
   case class LabelDef(name: TermName, params: List[Ident], rhs: Tree)
        extends DefTree with TermTree with LabelDefApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.LabelDef(this, name, transformer.transformIdents(params), transformer.transform(rhs)) //bq: Martin, once, atOwner(...) works, also change `LambdaLifter.proxy'
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.LabelDef(this, name, transformer.transformIdents(params), transformer.transform(rhs)) //bq: Martin, once, atOwner(...) works, also change `LambdaLifter.proxy'
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseName(name)
@@ -473,6 +516,8 @@ trait Trees extends api.Trees {
        extends SymTree with ImportApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Import(this, transformer.transform(expr), selectors)
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Import(this, transformer.transform(expr), selectors)
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(expr)
       selectors foreach traverser.traverseImportSelector
@@ -483,6 +528,8 @@ trait Trees extends api.Trees {
   case class Template(parents: List[Tree], self: ValDef, body: List[Tree])
        extends SymTree with TemplateApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Template(this, transformer.transformTrees(parents), transformer.transformValDef(self), transformer.transformStats(body, this.symbol))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Template(this, transformer.transformTrees(parents), transformer.transformValDef(self), transformer.transformStats(body, this.symbol))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseParents(parents)
@@ -496,6 +543,8 @@ trait Trees extends api.Trees {
        extends TermTree with BlockApi {
     override def transform(transformer: Transformer): Tree =
       treeCopy.Block(this, transformer.transformStats(stats, transformer.currentOwner), transformer.transform(expr))
+    override def transformFast(transformer: TransformerFast): Tree =
+      treeCopy.Block(this, transformer.transformStats(stats, transformer.currentOwner), transformer.transform(expr))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseTrees(stats)
       traverser.traverse(expr)
@@ -506,6 +555,8 @@ trait Trees extends api.Trees {
   case class CaseDef(pat: Tree, guard: Tree, body: Tree)
        extends Tree with CaseDefApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.CaseDef(this, transformer.transform(pat), transformer.transform(guard), transformer.transform(body))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.CaseDef(this, transformer.transform(pat), transformer.transform(guard), transformer.transform(body))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traversePattern(pat)
@@ -519,6 +570,8 @@ trait Trees extends api.Trees {
        extends TermTree with AlternativeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Alternative(this, transformer.transformTrees(trees))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Alternative(this, transformer.transformTrees(trees))
     override def traverse(traverser: Traverser): Unit =
       traverser.traverseTrees(trees)
   }
@@ -526,7 +579,7 @@ trait Trees extends api.Trees {
 
   case class Star(elem: Tree)
        extends TermTree with StarApi {
-    override def transform(transformer: Transformer): Tree =
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Star(this, transformer.transform(elem))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(elem)
@@ -538,6 +591,8 @@ trait Trees extends api.Trees {
        extends DefTree with BindApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Bind(this, name, transformer.transform(body))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Bind(this, name, transformer.transform(body))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseName(name)
       traverser.traverse(body)
@@ -548,6 +603,8 @@ trait Trees extends api.Trees {
   case class UnApply(fun: Tree, args: List[Tree])
        extends TermTree with UnApplyApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.UnApply(this, transformer.transform(fun), transformer.transformTrees(args)) // bq: see test/.../unapplyContexts2.scala
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.UnApply(this, transformer.transform(fun), transformer.transformTrees(args)) // bq: see test/.../unapplyContexts2.scala
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(fun)
@@ -575,6 +632,8 @@ trait Trees extends api.Trees {
   case class ArrayValue(elemtpt: Tree, elems: List[Tree]) extends TermTree {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ArrayValue(this, transformer.transform(elemtpt), transformer.transformTrees(elems))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.ArrayValue(this, transformer.transform(elemtpt), transformer.transformTrees(elems))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(elemtpt)
       traverser.traverseTrees(elems)
@@ -587,6 +646,11 @@ trait Trees extends api.Trees {
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.Function(this, transformer.transformValDefs(vparams), transformer.transform(body))
       }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.pushOwner(this.symbol)
+      try transformer.treeCopy.Function(this, transformer.transformValDefs(vparams), transformer.transform(body))
+      finally transformer.popOwner()
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(this.symbol) {
       traverser.traverseParams(vparams) ; traverser.traverse(body)
     }
@@ -596,6 +660,8 @@ trait Trees extends api.Trees {
   case class Assign(lhs: Tree, rhs: Tree)
        extends TermTree with AssignApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Assign(this, transformer.transform(lhs), transformer.transform(rhs))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Assign(this, transformer.transform(lhs), transformer.transform(rhs))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(lhs)
@@ -608,6 +674,8 @@ trait Trees extends api.Trees {
        extends TermTree with NamedArgApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.NamedArg(this, transformer.transform(lhs), transformer.transform(rhs))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.NamedArg(this, transformer.transform(lhs), transformer.transform(rhs))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(lhs)
       traverser.traverse(rhs)
@@ -618,6 +686,8 @@ trait Trees extends api.Trees {
   case class If(cond: Tree, thenp: Tree, elsep: Tree)
        extends TermTree with IfApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.If(this, transformer.transform(cond), transformer.transform(thenp), transformer.transform(elsep))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.If(this, transformer.transform(cond), transformer.transform(thenp), transformer.transform(elsep))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(cond)
@@ -631,6 +701,8 @@ trait Trees extends api.Trees {
        extends TermTree with MatchApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Match(this, transformer.transform(selector), transformer.transformCaseDefs(cases))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Match(this, transformer.transform(selector), transformer.transformCaseDefs(cases))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(selector)
       traverser.traverseCases(cases)
@@ -642,6 +714,8 @@ trait Trees extends api.Trees {
        extends SymTree with TermTree with ReturnApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Return(this, transformer.transform(expr))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Return(this, transformer.transform(expr))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(expr)
     }
@@ -651,6 +725,8 @@ trait Trees extends api.Trees {
   case class Try(block: Tree, catches: List[CaseDef], finalizer: Tree)
        extends TermTree with TryApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Try(this, transformer.transform(block), transformer.transformCaseDefs(catches), transformer.transform(finalizer))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Try(this, transformer.transform(block), transformer.transformCaseDefs(catches), transformer.transform(finalizer))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(block)
@@ -664,6 +740,8 @@ trait Trees extends api.Trees {
        extends TermTree with ThrowApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Throw(this, transformer.transform(expr))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Throw(this, transformer.transform(expr))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(expr)
     }
@@ -672,6 +750,8 @@ trait Trees extends api.Trees {
 
   case class New(tpt: Tree) extends TermTree with NewApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.New(this, transformer.transform(tpt))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.New(this, transformer.transform(tpt))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(tpt)
@@ -682,6 +762,8 @@ trait Trees extends api.Trees {
   case class Typed(expr: Tree, tpt: Tree)
        extends TermTree with TypedApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Typed(this, transformer.transform(expr), transformer.transform(tpt))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Typed(this, transformer.transform(expr), transformer.transform(tpt))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(expr)
@@ -713,6 +795,8 @@ trait Trees extends api.Trees {
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.TypeApply(this, transformer.transform(fun), transformer.transformTrees(args))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.TypeApply(this, transformer.transform(fun), transformer.transformTrees(args))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(fun)
       traverser.traverseTypeArgs(args)
@@ -725,6 +809,8 @@ trait Trees extends api.Trees {
     override def symbol: Symbol = fun.symbol
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Apply(this, transformer.transform(fun), transformer.transformTrees(args))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Apply(this, transformer.transform(fun), transformer.transformTrees(args))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(fun)
@@ -756,6 +842,8 @@ trait Trees extends api.Trees {
   case class ApplyDynamic(qual: Tree, args: List[Tree]) extends SymTree with TermTree {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ApplyDynamic(this, transformer.transform(qual), transformer.transformTrees(args))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.ApplyDynamic(this, transformer.transform(qual), transformer.transformTrees(args))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(qual)
       traverser.traverseTrees(args)
@@ -767,6 +855,8 @@ trait Trees extends api.Trees {
     override def symbol_=(sym: Symbol) { qual.symbol = sym }
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Super(this, transformer.transform(qual), mix)
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Super(this, transformer.transform(qual), mix)
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(qual)
       traverser.traverseName(mix)
@@ -777,6 +867,8 @@ trait Trees extends api.Trees {
   case class This(qual: TypeName)
         extends SymTree with TermTree with ThisApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.This(this, qual)
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.This(this, qual)
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseName(qual)
@@ -793,6 +885,9 @@ trait Trees extends api.Trees {
     override def transform(transformer: Transformer): Tree = {
       transformer.treeCopy.Select(this, transformer.transform(qualifier), name)
     }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.treeCopy.Select(this, transformer.transform(qualifier), name)
+    }
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(qualifier)
       traverser.traverseName(name)
@@ -806,6 +901,9 @@ trait Trees extends api.Trees {
     override def transform(transformer: Transformer): Tree = {
       transformer.treeCopy.Ident(this, name)
     }
+    override def transformFast(transformer: TransformerFast): Tree = {
+      transformer.treeCopy.Ident(this, name)
+    }
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseName(name)
     }
@@ -817,6 +915,8 @@ trait Trees extends api.Trees {
     override def symbol_=(sym: Symbol) { ident.symbol = sym }
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ReferenceToBoxed(this, transformer.transform(ident) match { case idt1: Ident => idt1 })
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.ReferenceToBoxed(this, transformer.transform(ident) match { case idt1: Ident => idt1 })
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(ident)
     }
@@ -827,6 +927,8 @@ trait Trees extends api.Trees {
         extends TermTree with LiteralApi {
     assert(value ne null)
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Literal(this, value)
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Literal(this, value)
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseConstant(value)
@@ -840,6 +942,8 @@ trait Trees extends api.Trees {
   case class Annotated(annot: Tree, arg: Tree) extends Tree with AnnotatedApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Annotated(this, transformer.transform(annot), transformer.transform(arg))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.Annotated(this, transformer.transform(annot), transformer.transform(arg))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(annot)
       traverser.traverse(arg)
@@ -850,6 +954,8 @@ trait Trees extends api.Trees {
   case class SingletonTypeTree(ref: Tree)
         extends TypTree with SingletonTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.SingletonTypeTree(this, transformer.transform(ref))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.SingletonTypeTree(this, transformer.transform(ref))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(ref)
@@ -863,6 +969,8 @@ trait Trees extends api.Trees {
     assert(qualifier.isType, qualifier)
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.SelectFromTypeTree(this, transformer.transform(qualifier), name)
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.SelectFromTypeTree(this, transformer.transform(qualifier), name)
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(qualifier)
       traverser.traverseName(name)
@@ -873,6 +981,8 @@ trait Trees extends api.Trees {
   case class CompoundTypeTree(templ: Template)
        extends TypTree with CompoundTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.CompoundTypeTree(this, transformer.transformTemplate(templ))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.CompoundTypeTree(this, transformer.transformTemplate(templ))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(templ)
@@ -889,6 +999,8 @@ trait Trees extends api.Trees {
     override def symbol_=(sym: Symbol) { tpt.symbol = sym }
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.AppliedTypeTree(this, transformer.transform(tpt), transformer.transformTrees(args))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.AppliedTypeTree(this, transformer.transform(tpt), transformer.transformTrees(args))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(tpt)
       traverser.traverseTypeArgs(args)
@@ -900,6 +1012,8 @@ trait Trees extends api.Trees {
        extends TypTree with TypeBoundsTreeApi {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.TypeBoundsTree(this, transformer.transform(lo), transformer.transform(hi))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.TypeBoundsTree(this, transformer.transform(lo), transformer.transform(hi))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(lo)
       traverser.traverse(hi)
@@ -910,6 +1024,8 @@ trait Trees extends api.Trees {
   case class ExistentialTypeTree(tpt: Tree, whereClauses: List[MemberDef])
        extends TypTree with ExistentialTypeTreeApi {
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.ExistentialTypeTree(this, transformer.transform(tpt), transformer.transformMemberDefs(whereClauses))
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.ExistentialTypeTree(this, transformer.transform(tpt), transformer.transformMemberDefs(whereClauses))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(tpt)
@@ -958,6 +1074,8 @@ trait Trees extends api.Trees {
       this
     }
     override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.TypeTree(this)
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.TypeTree(this)
     override def traverse(traverser: Traverser): Unit =
       ()
@@ -1429,6 +1547,7 @@ trait Trees extends api.Trees {
     override def isEmpty = true
     val asList = List(this)
     override def transform(transformer: Transformer): Tree = this
+    override def transformFast(transformer: TransformerFast): Tree = this
   }
   object noSelfType extends ValDef(Modifiers(PRIVATE), nme.WILDCARD, TypeTree(NoType), EmptyTree) with CannotHaveAttrs
   object pendingSuperCall extends Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List()) with CannotHaveAttrs
@@ -1441,6 +1560,91 @@ trait Trees extends api.Trees {
   class InternalTraverser extends Traverser {
     override def traverse(tree: Tree): Unit = tree.traverse(this)
   }
+
+  class TransformerFast {
+    /** The underlying tree copier. */
+    final var treeCopy: TreeCopier = newLazyTreeCopier
+    protected var depth = 0
+    protected val owners = mutable.ArrayBuffer[Symbol](rootMirror.RootClass)
+
+    /** The current owner symbol. */
+    protected[scala] def currentOwner: Symbol = owners.last
+    protected[scala] def currentOwner_=(owner: Symbol) = ???
+
+    /** The enclosing method of the currently transformed tree. */
+    protected def currentMethod = {
+      def enclosingMethod(sym: Symbol): Symbol =
+        if (sym.isMethod || sym == NoSymbol) sym else enclosingMethod(sym.owner)
+      enclosingMethod(currentOwner)
+    }
+
+    /** The enclosing class of the currently transformed tree. */
+    protected def currentClass = {
+      def enclosingClass(sym: Symbol): Symbol =
+        if (sym.isClass || sym == NoSymbol) sym else enclosingClass(sym.owner)
+      enclosingClass(currentOwner)
+    }
+
+    //    protected def currentPackage = currentOwner.enclosingTopLevelClass.owner
+
+    /** Transforms a single tree. */
+    def transform(tree: Tree): Tree = tree.transformFast(this)
+
+    /** Transforms a list of trees. */
+    def transformTrees(trees: List[Tree]): List[Tree] =
+      if (trees.isEmpty) Nil else trees mapConserve transform
+
+    /** Transforms a `Template`. */
+    def transformTemplate(tree: Template): Template =
+      transform(tree: Tree).asInstanceOf[Template]
+    /** Transforms a list of `TypeDef` trees. */
+    def transformTypeDefs(trees: List[TypeDef]): List[TypeDef] =
+      trees mapConserve (tree => transform(tree).asInstanceOf[TypeDef])
+    /** Transforms a `ValDef`. */
+    def transformValDef(tree: ValDef): ValDef =
+      if (tree eq noSelfType) tree
+      else transform(tree).asInstanceOf[ValDef]
+    /** Transforms a list of `ValDef` nodes. */
+    def transformValDefs(trees: List[ValDef]): List[ValDef] =
+      trees mapConserve (transformValDef(_))
+    /** Transforms a list of lists of `ValDef` nodes. */
+    def transformValDefss(treess: List[List[ValDef]]): List[List[ValDef]] =
+      treess mapConserve (transformValDefs(_))
+    /** Transforms a list of `MemberDef` nodes. */
+    def transformMemberDefs(trees: List[MemberDef]): List[MemberDef] =
+      trees mapConserve (tree => transform(tree).asInstanceOf[MemberDef])
+    /** Transforms a list of `CaseDef` nodes. */
+    def transformCaseDefs(trees: List[CaseDef]): List[CaseDef] =
+      trees mapConserve (tree => transform(tree).asInstanceOf[CaseDef])
+    /** Transforms a list of `Ident` nodes. */
+    def transformIdents(trees: List[Ident]): List[Ident] =
+      trees mapConserve (tree => transform(tree).asInstanceOf[Ident])
+    /** Traverses a list of trees with a given owner symbol. */
+    def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
+      stats mapConserve (stat =>
+        if (exprOwner != currentOwner && stat.isTerm) {
+          pushOwner(exprOwner)
+          try transform(stat)
+          finally popOwner()
+        }
+        else transform(stat)) filter (EmptyTree != _)
+    /** Transforms `Modifiers`. */
+    def transformModifiers(mods: Modifiers): Modifiers = {
+      if (mods.annotations.isEmpty) mods
+      else mods mapAnnotations transformTrees
+    }
+
+    def pushOwner(owner: Symbol): Unit = {
+      depth += 1
+      owners += owner
+    }
+
+    def popOwner(): Unit = {
+      owners.remove(owners.length - 1)
+      depth += 1
+    }
+  }
+
 
   def newValDef(sym: Symbol, rhs: Tree)(
     mods: Modifiers = Modifiers(sym.flags),

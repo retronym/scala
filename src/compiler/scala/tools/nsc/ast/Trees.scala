@@ -28,6 +28,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
     override def isType = definition.isType
     override def transform(transformer: ApiTransformer): Tree =
       transformer.treeCopy.DocDef(this, comment, transformer.transform(definition))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.DocDef(this, comment, transformer.transform(definition))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(definition)
     }
@@ -37,6 +39,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   case class SelectFromArray(qualifier: Tree, name: Name, erasure: Type)
        extends RefTree with TermTree {
    override def transform(transformer: ApiTransformer): Tree =
+     transformer.treeCopy.SelectFromArray(
+       this, transformer.transform(qualifier), name, erasure)
+   override def transformFast(transformer: TransformerFast): Tree =
      transformer.treeCopy.SelectFromArray(
        this, transformer.transform(qualifier), name, erasure)
    override def traverse(traverser: Traverser): Unit = {
@@ -51,6 +56,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
        extends SymTree with TermTree {
     override def transform(transformer: ApiTransformer): Tree =
       transformer.treeCopy.InjectDerivedValue(this, transformer.transform(arg))
+    override def transformFast(transformer: TransformerFast): Tree =
+      transformer.treeCopy.InjectDerivedValue(this, transformer.transform(arg))
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverse(arg)
     }
@@ -61,6 +68,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree {
     override def transform(transformer: ApiTransformer): Tree =
+      transformer.treeCopy.TypeTreeWithDeferredRefCheck(this)
+    override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(this)
     override def traverse(traverser: Traverser): Unit = {
       // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
@@ -148,6 +157,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
       case _ => this.treeCopy.TypeTreeWithDeferredRefCheck(tree)
     }
   }
+
+  protected def xtransformFast(transformer: TransformerFast, tree: Tree): Tree = throw new MatchError(tree)
 
   type ApiTransformer = super.Transformer
   class Transformer extends InternalTransformer {

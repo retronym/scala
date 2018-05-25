@@ -51,6 +51,7 @@ trait IndexedOptimizedSeq[A] extends Seq[A] {
     while (i < siz) { this(i) = f(this(i)); i += 1 }
     this
   }
+  override def last: A = apply(length - 1)
 }
 
 /** Explicit instantiation of the `Seq` trait to reduce class file size in subclasses. */
