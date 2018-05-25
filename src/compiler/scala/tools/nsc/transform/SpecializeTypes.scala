@@ -1454,8 +1454,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     && originalClass(clazz).parentSymbols.exists(p => hasSpecializedParams(p) && !p.isTrait)
   )
 
-  class SpecializationTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
+  class SpecializationTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+    private val delegate = new SpecializationTransformerFast(unit)
     override def transformUnit(unit: CompilationUnit): Unit = if (!settings.nospecialization) {
       informProgress("specializing " + unit)
       try {
@@ -1465,6 +1466,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           reporter.error(te.pos, te.msg)
       }
     }
+    override def transform(tree: Tree): global.Tree = delegate.transform(tree)
+  }
+
+  class SpecializationTransformerFast(unit: CompilationUnit) extends TypingTransformerFast(unit) {
 
     /** Map a specializable method to its rhs, when not deferred. */
     val body = new mutable.AnyRefMap[Symbol, Tree]()
@@ -1666,10 +1671,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
         case PackageDef(pid, stats) =>
           tree.symbol.info // make sure specializations have been performed
-          atOwner(tree, symbol) {
+          pushOwner(tree, symbol)
+          try {
             val specMembers = implSpecClasses(stats) map localTyper.typed
             treeCopy.PackageDef(tree, pid, transformStats(stats ::: specMembers, symbol.moduleClass))
-          }
+          } finally popOwner()
 
         case Template(parents, self, body) =>
           def transformTemplate = {
@@ -1685,14 +1691,20 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           treeCopy.Template(tree,
             parents1    /*currentOwner.info.parents.map(tpe => TypeTree(tpe) setPos parents.head.pos)*/ ,
             self,
-            atOwner(currentOwner)(transformTrees(body ::: specMembers)))
+            {
+              pushOwner(currentOwner)
+              try transformTrees(body ::: specMembers)
+              finally popOwner()
+            }
+          )
           }
           transformTemplate
 
         case ddef @ DefDef(_, _, _, vparamss, _, _) if info.isDefinedAt(symbol) =>
         def transformDefDef = {
           if (symbol.isConstructor) {
-            val t = atOwner(symbol)(forwardCtorCall(tree.pos, gen.mkSuperInitCall, vparamss, symbol.owner))
+            pushOwner(symbol)
+            val t = try forwardCtorCall(tree.pos, gen.mkSuperInitCall, vparamss, symbol.owner) finally popOwner()
             if (symbol.isPrimaryConstructor)
               localTyper.typedPos(symbol.pos)(deriveDefDef(tree)(_ => Block(List(t), Literal(Constant(())))))
             else // duplicate the original constructor
