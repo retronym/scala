@@ -78,7 +78,12 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   /** the following two members override abstract members in Transform */
   val phaseName: String = "fields"
 
-  protected def newTransformer(unit: CompilationUnit): Transformer = new FieldsTransformer(unit)
+  protected def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new FieldsTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
   override def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tp
     else synthFieldsAndAccessors(tp)
@@ -536,7 +541,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   // TODO: could we rebind more aggressively? consider overriding in type equality?
   def castHack(tree: Tree, pt: Type) = gen.mkAsInstanceOf(tree, pt)
 
-  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with CheckedAccessorTreeSynthesis {
+  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) with CheckedAccessorTreeSynthesis {
     protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
 
     def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
@@ -689,8 +694,11 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
       } filterNot (_ == EmptyTree) // there will likely be many EmptyTrees, but perhaps no thicket blocks that need expanding
     }
 
-    def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree =
-      atOwner(newOwner)(super.transform(stat.rhs.changeOwner(stat.symbol -> newOwner)))
+    def rhsAtOwner(stat: ValOrDefDef, newOwner: Symbol): Tree = {
+      pushOwner(newOwner)
+      try super.transform(stat.rhs.changeOwner(stat.symbol -> newOwner)
+      finally popOwner()
+    }
 
     override def transform(stat: Tree): Tree = {
       val currOwner = currentOwner // often a class, but not necessarily
@@ -722,7 +730,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
         // deferred val, trait val, lazy val (local or in class)
         case vd@ValDef(mods, name, tpt, rhs) if vd.symbol.hasFlag(ACCESSOR) && treeInfo.noFieldFor(vd, currOwner) =>
-          val transformedRhs = atOwner(statSym)(transform(rhs))
+          pushOwner(statSym)
+          val transformedRhs = try transform(rhs) finally popOwner()
 
           if (rhs == EmptyTree) mkAccessor(statSym)(EmptyTree)
           else if (currOwner.isTrait) mkAccessor(statSym)(castHack(transformedRhs, statSym.info.resultType))
@@ -758,7 +767,11 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
 
     def transformTermsAtExprOwner(exprOwner: Symbol)(stat: Tree) =
-      if (stat.isTerm) atOwner(exprOwner)(transform(stat))
+      if (stat.isTerm) {
+        pushOwner(exprOwner)
+        try transform(stat)
+        finally popOwner()
+      }
       else transform(stat)
 
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] = {
