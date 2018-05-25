@@ -255,13 +255,12 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           val callPrefix = gen.mkMethodCall(sel, targs, This(origThis) :: Nil)
 
           // Apply all the argument lists.
-          deriveDefDef(tree)(_ =>
-            atOwner(origMeth)(
-              localTyper.typedPos(rhs.pos)(
-                gen.mkForwarder(callPrefix, mmap(vparamss)(_.symbol))
-              )
-            )
-          )
+          deriveDefDef(tree) { _ =>
+            pushOwner(origMeth)
+            try localTyper.typedPos(rhs.pos)(
+              gen.mkForwarder(callPrefix, mmap(vparamss)(_.symbol))
+            ) finally popOwner()
+          }
         case _ =>
           super.transform(tree)
       }
@@ -271,7 +270,11 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       super.transformStats(stats, exprOwner) map {
         case md @ ModuleDef(_, _, _) =>
           val extraStats = extensionDefs remove md.symbol match {
-            case Some(defns) => defns.toList map (defn => atOwner(md.symbol)(localTyper.typedPos(md.pos.focus)(defn.duplicate)))
+            case Some(defns) => defns.toList map {defn =>
+              pushOwner(md.symbol)
+              try localTyper.typedPos(md.pos.focus)(defn.duplicate)
+              finally popOwner()
+            }
             case _           => Nil
           }
           if (extraStats.isEmpty) md
