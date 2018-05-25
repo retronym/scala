@@ -52,9 +52,14 @@ trait PatternMatching extends Transform
 
   val phaseName: String = "patmat"
 
-  def newTransformer(unit: CompilationUnit): Transformer = new MatchTransformer(unit)
+  def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new MatchTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): global.Tree = delegate.transform(tree)
+    }
+  }
 
-  class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class MatchTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     override def transform(tree: Tree): Tree = tree match {
       case Match(sel, cases) =>
         val origTp = tree.tpe
