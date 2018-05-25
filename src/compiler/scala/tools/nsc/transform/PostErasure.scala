@@ -16,10 +16,15 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
 
   val phaseName: String = "posterasure"
 
-  def newTransformer(unit: CompilationUnit): Transformer = new PostErasureTransformer(unit)
+  def newTransformer(unit: CompilationUnit): Transformer = {
+    val delegate = new PostErasureTransformer(unit)
+    new Transformer {
+      override def transform(tree: Tree): Tree = delegate.transform(tree)
+    }
+  }
   override def changesBaseClasses = false
 
-  class PostErasureTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class PostErasureTransformer(unit: CompilationUnit) extends TypingTransformerFast(unit) {
     override def transform(tree: Tree) = {
       def finish(res: Tree) = logResult(s"Posterasure reduction\n  Old: $tree\n  New")(res)
 
