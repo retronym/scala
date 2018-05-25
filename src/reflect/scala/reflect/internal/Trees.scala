@@ -579,6 +579,8 @@ trait Trees extends api.Trees {
 
   case class Star(elem: Tree)
        extends TermTree with StarApi {
+    override def transform(transformer: Transformer): Tree =
+      transformer.treeCopy.Star(this, transformer.transform(elem))
     override def transformFast(transformer: TransformerFast): Tree =
       transformer.treeCopy.Star(this, transformer.transform(elem))
     override def traverse(traverser: Traverser): Unit = {
