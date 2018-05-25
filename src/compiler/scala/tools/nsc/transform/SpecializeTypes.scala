@@ -224,7 +224,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   }
 
   protected def newTransformer(unit: CompilationUnit): Transformer =
-    new SpecializationTransformer(unit)
+    new SpecializationTransformerAdapter(unit)
 
   abstract class SpecializedInfo {
     def target: Symbol
@@ -1455,7 +1455,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   )
 
 
-  class SpecializationTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class SpecializationTransformerAdapter(unit: CompilationUnit) extends TypingTransformer(unit) {
     private val delegate = new SpecializationTransformerFast(unit)
     override def transformUnit(unit: CompilationUnit): Unit = if (!settings.nospecialization) {
       informProgress("specializing " + unit)
