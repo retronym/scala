@@ -974,7 +974,6 @@ trait Trees extends api.Trees {
   case class This(qual: TypeName)
         extends SymTree with TermTree with ThisApi {
     override def tag: Tree.Tag = Tree.Tag.This
-    override def tag: Tree.Tag = Tree.Tag.This
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.This(this, qual)
     override def transformFast(transformer: TransformerFast): Tree =
