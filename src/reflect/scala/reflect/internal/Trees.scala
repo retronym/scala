@@ -36,6 +36,7 @@ trait Trees extends api.Trees {
   object Tree {
     type Tag = Int
     object Tag {
+      final val NoTag = -1
       final val Alternative = 0
       final val Annotated = 1
       final val AppliedTypeTree = 2
@@ -111,7 +112,7 @@ trait Trees extends api.Trees {
   abstract class Tree extends TreeContextApiImpl with Attachable with Product {
     def id: Int = System.identityHashCode(this)
     nodeCount += 1
-    def tag: Tree.Tag = ???
+    def tag: Tree.Tag = NoTag
 
     if (StatisticsStatics.areSomeHotStatsEnabled())
       statistics.incCounter(statistics.nodeByType, getClass)
