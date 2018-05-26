@@ -13,6 +13,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   // --- additional cases --------------------------------------------------------
   /** Only used during parsing */
   case class Parens(args: List[Tree]) extends Tree {
+    override def tag: Tree.Tag = Tree.Tag.Parens
     override def traverse(traverser: Traverser): Unit = {
       traverser.traverseTrees(args)
     }
@@ -21,6 +22,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** Documented definition, eliminated by analyzer */
   case class DocDef(comment: DocComment, definition: Tree)
        extends Tree {
+    override def tag: Tree.Tag = Tree.Tag.DocDef
     override def symbol: Symbol = definition.symbol
     override def symbol_=(sym: Symbol): Unit = { definition.symbol = sym }
     override def isDef = definition.isDef
@@ -38,6 +40,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
  /** Array selection `<qualifier> . <name>` only used during erasure */
   case class SelectFromArray(qualifier: Tree, name: Name, erasure: Type)
        extends RefTree with TermTree {
+   override def tag: Tree.Tag = Tree.Tag.SelectFromArray
    override def transform(transformer: ApiTransformer): Tree =
      transformer.treeCopy.SelectFromArray(
        this, transformer.transform(qualifier), name, erasure)
@@ -54,6 +57,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
    */
   case class InjectDerivedValue(arg: Tree)
        extends SymTree with TermTree {
+    override def tag: Tree.Tag = Tree.Tag.InjectDerivedValue
     override def transform(transformer: ApiTransformer): Tree =
       transformer.treeCopy.InjectDerivedValue(this, transformer.transform(arg))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -67,6 +71,7 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
 
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree {
+    override def tag: Tree.Tag = Tree.Tag.TypeTreeWithDeferredRefCheck
     override def transform(transformer: ApiTransformer): Tree =
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(this)
     override def transformFast(transformer: TransformerFast): Tree =

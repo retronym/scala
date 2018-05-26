@@ -33,10 +33,85 @@ trait Trees extends api.Trees {
       else treeLine(t)
     )
   }
+  object Tree {
+    type Tag = Int
+    object Tag {
+      final val Alternative = 0
+      final val Annotated = 1
+      final val AppliedTypeTree = 2
+      final val Apply = 3
+      final val ApplyDynamic = 4
+      final val ApplyImplicitView = 5
+      final val ApplyToImplicitArgs = 6
+      final val ArrayValue = 7
+      final val Assign = 8
+      final val AssignOrNamedArg = 9
+      final val Bind = 10
+      final val Block = 11
+      final val CannotHaveAttrs = 12
+      final val CaseDef = 13
+      final val ClassDef = 14
+      final val CompoundTypeTree = 15
+      final val DefDef = 16
+      final val DefTree = 17
+      final val DocDef = 18
+      final val ExistentialTypeTree = 19
+      final val Function = 20
+      final val GenericApply = 21
+      final val Ident = 22
+      final val If = 23
+      final val ImplDef = 24
+      final val Import = 25
+      final val InjectDerivedValue = 26
+      final val LabelDef = 27
+      final val Literal = 28
+      final val Match = 29
+      final val MemberDef = 30
+      final val ModuleDef = 31
+      final val NameTree = 32
+      final val New = 33
+      final val PackageDef = 34
+      final val Parens = 35
+      final val PostfixSelect = 36
+      final val RefTree = 37
+      final val ReferenceToBoxed = 38
+      final val Return = 39
+      final val Select = 40
+      final val SelectFromArray = 41
+      final val SelectFromTypeTree = 42
+      final val SingletonTypeTree = 43
+      final val Star = 44
+      final val Super = 45
+      final val SymTree = 46
+      final val Template = 47
+      final val TermTree = 48
+      final val This = 49
+      final val Throw = 50
+      final val Tree = 51
+      final val Try = 52
+      final val TypTree = 53
+      final val TypeApply = 54
+      final val TypeBoundsTree = 55
+      final val TypeDef = 56
+      final val TypeTree = 57
+      final val TypeTreeWithDeferredRefCheck = 58
+      final val Typed = 59
+      final val UnApply = 60
+      final val ValDef = 61
+      final val ValOrDefDef = 62
+
+      final val UnmappableTree = 63
+      final val EmptyTree = 64
+      final val noSelfType = 65
+      final val pendingSuperCall = 66
+      final val NamedArg = 67
+    }
+  }
 
   abstract class Tree extends TreeContextApiImpl with Attachable with Product {
     def id: Int = System.identityHashCode(this)
     nodeCount += 1
+    def tag: Tree.Tag = ???
 
     if (StatisticsStatics.areSomeHotStatsEnabled())
       statistics.incCounter(statistics.nodeByType, getClass)
@@ -290,6 +365,7 @@ trait Trees extends api.Trees {
 
   case class PackageDef(pid: RefTree, stats: List[Tree])
        extends MemberDef with PackageDefApi {
+    override def tag: Tree.Tag = Tree.Tag.PackageDef
     def name = pid.name
     def mods = NoMods
     override def transform(transformer: Transformer): Tree =
@@ -321,6 +397,7 @@ trait Trees extends api.Trees {
 
   case class ClassDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], impl: Template)
        extends ImplDef with ClassDefApi {
+    override def tag: Tree.Tag = Tree.Tag.ClassDef
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
@@ -362,6 +439,7 @@ trait Trees extends api.Trees {
 
   case class ModuleDef(mods: Modifiers, name: TermName, impl: Template)
         extends ImplDef with ModuleDefApi {
+    override def tag: Tree.Tag = Tree.Tag.ModuleDef
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(mclass(this.symbol)) {
         transformer.treeCopy.ModuleDef(this, transformer.transformModifiers(mods),
@@ -405,6 +483,7 @@ trait Trees extends api.Trees {
   }
 
   case class ValDef(mods: Modifiers, name: TermName, tpt: Tree, rhs: Tree) extends ValOrDefDef with ValDefApi {
+    override def tag: Tree.Tag = Tree.Tag.ValDef
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
@@ -430,6 +509,7 @@ trait Trees extends api.Trees {
 
   case class DefDef(mods: Modifiers, name: TermName, tparams: List[TypeDef],
                     vparamss: List[List[ValDef]], tpt: Tree, rhs: Tree) extends ValOrDefDef with DefDefApi {
+    override def tag: Tree.Tag = Tree.Tag.DefDef
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
@@ -463,6 +543,7 @@ trait Trees extends api.Trees {
 
   case class TypeDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], rhs: Tree)
        extends MemberDef with TypeDefApi {
+    override def tag: Tree.Tag = Tree.Tag.TypeDef
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.TypeDef(this, transformer.transformModifiers(mods), name,
@@ -489,6 +570,7 @@ trait Trees extends api.Trees {
 
   case class LabelDef(name: TermName, params: List[Ident], rhs: Tree)
        extends DefTree with TermTree with LabelDefApi {
+    override def tag: Tree.Tag = Tree.Tag.LabelDef
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.LabelDef(this, name, transformer.transformIdents(params), transformer.transform(rhs)) //bq: Martin, once, atOwner(...) works, also change `LambdaLifter.proxy'
     override def transformFast(transformer: TransformerFast): Tree =
@@ -514,6 +596,7 @@ trait Trees extends api.Trees {
 
   case class Import(expr: Tree, selectors: List[ImportSelector])
        extends SymTree with ImportApi {
+    override def tag: Tree.Tag = Tree.Tag.Import
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Import(this, transformer.transform(expr), selectors)
     override def transformFast(transformer: TransformerFast): Tree =
@@ -527,6 +610,7 @@ trait Trees extends api.Trees {
 
   case class Template(parents: List[Tree], self: ValDef, body: List[Tree])
        extends SymTree with TemplateApi {
+    override def tag: Tree.Tag = Tree.Tag.Template
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Template(this, transformer.transformTrees(parents), transformer.transformValDef(self), transformer.transformStats(body, this.symbol))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -541,6 +625,7 @@ trait Trees extends api.Trees {
 
   case class Block(stats: List[Tree], expr: Tree)
        extends TermTree with BlockApi {
+    override def tag: Tree.Tag = Tree.Tag.Block
     override def transform(transformer: Transformer): Tree =
       treeCopy.Block(this, transformer.transformStats(stats, transformer.currentOwner), transformer.transform(expr))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -554,6 +639,7 @@ trait Trees extends api.Trees {
 
   case class CaseDef(pat: Tree, guard: Tree, body: Tree)
        extends Tree with CaseDefApi {
+    override def tag: Tree.Tag = Tree.Tag.CaseDef
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.CaseDef(this, transformer.transform(pat), transformer.transform(guard), transformer.transform(body))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -568,6 +654,7 @@ trait Trees extends api.Trees {
 
   case class Alternative(trees: List[Tree])
        extends TermTree with AlternativeApi {
+    override def tag: Tree.Tag = Tree.Tag.Alternative
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Alternative(this, transformer.transformTrees(trees))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -579,6 +666,7 @@ trait Trees extends api.Trees {
 
   case class Star(elem: Tree)
        extends TermTree with StarApi {
+    override def tag: Tree.Tag = Tree.Tag.Star
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Star(this, transformer.transform(elem))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -591,6 +679,7 @@ trait Trees extends api.Trees {
 
   case class Bind(name: Name, body: Tree)
        extends DefTree with BindApi {
+    override def tag: Tree.Tag = Tree.Tag.Bind
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Bind(this, name, transformer.transform(body))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -604,6 +693,7 @@ trait Trees extends api.Trees {
 
   case class UnApply(fun: Tree, args: List[Tree])
        extends TermTree with UnApplyApi {
+    override def tag: Tree.Tag = Tree.Tag.UnApply
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.UnApply(this, transformer.transform(fun), transformer.transformTrees(args)) // bq: see test/.../unapplyContexts2.scala
     override def transformFast(transformer: TransformerFast): Tree =
@@ -632,6 +722,7 @@ trait Trees extends api.Trees {
    *      ArrayValue(<Any>, List(Ident("foo"), Literal(42))))
    */
   case class ArrayValue(elemtpt: Tree, elems: List[Tree]) extends TermTree {
+    override def tag: Tree.Tag = Tree.Tag.ArrayValue
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ArrayValue(this, transformer.transform(elemtpt), transformer.transformTrees(elems))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -644,6 +735,7 @@ trait Trees extends api.Trees {
 
   case class Function(vparams: List[ValDef], body: Tree)
        extends SymTree with TermTree with FunctionApi {
+    override def tag: Tree.Tag = Tree.Tag.Function
     override def transform(transformer: Transformer): Tree =
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.Function(this, transformer.transformValDefs(vparams), transformer.transform(body))
@@ -661,6 +753,7 @@ trait Trees extends api.Trees {
 
   case class Assign(lhs: Tree, rhs: Tree)
        extends TermTree with AssignApi {
+    override def tag: Tree.Tag = Tree.Tag.Assign
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Assign(this, transformer.transform(lhs), transformer.transform(rhs))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -674,6 +767,7 @@ trait Trees extends api.Trees {
 
   case class NamedArg(lhs: Tree, rhs: Tree)
        extends TermTree with NamedArgApi {
+    override def tag: Tree.Tag = Tree.Tag.NamedArg
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.NamedArg(this, transformer.transform(lhs), transformer.transform(rhs))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -687,6 +781,7 @@ trait Trees extends api.Trees {
 
   case class If(cond: Tree, thenp: Tree, elsep: Tree)
        extends TermTree with IfApi {
+    override def tag: Tree.Tag = Tree.Tag.If
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.If(this, transformer.transform(cond), transformer.transform(thenp), transformer.transform(elsep))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -701,6 +796,7 @@ trait Trees extends api.Trees {
 
   case class Match(selector: Tree, cases: List[CaseDef])
        extends TermTree with MatchApi {
+    override def tag: Tree.Tag = Tree.Tag.Match
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Match(this, transformer.transform(selector), transformer.transformCaseDefs(cases))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -714,6 +810,7 @@ trait Trees extends api.Trees {
 
   case class Return(expr: Tree)
        extends SymTree with TermTree with ReturnApi {
+    override def tag: Tree.Tag = Tree.Tag.Return
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Return(this, transformer.transform(expr))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -726,6 +823,7 @@ trait Trees extends api.Trees {
 
   case class Try(block: Tree, catches: List[CaseDef], finalizer: Tree)
        extends TermTree with TryApi {
+    override def tag: Tree.Tag = Tree.Tag.Try
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Try(this, transformer.transform(block), transformer.transformCaseDefs(catches), transformer.transform(finalizer))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -740,6 +838,7 @@ trait Trees extends api.Trees {
 
   case class Throw(expr: Tree)
        extends TermTree with ThrowApi {
+    override def tag: Tree.Tag = Tree.Tag.Throw
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Throw(this, transformer.transform(expr))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -751,6 +850,7 @@ trait Trees extends api.Trees {
   object Throw extends ThrowExtractor
 
   case class New(tpt: Tree) extends TermTree with NewApi {
+    override def tag: Tree.Tag = Tree.Tag.New
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.New(this, transformer.transform(tpt))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -763,6 +863,7 @@ trait Trees extends api.Trees {
 
   case class Typed(expr: Tree, tpt: Tree)
        extends TermTree with TypedApi {
+    override def tag: Tree.Tag = Tree.Tag.Typed
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Typed(this, transformer.transform(expr), transformer.transform(tpt))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -792,7 +893,7 @@ trait Trees extends api.Trees {
        extends GenericApply with TypeApplyApi {
 
     assert(fun.isTerm, fun)
-
+    override def tag: Tree.Tag = Tree.Tag.TypeApply
     override def symbol: Symbol = fun.symbol
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
     override def transform(transformer: Transformer): Tree =
@@ -808,6 +909,7 @@ trait Trees extends api.Trees {
 
   case class Apply(fun: Tree, args: List[Tree])
        extends GenericApply with ApplyApi {
+    override def tag: Tree.Tag = Tree.Tag.Apply
     override def symbol: Symbol = fun.symbol
     override def symbol_=(sym: Symbol) { fun.symbol = sym }
     override def transform(transformer: Transformer): Tree =
@@ -842,6 +944,7 @@ trait Trees extends api.Trees {
   }
 
   case class ApplyDynamic(qual: Tree, args: List[Tree]) extends SymTree with TermTree {
+    override def tag: Tree.Tag = Tree.Tag.ApplyDynamic
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ApplyDynamic(this, transformer.transform(qual), transformer.transformTrees(args))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -853,6 +956,7 @@ trait Trees extends api.Trees {
   }
 
   case class Super(qual: Tree, mix: TypeName) extends TermTree with SuperApi {
+    override def tag: Tree.Tag = Tree.Tag.Super
     override def symbol: Symbol = qual.symbol
     override def symbol_=(sym: Symbol) { qual.symbol = sym }
     override def transform(transformer: Transformer): Tree =
@@ -868,6 +972,8 @@ trait Trees extends api.Trees {
 
   case class This(qual: TypeName)
         extends SymTree with TermTree with ThisApi {
+    override def tag: Tree.Tag = Tree.Tag.This
+    override def tag: Tree.Tag = Tree.Tag.This
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.This(this, qual)
     override def transformFast(transformer: TransformerFast): Tree =
@@ -880,7 +986,7 @@ trait Trees extends api.Trees {
 
   case class Select(qualifier: Tree, name: Name)
        extends RefTree with SelectApi {
-
+    override def tag: Tree.Tag = Tree.Tag.Select
     // !!! assert disabled due to test case pos/annotDepMethType.scala triggering it.
     // assert(qualifier.isTerm, qualifier)
 
@@ -898,6 +1004,7 @@ trait Trees extends api.Trees {
   object Select extends SelectExtractor
 
   case class Ident(name: Name) extends RefTree with IdentApi {
+    override def tag: Tree.Tag = Tree.Tag.Ident
     def qualifier: Tree = EmptyTree
     def isBackquoted = this.hasAttachment[BackquotedIdentifierAttachment.type]
     override def transform(transformer: Transformer): Tree = {
@@ -913,6 +1020,7 @@ trait Trees extends api.Trees {
   object Ident extends IdentExtractor
 
   case class ReferenceToBoxed(ident: Ident) extends TermTree with ReferenceToBoxedApi {
+    override def tag: Tree.Tag = Tree.Tag.ReferenceToBoxed
     override def symbol: Symbol = ident.symbol
     override def symbol_=(sym: Symbol) { ident.symbol = sym }
     override def transform(transformer: Transformer): Tree =
@@ -928,6 +1036,7 @@ trait Trees extends api.Trees {
   case class Literal(value: Constant)
         extends TermTree with LiteralApi {
     assert(value ne null)
+    override def tag: Tree.Tag = Tree.Tag.Literal
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.Literal(this, value)
     override def transformFast(transformer: TransformerFast): Tree =
@@ -955,6 +1064,7 @@ trait Trees extends api.Trees {
 
   case class SingletonTypeTree(ref: Tree)
         extends TypTree with SingletonTypeTreeApi {
+    override def tag: Tree.Tag = Tree.Tag.SingletonTypeTree
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.SingletonTypeTree(this, transformer.transform(ref))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -967,7 +1077,7 @@ trait Trees extends api.Trees {
 
   case class SelectFromTypeTree(qualifier: Tree, name: TypeName)
        extends RefTree with TypTree with SelectFromTypeTreeApi {
-
+    override def tag: Tree.Tag = Tree.Tag.SelectFromTypeTree
     assert(qualifier.isType, qualifier)
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.SelectFromTypeTree(this, transformer.transform(qualifier), name)
@@ -982,6 +1092,7 @@ trait Trees extends api.Trees {
 
   case class CompoundTypeTree(templ: Template)
        extends TypTree with CompoundTypeTreeApi {
+    override def tag: Tree.Tag = Tree.Tag.CompoundTypeTree
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.CompoundTypeTree(this, transformer.transformTemplate(templ))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -994,7 +1105,7 @@ trait Trees extends api.Trees {
 
   case class AppliedTypeTree(tpt: Tree, args: List[Tree])
        extends TypTree with AppliedTypeTreeApi {
-
+    override def tag: Tree.Tag = Tree.Tag.AppliedTypeTree
     assert(tpt.isType, tpt)
 
     override def symbol: Symbol = tpt.symbol
@@ -1012,6 +1123,7 @@ trait Trees extends api.Trees {
 
   case class TypeBoundsTree(lo: Tree, hi: Tree)
        extends TypTree with TypeBoundsTreeApi {
+    override def tag: Tree.Tag = Tree.Tag.TypeBoundsTree
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.TypeBoundsTree(this, transformer.transform(lo), transformer.transform(hi))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -1025,6 +1137,7 @@ trait Trees extends api.Trees {
 
   case class ExistentialTypeTree(tpt: Tree, whereClauses: List[MemberDef])
        extends TypTree with ExistentialTypeTreeApi {
+    override def tag: Tree.Tag = Tree.Tag.ExistentialTypeTree
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.ExistentialTypeTree(this, transformer.transform(tpt), transformer.transformMemberDefs(whereClauses))
     override def transformFast(transformer: TransformerFast): Tree =
@@ -1037,6 +1150,7 @@ trait Trees extends api.Trees {
   object ExistentialTypeTree extends ExistentialTypeTreeExtractor
 
   case class TypeTree() extends TypTree with TypeTreeApi {
+    override def tag: Tree.Tag = Tree.Tag.TypeTree
     private var orig: Tree = null
     /** Was this type tree originally empty? That is, does it now contain
       * an inferred type that must be forgotten in `resetAttrs` to
@@ -1546,13 +1660,18 @@ trait Trees extends api.Trees {
   }
 
   case object EmptyTree extends TermTree with CannotHaveAttrs {
+    override def tag: Tree.Tag = Tree.Tag.EmptyTree
     override def isEmpty = true
     val asList = List(this)
     override def transform(transformer: Transformer): Tree = this
     override def transformFast(transformer: TransformerFast): Tree = this
   }
-  object noSelfType extends ValDef(Modifiers(PRIVATE), nme.WILDCARD, TypeTree(NoType), EmptyTree) with CannotHaveAttrs
-  object pendingSuperCall extends Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List()) with CannotHaveAttrs
+  object noSelfType extends ValDef(Modifiers(PRIVATE), nme.WILDCARD, TypeTree(NoType), EmptyTree) with CannotHaveAttrs {
+    override def tag: Tree.Tag = Tree.Tag.noSelfType
+  }
+  object pendingSuperCall extends Apply(Select(Super(This(tpnme.EMPTY), tpnme.EMPTY), nme.CONSTRUCTOR), List()) with CannotHaveAttrs {
+    override def tag: Tree.Tag = Tree.Tag.pendingSuperCall
+  }
 
   @deprecated("use `noSelfType` instead", "2.11.0") lazy val emptyValDef = noSelfType
 
