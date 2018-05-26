@@ -35,7 +35,7 @@ trait Trees extends api.Trees {
   }
 
   abstract class Tree extends TreeContextApiImpl with Attachable with Product {
-    val id = nodeCount // TODO: add to attachment?
+    def id: Int = System.identityHashCode(this)
     nodeCount += 1
 
     if (StatisticsStatics.areSomeHotStatsEnabled())
