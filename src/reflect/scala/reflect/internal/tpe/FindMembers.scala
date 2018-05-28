@@ -136,10 +136,7 @@ trait FindMembers {
         case head :: tail =>
           if (head.isRefinementClass) {
             head.info.parents.exists(_.typeSymbol == owner) || isParentOfRefinementBaseClass(tail)
-          } else {
-            assert(!tail.exists(_.isRefinementClass))
-            false // no more refinements can appear after the first non-refinement class
-          }
+          } else false // no more refinements can appear after the first non-refinement class
       }
 
       // TODO Is the special handling of `private[this]` vs `private` backed up by the spec?
