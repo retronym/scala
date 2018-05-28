@@ -59,11 +59,6 @@ trait FindMembers {
       result
     }
 
-    /* Refinement classes **/
-    private[this] var refinedClasses: List[Symbol] = Nil
-    private[this] def isParentOfAnyRefinementClass(owner: Symbol): Boolean =
-      refinedClasses.exists(_.info.parents.exists(_.typeSymbol == owner))
-
     /*
      * Walk up through the decls of each base class.
      *
@@ -82,6 +77,7 @@ trait FindMembers {
       var seenFirstNonRefinementClass = false
 
       val findAll = name == nme.ANYname
+      var refinedClasses: List[Symbol] = Nil
 
       while (!bcs.isEmpty) {
         val currentBaseClass = bcs.head
@@ -94,7 +90,7 @@ trait FindMembers {
           if (meetsRequirements) {
             val excl: Long = flags & excluded
             val isExcluded: Boolean = excl != 0L
-            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass)) {
+            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinedClasses)) {
               if (shortCircuit(sym)) return false
               else addMemberIfNew(sym)
             } else if (excl == DEFERRED) {
@@ -131,7 +127,7 @@ trait FindMembers {
     // Q. When does a potential member fail to be an actual member?
     // A. if it is subsumed by an member in a subclass.
     private def isPotentialMember(sym: Symbol, flags: Long, owner: Symbol,
-                                  seenFirstNonRefinementClass: Boolean): Boolean = {
+                                  seenFirstNonRefinementClass: Boolean, refinementClasses: List[Symbol]): Boolean = {
       // conservatively (performance wise) doing this with flags masks rather than `sym.isPrivate`
       // to avoid multiple calls to `Symbol#flags`.
       val isPrivate      = (flags & PRIVATE) == PRIVATE
@@ -140,7 +136,7 @@ trait FindMembers {
       // TODO Is the special handling of `private[this]` vs `private` backed up by the spec?
       def admitPrivate: Boolean =
         !isPrivateLocal && // private[this] only a member from within the selector class. (Optimization only? Does the spec back this up?)
-          ( !seenFirstNonRefinementClass || isParentOfAnyRefinementClass(owner) )
+          ( !seenFirstNonRefinementClass || refinementClasses.exists(_.info.parents.exists(_.typeSymbol == owner)) )
 
       (sym.name != nme.CONSTRUCTOR || owner == initBaseClasses.head) &&
         (!isPrivate || (selectorClass == owner) || admitPrivate)
