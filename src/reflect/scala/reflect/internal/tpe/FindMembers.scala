@@ -7,6 +7,7 @@ package tpe
 
 import util.StatisticsStatics
 import Flags._
+import scala.annotation.tailrec
 
 trait FindMembers {
   this: SymbolTable =>
@@ -90,7 +91,7 @@ trait FindMembers {
           if (meetsRequirements) {
             val excl: Long = flags & excluded
             val isExcluded: Boolean = excl != 0L
-            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass, refinedClasses)) {
+            if (!isExcluded && isPotentialMember(sym, flags, currentBaseClass, seenFirstNonRefinementClass)) {
               if (shortCircuit(sym)) return false
               else addMemberIfNew(sym)
             } else if (excl == DEFERRED) {
@@ -102,13 +103,11 @@ trait FindMembers {
 
         // SLS 5.2 The private modifier can be used with any definition or declaration in a template.
         //         They are not inherited by subclasses [...]
-        if (currentBaseClass.isRefinementClass)
-          // SLS 3.2.7 A compound type T1 with . . . with Tn {R } represents objects with members as given in
-          //           the component types T1, ..., Tn and the refinement {R }
-          //
-          //           => private members should be included from T1, ... Tn. (scala/bug#7475)
-          refinedClasses ::= currentBaseClass
-        else if (currentBaseClass.isClass)
+        // SLS 3.2.7 A compound type T1 with . . . with Tn {R } represents objects with members as given in
+        //           the component types T1, ..., Tn and the refinement {R }
+        //
+        //           => private members should be included from T1, ... Tn. (scala/bug#7475)
+        if (!currentBaseClass.isRefinementClass && currentBaseClass.isClass)
           seenFirstNonRefinementClass = true // only inherit privates of refinement parents after this point
 
         bcs = bcs.tail
@@ -126,17 +125,27 @@ trait FindMembers {
     //
     // Q. When does a potential member fail to be an actual member?
     // A. if it is subsumed by an member in a subclass.
-    private def isPotentialMember(sym: Symbol, flags: Long, owner: Symbol,
-                                  seenFirstNonRefinementClass: Boolean, refinementClasses: List[Symbol]): Boolean = {
+    private def isPotentialMember(sym: Symbol, flags: Long, owner: Symbol, seenFirstNonRefinementClass: Boolean): Boolean = {
       // conservatively (performance wise) doing this with flags masks rather than `sym.isPrivate`
       // to avoid multiple calls to `Symbol#flags`.
       val isPrivate      = (flags & PRIVATE) == PRIVATE
       val isPrivateLocal = (flags & PrivateLocal) == PrivateLocal
 
+      @tailrec def isParentOfRefinementBaseClass(bcs: List[Symbol]): Boolean = bcs match {
+        case Nil => false
+        case head :: tail =>
+          if (head.isRefinementClass) {
+            head.info.parents.exists(_.typeSymbol == owner) || isParentOfRefinementBaseClass(tail)
+          } else {
+            assert(!tail.exists(_.isRefinementClass))
+            false // no more refinements can appear after the first non-refinement class
+          }
+      }
+
       // TODO Is the special handling of `private[this]` vs `private` backed up by the spec?
       def admitPrivate: Boolean =
         !isPrivateLocal && // private[this] only a member from within the selector class. (Optimization only? Does the spec back this up?)
-          ( !seenFirstNonRefinementClass || refinementClasses.exists(_.info.parents.exists(_.typeSymbol == owner)) )
+          ( !seenFirstNonRefinementClass || isParentOfRefinementBaseClass(initBaseClasses) )
 
       (sym.name != nme.CONSTRUCTOR || owner == initBaseClasses.head) &&
         (!isPrivate || (selectorClass == owner) || admitPrivate)
