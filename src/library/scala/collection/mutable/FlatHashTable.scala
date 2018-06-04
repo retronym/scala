@@ -2,10 +2,10 @@ package scala
 package collection.mutable
 
 import collection.{AbstractIterator, Iterator}
-
 import java.lang.{Integer, ThreadLocal}
-
 import java.lang.Integer.rotateRight
+import java.util
+
 import scala.util.hashing.byteswap32
 
 /** An implementation class backing a `HashSet`.
@@ -330,6 +330,18 @@ private[mutable] final class FlatHashTable[A] extends FlatHashTable.HashUtils[A]
     while (i >= 0) { table(i) = null; i -= 1 }
     tableSize = 0
     nnSizeMapReset(table.length)
+  }
+
+  override def clone: FlatHashTable[A] = {
+    val result = new FlatHashTable[A]
+    result.table = table.clone()
+    if (sizemap ne null)
+      result.sizemap = sizemap.clone()
+    result.seedvalue = seedvalue
+    result.tableSize = tableSize
+    result._loadFactor = _loadFactor
+    result.threshold = threshold
+    result
   }
 }
 

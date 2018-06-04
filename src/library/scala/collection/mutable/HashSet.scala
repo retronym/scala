@@ -21,7 +21,7 @@ final class HashSet[A]
     with SetOps[A, HashSet, HashSet[A]]
     with StrictOptimizedIterableOps[A, HashSet, HashSet[A]] {
 
-  @transient private[this] var table = new FlatHashTable[A]
+  @transient private var table = new FlatHashTable[A]
 
   // Used by scala-java8-compat (private[mutable] erases to public, so Java code can access it)
   private[mutable] def getTable: FlatHashTable[A] = table
@@ -65,6 +65,11 @@ final class HashSet[A]
     in.defaultReadObject()
     table = new FlatHashTable[A]
     table.init(in, x => ())
+  }
+  override def clone(): mutable.HashSet[A] = {
+    val result = new HashSet[A]
+    result.table = table.clone()
+    result
   }
 }
 
