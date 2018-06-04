@@ -51,7 +51,7 @@ final class ChampHashMap[K, +V] private[immutable] (val rootNode: MapNode[K, V],
     val keyHash = computeHash(key)
     val newRootNode = rootNode.updated(key, value, keyHash, 0, effect)
 
-    if (effect.isModified) {
+    if (newRootNode ne rootNode) {
       if (effect.hasReplacedValue) {
         ChampHashMap(newRootNode, cachedJavaKeySetHashCode, cachedSize)
       } else {
@@ -66,7 +66,7 @@ final class ChampHashMap[K, +V] private[immutable] (val rootNode: MapNode[K, V],
     val keyHash = computeHash(key)
     val newRootNode = rootNode.removed(key, keyHash, 0, effect)
 
-    if (effect.isModified)
+    if (newRootNode ne rootNode)
       ChampHashMap(newRootNode, cachedJavaKeySetHashCode - keyHash, cachedSize - 1)
     else this
   }
@@ -238,7 +238,6 @@ private final class BitmapIndexedMapNode[K, +V](val dataMap: Int, val nodeMap: I
         return copyAndSetValue(bitpos, value)
       } else {
         val subNodeNew = mergeTwoKeyValPairs(key0, value0, computeHash(key0), key, value, keyHash, shift + BitPartitionSize)
-        effect.setModified
         return copyAndMigrateFromInlineToNode(bitpos, subNodeNew)
       }
     }
@@ -248,14 +247,13 @@ private final class BitmapIndexedMapNode[K, +V](val dataMap: Int, val nodeMap: I
       val subNode = this.getNode(index)
 
       val subNodeNew = subNode.updated(key, value, keyHash, shift + BitPartitionSize, effect)
-      if (!effect.isModified) {
+      if (subNodeNew eq subNode) {
         return this
       } else {
         return copyAndSetNode(bitpos, subNodeNew)
       }
     }
 
-    effect.setModified
     copyAndInsertValue(bitpos, key, value)
   }
 
@@ -268,7 +266,6 @@ private final class BitmapIndexedMapNode[K, +V](val dataMap: Int, val nodeMap: I
       val (key0, _) = this.getPayload(index)
 
       if (key0 == key) {
-        effect.setModified
         if (this.payloadArity == 2 && this.nodeArity == 0) {
           /*
            * Create new node with remaining pair. The new node will a) either become the new root
@@ -291,7 +288,7 @@ private final class BitmapIndexedMapNode[K, +V](val dataMap: Int, val nodeMap: I
       val subNodeNew = subNode.removed(key, keyHash, shift + BitPartitionSize, effect)
       // assert(subNodeNew.sizePredicate != SizeEmpty, "Sub-node must have at least one element.")
 
-      if (!effect.isModified) return this
+      if (subNodeNew eq subNode) return this
       subNodeNew.sizePredicate match {
         case SizeOne =>
           if (this.payloadArity == 0 && this.nodeArity == 1) { // escalate (singleton or empty) result
@@ -520,7 +517,6 @@ private final class HashCollisionMapNode[K, +V](val hash: Int, val content: Vect
       effect.setReplacedValue
       new HashCollisionMapNode[K, V1](hash, updatedContent)
     } else {
-      effect.setModified
       new HashCollisionMapNode[K, V1](hash, content.appended(Tuple2(key, value)))
     }
 
@@ -528,7 +524,6 @@ private final class HashCollisionMapNode[K, +V](val hash: Int, val content: Vect
     if (!this.containsKey(key, hash, shift)) {
       this
     } else {
-      effect.setModified
       val updatedContent = content.filterNot(keyValuePair => keyValuePair._1 == key)
       // assert(updatedContent.size == content.size - 1)
 
@@ -575,14 +570,10 @@ private final class HashCollisionMapNode[K, +V](val hash: Int, val content: Vect
 
 private final case class MapEffect[K, +V]() {
 
-  private[this] var modified: Boolean = false
   private[this] var replacedValue: Boolean = false
 
-  def isModified =  { modified }
-  def setModified = { modified = true }
-
   def hasReplacedValue = { replacedValue }
-  def setReplacedValue = { replacedValue = true ; modified = true }
+  def setReplacedValue = { replacedValue = true }
 
 }
 
