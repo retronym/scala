@@ -129,23 +129,28 @@ trait Positions extends api.Positions { self: SymbolTable =>
     throw new ValidateException(msg)
   }
 
-  private val posStartOrdering: Ordering[Tree] = new Ordering[Tree] {
-    override def compare(x: Tree, y: Tree): Int = {
-      def posOf(t: Tree): Int = {
-        if (t == null || t.pos == NoPosition) Int.MinValue else t.pos.start
-      }
+  private val posStartOrdering: Ordering[Position] = new Ordering[Position] {
+    override def compare(x: Position, y: Position): Int = {
+      def posOf(pos: Position): Int = if (pos eq NoPosition) Int.MinValue else pos.start
       Integer.compare(posOf(x), posOf(y))
     }
   }
   def validatePositions(tree: Tree): Unit = if (!isPastTyper && !useOffsetPositions) {
     val trace = settings.Yposdebug && (settings.verbose || settings.Yrangepos)
     val topTree = tree
-    val childSolidDescendantBuffer = new java.util.ArrayList[Tree]
-    var childSolidDescendants = new Array[Tree](32)
+    val solidTrees = new java.util.ArrayList[Tree]
+    val solidTreePositions = new java.util.ArrayList[Position]
+    var posArray = new Array[Position](32)
     val solidChildrenCollector = new ChildSolidDescendantsCollector {
       def traverseSolidChild(t: Tree): Unit = {
-        childSolidDescendantBuffer.add(t)
+        solidTrees.add(t)
+        solidTreePositions.add(t.pos)
       }
+    }
+
+    object collector extends ChildSolidDescendantsCollector {
+      var tree: Tree = _
+      override def traverseSolidChild(ct: Tree): Unit = loop(ct, tree)
     }
 
     def loop(tree: Tree, encltree: Tree) {
@@ -175,33 +180,42 @@ trait Positions extends api.Positions { self: SymbolTable =>
             }
 
           solidChildrenCollector(tree)
-          val numChildren = childSolidDescendantBuffer.size
-          if (childSolidDescendants.length < numChildren) {
-            Integer.highestOneBit(numChildren)
-            childSolidDescendants = new Array[Tree](Integer.highestOneBit(numChildren - 1) << 1)
+          val numChildren = solidTrees.size
+          if (posArray.length < numChildren) {
+            posArray = new Array[Position](Integer.highestOneBit(numChildren - 1) << 1)
           }
-          childSolidDescendantBuffer.toArray(childSolidDescendants)
+          solidTreePositions.toArray(posArray)
 
           if (numChildren > 1) {
-            java.util.Arrays.sort(childSolidDescendants, 0, numChildren, posStartOrdering)
-            var t1 = childSolidDescendants(0)
+            java.util.Arrays.sort(posArray, 0, numChildren, posStartOrdering)
+            var pos1 = posArray(0)
             var i = 1
             while (i < numChildren) {
-              val t2 = childSolidDescendants(i)
-              if (t1.pos.overlaps(t2.pos)) {
-                reportTree("First overlapping", t1)
-                reportTree("Second overlapping", t2)
+              val pos2 = posArray(i)
+              if (pos1.overlaps(pos2)) {
+                def findTree(pos: Position): Tree = {
+                  val it = solidTrees.iterator()
+                  while (it.hasNext) {
+                    val tree = it.next()
+                    if (tree.pos eq pos) return tree
+                  }
+                  EmptyTree
+                }
+                reportTree("First overlapping", findTree(pos1))
+                reportTree("Second overlapping", findTree(pos2))
               }
-              if (t2.pos.isRange)
-                t1 = t2
+              if (pos2.isRange)
+                pos1 = pos2
               i += 1
             }
           }
         }
-        childSolidDescendantBuffer.clear()
-        new ChildSolidDescendantsCollector {
-          override def traverseSolidChild(ct: Tree): Unit = loop(ct, tree)
-        }.apply(tree)
+        solidTrees.clear()
+        solidTreePositions.clear()
+        val saved = collector.tree
+        collector.tree = tree
+        try collector.apply(tree)
+        finally collector.tree = saved
       }
     }
     loop(tree, tree)
