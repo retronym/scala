@@ -16,6 +16,17 @@ trait Map[K, +V]
   override protected def fromSpecificIterable(coll: Iterable[(K, V)] @uncheckedVariance): MapCC[K, V] @uncheckedVariance = mapFactory.from(coll)
   override protected def newSpecificBuilder: mutable.Builder[(K, V), MapCC[K, V]] @uncheckedVariance = mapFactory.newBuilder[K, V]
 
+  /** Apply `f` to each key/value pair for its side effects
+    *  Note: [U] parameter needed to help scalac's type inference.
+    */
+  def foreachKeyValue[U](f: (K, V) => U): Unit = {
+    val it = keyValuesIterator
+    while (it.hasNext) {
+      val next = it.next()
+      f(next._1, next._2)
+    }
+  }
+
   /**
     * @note This operation '''has''' to be overridden by concrete collection classes to effectively
     *       return a `MapFactory[MapCC]`. The implementation in `Map` only returns
