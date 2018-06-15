@@ -7,6 +7,8 @@ import java.io.{ObjectInputStream, ObjectOutputStream}
 import scala.annotation.unchecked.uncheckedVariance
 import scala.annotation.tailrec
 import mutable.{Builder, ListBuffer, ReusableBuilder}
+import scala.collection.immutable.ChampHashSet.empty
+import scala.collection.immutable.Map.empty
 
 /** A class for immutable linked lists representing ordered collections
   *  of elements of type `A`.
@@ -582,6 +584,7 @@ case object Nil extends List[Nothing] {
 object List extends StrictOptimizedSeqFactory[List] {
 
   def from[B](coll: collection.IterableOnce[B]): List[B] = coll match {
+    case _ if coll.knownSize == 0 => empty[B]
     case coll: List[B] => coll
     case _ => ListBuffer.from(coll).toList
   }

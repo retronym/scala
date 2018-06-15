@@ -271,6 +271,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
     count
   }
 
+  override def isEmpty: Boolean = size == 0
   override def foreach[U](f: A => U): Unit = iterator foreach f
 
   // It has the `()` because iterator runs `removeStaleEntries()`
