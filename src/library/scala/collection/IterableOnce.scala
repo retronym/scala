@@ -34,6 +34,22 @@ trait IterableOnce[+A] extends Any {
 
   /** @return The number of elements of this $coll if it can be computed in O(1) time, otherwise -1 */
   def knownSize: Int
+
+  /** Tests whether the $coll is empty.
+    *
+    *  Note: Implementations in subclasses that are not repeatedly traversable must take
+    *  care not to consume any elements when `isEmpty` is called.
+    *
+    *  @return    `true` if the $coll contains no elements, `false` otherwise.
+    */
+  def isEmpty: Boolean = iterator.isEmpty
+
+  /** Tests whether the $coll is not empty.
+    *
+    *  @return    `true` if the $coll contains at least one element, `false` otherwise.
+    */
+  @deprecatedOverriding("nonEmpty is defined as !isEmpty; override isEmpty instead", "2.13.0")
+  def nonEmpty: Boolean = !isEmpty
 }
 
 final class IterableOnceExtensionMethods[A](private val it: IterableOnce[A]) extends AnyVal {
@@ -79,12 +95,6 @@ final class IterableOnceExtensionMethods[A](private val it: IterableOnce[A]) ext
 
   @deprecated("toIterator has been renamed to iterator", "2.13.0")
   @`inline` def toIterator: Iterator[A] = it.iterator
-
-  @deprecated("Use .iterator.isEmpty instead of .isEmpty on IterableOnce", "2.13.0")
-  def isEmpty: Boolean = it match {
-    case it: Iterable[A] => it.isEmpty
-    case _ => it.iterator.isEmpty
-  }
 
   @deprecated("Use .iterator.mkString instead of .mkString on IterableOnce", "2.13.0")
   def mkString(start: String, sep: String, end: String): String = it match {
@@ -584,22 +594,6 @@ trait IterableOnceOps[+A, +CC[_], +C] extends Any { this: IterableOnce[A] =>
     *           `None` otherwise.
     */
   def reduceRightOption[B >: A](op: (A, B) => B): Option[B] = if (isEmpty) None else Some(reduceRight(op))
-
-  /** Tests whether the $coll is empty.
-    *
-    *  Note: Implementations in subclasses that are not repeatedly traversable must take
-    *  care not to consume any elements when `isEmpty` is called.
-    *
-    *  @return    `true` if the $coll contains no elements, `false` otherwise.
-    */
-  def isEmpty: Boolean = !iterator.hasNext
-
-  /** Tests whether the $coll is not empty.
-    *
-    *  @return    `true` if the $coll contains at least one element, `false` otherwise.
-    */
-  @deprecatedOverriding("nonEmpty is defined as !isEmpty; override isEmpty instead", "2.13.0")
-  def nonEmpty: Boolean = !isEmpty
 
   /** The size of this $coll.
     *
