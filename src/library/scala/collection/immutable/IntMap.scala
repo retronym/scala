@@ -164,6 +164,15 @@ private[immutable] class IntMapKeyIterator[V](it: IntMap[V]) extends IntMapItera
   def valueOf(tip: IntMap.Tip[V]) = tip.key
 }
 
+private[immutable] class IntMapKeyValueIterator[V](it: IntMap[V]) extends IntMapIterator[V, Product2[Int, V]](it) {
+  private[this] val result = MutableTuple2[Int, V](0, null.asInstanceOf[V])
+  def valueOf(tip: IntMap.Tip[V]) = {
+    result._1 = tip.key
+    result._2 = tip.value
+    result
+  }
+}
+
 import IntMap._
 
 /** Specialised immutable map structure for integer keys, based on
@@ -244,6 +253,11 @@ sealed abstract class IntMap[+T] extends AbstractMap[Int, T]
   override def valuesIterator: Iterator[T] = this match {
     case IntMap.Nil => Iterator.empty
     case _ => new IntMapValueIterator(this)
+  }
+
+  override def keyValuesIterator: Iterator[Product2[Int, T]] = this match {
+    case IntMap.Nil => Iterator.empty
+    case _ => new IntMapKeyValueIterator(this)
   }
 
   /**

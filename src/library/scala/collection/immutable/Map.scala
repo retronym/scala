@@ -242,7 +242,14 @@ object Map extends MapFactory[Map] {
     override def valuesIterator: Iterator[V] = new Map2Iterator[V] {
       override protected def nextResult(k: K, v: V): V = v
     }
-
+    override def keyValuesIterator: Iterator[Product2[K, V]] = new Map2Iterator[Product2[K, V]] {
+      private[this] val result = new MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+      override protected def nextResult(k: K, v: V): Product2[K, V] = {
+        result._1 = k
+        result._2 = v
+        result
+      }
+    }
     private abstract class Map2Iterator[A] extends AbstractIterator[A] {
       var i = 0
       override def hasNext: Boolean = i < 2
@@ -299,7 +306,14 @@ object Map extends MapFactory[Map] {
     override def valuesIterator: Iterator[V] = new Map3Iterator[V] {
       override protected def nextResult(k: K, v: V): V = v
     }
-
+    override def keyValuesIterator: Iterator[Product2[K, V]] = new Map3Iterator[Product2[K, V]] {
+      private[this] val result = new MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+      override protected def nextResult(k: K, v: V): Product2[K, V] = {
+        result._1 = k
+        result._2 = v
+        result
+      }
+    }
     private abstract class Map3Iterator[A] extends AbstractIterator[A] {
       var i = 0
       override def hasNext: Boolean = i < 3
@@ -362,7 +376,14 @@ object Map extends MapFactory[Map] {
     override def valuesIterator: Iterator[V] = new Map4Iterator[V] {
       override protected def nextResult(k: K, v: V): V = v
     }
-
+    override def keyValuesIterator: Iterator[Product2[K, V]] = new Map4Iterator[Product2[K, V]] {
+      private[this] val result = new MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+      override protected def nextResult(k: K, v: V): Product2[K, V] = {
+        result._1 = k
+        result._2 = v
+        result
+      }
+    }
     private abstract class Map4Iterator[A] extends AbstractIterator[A] {
       var i = 0
       override def hasNext: Boolean = i < 4

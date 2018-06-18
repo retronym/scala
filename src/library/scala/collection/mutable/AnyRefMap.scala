@@ -310,6 +310,14 @@ class AnyRefMap[K <: AnyRef, V] private[collection] (defaultEntry: K => V, initi
   override def valuesIterator: Iterator[V] = new AnyRefMapIterator[V] {
     protected def nextResult(k: K, v: V) = v
   }
+  override def keyValuesIterator: Iterator[Product2[K, V]] = new AnyRefMapIterator[Product2[K, V]] {
+    private[this] val result = MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+    protected def nextResult(k: K, v: V) = {
+      result._1 = k
+      result._2 = v
+      result
+    }
+  }
 
   private abstract class AnyRefMapIterator[A] extends AbstractIterator[A] {
     private[this] val hz = _hashes

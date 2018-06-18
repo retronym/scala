@@ -92,6 +92,17 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
     */
   def valuesIteratorFrom(start: K): Iterator[V] = iteratorFrom(start).map(_._2)
 
+  /**
+    * Creates an iterator over all the key/value pairs
+    * contained in this map having a key greater than or
+    * equal to `start` according to the ordering of
+    * this map.
+    *
+    * @param start The lower bound (inclusive)
+    * on the keys to be returned
+    */
+  def keyValuesIteratorFrom(start: K): Iterator[Product2[K, V]] = iteratorFrom(start)
+
   def firstKey: K = head._1
   def lastKey: K = last._1
 

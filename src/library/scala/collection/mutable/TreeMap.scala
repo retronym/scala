@@ -49,11 +49,21 @@ sealed class TreeMap[K, V] private (tree: RB.Tree[K, V])(implicit val ordering: 
     else RB.valuesIterator(tree, None)
   }
 
+  override def keyValuesIterator: Iterator[Product2[K, V]] = {
+    if (isEmpty) Iterator.empty
+    else RB.keyValuesIterator(tree, None)
+  }
+
   def keysIteratorFrom(start: K): Iterator[K] = RB.keysIterator(tree, Some(start))
 
   def iteratorFrom(start: K): Iterator[(K, V)] = RB.iterator(tree, Some(start))
 
   override def valuesIteratorFrom(start: K): Iterator[V] = RB.valuesIterator(tree, Some(start))
+
+  override def keyValuesIteratorFrom(start: K): Iterator[Product2[K, V]] = {
+    if (isEmpty) Iterator.empty
+    else RB.keyValuesIterator(tree, Some(start))
+  }
 
   def addOne(elem: (K, V)): this.type = { RB.insert(tree, elem._1, elem._2); this }
 
@@ -151,6 +161,8 @@ sealed class TreeMap[K, V] private (tree: RB.Tree[K, V])(implicit val ordering: 
     override def keysIteratorFrom(start: K) = RB.keysIterator(tree, pickLowerBound(Some(start)), until)
     override def iteratorFrom(start: K) = RB.iterator(tree, pickLowerBound(Some(start)), until)
     override def valuesIteratorFrom(start: K) = RB.valuesIterator(tree, pickLowerBound(Some(start)), until)
+    override def keyValuesIterator: Iterator[Product2[K, V]] = RB.keyValuesIterator(tree, from, until)
+    override def keyValuesIteratorFrom(start: K): Iterator[Product2[K, V]] = RB.keyValuesIterator(tree, pickLowerBound(Some(start)), until)
     override def size = if (RB.size(tree) == 0) 0 else iterator.length
     override def knownSize: Int = if (RB.size(tree) == 0) 0 else -1
     override def isEmpty = RB.size(tree) == 0 || !iterator.hasNext

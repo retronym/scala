@@ -2,7 +2,7 @@ package scala
 package collection.mutable
 
 import scala.annotation.tailrec
-import collection.{AbstractIterator, Iterator}
+import collection.{AbstractIterator, Iterator, MutableTuple2}
 import java.lang.String
 
 /**
@@ -469,6 +469,9 @@ private[collection] object RedBlackTree {
   def valuesIterator[A: Ordering, B](tree: Tree[A, B], start: Option[A] = None, end: Option[A] = None): Iterator[B] =
     new ValuesIterator(tree, start, end)
 
+  def keyValuesIterator[A: Ordering, B](tree: Tree[A, B], start: Option[A] = None, end: Option[A] = None): Iterator[Product2[A, B]] =
+    new KeyValuesIterator(tree, start, end)
+
   private[this] abstract class TreeIterator[A, B, R](tree: Tree[A, B], start: Option[A], end: Option[A])
                                                     (implicit ord: Ordering[A]) extends AbstractIterator[R] {
 
@@ -513,6 +516,17 @@ private[collection] object RedBlackTree {
     extends TreeIterator[A, B, B](tree, start, end) {
 
     def nextResult(node: Node[A, B]) = node.value
+  }
+
+  private[this] final class KeyValuesIterator[A: Ordering, B](tree: Tree[A, B], start: Option[A], end: Option[A])
+    extends TreeIterator[A, B, Product2[A, B]](tree, start, end) {
+    private[this] val result = MutableTuple2[A, B](null.asInstanceOf[A], null.asInstanceOf[B])
+
+    def nextResult(node: Node[A, B]) = {
+      result._1 = node.key
+      result._2 = node.value
+      result
+    }
   }
 
   // ---- debugging ----

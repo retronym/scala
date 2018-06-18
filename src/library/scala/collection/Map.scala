@@ -188,6 +188,13 @@ trait MapOps[K, +V, +CC[_, _] <: IterableOps[_, AnyConstr, _], +C]
     def next() = iter.next()._2
   }
 
+  /** Creates an iterator for all bindings in ths map
+    *
+    *  @return an iterator over all keys. For efficiency, the iterator may yield `Product2` elements that are
+    *          internally mutable. Read the key or value from the element before calling `next()`.
+    */
+  def keyValuesIterator: Iterator[Product2[K, V]] = iterator
+
   /** Filters this map by retaining only keys satisfying a predicate.
     *  @param  p   the predicate used to test keys
     *  @return an immutable map consisting only of those key value pairs of this map where the key satisfies

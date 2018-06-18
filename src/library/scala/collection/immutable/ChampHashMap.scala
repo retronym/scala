@@ -3,7 +3,7 @@ package collection.immutable
 
 import java.io.{ObjectInputStream, ObjectOutputStream}
 
-import collection.{IterableFactory, Iterator, MapFactory, StrictOptimizedIterableOps}
+import collection.{IterableFactory, Iterator, MapFactory, MutableTuple2, StrictOptimizedIterableOps}
 import collection.Hashing.{computeHash, keepBits}
 import scala.annotation.unchecked.{uncheckedVariance => uV}
 import java.lang.Integer.bitCount
@@ -49,6 +49,10 @@ final class ChampHashMap[K, +V] private[immutable] (val rootNode: MapNode[K, V],
     if (isEmpty) Iterator.empty
     else new MapValueIterator[K, V](rootNode)
   }
+
+  override def keyValuesIterator: Iterator[Product2[K, V]] =
+    if (isEmpty) Iterator.empty
+    else new MapKeyValueProductIterator[K, V](rootNode)
 
   protected[immutable] def reverseIterator: Iterator[(K, V)] = {
     if (isEmpty) Iterator.empty
@@ -631,6 +635,22 @@ private final class MapKeyValueTupleIterator[K, V](rootNode: MapNode[K, V])
     payload
   }
 
+}
+
+private final class MapKeyValueProductIterator[K, V](rootNode: MapNode[K, V])
+  extends ChampBaseIterator[MapNode[K, V]](rootNode) with Iterator[Product2[K, V]] {
+
+  private var value: MutableTuple2[K, V] = new MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+
+  def next(): Product2[K, V] = {
+    if (!hasNext)
+      throw new NoSuchElementException
+
+    value._1 = currentValueNode.getKey(currentValueCursor)
+    value._2 = currentValueNode.getValue(currentValueCursor)
+    currentValueCursor += 1
+    value
+  }
 }
 
 private final class MapKeyValueTupleReverseIterator[K, V](rootNode: MapNode[K, V])

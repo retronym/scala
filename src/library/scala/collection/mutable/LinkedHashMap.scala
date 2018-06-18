@@ -144,6 +144,22 @@ class LinkedHashMap[K, V]
       else Iterator.empty.next()
   }
 
+  override def keyValuesIterator: Iterator[Product2[K, V]] = new AbstractIterator[Product2[K, V]] {
+    private[this] var cur = firstEntry
+    private[this] val result = new MutableTuple2[K, V](null.asInstanceOf[K], null.asInstanceOf[V])
+    def hasNext = cur ne null
+    def next() =
+      if (hasNext) {
+        result._1 = cur.key
+        result._2 = cur.value
+        cur = cur.later
+        result
+      }
+      else Iterator.empty.next()
+  }
+
+
+
   override def foreach[U](f: ((K, V)) => U): Unit = {
     var cur = firstEntry
     while (cur ne null) {

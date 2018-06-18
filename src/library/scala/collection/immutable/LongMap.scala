@@ -161,6 +161,15 @@ private[immutable] class LongMapKeyIterator[V](it: LongMap[V]) extends LongMapIt
   def valueOf(tip: LongMap.Tip[V]) = tip.key
 }
 
+private[immutable] class LongMapKeyValueIterator[V](it: LongMap[V]) extends LongMapIterator[V, Product2[Long, V]](it){
+  private[this] val result = MutableTuple2[Long, V](0L, null.asInstanceOf[V])
+  def valueOf(tip: LongMap.Tip[V]) = {
+    result._1 = tip.key
+    result._2 = tip.value
+    result
+  }
+}
+
 /**
   *  Specialised immutable map structure for long keys, based on
   *  [[http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.37.5452 Fast Mergeable Long Maps]]
@@ -239,6 +248,11 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
   override def valuesIterator: Iterator[T] = this match {
     case LongMap.Nil => Iterator.empty
     case _ => new LongMapValueIterator(this)
+  }
+
+  override def keyValuesIterator: Iterator[Product2[Long, T]] = this match {
+    case LongMap.Nil => Iterator.empty
+    case _ => new LongMapKeyValueIterator(this)
   }
 
   /**

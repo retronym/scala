@@ -36,7 +36,12 @@ object OpenHashMap extends MapFactory[OpenHashMap] {
     */
   final private class OpenEntry[Key, Value](var key: Key,
                                             var hash: Int,
-                                            var value: Option[Value])
+                                            var value: Option[Value]) extends Product2[Key, Value] {
+    override def _1: Key = key
+    override def _2: Value = value.get
+    override def canEqual(that: Any): Boolean = that.isInstanceOf[OpenEntry[_, _]]
+    // mutable, don't override equality
+  }
 }
 
 /** A mutable hash map based on an open hashing scheme. The precise scheme is
@@ -231,6 +236,9 @@ class OpenHashMap[Key, Value](initialSize : Int)
   }
   override def valuesIterator: Iterator[Value] = new OpenHashMapIterator[Value] {
     override protected def nextResult(node: Entry): Value = node.value.get
+  }
+  override def keyValuesIterator: Iterator[Product2[Key, Value]] = new OpenHashMapIterator[Product2[Key, Value]] {
+    override protected def nextResult(node: Entry): Product2[Key, Value] = node
   }
 
   private abstract class OpenHashMapIterator[A] extends AbstractIterator[A] {
