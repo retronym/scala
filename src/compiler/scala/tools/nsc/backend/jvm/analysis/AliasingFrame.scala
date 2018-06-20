@@ -6,7 +6,7 @@ import scala.annotation.switch
 import scala.collection.mutable
 import scala.tools.asm.Opcodes
 import scala.tools.asm.tree._
-import scala.tools.asm.tree.analysis.{Analyzer, Value, Frame, Interpreter}
+import scala.tools.asm.tree.analysis.{Analyzer, Frame, Interpreter, Value}
 import opt.BytecodeUtils._
 import AliasSet.SmallBitSet
 
@@ -19,7 +19,7 @@ import AliasSet.SmallBitSet
  *
  * See the doc of package object `analysis` for some notes on the performance of alias analysis.
  */
-class AliasingFrame[V <: Value](nLocals: Int, nStack: Int) extends Frame[V](nLocals, nStack) {
+class AliasingFrame[V <: Value](nLocals: Int, nStack: Int) extends VanillaAsmFrame[V](nLocals, nStack) {
   import Opcodes._
 
   // Auxiliary constructor required for implementing `AliasingAnalyzer.newFrame`
