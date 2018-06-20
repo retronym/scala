@@ -34,6 +34,28 @@ trait IndexedSeq[+A] extends Seq[A]
 
   final override def toIndexedSeq: IndexedSeq[A] = this
 
+  override def canEqual(that: Any): Boolean = that match {
+    case otherIndexedSeq: IndexedSeq[_] => length == otherIndexedSeq.length && super.canEqual(that)
+    case _ => super.canEqual (that)
+  }
+
+  override def equals(o: Any): Boolean = o match {
+    case otherIndexedSeq: IndexedSeq[_] =>
+      (this eq otherIndexedSeq) || {
+        var equal = length == otherIndexedSeq.length
+        if (equal) {
+          val length = this.length
+          var index = 0
+          while (index < length && equal) {
+            equal = this (index) == otherIndexedSeq(index)
+            index += 1
+          }
+        }
+        equal
+      }
+    case _ => super.equals(o)
+  }
+
   override def iterableFactory: SeqFactory[IterableCC] = IndexedSeq
 }
 
