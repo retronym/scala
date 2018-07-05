@@ -162,6 +162,10 @@ public class JpmsClasspathImpl {
         }
     }
 
+    public boolean hasModule(String moduleName) {
+        return configuration.findModule(moduleName).isPresent();
+    }
+
     public boolean checkAccess(String siteModuleName, String targetModuleName, String packageName) {
         if (siteModuleName.equals(targetModuleName)) return true;
         if (siteModuleName.equals("")) siteModuleName = UNNAMED_MODULE_NAME;
@@ -170,7 +174,7 @@ public class JpmsClasspathImpl {
         Optional<ResolvedModule> siteModule = configuration.findModule(siteModuleName);
         Optional<ResolvedModule> targetModule = configuration.findModule(targetModuleName);
         if (siteModule.isPresent() && targetModule.isPresent()) {
-            boolean reads = siteModule.get().reads().contains(targetModule.get());
+            boolean reads = siteModuleName.equals(UNNAMED_MODULE_NAME) || siteModule.get().reads().contains(targetModule.get());
             if (reads) {
                 ModuleDescriptor targetDescriptor = targetModule.get().reference().descriptor();
                 return targetDescriptor.isAutomatic() || targetDescriptor.exports().stream().anyMatch(exports -> exports.source().equals(packageName) && (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)));

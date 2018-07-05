@@ -41,6 +41,7 @@ trait CompilationUnits { global: Global =>
 
     /** the content of the compilation unit in tree form */
     var body: Tree = EmptyTree
+    var jpmsModuleName: String = ""
 
     /** The position of the first xml literal encountered while parsing this compilation unit.
      * NoPosition if there were none. Write-once.

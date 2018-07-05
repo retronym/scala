@@ -16,6 +16,7 @@ import scala.reflect.internal.jpms.JpmsClasspathImpl
 import scala.reflect.io.PlainNioFile
 import scala.reflect.io.ZipArchive.{baseName, dirName}
 import scala.tools.nsc.Settings
+import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
 
@@ -105,6 +106,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], impl: JpmsClasspat
               location1 <- listLocationsForModules(fileManager, outerLocation).asScala
               location <- location1.asScala
               moduleName = inferModuleName(fileManager, location)
+              if (impl.hasModule(moduleName))
               jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
               path = asPath(fileManager, jfo)
               if (!path.getFileName.toString.contains("-"))
@@ -126,9 +128,8 @@ final class JpmsClassPath(patches: Map[String, List[String]], impl: JpmsClasspat
   private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = Nil
 
   override def findClassFile(className: String): Option[AbstractFile] = {
-    val packageName = dirName(className)
-    val simpleName = baseName(className)
-    classes(packageName).find(_.name == simpleName).map(_.file)
+    val (inPackage, classSimpleName) = separatePkgAndClassNames(className)
+    classes(inPackage).find(_.name == classSimpleName).map(_.file)
   }
 }
 

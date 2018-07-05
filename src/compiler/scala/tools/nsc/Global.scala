@@ -13,7 +13,7 @@ import java.nio.charset.{Charset, CharsetDecoder, IllegalCharsetNameException, U
 
 import scala.collection.{immutable, mutable}
 import io.{AbstractFile, SourceReader}
-import util.{ClassPath, returning}
+import util.{ClassPath, JpmsClassPath, returning}
 import reporters.{Reporter => LegacyReporter}
 import scala.reflect.ClassTag
 import scala.reflect.internal.{Reporter => InternalReporter}
@@ -1311,6 +1311,10 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     private def addUnit(unit: CompilationUnit): Unit = {
       unitbuf += unit
       compiledFiles += unit.source.file.path
+      classPath match {
+        case jcp: JpmsClassPath =>
+          unit.jpmsModuleName = jcp.defaultModuleName
+      }
     }
     private def warnDeprecatedAndConflictingSettings(): Unit = {
       // issue warnings for any usage of deprecated settings
