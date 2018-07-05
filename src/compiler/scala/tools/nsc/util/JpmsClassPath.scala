@@ -19,7 +19,12 @@ import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
 
-final class JpmsClassPath(impl: JpmsClasspathImpl) extends ClassPath {
+final class JpmsClassPath(patches: Map[String, List[String]], impl: JpmsClasspathImpl) extends ClassPath {
+  lazy val defaultModuleName: String = {
+    if (patches.size == 1) patches.keySet.head // TODO
+    else impl.currentModuleName()
+  }
+
   def checkAccess(thisModule: String, symModule: String, fullNameString: String): Boolean = {
     impl.checkAccess(thisModule, symModule, fullNameString)
   }
@@ -31,7 +36,7 @@ final class JpmsClassPath(impl: JpmsClasspathImpl) extends ClassPath {
   private val fileManager = impl.getFileManager
   private def locationAsPaths(location: StandardLocation): IndexedSeq[Path] = getLocationAsPaths(fileManager, location).asScala.toVector
   private val packageIndex = mutable.AnyRefMap[String, JpmsPackageEntry]()
-  private case class JpmsPackageEntry(name: String, moduleName: String) extends PackageEntry {
+  private case class JpmsPackageEntry(name: String) extends PackageEntry {
     val locations = util.EnumSet.noneOf(classOf[StandardLocation])
     val parentPackage: String = {
       val ix = name.lastIndexOf(".")
@@ -54,7 +59,7 @@ final class JpmsClassPath(impl: JpmsClasspathImpl) extends ClassPath {
             if (dir.getFileName.toString.contains("-")) FileVisitResult.SKIP_SUBTREE
             else {
               val packageName = path.relativize(dir).toString.replaceAll("/", ".")
-              val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName, moduleName))
+              val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
               entry.locations.add(moduleLocation)
               super.preVisitDirectory(dir, attrs)
             }
@@ -66,7 +71,7 @@ final class JpmsClassPath(impl: JpmsClasspathImpl) extends ClassPath {
       for (jfo <- fileManager.list(location, "", java.util.EnumSet.of(JavaFileObject.Kind.CLASS), true).asScala) {
         val binaryName = fileManager.inferBinaryName(location, jfo)
         val packageName = baseName(binaryName).replaceAll("/", ".")
-        val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName, moduleName))
+        val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
         entry.locations.add(moduleLocation)
       }
     }
@@ -77,7 +82,7 @@ final class JpmsClassPath(impl: JpmsClasspathImpl) extends ClassPath {
       val binaryName = fileManager.inferBinaryName(loc, jfo)
       val (packageName, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(binaryName.replaceAll("/", "."))
       val moduleName = ""
-      val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName, moduleName))
+      val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
       entry.locations.add(loc)
     }
   }
@@ -136,20 +141,22 @@ object JpmsClassPath {
     if (s.modulePath.isSetByUser) {
       add("--module-path", s.modulePath.value)
     }
+    var allPatches: Map[String, List[String]] = Map.empty
     if (s.patchModule.isSetByUser) {
       def parse(s: String) = s match {
         case EqualsPattern(module, patch) => (module, patch)
         case _ => throw new IllegalArgumentException(s"Unable to parse argument $s")
 
       }
-      val allPatches: Map[String, List[String]] = s.patchModule.value.map(parse).groupBy(_._1).mapValues(_.map(_._2)).to(Map)
+      allPatches = s.patchModule.value.map(parse).groupBy(_._1).mapValues(_.map(_._2)).to(Map)
       for ((module, patches) <- allPatches) {
         add("--patch-module", patches.mkString(","))
       }
     }
     val releaseOptional = java.util.Optional.ofNullable(s.release.value).filter(!_.isEmpty)
-    val impl = new JpmsClasspathImpl(releaseOptional, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
-    new JpmsClassPath(impl)
+    val output = s.outputDirs.getSingleOutput.get.file // TODO this assumes single output, file backed.
+    val impl = new JpmsClasspathImpl(releaseOptional, output.toPath, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
+    new JpmsClassPath(allPatches, impl)
   }
 
   private val EqualsPattern = """(.*)=(.*)""".r

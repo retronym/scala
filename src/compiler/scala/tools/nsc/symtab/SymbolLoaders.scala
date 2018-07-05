@@ -8,9 +8,10 @@ package symtab
 
 import classfile.ClassfileParser
 import java.io.IOException
+
 import scala.reflect.internal.MissingRequirementError
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
-import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
+import scala.tools.nsc.util.{ClassPath, ClassRepresentation, JpmsClassPath}
 import scala.reflect.internal.util.StatisticsStatics
 
 /** This class ...
@@ -155,7 +156,13 @@ abstract class SymbolLoaders {
    *  (overridden in interactive.Global).
    */
   def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile): Unit = {
-    enterClassAndModule(root, name, jpmsModuleName = "", (_, _) => new SourcefileLoader(src))
+    val moduleName = platform.classPath match {
+      case jcp: JpmsClassPath =>
+        jcp.defaultModuleName
+      case _ => ""
+
+    }
+    enterClassAndModule(root, name, jpmsModuleName = moduleName, (_, _) => new SourcefileLoader(src))
   }
 
   /** The package objects of scala and scala.reflect should always

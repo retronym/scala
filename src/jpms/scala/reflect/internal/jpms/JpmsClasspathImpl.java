@@ -1,11 +1,13 @@
 package scala.reflect.internal.jpms;
 
 import javax.lang.model.SourceVersion;
+import javax.tools.JavaFileManager;
+import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
-import java.lang.module.Configuration;
-import java.lang.module.ModuleDescriptor;
-import java.lang.module.ModuleFinder;
-import java.lang.module.ResolvedModule;
+import javax.tools.StandardLocation;
+import java.io.IOException;
+import java.lang.module.*;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -21,11 +23,17 @@ public class JpmsClasspathImpl {
     private static final Pattern ADD_EXPORTS_PATTERN = Pattern.compile("([^/]+)/([^=]+)=(,*[^,].*)");
     private final StandardJavaFileManager fileManager;
     private final Configuration configuration;
+    private ModuleReference classOutputModuleRef = null;
 
-    public JpmsClasspathImpl(Optional<String> release, List<List<String>> fileManangerOptions, List<String> addModules,
-                             List<String> addExports, List<String> addReads) {
+    public JpmsClasspathImpl(Optional<String> release, Path output, List<List<String>> fileManangerOptions, List<String> addModules,
+                             List<String> addExports, List<String> addReads) throws IOException {
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
+            try {
+                fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, Collections.singleton(output));
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
             for (List<String> optionSubList : fileManangerOptions) {
                 Iterator<String> iterator = optionSubList.iterator();
                 while (iterator.hasNext()) {
@@ -41,11 +49,23 @@ public class JpmsClasspathImpl {
         ModuleFinderAndFileManager moduleFinderAndFileManager = ModuleFinderAndFileManager.get(release, c);
         fileManager = moduleFinderAndFileManager.fileManager();
         ModuleFinder moduleFinder = moduleFinderAndFileManager.moduleFinder();
+
         // TODO let the caller pass in descriptors of source modules.
         List<ModuleDescriptor> sourceModules = new ArrayList<>();
         ArrayList<ModuleDescriptor> sourceAndUnnamed = new ArrayList<>(sourceModules);
         sourceAndUnnamed.add(ModuleDescriptor.newModule(UNNAMED_MODULE_NAME).requires("java.base").build());
         ModuleFinder fromSourceFinder = FixedModuleFinder.newModuleFinder(sourceAndUnnamed);
+        ModuleFinder finder = fromSourceFinder;
+        // If there is a module-info
+        JavaFileObject module = fileManager.getJavaFileForInput(StandardLocation.CLASS_OUTPUT, "module-info", JavaFileObject.Kind.CLASS);
+        if (module != null) {
+            ModuleFinder classOutputModuleFinder = ModuleFinder.of(output);
+            Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
+            if (classOutputModules.size() != 1) throw new IllegalStateException("Expected one module-info.class in " + output);
+            classOutputModuleRef = classOutputModules.iterator().next();
+            finder = ModuleFinder.compose(classOutputModuleFinder, finder);
+        }
+
         ExportRequireAdder adder = getExportRequireAdder(addExports, addReads);
         // Resolve the module graph.
         // `fromSourceFinder` is passed as the `before` finder to take precendence over, rather than clash with, a module-info.class in the
@@ -53,7 +73,7 @@ public class JpmsClasspathImpl {
         ExportRequireAddingModuleFinder afterFinder = new ExportRequireAddingModuleFinder(moduleFinder, adder);
         List<String> roots = new ArrayList<>(addModules);
         roots.add(UNNAMED_MODULE_NAME);
-        configuration = Configuration.empty().resolve(fromSourceFinder, afterFinder, roots);
+        configuration = Configuration.empty().resolve(finder, afterFinder, roots);
 
         if (!unhandled.isEmpty()) throw new IllegalArgumentException("Some options were unhandled: " + unhandled);
     }
@@ -83,11 +103,14 @@ public class JpmsClasspathImpl {
         HashMap<String, ModuleDescriptor.Exports> addExportsMap = new HashMap<>();
         for (String addExport : addExports) {
             Matcher matcher = ADD_EXPORTS_PATTERN.matcher(addExport);
-            if (!matcher.matches()) throw new IllegalArgumentException("Invalid -addexports specification: " + addExport);
+            if (!matcher.matches())
+                throw new IllegalArgumentException("Invalid -addexports specification: " + addExport);
             String moduleName = matcher.group(1);
-            if (!SourceVersion.isName(moduleName)) throw new IllegalArgumentException("Invalid module name in " + addExport);
+            if (!SourceVersion.isName(moduleName))
+                throw new IllegalArgumentException("Invalid module name in " + addExport);
             String packageName = matcher.group(2);
-            if (!SourceVersion.isName(packageName)) throw new IllegalArgumentException("Invalid package name in " + addExport);
+            if (!SourceVersion.isName(packageName))
+                throw new IllegalArgumentException("Invalid package name in " + addExport);
             HashSet<String> targets = new HashSet<>();
             for (String targetName : matcher.group(3).split(",")) {
                 if (targetName.equals("ALL-UNNAMED")) {
@@ -105,9 +128,11 @@ public class JpmsClasspathImpl {
         HashMap<String, List<String>> result = new HashMap<>();
         for (String addRequire : addRequires) {
             Matcher matcher = ADD_REQUIRES_PATTERN.matcher(addRequire);
-            if (!matcher.matches()) throw new IllegalArgumentException("Invalid -addrequire specification: " + addRequire);
+            if (!matcher.matches())
+                throw new IllegalArgumentException("Invalid -addrequire specification: " + addRequire);
             String moduleName = matcher.group(1);
-            if (!SourceVersion.isName(moduleName)) throw new IllegalArgumentException("Invalid module name in " + addRequire);
+            if (!SourceVersion.isName(moduleName))
+                throw new IllegalArgumentException("Invalid module name in " + addRequire);
             List<String> requires = new ArrayList<>();
             for (String required : matcher.group(2).split(",")) {
                 if (required.equals(ALL_UNNAMED)) {
@@ -121,12 +146,20 @@ public class JpmsClasspathImpl {
         return result;
     }
 
-    private ModuleDescriptor.Exports mkExports(String packageName, HashSet<String> targets) {
+    private static ModuleDescriptor.Exports mkExports(String packageName, HashSet<String> targets) {
         return ModuleDescriptor.newModule("dummy").exports(Set.of(), packageName, targets).build().exports().iterator().next();
     }
 
     public StandardJavaFileManager getFileManager() {
         return fileManager;
+    }
+
+    public String currentModuleName() {
+        if (classOutputModuleRef == null) {
+            return "";
+        } else {
+            return classOutputModuleRef.descriptor().name();
+        }
     }
 
     public boolean checkAccess(String siteModuleName, String targetModuleName, String packageName) {
