@@ -4,9 +4,7 @@ import java.net.URL
 import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
 import java.util
-import java.util.Collections
 
-import javax.tools.StandardLocation.PLATFORM_CLASS_PATH
 import javax.tools._
 
 import scala.collection.JavaConverters.{iterableAsScalaIterableConverter, _}
@@ -14,7 +12,7 @@ import scala.collection.mutable
 import scala.reflect.internal.jpms.FileManagerJava9Api._
 import scala.reflect.internal.jpms.JpmsClasspathImpl
 import scala.reflect.io.PlainNioFile
-import scala.reflect.io.ZipArchive.{baseName, dirName}
+import scala.reflect.io.ZipArchive.baseName
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
 import scala.tools.nsc.classpath._
