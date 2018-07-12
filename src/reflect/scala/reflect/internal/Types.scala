@@ -2337,7 +2337,24 @@ trait Types
       // must initialise symbol, see test/files/pos/ticket0137.scala
       val tpars = initializedTypeParams
       if (tpars.isEmpty) this
-      else typeFunAnon(tpars, copyTypeRef(this, pre, sym, tpars map (_.tpeHK))) // todo: also beta-reduce?
+      else {
+        val tparsAtNonClass =
+          // if we're eta-expanding a reference to a class, it can remain the owner of the type params
+          // TODO: why does cloning tpars break stuff?
+          if (sym.isClass) tpars
+          else {
+            // NOTE: during pickling, localizedOwner will change the owner to a non-class owner of the pickle root;
+            // (the pickle root is the current top-level class).
+            // The difference in owner between source-compiled vs class-loaded should not trigger recompilation (or breakage in ASF).
+            // We can't just re-use the owner of the type params (the class or type constructor that defines the type params),
+            // because if the owner is a type that's under consideration for relativizing, ASF thinks it needs to act on them.
+            // We want something enclosing that's not a class, but usually `sym.enclosingSuchThat(_.isTerm)` is NoSymbol anyway
+            // when using `sym` (the current owner for `tpars`), pos/t10762 will fail
+            val nonClassRoot = sym.enclosingSuchThat(_.isTerm)
+            cloneSymbolsAtOwner(tpars, nonClassRoot)
+          }
+        PolyType(tparsAtNonClass, copyTypeRef(this, pre, sym, tparsAtNonClass map (_.typeConstructor)))
+      }
     }
 
     // only need to rebind type aliases, as typeRef already handles abstract types
@@ -3938,14 +3955,6 @@ trait Types
 
   @deprecated("use genPolyType(...) instead", "2.10.0") // Used in reflection API
   def polyType(params: List[Symbol], tpe: Type): Type = GenPolyType(params, tpe)
-
-  /** A creator for anonymous type functions, where the symbol for the type function still needs to be created.
-   *
-   * TODO:
-   * type params of anonymous type functions, which currently can only arise from normalising type aliases, are owned by the type alias of which they are the eta-expansion
-   * higher-order subtyping expects eta-expansion of type constructors that arise from a class; here, the type params are owned by that class, but is that the right thing to do?
-   */
-  def typeFunAnon(tps: List[Symbol], body: Type): Type = typeFun(tps, body)
 
   /** A creator for a type functions, assuming the type parameters tps already have the right owner. */
   def typeFun(tps: List[Symbol], body: Type): Type = PolyType(tps, body)
