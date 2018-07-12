@@ -92,14 +92,15 @@ trait Infer extends Checkable {
   /** Map every TypeVar to its constraint.inst field.
    *  throw a NoInstance exception if a NoType or WildcardType is encountered.
    */
-  object instantiate extends TypeMap {
+  val instantiate = new instantiate(NoSymbol)
+  class instantiate(owner: Symbol) extends TypeMap {
     private var excludedVars = immutable.Set[TypeVar]()
     private def applyTypeVar(tv: TypeVar): Type = tv match {
       case TypeVar(origin, constr) if !constr.instValid => throw new DeferredNoInstance(() => s"no unique instantiation of type variable $origin could be found")
       case _ if excludedVars(tv)                        => throw new NoInstance("cyclic instantiation")
       case TypeVar(_, constr)                           =>
         excludedVars += tv
-        try apply(constr.inst)
+        try apply(constr.inst.cloneInfo(owner))
         finally excludedVars -= tv
     }
     def apply(tp: Type): Type = tp match {
