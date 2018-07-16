@@ -138,7 +138,7 @@ trait MemberLookupBase {
     // We need to cleanup the bogus classes created by the .class file parser. For example, [[scala.Predef]] resolves
     // to (bogus) class scala.Predef loaded by the class loader -- which we need to eliminate by looking at the info
     // and removing NoType classes
-    def cleanupBogusClasses(syms: List[Symbol]) = { syms.filter(_.info != NoType) }
+    def cleanupBogusClasses(syms: List[Symbol]) = { syms.filter(symbol => symbol.name == tpnme.MODULE_INFO || symbol.name == nme.MODULE_INFO || symbol.info != NoType) }
 
     def syms(name: Name) = container.info.nonPrivateMember(name.encodedName).alternatives
     def termSyms = cleanupBogusClasses(syms(newTermName(name)))

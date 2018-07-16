@@ -114,6 +114,7 @@ trait StdNames {
     val ROOT: NameType                         = "<root>"
     val SPECIALIZED_SUFFIX: NameType           = "$sp"
     val CASE_ACCESSOR: NameType                = "$access"
+    val MODULE_INFO: NameType                  = "module-info"
 
     val NESTED_IN: String                      = "$nestedIn"
     val NESTED_IN_ANON_CLASS: String           = NESTED_IN + ANON_CLASS_NAME.toString.replace("$", "")

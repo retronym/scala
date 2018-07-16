@@ -180,8 +180,10 @@ abstract class ClassfileParser {
           case CONSTANT_METHODHANDLE                                           => in skip 3
           case CONSTANT_FIELDREF | CONSTANT_METHODREF | CONSTANT_INTFMETHODREF => in skip 4
           case CONSTANT_NAMEANDTYPE | CONSTANT_INTEGER | CONSTANT_FLOAT        => in skip 4
-          case CONSTANT_INVOKEDYNAMIC                                          => in skip 4
+          case CONSTANT_CONSTANTDYNAMIC | CONSTANT_INVOKEDYNAMIC               => in skip 4
           case CONSTANT_LONG | CONSTANT_DOUBLE                                 => in skip 8 ; i += 1
+          case CONSTANT_MODULE                                                 => in skip 2
+          case CONSTANT_PACKAGE                                                => in skip 2
           case _                                                               => errorBadTag(in.bp - 1)
         }
       }

@@ -169,7 +169,7 @@ abstract class SymbolLoaders {
 
   /** Initialize toplevel class and module symbols in `owner` from class path representation `classRep`
    */
-  def initializeFromClassPath(owner: Symbol, classRep: ClassRepresentation): Unit = {
+  def initializeFromClassPath(owner: Symbol, classRep: ClassRepresentation): Unit = if (!nme.MODULE_INFO.string_==(classRep.name)) {
     ((classRep.binary, classRep.source) : @unchecked) match {
       case (Some(bin), Some(src))
       if platform.needCompile(bin, src) && !binaryOnly(owner, classRep.name) =>

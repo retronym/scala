@@ -60,21 +60,24 @@ object ClassfileConstants {
   final val JAVA_ACC_ENUM         = 0x4000   //   X       X
 
   // tags describing the type of a literal in the constant pool
-  final val CONSTANT_UTF8          =  1
-  final val CONSTANT_UNICODE       =  2
-  final val CONSTANT_INTEGER       =  3
-  final val CONSTANT_FLOAT         =  4
-  final val CONSTANT_LONG          =  5
-  final val CONSTANT_DOUBLE        =  6
-  final val CONSTANT_CLASS         =  7
-  final val CONSTANT_STRING        =  8
-  final val CONSTANT_FIELDREF      =  9
-  final val CONSTANT_METHODREF     = 10
-  final val CONSTANT_INTFMETHODREF = 11
-  final val CONSTANT_NAMEANDTYPE   = 12
-  final val CONSTANT_METHODHANDLE  = 15
-  final val CONSTANT_METHODTYPE    = 16
-  final val CONSTANT_INVOKEDYNAMIC = 18
+  final val CONSTANT_UTF8            =  1
+  final val CONSTANT_UNICODE         =  2
+  final val CONSTANT_INTEGER         =  3
+  final val CONSTANT_FLOAT           =  4
+  final val CONSTANT_LONG            =  5
+  final val CONSTANT_DOUBLE          =  6
+  final val CONSTANT_CLASS           =  7
+  final val CONSTANT_STRING          =  8
+  final val CONSTANT_FIELDREF        =  9
+  final val CONSTANT_METHODREF       = 10
+  final val CONSTANT_INTFMETHODREF   = 11
+  final val CONSTANT_NAMEANDTYPE     = 12
+  final val CONSTANT_METHODHANDLE    = 15
+  final val CONSTANT_METHODTYPE      = 16
+  final val CONSTANT_CONSTANTDYNAMIC = 17
+  final val CONSTANT_INVOKEDYNAMIC   = 18
+  final val CONSTANT_MODULE          = 19
+  final val CONSTANT_PACKAGE         = 20
 
   // tags describing the type of a literal in attribute values
   final val BYTE_TAG   = 'B'
