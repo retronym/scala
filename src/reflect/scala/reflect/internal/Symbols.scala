@@ -3479,6 +3479,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def sourceModule = companionModule
     override def enclClassChain = Nil
     override def isPackageClass = true
+
+    // Cache this because it is used in JPMS access checks.
+    private[this] var fullNameStringCache: String = null
+    override def fullNameString: String = {
+      val cached = fullNameStringCache
+      if (cached == null) {
+        val computed = super.fullNameString
+        fullNameStringCache = computed
+        computed
+      } else {
+        fullNameStringCache
+      }
+    }
   }
 
   class RefinementClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)
@@ -3556,7 +3569,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         accessiblePackages.get(otherModule) match {
           case Some(None) =>
             true // this was an automatic module
-          case Some(Some(set)) => set.contains(pack.fullNameString) // TODO JPMS cache PackageSymbol.fullNameString
+          case Some(Some(set)) => set.contains(pack.moduleClass.fullNameString)
           case None => true
         }
       }
