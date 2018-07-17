@@ -134,8 +134,9 @@ abstract class SymbolLoaders {
     // to reuse the symbols returned below.
     val clazz = enterClass(root, clazz0, completer)
     val module = enterModule(root, module0, completer)
-    clazz.asInstanceOf[ClassSymbol].jpmsModuleName = jpmsModuleName
-    module.moduleClass.asInstanceOf[ClassSymbol].jpmsModuleName = jpmsModuleName
+    val jpmsModule = lookupJpmsModule(jpmsModuleName)
+    clazz.asInstanceOf[ClassSymbol].jpmsModule = jpmsModule
+    module.moduleClass.asInstanceOf[ClassSymbol].jpmsModule = jpmsModule
     if (!clazz.isAnonymousClass) {
       // Diagnostic for scala/bug#7147
       def msg: String = {

@@ -18,14 +18,10 @@ import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
 
-final class JpmsClassPath(patches: Map[String, List[String]], impl: JpmsClasspathImpl) extends ClassPath {
+final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClasspathImpl) extends ClassPath {
   lazy val defaultModuleName: String = {
     if (patches.size == 1) patches.keySet.head // TODO
     else impl.currentModuleName()
-  }
-
-  def checkAccess(thisModule: String, symModule: String, fullNameString: String): Boolean = {
-    impl.checkAccess(thisModule, symModule, fullNameString)
   }
 
   override def asURLs: Seq[URL] = Nil // TODO

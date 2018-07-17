@@ -757,12 +757,11 @@ trait Contexts { self: Analyzer =>
         val jpmsCanAccess = global.classPath match {
           case _ if sym.hasPackageFlag => true // TODO
           case jcp: JpmsClassPath =>
-            def moduleNameOf(sym: Symbol) = sym.enclosingTopLevelClass match {
-              case cls: ClassSymbol => cls.jpmsModuleName
-              case _ => ""
+            def jpmsModuleOf(sym: Symbol) = sym.enclosingTopLevelClass match {
+              case cls: ClassSymbol => cls.jpmsModule
+              case _ => NoJpmsModuleSymbol
             }
-            val symModule = moduleNameOf(sym)
-            jcp.checkAccess(unit.jpmsModuleName, symModule, sym.enclosingPackage.fullNameString)
+            unit.jpmsModule.isAccessible(jcp.impl)(jpmsModuleOf(sym), sym.enclosingPackage)
           case _ =>
             true
         }

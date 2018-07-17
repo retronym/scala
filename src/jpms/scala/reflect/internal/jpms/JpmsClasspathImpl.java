@@ -1,7 +1,6 @@
 package scala.reflect.internal.jpms;
 
 import javax.lang.model.SourceVersion;
-import javax.tools.JavaFileManager;
 import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
@@ -34,7 +33,7 @@ public class JpmsClasspathImpl {
             } catch (IOException ex) {
                 throw new RuntimeException(ex);
             }
-            for (List<String> optionSubList : fileManangerOptions) {
+            for (List<String> optionSubList: fileManangerOptions) {
                 Iterator<String> iterator = optionSubList.iterator();
                 while (iterator.hasNext()) {
                     String next = iterator.next();
@@ -61,7 +60,8 @@ public class JpmsClasspathImpl {
         if (module != null) {
             ModuleFinder classOutputModuleFinder = ModuleFinder.of(output);
             Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
-            if (classOutputModules.size() != 1) throw new IllegalStateException("Expected one module-info.class in " + output);
+            if (classOutputModules.size() != 1)
+                throw new IllegalStateException("Expected one module-info.class in " + output);
             classOutputModuleRef = classOutputModules.iterator().next();
             finder = ModuleFinder.compose(classOutputModuleFinder, finder);
         }
@@ -101,7 +101,7 @@ public class JpmsClasspathImpl {
 
     private HashMap<String, ModuleDescriptor.Exports> processAddExports(List<String> addExports) {
         HashMap<String, ModuleDescriptor.Exports> addExportsMap = new HashMap<>();
-        for (String addExport : addExports) {
+        for (String addExport: addExports) {
             Matcher matcher = ADD_EXPORTS_PATTERN.matcher(addExport);
             if (!matcher.matches())
                 throw new IllegalArgumentException("Invalid -addexports specification: " + addExport);
@@ -112,7 +112,7 @@ public class JpmsClasspathImpl {
             if (!SourceVersion.isName(packageName))
                 throw new IllegalArgumentException("Invalid package name in " + addExport);
             HashSet<String> targets = new HashSet<>();
-            for (String targetName : matcher.group(3).split(",")) {
+            for (String targetName: matcher.group(3).split(",")) {
                 if (targetName.equals("ALL-UNNAMED")) {
                     targets.add(UNNAMED_MODULE_NAME);
                 } else {
@@ -126,7 +126,7 @@ public class JpmsClasspathImpl {
 
     private HashMap<String, List<String>> processAddReads(List<String> addRequires) {
         HashMap<String, List<String>> result = new HashMap<>();
-        for (String addRequire : addRequires) {
+        for (String addRequire: addRequires) {
             Matcher matcher = ADD_REQUIRES_PATTERN.matcher(addRequire);
             if (!matcher.matches())
                 throw new IllegalArgumentException("Invalid -addrequire specification: " + addRequire);
@@ -134,7 +134,7 @@ public class JpmsClasspathImpl {
             if (!SourceVersion.isName(moduleName))
                 throw new IllegalArgumentException("Invalid module name in " + addRequire);
             List<String> requires = new ArrayList<>();
-            for (String required : matcher.group(2).split(",")) {
+            for (String required: matcher.group(2).split(",")) {
                 if (required.equals(ALL_UNNAMED)) {
                     requires.add(UNNAMED_MODULE_NAME);
                 } else {
@@ -166,21 +166,29 @@ public class JpmsClasspathImpl {
         return configuration.findModule(moduleName).isPresent();
     }
 
-    public boolean checkAccess(String siteModuleName, String targetModuleName, String packageName) {
-        if (siteModuleName.equals(targetModuleName)) return true;
+    public Map<String, Set<String>> accessibleModulePackages(String siteModuleName) {
         if (siteModuleName.equals("")) siteModuleName = UNNAMED_MODULE_NAME;
-        String finalSiteModuleName = siteModuleName;
 
+        HashMap<String, Set<String>> result = new HashMap<>();
+        String finalSiteModuleName = siteModuleName;
         Optional<ResolvedModule> siteModule = configuration.findModule(siteModuleName);
-        Optional<ResolvedModule> targetModule = configuration.findModule(targetModuleName);
-        if (siteModule.isPresent() && targetModule.isPresent()) {
-            boolean reads = siteModuleName.equals(UNNAMED_MODULE_NAME) || siteModule.get().reads().contains(targetModule.get());
-            if (reads) {
-                ModuleDescriptor targetDescriptor = targetModule.get().reference().descriptor();
-                return targetDescriptor.isAutomatic() || targetDescriptor.exports().stream().anyMatch(exports -> exports.source().equals(packageName) && (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)));
-            } else return false;
-        } else {
-            return true;
+        if (!siteModule.isPresent()) return result;
+
+        Set<ResolvedModule> readModules = siteModuleName.equals(UNNAMED_MODULE_NAME) ? configuration.modules() : siteModule.get().reads();
+        for (ResolvedModule readModule: readModules) {
+            HashSet<String> packages = new HashSet<>();
+            result.put(readModule.name(), packages);
+            ModuleDescriptor descriptor = readModule.reference().descriptor();
+            if (descriptor.isAutomatic()) {
+                packages.add("*");
+            } else {
+                for (ModuleDescriptor.Exports exports: descriptor.exports()) {
+                    if (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)) {
+                        packages.add(exports.source());
+                    }
+                }
+            }
         }
+        return result;
     }
 }

@@ -118,11 +118,13 @@ trait Importers { to: SymbolTable =>
           myowner.newTypeSkolemSymbol(myname.toTypeName, origin, mypos, myflags)
         case their: from.ModuleClassSymbol =>
           val my = myowner.newModuleClass(myname.toTypeName, mypos, myflags)
+          my.jpmsModule = importJpmsSymbol(their.jpmsModule)
           symMap.weakUpdate(their, my)
           my.sourceModule = importSymbol(their.sourceModule)
           my
         case their: from.ClassSymbol =>
           val my = myowner.newClassSymbol(myname.toTypeName, mypos, myflags)
+          my.jpmsModule = importJpmsSymbol(their.jpmsModule)
           symMap.weakUpdate(their, my)
           if (their.thisSym != their) {
             my.typeOfThis = importType(their.typeOfThis)
@@ -136,6 +138,10 @@ trait Importers { to: SymbolTable =>
       symMap.weakUpdate(their, my)
       markFlagsCompleted(my)(mask = AllFlags)
       my setInfo recreatedSymbolCompleter(my, their)
+    }
+
+    def importJpmsSymbol(their: from.JpmsModuleSymbol): JpmsModuleSymbol = {
+      lookupJpmsModule(their.name.toString)
     }
 
     def importSymbol(their0: from.Symbol): Symbol = {

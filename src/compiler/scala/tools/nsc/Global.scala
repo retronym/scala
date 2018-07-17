@@ -1313,7 +1313,7 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
       compiledFiles += unit.source.file.path
       classPath match {
         case jcp: JpmsClassPath =>
-          unit.jpmsModuleName = jcp.defaultModuleName
+          unit.jpmsModule = lookupJpmsModule(jcp.defaultModuleName)
       }
     }
     private def warnDeprecatedAndConflictingSettings(): Unit = {
