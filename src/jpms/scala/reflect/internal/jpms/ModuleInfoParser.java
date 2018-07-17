@@ -7,10 +7,7 @@ import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.element.ModuleElement;
 import javax.lang.model.element.Name;
 import javax.lang.model.element.TypeElement;
-import javax.tools.JavaCompiler;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.ToolProvider;
+import javax.tools.*;
 import java.io.PrintWriter;
 import java.nio.charset.Charset;
 import java.nio.file.Path;
@@ -74,9 +71,10 @@ public class ModuleInfoParser {
 
     public static ModuleElementHolder parseModuleInfo(Path path) {
         JavaCompiler systemJavaCompiler = ToolProvider.getSystemJavaCompiler();
-        StandardJavaFileManager fileManager = systemJavaCompiler.getStandardFileManager(new NullDiagnosticListener<>(), Locale.getDefault(), Charset.defaultCharset());
+        StoreDiagnosticListener<JavaFileObject> diagnosticListener = new StoreDiagnosticListener<>();
+        StandardJavaFileManager fileManager = systemJavaCompiler.getStandardFileManager(diagnosticListener, Locale.getDefault(), Charset.defaultCharset());
         Iterable<? extends JavaFileObject> files = fileManager.getJavaFileObjects(path);
-        JavaCompiler.CompilationTask task = systemJavaCompiler.getTask(new PrintWriter(System.out), fileManager, new NullDiagnosticListener<>(), Collections.emptyList(), Collections.emptyList(), files);
+        JavaCompiler.CompilationTask task = systemJavaCompiler.getTask(new PrintWriter(System.out), fileManager, diagnosticListener, Collections.emptyList(), Collections.emptyList(), files);
         final ModuleElementHolder[] moduleElementHolder = new ModuleElementHolder[1];
         Processor processor = new AbstractProcessor() {
             @Override
@@ -99,6 +97,7 @@ public class ModuleInfoParser {
         };
         task.setProcessors(Collections.singleton(processor));
         task.call();
+        System.out.println(diagnosticListener.getDiagnostics().stream());
         return moduleElementHolder[0];
     }
 

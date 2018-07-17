@@ -1313,7 +1313,22 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
       compiledFiles += unit.source.file.path
       classPath match {
         case jcp: JpmsClassPath =>
+          // Infer the current module name from the `--patch-module` command line
+          // TODO JPMS: look for a module-info.java among the sources, parse it, and take it
+          // as the default module name.
+          // We can start by using the file name convention to find this file and parse it early
+          //
+          // From the JLS:
+          // "If and only if packages are stored in a file system (§7.2), the host system may choose
+          //  to enforce the restriction that it is a compile-time error if a module declaration is
+          //  not found in a file under a name composed of module-info plus an extension (such
+          //  as .java or .jav)."
+          //
+          // We also need to make the directives available to `JmpsClassPath` before it constructs the module
+          // graph. That will take some refactoring so that some early parsing can be a dependency of the
+          // classpath.
           unit.jpmsModule = lookupJpmsModule(jcp.defaultModuleName)
+        case _ =>
       }
     }
     private def warnDeprecatedAndConflictingSettings(): Unit = {
