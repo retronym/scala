@@ -11,8 +11,10 @@ public class ExportRequireAdder {
         ModuleDescriptor.Builder builder = ModuleDescriptor.newModule(d.name(), d.modifiers());
 
         addPatchedExports(d, builder);
-        addPatchedRequires(d, builder);
-        d.opens().forEach(builder::opens);
+        if (!d.isAutomatic())
+            addPatchedRequires(d, builder);
+        if (!d.isAutomatic() && !d.isOpen())
+            d.opens().forEach(builder::opens);
         d.mainClass().ifPresent(builder::mainClass);
         d.provides().forEach(builder::provides);
         builder.packages(d.packages());

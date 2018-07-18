@@ -123,7 +123,7 @@ abstract class SymbolLoaders {
   /** Enter class and module with given `name` into scope of `root`
    *  and give them `completer` as type.
    */
-  def enterClassAndModule(root: Symbol, name: String, jpmsModuleName: String, getCompleter: (ClassSymbol, ModuleSymbol) => SymbolLoader): Unit = {
+  def enterClassAndModule(root: Symbol, name: String, jpmsModule: JpmsModuleSymbol, getCompleter: (ClassSymbol, ModuleSymbol) => SymbolLoader): Unit = {
     val clazz0 = newClass(root, name)
     val module0 = newModule(root, name)
     val completer = getCompleter(clazz0, module0)
@@ -134,7 +134,6 @@ abstract class SymbolLoaders {
     // to reuse the symbols returned below.
     val clazz = enterClass(root, clazz0, completer)
     val module = enterModule(root, module0, completer)
-    val jpmsModule = lookupJpmsModule(jpmsModuleName)
     clazz.asInstanceOf[ClassSymbol].jpmsModule = jpmsModule
     module.moduleClass.asInstanceOf[ClassSymbol].jpmsModule = jpmsModule
     if (!clazz.isAnonymousClass) {
@@ -157,13 +156,13 @@ abstract class SymbolLoaders {
    *  (overridden in interactive.Global).
    */
   def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile): Unit = {
-    val moduleName = platform.classPath match {
+    val jpmsModule = platform.classPath match {
       case jcp: JpmsClassPath =>
-        jcp.defaultModuleName
-      case _ => ""
-
+        DefaultJpmsModuleSymbol
+      case _ =>
+        NoJpmsModuleSymbol
     }
-    enterClassAndModule(root, name, jpmsModuleName = moduleName, (_, _) => new SourcefileLoader(src))
+    enterClassAndModule(root, name, jpmsModule, (_, _) => new SourcefileLoader(src))
   }
 
   /** The package objects of scala and scala.reflect should always
@@ -189,7 +188,7 @@ abstract class SymbolLoaders {
         if (settings.verbose) inform("[symloader] no class, picked up source file for " + src.path)
         enterToplevelsFromSource(owner, classRep.name, src)
       case (Some(bin), _) =>
-        enterClassAndModule(owner, classRep.name, classRep.jpmsModuleName, new ClassfileLoader(bin, _, _))
+        enterClassAndModule(owner, classRep.name, lookupJpmsModule(classRep.jpmsModuleName), new ClassfileLoader(bin, _, _))
     }
   }
 

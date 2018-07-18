@@ -377,7 +377,7 @@ trait Trees extends api.Trees {
     override def transform(transformer: Transformer): Tree = this
     override def traverse(traverser: Traverser): Unit = ()
   }
-  case class JpmsRequiresDirective(packageName: String, transitive: Boolean, isStatic: Boolean) extends JpmsDirective {
+  case class JpmsRequiresDirective(moduleName: String, transitive: Boolean, isStatic: Boolean) extends JpmsDirective {
     require(!(transitive && isStatic), "A requires directive cannot be both transitive and static")
   }
   case class JpmsExportsDirective(packageName: String, to: List[String]) extends JpmsDirective

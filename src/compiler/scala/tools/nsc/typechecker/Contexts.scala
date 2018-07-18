@@ -754,16 +754,19 @@ trait Contexts { self: Analyzer =>
       (pre == NoPrefix) || {
         val ab = sym.accessBoundary(sym.owner)
 
-        val jpmsCanAccess = global.classPath match {
-          case _ if sym.hasPackageFlag => true // TODO
-          case jcp: JpmsClassPath =>
-            def jpmsModuleOf(sym: Symbol) = sym.enclosingTopLevelClass match {
-              case cls: ClassSymbol => cls.jpmsModule
-              case _ => NoJpmsModuleSymbol
-            }
-            unit.jpmsModule.isAccessible(jcp.impl)(jpmsModuleOf(sym), sym.enclosingPackage)
-          case _ =>
-            true
+        // TODO JPMS when should we restrict access to a type alias with an underlying symbol that is inaccessible?
+        // TODO JPMS restrict access to `package p1.p2` unless we can access it _or_ one of its subpackages.
+        // TODO JPMS better error reporting for accessibility errors due to JPMS
+        val jpmsCanAccess = sym.hasPackageFlag || !(sym.isClass || sym.isModule || sym.isMethod) || {
+          currentRun.resolvedModuleGraph match {
+            case None => true
+            case Some(graph) =>
+              val symJpmsModule = sym.enclosingTopLevelClass match {
+                case cls: ClassSymbol => cls.jpmsModule
+                case _ => NoJpmsModuleSymbol
+              }
+              unit.jpmsModule.isAccessible(graph)(symJpmsModule, sym.enclosingPackage)
+          }
         }
         jpmsCanAccess && (  (ab.isTerm || ab == rootMirror.RootClass)
         || (accessWithin(ab) || accessWithinLinked(ab)) &&

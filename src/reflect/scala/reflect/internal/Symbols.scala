@@ -15,7 +15,7 @@ import scala.annotation.tailrec
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import Variance._
 import scala.collection.JavaConverters.mapAsScalaConcurrentMapConverter
-import scala.reflect.internal.jpms.JpmsClasspathImpl
+import scala.reflect.internal.jpms.{JpmsClasspathImpl, ResolvedModuleGraph}
 
 trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
@@ -3548,29 +3548,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   class StubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String) extends ClassSymbol(owner0, owner0.pos, name0) with StubSymbol
   class StubTermSymbol(owner0: Symbol, name0: TermName, val missingMessage: String) extends TermSymbol(owner0, owner0.pos, name0) with StubSymbol
 
-  final class JpmsModuleSymbol(val name: TermName) extends Symbol(NoSymbol, NoPosition, name) {
-    private[this] var accessiblePackages: Map[JpmsModuleSymbol, Option[Set[String]]] = _
+  final class JpmsModuleSymbol(val initName: TermName) extends Symbol(NoSymbol, NoPosition, initName) {
+    private[this] var accessiblePackages: Map[Name, Option[Set[String]]] = _
     private[this] var accessiblePackagesRunId = NoRunId
-    private def computeAccessibility(jcp: JpmsClasspathImpl): Unit = {
-      val accessible: java.util.Map[String, java.util.Set[String]] = jcp.accessibleModulePackages(name.toString)
+    private[this] var _name = initName
+    def name: TermName = _name
+    def name_=(other: TermName) = {
+      assert(accessiblePackagesRunId != currentRunId, "Default JPMS module name changed after it has been used in an access check")
+      _name = other
+    }
+    private def computeAccessibility(moduleGraph: ResolvedModuleGraph): Unit = {
+      val accessible: java.util.Map[String, java.util.Set[String]] = moduleGraph.accessibleModulePackages(name.toString)
       import scala.collection.JavaConverters._
       accessiblePackages = accessible.asScala.map {
         case (targetModule: String, targetPackages: java.util.Set[String]) =>
           val targetPackagesOrWildcard = if (targetPackages.size == 1 && targetPackages.iterator().next() == "*") {
             None
           } else Some(targetPackages.asScala.toSet)
-          (lookupJpmsModule(targetModule), targetPackagesOrWildcard)
+          (lookupJpmsModule(targetModule).name, targetPackagesOrWildcard)
       }.toMap
     }
-    def isAccessible(jcp: JpmsClasspathImpl)(otherModule: JpmsModuleSymbol, pack: Symbol): Boolean = {
-      if (this == otherModule) true
+    def isAccessible(moduleGraph: ResolvedModuleGraph)(otherModule: JpmsModuleSymbol, pack: Symbol): Boolean = {
+      if (this.name == otherModule.name) true
       else {
-        if (accessiblePackages == null || currentRunId != accessiblePackagesRunId) computeAccessibility(jcp)
-        accessiblePackages.get(otherModule) match {
+        if (accessiblePackages == null || currentRunId != accessiblePackagesRunId) computeAccessibility(moduleGraph)
+        accessiblePackages.get(otherModule.name) match {
           case Some(None) =>
             true // this was an automatic module
           case Some(Some(set)) => set.contains(pack.moduleClass.fullNameString)
-          case None => true
+          case None => false
         }
       }
     }
@@ -3582,6 +3588,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override type NameType = TermName
   }
   lazy val NoJpmsModuleSymbol = new JpmsModuleSymbol(nme.EMPTY)
+  lazy val DefaultJpmsModuleSymbol = new JpmsModuleSymbol(nme.EMPTY)
 
   // TODO JPMS What about multi-run compilation?
   private val jpmsModules = collection.mutable.AnyRefMap[String, JpmsModuleSymbol]()

@@ -528,12 +528,12 @@ trait Printers extends api.Printers { self: SymbolTable =>
             printColumn(directives, "", ";", "}")
           }
           currentOwner = currentOwner1
-        case JpmsRequiresDirective(packageName, transitive, isStatic) =>
+        case JpmsRequiresDirective(moduleName, transitive, isStatic) =>
           print("requires")
           if (transitive) print(" transitive")
           else if (isStatic) print(" transitive")
           else print(" ")
-          print(packageName)
+          print(moduleName)
         case JpmsExportsDirective(packageName, tos) =>
           print("exports ")
           print(packageName)

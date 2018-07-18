@@ -11,21 +11,28 @@ import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class JpmsClasspathImpl {
 
     // has to be a valid module name, so we can't use the pseudo-name "ALL-UNNAMED"
-    private static final String UNNAMED_MODULE_NAME = "___UNNAMED";
+    static final String UNNAMED_MODULE_NAME = "___UNNAMED";
     private static final String ALL_UNNAMED = "ALL-UNNAMED";
 
     private static final Pattern ADD_REQUIRES_PATTERN = Pattern.compile("([^=]+)=(,*[^,].*)");
     private static final Pattern ADD_EXPORTS_PATTERN = Pattern.compile("([^/]+)/([^=]+)=(,*[^,].*)");
     private final StandardJavaFileManager fileManager;
-    private final Configuration configuration;
+    private final List<String> addReads;
+    private final List<String> addExports;
+    private final List<String> addModules;
+    private final Path output;
     private ModuleReference classOutputModuleRef = null;
+    private final ModuleFinder moduleFinder;
+    private String uniquePatchModule;
 
     public JpmsClasspathImpl(Optional<String> release, Path output, List<List<String>> fileManangerOptions, List<String> addModules,
-                             List<String> addExports, List<String> addReads) throws IOException {
+                             List<String> addExports, List<String> addReads, String uniquePatchModule) throws IOException {
+        this.uniquePatchModule = uniquePatchModule;
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
             try {
@@ -47,35 +54,60 @@ public class JpmsClasspathImpl {
         });
         ModuleFinderAndFileManager moduleFinderAndFileManager = ModuleFinderAndFileManager.get(release, c);
         fileManager = moduleFinderAndFileManager.fileManager();
-        ModuleFinder moduleFinder = moduleFinderAndFileManager.moduleFinder();
 
-        // TODO let the caller pass in descriptors of source modules.
-        List<ModuleDescriptor> sourceModules = new ArrayList<>();
+        moduleFinder = moduleFinderAndFileManager.moduleFinder();
+        this.addReads = addReads;
+        this.addExports = addExports;
+        this.addModules = addModules;
+        this.output = output;
+
+        if (!unhandled.isEmpty()) throw new IllegalArgumentException("Some options were unhandled: " + unhandled);
+    }
+
+    public ResolvedModuleGraph resolveModuleGraph(JpmsModuleDescriptor sourceModule) throws IOException {
+        ModuleDescriptor sourceModuleDescriptor = null;
+        if (sourceModule != null) {
+            sourceModuleDescriptor = sourceModule.create();
+        }
+        List<ModuleDescriptor> sourceModules = Optional.ofNullable(sourceModuleDescriptor).stream().collect(Collectors.toList());
         ArrayList<ModuleDescriptor> sourceAndUnnamed = new ArrayList<>(sourceModules);
         sourceAndUnnamed.add(ModuleDescriptor.newModule(UNNAMED_MODULE_NAME).requires("java.base").build());
         ModuleFinder fromSourceFinder = FixedModuleFinder.newModuleFinder(sourceAndUnnamed);
         ModuleFinder finder = fromSourceFinder;
-        // If there is a module-info
-        JavaFileObject module = fileManager.getJavaFileForInput(StandardLocation.CLASS_OUTPUT, "module-info", JavaFileObject.Kind.CLASS);
-        if (module != null) {
-            ModuleFinder classOutputModuleFinder = ModuleFinder.of(output);
-            Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
-            if (classOutputModules.size() != 1)
-                throw new IllegalStateException("Expected one module-info.class in " + output);
-            classOutputModuleRef = classOutputModules.iterator().next();
-            finder = ModuleFinder.compose(classOutputModuleFinder, finder);
+        String defaultModule = null;
+        if (sourceModule == null) {
+            // Consider a module-info.class from the class output directory if there is not module-info.java among the compiled sources.
+            JavaFileObject module = fileManager.getJavaFileForInput(StandardLocation.CLASS_OUTPUT, "module-info", JavaFileObject.Kind.CLASS);
+            if (module != null) {
+                ModuleFinder classOutputModuleFinder = ModuleFinder.of(this.output);
+                Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
+                if (classOutputModules.size() != 1) {
+                    throw new IllegalStateException("Expected one module-info.class in " + this.output);
+                }
+                finder = ModuleFinder.compose(classOutputModuleFinder, finder);
+            }
+        } else {
+            defaultModule = sourceModuleDescriptor.name();
         }
-
-        ExportRequireAdder adder = getExportRequireAdder(addExports, addReads);
+        if (uniquePatchModule != null) {
+            if (defaultModule != null)
+                throw new IllegalArgumentException("Cannot provide both `--patch-module` and a module-info source of class file"); // TODO JMPS revisit this
+            else defaultModule = uniquePatchModule;
+        }
+        ExportRequireAdder adder = getExportRequireAdder(this.addExports, this.addReads);
         // Resolve the module graph.
         // `fromSourceFinder` is passed as the `before` finder to take precendence over, rather than clash with, a module-info.class in the
         // output directory.
-        ExportRequireAddingModuleFinder afterFinder = new ExportRequireAddingModuleFinder(moduleFinder, adder);
-        List<String> roots = new ArrayList<>(addModules);
+        ExportRequireAddingModuleFinder afterFinder = new ExportRequireAddingModuleFinder(this.moduleFinder, adder);
+        List<String> roots = new ArrayList<>(this.addModules);
         roots.add(UNNAMED_MODULE_NAME);
-        configuration = Configuration.empty().resolve(finder, afterFinder, roots);
-
-        if (!unhandled.isEmpty()) throw new IllegalArgumentException("Some options were unhandled: " + unhandled);
+        if (defaultModule == null) {
+            defaultModule = "";
+        } else {
+            roots.add(defaultModule);
+        }
+        Configuration configuration = Configuration.empty().resolve(finder, afterFinder, roots);
+        return new ResolvedModuleGraph(defaultModule, configuration);
     }
 
     private ExportRequireAdder getExportRequireAdder(List<String> addExports, List<String> addReads) {
@@ -160,35 +192,5 @@ public class JpmsClasspathImpl {
         } else {
             return classOutputModuleRef.descriptor().name();
         }
-    }
-
-    public boolean hasModule(String moduleName) {
-        return configuration.findModule(moduleName).isPresent();
-    }
-
-    public Map<String, Set<String>> accessibleModulePackages(String siteModuleName) {
-        if (siteModuleName.equals("")) siteModuleName = UNNAMED_MODULE_NAME;
-
-        HashMap<String, Set<String>> result = new HashMap<>();
-        String finalSiteModuleName = siteModuleName;
-        Optional<ResolvedModule> siteModule = configuration.findModule(siteModuleName);
-        if (!siteModule.isPresent()) return result;
-
-        Set<ResolvedModule> readModules = siteModuleName.equals(UNNAMED_MODULE_NAME) ? configuration.modules() : siteModule.get().reads();
-        for (ResolvedModule readModule: readModules) {
-            HashSet<String> packages = new HashSet<>();
-            result.put(readModule.name(), packages);
-            ModuleDescriptor descriptor = readModule.reference().descriptor();
-            if (descriptor.isAutomatic()) {
-                packages.add("*");
-            } else {
-                for (ModuleDescriptor.Exports exports: descriptor.exports()) {
-                    if (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)) {
-                        packages.add(exports.source());
-                    }
-                }
-            }
-        }
-        return result;
     }
 }

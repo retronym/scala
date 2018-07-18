@@ -981,7 +981,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       import nme.javaKeywords
       ident() match {
         case javaKeywords.REQUIRES =>
-          val requirement = dottedName()
+          val requirement = this.moduleName()
           if (in.token == IDENTIFIER) {
             ident() match {
               case javaKeywords.TRANSITIVE =>

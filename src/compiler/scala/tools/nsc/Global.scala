@@ -30,6 +30,7 @@ import transform._
 import backend.{JavaPlatform, ScalaPrimitives}
 import backend.jvm.{BackendStats, GenBCode}
 import scala.language.postfixOps
+import scala.reflect.internal.jpms.{JpmsModuleDescriptor, ResolvedModuleGraph}
 import scala.tools.nsc.ast.{TreeGen => AstTreeGen}
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.profile.Profiler
@@ -1156,6 +1157,7 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
       curRun = this
       phase = SomePhase
       phaseWithId(phase.id) = phase
+      DefaultJpmsModuleSymbol.name = nme.EMPTY
       definitions.init()
 
       // the components to use, omitting those named by -Yskip and stopping at the -Ystop phase
@@ -1227,6 +1229,25 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
 
       phase = first   //parserPhase
       first
+    }
+
+    var sourceJpmsModuleDef: Option[JpmsModuleDef] = None
+    lazy val resolvedModuleGraph: Option[ResolvedModuleGraph] = {
+      classPath match {
+        case jcp: JpmsClassPath =>
+          val jpmsModuleDescriptor = sourceJpmsModuleDef.map { moduleDef =>
+              import scala.collection.JavaConverters._
+              val requires = moduleDef.directives.collect {
+                case requireDirective: JpmsRequiresDirective =>
+                  new JpmsModuleDescriptor.RequireDirective(requireDirective.moduleName, requireDirective.transitive, requireDirective.isStatic)
+              }.asJava
+              new JpmsModuleDescriptor(moduleDef.name.toString, requires)
+          }
+          val graph = jcp.impl.resolveModuleGraph(jpmsModuleDescriptor.orNull)
+          DefaultJpmsModuleSymbol.name = TermName(graph.getDefaultModule)
+          Some(graph)
+        case _ => None
+      }
     }
 
     // --------------- Miscellanea -------------------------------
@@ -1311,25 +1332,6 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     private def addUnit(unit: CompilationUnit): Unit = {
       unitbuf += unit
       compiledFiles += unit.source.file.path
-      classPath match {
-        case jcp: JpmsClassPath =>
-          // Infer the current module name from the `--patch-module` command line
-          // TODO JPMS: look for a module-info.java among the sources, parse it, and take it
-          // as the default module name.
-          // We can start by using the file name convention to find this file and parse it early
-          //
-          // From the JLS:
-          // "If and only if packages are stored in a file system (§7.2), the host system may choose
-          //  to enforce the restriction that it is a compile-time error if a module declaration is
-          //  not found in a file under a name composed of module-info plus an extension (such
-          //  as .java or .jav)."
-          //
-          // We also need to make the directives available to `JmpsClassPath` before it constructs the module
-          // graph. That will take some refactoring so that some early parsing can be a dependency of the
-          // classpath.
-          unit.jpmsModule = lookupJpmsModule(jcp.defaultModuleName)
-        case _ =>
-      }
     }
     private def warnDeprecatedAndConflictingSettings(): Unit = {
       // issue warnings for any usage of deprecated settings
@@ -1450,6 +1452,16 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     def compileUnits(units: List[CompilationUnit], fromPhase: Phase = firstPhase): Unit =
       compileUnitsInternal(units, fromPhase)
     private def compileUnitsInternal(units: List[CompilationUnit], fromPhase: Phase): Unit = {
+      units.filter(_.source.file.name.equalsIgnoreCase("module-info.java")) match {
+        case Nil =>
+        case unit :: Nil =>
+          currentRun.sourceJpmsModuleDef = newJavaUnitParser(unit).parse().collect {
+            case jmd: JpmsModuleDef => jmd
+          }.headOption
+        case _ =>
+          warning("More than one module-info.java file detected among sources. Source files will not be associated with these modules.")
+      }
+
       units foreach addUnit
       reporter.reset()
       warnDeprecatedAndConflictingSettings()

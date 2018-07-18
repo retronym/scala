@@ -9,7 +9,7 @@ package backend
 import io.AbstractFile
 import scala.tools.nsc.classpath.AggregateClassPath
 import scala.tools.util.PathResolver
-import scala.tools.nsc.util.ClassPath
+import scala.tools.nsc.util.{ClassPath, JpmsClassPath}
 
 trait JavaPlatform extends Platform {
   val global: Global
