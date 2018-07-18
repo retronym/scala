@@ -5,14 +5,15 @@ import java.nio.file._
 import java.nio.file.attribute.BasicFileAttributes
 import java.util
 
+import javax.tools.JavaFileManager.Location
 import javax.tools._
 
 import scala.collection.JavaConverters.{iterableAsScalaIterableConverter, _}
 import scala.collection.mutable
+import scala.reflect.internal.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
 import scala.reflect.internal.jpms.FileManagerJava9Api._
 import scala.reflect.internal.jpms.JpmsClasspathImpl
 import scala.reflect.io.PlainNioFile
-import scala.reflect.io.ZipArchive.baseName
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
 import scala.tools.nsc.classpath._
@@ -26,14 +27,16 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   private val fileManager = impl.getFileManager
   private def locationAsPaths(location: StandardLocation): IndexedSeq[Path] = getLocationAsPaths(fileManager, location).asScala.toVector
   private val packageIndex = mutable.AnyRefMap[String, JpmsPackageEntry]()
+
   private case class JpmsPackageEntry(name: String) extends PackageEntry {
-    val locations = util.EnumSet.noneOf(classOf[StandardLocation])
+    val locations = new java.util.LinkedHashMap[Location, StandardLocation]()
     val parentPackage: String = {
       val ix = name.lastIndexOf(".")
       if (ix > 0) name.substring(0, ix) else ""
     }
   }
-  val moduleLocations = List(StandardLocation.MODULE_SOURCE_PATH, StandardLocation.UPGRADE_MODULE_PATH, StandardLocation.SYSTEM_MODULES, StandardLocation.MODULE_PATH)
+
+  val moduleLocations = List(StandardLocation.MODULE_SOURCE_PATH, StandardLocation.UPGRADE_MODULE_PATH, StandardLocation.SYSTEM_MODULES, StandardLocation.MODULE_PATH, StandardLocation.PATCH_MODULE_PATH)
   for {
     moduleLocation <- moduleLocations
     location1 <- listLocationsForModules(fileManager, moduleLocation).asScala
@@ -41,7 +44,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   } {
     val moduleName = inferModuleName(fileManager, location)
     val paths = getLocationAsPaths(fileManager, location).asScala
-    val useNioPath = paths.forall(java.nio.file.Files.isDirectory(_))
+    val useNioPath = !util.EnumSet.of(StandardLocation.MODULE_PATH, StandardLocation.PATCH_MODULE_PATH).contains(moduleLocation) && paths.forall(java.nio.file.Files.isDirectory(_))
     if (useNioPath) {
       for (path <- paths) {
         val visitor = new SimpleFileVisitor[Path] {
@@ -50,7 +53,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
             else {
               val packageName = path.relativize(dir).toString.replaceAll("/", ".")
               val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
-              entry.locations.add(moduleLocation)
+              entry.locations.put(location, moduleLocation)
               super.preVisitDirectory(dir, attrs)
             }
           }
@@ -62,7 +65,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
         val binaryName = fileManager.inferBinaryName(location, jfo)
         val (packageName, className) = separatePkgAndClassNames(binaryName)
         val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
-        entry.locations.add(moduleLocation)
+        entry.locations.put(location, moduleLocation)
       }
     }
   }
@@ -72,7 +75,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
     val (packageName, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(binaryName.replaceAll("/", "."))
     val moduleName = ""
     val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
-    entry.locations.add(StandardLocation.CLASS_PATH)
+    entry.locations.put(StandardLocation.CLASS_PATH, StandardLocation.CLASS_PATH)
   }
 
   private[nsc] def hasPackage(pkg: String): Boolean = {
@@ -86,28 +89,26 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
     packageIndex.get(inPackage) match {
       case None => Nil
       case Some(entry) =>
-        entry.locations.asScala.flatMap { outerLocation =>
-          if (isModuleOrientedLocation(outerLocation)) {
-            val paths = getLocationAsPaths(fileManager, outerLocation).asScala
-            for {
-              location1 <- listLocationsForModules(fileManager, outerLocation).asScala
-              location <- location1.asScala
-              moduleName = inferModuleName(fileManager, location)
-              // TODO JPMS We don't have the resolved module graph here to help us out. Is that a problem?
-              // if (impl.hasModule(moduleName))
-              jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
-              path = asPath(fileManager, jfo)
-              if (!path.getFileName.toString.contains("-"))
-            } yield {
-              JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, outerLocation)
+        entry.locations.asScala.iterator.flatMap[ClassFileEntry] {
+          case (location: Location, outerLocation: StandardLocation) =>
+            if (isModuleOrientedLocation(outerLocation)) {
+              val moduleName = inferModuleName(fileManager, location)
+              for {
+                // TODO JPMS We don't have the resolved module graph here to help us out. Is that a problem?
+                // if (impl.hasModule(moduleName))
+                jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
+                path = asPath(fileManager, jfo)
+                if (!path.getFileName.toString.contains("-"))
+              } yield {
+                JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, outerLocation)
+              }
+            } else {
+              val listing = fileManager.list(outerLocation, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
+              listing.iterator.map { jfo =>
+                val moduleName = ""
+                JpmsClassFileEntryImpl(new PlainNioFile(asPath(fileManager, jfo)), moduleName, outerLocation)
+              }
             }
-          } else {
-            val listing = fileManager.list(outerLocation, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
-            listing.iterator.map { jfo =>
-              val moduleName = ""
-              JpmsClassFileEntryImpl(new PlainNioFile(asPath(fileManager, jfo)), moduleName, outerLocation)
-            }
-          }
         }.toArray[ClassFileEntry]
     }
   }
@@ -124,9 +125,11 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
 object JpmsClassPath {
   def apply(s: Settings): ClassPath = {
     val javaOptions = new java.util.ArrayList[java.util.List[String]]()
+
     def add(optName: String, args: String*): Unit = {
       javaOptions.add((optName +: args).asJava)
     }
+
     if (s.modulePath.isSetByUser) {
       add("--module-path", s.modulePath.value)
     }
@@ -135,18 +138,28 @@ object JpmsClassPath {
       def parse(s: String) = s match {
         case EqualsPattern(module, patch) => (module, patch)
         case _ => throw new IllegalArgumentException(s"Unable to parse argument $s")
-
       }
+
       allPatches = s.patchModule.value.map(parse).groupBy(_._1).mapValues(_.map(_._2)).to(Map)
       for ((module, patches) <- allPatches) {
-        add("--patch-module", patches.mkString(","))
+        add("--patch-module", s"$module=${patches.mkString(",")}")
       }
     }
     add("--class-path", s.classpath.value)
     val uniquePatchModule = if (allPatches.size == 1) allPatches.keySet.head else null
     val releaseOptional = java.util.Optional.ofNullable(s.release.value).filter(!_.isEmpty)
-    val output = s.outputDirs.getSingleOutput.get.file // TODO this assumes single output, file backed.
-    val impl = new JpmsClasspathImpl(releaseOptional, output.toPath, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava, uniquePatchModule)
+    val singleOutput = s.outputDirs.getSingleOutput.get
+    val classOutput = if (singleOutput.file != null)
+      new OutputPathClassOutput(singleOutput.file.toPath)
+    else {
+      val supplier = () => {
+        val file = singleOutput.lookupName("module-info.class", false)
+        if (file == null) null
+        else file.toByteArray
+      }
+      new SupplierClassOutput(() => supplier())
+    }
+    val impl = new JpmsClasspathImpl(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava, uniquePatchModule)
     new JpmsClassPath(allPatches, impl)
   }
 

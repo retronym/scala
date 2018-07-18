@@ -67,10 +67,9 @@ class Compiler(val global: Global) {
   private def reporter = global.reporter.asInstanceOf[StoreReporter]
 
   def checkReport(allowMessage: StoreReporter#Info => Boolean = _ => false): Unit = {
-    val disallowed = reporter.infos.toList.filter(!allowMessage(_)) // toList prevents an infer-non-wildcard-existential warning.
+    val disallowed: Seq[StoreReporter#Info] = reporter.infos.toList.filter(!allowMessage(_)) // toList prevents an infer-non-wildcard-existential warning.
     if (disallowed.nonEmpty) {
-      val msg = disallowed.mkString("\n")
-      assert(false, "The compiler issued non-allowed warnings or errors:\n" + msg)
+      throw new CompilerErrors(disallowed)
     }
   }
 
@@ -338,3 +337,5 @@ object BytecodeTesting {
     def stringLines = l.mkString("\n")
   }
 }
+
+case class CompilerErrors(messages: Seq[StoreReporter#Info]) extends AssertionError("The compiler issued non-allowed warnings or errors: " + messages.mkString("\n"))

@@ -25,21 +25,16 @@ public class JpmsClasspathImpl {
     private final List<String> addReads;
     private final List<String> addExports;
     private final List<String> addModules;
-    private final Path output;
-    private ModuleReference classOutputModuleRef = null;
+    private final ClassOutput classOutput;
     private final ModuleFinder moduleFinder;
     private String uniquePatchModule;
 
-    public JpmsClasspathImpl(Optional<String> release, Path output, List<List<String>> fileManangerOptions, List<String> addModules,
+    public JpmsClasspathImpl(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManangerOptions, List<String> addModules,
                              List<String> addExports, List<String> addReads, String uniquePatchModule) throws IOException {
         this.uniquePatchModule = uniquePatchModule;
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
-            try {
-                fm.setLocationFromPaths(StandardLocation.CLASS_OUTPUT, Collections.singleton(output));
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
-            }
+            classOutput.configure(fm);
             for (List<String> optionSubList: fileManangerOptions) {
                 Iterator<String> iterator = optionSubList.iterator();
                 while (iterator.hasNext()) {
@@ -59,7 +54,7 @@ public class JpmsClasspathImpl {
         this.addReads = addReads;
         this.addExports = addExports;
         this.addModules = addModules;
-        this.output = output;
+        this.classOutput = classOutput;
 
         if (!unhandled.isEmpty()) throw new IllegalArgumentException("Some options were unhandled: " + unhandled);
     }
@@ -76,14 +71,8 @@ public class JpmsClasspathImpl {
         ModuleFinder finder = fromSourceFinder;
         String defaultModule = null;
         if (sourceModule == null) {
-            // Consider a module-info.class from the class output directory if there is not module-info.java among the compiled sources.
-            JavaFileObject module = fileManager.getJavaFileForInput(StandardLocation.CLASS_OUTPUT, "module-info", JavaFileObject.Kind.CLASS);
-            if (module != null) {
-                ModuleFinder classOutputModuleFinder = ModuleFinder.of(this.output);
-                Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
-                if (classOutputModules.size() != 1) {
-                    throw new IllegalStateException("Expected one module-info.class in " + this.output);
-                }
+            ModuleFinder classOutputModuleFinder = classOutput.moduleFinder(fileManager);
+            if (classOutputModuleFinder != null) {
                 finder = ModuleFinder.compose(classOutputModuleFinder, finder);
             }
         } else {
@@ -184,13 +173,5 @@ public class JpmsClasspathImpl {
 
     public StandardJavaFileManager getFileManager() {
         return fileManager;
-    }
-
-    public String currentModuleName() {
-        if (classOutputModuleRef == null) {
-            return "";
-        } else {
-            return classOutputModuleRef.descriptor().name();
-        }
     }
 }
