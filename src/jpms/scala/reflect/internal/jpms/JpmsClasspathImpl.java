@@ -147,7 +147,7 @@ public class JpmsClasspathImpl {
         for (String addRequire: addRequires) {
             Matcher matcher = ADD_REQUIRES_PATTERN.matcher(addRequire);
             if (!matcher.matches())
-                throw new IllegalArgumentException("Invalid -addrequire specification: " + addRequire);
+                throw new IllegalArgumentException("Invalid -addreads specification: " + addRequire);
             String moduleName = matcher.group(1);
             if (!SourceVersion.isName(moduleName))
                 throw new IllegalArgumentException("Invalid module name in " + addRequire);

@@ -63,9 +63,12 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
     } else {
       for (jfo <- fileManager.list(location, "", java.util.EnumSet.of(JavaFileObject.Kind.CLASS), true).asScala) {
         val binaryName = fileManager.inferBinaryName(location, jfo)
-        val (packageName, className) = separatePkgAndClassNames(binaryName)
-        val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
-        entry.locations.put(location, moduleLocation)
+        val (fullPackageName, className) = separatePkgAndClassNames(binaryName)
+        for (prefix <- fullPackageName.split('.').inits) {
+          val packageName = prefix.mkString(".")
+          val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
+          entry.locations.put(location, moduleLocation)
+        }
       }
     }
   }
