@@ -275,7 +275,7 @@ abstract class SymbolLoaders {
       val classPathEntries = classPath.list(packageName)
 
       if (!root.isRoot)
-        for (entry <- classPathEntries.classesAndSources)
+        for (entry <- classPathEntries.classesAndSources if entry.name != "module-info")
           initializeFromClassPath(root, entry)
       if (!root.isEmptyPackageClass) {
         for (pkg <- classPathEntries.packages) {
