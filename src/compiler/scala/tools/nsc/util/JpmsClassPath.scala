@@ -30,6 +30,11 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
   private val paths = mutable.ArrayBuffer[(Path, StandardLocation, Location)]()
   indexLocations()
 
+  // TODO JPMS It's a bit annoying that we have to start interrogating the classpath before we've resolve the module
+  //      graph: we have to assume that all modules are potentially on the module path. It seems pretty hard to
+  //      change our initialization order though: `new Run() -> Definitions.init -> PackageLoader.doComplete -> ClassPath.list`
+  //      happens before we even have a list of source files, which might include a module-info.java file, which is
+  //      relevant to the module graph construction.
   private def indexLocations() {
     for {
       moduleLocation <- moduleLocations
