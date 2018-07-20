@@ -5,6 +5,7 @@ import java.nio.file._
 import java.util
 
 import javax.tools.JavaFileManager.Location
+import javax.tools.JavaFileObject.Kind
 import javax.tools._
 
 import scala.collection.JavaConverters.{iterableAsScalaIterableConverter, _}
@@ -103,9 +104,18 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
   private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = Nil
 
   override def findClassFile(className: String): Option[AbstractFile] = {
-    // TODO JPMS implement directly
     val (inPackage, classSimpleName) = separatePkgAndClassNames(className)
-    classes(inPackage).find(_.name == classSimpleName).map(_.file)
+    val pathsIterator = paths.iterator
+    while (pathsIterator.hasNext) {
+      val (path, standardLocation, location) = pathsIterator.next()
+      val it = fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).iterator()
+      while (it.hasNext) {
+        val jfo = it.next()
+        if (jfo.isNameCompatible(classSimpleName, Kind.CLASS))
+          return Some(new PlainNioFile(asPath(fileManager, jfo)))
+      }
+    }
+    None
   }
 
   def resolveModuleGraph(sourceModule: JpmsModuleDescriptor): ResolvedModuleGraph = impl.resolveModuleGraph(sourceModule)
