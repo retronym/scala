@@ -36,10 +36,6 @@ public class ResolvedModuleGraph {
         }
     }
 
-    public boolean hasModule(String moduleName) {
-        return configuration.findModule(moduleName).isPresent();
-    }
-
     public Map<String, Set<String>> accessibleModulePackages(String siteModuleName) {
         if (siteModuleName.equals("")) siteModuleName = UNNAMED_MODULE_NAME;
 
@@ -64,10 +60,6 @@ public class ResolvedModuleGraph {
             }
         }
         return result;
-    }
-
-    public String currentModule() {
-        return currentModule;
     }
 
     public String moduleForSourceFile(Path path) throws IOException {

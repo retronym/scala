@@ -16,10 +16,12 @@ public class JpmsClasspathSupport {
 
     // has to be a valid module name, so we can't use the pseudo-name "ALL-UNNAMED"
     static final String UNNAMED_MODULE_NAME = "___UNNAMED";
+    // ... which we do need when parsing command line options.
     private static final String ALL_UNNAMED = "ALL-UNNAMED";
 
     private static final Pattern ADD_REQUIRES_PATTERN = Pattern.compile("([^=]+)=(,*[^,].*)");
     private static final Pattern ADD_EXPORTS_PATTERN = Pattern.compile("([^/]+)/([^=]+)=(,*[^,].*)");
+
     private final StandardJavaFileManager fileManager;
     private final List<String> addReads;
     private final List<String> addExports;
