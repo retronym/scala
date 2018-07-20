@@ -1,12 +1,14 @@
 package scala.tools.testing
 
+import java.nio.file.Path
+
 import junit.framework.AssertionFailedError
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
 import scala.collection.generic.Clearable
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.util.BatchSourceFile
+import scala.reflect.internal.util.{BatchSourceFile, SourceFile}
 import scala.reflect.io.VirtualDirectory
 import scala.tools.asm.Opcodes
 import scala.tools.asm.tree.{AbstractInsnNode, ClassNode, MethodNode}
@@ -54,8 +56,10 @@ class Compiler(val global: Global) {
   def compiledClassesFromCache = global.genBCode.postProcessor.byteCodeRepository.compilingClasses.valuesIterator.map(_._1).toList.sortBy(_.name)
 
   def resetOutput(): Unit = {
-    global.settings.outputDirs.setSingleOutput(new VirtualDirectory("(memory)", None))
+    global.settings.outputDirs.setSingleOutput(outputFunction())
   }
+
+  var outputFunction: () => AbstractFile = () => new VirtualDirectory("(memory)", None)
 
   def newRun: global.Run = {
     global.reporter.reset()
@@ -87,6 +91,13 @@ class Compiler(val global: Global) {
   def compileClass(code: String, javaCode: List[(String, String)] = Nil, allowMessage: StoreReporter#Info => Boolean = _ => false): ClassNode = {
     val List(c) = compileClasses(code, javaCode, allowMessage)
     c
+  }
+
+  def compileSourceFiles(code: List[SourceFile], allowMessage: StoreReporter#Info => Boolean = _ => false): Seq[Global#CompilationUnit] = {
+    val run = newRun
+    run.compileSources(code)
+    checkReport(allowMessage)
+    run.units.toList
   }
 
   def compileToBytesTransformed(scalaCode: String, javaCode: List[(String, String)] = Nil, beforeBackend: global.Tree => global.Tree): List[(String, Array[Byte])] = {
@@ -130,6 +141,14 @@ class Compiler(val global: Global) {
   def compileInstructions(code: String, allowMessage: StoreReporter#Info => Boolean = _ => false): List[Instruction] = {
     val List(m) = compileMethods(code, allowMessage = allowMessage)
     m.instructions
+  }
+
+  def compileJava(sources: List[Path], options: List[String]): Unit = {
+    import scala.collection.JavaConverters._
+    val compiler = javax.tools.ToolProvider.getSystemJavaCompiler
+    val fileManager = compiler.getStandardFileManager(null, null, null)
+    val task = compiler.getTask(null, null, null, options.asJava, null, fileManager.getJavaFileObjects(sources: _*))
+    assert(task.call())
   }
 }
 

@@ -10,6 +10,7 @@ import classfile.ClassfileParser
 import java.io.IOException
 
 import scala.reflect.internal.MissingRequirementError
+import scala.reflect.internal.jpms.ResolvedModuleGraph
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation, JpmsClassPath}
 import scala.reflect.internal.util.StatisticsStatics
@@ -156,14 +157,15 @@ abstract class SymbolLoaders {
    *  (overridden in interactive.Global).
    */
   def enterToplevelsFromSource(root: Symbol, name: String, src: AbstractFile): Unit = {
-    val jpmsModule = platform.classPath match {
-      case jcp: JpmsClassPath =>
-        DefaultJpmsModuleSymbol
-      case _ =>
-        NoJpmsModuleSymbol
+    val jpmsModule = currentJpmsModuleGraph match {
+      case Some(graph) =>
+        lookupJpmsModule(graph.moduleForSourceFile(src.file.toPath))
+      case _ => NoJpmsModuleSymbol
     }
     enterClassAndModule(root, name, jpmsModule, (_, _) => new SourcefileLoader(src))
   }
+
+  def currentJpmsModuleGraph(): Option[ResolvedModuleGraph] = None // overridden in Global
 
   /** The package objects of scala and scala.reflect should always
    *  be loaded in binary if classfiles are available, even if sourcefiles

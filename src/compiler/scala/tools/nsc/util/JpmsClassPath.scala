@@ -72,10 +72,13 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   val platform = fileManager.list(StandardLocation.CLASS_PATH, "", java.util.EnumSet.of(JavaFileObject.Kind.CLASS), true)
   platform.iterator().forEachRemaining { jfo: JavaFileObject =>
     val binaryName = fileManager.inferBinaryName(StandardLocation.CLASS_PATH, jfo)
-    val (packageName, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(binaryName.replaceAll("/", "."))
+    val (fullPackageName, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(binaryName.replaceAll("/", "."))
     val moduleName = ""
-    val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
-    entry.locations.put(StandardLocation.CLASS_PATH, StandardLocation.CLASS_PATH)
+    for (prefix <- fullPackageName.split('.').inits) {
+      val packageName = prefix.mkString(".")
+      val entry = packageIndex.getOrElseUpdate(packageName, new JpmsPackageEntry(packageName))
+      entry.locations.put(StandardLocation.CLASS_PATH, StandardLocation.CLASS_PATH)
+    }
   }
 
   private[nsc] def hasPackage(pkg: String): Boolean = {
@@ -146,7 +149,6 @@ object JpmsClassPath {
       }
     }
     add("--class-path", s.classpath.value)
-    val uniquePatchModule = if (allPatches.size == 1) allPatches.keySet.head else null
     val releaseOptional = java.util.Optional.ofNullable(s.release.value).filter(!_.isEmpty)
     val singleOutput = s.outputDirs.getSingleOutput.get
     val classOutput = if (singleOutput.file != null)
@@ -159,7 +161,8 @@ object JpmsClassPath {
       }
       new SupplierClassOutput(() => supplier())
     }
-    val impl = new JpmsClasspathImpl(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava, uniquePatchModule)
+    val impl = new JpmsClasspathImpl(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
+    // TODO JPMS refactor this classpath so that settings are re-read on subsequent runs. Maybe currentClasspath should just be recreated on each new Run?
     new JpmsClassPath(allPatches, impl)
   }
 

@@ -27,15 +27,13 @@ public class JpmsClasspathImpl {
     private final List<String> addModules;
     private final ClassOutput classOutput;
     private final ModuleFinder moduleFinder;
-    private String uniquePatchModule;
 
-    public JpmsClasspathImpl(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManangerOptions, List<String> addModules,
-                             List<String> addExports, List<String> addReads, String uniquePatchModule) throws IOException {
-        this.uniquePatchModule = uniquePatchModule;
+    public JpmsClasspathImpl(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManagerOptions, List<String> addModules,
+                             List<String> addExports, List<String> addReads) throws IOException {
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
             classOutput.configure(fm);
-            for (List<String> optionSubList: fileManangerOptions) {
+            for (List<String> optionSubList: fileManagerOptions) {
                 Iterator<String> iterator = optionSubList.iterator();
                 while (iterator.hasNext()) {
                     String next = iterator.next();
@@ -69,19 +67,18 @@ public class JpmsClasspathImpl {
         sourceAndUnnamed.add(ModuleDescriptor.newModule(UNNAMED_MODULE_NAME).requires("java.base").build());
         ModuleFinder fromSourceFinder = FixedModuleFinder.newModuleFinder(sourceAndUnnamed);
         ModuleFinder finder = fromSourceFinder;
-        String defaultModule = null;
+        String currentModule = null;
+        // Is a module-info.java file is among the set of compiled source files?
         if (sourceModule == null) {
+            // No, setup a module finder on the class output directory to read the module-info.class file, if present.
             ModuleFinder classOutputModuleFinder = classOutput.moduleFinder(fileManager);
             if (classOutputModuleFinder != null) {
                 finder = ModuleFinder.compose(classOutputModuleFinder, finder);
             }
         } else {
-            defaultModule = sourceModuleDescriptor.name();
-        }
-        if (uniquePatchModule != null) {
-            if (defaultModule != null)
-                throw new IllegalArgumentException("Cannot provide both `--patch-module` and a module-info source of class file"); // TODO JMPS revisit this
-            else defaultModule = uniquePatchModule;
+            // Yes, record the name of the module. The other source files being compiled will be part of this
+            // module, except if they fall under source directories named in the `-patchmodule` directive.
+            currentModule = sourceModuleDescriptor.name();
         }
         ExportRequireAdder adder = getExportRequireAdder(this.addExports, this.addReads);
         // Resolve the module graph.
@@ -90,13 +87,13 @@ public class JpmsClasspathImpl {
         ExportRequireAddingModuleFinder afterFinder = new ExportRequireAddingModuleFinder(this.moduleFinder, adder);
         List<String> roots = new ArrayList<>(this.addModules);
         roots.add(UNNAMED_MODULE_NAME);
-        if (defaultModule == null) {
-            defaultModule = "";
+        if (currentModule == null) {
+            currentModule = "";
         } else {
-            roots.add(defaultModule);
+            roots.add(currentModule);
         }
         Configuration configuration = Configuration.empty().resolve(finder, afterFinder, roots);
-        return new ResolvedModuleGraph(defaultModule, configuration);
+        return new ResolvedModuleGraph(currentModule, configuration, fileManager);
     }
 
     private ExportRequireAdder getExportRequireAdder(List<String> addExports, List<String> addReads) {

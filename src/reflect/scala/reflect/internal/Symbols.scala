@@ -3548,15 +3548,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   class StubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String) extends ClassSymbol(owner0, owner0.pos, name0) with StubSymbol
   class StubTermSymbol(owner0: Symbol, name0: TermName, val missingMessage: String) extends TermSymbol(owner0, owner0.pos, name0) with StubSymbol
 
-  final class JpmsModuleSymbol(val initName: TermName) extends Symbol(NoSymbol, NoPosition, initName) {
+  final class JpmsModuleSymbol(val name: TermName) extends Symbol(NoSymbol, NoPosition, name) {
     private[this] var accessiblePackages: Map[Name, Option[Set[String]]] = _
     private[this] var accessiblePackagesRunId = NoRunId
-    private[this] var _name = initName
-    def name: TermName = _name
-    def name_=(other: TermName) = {
-      assert(accessiblePackagesRunId != currentRunId, "Default JPMS module name changed after it has been used in an access check")
-      _name = other
-    }
     private def computeAccessibility(moduleGraph: ResolvedModuleGraph): Unit = {
       val accessible: java.util.Map[String, java.util.Set[String]] = moduleGraph.accessibleModulePackages(name.toString)
       import scala.collection.JavaConverters._
@@ -3569,7 +3563,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }.toMap
     }
     def isAccessible(moduleGraph: ResolvedModuleGraph)(otherModule: JpmsModuleSymbol, pack: Symbol): Boolean = {
-      if (this.name == otherModule.name) true
+      if (this == otherModule) true
       else {
         if (accessiblePackages == null || currentRunId != accessiblePackagesRunId) computeAccessibility(moduleGraph)
         accessiblePackages.get(otherModule.name) match {
@@ -3589,6 +3583,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
   lazy val NoJpmsModuleSymbol = new JpmsModuleSymbol(nme.EMPTY)
   lazy val DefaultJpmsModuleSymbol = new JpmsModuleSymbol(nme.EMPTY)
+  lazy val ClassOutputJpmsModuleSymbol = new JpmsModuleSymbol(nme.EMPTY)
 
   // TODO JPMS What about multi-run compilation?
   private val jpmsModules = collection.mutable.AnyRefMap[String, JpmsModuleSymbol]()

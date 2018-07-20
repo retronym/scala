@@ -758,7 +758,7 @@ trait Contexts { self: Analyzer =>
         // TODO JPMS restrict access to `package p1.p2` unless we can access it _or_ one of its subpackages.
         // TODO JPMS better error reporting for accessibility errors due to JPMS
         val jpmsCanAccess = sym.hasPackageFlag || !(sym.isClass || sym.isModule || sym.isMethod) || {
-          currentRun.resolvedModuleGraph match {
+          currentRun.jpmsModuleGraph match {
             case None => true
             case Some(graph) =>
               val symJpmsModule = sym.enclosingTopLevelClass match {

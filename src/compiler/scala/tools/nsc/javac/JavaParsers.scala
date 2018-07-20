@@ -911,7 +911,8 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       val buf = new ListBuffer[Tree]
       while (in.token == IMPORT)
         buf ++= importDecl()
-      if (in.token == IDENTIFIER) {
+      if (thisPackageName == tpnme.EMPTY_PACKAGE_NAME && in.token == IDENTIFIER) {
+        thisPackageName = tpnme.EMPTY
         var ident1 = ident()
         var isOpen = false
         if (ident1 == nme.javaKeywords.OPEN) {
@@ -923,12 +924,12 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             val jpmsModuleDef = jpmsModule(isOpen)
             accept(EOF)
             atPos(pos) {
-              makePackaging(pkg, jpmsModuleDef :: Nil)
+              makePackaging(pkg, buf.prependToList(jpmsModuleDef :: Nil))
             }
           case _ =>
             syntaxError("unexpected identifier", skipIt = true)
             atPos(pos) {
-              makePackaging(pkg, Nil)
+              makePackaging(pkg, buf.toList)
             }
         }
       } else {
@@ -981,19 +982,22 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       import nme.javaKeywords
       ident() match {
         case javaKeywords.REQUIRES =>
-          val requirement = this.moduleName()
           if (in.token == IDENTIFIER) {
-            ident() match {
+            in.name match {
               case javaKeywords.TRANSITIVE =>
-                JpmsRequiresDirective(requirement, transitive = true, isStatic = false)
+                in.nextToken()
+                // TODO JPMS `requires transitive.foo.bar` should be allowed, see the Java Language Specification
+                // description of "restricted keywords".
+                JpmsRequiresDirective(this.moduleName, transitive = true, isStatic = false)
               case _ =>
-                syntaxError("expected `transitive` or `;`", skipIt = true)
-                errorTypeTree
+                JpmsRequiresDirective(this.moduleName(), transitive = false, isStatic = false)
             }
           } else if (in.token == STATIC) {
+            val requirement = this.moduleName()
             JpmsRequiresDirective(requirement, transitive = false, isStatic = true)
           } else {
-            JpmsRequiresDirective(requirement, transitive = false, isStatic = false)
+            syntaxError("expected `transitive` or module name`", skipIt = true)
+            errorTypeTree
           }
         case javaKeywords.EXPORTS =>
           val packageName = this.packageName()

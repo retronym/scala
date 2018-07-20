@@ -966,6 +966,7 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
   def currentFreshNameCreator      = if (curFreshNameCreator == null) currentUnit.fresh else curFreshNameCreator
   private[this] var curFreshNameCreator: FreshNameCreator = null
   private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit = curFreshNameCreator = fresh
+  final def currentJpmsModuleGraph(): Option[ResolvedModuleGraph] = currentRun.jpmsModuleGraph
 
   def isGlobalInitialized = (
        definitions.isDefinitionsInitialized
@@ -1157,7 +1158,6 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
       curRun = this
       phase = SomePhase
       phaseWithId(phase.id) = phase
-      DefaultJpmsModuleSymbol.name = nme.EMPTY
       definitions.init()
 
       // the components to use, omitting those named by -Yskip and stopping at the -Ystop phase
@@ -1232,7 +1232,7 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     }
 
     var sourceJpmsModuleDef: Option[JpmsModuleDef] = None
-    lazy val resolvedModuleGraph: Option[ResolvedModuleGraph] = {
+    lazy val jpmsModuleGraph: Option[ResolvedModuleGraph] = {
       classPath match {
         case jcp: JpmsClassPath =>
           val jpmsModuleDescriptor = sourceJpmsModuleDef.map { moduleDef =>
@@ -1244,7 +1244,6 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
               new JpmsModuleDescriptor(moduleDef.name.toString, requires)
           }
           val graph = jcp.impl.resolveModuleGraph(jpmsModuleDescriptor.orNull)
-          DefaultJpmsModuleSymbol.name = TermName(graph.getDefaultModule)
           Some(graph)
         case _ => None
       }
@@ -1456,10 +1455,23 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
         case Nil =>
         case unit :: Nil =>
           currentRun.sourceJpmsModuleDef = newJavaUnitParser(unit).parse().collect {
-            case jmd: JpmsModuleDef => jmd
+            case jmd: JpmsModuleDef =>
+              jmd
           }.headOption
         case _ =>
           warning("More than one module-info.java file detected among sources. Source files will not be associated with these modules.")
+      }
+      currentRun.jpmsModuleGraph match {
+        case Some(graph) =>
+          units foreach {unit =>
+            val file = unit.source.file.file
+            val jpmsModule = if (file == null)
+              NoJpmsModuleSymbol
+            else
+              lookupJpmsModule(graph.moduleForSourceFile(file.toPath))
+            unit.jpmsModule = jpmsModule
+          }
+        case None =>
       }
 
       units foreach addUnit
