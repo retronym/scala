@@ -15,6 +15,7 @@ class JpmsTest extends ClearAfterClass {
 
   private val fileFactory: FileFactory = cached("sourceFileFactory", () => new FileFactory())
 
+  // TODO JPMS factor out the setup part of this test into a test fixture and split this into smaller pieces
   @Test def modulePath(): Unit = {
     val javaClassPath = sys.props("java.class.path").split(java.io.File.pathSeparator).toList
     val library = javaClassPath.find(element => Paths.get(element).getFileName.toString == "library").get
@@ -67,7 +68,8 @@ class JpmsTest extends ClearAfterClass {
     compilerDefault.compileSourceFiles(code1 :: moduleInfoP1 :: Nil)
 
     // Use javac to generate the module-info.class file.
-    compilerDefault.compileJava(moduleInfoP1.file.file.toPath :: Nil, List("-nowarn", "-d", outputDir.toString, "--module-path", scalaLibraryJpmsModuleJar.toString, "--patch-module", s"scala.library=$library", "-cp", outputDir.toString))
+    compilerDefault.compileJava(moduleInfoP1.file.file.toPath :: Nil, List("-nowarn", "-d", outputDir.toString,
+      "--module-path", scalaLibraryJpmsModuleJar.toString, "--patch-module", s"scala.library=$library", "-cp", outputDir.toString))
     assert(Files.exists(outputDir.resolve("module-info.class")))
 
     // Let's compile clients of this module.
@@ -80,12 +82,12 @@ class JpmsTest extends ClearAfterClass {
     }
 
     // Let's add a reference to a package isn't exported.
-    val unittestCode = fileFactory("""package other; class Patched { new p1.api.P1Api; new p1.impl.C}""")
+    val clientCode = fileFactory("""package other; class Patched { new p1.api.P1Api; new p1.impl.C}""")
 
-    // The unit test source, again part of the unnamed module, can access `p1.api` but can't access `p1.impl`.
+    // The client source, again part of the unnamed module, can access `p1.api` but can't access `p1.impl`.
     {
       val compiler = createCompiler("-addmodules:p1", outputDir2, List(outputDir.toString))
-      val thrown = AssertUtil.assertThrows[CompilerErrors](compiler.compileSourceFiles(unittestCode :: Nil))
+      val thrown = AssertUtil.assertThrows[CompilerErrors](compiler.compileSourceFiles(clientCode :: Nil))
       thrown.messages.toList match {
         case msg :: Nil => assert(msg.msg.contains("class C in package impl cannot be accessed in package p1.impl"), msg)
         case msgs => fail(msgs.mkString("\n"))
@@ -95,15 +97,15 @@ class JpmsTest extends ClearAfterClass {
     // We can add an the export with a command line option:
     {
       val compiler = createCompiler("-addmodules:p1 -addexports:p1/p1.impl=ALL-UNNAMED", outputDir2, List(outputDir.toString))
-      compiler.compileSourceFiles(unittestCode :: Nil)
+      compiler.compileSourceFiles(clientCode :: Nil)
     }
 
     // Or, more idiomatically, patch the unit test sources into module `p1`. Then, they can access everything in the module.
     {
-      val unitTestPatchModuleCompiler = createCompiler(s"-addmodules:p1 -patchmodule:p1=${fileFactory.baseDirectory}", outputDir2, List(outputDir.toString))
+      val compiler = createCompiler(s"-addmodules:p1 -patchmodule:p1=${fileFactory.baseDirectory}", outputDir2, List(outputDir.toString))
       // TODO JPMS check whether javac requires an explicit `-addmodules` here, or whether modules referred to in
       // `-patchmodules` are implicitly added to the root modules of the graph.
-      unitTestPatchModuleCompiler.compileSourceFiles(unittestCode :: Nil)
+      compiler.compileSourceFiles(clientCode :: Nil)
     }
   }
 
