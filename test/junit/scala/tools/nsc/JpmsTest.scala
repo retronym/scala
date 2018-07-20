@@ -47,7 +47,7 @@ class JpmsTest extends ClearAfterClass {
     {
       val thrown = AssertUtil.assertThrows[CompilerErrors](compilerDefault.compileSourceFiles(code1 :: Nil))
       thrown.messages.toList match {
-        case msg :: Nil => assert(msg.msg.contains("class DatatypeConverter in package bind cannot be accessed in package javax.xml.bind"), msg)
+        case msg :: Nil => assert(msg.contains("class DatatypeConverter in package bind cannot be accessed in package javax.xml.bind"), msg)
         case msgs => fail(msgs.mkString("\n"))
       }
     }
@@ -89,7 +89,7 @@ class JpmsTest extends ClearAfterClass {
       val compiler = createCompiler("-addmodules:p1", outputDir2, List(outputDir.toString))
       val thrown = AssertUtil.assertThrows[CompilerErrors](compiler.compileSourceFiles(clientCode :: Nil))
       thrown.messages.toList match {
-        case msg :: Nil => assert(msg.msg.contains("class C in package impl cannot be accessed in package p1.impl"), msg)
+        case msg :: Nil => assert(msg.contains("class C in package impl cannot be accessed in package p1.impl"), msg)
         case msgs => fail(msgs.mkString("\n"))
       }
     }

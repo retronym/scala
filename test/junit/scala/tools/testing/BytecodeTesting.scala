@@ -1,13 +1,16 @@
 package scala.tools.testing
 
 import java.nio.file.Path
+import java.util.Locale
 
+import javax.tools.JavaFileObject
 import junit.framework.AssertionFailedError
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
 import scala.collection.generic.Clearable
 import scala.collection.mutable.ListBuffer
+import scala.reflect.internal.jpms.StoreDiagnosticListener
 import scala.reflect.internal.util.{BatchSourceFile, SourceFile}
 import scala.reflect.io.VirtualDirectory
 import scala.tools.asm.Opcodes
@@ -73,7 +76,7 @@ class Compiler(val global: Global) {
   def checkReport(allowMessage: StoreReporter#Info => Boolean = _ => false): Unit = {
     val disallowed: Seq[StoreReporter#Info] = reporter.infos.toList.filter(!allowMessage(_)) // toList prevents an infer-non-wildcard-existential warning.
     if (disallowed.nonEmpty) {
-      throw new CompilerErrors(disallowed)
+      throw new CompilerErrors(disallowed.map(_.msg))
     }
   }
 
@@ -146,9 +149,14 @@ class Compiler(val global: Global) {
   def compileJava(sources: List[Path], options: List[String]): Unit = {
     import scala.collection.JavaConverters._
     val compiler = javax.tools.ToolProvider.getSystemJavaCompiler
-    val fileManager = compiler.getStandardFileManager(null, null, null)
-    val task = compiler.getTask(null, null, null, options.asJava, null, fileManager.getJavaFileObjects(sources: _*))
+    val diagnosticListener = new StoreDiagnosticListener[JavaFileObject]
+    val fileManager = compiler.getStandardFileManager(diagnosticListener, null, null)
+    val task = compiler.getTask(null, null, diagnosticListener, options.asJava, null, fileManager.getJavaFileObjects(sources: _*))
     assert(task.call())
+    val errors = diagnosticListener.getErrors
+    if (!errors.isEmpty) {
+      throw new CompilerErrors(errors.asScala.map(_.getMessage(Locale.US)).toList)
+    }
   }
 }
 
@@ -357,4 +365,4 @@ object BytecodeTesting {
   }
 }
 
-case class CompilerErrors(messages: Seq[StoreReporter#Info]) extends AssertionError("The compiler issued non-allowed warnings or errors: " + messages.mkString("\n"))
+case class CompilerErrors(messages: Seq[String]) extends AssertionError("The compiler issued non-allowed warnings or errors: " + messages.mkString("\n"))

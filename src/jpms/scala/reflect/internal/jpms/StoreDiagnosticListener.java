@@ -4,8 +4,9 @@ import javax.tools.Diagnostic;
 import javax.tools.DiagnosticListener;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
-final class StoreDiagnosticListener<S> implements DiagnosticListener<S> {
+final public class StoreDiagnosticListener<S> implements DiagnosticListener<S> {
     private List<Diagnostic<? extends S>> diagnostics = new ArrayList<>();
 
     @Override
@@ -15,5 +16,9 @@ final class StoreDiagnosticListener<S> implements DiagnosticListener<S> {
 
     public List<Diagnostic<? extends S>> getDiagnostics() {
         return diagnostics;
+    }
+
+    public List<Diagnostic<? extends S>> getErrors() {
+        return diagnostics.stream().filter(diagnostic -> diagnostic.getKind().equals(Diagnostic.Kind.ERROR)).collect(Collectors.toList());
     }
 }
