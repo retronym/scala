@@ -27,7 +27,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   private def locationAsPaths(location: StandardLocation): IndexedSeq[Path] = getLocationAsPaths(fileManager, location).asScala.toVector
   private val packageIndex = mutable.AnyRefMap[String, PackageEntryImpl]()
   private val moduleLocations = Array(StandardLocation.MODULE_SOURCE_PATH, StandardLocation.UPGRADE_MODULE_PATH, StandardLocation.SYSTEM_MODULES, StandardLocation.MODULE_PATH, StandardLocation.PATCH_MODULE_PATH)
-  private val paths = mutable.ArrayBuffer[(Path, Location)]()
+  private val paths = mutable.ArrayBuffer[(Path, StandardLocation, Location)]()
   indexLocations()
 
   private def indexLocations() {
@@ -37,8 +37,11 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
       location <- location1.asScala
       path <- getLocationAsPaths(fileManager, location).asScala
     } {
-      paths += (path -> location)
+      paths.addOne((path, moduleLocation, location))
     }
+    val cpLocation = StandardLocation.CLASS_PATH
+    for (path <- getLocationAsPaths(fileManager, cpLocation).asScala)
+      paths.addOne((path, cpLocation, cpLocation))
   }
 
   private[nsc] def hasPackage(pkg: String): Boolean = {
@@ -49,7 +52,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
     val seen = mutable.Set[String]()
     val result = immutable.ArraySeq.untagged.newBuilder[PackageEntry]
     for {
-      (path, location) <- paths
+      (path, standardLocation, location) <- paths
     } {
       // We use NIO path API to list classpath/modulepath elements, rather than FileManager.list which
       // only returns files, not sub-directories. The only way to find sub-directories with FileManager.list
@@ -76,24 +79,16 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = {
     val result = immutable.ArraySeq.untagged.newBuilder[ClassFileEntry]
     for {
-      moduleLocation <- moduleLocations
-      location1 <- {
-        assert(isModuleOrientedLocation(moduleLocation), moduleLocation)
-        listLocationsForModules(fileManager, moduleLocation).asScala
-      }
-      location <- location1.asScala
-      moduleName = inferModuleName(fileManager, location)
-      jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala
+      (path, standardLocation, location) <- paths
     } {
-      val binaryName = fileManager.inferBinaryName(location, jfo)
-      val path = asPath(fileManager, jfo)
-      result += JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, moduleLocation)
-    }
-
-    for (jfo <- fileManager.list(StandardLocation.CLASS_PATH, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
-      val binaryName = fileManager.inferBinaryName(StandardLocation.CLASS_PATH, jfo)
-      val path = asPath(fileManager, jfo)
-      result += JpmsClassFileEntryImpl(new PlainNioFile(path), "", StandardLocation.CLASS_PATH)
+      val moduleName = if (isModuleOrientedLocation(standardLocation))
+        inferModuleName(fileManager, location)
+      else ""
+      for (jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
+        val binaryName = fileManager.inferBinaryName(location, jfo)
+        val path = asPath(fileManager, jfo)
+        result += JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, standardLocation)
+      }
     }
     result.result()
   }
