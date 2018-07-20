@@ -11,7 +11,7 @@ import java.lang.module.ResolvedModule;
 import java.nio.file.Path;
 import java.util.*;
 
-import static scala.reflect.internal.jpms.JpmsClasspathImpl.UNNAMED_MODULE_NAME;
+import static scala.reflect.internal.jpms.JpmsClasspathSupport.UNNAMED_MODULE_NAME;
 
 public class ResolvedModuleGraph {
     private String currentModule;

@@ -11,14 +11,14 @@ import scala.collection.JavaConverters.{iterableAsScalaIterableConverter, _}
 import scala.collection.{immutable, mutable}
 import scala.reflect.internal.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
 import scala.reflect.internal.jpms.FileManagerJava9Api._
-import scala.reflect.internal.jpms.JpmsClasspathImpl
+import scala.reflect.internal.jpms.{JpmsClasspathSupport, JpmsModuleDescriptor, ResolvedModuleGraph}
 import scala.reflect.io.PlainNioFile
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
 
-final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClasspathImpl) extends ClassPath {
+final class JpmsClassPath(patches: Map[String, List[String]], private val impl: JpmsClasspathSupport) extends ClassPath {
   override def asURLs: Seq[URL] = Nil // TODO
   override def asClassPathStrings: Seq[String] = Nil // TODO
   override def asSourcePathString: String = ""
@@ -98,9 +98,12 @@ final class JpmsClassPath(patches: Map[String, List[String]], val impl: JpmsClas
   private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = Nil
 
   override def findClassFile(className: String): Option[AbstractFile] = {
+    // TODO JPMS implement directly
     val (inPackage, classSimpleName) = separatePkgAndClassNames(className)
     classes(inPackage).find(_.name == classSimpleName).map(_.file)
   }
+
+  def resolveModuleGraph(sourceModule: JpmsModuleDescriptor): ResolvedModuleGraph = impl.resolveModuleGraph(sourceModule)
 }
 
 object JpmsClassPath {
@@ -139,7 +142,7 @@ object JpmsClassPath {
       }
       new SupplierClassOutput(() => supplier())
     }
-    val impl = new JpmsClasspathImpl(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
+    val impl = new JpmsClasspathSupport(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
     // TODO JPMS refactor this classpath so that settings are re-read on subsequent runs. Maybe currentClasspath should just be recreated on each new Run?
     new JpmsClassPath(allPatches, impl)
   }

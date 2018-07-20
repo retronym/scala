@@ -1,19 +1,18 @@
 package scala.reflect.internal.jpms;
 
 import javax.lang.model.SourceVersion;
-import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
 import java.io.IOException;
-import java.lang.module.*;
-import java.nio.file.Path;
+import java.lang.module.Configuration;
+import java.lang.module.ModuleDescriptor;
+import java.lang.module.ModuleFinder;
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-public class JpmsClasspathImpl {
+public class JpmsClasspathSupport {
 
     // has to be a valid module name, so we can't use the pseudo-name "ALL-UNNAMED"
     static final String UNNAMED_MODULE_NAME = "___UNNAMED";
@@ -28,8 +27,8 @@ public class JpmsClasspathImpl {
     private final ClassOutput classOutput;
     private final ModuleFinder moduleFinder;
 
-    public JpmsClasspathImpl(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManagerOptions, List<String> addModules,
-                             List<String> addExports, List<String> addReads) throws IOException {
+    public JpmsClasspathSupport(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManagerOptions, List<String> addModules,
+                                List<String> addExports, List<String> addReads) throws IOException {
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
             classOutput.configure(fm);

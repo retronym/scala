@@ -15,7 +15,7 @@ import scala.annotation.tailrec
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 import Variance._
 import scala.collection.JavaConverters.mapAsScalaConcurrentMapConverter
-import scala.reflect.internal.jpms.{JpmsClasspathImpl, ResolvedModuleGraph}
+import scala.reflect.internal.jpms.{JpmsClasspathSupport, ResolvedModuleGraph}
 
 trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
