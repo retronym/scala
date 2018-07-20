@@ -272,13 +272,8 @@ abstract class SymbolLoaders {
       assert(root.isPackageClass, root)
       root.setInfo(new PackageClassInfoType(newScope, root))
 
-      val classPathEntries = try {
-        classPath.list(packageName)
-      } catch {
-        case t: Throwable =>
-          t.printStackTrace()
-          throw t
-      }
+      val classPathEntries = classPath.list(packageName)
+
       if (!root.isRoot)
         for (entry <- classPathEntries.classesAndSources if entry.name != "module-info")
           initializeFromClassPath(root, entry)
