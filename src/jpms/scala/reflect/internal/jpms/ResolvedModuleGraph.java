@@ -18,6 +18,7 @@ public class ResolvedModuleGraph {
     private final Configuration configuration;
     private StandardJavaFileManager fileManager;
     private Map<String, Set<JavaFileManager.Location>> modulePatchLocations = new HashMap<>();
+    public static final Set<String> AUTOMATIC_MODULE_EXPORT_ALL = new HashSet<>();
 
     public ResolvedModuleGraph(String currentModule, Configuration configuration, StandardJavaFileManager fileManager) throws IOException {
         this.currentModule = currentModule;
@@ -37,21 +38,24 @@ public class ResolvedModuleGraph {
     }
 
     public Map<String, Set<String>> accessibleModulePackages(String siteModuleName) {
-        if (siteModuleName.equals("")) siteModuleName = UNNAMED_MODULE_NAME;
+        Set<ResolvedModule> readModules;
+        String finalSiteModuleName = siteModuleName;
+        if (siteModuleName.equals("")) {
+            readModules = configuration.modules();
+            finalSiteModuleName = UNNAMED_MODULE_NAME;
+        } else {
+            readModules = configuration.findModule(siteModuleName).map(ResolvedModule::reads).orElse(Collections.emptySet());
+        }
 
         HashMap<String, Set<String>> result = new HashMap<>();
-        String finalSiteModuleName = siteModuleName;
-        Optional<ResolvedModule> siteModule = configuration.findModule(siteModuleName);
-        if (!siteModule.isPresent()) return result;
-
-        Set<ResolvedModule> readModules = siteModuleName.equals(UNNAMED_MODULE_NAME) ? configuration.modules() : siteModule.get().reads();
         for (ResolvedModule readModule: readModules) {
-            HashSet<String> packages = new HashSet<>();
-            result.put(readModule.name(), packages);
+
             ModuleDescriptor descriptor = readModule.reference().descriptor();
             if (descriptor.isAutomatic()) {
-                packages.add("*");
+                result.put(readModule.name(), AUTOMATIC_MODULE_EXPORT_ALL);
             } else {
+                HashSet<String> packages = new HashSet<>();
+                result.put(readModule.name(), packages);
                 for (ModuleDescriptor.Exports exports: descriptor.exports()) {
                     if (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)) {
                         packages.add(exports.source());

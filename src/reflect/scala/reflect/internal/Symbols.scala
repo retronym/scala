@@ -3556,7 +3556,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       import scala.collection.JavaConverters._
       accessiblePackages = accessible.asScala.map {
         case (targetModule: String, targetPackages: java.util.Set[String]) =>
-          val targetPackagesOrWildcard = if (targetPackages.size == 1 && targetPackages.iterator().next() == "*") {
+          val targetPackagesOrWildcard = if (targetPackages eq ResolvedModuleGraph.AUTOMATIC_MODULE_EXPORT_ALL) {
             None
           } else Some(targetPackages.asScala.toSet)
           (lookupJpmsModule(targetModule).name, targetPackagesOrWildcard)
