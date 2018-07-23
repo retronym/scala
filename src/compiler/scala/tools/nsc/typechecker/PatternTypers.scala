@@ -224,7 +224,7 @@ trait PatternTypers {
      */
     private def convertToCaseConstructor(tree: Tree, caseClass: Symbol, ptIn: Type): Tree = {
       val variantToSkolem     = new VariantToSkolemMap
-      val caseClassType       = tree.tpe.prefix memberType caseClass
+      val caseClassType       = caseClass.tpe_*.asSeenFrom(tree.tpe.prefix, caseClass.owner)
       val caseConstructorType = caseClassType memberType caseClass.primaryConstructor
       val tree1               = TypeTree(caseConstructorType) setOriginal tree
 

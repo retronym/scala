@@ -2338,21 +2338,7 @@ trait Types
       val tpars = initializedTypeParams
       if (tpars.isEmpty) this
       else {
-        val tparsAtNonClass =
-          // if we're eta-expanding a reference to a class, it can remain the owner of the type params
-          // TODO: why does cloning tpars break stuff?
-          if (sym.isClass) tpars
-          else {
-            // NOTE: during pickling, localizedOwner will change the owner to a non-class owner of the pickle root;
-            // (the pickle root is the current top-level class).
-            // The difference in owner between source-compiled vs class-loaded should not trigger recompilation (or breakage in ASF).
-            // We can't just re-use the owner of the type params (the class or type constructor that defines the type params),
-            // because if the owner is a type that's under consideration for relativizing, ASF thinks it needs to act on them.
-            // We want something enclosing that's not a class, but usually `sym.enclosingSuchThat(_.isTerm)` is NoSymbol anyway
-            // when using `sym` (the current owner for `tpars`), pos/t10762 will fail
-            val nonClassRoot = sym.enclosingSuchThat(_.isTerm)
-            cloneSymbolsAtOwner(tpars, nonClassRoot)
-          }
+        val tparsAtNonClass = cloneSymbolsAtOwner(tpars, sym.newLocalDummy(sym.pos))
         PolyType(tparsAtNonClass, copyTypeRef(this, pre, sym, tparsAtNonClass map (_.typeConstructor)))
       }
     }
