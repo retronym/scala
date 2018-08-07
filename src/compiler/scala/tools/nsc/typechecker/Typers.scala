@@ -202,7 +202,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     private def unit = context.unit
     import typeDebug.ptTree
     import TyperErrorGen._
-    implicit def fresh: FreshNameCreator = freshNameCreatorFor(context)
+    implicit def fresh: FreshNameCreator = freshNameCreatorFor(context); private[this] val global1: global.type = global
 
     private def transformed: mutable.Map[Tree, Tree] = unit.transformed
 
@@ -5019,15 +5019,15 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 }
                 else None
               )
-              debuglog(s"""
-                |qual=$qual:${qual.tpe}
-                |symbol=${qual.tpe.termSymbol.defString}
-                |scope-id=${qual.tpe.termSymbol.info.decls.hashCode}
-                |members=${qual.tpe.members mkString ", "}
-                |name=$name
-                |found=$sym
-                |owner=${context.enclClass.owner}
-                """.stripMargin)
+//              debuglog(s"""
+//                |qual=$qual:${qual.tpe}
+//                |symbol=${qual.tpe.termSymbol.defString}
+//                |scope-id=${qual.tpe.termSymbol.info.decls.hashCode}
+//                |members=${qual.tpe.members mkString ", "}
+//                |name=$name
+//                |found=$sym
+//                |owner=${context.enclClass.owner}
+//                """.stripMargin)
 
               // 1) Try converting a term selection on a java class into a type selection.
               // 2) Try expanding according to Dynamic rules.
@@ -5569,8 +5569,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       def typedTypeBoundsTree(tree: TypeBoundsTree) = {
-        val lo1 = if (tree.lo.isEmpty) TypeTree(NothingTpe) else typedType(tree.lo, mode)
-        val hi1 = if (tree.hi.isEmpty) TypeTree(AnyTpe) else typedType(tree.hi, mode)
+        val lo1 = if (tree.lo.isEmpty) TypeTree(global1.definitions.NothingTpe) else typedType(tree.lo, mode)
+        val hi1 = if (tree.hi.isEmpty) TypeTree(global1.definitions.AnyTpe) else typedType(tree.hi, mode)
         treeCopy.TypeBoundsTree(tree, lo1, hi1) setType TypeBounds(lo1.tpe, hi1.tpe)
       }
 
@@ -5717,7 +5717,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (tree.hasSymbolField) tree.symbol = NoSymbol
         }
         val alreadyTyped = tree.tpe ne null
-        val shouldPrint = !alreadyTyped && !phase.erasedTypes
+        val shouldPrint = !alreadyTyped && !global1.phase.erasedTypes
         val ptWild = if (mode.inPatternMode)
           ptPlugins // scala/bug#5022 don't widen pt for patterns as types flow from it to the case body.
         else
