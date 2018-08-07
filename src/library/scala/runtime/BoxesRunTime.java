@@ -125,12 +125,20 @@ public final class BoxesRunTime
      *  in any case, we dispatch to it as soon as we spot one on either side.
      */
     public static boolean equals2(Object x, Object y) {
-        if (x instanceof java.lang.Number)
-            return equalsNumObject((java.lang.Number)x, y);
-        if (x instanceof java.lang.Character)
-            return equalsCharObject((java.lang.Character)x, y);
         if (x == null)
             return y == null;
+        else if (y == null || x.getClass() == y.getClass())
+            return x.equals(y);
+        return equals3(x, y);
+    }
+
+    private static boolean equals3(Object x, Object y) {
+        if (x instanceof Number) {
+            return equalsNumObject((Number)x, y);
+        }
+        if (x instanceof Character) {
+            return equalsCharObject((Character)x, y);
+        }
 
         return x.equals(y);
     }
