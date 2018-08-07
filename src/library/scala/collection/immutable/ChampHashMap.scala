@@ -57,6 +57,7 @@ final class ChampHashMap[K, +V] private[immutable] (private val rootNode: MapNod
 
   override final def contains(key: K): Boolean = rootNode.containsKey(key, computeHash(key), 0)
 
+  override def apply(key: K): V = rootNode.apply(key, computeHash(key), 0)
   def get(key: K): Option[V] = rootNode.get(key, computeHash(key), 0)
 
   override def getOrElse[V1 >: V](key: K, default: => V1): V1 = rootNode.getOrElse(key, computeHash(key), 0, default)
@@ -137,6 +138,7 @@ private final class Replaced[K, V](node: MapNode[K, V @uV]) extends MapNodeSourc
 private[immutable] sealed abstract class MapNode[K, +V] extends MapNodeSource[K, V] with Node[MapNode[K, V @uV]] {
   final def get: MapNode[K, V] = this
 
+  def apply(key: K, hash: Int, shift: Int): V
   def get(key: K, hash: Int, shift: Int): Option[V]
   def getOrElse[V1 >: V](key: K, hash: Int, shift: Int, f: => V1): V1
 
@@ -202,6 +204,24 @@ private class BitmapIndexedMapNode[K, +V](val dataMap: Int, val nodeMap: Int, va
 
   def getNode(index: Int) =
     content(content.length - 1 - index).asInstanceOf[MapNode[K, V]]
+
+  def apply(key: K, keyHash: Int, shift: Int): V = {
+    val mask = maskFrom(keyHash, shift)
+    val bitpos = bitposFrom(mask)
+
+    if ((dataMap & bitpos) != 0) {
+      val index = indexFrom(dataMap, mask, bitpos)
+      val key0 = this.getKey(index)
+      return if (key == key0) this.getValue(index) else throw new NoSuchElementException
+    }
+
+    if ((nodeMap & bitpos) != 0) {
+      val index = indexFrom(nodeMap, mask, bitpos)
+      return this.getNode(index).get(key, keyHash, shift + BitPartitionSize)
+    }
+
+    throw new NoSuchElementException
+  }
 
   def get(key: K, keyHash: Int, shift: Int): Option[V] = {
     val mask = maskFrom(keyHash, shift)
@@ -539,6 +559,7 @@ private class HashCollisionMapNode[K, +V](val hash: Int, val content: Vector[(K,
 
   require(content.size >= 2)
 
+  def apply(key: K, hash: Int, shift: Int): V = get(key, hash, shift).get
   def get(key: K, hash: Int, shift: Int): Option[V] =
     if (this.hash == hash) content.find(key == _._1).map(_._2) else None
   def getOrElse[V1 >: V](key: K, hash: Int, shift: Int, f: => V1): V1 = {
