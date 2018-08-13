@@ -25,7 +25,7 @@ trait AbsSettings extends scala.reflect.internal.settings.AbsSettings {
   protected def allSettings: scala.collection.Set[Setting]
 
   // settings minus internal usage settings
-  def visibleSettings = allSettings filterNot (_.isInternalOnly)
+  def visibleSettings = allSettings.iterator filterNot (_.isInternalOnly)
 
   // only settings which differ from default
   def userSetSettings = visibleSettings filterNot (_.isDefault)

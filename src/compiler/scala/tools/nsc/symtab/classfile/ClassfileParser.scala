@@ -15,16 +15,18 @@ package tools.nsc
 package symtab
 package classfile
 
-import java.io.{ByteArrayInputStream, DataInputStream, File, IOException}
+import java.io._
 import java.lang.Integer.toHexString
+import java.nio.ByteBuffer
 
 import scala.collection.{immutable, mutable}
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.annotation.switch
 import scala.reflect.internal.JavaAccFlags
 import scala.reflect.internal.pickling.{ByteCodecs, PickleBuffer}
-import scala.reflect.io.NoAbstractFile
+import scala.reflect.io.{NoAbstractFile, VirtualFile}
 import scala.reflect.internal.util.Collections._
+import scala.tools.nsc.backend.{ClassBytes, ScalaClass, ScalaRawClass}
 import scala.tools.nsc.util.ClassPath
 import scala.tools.nsc.io.AbstractFile
 import scala.util.control.NonFatal
@@ -152,14 +154,56 @@ abstract class ClassfileParser {
   def parse(file: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol): Unit = {
     this.file = file
     pushBusy(clazz) {
-      this.in           = new AbstractFileReader(file)
       this.clazz        = clazz
       this.staticModule = module
       this.isScala      = false
 
-      parseHeader()
-      this.pool = newConstantPool
-      parseClass()
+      import loaders.platform._
+      classFileInfo(file, clazz) match {
+        case Some(info) =>
+          info match {
+            case ScalaRawClass(className) =>
+              isScalaRaw = true
+              currentClass = TermName(className)
+            case ScalaClass(className, pickle) =>
+              val pickle1 = pickle
+              isScala = true
+              currentClass = TermName(className)
+              if (pickle1.hasArray) {
+                unpickler.unpickle(pickle1.array, pickle1.arrayOffset + pickle1.position(), clazz, staticModule, file.name)
+              } else {
+                val array = new Array[Byte](pickle1.remaining)
+                pickle1.get(array)
+                unpickler.unpickle(array, 0, clazz, staticModule, file.name)
+              }
+            case ClassBytes(data) =>
+              val data1 = data.duplicate()
+              val array = new Array[Byte](data1.remaining)
+              data1.get(array)
+              this.in = new AbstractFileReader(file, array)
+              parseHeader()
+              this.pool = newConstantPool
+              parseClass()
+          }
+        case None =>
+          this.in = new AbstractFileReader(file)
+          parseHeader()
+          this.pool = newConstantPool
+          parseClass()
+          if (!(isScala || isScalaRaw))
+            loaders.platform.classFileInfoParsed(file, clazz, ClassBytes(ByteBuffer.wrap(in.buf)))
+      }
+      if (isScalaRaw && !isNothingOrNull) {
+        unlinkRaw()
+      }
+    }
+  }
+
+  private def unlinkRaw(): Unit = {
+    val decls = clazz.enclosingPackage.info.decls
+    for (c <- List(clazz, staticModule, staticModule.moduleClass)) {
+      c.setInfo(NoType)
+      decls.unlink(c)
     }
   }
 
@@ -439,6 +483,15 @@ abstract class ClassfileParser {
       innerClasses innerSymbol name
     else
       lookupClass(name)
+  }
+
+  // TODO: remove after the next 2.13 milestone
+  // A bug in the backend caused classes ending in `$` do get only a Scala marker attribute
+  // instead of a ScalaSig and a Signature annotaiton. This went unnoticed because isScalaRaw
+  // classes were parsed like Java classes. The below covers the cases in the std lib.
+  private def isNothingOrNull = {
+    val n = clazz.fullName.toString
+    n == "scala.runtime.Nothing$" || n == "scala.runtime.Null$"
   }
 
   def parseClass() {
@@ -890,8 +943,8 @@ abstract class ClassfileParser {
               case Some(san: AnnotationInfo) =>
                 val bytes =
                   san.assocs.find({ _._1 == nme.bytes }).get._2.asInstanceOf[ScalaSigBytes].bytes
-
                 unpickler.unpickle(bytes, 0, clazz, staticModule, in.file.name)
+                loaders.platform.classFileInfoParsed(file, clazz, ScalaClass(this.currentClass.toString, ByteBuffer.wrap(bytes)))
               case None =>
                 throw new RuntimeException("Scala class file does not contain Scala annotation")
             }
@@ -1216,6 +1269,7 @@ abstract class ClassfileParser {
           in.skip(attrLen)
         case tpnme.ScalaATTR =>
           isScalaRaw = true
+          loaders.platform.classFileInfoParsed(file, clazz, ScalaRawClass(this.currentClass.toString))
         case tpnme.InnerClassesATTR if !isScala =>
           val entries = u2
           for (i <- 0 until entries) {
