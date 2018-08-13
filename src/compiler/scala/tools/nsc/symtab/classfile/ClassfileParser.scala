@@ -8,7 +8,7 @@ package tools.nsc
 package symtab
 package classfile
 
-import java.io.{ByteArrayInputStream, DataInputStream, File, IOException}
+import java.io._
 import java.lang.Integer.toHexString
 
 import scala.collection.{immutable, mutable}
@@ -16,7 +16,7 @@ import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.annotation.switch
 import scala.reflect.internal.JavaAccFlags
 import scala.reflect.internal.pickling.ByteCodecs
-import scala.reflect.io.NoAbstractFile
+import scala.reflect.io.{NoAbstractFile, VirtualFile}
 import scala.tools.nsc.util.ClassPath
 import scala.tools.nsc.io.AbstractFile
 import scala.util.control.NonFatal
@@ -140,14 +140,50 @@ abstract class ClassfileParser {
   def parse(file: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol): Unit = {
     this.file = file
     pushBusy(clazz) {
-      this.in           = new AbstractFileReader(file)
       this.clazz        = clazz
       this.staticModule = module
       this.isScala      = false
 
-      parseHeader()
-      this.pool = new ConstantPool
-      parseClass()
+      import loaders.platform._
+      classFileInfo(file, clazz) match {
+        case Some(info) =>
+          info match {
+            case ScalaRawClass(className) =>
+              isScalaRaw = true
+              currentClass = TermName(className)
+            case ScalaClass(className, pickle) =>
+              isScala = true
+              currentClass = TermName(className)
+              if (pickle.hasArray) {
+                unpickler.unpickle(pickle.array, pickle.arrayOffset + pickle.position(), clazz, staticModule, file.name)
+              } else {
+                val array = new Array[Byte](pickle.remaining)
+                pickle.get(array)
+                unpickler.unpickle(array, 0, clazz, staticModule, file.name)
+              }
+            case ClassBytes(data) =>
+              val array = new Array[Byte](data.remaining)
+              data.get(array)
+              this.in = new AbstractFileReader(file, array)
+              parseClass()
+          }
+        case None =>
+          this.in = new AbstractFileReader(file)
+          parseHeader()
+          this.pool = new ConstantPool
+          parseClass()
+      }
+      if (isScalaRaw && !isNothingOrNull) {
+        unlinkRaw()
+      }
+    }
+  }
+
+  private def unlinkRaw(): Unit = {
+    val decls = clazz.enclosingPackage.info.decls
+    for (c <- List(clazz, staticModule, staticModule.moduleClass)) {
+      c.setInfo(NoType)
+      decls.unlink(c)
     }
   }
 
@@ -439,6 +475,15 @@ abstract class ClassfileParser {
       lookupClass(name)
   }
 
+  // TODO: remove after the next 2.13 milestone
+  // A bug in the backend caused classes ending in `$` do get only a Scala marker attribute
+  // instead of a ScalaSig and a Signature annotaiton. This went unnoticed because isScalaRaw
+  // classes were parsed like Java classes. The below covers the cases in the std lib.
+  private def isNothingOrNull = {
+    val n = clazz.fullName.toString
+    n == "scala.runtime.Nothing$" || n == "scala.runtime.Null$"
+  }
+
   def parseClass(): Unit = {
     unpickleOrParseInnerClasses()
 
@@ -453,15 +498,6 @@ abstract class ClassfileParser {
       // scala-dev#248: when a type alias (in a package object) shadows a class symbol, getClassSymbol returns a stub
       // TODO: this also prevents the error when it would be useful (`mv a/C.class .`)
       if (!c.isInstanceOf[StubSymbol] && c != clazz) mismatchError(c)
-    }
-
-    // TODO: remove after the next 2.13 milestone
-    // A bug in the backend caused classes ending in `$` do get only a Scala marker attribute
-    // instead of a ScalaSig and a Signature annotaiton. This went unnoticed because isScalaRaw
-    // classes were parsed like Java classes. The below covers the cases in the std lib.
-    def isNothingOrNull = {
-      val n = clazz.fullName.toString
-      n == "scala.runtime.Nothing$" || n == "scala.runtime.Null$"
     }
 
     if (isScala) {
