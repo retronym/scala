@@ -14,7 +14,7 @@ class CompletionTest {
 
   def newIMain(): IMain = {
     val settings = new Settings()
-    settings.Xnojline.value = true
+    settings.Xjline.value = "off"
     settings.usejavacp.value = true
 
     new IMain(settings, new ReplReporterImpl(settings, new PrintWriter(new StringWriter)))
@@ -27,11 +27,12 @@ class CompletionTest {
     completer
   }
 
-  private def interpretLines(lines: String*): (Completion, Repl) = {
+  private def interpretLines(lines: String*): (Completion, Repl, Accumulator) = {
     val intp = newIMain()
-    lines foreach intp.interpret
-    val completer = new ReplCompletion(intp)
-    (completer, intp)
+    lines.foreach(intp.interpret)
+    val acc = new Accumulator
+    val completer = new ReplCompletion(intp, acc)
+    (completer, intp, acc)
   }
 
   implicit class BeforeAfterCompletion(completion: Completion) {
@@ -130,7 +131,7 @@ class CompletionTest {
 
   @Test
   def previousLineCompletions(): Unit = {
-    val (completer, intp) = interpretLines(
+    val (completer, intp, _) = interpretLines(
       "class C { val x_y_z = 42 }",
       "object O { type T = Int }")
 
@@ -146,17 +147,16 @@ class CompletionTest {
 
   @Test
   def previousResultInvocation(): Unit = {
-    val (completer, _) = interpretLines("1 + 1")
+    val (completer, _, _) = interpretLines("1 + 1")
 
     checkExact(completer, ".toCha")("toChar")
   }
 
   @Test
   def multiLineInvocation(): Unit = {
-    val (completer, _) = interpretLines()
-    completer.withPartialInput("class C {") {
-      checkExact(completer, "1 + 1.toCha")("toChar")
-    }
+    val (completer, _, accumulator) = interpretLines()
+    accumulator += "class C {"
+    checkExact(completer, "1 + 1.toCha")("toChar")
   }
 
   @Test
