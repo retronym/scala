@@ -198,6 +198,8 @@ trait Collections {
     mutable.LinkedHashMap[A1, B](xs map (x => (x, f(x))): _*)
   }
 
+  final def listToArray[A <: Any]
+
   final def mapWithIndex[A, B](xs: List[A])(f: (A, Int) => B): List[B] = {
     val lb = new ListBuffer[B]
     var index = 0

@@ -2526,7 +2526,12 @@ trait Types
       else if (/*isDependentMethodType &&*/ sameLength(actuals, params)) {
         val idm = new InstantiateDependentMap(params, actuals)
         val res = idm(resultType)
-        existentialAbstraction(idm.existentialsNeeded, res)
+        val result = existentialAbstraction(idm.existentialsNeeded, res)
+        if (idm.lazinessPayOff == 0)
+          getClass
+        else
+          getClass
+        result
       }
       else existentialAbstraction(params, resultType)
 
