@@ -20,7 +20,7 @@ trait PhaseAssembly {
    * Aux data structure for solving the constraint system
    * The dependency graph container with helper methods for node and edge creation
    */
-  private class DependencyGraph {
+  private[nsc] class DependencyGraph {
 
     /** Simple edge with to and from refs */
     case class Edge(var frm: Node, var to: Node, var hard: Boolean)
@@ -105,6 +105,27 @@ trait PhaseAssembly {
       }
 
       if (node.level < lvl) node.level = lvl
+
+
+//      var nodeBefore = node.before
+//      var prevNodeBefore = nodeBefore
+//      do {
+//        for (hl <- node.before if hl.hard) {
+//          node.phaseobj = Some(node.phaseobj.get ++ hl.frm.phaseobj.get)
+//          node.before = hl.frm.before
+//          nodes -= hl.frm.phasename
+//          edges -= hl
+//          for (edge <- node.before) edge.to = node
+//        }
+//        prevNodeBefore = nodeBefore
+//        nodeBefore = node.before
+//      } while (nodeBefore ne prevNodeBefore)
+//
+//      node.visited = true
+//
+//      for (edge <- node.before) {
+//        collapseHardLinksAndLevels( edge.frm, lvl + 1)
+//      }
 
       var hls = Nil ++ node.before.filter(_.hard)
       while (hls.size > 0) {
