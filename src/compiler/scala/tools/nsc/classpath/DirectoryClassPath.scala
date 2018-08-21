@@ -124,6 +124,8 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directo
 
   def asURLs: Seq[URL] = Seq(dir.toURI.toURL)
   def asClassPathStrings: Seq[String] = Seq(dir.getPath)
+
+  def close() {}
 }
 
 object JrtClassPath {
@@ -216,6 +218,9 @@ final class JrtClassPath(fs: java.nio.file.FileSystem) extends ClassPath with No
       }.take(1).toList.headOption
     }
   }
+  override def close(): Unit = {
+    // leave the jrt:// filesystem open, we don't have exclusive ownership.
+  }
 }
 
 /**
@@ -277,6 +282,9 @@ final class CtSymClassPath(ctSym: java.nio.file.Path, release: Int) extends Clas
         if (Files.exists(file)) new scala.reflect.io.PlainNioFile(file) :: Nil else Nil
       }.take(1).toList.headOption
     }
+  }
+  override def close(): Unit = {
+    fileSystem.close()
   }
 }
 

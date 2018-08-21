@@ -136,6 +136,9 @@ object ZipAndJarClassPathFactory extends ZipAndJarFileLookupFactory {
 
     override private[nsc] def hasPackage(pkg: String) = cachedPackages.contains(pkg)
     override private[nsc] def list(inPackage: String): ClassPathEntries = ClassPathEntries(packages(inPackage), classes(inPackage))
+    def close(): Unit = {
+      file.close()
+    }
   }
 
   private object ManifestResourcesClassPath {
@@ -201,8 +204,9 @@ final class FileBasedCache[T] {
   }
 
   def clear(): Unit = cache.synchronized {
-    // TODO support closing
-    // cache.valuesIterator.foreach(_.close())
+    cache.valuesIterator.foreach {
+      case ()
+    }
     cache.clear()
   }
 }

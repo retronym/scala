@@ -124,6 +124,7 @@ abstract class ZipArchive(override val file: JFile, release: Option[String]) ext
     if (entry.isDirectory) ensureDir(dirs, entry.getName, entry)
     else ensureDir(dirs, dirName(entry.getName), null)
   }
+  def close(): Unit
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArchive(file, release) {
@@ -171,10 +172,13 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
     override def sizeOption: Option[Int] = Some(zipEntry.getSize.toInt)
   }
 
+  private var zipFile: ZipFile = null
+
   lazy val (root, allDirs) = {
     val root = new DirEntry("/")
     val dirs = mutable.HashMap[String, DirEntry]("/" -> root)
     val zipFile = openZipFile()
+    this.zipFile = zipFile
     val enum    = zipFile.entries()
 
     try {
@@ -220,13 +224,23 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
     case x: FileZipArchive => file.getAbsoluteFile == x.file.getAbsoluteFile
     case _                 => false
   }
+  def close(): Unit = {
+    if (ZipArchive.closeZipFile) {
+      // not held open permanently, nothing to do here.
+    } else {
+      if (zipFile ne null)
+        zipFile.close()
+    }
+  }
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class URLZipArchive(val url: URL) extends ZipArchive(null) {
+  private var zipInputStream: ZipInputStream = _
   def iterator: Iterator[Entry] = {
     val root     = new DirEntry("/")
     val dirs     = mutable.HashMap[String, DirEntry]("/" -> root)
     val in       = new ZipInputStream(new ByteArrayInputStream(Streamable.bytes(input)))
+    zipInputStream = in
 
     @tailrec def loop() {
       val zipEntry = in.getNextEntry()
@@ -288,13 +302,20 @@ final class URLZipArchive(val url: URL) extends ZipArchive(null) {
     case x: URLZipArchive => url == x.url
     case _                => false
   }
+  def close(): Unit = {
+    if (zipInputStream ne null)
+      zipInputStream.close()
+  }
 }
 
 final class ManifestResources(val url: URL) extends ZipArchive(null) {
+  private var openedInputStream: InputStream = _
   def iterator = {
     val root     = new DirEntry("/")
     val dirs     = mutable.HashMap[String, DirEntry]("/" -> root)
-    val manifest = new Manifest(input)
+    val openedInputStream = input
+    val manifest = new Manifest(openedInputStream)
+    input
     val iter     = manifest.getEntries().keySet().iterator().asScala.filter(_.endsWith(".class")).map(new ZipEntry(_))
 
     for (zipEntry <- iter) {
@@ -345,5 +366,10 @@ final class ManifestResources(val url: URL) extends ZipArchive(null) {
         in = null
       }
     }
+  }
+
+  def close(): Unit = {
+    if (openedInputStream ne null)
+      openedInputStream.close()
   }
 }

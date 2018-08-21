@@ -32,6 +32,7 @@ class AggregateClassPathTest {
     override def asClassPathStrings: Seq[String] = unsupported
     override def asSourcePathString: String = unsupported
     override def asURLs: Seq[URL] = unsupported
+    override def close(): Unit = {}
   }
 
   private case class TestClassPath(virtualPath: String, classesInPackage: EntryNamesInPackage*) extends TestClassPathBase {

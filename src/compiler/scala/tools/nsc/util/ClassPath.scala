@@ -7,6 +7,8 @@
 package scala.tools.nsc
 package util
 
+import java.io.Closeable
+
 import io.{AbstractFile, Directory, File, Jar}
 import java.net.MalformedURLException
 import java.net.URL
@@ -18,7 +20,7 @@ import Jar.isJarOrZip
 /**
   * A representation of the compiler's class- or sourcepath.
   */
-trait ClassPath {
+trait ClassPath extends Closeable {
   import scala.tools.nsc.classpath._
   def asURLs: Seq[URL]
 
@@ -93,6 +95,8 @@ trait ClassPath {
   /** The whole sourcepath in the form of one String.
     */
   def asSourcePathString: String
+
+  def close(): Unit
 }
 
 object ClassPath {

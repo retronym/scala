@@ -37,4 +37,5 @@ case class VirtualDirectoryClassPath(dir: VirtualDirectory) extends ClassPath wi
 
   protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
   protected def isMatchingFile(f: AbstractFile): Boolean = f.isClass
+  override def close(): Unit = {}
 }

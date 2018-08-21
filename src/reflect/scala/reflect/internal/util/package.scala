@@ -2,7 +2,8 @@ package scala
 package reflect
 package internal
 
-import scala.language.existentials // scala/bug#6541
+import scala.language.existentials
+import scala.util.control.NonFatal // scala/bug#6541
 
 package object util {
 
@@ -40,4 +41,28 @@ package object util {
    * Adds the `sm` String interpolator to a [[scala.StringContext]].
    */
   implicit class StringContextStripMarginOps(val stringContext: StringContext) extends StripMarginInterpolator
+
+  /** Calls `close` on each given `Closable`, throwing the first `NonFatal` exception, possible augmented with subsequent surpressed exceptions. */
+  def closeAll(as: Iterable[java.io.Closeable]): Unit = {
+    val closables = as.toArray
+    var i = 0
+    try {
+      while (i < closables.length) {
+        closables(i).close()
+        i += 1
+      }
+    } catch {
+      case NonFatal(ex) =>
+        while (i < closables.length) {
+          try {
+            closables(i).close()
+          } catch {
+            case NonFatal(ex2) =>
+              ex.addSuppressed(ex)
+          }
+          i += 1
+        }
+        throw ex
+    }
+  }
 }

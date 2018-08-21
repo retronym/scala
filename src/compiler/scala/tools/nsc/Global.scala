@@ -1655,6 +1655,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   }
 
   def createJavadoc    = false
+
+  def close(): Unit = {
+    platform.classPath.close()
+  }
 }
 
 object Global {

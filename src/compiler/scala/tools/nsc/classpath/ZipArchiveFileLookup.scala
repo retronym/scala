@@ -74,4 +74,8 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
 
   protected def createFileEntry(file: FileZipArchive#Entry): FileEntryType
   protected def isRequiredFileType(file: AbstractFile): Boolean
+  override def close(): Unit = {
+    if (archive ne null)
+      archive.close()
+  }
 }
