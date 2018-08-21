@@ -3,7 +3,7 @@
  */
 package scala.tools.nsc.classpath
 
-import java.io.File
+import java.io.{Closeable, File}
 import java.net.URL
 import java.nio.file.Files
 import java.nio.file.attribute.{BasicFileAttributes, FileTime}
@@ -13,6 +13,7 @@ import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import scala.tools.nsc.Settings
 import FileUtils._
+import scala.reflect.internal
 
 /**
  * A trait providing an optional cache for classpath entries obtained from zip and jar files.
@@ -204,10 +205,10 @@ final class FileBasedCache[T] {
   }
 
   def clear(): Unit = cache.synchronized {
-    val closables: Iterable[Closeable] = cache.values.collect {
+    val closeables: Iterable[Closeable] = cache.values.collect {
       case (_, closeable: Closeable) => closeable
     }
-    internal.util.closeAll(closables)
+    internal.util.closeAll(closeables)
     cache.clear()
   }
 }
