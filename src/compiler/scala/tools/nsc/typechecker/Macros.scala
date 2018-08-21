@@ -89,7 +89,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
           macroLogVerbose(s"macro classloader: caching is disabled because the following paths are not supported: ${nonJarZips.mkString(",")}.")
           newLoader()
         } else {
-          macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader)
+          macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()))(newLoader)
         }
       }
     }

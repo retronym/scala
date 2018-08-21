@@ -30,7 +30,7 @@ sealed trait ZipAndJarFileLookupFactory {
   protected def createForZipFile(zipFile: AbstractFile, release: Option[String]): ClassPath
 
   private def createUsingCache(zipFile: AbstractFile, settings: Settings): ClassPath = {
-    cache.getOrCreate(List(zipFile.file.toPath), () => createForZipFile(zipFile, settings.releaseValue))
+    cache.getOrCreate(List(zipFile.file.toPath), settings.releaseValue)(() => createForZipFile(zipFile, settings.releaseValue))
   }
 }
 
@@ -183,9 +183,9 @@ object ZipAndJarSourcePathFactory extends ZipAndJarFileLookupFactory {
 final class FileBasedCache[T] {
   import java.nio.file.Path
   private case class Stamp(lastModified: FileTime, fileKey: Object)
-  private val cache = collection.mutable.Map.empty[Seq[Path], (Seq[Stamp], T)]
+  private val cache = collection.mutable.Map.empty[(AnyRef, Seq[Path]), (Seq[Stamp], T)]
 
-  def getOrCreate(paths: Seq[Path], create: () => T): T = cache.synchronized {
+  def getOrCreate(paths: Seq[Path], extraKey: AnyRef = "")(create: () => T): T = cache.synchronized {
     val stamps = paths.map { path =>
       val attrs = Files.readAttributes(path, classOf[BasicFileAttributes])
       val lastModified = attrs.lastModifiedTime()
@@ -194,19 +194,20 @@ final class FileBasedCache[T] {
       Stamp(lastModified, fileKey)
     }
 
-    cache.get(paths) match {
+    cache.get((extraKey, paths)) match {
       case Some((cachedStamps, cached)) if cachedStamps == stamps => cached
       case _ =>
         val value = create()
-        cache.put(paths, (stamps, value))
+        cache.put((extraKey, paths), (stamps, value))
         value
     }
   }
 
   def clear(): Unit = cache.synchronized {
-    cache.valuesIterator.foreach {
-      case ()
+    val closables: Iterable[Closeable] = cache.values.collect {
+      case (_, closeable: Closeable) => closeable
     }
+    internal.util.closeAll(closables)
     cache.clear()
   }
 }

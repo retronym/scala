@@ -104,7 +104,7 @@ object Plugin {
     }
 
     if (disableCache || locations.exists(!Jar.isJarOrZip(_))) newLoader()
-    else pluginClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader)
+    else pluginClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()))(newLoader)
   }
 
   /** Try to load a plugin description from the specified location.
