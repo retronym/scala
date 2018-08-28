@@ -11,6 +11,7 @@ package io
 import java.io.{ IOException, InputStream, OutputStream, BufferedOutputStream, ByteArrayOutputStream }
 import java.io.{ File => JFile }
 import java.net.URL
+import java.nio.file.attribute.{BasicFileAttributes, FileTime}
 
 /**
  * An abstraction over files for use in the reflection/compiler libraries.
@@ -257,6 +258,22 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
     assert (isDirectory, "Tried to find '%s' in '%s' but it is not a directory".format(name, path))
     fileOrSubdirectoryNamed(name, isDir = true)
   }
+
+  final def asNioBasicFileAttributes: BasicFileAttributes = new BasicFileAttributes {
+    override def lastModifiedTime(): FileTime = FileTime.fromMillis(lastModified)
+    override def lastAccessTime(): FileTime = unsupported()
+    override def creationTime(): FileTime = unsupported()
+    override def isRegularFile: Boolean = !isDirectory
+    override def isDirectory: Boolean = isDirectory
+    override def isSymbolicLink: Boolean = unsupported()
+    override def isOther: Boolean = false
+    override def size(): Long = AbstractFile.this.sizeOption match {
+      case Some(size) => size.toLong
+      case None => unsupported()
+    }
+    override def fileKey(): AnyRef = unsupported()
+  }
+
 
   protected def unsupported(): Nothing = unsupported(null)
   protected def unsupported(msg: String): Nothing = throw new UnsupportedOperationException(msg)
