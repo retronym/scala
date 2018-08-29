@@ -1210,6 +1210,8 @@ trait Types
 
     override def underlying: Type = functionArgsProto
 
+    override def isHigherKinded: Boolean = false
+
     // Always match if we couldn't collapse the expected types contributed for this argument by the alternatives.
     // TODO: could we just match all function-ish types as an optimization? We previously used WildcardType
     override def isMatchedBy(tp: Type, depth: Depth): Boolean =
