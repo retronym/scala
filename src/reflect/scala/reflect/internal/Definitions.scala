@@ -856,6 +856,7 @@ trait Definitions extends api.StandardDefinitions {
       case TypeRef(_, _, _)                             => val normalize = tp.normalize; (normalize ne tp) && isStable(normalize)
       case TypeVar(origin, _)                           => isStable(origin)
       case AnnotatedType(_, atp)                        => isStable(atp)    // Really?
+      case _: OverloadedArgFunProto                     => false
       case _: SimpleTypeProxy                           => isStable(tp.underlying)
       case _                                            => false
     }
