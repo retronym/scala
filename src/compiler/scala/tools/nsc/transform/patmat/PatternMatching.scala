@@ -205,20 +205,20 @@ trait Interface extends ast.TreeDSL {
       def apply(tree: Tree): Tree = {
         // according to -Ystatistics 10% of translateMatch's time is spent in this method...
         // since about half of the typedSubst's end up being no-ops, the check below shaves off 5% of the time spent in typedSubst
-        val toIdents = to.forall(_.isInstanceOf[Ident])
         val containsSym = tree.exists {
           case i@Ident(_) => from contains i.symbol
           case tt: TypeTree => tt.tpe.exists {
             case SingleType(_, sym) =>
               (from contains sym) && {
-                if (!toIdents) global.devWarning(s"Unexpected substitution of non-Ident into TypeTree `$tt`, subst= $this")
+                global.devWarningIf(to.exists(!_.isInstanceOf[Ident])) {
+                  s"Unexpected substitution of non-Ident into TypeTree `$tt`, subst= $this"
+                }
                 true
               }
             case _ => false
           }
           case _          => false
         }
-        val toSyms = to.map(_.symbol)
         object substIdentsForTrees extends Transformer {
           private def typedIfOrigTyped(to: Tree, origTp: Type): Tree =
             if (origTp == null || origTp == NoType) to
