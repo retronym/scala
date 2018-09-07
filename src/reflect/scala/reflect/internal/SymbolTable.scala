@@ -75,11 +75,32 @@ abstract class SymbolTable extends macros.Universe
   def isDeveloper: Boolean = settings.debug
 
   @deprecated("use devWarning if this is really a warning; otherwise use log", "2.11.0")
-  def debugwarn(msg: => String): Unit = devWarning(msg)
+  final def debugwarn(msg: => String): Unit = devWarning(msg)
 
-  /** Override with final implementation for inlining. */
-  def debuglog(msg:  => String): Unit = if (settings.debug) log(msg)
-  def devWarning(msg: => String): Unit = if (isDeveloper) Console.err.println(msg)
+  @inline final def debuglog(msg: => String): Unit = {
+    if (settings.debug)
+      log(msg)
+  }
+
+  /** This is for WARNINGS which should reach the ears of scala developers
+    *  whenever they occur, but are not useful for normal users. They should
+    *  be precise, explanatory, and infrequent. Please don't use this as a
+    *  logging mechanism. !!! is prefixed to all messages issued via this route
+    *  to make them visually distinct.
+    */
+  @inline final def devWarning(msg: => String): Unit = {
+    if (isDeveloper)
+      warning(NoPosition, "!!! " + msg)
+    else
+      log(s"!!! $msg") // such warnings always at least logged
+  }
+  @inline final def devWarning(pos: Position, msg: => String): Unit = {
+    if (isDeveloper)
+      warning(pos, "!!! " + msg)
+    else
+      log(s"!!! [@ $pos] $msg") // such warnings always at least logged
+  }
+
   def throwableAsString(t: Throwable): String = "" + t
   def throwableAsString(t: Throwable, maxFrames: Int): String = t.getStackTrace take maxFrames mkString "\n  at "
 

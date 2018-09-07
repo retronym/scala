@@ -275,21 +275,6 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
 
   override def isDeveloper = settings.developer || super.isDeveloper
 
-  /** This is for WARNINGS which should reach the ears of scala developers
-   *  whenever they occur, but are not useful for normal users. They should
-   *  be precise, explanatory, and infrequent. Please don't use this as a
-   *  logging mechanism. !!! is prefixed to all messages issued via this route
-   *  to make them visually distinct.
-   */
-  @inline final override def devWarning(msg: => String): Unit = devWarning(NoPosition, msg)
-  @inline final def devWarning(pos: Position, msg: => String): Unit = {
-    def pos_s = if (pos eq NoPosition) "" else s" [@ $pos]"
-    if (isDeveloper)
-      warning(pos, "!!! " + msg)
-    else
-      log(s"!!!$pos_s $msg") // such warnings always at least logged
-  }
-
   def logError(msg: String, t: Throwable): Unit = ()
 
   override def shouldLogAtThisPhase = settings.log.isSetByUser && (
@@ -299,11 +284,6 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
   @inline final def log(msg: => AnyRef): Unit = {
     if (shouldLogAtThisPhase)
       inform(s"[log $globalPhase$atPhaseStackMessage] $msg")
-  }
-
-  @inline final override def debuglog(msg: => String): Unit = {
-    if (settings.debug)
-      log(msg)
   }
 
   @deprecated("Renamed to reportThrowable", "2.10.1")
