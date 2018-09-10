@@ -627,6 +627,15 @@ final class StringOps(private val s: String) extends AnyVal {
   /** Return all lines in this string in an iterator, excluding trailing line
     *  end characters; i.e., apply `.stripLineEnd` to all lines
     *  returned by `linesWithSeparators`.
+    *
+    * This is an alias for `lines` with a name that won't conflict with `String.lines` added in JDK 11.
+    */
+  def linesIterator: Iterator[String] =
+    linesWithSeparators map (_.stripLineEnd)
+
+  /** Return all lines in this string in an iterator, excluding trailing line
+    *  end characters; i.e., apply `.stripLineEnd` to all lines
+    *  returned by `linesWithSeparators`.
     */
   def lines: Iterator[String] =
     linesWithSeparators map (_.stripLineEnd)
