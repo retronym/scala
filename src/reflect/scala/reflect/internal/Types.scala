@@ -1127,7 +1127,7 @@ trait Types
   /** An object representing an unknown type, used during type inference.
    *  If you see WildcardType outside of inference it is almost certainly a bug.
    */
-  case object WildcardType extends Type with ProtoType {
+  case object WildcardType extends ProtoType {
     override def safeToString: String = "?"
     override def kind = "WildcardType"
   }
@@ -1141,7 +1141,7 @@ trait Types
    *       type is created: a MethodType with parameters typed as
    *       BoundedWildcardTypes.
    */
-  case class BoundedWildcardType(override val bounds: TypeBounds) extends Type with BoundedWildcardTypeApi with ProtoType {
+  case class BoundedWildcardType(override val bounds: TypeBounds) extends ProtoType with BoundedWildcardTypeApi  {
     override def isMatchedBy(tp: Type, depth: Depth)= isSubType(tp, bounds.hi, depth)
     override def canMatch(tp: Type, depth: Depth): Boolean = isSubType(bounds.lo, tp, depth)
     override def registerTypeEquality(tp: Type): Boolean = bounds.containsType(tp)
@@ -1160,10 +1160,10 @@ trait Types
 
   object BoundedWildcardType extends BoundedWildcardTypeExtractor
 
-  trait ProtoType extends Type {
+  abstract class ProtoType extends Type {
     def toBounds: TypeBounds = TypeBounds.empty
 
-    override def isWildcard = true
+    override final def isWildcard = true
     override def members = ErrorType.decls
 
     // tp <:< this prototype?
@@ -1204,7 +1204,7 @@ trait Types
     *
     * In all other cases, the old behavior is maintained: Wildcard is expected.
     */
-  case class OverloadedArgFunProto(argIdx: Int, pre: Type, alternatives: List[Symbol]) extends ProtoType with SimpleTypeProxy {
+  final case class OverloadedArgFunProto(argIdx: Int, pre: Type, alternatives: List[Symbol]) extends ProtoType with SimpleTypeProxy {
     override def safeToString: String = underlying.safeToString
     override def kind = "OverloadedArgFunProto"
 
