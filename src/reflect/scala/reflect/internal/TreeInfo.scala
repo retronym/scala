@@ -969,4 +969,15 @@ abstract class TreeInfo {
     case Block(_, expr) => isMacroApplicationOrBlock(expr)
     case tree => isMacroApplication(tree)
   }
+
+  // Return a pair consisting of (all statements up to and including superclass and trait constr calls, rest)
+  final def splitAtSuper(stats: List[Tree], classOnly: Boolean): (List[Tree], List[Tree]) = {
+    def isConstr(tree: Tree): Boolean = tree match {
+      case Block(_, expr) => isConstr(expr) // scala/bug#6481 account for named argument blocks
+      case _              => (tree.symbol ne null) && (if (classOnly) tree.symbol.isClassConstructor else tree.symbol.isConstructor)
+    }
+    val (pre, rest0)       = stats span (!isConstr(_))
+    val (supercalls, rest) = rest0 span (isConstr(_))
+    (pre ::: supercalls, rest)
+  }
 }

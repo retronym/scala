@@ -704,7 +704,8 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       // Example input: $line3.$read$$iw$$iw$
       val classNameRegex = (naming.lineRegex + ".*").r
       def isWrapperInit(x: StackTraceElement) = cond(x.getClassName) {
-        case classNameRegex() if x.getMethodName == nme.CONSTRUCTOR.decoded => true
+        case classNameRegex() =>
+          x.getMethodName == nme.CONSTRUCTOR.decoded || x.getMethodName == "<clinit>" || x.getMethodName == printName
       }
       val stackTrace = unwrapped stackTracePrefixString (!isWrapperInit(_))
 

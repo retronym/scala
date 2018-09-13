@@ -29,7 +29,7 @@ trait TestBase {
 }
 
 
-trait FutureCallbacks extends TestBase {
+class FutureCallbacks extends TestBase {
   import ExecutionContext.Implicits._
 
   def testOnSuccess(): Unit = once {
@@ -123,7 +123,7 @@ trait FutureCallbacks extends TestBase {
 }
 
 
-trait FutureCombinators extends TestBase {
+class FutureCombinators extends TestBase {
   import ExecutionContext.Implicits._
 
   def testMapSuccess(): Unit = once {
@@ -519,7 +519,7 @@ def testTransformFailure(): Unit = once {
 }
 
 
-trait FutureProjections extends TestBase {
+class FutureProjections extends TestBase {
   import ExecutionContext.Implicits._
 
   def testFailedFailureOnComplete(): Unit = once {
@@ -611,7 +611,7 @@ trait FutureProjections extends TestBase {
 }
 
 
-trait Blocking extends TestBase {
+class Blocking extends TestBase {
   import ExecutionContext.Implicits._
 
   def testAwaitSuccess(): Unit = once {
@@ -643,7 +643,7 @@ trait Blocking extends TestBase {
   testFQCNForAwaitAPI()
 }
 
-trait BlockContexts extends TestBase {
+class BlockContexts extends TestBase {
   import ExecutionContext.Implicits._
   import scala.concurrent.{ Await, Awaitable, BlockContext }
 
@@ -700,7 +700,7 @@ trait BlockContexts extends TestBase {
   testPopCustom()
 }
 
-trait Promises extends TestBase {
+class Promises extends TestBase {
   import ExecutionContext.Implicits._
 
   def testSuccess(): Unit = once {
@@ -731,12 +731,11 @@ trait Promises extends TestBase {
 }
 
 
-trait Exceptions extends TestBase {
+class Exceptions extends TestBase {
   import ExecutionContext.Implicits._
-
 }
 
-trait GlobalExecutionContext extends TestBase {
+class GlobalExecutionContext extends TestBase {
   import ExecutionContext.Implicits._
   
   def testNameOfGlobalECThreads(): Unit = once {
@@ -749,7 +748,7 @@ trait GlobalExecutionContext extends TestBase {
   testNameOfGlobalECThreads()
 }
 
-trait CustomExecutionContext extends TestBase {
+class CustomExecutionContext extends TestBase {
   import scala.concurrent.{ ExecutionContext, Awaitable }
 
   def defaultEC = ExecutionContext.global
@@ -900,7 +899,7 @@ trait CustomExecutionContext extends TestBase {
   testCallbackChainCustomEC()
 }
 
-trait ExecutionContextPrepare extends TestBase {
+class ExecutionContextPrepare extends TestBase {
   val theLocal = new ThreadLocal[String] {
     override protected def initialValue(): String = ""
   }
@@ -954,17 +953,17 @@ trait ExecutionContextPrepare extends TestBase {
 }
 
 object Test
-extends App
-with FutureCallbacks
-with FutureCombinators
-with FutureProjections
-with Promises
-with BlockContexts
-with Exceptions
-with GlobalExecutionContext
-with CustomExecutionContext
-with ExecutionContextPrepare
-{
+extends App {
+  new FutureCallbacks
+  new FutureCombinators
+  new FutureProjections
+  new Promises
+  new BlockContexts
+  new Exceptions
+  new GlobalExecutionContext
+  new CustomExecutionContext
+  new ExecutionContextPrepare
+
   System.exit(0)
 }
 
