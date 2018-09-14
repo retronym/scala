@@ -407,38 +407,19 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     override def foreach[U](p: Symbol => U): Unit = toList foreach p
 
+    // TODO in 2.13.x, s/sameLength(result, filtered)/result eq filtered/, taking advantage of
+    //      the new conservation in List.filter/filterNot
     override def filterNot(p: Symbol => Boolean): Scope = {
-      val first = toList
-      var current = first
-      while ((current ne Nil) && !p(current.head)) {
-        current = current.tail
-      }
-      if (current eq Nil) this
-      else {
-        def notMatch(nextMatch: List[Symbol], firstNonMatch: List[Symbol]): List[Symbol] = {
-          if (nextMatch eq firstNonMatch) firstNonMatch.tail filterNot p
-          else nextMatch.head :: notMatch(nextMatch.tail, firstNonMatch)
-        }
-
-        newScopeWith(notMatch(first, current): _*)
-      }
+      val result = toList
+      val filtered = result.filterNot(p)
+      if (sameLength(result, filtered)) this else newScopeWith(filtered: _*)
     }
     override def filter(p: Symbol => Boolean): Scope = {
-      val first = toList
-      var current = first
-      while ((current ne Nil) && p(current.head)) {
-        current = current.tail
-      }
-      if (current eq Nil) this
-      else {
-        def matches(nextMatch: List[Symbol], firstNonMatch: List[Symbol]): List[Symbol] = {
-          if (nextMatch eq firstNonMatch) firstNonMatch.tail filter p
-          else nextMatch.head :: matches(nextMatch.tail, firstNonMatch)
-        }
-
-        newScopeWith(matches(first, current): _*)
-      }
+      val result = toList
+      val filtered = result.filter(p)
+      if (sameLength(result, filtered)) this else newScopeWith(filtered: _*)
     }
+
     @deprecated("use `toList.reverse` instead", "2.10.0") // Used in sbt 0.12.4
     def reverse: List[Symbol] = toList.reverse
 
