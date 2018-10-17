@@ -27,7 +27,6 @@ import mutable.StringBuilder
  *  @define coll string
  */
 final class StringOps(override val repr: String) extends AnyVal with StringLike[String] {
-
   override protected[this] def thisCollection: WrappedString = new WrappedString(repr)
   override protected[this] def toCollection(repr: String): WrappedString = new WrappedString(repr)
 

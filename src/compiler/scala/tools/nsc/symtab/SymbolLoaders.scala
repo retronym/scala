@@ -213,7 +213,12 @@ abstract class SymbolLoaders {
       })
     }
 
-    override def complete(root: Symbol) {
+    override def complete(root: Symbol): Unit = {
+      statistics.withContext(true, root, NoSymbol, NoSymbol) {
+        completeInternal(root)
+      }
+    }
+    private def completeInternal(root: Symbol) {
       try {
         val start = java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime())
         val currentphase = phase
@@ -225,7 +230,7 @@ abstract class SymbolLoaders {
         setSource(root.companionSymbol) // module -> class, class -> module
       }
       catch {
-        case ex @ (_: IOException | _: MissingRequirementError) =>
+        case ex@(_: IOException | _: MissingRequirementError) =>
           ok = false
           signalError(root, ex)
       }

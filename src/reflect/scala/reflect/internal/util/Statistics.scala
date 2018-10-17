@@ -9,12 +9,54 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import scala.runtime.LongRef
 
 abstract class Statistics(val symbolTable: SymbolTable, settings: MutableSettings) {
-
   initFromSettings(settings)
 
   def initFromSettings(currentSettings: MutableSettings): Unit = {
     enabled = currentSettings.YstatisticsEnabled
     hotEnabled = currentSettings.YhotStatisticsEnabled
+  }
+
+  type Sym = SymbolTable#Symbol
+  case class StatsKey(owner: Sym, macroo: Sym, implicitPt: Sym)
+
+  final class StackedStats {
+    private var startNanos = System.nanoTime()
+    var duration: Long = 0
+    var running = true
+    def stop(): Unit = {
+      assert(running)
+      duration += System.nanoTime() - startNanos
+      running = false
+    }
+    def start(): Unit = {
+      startNanos = System.nanoTime()
+      running = true
+    }
+  }
+
+  private val TopKey = StatsKey(symbolTable.NoSymbol, symbolTable.NoSymbol, symbolTable.NoSymbol)
+  private var statsStack = mutable.ArrayStack[(StatsKey, StackedStats)]((TopKey, new StackedStats))
+  val statsMap = mutable.AnyRefMap[StatsKey, StackedStats](statsStack.head)
+  private def currentStats: StackedStats = statsStack.top._2
+
+  def start(owner: Sym, macroo: Sym, implicitPt: Sym): Unit = {
+    currentStats.stop()
+    val key = StatsKey(owner, macroo, implicitPt)
+    val stats = statsMap.getOrNull(key) match {
+      case null => val x = new StackedStats; statsMap(key) = x; x
+      case existing => existing.start(); existing
+    }
+    statsStack.push((key, stats))
+  }
+  def end(): Unit = {
+    statsStack.pop()._2.stop()
+    currentStats.start()
+  }
+  @inline final def withContext[T](condition: Boolean, owner: Sym, macroo: Sym, implicitPt: Sym)(f: => T): T = {
+    def implicitOrMacroOnStack = statsStack.exists(x => x._1.implicitPt != symbolTable.NoSymbol || x._1.macroo != symbolTable.NoSymbol)
+    val shouldStart = StatisticsStatics.areSomeColdStatsEnabled() && enabled && condition && !implicitOrMacroOnStack
+    if (shouldStart) start(owner, macroo, implicitPt)
+    try { f } finally {if (shouldStart) end()}
   }
 
   type TimerSnapshot = (Long, Long)

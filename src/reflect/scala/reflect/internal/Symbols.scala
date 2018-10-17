@@ -1230,6 +1230,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       def next = { val r = current; current = current.owner; r }
     }
 
+    @tailrec final def hasTermOwner: Boolean = this != NoSymbol && {
+      val owner = this.owner
+      if (owner.hasPackageFlag) false
+      else if (owner.isTerm) true
+      else owner.hasTermOwner
+    }
+
     /** Same as `ownerChain contains sym` but more efficient, and
      *  with a twist for refinement classes (see RefinementClassSymbol.)
      */

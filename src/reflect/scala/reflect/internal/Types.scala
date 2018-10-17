@@ -4867,4 +4867,6 @@ trait TypesStats {
   val typerefBaseTypeSeqCount = newSubCounter("  of which for typerefs", baseTypeSeqCount)
   val singletonBaseTypeSeqCount = newSubCounter("  of which for singletons", baseTypeSeqCount)
   val typeOpsStack = newTimerStack()
+  val completionStack = newTimerStack()
+  class PerSymbolStats(stats: List[Quantity])
 }
