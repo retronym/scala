@@ -28,9 +28,11 @@ public class JpmsClasspathSupport {
     private final List<String> addModules;
     private final ClassOutput classOutput;
     private final ModuleFinder moduleFinder;
+    private Optional<String> release;
 
     public JpmsClasspathSupport(Optional<String> release, ClassOutput classOutput, List<List<String>> fileManagerOptions, List<String> addModules,
                                 List<String> addExports, List<String> addReads) throws IOException {
+        this.release = release;
         List<List<String>> unhandled = new ArrayList<>();
         Consumer<StandardJavaFileManager> c = (fm -> {
             classOutput.configure(fm);
@@ -171,5 +173,9 @@ public class JpmsClasspathSupport {
 
     public StandardJavaFileManager getFileManager() {
         return fileManager;
+    }
+
+    public Optional<String> getRelease() {
+        return release;
     }
 }

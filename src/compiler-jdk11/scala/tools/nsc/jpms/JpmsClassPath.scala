@@ -2,8 +2,12 @@ package scala.tools.nsc.jpms
 
 import java.net.URL
 import java.nio.file._
-import java.util
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.spi.FileSystemProvider
+import java.util.Collections
 
+import com.sun.tools.javac.file.RelativePath
+import com.sun.tools.javac.util.Assert
 import javax.tools.JavaFileManager.Location
 import javax.tools.JavaFileObject.Kind
 import javax.tools._
@@ -68,10 +72,50 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
 
   private val fileManager = impl.getFileManager
   private def locationAsPaths(location: StandardLocation): IndexedSeq[Path] = getLocationAsPaths(fileManager, location).asScala.toVector
-  private val packageIndex = mutable.AnyRefMap[String, PackageEntryImpl]()
+
   private val moduleLocations = Array(StandardLocation.MODULE_SOURCE_PATH, StandardLocation.UPGRADE_MODULE_PATH, StandardLocation.SYSTEM_MODULES, StandardLocation.MODULE_PATH, StandardLocation.PATCH_MODULE_PATH)
   private val paths = mutable.ArrayBuffer[(Path, StandardLocation, Location)]()
+  val jarPackageIndex = mutable.HashMap[String, mutable.ArrayBuffer[Location]]()
   indexLocations()
+
+
+  lazy val jarfsProvider: Option[FileSystemProvider] = {
+    FileSystemProvider.installedProviders.asScala.find(_.getScheme == "jar")
+  }
+
+  private def indexLocation(path: Path, standardLocation: StandardLocation, location: Location): Unit = {
+    paths.addOne((path, standardLocation, location))
+    if (Files.isDirectory(path)) {
+      ()
+    } else {
+      val fs = if (impl.getRelease.orElse(null) != null && path.toString.endsWith(".jar")) {
+        val env: java.util.Map[String, String] = Collections.singletonMap("multi-release", impl.getRelease.get())
+        jarfsProvider.get.newFileSystem(path, env)
+      } else FileSystems.newFileSystem(path, null)
+      try {
+        val packages = mutable.Set[String]()
+        import scala.collection.JavaConverters._
+        for (root <- fs.getRootDirectories.asScala) {
+          Files.walkFileTree(root, java.util.EnumSet.noneOf(classOf[FileVisitOption]), Integer.MAX_VALUE, new SimpleFileVisitor[Path]() {
+            override def preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult = {
+              val dirName = dir.getFileName
+              if (dir eq root)
+                FileVisitResult.CONTINUE
+              else if ((dirName eq null) || dirName.toString.contains("-"))
+                FileVisitResult.SKIP_SUBTREE
+              else {
+                val buffer = jarPackageIndex.getOrElseUpdate(root.relativize(dir).toString.replace('/', '.'), mutable.ArrayBuffer())
+                buffer += location
+                FileVisitResult.CONTINUE
+              }
+            }
+          })
+        }
+      } finally {
+        fs.close()
+      }
+    }
+  }
 
   // TODO JPMS It's a bit annoying that we have to start interrogating the classpath before we've resolve the module
   //      graph: we have to assume that all modules are potentially on the module path. It seems pretty hard to
@@ -85,11 +129,11 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
       location <- location1.asScala
       path <- getLocationAsPaths(fileManager, location).asScala
     } {
-      paths.addOne((path, moduleLocation, location))
+      indexLocation(path, moduleLocation, location)
     }
     val cpLocation = StandardLocation.CLASS_PATH
     for (path <- getLocationAsPaths(fileManager, cpLocation).asScala)
-      paths.addOne((path, cpLocation, cpLocation))
+      indexLocation(path, cpLocation, cpLocation)
   }
 
   private[nsc] def hasPackage(pkg: String): Boolean = {
@@ -121,10 +165,18 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
         }
       }
     }
+    val inPackageDot = inPackage + "."
+    for (subJarPackage <- jarPackageIndex.keysIterator.filter(k => PackageNameUtils.packageContains(inPackage, k))) {
+      val packageSimpleName = PackageNameUtils.separatePkgAndClassNames(subJarPackage)._2
+      if (!seen.contains(packageSimpleName)) {
+        seen += packageSimpleName
+        result += PackageEntryImpl(subJarPackage)
+      }
+    }
     result.result()
   }
 
-  private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] = {
+  private[nsc] def classes(inPackage: String) = {
     val result = immutable.ArraySeq.untagged.newBuilder[ClassFileEntry]
     // TODO: simplify indexing logic, but make sure to list each class only once (paths has duplicated entries if you only consider the input to fileManager.list below)
     for ((standardLocation, location) <- paths.map { case (p, sl, l) => (sl, l)}.distinct) {
@@ -133,7 +185,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
         else ""
 //      println(s"----  $location / $moduleName ----")
 
-      for (jfo <- fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
+      for (jfo <- fileManager.list(location, inPackage, java.util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
         val binaryName = fileManager.inferBinaryName(location, jfo)
         val path = asPath(fileManager, jfo)
 //        println(s"$path $moduleName $location")
@@ -152,7 +204,7 @@ final class JpmsClassPath(patches: Map[String, List[String]], private val impl: 
     val pathsIterator = paths.iterator
     while (pathsIterator.hasNext) {
       val (path, standardLocation, location) = pathsIterator.next()
-      val it = fileManager.list(location, inPackage, util.EnumSet.of(JavaFileObject.Kind.CLASS), false).iterator()
+      val it = fileManager.list(location, inPackage, java.util.EnumSet.of(JavaFileObject.Kind.CLASS), false).iterator()
       while (it.hasNext) {
         val jfo = it.next()
         if (jfo.isNameCompatible(classSimpleName, Kind.CLASS))
