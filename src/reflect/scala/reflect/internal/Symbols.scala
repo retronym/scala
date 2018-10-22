@@ -3347,8 +3347,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def associatedFile_=(f: AbstractFile): Unit = { _associatedFile = f }
 
     def associatedJpmsModuleName: String =
-      if (!isTopLevel) enclosingTopLevelClass.asClass.associatedJpmsModuleName
-      else if (_associatedJpmsModuleName eq null) "" // guarantee not null, but save cost of initializing the var
+      if (!isTopLevel) {
+        enclosingTopLevelClass match {
+          case NoSymbol => ""
+          case encl => encl.asClass.associatedJpmsModuleName
+        }
+      } else if (_associatedJpmsModuleName eq null) "" // guarantee not null, but save cost of initializing the var
       else _associatedJpmsModuleName
 
     def associatedJpmsModuleName_=(name: String): Unit = _associatedJpmsModuleName = name
