@@ -1302,7 +1302,11 @@ trait Namers extends MethodSynthesis {
 
       val resTpGiven =
         if (tpt.isEmpty) WildcardType
-        else typer.typedType(tpt).tpe
+        else {
+          val tp = typer.typedType(tpt).tpe
+          ddef.tpt setType tp
+          tp
+        }
 
 
       // ignore missing types unless we can look to overridden method to recover the missing information
@@ -1429,7 +1433,9 @@ trait Namers extends MethodSynthesis {
         //   trait T { def f: A }; class C extends T { implicit def b2a(t: B): A = ???; def f = new B }
         val resTpComputedUnlessGiven =
           if (tpt.isEmpty) assignTypeToTree(ddef, typer, resTpFromOverride)
-          else resTpGiven
+          else {
+            resTpGiven
+          }
 
         // #2382: return type of default getters are always @uncheckedVariance
         if (meth.hasDefault) resTpComputedUnlessGiven.withAnnotation(AnnotationInfo(uncheckedVarianceClass.tpe, List(), List()))
@@ -1715,7 +1721,11 @@ trait Namers extends MethodSynthesis {
 
             tptFromRhsUnderPt
           }
-        } else typer.typedType(tpt).tpe
+        } else {
+          val tp = typer.typedType(tpt).tpe
+          vdef.tpt setType tp
+          tp
+        }
 
 //      println(s"val: $result / ${vdef.tpt.tpe} / ")
 

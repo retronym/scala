@@ -267,7 +267,7 @@ class BasePrintTest {
     |}""",
     typedCode = sm"""
     |{
-    |  class foo[t](x: scala.Int);
+    |  class foo[t](x: Int);
     |  {
     |    final class $$anon extends foo[scala.Predef.String](3) {
     |      ()
@@ -327,12 +327,12 @@ class BasePrintTest {
   @Test def testFunc1 = assertResultCode(
     code = "List(1, 2, 3).map((i: Int) => i - 1)")(
     parsedCode = "List(1, 2, 3).map(((i: Int) => i.-(1)))",
-    typedCode = sm"scala.collection.immutable.List.apply[Int](1, 2, 3).map[Int, List[Int]](((i: scala.Int) => i.-(1)))(scala.collection.immutable.List.canBuildFrom[Int])")
+    typedCode = sm"scala.collection.immutable.List.apply[Int](1, 2, 3).map[Int, List[Int]](((i: Int) => i.-(1)))(scala.collection.immutable.List.canBuildFrom[Int])")
 
   @Test def testFunc2 = assertResultCode(
     code = "val sum: Seq[Int] => Int = _ reduceLeft (_+_)")(
     parsedCode = "val sum: _root_.scala.Function1[Seq[Int], Int] = ((x$1) => x$1.reduceLeft(((x$2, x$3) => x$2.+(x$3))))",
-    typedCode = "val sum: _root_.scala.Function1[scala.`package`.Seq[scala.Int], scala.Int] = ((x$1: Seq[Int]) => x$1.reduceLeft[Int](((x$2: Int, x$3: Int) => x$2.+(x$3))))")
+    typedCode = "val sum: _root_.scala.Function1[Seq[Int], Int] = ((x$1: Seq[Int]) => x$1.reduceLeft[Int](((x$2: Int, x$3: Int) => x$2.+(x$3))))")
 
   @Test def testFunc3 = assertResultCode(
     code = "List(1, 2, 3) map (_ - 1)")(
@@ -342,7 +342,7 @@ class BasePrintTest {
   @Test def testFunc4 = assertResultCode(
     code = "val x: String => Int = ((str: String) => 1)")(
     parsedCode = "val x: _root_.scala.Function1[String, Int] = ((str: String) => 1)",
-    typedCode = " val x: _root_.scala.Function1[_root_.scala.Predef.String, _root_.scala.Int] = ((str: _root_.scala.Predef.String) => 1)", printRoot = true)
+    typedCode = " val x: _root_.scala.Function1[String, Int] = ((str: String) => 1)", printRoot = true)
 
   @Test def testAssign1 = assertPrintedCode("(f.v = 5).toString", checkTypedTree = false)
   
@@ -832,7 +832,7 @@ class ClassPrintTest {
     typedCode = sm"""
     |object Test {
     |  import java.io._;
-    |  var file: java.io.PrintStream = null;
+    |  var file: PrintStream = null;
     |  try {
     |    val out = new java.io.FileOutputStream("myfile.txt");
     |    Test.this.`file_=`(new java.io.PrintStream(out))
