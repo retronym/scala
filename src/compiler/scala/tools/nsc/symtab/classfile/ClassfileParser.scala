@@ -193,17 +193,6 @@ abstract class ClassfileParser {
           if (!(isScala || isScalaRaw))
             loaders.platform.classFileInfoParsed(file, clazz, ClassBytes(ByteBuffer.wrap(in.buf)))
       }
-      if (isScalaRaw && !isNothingOrNull) {
-        unlinkRaw()
-      }
-    }
-  }
-
-  private def unlinkRaw(): Unit = {
-    val decls = clazz.enclosingPackage.info.decls
-    for (c <- List(clazz, staticModule, staticModule.moduleClass)) {
-      c.setInfo(NoType)
-      decls.unlink(c)
     }
   }
 
