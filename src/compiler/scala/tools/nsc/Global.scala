@@ -1446,7 +1446,20 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     private def printArgs(sources: List[SourceFile]): Unit = {
       if (settings.printArgs.isSetByUser) {
-        val argsFile = (settings.recreateArgs ::: sources.map(_.file.absolute.toString())).mkString("", "\n", "\n")
+        val singleOuputDir: List[String] = if (settings.d.value == settings.d.default) {
+          settings.outputDirs.getSingleOutput match {
+            case Some(file) =>
+              val jfile = file.file
+              if (jfile != null && !java.nio.file.Files.isSameFile(jfile.toPath, java.nio.file.Paths.get(settings.d.value))) {
+                // A build tool must have used `settings.outDirs.setSingleOutput`, bypassing `-d`.
+                // Render that to the equivalent -d arguments.
+                "-d" :: jfile.toString :: Nil
+              } else Nil
+            case _ => Nil
+          }
+        } else Nil
+        val recreated = settings.userSetSettings.toList.filterNot(_ eq settings.printArgs).flatMap(_.unparse)
+        val argsFile = (recreated ::: singleOuputDir ::: sources.map(_.file.absolute.toString())).mkString("", "\n", "\n")
         settings.printArgs.value match {
           case "-" =>
             reporter.echo(argsFile)
