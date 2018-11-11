@@ -905,7 +905,7 @@ class LazyListLazinessTest {
       in.readObject.asInstanceOf[LazyList[Int]]
     }
 
-    genericElementIndependentOp_properlyLazy(serializeDeserialize)
+    assertLazyAll(serializeDeserialize)
     val op = lazyListOp { list =>
       list.take(4).force
       serializeDeserialize(list)
