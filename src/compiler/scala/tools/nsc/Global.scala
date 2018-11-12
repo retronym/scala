@@ -1685,6 +1685,20 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
   }
 
   def createJavadoc    = false
+
+  var typerDepth: Int = 0
+  var maxTyperDepth = 0
+  final def decTyperDepth(): Unit = {
+    typerDepth -= 1
+  }
+  final def incTyperDepth(): Unit = {
+    typerDepth += 1
+    maxTyperDepth = math.max(typerDepth, maxTyperDepth)
+  }
+  val typerDepthReportThreshold: Int = Integer.getInteger("scala.typer.ast.depth.threshhold", Int.MaxValue)
+  scala.sys.addShutdownHook {
+    println("max typer depth: " + maxTyperDepth)
+  }
 }
 
 object Global {

@@ -5633,6 +5633,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
 
     def typed(tree: Tree, mode: Mode, pt: Type): Tree = {
+      incTyperDepth()
+      if (typerDepth > typerDepthReportThreshold) {
+        var pos = context.enclMethod.owner.pos
+        if (pos == NoPosition)
+          pos = tree.pos
+        reporter.warning(pos, "AST depth within " + context.owner.enclMethod.pos + " exceeds " + typerDepthReportThreshold + " at " + globalPhase.name )
+      }
       lastTreeToTyper = tree
       val statsEnabled = StatisticsStatics.areSomeHotStatsEnabled() && statistics.areHotStatsLocallyEnabled
       val startByType = if (statsEnabled) statistics.pushTimer(byTypeStack, byTypeNanos(tree.getClass)) else null
@@ -5707,6 +5714,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       } finally {
         if (shouldPopTypingStack) typingStack.pop(tree)
         if (statsEnabled) statistics.popTimer(byTypeStack, startByType)
+        decTyperDepth()
       }
     }
 

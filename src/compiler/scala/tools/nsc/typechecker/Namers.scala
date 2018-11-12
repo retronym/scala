@@ -2015,8 +2015,12 @@ trait Namers extends MethodSynthesis {
 
     override def complete(sym: Symbol) = {
       lockedCount += 1
+      val saved = typerDepth
       try completeImpl(sym)
-      finally lockedCount -= 1
+      finally {
+        typerDepth = saved
+        lockedCount -= 1
+      }
     }
   }
 
