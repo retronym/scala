@@ -166,7 +166,7 @@ abstract class ClassfileParser {
               isScalaRaw = true
               currentClass = TermName(className)
             case ScalaClass(className, pickle) =>
-              val pickle1 = pickle
+              val pickle1 = pickle()
               isScala = true
               currentClass = TermName(className)
               if (pickle1.hasArray) {
@@ -177,7 +177,7 @@ abstract class ClassfileParser {
                 unpickler.unpickle(array, 0, clazz, staticModule, file.name)
               }
             case ClassBytes(data) =>
-              val data1 = data.duplicate()
+              val data1 = data()
               val array = new Array[Byte](data1.remaining)
               data1.get(array)
               this.in = new AbstractFileReader(file, array)
@@ -191,7 +191,7 @@ abstract class ClassfileParser {
           this.pool = newConstantPool
           parseClass()
           if (!(isScala || isScalaRaw))
-            loaders.platform.classFileInfoParsed(file, clazz, ClassBytes(ByteBuffer.wrap(in.buf)))
+            loaders.platform.classFileInfoParsed(file, clazz, ClassBytes(() => ByteBuffer.wrap(in.buf)))
       }
     }
   }
@@ -933,7 +933,7 @@ abstract class ClassfileParser {
                 val bytes =
                   san.assocs.find({ _._1 == nme.bytes }).get._2.asInstanceOf[ScalaSigBytes].bytes
                 unpickler.unpickle(bytes, 0, clazz, staticModule, in.file.name)
-                loaders.platform.classFileInfoParsed(file, clazz, ScalaClass(this.currentClass.toString, ByteBuffer.wrap(bytes)))
+                loaders.platform.classFileInfoParsed(file, clazz, ScalaClass(this.currentClass.toString, () => ByteBuffer.wrap(bytes)))
               case None =>
                 throw new RuntimeException("Scala class file does not contain Scala annotation")
             }

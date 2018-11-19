@@ -97,7 +97,7 @@ trait Platform {
 }
 
 sealed abstract class ClassfileInfo {}
-final case class ClassBytes(data: ByteBuffer) extends ClassfileInfo
+final case class ClassBytes(data: () => ByteBuffer) extends ClassfileInfo
 final case class ScalaRawClass(className: String) extends ClassfileInfo
-final case class ScalaClass(className: String, pickle: ByteBuffer) extends ClassfileInfo
+final case class ScalaClass(className: String, pickle: () => ByteBuffer) extends ClassfileInfo
 
