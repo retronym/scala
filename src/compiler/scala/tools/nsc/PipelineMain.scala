@@ -18,12 +18,13 @@ import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
 import scala.reflect.io.{VirtualDirectory, VirtualFile}
 import scala.tools.nsc.backend.{ClassfileInfo, JavaPlatform, ScalaClass, ScalaRawClass}
-import scala.tools.nsc.classpath.{DirectoryClassPath, VirtualDirectoryClassPath}
+import scala.tools.nsc.classpath.{DirectoryClassPath, VirtualDirectoryClassPath, ZipArchiveFileLookup}
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
 import scala.util.{Failure, Success}
 import scala.concurrent.duration.Duration
+import scala.tools.nsc.classpath.ZipAndJarClassPathFactory.ZipArchiveClassPath
 
 class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy) {
   /** Forward errors to the (current) reporter. */
@@ -59,7 +60,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val base = packageDir(symbol.owner)
       if (symbol.isClass) {
         val primary = base.fileNamed(symbol.encodedName + ".class")
-        classInfo(primary) = ScalaClass(symbol.fullNameString, ByteBuffer.wrap(pickle.bytes))
+        classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
         if (symbol.companionModule.exists) {
           val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
           classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
@@ -67,12 +68,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       } else if (symbol.isModule) {
         if (symbol.companionClass.exists) {
           val primary = base.fileNamed(symbol.encodedName + ".class")
-          classInfo(primary) = ScalaClass(symbol.fullNameString, ByteBuffer.wrap(pickle.bytes))
+          classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
           val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
           classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
         } else {
           val primary = base.fileNamed(symbol.encodedName + "$.class")
-          classInfo(primary) = ScalaClass(symbol.fullNameString, ByteBuffer.wrap(pickle.bytes))
+          classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
         }
       }
     }
@@ -394,6 +395,15 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val replacements = mutable.Buffer[PickleClassPath[_]]()
       override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
         classPath.flatMap {
+          case zcp: ZipArchiveFileLookup[_] =>
+            val path = zcp.zipFile.toPath.toRealPath().normalize()
+            allPickleData.get(path) match {
+              case null =>
+                zcp :: Nil
+              case pcp =>
+                replacements += pcp
+                pcp.classpath :: zcp :: Nil // leaving the original classpath for Java compiled files for now
+            }
           case dcp: DirectoryClassPath =>
             val path = dcp.dir.toPath.toRealPath().normalize()
             allPickleData.get(path) match {
