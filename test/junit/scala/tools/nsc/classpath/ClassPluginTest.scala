@@ -26,7 +26,7 @@ class ClassPluginTest extends BytecodeTesting {
   // ... and this one to read them with a ClassPathPlugin
   object symbolTable extends SymbolTableForUnitTesting {
     val fakeClasses = Map(
-      "fake.C" -> ScalaClass("fake.C", pickleOf("package fake; class C { def foo = 42 }"))
+      "fake.C" -> ScalaClass("fake.C", () => pickleOf("package fake; class C { def foo = 42 }"))
     )
     private val fakes = new VirtualDirectory("fakes", None)
     fakes.subdirectoryNamed("fake").fileNamed("C.class")
