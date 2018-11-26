@@ -90,6 +90,8 @@ abstract class Pickler extends SubComponent {
           throw e
       }
     }
+
+    override protected def shouldRunThisPhaseForJava: Boolean = true //from some -Y ??
   }
 
   private class Pickle(root: Symbol) extends PickleBuffer(new Array[Byte](4096), -1, 0) {
