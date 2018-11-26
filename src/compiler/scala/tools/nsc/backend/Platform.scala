@@ -57,7 +57,7 @@ trait Platform {
     *   - Caching the ScalaSignature annotation contents, to avoid the cost of decompressing
     *     and parsing the classfile, akin to the OpenJDK's .sig format for stripped class files.
     *   - Starting a downstream compilation job immediately after the upstream job has completed
-    *     the pickler phase ("Build Pipelineing")
+    *     the pickler phase ("Build Pipelining")
     */
   abstract class ClassPathPlugin {
     def info(file: AbstractFile, clazz: ClassSymbol): Option[ClassfileInfo]
