@@ -66,15 +66,10 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
         }
       } else if (symbol.isModule) {
-        if (symbol.companionClass.exists) {
           val primary = base.fileNamed(symbol.encodedName + ".class")
           classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
           val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
           classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
-        } else {
-          val primary = base.fileNamed(symbol.encodedName + "$.class")
-          classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
-        }
       }
     }
   }
@@ -175,7 +170,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       case Pipeline =>
         val futures: immutable.Seq[Future[Unit]] = projects.map { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.outlineDone.future))
-          f1.map { _ => p.fullCompileExportPickles(); p.javaCompile() }
+          val scalaCompiles: Future[Unit] = f1.map { _ => p.fullCompileExportPickles() }
+          // Start javac after scalac has completely finished
+          val f2 = Future.sequence[Unit, List](p.groups.map(_.done.future))
+          val javaCompiles: Future[Unit] = f2.map { _ => p.javaCompile() }
+          scalaCompiles.flatMap(_ => javaCompiles)
         }
         val toWait: Future[List[Unit]] = Future.sequence(futures).flatMap(_ => Future.sequence(projects.flatMap(p => p.javaDone.future :: p.groups.map(_.done.future) )))
         Await.result(toWait, Duration.Inf)
@@ -231,11 +230,16 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     def projectEvents(p: Task): List[String] = {
       val events = List.newBuilder[String]
       if (p.outlineTimer.durationMicros > 0d) {
-        events += durationEvent(p.label, "outline-type", p.outlineTimer)
+        val desc = if (p.shouldOutlineType) "outline-type" else "parser-to-pickler"
+        events += durationEvent(p.label, desc, p.outlineTimer)
       }
       for ((g, ix) <- p.groups.zipWithIndex) {
         if (g.timer.durationMicros > 0d)
           events += durationEvent(p.label, "compile-" + ix, g.timer)
+      }
+      if (p.javaTimer.durationMicros > 0d) {
+        val desc = "javac"
+        events += durationEvent(p.label, desc, p.javaTimer)
       }
       events.result()
     }
@@ -271,6 +275,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val isGrouped = groups.size > 1
 
     val outlineTimer = new Timer()
+    val javaTimer = new Timer()
 
     var shouldOutlineType = true
     var outlineCriticalPathMs = 0d
@@ -332,6 +337,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     def fullCompileExportPickles(): Unit = {
       assert(groups.size == 1)
       val group = groups.head
+      log("scalac: start")
       outlineTimer.start()
       val run2 = new compiler.Run() {
         override def advancePhase(): Unit = {
@@ -340,6 +346,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
             outlineTimer.stop()
             outlineDone.complete(Success(()))
             group.timer.start()
+            log("scalac: exported pickles")
           }
           super.advancePhase()
         }
@@ -348,6 +355,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       run2 compile group.files
       compiler.reporter.finish()
       group.timer.stop()
+      log("scalac: done")
       if (compiler.reporter.hasErrors) {
         group.done.complete(Failure(new RuntimeException("Compile failed")))
       } else {
@@ -356,18 +364,24 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
 
     def javaCompile(): Unit = {
+      log("javac: start")
       val javaSources = files.filter(_.endsWith(".java"))
       if (javaSources.nonEmpty) {
+        javaTimer.start()
         javaDone.completeWith(Future {
           val opts = java.util.Arrays.asList("-d", command.settings.outdir.value, "-cp", command.settings.outdir.value + File.pathSeparator + command.settings.classpath.value)
           val compileTask = ToolProvider.getSystemJavaCompiler.getTask(null, null, null, opts, null, fileManager.getJavaFileObjects(javaSources.toArray: _*))
           compileTask.setProcessors(Collections.emptyList())
           compileTask.call()
+          javaTimer.stop()
+          ()
         })
       } else {
         javaDone.complete(Success(()))
       }
+      log("javac: start")
     }
+    def log(msg: String) = () //Predef.println(this.label + ": " + msg)
   }
 
   final class Timer() {
@@ -402,7 +416,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
                 zcp :: Nil
               case pcp =>
                 replacements += pcp
-                pcp.classpath :: zcp :: Nil // leaving the original classpath for Java compiled files for now
+                pcp.classpath :: Nil
             }
           case dcp: DirectoryClassPath =>
             val path = dcp.dir.toPath.toRealPath().normalize()
@@ -411,7 +425,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
                 dcp :: Nil
               case pcp =>
                 replacements += pcp
-                pcp.classpath :: dcp :: Nil // leaving the original classpath for Java compiled files for now
+                pcp.classpath :: Nil
             }
           case cp => cp :: Nil
         }
@@ -419,7 +433,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
       override def info(file: AbstractFile, clazz: g.ClassSymbol): Option[ClassfileInfo] = {
         file match {
-          case vf: VirtualFile =>
+          case vf: VirtualFile if vf.getClass == classOf[VirtualFile] =>
             val iterator = replacements.iterator.flatMap(_.classInfo.get(vf))
             if (iterator.hasNext)
               return Some(iterator.next())
@@ -452,8 +466,7 @@ case object Traditional extends BuildStrategy
 object PipelineMain {
   def main(args: Array[String]): Unit = {
     var i = 0
-    //for (_ <- 1 to 10; n <- List(parallel.availableProcessors, 1); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
-    for (_ <- 1 to 20; n <- List(parallel.availableProcessors); strat <- List(OutlineTypeOnly)) {
+    for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
         i += 1
         val main = new PipelineMainClass(i.toString, n, strat)
         println(s"====== ITERATION $i=======")
