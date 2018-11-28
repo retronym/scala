@@ -391,26 +391,19 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
     val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
       val replacements = mutable.Buffer[PickleClassPath[_]]()
+      def replaceInternalClassPath(cp: ClassPath, underlying: Path): List[ClassPath] = {
+        allPickleData.get(underlying.toRealPath().normalize()) match {
+          case null =>
+            cp :: Nil
+          case pcp =>
+            replacements += pcp
+            pcp.classpath :: Nil
+        }
+      }
       override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
         classPath.flatMap {
-          case zcp: ZipArchiveFileLookup[_] =>
-            val path = zcp.zipFile.toPath.toRealPath().normalize()
-            allPickleData.get(path) match {
-              case null =>
-                zcp :: Nil
-              case pcp =>
-                replacements += pcp
-                pcp.classpath :: Nil
-            }
-          case dcp: DirectoryClassPath =>
-            val path = dcp.dir.toPath.toRealPath().normalize()
-            allPickleData.get(path) match {
-              case null =>
-                dcp :: Nil
-              case pcp =>
-                replacements += pcp
-                pcp.classpath :: Nil
-            }
+          case zcp: ZipArchiveFileLookup[_] => replaceInternalClassPath(zcp, zcp.zipFile.toPath)
+          case dcp: DirectoryClassPath => replaceInternalClassPath(dcp, dcp.dir.toPath)
           case cp => cp :: Nil
         }
       }
