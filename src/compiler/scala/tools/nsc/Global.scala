@@ -406,8 +406,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     def apply(unit: CompilationUnit): Unit
 
     // run only the phases needed
-    private[this] val runThisPhaseForJava: Boolean = shouldRunThisPhaseForJava
-
     protected def shouldRunThisPhaseForJava: Boolean = {
       this.id > (if (createJavadoc) currentRun.typerPhase.id
       else currentRun.namerPhase.id)
@@ -416,7 +414,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** Is current phase cancelled on this unit? */
     def cancelled(unit: CompilationUnit) = {
       if (Thread.interrupted()) reporter.cancelled = true
-      reporter.cancelled || unit.isJava && runThisPhaseForJava
+      reporter.cancelled || unit.isJava && shouldRunThisPhaseForJava
     }
 
     private def beforeUnit(unit: CompilationUnit): Unit = {
