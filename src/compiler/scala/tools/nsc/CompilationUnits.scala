@@ -21,7 +21,7 @@ trait CompilationUnits { global: Global =>
   /** An object representing a missing compilation unit.
    */
   object NoCompilationUnit extends CompilationUnit(NoSourceFile) {
-    override lazy val isJava = false
+    override val isJava = false
     override def exists = false
     override def toString() = "NoCompilationUnit"
   }
