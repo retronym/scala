@@ -284,8 +284,6 @@ abstract class SymbolLoaders {
 
       val classPathEntries = classPath.list(packageName)
 
-      if (root.name.string_==("immutable"))
-        getClass
       if (!root.isRoot)
         for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
       if (!root.isEmptyPackageClass) {
