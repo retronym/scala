@@ -465,6 +465,17 @@ case object Traditional extends BuildStrategy
 
 object PipelineMain {
   def main(args: Array[String]): Unit = {
+    val main = new PipelineMainClass("1", parallel.availableProcessors, Pipeline)
+    val result = main.process(args)
+    if (!result)
+      System.exit(1)
+    else
+      System.exit(0)
+  }
+}
+
+object PipelineMainTest {
+  def main(args: Array[String]): Unit = {
     var i = 0
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
         i += 1
