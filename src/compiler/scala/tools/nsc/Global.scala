@@ -405,12 +405,18 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     def apply(unit: CompilationUnit): Unit
 
+    // run only the phases needed
+    private[this] val runThisPhaseForJava: Boolean = shouldRunThisPhaseForJava
+
+    protected def shouldRunThisPhaseForJava: Boolean = {
+      this.id > (if (createJavadoc) currentRun.typerPhase.id
+      else currentRun.namerPhase.id)
+    }
+
     /** Is current phase cancelled on this unit? */
     def cancelled(unit: CompilationUnit) = {
-      // run the typer only if in `createJavadoc` mode
-      val maxJavaPhase = if (createJavadoc) currentRun.typerPhase.id else currentRun.namerPhase.id
       if (Thread.interrupted()) reporter.cancelled = true
-      reporter.cancelled || unit.isJava && this.id > maxJavaPhase
+      reporter.cancelled || unit.isJava && runThisPhaseForJava
     }
 
     private def beforeUnit(unit: CompilationUnit): Unit = {
