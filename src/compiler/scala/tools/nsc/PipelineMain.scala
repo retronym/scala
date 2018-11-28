@@ -89,8 +89,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val projects: List[Task] = args.toList.map(commandFor)
     val produces = mutable.HashMap[Path, Task]()
     for (p <- projects) {
-      val outputDir = p.command.settings.outputDirs.getSingleOutput.get.file.toPath.toAbsolutePath.normalize()
-      produces(outputDir) = p
+      produces(p.outputDir) = p
     }
     val dependsOn = mutable.HashMap[Task, List[Task]]()
     for (p <- projects) {
@@ -101,37 +100,14 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val timer = new Timer
     timer.start()
     strategy match {
-      case OutlineTypeOnly =>
-        val futures = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.outlineDone.future))
-          p.shouldOutlineType = true
-          f1.map { _ =>
-            p.outlineCompile()
-            p.javaCompile()
-          }
-        }
-
-        val toWait: Future[List[Unit]] = Future.sequence(futures).flatMap(_ => Future.sequence(projects.flatMap(p => p.javaDone.future :: p.outlineDone.future :: Nil) ))
-        Await.result(toWait, Duration.Inf)
-        timer.stop()
-
-        for (p <- projects) {
-          val dependencies = dependsOn(p)
-          def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
-          val maxOutlineCriticalPathMs = maxByOrZero(dependencies)(_.outlineCriticalPathMs)
-          p.outlineCriticalPathMs = maxOutlineCriticalPathMs + p.outlineTimer.durationMs
-          p.regularCriticalPathMs = maxOutlineCriticalPathMs + maxByOrZero(p.groups)(_.timer.durationMs)
-          p.fullCriticalPathMs = maxByOrZero(dependencies)(_.fullCriticalPathMs) + p.groups.map(_.timer.durationMs).sum
-        }
-
-        if (parallelism == 1) {
-          val criticalPath = projects.maxBy(_.regularCriticalPathMs)
-          println(f"Critical path: ${criticalPath.regularCriticalPathMs}%.0f ms. Wall Clock: ${timer.durationMs}%.0f ms")
-        } else
-          println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case OutlineTypePipeline =>
         val futures = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.outlineDone.future))
+          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map { task =>
+            if (p.macroClassPathSet.contains(task.outputDir))
+              task.javaDone.future
+            else
+              task.outlineDone.future
+          })
           val shouldOutlineType = dependedOn(p)
           p.shouldOutlineType = shouldOutlineType
           f1.map { _ =>
@@ -169,7 +145,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         val futures: immutable.Seq[Future[Unit]] = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.outlineDone.future))
+          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => {
+            if (p.macroClassPathSet.contains(task.outputDir))
+              task.javaDone.future
+            else
+              task.outlineDone.future
+          }))
           val scalaCompiles: Future[Unit] = f1.map { _ => p.fullCompileExportPickles() }
           // Start javac after scalac has completely finished
           val f2 = Future.sequence[Unit, List](p.groups.map(_.done.future))
@@ -256,6 +237,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   private case class Task(argsFile: String, command: CompilerCommand, files: List[String]) {
     val label = argsFile.replaceAll("target/", "").replaceAll("""(.*)/(.*).args""", "$1:$2")
     override def toString: String = argsFile
+    def outputDir: Path = command.settings.outputDirs.getSingleOutput.get.file.toPath.toAbsolutePath.normalize()
+    def macroClassPath: Seq[Path] = ClassPath.expandPath(command.settings.YmacroClasspath.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
+    def macroClassPathSet: Set[Path] = macroClassPath.toSet
 
     command.settings.YcacheMacroClassLoader.value = "none"
 
@@ -456,7 +440,6 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 }
 
 sealed abstract class BuildStrategy
-case object OutlineTypeOnly extends BuildStrategy
 /** Outline type check to compute type signatures as pickles as an input to downstream compilation. */
 case object OutlineTypePipeline extends BuildStrategy
 case object Pipeline extends BuildStrategy
