@@ -93,8 +93,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
     val dependsOn = mutable.HashMap[Task, List[Task]]()
     for (p <- projects) {
-      val value: Seq[String] = ClassPath.expandPath(p.command.settings.classpath.value, expandStar = true)
-      dependsOn(p) = value.flatMap(s => produces.get(Paths.get(s).toAbsolutePath.normalize())).toList.filterNot(_ == p)
+      dependsOn(p) = (p.classPath ++ p.pluginClassPath).flatMap(s => produces.get(s)).toList.filterNot(_ == p)
     }
     val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.toSet
     val timer = new Timer
@@ -102,12 +101,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     strategy match {
       case OutlineTypePipeline =>
         val futures = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map { task =>
-            if (p.macroClassPathSet.contains(task.outputDir) || p.pluginClassPath.contains(task.outputDir))
-              task.javaDone.future
-            else
-              task.outlineDone.future
-          })
+          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
           val shouldOutlineType = dependedOn(p)
           p.shouldOutlineType = shouldOutlineType
           f1.map { _ =>
@@ -145,12 +139,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         val futures: immutable.Seq[Future[Unit]] = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => {
-            if (p.macroClassPathSet.contains(task.outputDir) || p.pluginClassPath.contains(task.outputDir))
-              task.javaDone.future
-            else
-              task.outlineDone.future
-          }))
+          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
           val scalaCompiles: Future[Unit] = f1.map { _ => p.fullCompileExportPickles() }
           // Start javac after scalac has completely finished
           val f2 = Future.sequence[Unit, List](p.groups.map(_.done.future))
@@ -238,13 +227,26 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val label = argsFile.replaceAll("target/", "").replaceAll("""(.*)/(.*).args""", "$1:$2")
     override def toString: String = argsFile
     def outputDir: Path = command.settings.outputDirs.getSingleOutput.get.file.toPath.toAbsolutePath.normalize()
-    def macroClassPath: Seq[Path] = ClassPath.expandPath(command.settings.YmacroClasspath.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
+    private def expand(s: command.settings.PathSetting): List[Path] = {
+      ClassPath.expandPath(s.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
+    }
+    def classPath: Seq[Path] = expand(command.settings.classpath)
+    def macroClassPath: Seq[Path] = expand(command.settings.YmacroClasspath)
     def macroClassPathSet: Set[Path] = macroClassPath.toSet
     def pluginClassPath: Set[Path] = {
       def asPath(p: String) = ClassPath split p
       val paths  = command.settings.plugin.value filter (_ != "") flatMap (s => asPath(s) map (s => Paths.get(s)))
       paths.toSet
     }
+    def dependencyReadyFuture(dependency: Task) =  if (macroClassPathSet.contains(dependency.outputDir)) {
+      log(s"dependency is on macro classpath, will wait for .class files: ${dependency.label}")
+      dependency.javaDone.future
+    } else if (pluginClassPath.contains(dependency.outputDir)) {
+      log(s"dependency is on plugin classpath, will wait for .class files: ${dependency.label}")
+      dependency.javaDone.future
+    } else
+      dependency.outlineDone.future
+
 
     command.settings.YcacheMacroClassLoader.value = "none"
 
@@ -370,7 +372,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       }
       log("javac: start")
     }
-    def log(msg: String) = () //Predef.println(this.label + ": " + msg)
+    def log(msg: String) = Predef.println(this.label + ": " + msg)
   }
 
   final class Timer() {
@@ -462,7 +464,12 @@ object PipelineMainTest {
         i += 1
         val main = new PipelineMainClass(i.toString, n, strat)
         println(s"====== ITERATION $i=======")
-        val result = main.process(args)
+        val result = main.process(Array(
+          "/code/boxer/macros/target/compile.args",
+          "/code/boxer/plugin/target/compile.args",
+          "/code/boxer/support/target/compile.args",
+          "/code/boxer/use-macro/target/compile.args",
+          "/code/boxer/use-plugin/target/compile.args"))
         if (!result)
           System.exit(1)
     }
