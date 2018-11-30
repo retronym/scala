@@ -41,6 +41,8 @@ abstract class Pickler extends SubComponent {
 
   class PicklePhase(prev: Phase) extends StdPhase(prev) {
     def apply(unit: CompilationUnit): Unit = {
+      if (unit.isJava)
+        getClass
       def pickle(tree: Tree): Unit = {
         tree match {
           case PackageDef(_, stats) =>
@@ -91,7 +93,7 @@ abstract class Pickler extends SubComponent {
       }
     }
 
-    override protected def shouldRunThisPhaseForJava: Boolean = true //from some -Y ??
+    override protected def shouldSkipThisPhaseForJava: Boolean = false //from some -Y ??
   }
 
   private class Pickle(root: Symbol) extends PickleBuffer(new Array[Byte](4096), -1, 0) {
