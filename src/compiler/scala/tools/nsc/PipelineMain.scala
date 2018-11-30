@@ -103,7 +103,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       case OutlineTypePipeline =>
         val futures = projects.map { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map { task =>
-            if (p.macroClassPathSet.contains(task.outputDir))
+            if (p.macroClassPathSet.contains(task.outputDir) || p.pluginClassPath.contains(task.outputDir))
               task.javaDone.future
             else
               task.outlineDone.future
@@ -146,7 +146,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       case Pipeline =>
         val futures: immutable.Seq[Future[Unit]] = projects.map { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => {
-            if (p.macroClassPathSet.contains(task.outputDir))
+            if (p.macroClassPathSet.contains(task.outputDir) || p.pluginClassPath.contains(task.outputDir))
               task.javaDone.future
             else
               task.outlineDone.future
@@ -240,6 +240,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     def outputDir: Path = command.settings.outputDirs.getSingleOutput.get.file.toPath.toAbsolutePath.normalize()
     def macroClassPath: Seq[Path] = ClassPath.expandPath(command.settings.YmacroClasspath.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
     def macroClassPathSet: Set[Path] = macroClassPath.toSet
+    def pluginClassPath: Set[Path] = {
+      def asPath(p: String) = ClassPath split p
+      val paths  = command.settings.plugin.value filter (_ != "") flatMap (s => asPath(s) map (s => Paths.get(s)))
+      paths.toSet
+    }
 
     command.settings.YcacheMacroClassLoader.value = "none"
 
