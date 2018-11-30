@@ -41,8 +41,6 @@ abstract class Pickler extends SubComponent {
 
   class PicklePhase(prev: Phase) extends StdPhase(prev) {
     def apply(unit: CompilationUnit): Unit = {
-      if (unit.isJava)
-        getClass
       def pickle(tree: Tree): Unit = {
         tree match {
           case PackageDef(_, stats) =>
