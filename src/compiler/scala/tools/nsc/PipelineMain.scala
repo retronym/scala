@@ -106,27 +106,38 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     timer.start()
     strategy match {
       case OutlineTypePipeline =>
-        val futures = projects.map { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
-          val shouldOutlineType = dependedOn(p)
-          p.shouldOutlineType = shouldOutlineType
-          f1.map { _ =>
-            if (p.shouldOutlineType) {
-              p.outlineCompile()
-            } else {
-              p.fullCompile()
+        projects.foreach {p =>
+          val isLeaf = !dependedOn.contains(p)
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
+          if (isLeaf) {
+            for {
+              _ <- depsReady
+              _ <- {
+                p.fullCompile()
+                Future.sequence(p.groups.map(_.done.future))
+              }
+            } yield {
+              p.javaCompile()
             }
+          } else {
+            for {
+              _ <- depsReady
+              _ <- {
+                p.outlineCompile()
+                p.outlineDone.future
+              }
+              _ <- {
+                p.fullCompile()
+                Future.sequence(p.groups.map(_.done.future))
+              }
+            } yield {
+              p.javaCompile()
+            }
+
           }
         }
-        projects.map {
-          p =>
-            if (p.shouldOutlineType) p.outlineDone.future.onComplete { _ =>
-              p.fullCompile()
-            }
-            Future.sequence(p.groups.map(_.done.future)).map(_ => p.javaCompile())
-        }
-        val toWait: Future[List[Unit]] = Future.sequence(futures).flatMap(_ => Future.sequence(projects.flatMap(p => p.javaDone.future :: p.groups.map(_.done.future) )))
-        Await.result(toWait, Duration.Inf)
+
+        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
         timer.stop()
 
         for (p <- projects) {
@@ -144,7 +155,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         } else
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
-        val futures: immutable.Seq[Future[Unit]] = projects.map { p =>
+        projects.foreach { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
           val scalaCompiles: Future[Unit] = f1.map { _ => p.fullCompileExportPickles() }
           // Start javac after scalac has completely finished
@@ -152,8 +163,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           val javaCompiles: Future[Unit] = f2.map { _ => p.javaCompile() }
           scalaCompiles.flatMap(_ => javaCompiles)
         }
-        val toWait: Future[List[Unit]] = Future.sequence(futures).flatMap(_ => Future.sequence(projects.flatMap(p => p.javaDone.future :: p.groups.map(_.done.future) )))
-        Await.result(toWait, Duration.Inf)
+        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
         timer.stop()
 
         for (p <- projects) {
@@ -171,17 +181,14 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         } else
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Traditional =>
-        val futures = projects.map { p =>
+        projects.foreach { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.javaDone.future))
-          val shouldOutlineType = dependedOn(p)
-          p.shouldOutlineType = shouldOutlineType
           f1.flatMap { _ =>
             p.fullCompile()
             Future.sequence(p.groups.map(_.done.future)).map(_ => p.javaCompile())
           }
         }
-        val toWait: Future[List[Unit]] = Future.sequence(futures).flatMap(_ => Future.sequence(projects.flatMap(p => p.javaDone.future :: p.groups.map(_.done.future) )))
-        Await.result(toWait, Duration.Inf)
+        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
         timer.stop()
 
         for (p <- projects) {
@@ -206,7 +213,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     def projectEvents(p: Task): List[String] = {
       val events = List.newBuilder[String]
       if (p.outlineTimer.durationMicros > 0d) {
-        val desc = if (p.shouldOutlineType) "outline-type" else "parser-to-pickler"
+        val desc = if (strategy == OutlineTypePipeline) "outline-type" else "parser-to-pickler"
         events += durationEvent(p.label, desc, p.outlineTimer)
       }
       for ((g, ix) <- p.groups.zipWithIndex) {
@@ -274,12 +281,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val outlineTimer = new Timer()
     val javaTimer = new Timer()
 
-    var shouldOutlineType = true
     var outlineCriticalPathMs = 0d
     var regularCriticalPathMs = 0d
     var fullCriticalPathMs = 0d
-    val outlineDone = Promise[Unit]()
-    val javaDone = Promise[Unit]()
+    val outlineDone: Promise[Unit] = Promise[Unit]()
+    val javaDone: Promise[Unit] = Promise[Unit]()
+    def compilationDone: Future[List[Unit]] = Future.sequence(javaDone.future :: groups.map(_.done.future))
 
     lazy val compiler: Global = {
       val result = newCompiler(command.settings)
@@ -293,6 +300,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
     def outlineCompile(): Unit = {
       outlineTimer.start()
+      log("scalac outline: start")
       command.settings.Youtline.value = true
       command.settings.stopAfter.value = List("pickler")
       command.settings.Ymacroexpand.value = command.settings.MacroExpand.None
@@ -305,6 +313,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         outlineDone.complete(Failure(new RuntimeException("compile failed")))
       else
         outlineDone.complete(Success(()))
+      log("scalac outline: done")
     }
 
     def fullCompile(): Unit = {
@@ -312,9 +321,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       command.settings.stopAfter.value = Nil
       command.settings.Ymacroexpand.value = command.settings.MacroExpand.Normal
 
-      for (group <- groups) {
+      val groupCount = groups.size
+      for ((group, ix) <- groups.zipWithIndex) {
         group.done.completeWith {
           Future {
+            log(s"scalac (${ix + 1}/$groupCount): start")
             val compiler2 = newCompiler(command.settings)
             val run2 = new compiler2.Run()
             group.timer.start()
@@ -326,6 +337,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
             } else {
               group.done.complete(Success(()))
             }
+            log(s"scalac (${ix + 1}/$groupCount): done")
           }
         }
       }
@@ -376,9 +388,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       } else {
         javaDone.complete(Success(()))
       }
-      log("javac: start")
+      log("javac: done")
     }
-    def log(msg: String) = Predef.println(this.label + ": " + msg)
+    def log(msg: String): Unit = Predef.println(this.label + ": " + msg)
   }
 
   final class Timer() {
