@@ -5,6 +5,7 @@
 package scala.tools.nsc
 
 import java.io.File
+import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path, Paths}
 import java.util.Collections
@@ -33,8 +34,13 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   }
 
   private var reporter: Reporter = _
-
-  implicit val executor = ExecutionContext.fromExecutor(new java.util.concurrent.ForkJoinPool(parallelism))
+  private object handler extends UncaughtExceptionHandler {
+    override def uncaughtException(t: Thread, e: Throwable): Unit = {
+      e.printStackTrace()
+      System.exit(-1)
+    }
+  }
+  implicit val executor = ExecutionContext.fromExecutor(new java.util.concurrent.ForkJoinPool(parallelism), t => handler.uncaughtException(Thread.currentThread(), t))
   val fileManager = ToolProvider.getSystemJavaCompiler.getStandardFileManager(null, null, null)
 
   private class PickleClassPath[G <: Global](data: mutable.AnyRefMap[G#Symbol, PickleBuffer]) {
