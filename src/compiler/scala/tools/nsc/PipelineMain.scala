@@ -10,22 +10,20 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path, Paths}
 import java.util.Collections
 
-import javax.tools.{SimpleJavaFileObject, ToolProvider}
+import javax.tools.ToolProvider
 
-import scala.collection.JavaConverters.asJavaIterableConverter
-import scala.collection.{immutable, mutable, parallel}
+import scala.collection.{mutable, parallel}
+import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future, Promise}
 import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
 import scala.reflect.io.{VirtualDirectory, VirtualFile}
-import scala.tools.nsc.backend.{ClassfileInfo, JavaPlatform, ScalaClass, ScalaRawClass}
+import scala.tools.nsc.backend.{ClassfileInfo, ScalaClass, ScalaRawClass}
 import scala.tools.nsc.classpath.{DirectoryClassPath, VirtualDirectoryClassPath, ZipArchiveFileLookup}
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
 import scala.util.{Failure, Success}
-import scala.concurrent.duration.Duration
-import scala.tools.nsc.classpath.ZipAndJarClassPathFactory.ZipArchiveClassPath
 
 class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy) {
   /** Forward errors to the (current) reporter. */
@@ -390,7 +388,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       }
       log("javac: done")
     }
-    def log(msg: String): Unit = Predef.println(this.label + ": " + msg)
+    def log(msg: String): Unit = println(this.label + ": " + msg)
   }
 
   final class Timer() {
@@ -466,7 +464,10 @@ case object Traditional extends BuildStrategy
 
 object PipelineMain {
   def main(args: Array[String]): Unit = {
-    val main = new PipelineMainClass("1", parallel.availableProcessors, Pipeline)
+    val strategies = List(OutlineTypePipeline, Pipeline, Traditional)
+    val strategy = strategies.find(_.productPrefix.equalsIgnoreCase(System.getProperty("scala.pipeline.strategy", "pipeline"))).get
+    val parallelism = java.lang.Integer.getInteger("scala.pipeline.parallelism", parallel.availableProcessors)
+    val main = new PipelineMainClass("1", parallelism, strategy)
     val result = main.process(args)
     if (!result)
       System.exit(1)
