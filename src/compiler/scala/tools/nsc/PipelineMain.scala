@@ -10,13 +10,14 @@ import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
 import java.util.Collections
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 
 import javax.tools.ToolProvider
 
 import scala.collection.{mutable, parallel}
 import scala.concurrent.duration.Duration
-import scala.concurrent.{Await, ExecutionContext, Future, Promise}
+import scala.concurrent._
 import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
 import scala.reflect.io.{VirtualDirectory, VirtualFile}
@@ -117,6 +118,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
             for {
               _ <- depsReady
               _ <- {
+                p.outlineDone.complete(Success(()))
                 p.fullCompile()
                 Future.sequence(p.groups.map(_.done.future))
               }
@@ -188,6 +190,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         projects.foreach { p =>
           val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.javaDone.future))
           f1.flatMap { _ =>
+            p.outlineDone.complete(Success(()))
             p.fullCompile()
             Future.sequence(p.groups.map(_.done.future)).map(_ => p.javaCompile())
           }
@@ -426,42 +429,44 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   protected def newCompiler(settings: Settings): Global = {
     val g = Global(settings)
 
-    val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
-      val replacements = mutable.Buffer[PickleClassPath[_]]()
-      def replaceInternalClassPath(cp: ClassPath, underlying: Path): List[ClassPath] = {
-        allPickleData.get(underlying.toRealPath().normalize()) match {
-          case null =>
-            cp :: Nil
-          case pcp =>
-            replacements += pcp
-            pcp.classpath :: Nil
+    if (strategy != Traditional) {
+      val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
+        val replacements = mutable.Buffer[PickleClassPath[_]]()
+        def replaceInternalClassPath(cp: ClassPath, underlying: Path): List[ClassPath] = {
+          allPickleData.get(underlying.toRealPath().normalize()) match {
+            case null =>
+              cp :: Nil
+            case pcp =>
+              replacements += pcp
+              pcp.classpath :: Nil
+          }
         }
-      }
-      override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
-        classPath.flatMap {
-          case zcp: ZipArchiveFileLookup[_] => replaceInternalClassPath(zcp, zcp.zipFile.toPath)
-          case dcp: DirectoryClassPath => replaceInternalClassPath(dcp, dcp.dir.toPath)
-          case cp => cp :: Nil
-        }
-      }
-
-      override def info(file: AbstractFile, clazz: g.ClassSymbol): Option[ClassfileInfo] = {
-        file match {
-          case vf: VirtualFile if vf.getClass == classOf[VirtualFile] =>
-            val iterator = replacements.iterator.flatMap(_.classInfo.get(vf))
-            if (iterator.hasNext)
-              return Some(iterator.next())
-            else None
-          case _ => None
+        override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
+          classPath.flatMap {
+            case zcp: ZipArchiveFileLookup[_] => replaceInternalClassPath(zcp, zcp.zipFile.toPath)
+            case dcp: DirectoryClassPath => replaceInternalClassPath(dcp, dcp.dir.toPath)
+            case cp => cp :: Nil
+          }
         }
 
-        pickleCache.get(file)
+        override def info(file: AbstractFile, clazz: g.ClassSymbol): Option[ClassfileInfo] = {
+          file match {
+            case vf: VirtualFile if vf.getClass == classOf[VirtualFile] =>
+              val iterator = replacements.iterator.flatMap(_.classInfo.get(vf))
+              if (iterator.hasNext)
+                return Some(iterator.next())
+              else None
+            case _ => None
+          }
+
+          pickleCache.get(file)
+        }
+        override def parsed(file: AbstractFile, clazz: g.ClassSymbol, info: ClassfileInfo): Unit = {
+          pickleCache.put(file, info)
+        }
       }
-      override def parsed(file: AbstractFile, clazz: g.ClassSymbol, info: ClassfileInfo): Unit = {
-        pickleCache.put(file, info)
-      }
+      g.platform.addClassPathPlugin(plugin)
     }
-    g.platform.addClassPathPlugin(plugin)
     g
   }
 
@@ -519,29 +524,31 @@ class PickleCache(val dir: Path) {
       case Some(jar) =>
         val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
         if (Files.exists(cachePath)) {
-          val it = Files.list(cachePath).iterator()
-          if (it.hasNext) {
-            val f = it.next()
-            val name = f.getFileName
-            name.toString match {
-              case PicklePattern(className) =>
-                val bytes = Files.readAllBytes(f)
-                Some(ScalaClass(className, () => ByteBuffer.wrap(bytes)))
-              case RawPattern(className) =>
-                val bytes = Files.readAllBytes(f)
-                Some(backend.ScalaRawClass(className))
-              case _ => None
-            }
-          } else None
+          val listing = Files.list(cachePath)
+          try {
+            val it = listing.iterator()
+            if (it.hasNext) {
+              val f = it.next()
+              val name = f.getFileName
+              name.toString match {
+                case PicklePattern(className) =>
+                  val bytes = Files.readAllBytes(f)
+                  Some(ScalaClass(className, () => ByteBuffer.wrap(bytes)))
+                case RawPattern(className) =>
+                  val bytes = Files.readAllBytes(f)
+                  Some(backend.ScalaRawClass(className))
+                case _ => None
+              }
+            } else None
+          } finally {
+            listing.close()
+          }
         } else None
       case None =>
         None
     }
   }
   def put(file: AbstractFile, info: ClassfileInfo): Unit = {
-    if (file.toString().contains("Plugin.class"))
-      getClass
-
     file.underlyingSource match {
       case Some(jar) =>
         val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
