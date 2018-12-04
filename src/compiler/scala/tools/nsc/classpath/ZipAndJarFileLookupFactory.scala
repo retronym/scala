@@ -39,7 +39,7 @@ sealed trait ZipAndJarFileLookupFactory {
       closeableRegistry.registerClosable(result)
       result
     } else {
-      cache.getOrCreate(List(zipFile.file.toPath), () => createForZipFile(zipFile, settings.releaseValue), closeableRegistry)
+      cache.getOrCreate(List(zipFile.file.toPath), () => createForZipFile(zipFile, settings.releaseValue), closeableRegistry, checkStamps = true)
     }
   }
 
@@ -213,7 +213,7 @@ final class FileBasedCache[T] {
   }
   private val cache = collection.mutable.Map.empty[Seq[Path], Entry]
 
-  def getOrCreate(paths: Seq[Path], create: () => T, closeableRegistry: CloseableRegistry): T = cache.synchronized {
+  def getOrCreate(paths: Seq[Path], create: () => T, closeableRegistry: CloseableRegistry, checkStamps: Boolean): T = cache.synchronized {
     val stamps = paths.map { path =>
       val attrs = Files.readAttributes(path, classOf[BasicFileAttributes])
       val lastModified = attrs.lastModifiedTime()
@@ -224,7 +224,7 @@ final class FileBasedCache[T] {
 
     cache.get(paths) match {
       case Some(e@Entry(cachedStamps, cached)) =>
-        if (cachedStamps == stamps) {
+        if (!checkStamps || cachedStamps == stamps) {
           // Cache hit
           e.referenceCount.incrementAndGet()
           closeableRegistry.registerClosable(e.referenceCountDecrementer)

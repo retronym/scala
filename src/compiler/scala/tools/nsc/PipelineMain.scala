@@ -296,8 +296,8 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       dependency.outlineDone.future
 
 
-    command.settings.YcacheMacroClassLoader.value = "last-modified"
-    command.settings.YcachePluginClassLoader.value = "last-modified"
+    command.settings.YcacheMacroClassLoader.value = "always"
+    command.settings.YcachePluginClassLoader.value = "always"
 
     val groups: List[Group] = {
       val isScalaLibrary = files.exists(_.endsWith("Predef.scala"))

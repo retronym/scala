@@ -69,7 +69,8 @@ trait Plugins { global: Global =>
     * @return
     */
   protected def findPluginClassLoader(classpath: Seq[Path]): ClassLoader = {
-    val disableCache = settings.YcachePluginClassLoader.value == settings.CachePolicy.None.name
+    val policy = settings.YcachePluginClassLoader.value
+    val disableCache = policy == settings.CachePolicy.None.name
     def newLoader = () => {
       val compilerLoader = classOf[Plugin].getClassLoader
       val urls = classpath map (_.toURL)
@@ -88,7 +89,7 @@ trait Plugins { global: Global =>
       val loader = newLoader()
       closeableRegistry.registerClosable(loader)
       loader
-    } else pluginClassLoadersCache.getOrCreate(classpath.map(_.jfile.toPath()), newLoader, closeableRegistry)
+    } else pluginClassLoadersCache.getOrCreate(classpath.map(_.jfile.toPath()), newLoader, closeableRegistry, policy == settings.CachePolicy.LastModified.name)
   }
 
   protected lazy val roughPluginsList: List[Plugin] = loadRoughPluginsList()
@@ -181,7 +182,8 @@ trait Plugins { global: Global =>
       ScalaClassLoader.fromURLs(classpath, getClass.getClassLoader)
     }
 
-    val disableCache = settings.YcacheMacroClassLoader.value == settings.CachePolicy.None.name
+    val policy = settings.YcacheMacroClassLoader.value
+    val disableCache = policy == settings.CachePolicy.None.name
     if (disableCache) newLoader()
     else {
       import scala.tools.nsc.io.Jar
@@ -196,7 +198,7 @@ trait Plugins { global: Global =>
         perRunCaches.recordClassloader(newLoader())
       } else {
         val locations = urlsAndFiles.map(t => Path(t._2.file))
-        Macros.macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader, closeableRegistry)
+        Macros.macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader, closeableRegistry, checkStamps = policy == settings.CachePolicy.LastModified.name)
       }
     }
   }
