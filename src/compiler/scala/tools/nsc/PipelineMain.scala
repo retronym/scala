@@ -106,6 +106,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       dependsOn(p) = (p.classPath ++ p.pluginClassPath).flatMap(s => produces.get(s)).toList.filterNot(_ == p)
     }
     val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.toSet
+
     val timer = new Timer
     timer.start()
     strategy match {
@@ -163,12 +164,17 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         projects.foreach { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
-          val scalaCompiles: Future[Unit] = f1.map { _ => p.fullCompileExportPickles() }
-          // Start javac after scalac has completely finished
-          val f2 = Future.sequence[Unit, List](p.groups.map(_.done.future))
-          val javaCompiles: Future[Unit] = f2.map { _ => p.javaCompile() }
-          scalaCompiles.flatMap(_ => javaCompiles)
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
+          for {
+            _ <- depsReady
+            _ <- {
+              p.fullCompileExportPickles()
+              // Start javac after scalac has completely finished
+              Future.sequence(p.groups.map(_.done.future))
+            }
+          } yield {
+            p.javaCompile()
+          }
         }
         Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
         timer.stop()
@@ -216,6 +222,18 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         }
     }
 
+    writeChromeTrace(projects)
+    deleteTempPickleCache()
+    true
+  }
+
+  private def deleteTempPickleCache(): Unit = {
+    if (pickleCacheConfigured == null) {
+      AbstractFile.getDirectory(pickleCache.dir.toFile).delete()
+    }
+  }
+
+  private def writeChromeTrace(projects: List[Task]) = {
     val trace = new java.lang.StringBuilder()
     trace.append("""{"traceEvents": [""")
     val sb = new mutable.StringBuilder(trace)
@@ -244,10 +262,6 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     projects.iterator.flatMap(projectEvents).addString(sb, ",\n")
     trace.append("]}")
     Files.write(Paths.get(s"build-${label}.trace"), trace.toString.getBytes())
-    if (pickleCacheConfigured == null) {
-      AbstractFile.getDirectory(pickleCache.dir.toFile).delete()
-    }
-    true
   }
 
   case class Group(files: List[String]) {
