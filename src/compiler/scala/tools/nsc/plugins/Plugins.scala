@@ -84,7 +84,7 @@ trait Plugins { global: Global =>
     // mitigate the cost of dynamic classloading as it has been
     // measured in https://github.com/scala/scala-dev/issues/458.
 
-    if (disableCache || classpath.exists(!Jar.isJarOrZip(_))) {
+    if (disableCache) {
       val loader = newLoader()
       closeableRegistry.registerClosable(loader)
       loader
@@ -196,13 +196,7 @@ trait Plugins { global: Global =>
         perRunCaches.recordClassloader(newLoader())
       } else {
         val locations = urlsAndFiles.map(t => Path(t._2.file))
-        val nonJarZips = locations.filterNot(Jar.isJarOrZip(_))
-        if (nonJarZips.nonEmpty) {
-          analyzer.macroLogVerbose(s"macro classloader: caching is disabled because the following paths are not supported: ${nonJarZips.mkString(",")}.")
-          perRunCaches.recordClassloader(newLoader())
-        } else {
-          Macros.macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader, closeableRegistry)
-        }
+        Macros.macroClassLoadersCache.getOrCreate(locations.map(_.jfile.toPath()), newLoader, closeableRegistry)
       }
     }
   }
