@@ -7,8 +7,10 @@ package scala.tools.nsc
 import java.io.File
 import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.ByteBuffer
+import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
 import java.util.Collections
+import java.util.concurrent.locks.{Lock, ReadWriteLock}
 
 import javax.tools.ToolProvider
 
@@ -26,6 +28,11 @@ import scala.tools.nsc.util.ClassPath
 import scala.util.{Failure, Success}
 
 class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy) {
+  private val pickleCacheConfigured = System.getProperty("scala.pipeline.picklecache")
+  private val pickleCache = {
+    new PickleCache(if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache") else Paths.get(pickleCacheConfigured))
+  }
+
   /** Forward errors to the (current) reporter. */
   protected def scalacError(msg: String): Unit = {
     reporter.error(FakePos("scalac"), msg + "\n  scalac -help  gives more information")
@@ -78,7 +85,6 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
   }
   private val allPickleData =  new java.util.concurrent.ConcurrentHashMap[Path, PickleClassPath[_]]
-  private val allParsedInfos = new java.util.concurrent.ConcurrentHashMap[AbstractFile, ClassfileInfo]
 
   def process(args: Array[String]): Boolean = {
     println(s"parallelism = $parallelism, strategy = $strategy")
@@ -227,6 +233,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     projects.iterator.flatMap(projectEvents).addString(sb, ",\n")
     trace.append("]}")
     Files.write(Paths.get(s"build-${label}.trace"), trace.toString.getBytes())
+    if (pickleCacheConfigured == null) {
+      AbstractFile.getDirectory(pickleCache.dir.toFile).delete()
+    }
     true
   }
 
@@ -292,7 +301,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       if (reporter.hasErrors)
         reporter.flush()
       else if (command.shouldStopWithInfo)
-        reporter.echo(command.getInfoMessage(compiler))
+        reporter.echo(command.getInfoMessage(result))
       result
     }
 
@@ -440,13 +449,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
             else None
           case _ => None
         }
-        allParsedInfos.get(file) match {
-          case null => None
-          case info => Some(info)
-        }
+
+        pickleCache.get(file)
       }
       override def parsed(file: AbstractFile, clazz: g.ClassSymbol, info: ClassfileInfo): Unit = {
-        allParsedInfos.put(file, info)
+        pickleCache.put(file, info)
       }
     }
     g.platform.addClassPathPlugin(plugin)
@@ -493,5 +500,58 @@ object PipelineMainTest {
           System.exit(1)
     }
     System.exit(0)
+  }
+}
+
+class PickleCache(val dir: Path) {
+
+  private val PicklePattern = """(.*)\.pickle""".r
+  private val RawPattern = """(.*)\.raw""".r
+  def get(file: AbstractFile): Option[ClassfileInfo] = synchronized {
+    if (file.toString().contains("Plugin.class"))
+      getClass
+    file.underlyingSource match {
+      case Some(jar) =>
+        val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
+        if (Files.exists(cachePath)) {
+          val it = Files.list(cachePath).iterator()
+          if (it.hasNext) {
+            val f = it.next()
+            val name = f.getFileName
+            name.toString match {
+              case PicklePattern(className) =>
+                val bytes = Files.readAllBytes(f)
+                Some(ScalaClass(className, () => ByteBuffer.wrap(bytes)))
+              case RawPattern(className) =>
+                val bytes = Files.readAllBytes(f)
+                Some(backend.ScalaRawClass(className))
+              case _ => None
+            }
+          } else None
+        } else None
+      case None =>
+        None
+    }
+  }
+  def put(file: AbstractFile, info: ClassfileInfo): Unit = {
+    if (file.toString().contains("Plugin.class"))
+      getClass
+
+    file.underlyingSource match {
+      case Some(jar) =>
+        val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
+        info match {
+          case ScalaClass(className, pickle) =>
+            Files.createDirectories(cachePath)
+            val ch = Channels.newChannel(Files.newOutputStream(cachePath.resolve(className + ".pickle")))
+            try ch.write(pickle())
+            finally ch.close()
+          case ScalaRawClass(className) =>
+            Files.createDirectories(cachePath)
+            Files.write(cachePath.resolve(className + ".raw"), Array[Byte]())
+          case _ =>
+        }
+      case None =>
+    }
   }
 }
