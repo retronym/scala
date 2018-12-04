@@ -10,14 +10,12 @@ import java.nio.ByteBuffer
 import java.nio.channels.Channels
 import java.nio.file.{Files, Path, Paths}
 import java.util.Collections
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.{Lock, ReadWriteLock}
 
 import javax.tools.ToolProvider
 
 import scala.collection.{mutable, parallel}
-import scala.concurrent.duration.Duration
 import scala.concurrent._
+import scala.concurrent.duration.Duration
 import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
 import scala.reflect.io.{VirtualDirectory, VirtualFile}
@@ -40,20 +38,23 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   }
 
   private var reporter: Reporter = _
+
   private object handler extends UncaughtExceptionHandler {
     override def uncaughtException(t: Thread, e: Throwable): Unit = {
       e.printStackTrace()
       System.exit(-1)
     }
   }
+
   implicit val executor = ExecutionContext.fromExecutor(new java.util.concurrent.ForkJoinPool(parallelism), t => handler.uncaughtException(Thread.currentThread(), t))
   val fileManager = ToolProvider.getSystemJavaCompiler.getStandardFileManager(null, null, null)
 
-  private class PickleClassPath[G <: Global](data: mutable.AnyRefMap[G#Symbol, PickleBuffer]) {
-    val dir = new VirtualDirectory("fakes", None)
-    val classpath = VirtualDirectoryClassPath(dir)
+  def pickleClassPath[G <: Global](output: AbstractFile, data: mutable.AnyRefMap[G#Symbol, PickleBuffer]): ClassPath = {
+    val cachePath: Path = pickleCache.cachePath(output)
+    Files.createDirectories(cachePath)
+    val dir = AbstractFile.getDirectory(cachePath.toFile)
+
     val dirs = mutable.Map[G#Symbol, AbstractFile]()
-    val classInfo = mutable.Map[AbstractFile, ClassfileInfo]()
     def packageDir(packSymbol: G#Symbol): AbstractFile = {
       if (packSymbol.isEmptyPackageClass) dir
       else if (dirs.contains(packSymbol)) dirs(packSymbol)
@@ -70,22 +71,19 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
     for ((symbol, pickle) <- data) {
       val base = packageDir(symbol.owner)
-      if (symbol.isClass) {
-        val primary = base.fileNamed(symbol.encodedName + ".class")
-        classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
-        if (symbol.companionModule.exists) {
-          val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
-          classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
-        }
-      } else if (symbol.isModule) {
-          val primary = base.fileNamed(symbol.encodedName + ".class")
-          classInfo(primary) = ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes))
-          val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
-          classInfo(secondary) = ScalaRawClass(symbol.companionModule.fullNameString)
-      }
+      val primary = base.fileNamed(symbol.encodedName + ".class")
+      pickleCache.put(primary, ScalaClass(symbol.fullNameString, () => ByteBuffer.wrap(pickle.bytes)))
+
+      // TODO is this needed?
+      //      if (symbol.companionModule.exists) {
+      //        val secondary = base.fileNamed(symbol.companionModule.encodedName + "$.class")
+      //        pickleCache.put(secondary, ScalaRawClass(symbol.companionModule.fullNameString))
+      //      }
     }
+    DirectoryClassPath(dir.file)
   }
-  private val allPickleData =  new java.util.concurrent.ConcurrentHashMap[Path, PickleClassPath[_]]
+
+  private val allPickleData = new java.util.concurrent.ConcurrentHashMap[Path, ClassPath]
 
   def process(args: Array[String]): Boolean = {
     println(s"parallelism = $parallelism, strategy = $strategy")
@@ -93,10 +91,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     reporter = new ConsoleReporter(new Settings(scalacError))
 
     def commandFor(argFileArg: String): Task = {
-      val ss   = new Settings(scalacError)
+      val ss = new Settings(scalacError)
       val command = new CompilerCommand(("@" + argFileArg) :: Nil, ss)
       Task(argFileArg, command, command.files)
     }
+
     val projects: List[Task] = args.toList.map(commandFor)
     val produces = mutable.HashMap[Path, Task]()
     for (p <- projects) {
@@ -111,7 +110,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     timer.start()
     strategy match {
       case OutlineTypePipeline =>
-        projects.foreach {p =>
+        projects.foreach { p =>
           val isLeaf = !dependedOn.contains(p)
           val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
           if (isLeaf) {
@@ -148,7 +147,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
         for (p <- projects) {
           val dependencies = dependsOn(p)
+
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
+
           val maxOutlineCriticalPathMs = maxByOrZero(dependencies)(_.outlineCriticalPathMs)
           p.outlineCriticalPathMs = maxOutlineCriticalPathMs + p.outlineTimer.durationMs
           p.regularCriticalPathMs = maxOutlineCriticalPathMs + maxByOrZero(p.groups)(_.timer.durationMs)
@@ -174,7 +175,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
         for (p <- projects) {
           val dependencies = dependsOn(p)
+
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
+
           val maxOutlineCriticalPathMs = maxByOrZero(dependencies)(_.outlineCriticalPathMs)
           p.outlineCriticalPathMs = maxOutlineCriticalPathMs + p.outlineTimer.durationMs
           p.regularCriticalPathMs = maxOutlineCriticalPathMs + maxByOrZero(p.groups)(_.timer.durationMs)
@@ -200,7 +203,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
         for (p <- projects) {
           val dependencies = dependsOn(p)
+
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
+
           p.fullCriticalPathMs = maxByOrZero(dependencies)(_.fullCriticalPathMs) + p.groups.map(_.timer.durationMs).sum
         }
         if (parallelism == 1) {
@@ -214,9 +219,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val trace = new java.lang.StringBuilder()
     trace.append("""{"traceEvents": [""")
     val sb = new mutable.StringBuilder(trace)
+
     def durationEvent(name: String, cat: String, t: Timer): String = {
       s"""{"name": "$name", "cat": "$cat", "ph": "X", "ts": ${(t.startMicros).toLong}, "dur": ${(t.durationMicros).toLong}, "pid": 0, "tid": ${t.thread.getId}}"""
     }
+
     def projectEvents(p: Task): List[String] = {
       val events = List.newBuilder[String]
       if (p.outlineTimer.durationMicros > 0d) {
@@ -233,6 +240,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       }
       events.result()
     }
+
     projects.iterator.flatMap(projectEvents).addString(sb, ",\n")
     trace.append("]}")
     Files.write(Paths.get(s"build-${label}.trace"), trace.toString.getBytes())
@@ -246,6 +254,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val timer = new Timer
     val done = Promise[Unit]()
   }
+
   private case class Task(argsFile: String, command: CompilerCommand, files: List[String]) {
     val label = argsFile.replaceAll("target/", "").replaceAll("""(.*)/(.*).args""", "$1:$2")
     override def toString: String = argsFile
@@ -258,10 +267,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     def macroClassPathSet: Set[Path] = macroClassPath.toSet
     def pluginClassPath: Set[Path] = {
       def asPath(p: String) = ClassPath split p
-      val paths  = command.settings.plugin.value filter (_ != "") flatMap (s => asPath(s) map (s => Paths.get(s)))
+
+      val paths = command.settings.plugin.value filter (_ != "") flatMap (s => asPath(s) map (s => Paths.get(s)))
       paths.toSet
     }
-    def dependencyReadyFuture(dependency: Task) =  if (macroClassPathSet.contains(dependency.outputDir)) {
+    def dependencyReadyFuture(dependency: Task) = if (macroClassPathSet.contains(dependency.outputDir)) {
       log(s"dependency is on macro classpath, will wait for .class files: ${dependency.label}")
       dependency.javaDone.future
     } else if (pluginClassPath.contains(dependency.outputDir)) {
@@ -316,7 +326,8 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       command.settings.Ymacroexpand.value = command.settings.MacroExpand.None
       val run1 = new compiler.Run()
       run1 compile files
-      allPickleData.put(command.settings.outputDirs.getSingleOutput.get.file.toPath.toRealPath().normalize(), new PickleClassPath(run1.symData))
+      val outDir = command.settings.outputDirs.getSingleOutput.get
+      allPickleData.put(outDir.file.toPath.toRealPath().normalize(), pickleClassPath(outDir, run1.symData))
       outlineTimer.stop()
       reporter.finish()
       if (reporter.hasErrors) {
@@ -363,7 +374,8 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val run2 = new compiler.Run() {
         override def advancePhase(): Unit = {
           if (compiler.phase == this.picklerPhase) {
-            allPickleData.put(command.settings.outputDirs.getSingleOutput.get.file.toPath.toRealPath().normalize(), new PickleClassPath(symData))
+            val outDir = command.settings.outputDirs.getSingleOutput.get
+            allPickleData.put(outDir.file.toPath.toRealPath().normalize(), pickleClassPath(outDir, symData))
             outlineTimer.stop()
             outlineDone.complete(Success(()))
             group.timer.start()
@@ -373,17 +385,24 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         }
       }
 
-      run2 compile group.files
-      compiler.reporter.finish()
-      group.timer.stop()
-      if (compiler.reporter.hasErrors) {
-        log("scalac: failed")
-        outlineDone.complete(Failure(new RuntimeException("Compile failed")))
-        group.done.complete(Failure(new RuntimeException("Compile failed")))
-      } else {
-        log("scalac: done")
-//        outlineDone.complete(Success(()))
-        group.done.complete(Success(()))
+      try {
+        run2 compile group.files
+        compiler.reporter.finish()
+        group.timer.stop()
+        if (compiler.reporter.hasErrors) {
+          log("scalac: failed")
+          outlineDone.complete(Failure(new RuntimeException("Compile failed")))
+          group.done.complete(Failure(new RuntimeException("Compile failed")))
+        } else {
+          log("scalac: done")
+          //        outlineDone.complete(Success(()))
+          group.done.complete(Success(()))
+        }
+      } catch {
+        case t: Throwable =>
+          t.printStackTrace()
+          outlineDone.complete(Failure(new RuntimeException("Compile failed")))
+          group.done.complete(Failure(new RuntimeException("Compile failed")))
       }
     }
 
@@ -431,14 +450,14 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
     if (strategy != Traditional) {
       val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
-        val replacements = mutable.Buffer[PickleClassPath[_]]()
+        val replacements = mutable.Buffer[ClassPath]()
         def replaceInternalClassPath(cp: ClassPath, underlying: Path): List[ClassPath] = {
           allPickleData.get(underlying.toRealPath().normalize()) match {
             case null =>
               cp :: Nil
             case pcp =>
               replacements += pcp
-              pcp.classpath :: Nil
+              pcp :: Nil
           }
         }
         override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
@@ -450,15 +469,6 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         }
 
         override def info(file: AbstractFile, clazz: g.ClassSymbol): Option[ClassfileInfo] = {
-          file match {
-            case vf: VirtualFile if vf.getClass == classOf[VirtualFile] =>
-              val iterator = replacements.iterator.flatMap(_.classInfo.get(vf))
-              if (iterator.hasNext)
-                return Some(iterator.next())
-              else None
-            case _ => None
-          }
-
           pickleCache.get(file)
         }
         override def parsed(file: AbstractFile, clazz: g.ClassSymbol, info: ClassfileInfo): Unit = {
@@ -473,9 +483,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 }
 
 sealed abstract class BuildStrategy
+
 /** Outline type check to compute type signatures as pickles as an input to downstream compilation. */
 case object OutlineTypePipeline extends BuildStrategy
+
 case object Pipeline extends BuildStrategy
+
 /** Emit class files before triggering downstream compilation */
 case object Traditional extends BuildStrategy
 
@@ -497,17 +510,17 @@ object PipelineMainTest {
   def main(args: Array[String]): Unit = {
     var i = 0
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
-        i += 1
-        val main = new PipelineMainClass(i.toString, n, strat)
-        println(s"====== ITERATION $i=======")
-        val result = main.process(Array(
-          "/code/boxer/macros/target/compile.args",
-          "/code/boxer/plugin/target/compile.args",
-          "/code/boxer/support/target/compile.args",
-          "/code/boxer/use-macro/target/compile.args",
-          "/code/boxer/use-plugin/target/compile.args"))
-        if (!result)
-          System.exit(1)
+      i += 1
+      val main = new PipelineMainClass(i.toString, n, strat)
+      println(s"====== ITERATION $i=======")
+      val result = main.process(Array(
+        "/code/boxer/macros/target/compile.args",
+        "/code/boxer/plugin/target/compile.args",
+        "/code/boxer/support/target/compile.args",
+        "/code/boxer/use-macro/target/compile.args",
+        "/code/boxer/use-plugin/target/compile.args"))
+      if (!result)
+        System.exit(1)
     }
     System.exit(0)
   }
@@ -518,52 +531,50 @@ class PickleCache(val dir: Path) {
   private val PicklePattern = """(.*)\.pickle""".r
   private val RawPattern = """(.*)\.raw""".r
   def get(file: AbstractFile): Option[ClassfileInfo] = synchronized {
-    if (file.toString().contains("Plugin.class"))
-      getClass
-    file.underlyingSource match {
-      case Some(jar) =>
-        val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
-        if (Files.exists(cachePath)) {
-          val listing = Files.list(cachePath)
-          try {
-            val it = listing.iterator()
-            if (it.hasNext) {
-              val f = it.next()
-              val name = f.getFileName
-              name.toString match {
-                case PicklePattern(className) =>
-                  val bytes = Files.readAllBytes(f)
-                  Some(ScalaClass(className, () => ByteBuffer.wrap(bytes)))
-                case RawPattern(className) =>
-                  val bytes = Files.readAllBytes(f)
-                  Some(backend.ScalaRawClass(className))
-                case _ => None
-              }
-            } else None
-          } finally {
-            listing.close()
+    val cachePath = this.cachePath(file)
+    if (Files.exists(cachePath)) {
+      val listing = Files.list(cachePath)
+      try {
+        val it = listing.iterator()
+        if (it.hasNext) {
+          val f = it.next()
+          val name = f.getFileName
+          name.toString match {
+            case PicklePattern(className) =>
+              val bytes = Files.readAllBytes(f)
+              Some(ScalaClass(className, () => ByteBuffer.wrap(bytes)))
+            case RawPattern(className) =>
+              val bytes = Files.readAllBytes(f)
+              Some(backend.ScalaRawClass(className))
+            case _ => None
           }
         } else None
-      case None =>
-        None
+      } finally {
+        listing.close()
+      }
+    } else None
+  }
+  def cachePath(file: AbstractFile): Path = {
+    file.underlyingSource match {
+      case Some(jar) if jar ne file =>
+        dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
+      case _ =>
+        dir.resolve("./" + file.path).normalize()
     }
   }
+
   def put(file: AbstractFile, info: ClassfileInfo): Unit = {
-    file.underlyingSource match {
-      case Some(jar) =>
-        val cachePath = dir.resolve("." + jar.file.toPath).normalize().resolve(file.path)
-        info match {
-          case ScalaClass(className, pickle) =>
-            Files.createDirectories(cachePath)
-            val ch = Channels.newChannel(Files.newOutputStream(cachePath.resolve(className + ".pickle")))
-            try ch.write(pickle())
-            finally ch.close()
-          case ScalaRawClass(className) =>
-            Files.createDirectories(cachePath)
-            Files.write(cachePath.resolve(className + ".raw"), Array[Byte]())
-          case _ =>
-        }
-      case None =>
+    val cachePath = this.cachePath(file)
+    info match {
+      case ScalaClass(className, pickle) =>
+        Files.createDirectories(cachePath)
+        val ch = Channels.newChannel(Files.newOutputStream(cachePath.resolve(className + ".pickle")))
+        try ch.write(pickle())
+        finally ch.close()
+      case ScalaRawClass(className) =>
+        Files.createDirectories(cachePath)
+        Files.write(cachePath.resolve(className + ".raw"), Array[Byte]())
+      case _ =>
     }
   }
 }
