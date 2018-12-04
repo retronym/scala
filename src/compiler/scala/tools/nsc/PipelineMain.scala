@@ -293,7 +293,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     var fullCriticalPathMs = 0d
     val outlineDone: Promise[Unit] = Promise[Unit]()
     val javaDone: Promise[Unit] = Promise[Unit]()
-    def compilationDone: Future[List[Unit]] = Future.sequence(javaDone.future :: groups.map(_.done.future))
+    def compilationDone: Future[List[Unit]] = Future.sequence(outlineDone.future :: (groups.map(_.done.future) :+ javaDone.future))
 
     lazy val compiler: Global = {
       val result = newCompiler(command.settings)
@@ -316,11 +316,13 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       allPickleData.put(command.settings.outputDirs.getSingleOutput.get.file.toPath.toRealPath().normalize(), new PickleClassPath(run1.symData))
       outlineTimer.stop()
       reporter.finish()
-      if (reporter.hasErrors)
+      if (reporter.hasErrors) {
+        log("scalac outline: failed")
         outlineDone.complete(Failure(new RuntimeException("compile failed")))
-      else
+      } else {
+        log("scalac outline: done")
         outlineDone.complete(Success(()))
-      log("scalac outline: done")
+      }
     }
 
     def fullCompile(): Unit = {
@@ -371,10 +373,13 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       run2 compile group.files
       compiler.reporter.finish()
       group.timer.stop()
-      log("scalac: done")
       if (compiler.reporter.hasErrors) {
+        log("scalac: failed")
+        outlineDone.complete(Failure(new RuntimeException("Compile failed")))
         group.done.complete(Failure(new RuntimeException("Compile failed")))
       } else {
+        log("scalac: done")
+//        outlineDone.complete(Success(()))
         group.done.complete(Success(()))
       }
     }
