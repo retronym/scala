@@ -101,7 +101,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     builder.append("}\n")
     val path = Paths.get("projects.dot")
     Files.write(path, builder.toString.getBytes(java.nio.charset.StandardCharsets.UTF_8))
-    println("Wrote project dependency to: " + path)
+    println("Wrote project dependency graph to: " + path.toAbsolutePath)
   }
 
   private case class Dependency(t: Task, isMacro: Boolean, isPlugin: Boolean)
