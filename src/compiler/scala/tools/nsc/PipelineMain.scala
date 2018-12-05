@@ -86,6 +86,26 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
   private val allPickleData = new java.util.concurrent.ConcurrentHashMap[Path, ClassPath]
 
+  def writeDotFile(dependsOn: mutable.LinkedHashMap[Task, List[Dependency]]): Unit = {
+    val builder = new java.lang.StringBuilder()
+    builder.append("digraph projects {\n")
+    for ((p, deps) <- dependsOn) {
+      //builder.append("  node \"[]").append(p.label).append("\";\n")
+      for (dep <- deps) {
+        builder.append("   \"").append(p.label).append("\" -> \"").append(dep.t.label).append("\" [")
+        if (dep.isMacro) builder.append("label=M")
+        else if (dep.isPlugin) builder.append("label=P")
+        builder.append("];\n")
+      }
+    }
+    builder.append("}\n")
+    val path = Paths.get("projects.dot")
+    Files.write(path, builder.toString.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    println("Wrote project dependency to: " + path)
+  }
+
+  private case class Dependency(t: Task, isMacro: Boolean, isPlugin: Boolean)
+
   def process(args: Array[String]): Boolean = {
     println(s"parallelism = $parallelism, strategy = $strategy")
 
@@ -98,15 +118,20 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
 
     val projects: List[Task] = args.toList.map(commandFor)
-    val produces = mutable.HashMap[Path, Task]()
+    val produces = mutable.LinkedHashMap[Path, Task]()
     for (p <- projects) {
       produces(p.outputDir) = p
     }
-    val dependsOn = mutable.HashMap[Task, List[Task]]()
+    val dependsOn = mutable.LinkedHashMap[Task, List[Dependency]]()
     for (p <- projects) {
-      dependsOn(p) = (p.classPath ++ p.pluginClassPath).flatMap(s => produces.get(s)).toList.filterNot(_ == p)
+      val macroDeps = p.macroClassPath.flatMap(p => produces.get(p)).toList.filterNot(_ == p).map(t => Dependency(t, isMacro = true, isPlugin = false))
+      val pluginDeps = p.pluginClassPath.flatMap(p => produces.get(p)).toList.filterNot(_ == p).map(t => Dependency(t, isMacro = false, isPlugin = true))
+      val classPathDeps = p.classPath.flatMap(p => produces.get(p)).toList.filterNot(_ == p).filterNot(p => macroDeps.exists(_.t == p)).map(t => Dependency(t, isMacro = false, isPlugin = false))
+      dependsOn(p) = classPathDeps ++ macroDeps ++ pluginDeps
     }
-    val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.toSet
+    val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.map(_.t).toSet
+
+    writeDotFile(dependsOn)
 
     val timer = new Timer
     timer.start()
@@ -114,7 +139,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       case OutlineTypePipeline =>
         projects.foreach { p =>
           val isLeaf = !dependedOn.contains(p)
-          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task.t) })
           if (isLeaf) {
             for {
               _ <- depsReady
@@ -148,7 +173,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         timer.stop()
 
         for (p <- projects) {
-          val dependencies = dependsOn(p)
+          val dependencies = dependsOn(p).map(_.t)
 
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
 
@@ -165,7 +190,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         projects.foreach { p =>
-          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task.t)))
           for {
             _ <- depsReady
             _ <- {
@@ -181,7 +206,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         timer.stop()
 
         for (p <- projects) {
-          val dependencies = dependsOn(p)
+          val dependencies = dependsOn(p).map(_.t)
 
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
 
@@ -198,7 +223,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Traditional =>
         projects.foreach { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.javaDone.future))
+          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.t.javaDone.future))
           f1.flatMap { _ =>
             p.outlineDone.complete(Success(()))
             p.fullCompile()
@@ -209,7 +234,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         timer.stop()
 
         for (p <- projects) {
-          val dependencies = dependsOn(p)
+          val dependencies = dependsOn(p).map(_.t)
 
           def maxByOrZero[A](as: List[A])(f: A => Double): Double = if (as.isEmpty) 0d else as.map(f).max
 
