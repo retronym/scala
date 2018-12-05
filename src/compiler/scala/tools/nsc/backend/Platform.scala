@@ -49,8 +49,7 @@ trait Platform {
   def needCompile(bin: AbstractFile, src: AbstractFile): Boolean
 
   /**
-    * A class path plugin can modify the classpath before it is used by the compiler, and can
-    * customize the way that the compiler reads the contents of class files.
+    * A class path plugin can modify the classpath before it is used by the compiler.
     *
     * Applications could include:
     *
@@ -60,8 +59,6 @@ trait Platform {
     *     the pickler phase ("Build Pipelining")
     */
   abstract class ClassPathPlugin {
-    def info(file: AbstractFile, clazz: ClassSymbol): Option[ClassfileInfo]
-    def parsed(file: AbstractFile, clazz: ClassSymbol, info: ClassfileInfo): Unit = ()
     def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = classPath
   }
 
@@ -85,19 +82,4 @@ trait Platform {
     if (!classPathPlugins.contains(plugin))
       classPathPlugins = plugin :: classPathPlugins
   }
-  final def classFileInfo(file: AbstractFile, clazz: ClassSymbol): Option[ClassfileInfo] = if (classPathPlugins eq Nil) None else {
-    classPathPlugins.foldLeft(Option.empty[ClassfileInfo]) {
-      case (Some(info), _) => Some(info)
-      case (None, plugin) => plugin.info(file, clazz)
-    }
-  }
-  final def classFileInfoParsed(file: AbstractFile, clazz: ClassSymbol, info: ClassfileInfo): Unit = if (classPathPlugins eq Nil) None else {
-    classPathPlugins.foreach(_.parsed(file, clazz, info))
-  }
 }
-
-sealed abstract class ClassfileInfo {}
-final case class ClassBytes(data: () => ByteBuffer) extends ClassfileInfo
-final case class ScalaRawClass(className: String) extends ClassfileInfo
-final case class ScalaClass(className: String, pickle: () => ByteBuffer) extends ClassfileInfo
-

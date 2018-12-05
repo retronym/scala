@@ -17,18 +17,15 @@ package classfile
 
 import java.io._
 import java.lang.Integer.toHexString
-import java.nio.ByteBuffer
 
-import scala.collection.{immutable, mutable}
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.annotation.switch
-import scala.reflect.internal.JavaAccFlags
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.{immutable, mutable}
+import scala.reflect.internal.{JavaAccFlags, SymbolTable}
 import scala.reflect.internal.pickling.{ByteCodecs, PickleBuffer}
-import scala.reflect.io.{NoAbstractFile, VirtualFile}
-import scala.reflect.internal.util.Collections._
-import scala.tools.nsc.backend.{ClassBytes, ScalaClass, ScalaRawClass}
-import scala.tools.nsc.util.ClassPath
+import scala.reflect.io.NoAbstractFile
 import scala.tools.nsc.io.AbstractFile
+import scala.tools.nsc.util.ClassPath
 import scala.util.control.NonFatal
 
 /** This abstract class implements a class file parser.
@@ -59,8 +56,9 @@ abstract class ClassfileParser {
   def classPath: ClassPath
 
   import definitions._
-  import scala.reflect.internal.ClassfileConstants._
+
   import Flags._
+  import scala.reflect.internal.ClassfileConstants._
 
   protected type ThisConstantPool <: ConstantPool
   protected def newConstantPool: ThisConstantPool
@@ -158,40 +156,16 @@ abstract class ClassfileParser {
       this.staticModule = module
       this.isScala      = false
 
-      import loaders.platform._
-      classFileInfo(file, clazz) match {
-        case Some(info) =>
-          info match {
-            case ScalaRawClass(className) =>
-              isScalaRaw = true
-              currentClass = TermName(className)
-            case ScalaClass(className, pickle) =>
-              val pickle1 = pickle()
-              isScala = true
-              currentClass = TermName(className)
-              if (pickle1.hasArray) {
-                unpickler.unpickle(pickle1.array, pickle1.arrayOffset + pickle1.position(), clazz, staticModule, file.name)
-              } else {
-                val array = new Array[Byte](pickle1.remaining)
-                pickle1.get(array)
-                unpickler.unpickle(array, 0, clazz, staticModule, file.name)
-              }
-            case ClassBytes(data) =>
-              val data1 = data()
-              val array = new Array[Byte](data1.remaining)
-              data1.get(array)
-              this.in = new AbstractFileReader(file, array)
-              parseHeader()
-              this.pool = newConstantPool
-              parseClass()
-          }
-        case None =>
-          this.in = new AbstractFileReader(file)
-          parseHeader()
-          this.pool = newConstantPool
-          parseClass()
-          if (!(isScala || isScalaRaw))
-            loaders.platform.classFileInfoParsed(file, clazz, ClassBytes(() => ByteBuffer.wrap(in.buf)))
+      this.in = new AbstractFileReader(file)
+      val magic = in.getInt(in.bp)
+      if (magic != JAVA_MAGIC && file.name.endsWith(".sig")) {
+        currentClass = TermName(clazz.javaClassName)
+        isScala = true
+        unpickler.unpickle(in.buf, 0, clazz, staticModule, file.name)
+      } else {
+        parseHeader()
+        this.pool = newConstantPool
+        parseClass()
       }
     }
   }
@@ -933,7 +907,6 @@ abstract class ClassfileParser {
                 val bytes =
                   san.assocs.find({ _._1 == nme.bytes }).get._2.asInstanceOf[ScalaSigBytes].bytes
                 unpickler.unpickle(bytes, 0, clazz, staticModule, in.file.name)
-                loaders.platform.classFileInfoParsed(file, clazz, ScalaClass(this.currentClass.toString, () => ByteBuffer.wrap(bytes)))
               case None =>
                 throw new RuntimeException("Scala class file does not contain Scala annotation")
             }
@@ -1258,7 +1231,6 @@ abstract class ClassfileParser {
           in.skip(attrLen)
         case tpnme.ScalaATTR =>
           isScalaRaw = true
-          loaders.platform.classFileInfoParsed(file, clazz, ScalaRawClass(this.currentClass.toString))
         case tpnme.InnerClassesATTR if !isScala =>
           val entries = u2
           for (i <- 0 until entries) {
