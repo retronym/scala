@@ -419,8 +419,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       outlineTimer.start()
       val run2 = new compiler.Run() {
         override def advancePhase(): Unit = {
-          val phase = compiler.phase
-          if (phase == this.picklerPhase) {
+          if (compiler.phase == this.picklerPhase) {
             registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get, symData)
             outlineTimer.stop()
             outlineDone.complete(Success(()))

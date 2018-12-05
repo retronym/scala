@@ -487,10 +487,19 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with Analyzer
 
+  // phaseName = "patmat"
+  object patmat extends {
+    val global: Global.this.type = Global.this
+    val runsAfter = List("typer")
+    val runsRightAfter = None
+    // patmat doesn't need to be right after typer, as long as we run before superaccessors
+    // (sbt does need to run right after typer, so don't conflict)
+  } with PatternMatching
+
   // phaseName = "superaccessors"
   object superAccessors extends {
     val global: Global.this.type = Global.this
-    val runsAfter = List("typer")
+    val runsAfter = List("patmat")
     val runsRightAfter = None
   } with SuperAccessors
 
@@ -515,20 +524,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val runsRightAfter = None
   } with RefChecks
 
-  // phaseName = "patmat"
-  object patmat extends {
-    val global: Global.this.type = Global.this
-    // patmat does not need to run before the superaccessors phase, because
-    // patmat never emits `this.x` where `x` is a ParamAccessor.
-    // (However, patmat does need to run before outer accessors generation).
-    val runsAfter = List("refchecks")
-    val runsRightAfter = None
-  } with PatternMatching
-
   // phaseName = "uncurry"
   override object uncurry extends {
     val global: Global.this.type = Global.this
-    val runsAfter = List("patmat")
+    val runsAfter = List("refchecks")
     val runsRightAfter = None
   } with UnCurry
 
