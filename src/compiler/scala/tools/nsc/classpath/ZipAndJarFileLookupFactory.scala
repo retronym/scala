@@ -24,6 +24,7 @@ import scala.reflect.io.{AbstractFile, FileZipArchive, ManifestResources}
 import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
 import scala.tools.nsc.{CloseableRegistry, Settings}
 import FileUtils._
+import scala.reflect.internal.SymbolTable
 
 /**
  * A trait providing an optional cache for classpath entries obtained from zip and jar files.
@@ -203,7 +204,8 @@ final class FileBasedCache[T] {
           val count = referenceCount.decrementAndGet()
           if (count == 0) {
             t match {
-              case cl: Closeable => FileBasedCache.deferredClose(referenceCount, cl)
+              case cl: Closeable =>
+                FileBasedCache.deferredClose(referenceCount, cl)
               case _ =>
             }
           }
@@ -226,9 +228,17 @@ final class FileBasedCache[T] {
       case Some(e@Entry(cachedStamps, cached)) =>
         if (!checkStamps || cachedStamps == stamps) {
           // Cache hit
-          e.referenceCount.incrementAndGet()
-          closeableRegistry.registerClosable(e.referenceCountDecrementer)
-          cached
+          val count = e.referenceCount.incrementAndGet()
+          if (count == 1) {
+            // Closed, recreate.
+            val value = create()
+            val entry = Entry(stamps, value)
+            cache.put(paths, entry)
+            value
+          } else {
+            closeableRegistry.registerClosable(e.referenceCountDecrementer)
+            cached
+          }
         } else {
           // Cache miss: we found an entry but the underlying files have been modified
           cached match {
