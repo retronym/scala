@@ -167,6 +167,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
     val timer = new Timer
     timer.start()
+
+    def awaitDone(): Unit = {
+      Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
+      timer.stop()
+    }
     strategy match {
       case OutlineTypePipeline =>
         projects.foreach { p =>
@@ -201,8 +206,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           f.onComplete { _ => p.compiler.close() }
         }
 
-        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
-        timer.stop()
+        awaitDone()
 
         for (p <- projects) {
           val dependencies = dependsOn(p).map(_.t)
@@ -233,9 +237,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           } yield {
             p.javaCompile()
           }
-          f.onComplete { _ => p.compiler.close() }        }
-        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
-        timer.stop()
+          f.onComplete { _ => p.compiler.close() }
+        }
+        awaitDone()
 
         for (p <- projects) {
           val dependencies = dependsOn(p).map(_.t)
@@ -255,7 +259,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Traditional =>
         projects.foreach { p =>
-          val f1 = Future.sequence[Unit, List](dependsOn.getOrElse(p, Nil).map(_.t.javaDone.future))
+          val f1 = Future.sequence(dependsOn.getOrElse(p, Nil).map(_.t.javaDone.future))
           val f2 = f1.flatMap { _ =>
             p.outlineDone.complete(Success(()))
             p.fullCompile()
@@ -263,8 +267,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           }
           f2.onComplete { _ => p.compiler.close() }
         }
-        Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
-        timer.stop()
+        awaitDone()
 
         for (p <- projects) {
           val dependencies = dependsOn(p).map(_.t)
