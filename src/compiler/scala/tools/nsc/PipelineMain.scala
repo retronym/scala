@@ -13,6 +13,7 @@ import java.util.Collections
 
 import javax.tools.ToolProvider
 
+import scala.collection.JavaConverters.asScalaIteratorConverter
 import scala.collection.{mutable, parallel}
 import scala.concurrent._
 import scala.concurrent.duration.Duration
@@ -24,7 +25,7 @@ import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
 import scala.util.{Failure, Success}
 
-class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy) {
+class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy, argFiles: Seq[Path]) {
   private val pickleCacheConfigured = System.getProperty("scala.pipeline.picklecache")
   private val pickleCache: Path = {
     if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache") else Paths.get(pickleCacheConfigured)
@@ -117,18 +118,18 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
   private case class Dependency(t: Task, isMacro: Boolean, isPlugin: Boolean)
 
-  def process(args: Array[String]): Boolean = {
+  def process(): Boolean = {
     println(s"parallelism = $parallelism, strategy = $strategy")
 
     reporter = new ConsoleReporter(new Settings(scalacError))
 
-    def commandFor(argFileArg: String): Task = {
+    def commandFor(argFileArg: Path): Task = {
       val ss = new Settings(scalacError)
       val command = new CompilerCommand(("@" + argFileArg) :: Nil, ss)
       Task(argFileArg, command, command.files)
     }
 
-    val projects: List[Task] = args.toList.map(commandFor)
+    val projects: List[Task] = argFiles.toList.map(commandFor)
     val produces = mutable.LinkedHashMap[Path, Task]()
     for (p <- projects) {
       produces(p.outputDir) = p
@@ -141,7 +142,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       dependsOn(p) = classPathDeps ++ macroDeps ++ pluginDeps
     }
     val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.map(_.t).toSet
-    val externalClassPath = projects.iterator.flatMap(_.classPath).filter(p => !produces.contains(p)).toSet
+    val externalClassPath = projects.iterator.flatMap(_.classPath).filter(p => !produces.contains(p) && Files.exists(p)).toSet
 
     if (strategy != Traditional) {
       val exportTimer = new Timer
@@ -150,7 +151,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         val extracted = cachePath(entry)
         val sourceTimeStamp = Files.getLastModifiedTime(entry)
         if (Files.exists(extracted) && Files.getLastModifiedTime(extracted) == sourceTimeStamp) {
-          println(s"Skipped export of pickles from $entry to $extracted (up to date)")
+          // println(s"Skipped export of pickles from $entry to $extracted (up to date)")
         } else {
           PickleExtractor.process(entry, extracted)
           Files.setLastModifiedTime(extracted, sourceTimeStamp)
@@ -331,9 +332,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val done = Promise[Unit]()
   }
 
-  private case class Task(argsFile: String, command: CompilerCommand, files: List[String]) {
-    val label = argsFile.replaceAll("target/", "").replaceAll("""(.*)/(.*).args""", "$1:$2")
-    override def toString: String = argsFile
+  private case class Task(argsFile: Path, command: CompilerCommand, files: List[String]) {
+    val label = argsFile.toString.replaceAll("target/", "").replaceAll("""(.*)/(.*).args""", "$1:$2")
+    override def toString: String = argsFile.toString
     def outputDir: Path = command.settings.outputDirs.getSingleOutput.get.file.toPath.toAbsolutePath.normalize()
     private def expand(s: command.settings.PathSetting): List[Path] = {
       ClassPath.expandPath(s.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
@@ -384,6 +385,8 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val outlineDone: Promise[Unit] = Promise[Unit]()
     val javaDone: Promise[Unit] = Promise[Unit]()
     def compilationDone: Future[List[Unit]] = Future.sequence(outlineDone.future :: (groups.map(_.done.future) :+ javaDone.future))
+
+    val originalClassPath: String = command.settings.classpath.value
 
     lazy val compiler: Global = try {
       val result = newCompiler(command.settings)
@@ -501,7 +504,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       if (javaSources.nonEmpty) {
         javaTimer.start()
         javaDone.completeWith(Future {
-          val opts = java.util.Arrays.asList("-d", command.settings.outdir.value, "-cp", command.settings.outdir.value + File.pathSeparator + command.settings.classpath.value)
+          val opts = java.util.Arrays.asList("-d", command.settings.outdir.value, "-cp", command.settings.outdir.value + File.pathSeparator + originalClassPath)
           val compileTask = ToolProvider.getSystemJavaCompiler.getTask(null, null, null, opts, null, fileManager.getJavaFileObjects(javaSources.toArray: _*))
           compileTask.setProcessors(Collections.emptyList())
           compileTask.call()
@@ -539,7 +542,10 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val classPath = ClassPath.expandPath(settings.classpath.value, expandStar = true)
       val modifiedClassPath = classPath.map { entry =>
         val entryPath = Paths.get(entry)
-        strippedAndExportedClassPath.getOrElse(entryPath.toRealPath().normalize(), entryPath).toString
+        if (Files.exists(entryPath))
+          strippedAndExportedClassPath.getOrElse(entryPath.toRealPath().normalize(), entryPath).toString
+        else
+          entryPath
       }
       settings.classpath.value = modifiedClassPath.mkString(java.io.File.pathSeparator)
     }
@@ -562,8 +568,14 @@ object PipelineMain {
     val strategies = List(OutlineTypePipeline, Pipeline, Traditional)
     val strategy = strategies.find(_.productPrefix.equalsIgnoreCase(System.getProperty("scala.pipeline.strategy", "pipeline"))).get
     val parallelism = java.lang.Integer.getInteger("scala.pipeline.parallelism", parallel.availableProcessors)
-    val main = new PipelineMainClass("1", parallelism, strategy)
-    val result = main.process(args)
+    val argFiles: Seq[Path] = args match {
+      case Array(path) if Files.isDirectory(Paths.get(path)) =>
+        Files.walk(Paths.get(path)).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
+      case _ =>
+        args.map(Paths.get(_))
+    }
+    val main = new PipelineMainClass("1", parallelism, strategy, argFiles)
+    val result = main.process()
     if (!result)
       System.exit(1)
     else
@@ -574,18 +586,12 @@ object PipelineMain {
 object PipelineMainTest {
   def main(args: Array[String]): Unit = {
     var i = 0
+    val argsFiles = Files.walk(Paths.get("/code/guardian-frontend")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
       i += 1
-      val main = new PipelineMainClass(i.toString, n, strat)
+      val main = new PipelineMainClass(i.toString, n, strat, argsFiles)
       println(s"====== ITERATION $i=======")
-      val result = main.process(Array(
-        "/code/boxer/macros/target/compile.args",
-        "/code/boxer/plugin/target/compile.args",
-        "/code/boxer/support/target/compile.args",
-        "/code/boxer/use-macro/target/compile.args",
-        "/code/boxer/use-plugin/target/compile.args",
-        "/code/boxer/use-macro2/target/compile.args",
-        "/code/boxer/use-plugin2/target/compile.args"))
+      val result = main.process()
       if (!result)
         System.exit(1)
     }

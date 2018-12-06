@@ -4,7 +4,7 @@ import java.io.Closeable
 import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor, _}
 
-import scala.collection.JavaConverters.{asScalaBufferConverter, bufferAsJavaListConverter}
+import scala.collection.JavaConverters.{asScalaBufferConverter, bufferAsJavaListConverter, collectionAsScalaIterableConverter}
 import scala.reflect.internal.pickling.ByteCodecs
 import scala.reflect.io.RootPath
 import scala.tools.asm.tree.ClassNode
@@ -78,8 +78,8 @@ object PickleExtractor {
           val len = ByteCodecs.decode(bytes)
           pickleData = bytes.take(len)
         } else if (node.desc == "Lscala/reflect/ScalaLongSignature;") {
-          val Array("bytes", data: Array[String]) = node.values.toArray()
-          val encoded = data flatMap (_.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+          val Array("bytes", data: java.util.Collection[String @unchecked]) = node.values.toArray()
+          val encoded = data.asScala.toArray flatMap (_.getBytes(java.nio.charset.StandardCharsets.UTF_8))
           val len = ByteCodecs.decode(encoded)
           pickleData = encoded.take(len)
         }
