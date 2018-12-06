@@ -9,7 +9,6 @@ import java.lang.Thread.UncaughtExceptionHandler
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
-import java.util
 import java.util.Collections
 
 import javax.tools.ToolProvider
@@ -17,11 +16,9 @@ import javax.tools.ToolProvider
 import scala.collection.{mutable, parallel}
 import scala.concurrent._
 import scala.concurrent.duration.Duration
-import scala.reflect.internal.SymbolTable
 import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
-import scala.reflect.io.{PlainNioFile, RootPath}
-import scala.tools.nsc.classpath.{ClassPathFactory, DirectoryClassPath, ZipArchiveFileLookup}
+import scala.reflect.io.RootPath
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
@@ -146,12 +143,24 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val dependedOn: Set[Task] = dependsOn.valuesIterator.flatten.map(_.t).toSet
     val externalClassPath = projects.iterator.flatMap(_.classPath).filter(p => !produces.contains(p)).toSet
 
-    for (entry <- externalClassPath) {
-      val extracted = cachePath(entry)
-      PickleExtractor.process(entry, extracted)
-      println(s"Exported pickles from $entry to $extracted")
-      Files.setLastModifiedTime(extracted, Files.getLastModifiedTime(entry))
-      strippedAndExportedClassPath(entry) = extracted
+    if (strategy != Traditional) {
+      val exportTimer = new Timer
+      exportTimer.start()
+      for (entry <- externalClassPath) {
+        val extracted = cachePath(entry)
+        val sourceTimeStamp = Files.getLastModifiedTime(entry)
+        if (Files.exists(extracted) && Files.getLastModifiedTime(extracted) == sourceTimeStamp) {
+          println(s"Skipped export of pickles from $entry to $extracted (up to date)")
+        } else {
+          PickleExtractor.process(entry, extracted)
+          Files.setLastModifiedTime(extracted, sourceTimeStamp)
+          println(s"Exported pickles from $entry to $extracted")
+          Files.setLastModifiedTime(extracted, sourceTimeStamp)
+        }
+        strippedAndExportedClassPath(entry) = extracted
+      }
+      exportTimer.stop()
+      println(f"Exported external classpath in ${exportTimer.durationMs}%.0f ms")
     }
 
     writeDotFile(dependsOn)
@@ -523,32 +532,16 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   }
 
   protected def newCompiler(settings: Settings): Global = {
-    val g = Global(settings)
-
     if (strategy != Traditional) {
-      val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
-        def replace(cp: ClassPath, underlying: Path): List[ClassPath] = {
-          strippedAndExportedClassPath.get(underlying.toRealPath().normalize()) match {
-            case Some(stripped) =>
-              val replacement = ClassPathFactory.newClassPath(new PlainNioFile(stripped), g.settings, g.closeableRegistry)
-              replacement :: Nil
-            case None =>
-              cp :: Nil
-          }
-        }
-        override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
-          classPath.flatMap {
-            case zcp: ZipArchiveFileLookup[_] => replace(zcp, zcp.zipFile.toPath)
-            case dcp: DirectoryClassPath => replace(dcp, dcp.dir.toPath)
-            case cp => cp :: Nil
-          }
-        }
+      val classPath = ClassPath.expandPath(settings.classpath.value, expandStar = true)
+      val modifiedClassPath = classPath.map { entry =>
+        val entryPath = Paths.get(entry)
+        strippedAndExportedClassPath.getOrElse(entryPath.toRealPath().normalize(), entryPath).toString
       }
-      g.platform.addClassPathPlugin(plugin)
+      settings.classpath.value = modifiedClassPath.mkString(java.io.File.pathSeparator)
     }
-    g
+    Global(settings)
   }
-
 }
 
 sealed abstract class BuildStrategy
