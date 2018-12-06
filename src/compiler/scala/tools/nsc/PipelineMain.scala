@@ -324,7 +324,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
     projects.iterator.flatMap(projectEvents).addString(sb, ",\n")
     trace.append("]}")
-    Files.write(Paths.get(s"build-${label}.trace"), trace.toString.getBytes())
+    val traceFile = Paths.get(s"build-${label}.trace")
+    Files.write(traceFile, trace.toString.getBytes())
+    println("Chrome trace written to " + traceFile.toAbsolutePath)
   }
 
   case class Group(files: List[String]) {
@@ -589,7 +591,7 @@ object PipelineMainTest {
     val argsFiles = Files.walk(Paths.get("/code/guardian-frontend")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
       i += 1
-      val main = new PipelineMainClass(i.toString, n, strat, argsFiles)
+      val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles)
       println(s"====== ITERATION $i=======")
       val result = main.process()
       if (!result)
