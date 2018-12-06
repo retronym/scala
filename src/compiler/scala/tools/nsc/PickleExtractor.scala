@@ -6,41 +6,12 @@ import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor, _}
 
 import scala.collection.JavaConverters.{asScalaBufferConverter, bufferAsJavaListConverter}
 import scala.reflect.internal.pickling.ByteCodecs
+import scala.reflect.io.RootPath
 import scala.tools.asm.tree.ClassNode
 import scala.tools.asm.{ClassReader, ClassWriter, Opcodes}
 
 object PickleExtractor {
 
-  abstract class RootPath extends Closeable {
-    def root: Path
-  }
-
-  def rootPath(path: Path, writable: Boolean): RootPath = {
-    if (path.getFileName.toString.endsWith(".jar")) {
-      import java.net.URI
-      val zipFile = URI.create("jar:file:" + path.toUri.getPath)
-      val env = new java.util.HashMap[String, String]()
-      if (!Files.exists(path.getParent))
-        Files.createDirectories(path.getParent)
-      if (writable) {
-        env.put("create", "true")
-        if (Files.exists(path))
-          Files.delete(path)
-      }
-      val zipfs = FileSystems.newFileSystem(zipFile, env)
-      new RootPath {
-        def root = zipfs.getRootDirectories.iterator().next()
-        def close(): Unit = {
-          zipfs.close()
-        }
-      }
-    } else {
-      new RootPath {
-        override def root: Path = path
-        override def close(): Unit = ()
-      }
-    }
-  }
   def main(args: Array[String]): Unit = {
     args.toList match {
       case input :: output :: Nil =>
@@ -49,8 +20,8 @@ object PickleExtractor {
     }
   }
   def process(input: Path, output: Path): Unit = {
-    val inputPath = rootPath(input, writable = false)
-    val outputPath = rootPath(output, writable = true)
+    val inputPath = RootPath(input, writable = false)
+    val outputPath = RootPath(output, writable = true)
     try {
       val root = inputPath.root
       Files.createDirectories(outputPath.root)
@@ -114,8 +85,6 @@ object PickleExtractor {
         }
       }
       output.visibleAnnotations = input.visibleAnnotations.asScala.filter(node => isScalaAnnotation(node.desc) && {
-        node;
-        node.values
         true
       }).asJava
     }

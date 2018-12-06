@@ -124,7 +124,12 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directo
     //
     // Note this behaviour can be enabled in javac with `javac -XDsortfiles`, but that's only
     // intended to improve determinism of the compiler for compiler hackers.
-    util.Arrays.sort(listing, (o1: File, o2: File) => o1.getName.compareTo(o2.getName))
+    util.Arrays.sort(listing, (o1: File, o2: File) => {
+      if (o1 == null || o1.getName == null || o2 == null || o2.getName == null)
+        getClass
+      o1.getName.compareTo(o2.getName)
+    }
+    )
     listing
   }
   protected def getName(f: File): String = f.getName

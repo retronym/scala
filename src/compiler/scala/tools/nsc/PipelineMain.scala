@@ -6,10 +6,10 @@ package scala.tools.nsc
 
 import java.io.File
 import java.lang.Thread.UncaughtExceptionHandler
-import java.nio.ByteBuffer
-import java.nio.channels.Channels
 import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path, Paths}
+import java.time.Instant
+import java.util
 import java.util.Collections
 
 import javax.tools.ToolProvider
@@ -20,7 +20,7 @@ import scala.concurrent.duration.Duration
 import scala.reflect.internal.SymbolTable
 import scala.reflect.internal.pickling.PickleBuffer
 import scala.reflect.internal.util.FakePos
-import scala.reflect.io.PlainNioFile
+import scala.reflect.io.{PlainNioFile, RootPath}
 import scala.tools.nsc.classpath.{ClassPathFactory, DirectoryClassPath, ZipArchiveFileLookup}
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
@@ -29,10 +29,12 @@ import scala.util.{Failure, Success}
 
 class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy) {
   private val pickleCacheConfigured = System.getProperty("scala.pipeline.picklecache")
-  private val pickleCache = {
-    new PickleCache(if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache") else Paths.get(pickleCacheConfigured))
+  private val pickleCache: Path = {
+    if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache") else Paths.get(pickleCacheConfigured)
   }
-  private val strippedExternalClasspath = mutable.HashMap[Path, Path]()
+  private def cachePath(file: Path): Path = pickleCache.resolve("./" + file).normalize()
+
+  private val strippedAndExportedClassPath = mutable.HashMap[Path, Path]()
 
   /** Forward errors to the (current) reporter. */
   protected def scalacError(msg: String): Unit = {
@@ -50,39 +52,53 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
   implicit val executor = ExecutionContext.fromExecutor(new java.util.concurrent.ForkJoinPool(parallelism), t => handler.uncaughtException(Thread.currentThread(), t))
   val fileManager = ToolProvider.getSystemJavaCompiler.getStandardFileManager(null, null, null)
+  def changeExtension(p: Path, newExtension: String): Path = {
+    val fileName = p.getFileName.toString
+    val changedFileName = fileName.lastIndexOf('.') match {
+      case -1 => fileName + newExtension
+      case n => fileName.substring(0, n) + newExtension
+    }
+    p.getParent.resolve(changedFileName)
+  }
 
-  def registerPickleClassPath[G <: Global](output: AbstractFile, data: mutable.AnyRefMap[G#Symbol, PickleBuffer]): Unit = {
-    val cachePath: Path = pickleCache.cachePath(output)
-    Files.createDirectories(cachePath)
-    val dir = AbstractFile.getDirectory(cachePath.toFile)
+  def registerPickleClassPath[G <: Global](output: Path, data: mutable.AnyRefMap[G#Symbol, PickleBuffer]): Unit = {
+    val jarPath = changeExtension(cachePath(output), ".jar")
+    val root = RootPath(jarPath, writable = true)
 
-    val dirs = mutable.Map[G#Symbol, AbstractFile]()
-    def packageDir(packSymbol: G#Symbol): AbstractFile = {
-      if (packSymbol.isEmptyPackageClass) dir
+    val dirs = mutable.Map[G#Symbol, Path]()
+    def packageDir(packSymbol: G#Symbol): Path = {
+      if (packSymbol.isEmptyPackageClass) root.root
       else if (dirs.contains(packSymbol)) dirs(packSymbol)
       else if (packSymbol.owner.isRoot) {
-        val subDir = dir.subdirectoryNamed(packSymbol.encodedName)
+        val subDir = root.root.resolve(packSymbol.encodedName)
+        Files.createDirectories(subDir)
         dirs.put(packSymbol, subDir)
         subDir
       } else {
         val base = packageDir(packSymbol.owner)
-        val subDir = base.subdirectoryNamed(packSymbol.encodedName)
+        val subDir = base.resolve(packSymbol.encodedName)
+        Files.createDirectories(subDir)
         dirs.put(packSymbol, subDir)
         subDir
       }
     }
-    for ((symbol, pickle) <- data) {
-      val base = packageDir(symbol.owner)
-      val primary = base.fileNamed(symbol.encodedName + ".sig").file.toPath
-      Files.createDirectories(primary.getParent)
-      Files.write(primary, pickle.bytes)
-      Files.setLastModifiedTime(primary, Files.getLastModifiedTime(output.file.toPath))
+    val written = new java.util.IdentityHashMap[AnyRef, Unit]()
+    try {
+      for ((symbol, pickle) <- data) {
+        if (!written.containsKey(pickle)) {
+          val base = packageDir(symbol.owner)
+          val primary = base.resolve(symbol.encodedName + ".sig")
+          Files.write(primary, pickle.bytes)
+          written.put(pickle, ())
+        }
+      }
+    } finally {
+      root.close()
     }
-    val classpath = DirectoryClassPath(dir.file)
-    allPickleData.put(output.file.toPath.toRealPath().normalize(), classpath)
+    Files.setLastModifiedTime(jarPath, FileTime.from(Instant.now()))
+    strippedAndExportedClassPath.put(output.toRealPath().normalize(), jarPath)
   }
 
-  private val allPickleData = new java.util.concurrent.ConcurrentHashMap[Path, ClassPath]
 
   def writeDotFile(dependsOn: mutable.LinkedHashMap[Task, List[Dependency]]): Unit = {
     val builder = new java.lang.StringBuilder()
@@ -131,10 +147,11 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val externalClassPath = projects.iterator.flatMap(_.classPath).filter(p => !produces.contains(p)).toSet
 
     for (entry <- externalClassPath) {
-      val extracted = pickleCache.cachePath(new PlainNioFile(entry))
+      val extracted = cachePath(entry)
       PickleExtractor.process(entry, extracted)
       println(s"Exported pickles from $entry to $extracted")
-      strippedExternalClasspath(entry) = extracted
+      Files.setLastModifiedTime(extracted, Files.getLastModifiedTime(entry))
+      strippedAndExportedClassPath(entry) = extracted
     }
 
     writeDotFile(dependsOn)
@@ -262,7 +279,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
   private def deleteTempPickleCache(): Unit = {
     if (pickleCacheConfigured == null) {
-      AbstractFile.getDirectory(pickleCache.dir.toFile).delete()
+      AbstractFile.getDirectory(pickleCache.toFile).delete()
     }
   }
 
@@ -379,7 +396,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         command.settings.Ymacroexpand.value = command.settings.MacroExpand.None
         val run1 = new compiler.Run()
         run1 compile files
-        registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get, run1.symData)
+        registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get.file.toPath, run1.symData)
         outlineTimer.stop()
         reporter.finish()
         if (reporter.hasErrors) {
@@ -436,7 +453,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         val run2 = new compiler.Run() {
           override def advancePhase(): Unit = {
             if (compiler.phase == this.picklerPhase) {
-              registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get, symData)
+              registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get.file.toPath, symData)
               outlineTimer.stop()
               outlineDone.complete(Success(()))
               group.timer.start()
@@ -507,31 +524,24 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
 
   protected def newCompiler(settings: Settings): Global = {
     val g = Global(settings)
-    Files.setLastModifiedTime(settings.outputDirs.getSingleOutput.get.file.toPath, FileTime.fromMillis(System.currentTimeMillis()))
 
     if (strategy != Traditional) {
       val plugin: g.platform.ClassPathPlugin = new g.platform.ClassPathPlugin {
         def replace(cp: ClassPath, underlying: Path): List[ClassPath] = {
-          allPickleData.get(underlying.toRealPath().normalize()) match {
-            case null =>
-              strippedExternalClasspath.get(underlying.toRealPath().normalize()) match {
-                case Some(stripped) =>
-                  val replacement = ClassPathFactory.newClassPath(new PlainNioFile(stripped), g.settings, g.closeableRegistry)
-                  replacement :: Nil
-                case None =>
-                  cp :: Nil
-              }
-            case pcp =>
-              pcp :: Nil
+          strippedAndExportedClassPath.get(underlying.toRealPath().normalize()) match {
+            case Some(stripped) =>
+              val replacement = ClassPathFactory.newClassPath(new PlainNioFile(stripped), g.settings, g.closeableRegistry)
+              replacement :: Nil
+            case None =>
+              cp :: Nil
           }
         }
         override def modifyClassPath(classPath: Seq[ClassPath]): Seq[ClassPath] = {
-          val modified = classPath.flatMap {
+          classPath.flatMap {
             case zcp: ZipArchiveFileLookup[_] => replace(zcp, zcp.zipFile.toPath)
             case dcp: DirectoryClassPath => replace(dcp, dcp.dir.toPath)
             case cp => cp :: Nil
           }
-          modified
         }
       }
       g.platform.addClassPathPlugin(plugin)
@@ -584,17 +594,5 @@ object PipelineMainTest {
         System.exit(1)
     }
     System.exit(0)
-  }
-}
-
-class PickleCache(val dir: Path) {
-
-  def cachePath(file: AbstractFile): Path = {
-    file.underlyingSource match {
-      case Some(jar) if jar ne file =>
-        dir.resolve("." + jar.file.toPath).normalize().resolve(file.path.replaceAll(".class$", ".sig"))
-      case _ =>
-        dir.resolve("./" + file.path.replaceAll(".class$", ".sig")).normalize()
-    }
   }
 }
