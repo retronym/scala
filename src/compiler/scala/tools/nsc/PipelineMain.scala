@@ -148,7 +148,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val exportTimer = new Timer
       exportTimer.start()
       for (entry <- externalClassPath) {
-        val extracted = cachePath(entry)
+        val extracted = changeExtension(cachePath(entry), ".jar")
         val sourceTimeStamp = Files.getLastModifiedTime(entry)
         if (Files.exists(extracted) && Files.getLastModifiedTime(extracted) == sourceTimeStamp) {
           // println(s"Skipped export of pickles from $entry to $extracted (up to date)")
