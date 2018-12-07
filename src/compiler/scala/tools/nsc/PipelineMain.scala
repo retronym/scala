@@ -25,12 +25,18 @@ import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
 import scala.util.{Failure, Success}
 
-class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy, argFiles: Seq[Path]) {
+class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy, argFiles: Seq[Path], useJars: Boolean) {
   private val pickleCacheConfigured = System.getProperty("scala.pipeline.picklecache")
   private val pickleCache: Path = {
-    if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache") else Paths.get(pickleCacheConfigured)
+    if (pickleCacheConfigured == null) Files.createTempDirectory("scala.picklecache")
+    else {
+      Paths.get(pickleCacheConfigured)
+    }
   }
-  private def cachePath(file: Path): Path = pickleCache.resolve("./" + file).normalize()
+  private def cachePath(file: Path): Path = {
+    val newExtension = if (useJars) ".jar" else ""
+    changeExtension(pickleCache.resolve("./" + file).normalize(), newExtension)
+  }
 
   private val strippedAndExportedClassPath = mutable.HashMap[Path, Path]()
 
@@ -60,8 +66,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
   }
 
   def registerPickleClassPath[G <: Global](output: Path, data: mutable.AnyRefMap[G#Symbol, PickleBuffer]): Unit = {
-    val jarPath = changeExtension(cachePath(output), ".jar")
+    val jarPath = cachePath(output)
     val root = RootPath(jarPath, writable = true)
+    Files.createDirectories(root.root)
 
     val dirs = mutable.Map[G#Symbol, Path]()
     def packageDir(packSymbol: G#Symbol): Path = {
@@ -148,7 +155,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       val exportTimer = new Timer
       exportTimer.start()
       for (entry <- externalClassPath) {
-        val extracted = changeExtension(cachePath(entry), ".jar")
+        val extracted = cachePath(entry)
         val sourceTimeStamp = Files.getLastModifiedTime(entry)
         if (Files.exists(extracted) && Files.getLastModifiedTime(extracted) == sourceTimeStamp) {
           // println(s"Skipped export of pickles from $entry to $extracted (up to date)")
@@ -570,13 +577,14 @@ object PipelineMain {
     val strategies = List(OutlineTypePipeline, Pipeline, Traditional)
     val strategy = strategies.find(_.productPrefix.equalsIgnoreCase(System.getProperty("scala.pipeline.strategy", "pipeline"))).get
     val parallelism = java.lang.Integer.getInteger("scala.pipeline.parallelism", parallel.availableProcessors)
+    val useJars = java.lang.Boolean.getBoolean("scala.pipeline.use.jar")
     val argFiles: Seq[Path] = args match {
       case Array(path) if Files.isDirectory(Paths.get(path)) =>
         Files.walk(Paths.get(path)).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
       case _ =>
         args.map(Paths.get(_))
     }
-    val main = new PipelineMainClass("1", parallelism, strategy, argFiles)
+    val main = new PipelineMainClass("1", parallelism, strategy, argFiles, useJars)
     val result = main.process()
     if (!result)
       System.exit(1)
@@ -591,7 +599,7 @@ object PipelineMainTest {
     val argsFiles = Files.walk(Paths.get("/code/guardian-frontend")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
       i += 1
-      val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles)
+      val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles, useJars = true)
       println(s"====== ITERATION $i=======")
       val result = main.process()
       if (!result)
