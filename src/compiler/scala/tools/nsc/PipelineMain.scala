@@ -367,9 +367,6 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       dependency.outlineDone.future
 
 
-    command.settings.YcacheMacroClassLoader.value = "always"
-    command.settings.YcachePluginClassLoader.value = "always"
-
     val groups: List[Group] = {
       val isScalaLibrary = files.exists(_.endsWith("Predef.scala"))
       if (strategy != OutlineTypePipeline || isScalaLibrary) {
