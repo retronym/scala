@@ -196,24 +196,40 @@ final class FileBasedCache[T] {
   private case class Stamp(lastModified: FileTime, fileKey: Object)
   private case class Entry(stamps: Seq[Stamp], t: T) {
     val referenceCount: AtomicInteger = new AtomicInteger(1)
-    def referenceCountDecrementer: Closeable = new Closeable {
-      var closed = false
-      override def close(): Unit = {
-        if (!closed) {
-          closed = true
-          val count = referenceCount.decrementAndGet()
-          if (count == 0) {
-            t match {
-              case cl: Closeable =>
-                FileBasedCache.deferredClose(referenceCount, cl)
-              case _ =>
-            }
+  }
+  private val cache = collection.mutable.Map.empty[Seq[Path], Entry]
+
+  private def referenceCountDecrementer(e: Entry, paths: Seq[Path]): Closeable = new Closeable {
+    var closed = false
+    override def close(): Unit = {
+      if (!closed) {
+        closed = true
+        val count = e.referenceCount.decrementAndGet()
+        if (count == 0) {
+          e.t match {
+            case cl: Closeable =>
+              FileBasedCache.timer match {
+                case Some(timer) =>
+                  val task = new TimerTask {
+                    override def run(): Unit = {
+                      cache.synchronized {
+                        if (e.referenceCount.compareAndSet(0, -1)) {
+                          cache.remove(paths)
+                          cl.close()
+                        }
+                      }
+                    }
+                  }
+                  timer.schedule(task, FileBasedCache.deferCloseMs.toLong)
+                case None =>
+                  cl.close()
+              }
+            case _ =>
           }
         }
       }
     }
   }
-  private val cache = collection.mutable.Map.empty[Seq[Path], Entry]
 
   def getOrCreate(paths: Seq[Path], create: () => T, closeableRegistry: CloseableRegistry, checkStamps: Boolean): T = cache.synchronized {
     val stamps = paths.map { path =>
@@ -229,16 +245,9 @@ final class FileBasedCache[T] {
         if (!checkStamps || cachedStamps == stamps) {
           // Cache hit
           val count = e.referenceCount.incrementAndGet()
-          if (count == 1) {
-            // Closed, recreate.
-            val value = create()
-            val entry = Entry(stamps, value)
-            cache.put(paths, entry)
-            value
-          } else {
-            closeableRegistry.registerClosable(e.referenceCountDecrementer)
-            cached
-          }
+          assert(count > 0, (stamps, count))
+          closeableRegistry.registerClosable(referenceCountDecrementer(e, paths))
+          cached
         } else {
           // Cache miss: we found an entry but the underlying files have been modified
           cached match {
@@ -252,7 +261,7 @@ final class FileBasedCache[T] {
           val value = create()
           val entry = Entry(stamps, value)
           cache.put(paths, entry)
-          closeableRegistry.registerClosable(entry.referenceCountDecrementer)
+          closeableRegistry.registerClosable(referenceCountDecrementer(entry, paths))
           value
         }
       case _ =>
@@ -260,7 +269,7 @@ final class FileBasedCache[T] {
         val value = create()
         val entry = Entry(stamps, value)
         cache.put(paths, entry)
-        closeableRegistry.registerClosable(entry.referenceCountDecrementer)
+        closeableRegistry.registerClosable(referenceCountDecrementer(entry, paths))
         value
     }
   }
@@ -278,19 +287,5 @@ object FileBasedCache {
     if (deferCloseMs > 0)
       Some(new java.util.Timer(true))
     else None
-  }
-  private def deferredClose(referenceCount: AtomicInteger, closable: Closeable): Unit = {
-    timer match {
-      case Some(timer) =>
-        val task = new TimerTask {
-          override def run(): Unit = {
-            if (referenceCount.get == 0)
-              closable.close()
-          }
-        }
-        timer.schedule(task, FileBasedCache.deferCloseMs.toLong)
-      case None =>
-        closable.close()
-    }
   }
 }

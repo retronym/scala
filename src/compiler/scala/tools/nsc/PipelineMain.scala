@@ -593,7 +593,7 @@ object PipelineMain {
 object PipelineMainTest {
   def main(args: Array[String]): Unit = {
     var i = 0
-    val argsFiles = Files.walk(Paths.get("/code/guardian-frontend")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
+    val argsFiles = Files.walk(Paths.get("/code/boxer")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
     for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
       i += 1
       val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles, useJars = true)
