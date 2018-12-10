@@ -367,6 +367,13 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       dependency.outlineDone.future
 
 
+    val cacheMacro = java.lang.Boolean.getBoolean("scala.pipeline.cache.macro.classloader")
+    val cachePlugin = java.lang.Boolean.getBoolean("scala.pipeline.cache.plugin.classloader")
+    if (cacheMacro)
+      command.settings.YcacheMacroClassLoader.value = "always"
+    if (cachePlugin)
+      command.settings.YcachePluginClassLoader.value = "always"
+
     val groups: List[Group] = {
       val isScalaLibrary = files.exists(_.endsWith("Predef.scala"))
       if (strategy != OutlineTypePipeline || isScalaLibrary) {
