@@ -539,6 +539,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           override def advancePhase(): Unit = {
             if (compiler.phase == this.picklerPhase) {
               outlineTimer.stop()
+              log(f"scalac outline: done ${outlineTimer.durationMs}%.0f ms")
               pickleExportTimer.start()
               registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get.file.toPath, symData)
               pickleExportTimer.stop()
