@@ -184,7 +184,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       case OutlineTypePipeline =>
         projects.foreach { p =>
           val isLeaf = !dependedOn.contains(p)
-          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task.t) })
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map { task => p.dependencyReadyFuture(task) })
           val f = if (isLeaf) {
             for {
               _ <- depsReady
@@ -234,7 +234,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         projects.foreach { p =>
-          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task.t)))
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).iterator.map(task => p.dependencyReadyFuture(task)))
           val f = for {
             _ <- depsReady
             _ <- {
@@ -348,23 +348,23 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     private def expand(s: command.settings.PathSetting): List[Path] = {
       ClassPath.expandPath(s.value, expandStar = true).map(s => Paths.get(s).toAbsolutePath.normalize())
     }
-    def classPath: Seq[Path] = expand(command.settings.classpath)
-    def macroClassPath: Seq[Path] = expand(command.settings.YmacroClasspath)
-    def macroClassPathSet: Set[Path] = macroClassPath.toSet
-    def pluginClassPath: Set[Path] = {
+    lazy val classPath: Seq[Path] = expand(command.settings.classpath)
+    lazy val macroClassPath: Seq[Path] = expand(command.settings.YmacroClasspath)
+    lazy val macroClassPathSet: Set[Path] = macroClassPath.toSet
+    lazy val pluginClassPath: Set[Path] = {
       def asPath(p: String) = ClassPath split p
 
       val paths = command.settings.plugin.value filter (_ != "") flatMap (s => asPath(s) map (s => Paths.get(s)))
       paths.toSet
     }
-    def dependencyReadyFuture(dependency: Task) = if (macroClassPathSet.contains(dependency.outputDir)) {
-      log(s"dependency is on macro classpath, will wait for .class files: ${dependency.label}")
-      dependency.javaDone.future
-    } else if (pluginClassPath.contains(dependency.outputDir)) {
-      log(s"dependency is on plugin classpath, will wait for .class files: ${dependency.label}")
-      dependency.javaDone.future
+    def dependencyReadyFuture(dependency: Dependency) = if (dependency.isMacro) {
+      log(s"dependency is on macro classpath, will wait for .class files: ${dependency.t.label}")
+      dependency.t.javaDone.future
+    } else if (dependency.isPlugin) {
+      log(s"dependency is on plugin classpath, will wait for .class files: ${dependency.t.label}")
+      dependency.t.javaDone.future
     } else
-      dependency.outlineDone.future
+      dependency.t.outlineDone.future
 
 
     val cacheMacro = java.lang.Boolean.getBoolean("scala.pipeline.cache.macro.classloader")
