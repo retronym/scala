@@ -10,11 +10,12 @@ import java.nio.file.attribute.FileTime
 import java.nio.file.{Files, Path, Paths}
 import java.time.Instant
 import java.util.Collections
+import java.util.concurrent.atomic.AtomicInteger
 
 import javax.tools.ToolProvider
 
 import scala.collection.JavaConverters.asScalaIteratorConverter
-import scala.collection.{mutable, parallel}
+import scala.collection.{immutable, mutable, parallel}
 import scala.concurrent._
 import scala.concurrent.duration.Duration
 import scala.reflect.internal.pickling.PickleBuffer
@@ -23,7 +24,7 @@ import scala.reflect.io.RootPath
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.{ConsoleReporter, Reporter}
 import scala.tools.nsc.util.ClassPath
-import scala.util.{Failure, Success}
+import scala.util.{Failure, Success, Try}
 
 class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy, argFiles: Seq[Path], useJars: Boolean) {
   private val pickleCacheConfigured = System.getProperty("scala.pipeline.picklecache")
@@ -137,6 +138,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
 
     val projects: List[Task] = argFiles.toList.map(commandFor)
+    val numProjects = projects.size
     val produces = mutable.LinkedHashMap[Path, Task]()
     for (p <- projects) {
       produces(p.outputDir) = p
@@ -176,9 +178,49 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val timer = new Timer
     timer.start()
 
+    def awaitAll(fs: Seq[Future[_]]): Future[_] = {
+      val done = Promise[Any]()
+      val allFutures = projects.flatMap(_.futures)
+      val count = allFutures.size
+      val counter = new AtomicInteger(count)
+      val handler = (a: Try[_]) => a match {
+        case f @ Failure(_) =>
+          done.complete(f)
+        case Success(_) =>
+          val remaining = counter.decrementAndGet()
+          if (remaining == 0) done.success(())
+      }
+
+      allFutures.foreach(_.onComplete(handler))
+      done.future
+    }
+
     def awaitDone(): Unit = {
-      Await.result(Future.sequence(projects.map(_.compilationDone)), Duration.Inf)
-      timer.stop()
+      val allFutures: immutable.Seq[Future[_]] = projects.flatMap(_.futures)
+      val numAllFutures = allFutures.size
+      val awaitAllFutures: Future[_] = awaitAll(allFutures)
+      val numTasks = awaitAllFutures
+      var lastNumCompleted = allFutures.count(_.isCompleted)
+      while (true) try {
+        Await.result(awaitAllFutures, Duration(60, "s"))
+        timer.stop()
+        return
+      } catch {
+        case _: TimeoutException =>
+          val numCompleted = allFutures.count(_.isCompleted)
+          if (numCompleted == lastNumCompleted) {
+            println(s"STALLED: $numCompleted / $numAllFutures")
+            println("Outline/Scala/Javac")
+            projects.map {
+              p =>
+                def toX(b: Future[_]): String = b.value match { case None => "-"; case Some(Success(_)) => "x"; case Some(Failure(_)) => "!" }
+                val s = List(p.outlineDoneFuture, p.groupsDoneFuture, p.javaDoneFuture).map(toX).mkString(" ")
+                println(s + " " + p.label)
+            }
+          } else {
+            println(s"PROGRESS: $numCompleted / $numAllFutures")
+          }
+      }
     }
     strategy match {
       case OutlineTypePipeline =>
@@ -234,7 +276,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           println(f" Wall Clock: ${timer.durationMs}%.0f ms")
       case Pipeline =>
         projects.foreach { p =>
-          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).iterator.map(task => p.dependencyReadyFuture(task)))
+          val depsReady = Future.sequence(dependsOn.getOrElse(p, Nil).map(task => p.dependencyReadyFuture(task)))
           val f = for {
             _ <- depsReady
             _ <- {
@@ -396,8 +438,13 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     var regularCriticalPathMs = 0d
     var fullCriticalPathMs = 0d
     val outlineDone: Promise[Unit] = Promise[Unit]()
+    val outlineDoneFuture = outlineDone.future
     val javaDone: Promise[Unit] = Promise[Unit]()
-    def compilationDone: Future[List[Unit]] = Future.sequence(outlineDone.future :: (groups.map(_.done.future) :+ javaDone.future))
+    val javaDoneFuture: Future[_] = javaDone.future
+    val groupsDoneFuture: Future[List[Unit]] = Future.sequence(groups.map(_.done.future))
+    val futures: List[Future[_]] = {
+      outlineDone.future :: javaDone.future :: groups.map(_.done.future)
+    }
 
     val originalClassPath: String = command.settings.classpath.value
 
@@ -429,7 +476,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         reporter.finish()
         if (reporter.hasErrors) {
           log("scalac outline: failed")
-          outlineDone.complete(Failure(new RuntimeException("compile failed")))
+          outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
         } else {
           log("scalac outline: done")
           outlineDone.complete(Success(()))
@@ -437,7 +484,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       } catch {
         case t: Throwable =>
           t.printStackTrace()
-          outlineDone.complete(Failure(new RuntimeException("compile failed")))
+          outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
       }
     }
 
@@ -459,7 +506,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
               compiler2.reporter.finish()
               group.timer.stop()
               if (compiler2.reporter.hasErrors) {
-                group.done.complete(Failure(new RuntimeException("Compile failed")))
+                group.done.complete(Failure(new RuntimeException(label + ": compile failed: ")))
               } else {
                 group.done.complete(Success(()))
               }
@@ -496,8 +543,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         group.timer.stop()
         if (compiler.reporter.hasErrors) {
           log("scalac: failed")
-          outlineDone.complete(Failure(new RuntimeException("Compile failed")))
-          group.done.complete(Failure(new RuntimeException("Compile failed")))
+          if (!outlineDone.isCompleted)
+            outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
+          group.done.complete(Failure(new RuntimeException(label + ": compile failed: ")))
         } else {
           log("scalac: done")
           //        outlineDone.complete(Success(()))
@@ -506,8 +554,10 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       } catch {
         case t: Throwable =>
           t.printStackTrace()
-          outlineDone.complete(Failure(new RuntimeException("Compile failed")))
-          group.done.complete(Failure(new RuntimeException("Compile failed")))
+          if (!outlineDone.isCompleted)
+            outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
+          if (!group.done.isCompleted)
+            group.done.complete(Failure(new RuntimeException(label + ": compile failed: ")))
       }
     }
 
@@ -601,7 +651,7 @@ object PipelineMainTest {
   def main(args: Array[String]): Unit = {
     var i = 0
     val argsFiles = Files.walk(Paths.get("/code/boxer")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
-    for (_ <- 1 to 10; n <- List(parallel.availableProcessors); strat <- List(Pipeline, OutlineTypePipeline, Traditional)) {
+    for (_ <- 1 to 1; n <- List(parallel.availableProcessors); strat <- List(Pipeline)) {
       i += 1
       val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles, useJars = true)
       println(s"====== ITERATION $i=======")
