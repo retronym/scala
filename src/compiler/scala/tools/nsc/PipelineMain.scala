@@ -282,7 +282,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           val f = for {
             _ <- depsReady
             _ <- {
-              p.fullCompileExportPickles()
+              val isLeaf = !dependedOn.contains(p)
+              if (isLeaf) {
+                p.outlineDone.complete(Success(()))
+                p.fullCompile()
+              } else
+                p.fullCompileExportPickles()
               // Start javac after scalac has completely finished
               Future.sequence(p.groups.map(_.done.future))
             }
