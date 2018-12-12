@@ -204,6 +204,8 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       while (true) try {
         Await.result(awaitAllFutures, Duration(60, "s"))
         timer.stop()
+        val numCompleted = allFutures.count(_.isCompleted)
+        println(s"PROGRESS: $numCompleted / $numAllFutures")
         return
       } catch {
         case _: TimeoutException =>
