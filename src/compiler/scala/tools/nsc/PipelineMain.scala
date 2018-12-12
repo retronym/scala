@@ -361,6 +361,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       if (p.outlineTimer.durationMicros > 0d) {
         val desc = if (strategy == OutlineTypePipeline) "outline-type" else "parser-to-pickler"
         events += durationEvent(p.label, desc, p.outlineTimer)
+        events += durationEvent(p.label, "pickle-export", p.pickleExportTimer)
       }
       for ((g, ix) <- p.groups.zipWithIndex) {
         if (g.timer.durationMicros > 0d)
@@ -434,6 +435,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     val isGrouped = groups.size > 1
 
     val outlineTimer = new Timer()
+    val pickleExportTimer = new Timer
     val javaTimer = new Timer()
 
     var outlineCriticalPathMs = 0d
@@ -480,7 +482,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           log("scalac outline: failed")
           outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
         } else {
-          log("scalac outline: done")
+          log(f"scala outline: done ${outlineTimer.durationMs}%.0f ms")
           outlineDone.complete(Success(()))
         }
       } catch {
@@ -500,13 +502,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
         group.done.completeWith {
           Future {
             log(s"scalac (${ix + 1}/$groupCount): start")
+            group.timer.start()
             val compiler2 = newCompiler(command.settings)
             try {
               val run2 = new compiler2.Run()
-              group.timer.start()
               run2 compile group.files
               compiler2.reporter.finish()
-              group.timer.stop()
               if (compiler2.reporter.hasErrors) {
                 group.done.complete(Failure(new RuntimeException(label + ": compile failed: ")))
               } else {
@@ -514,8 +515,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
               }
             } finally {
               compiler2.close()
+              group.timer.stop()
             }
-            log(s"scalac (${ix + 1}/$groupCount): done")
+            log(f"scalac (${ix + 1}/$groupCount): done ${group.timer.durationMs}%.0f ms")
           }
         }
       }
@@ -528,13 +530,16 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       outlineTimer.start()
       try {
         val run2 = new compiler.Run() {
+
           override def advancePhase(): Unit = {
             if (compiler.phase == this.picklerPhase) {
-              registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get.file.toPath, symData)
               outlineTimer.stop()
+              pickleExportTimer.start()
+              registerPickleClassPath(command.settings.outputDirs.getSingleOutput.get.file.toPath, symData)
+              pickleExportTimer.stop()
+              log(f"scalac: exported pickles ${pickleExportTimer.durationMs}%.0f ms")
               outlineDone.complete(Success(()))
               group.timer.start()
-              log("scalac: exported pickles")
             }
             super.advancePhase()
           }
@@ -549,7 +554,7 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
             outlineDone.complete(Failure(new RuntimeException(label + ": compile failed: ")))
           group.done.complete(Failure(new RuntimeException(label + ": compile failed: ")))
         } else {
-          log("scalac: done")
+          log(f"scalac: done ${group.timer.durationMs}%.0f ms")
           //        outlineDone.complete(Success(()))
           group.done.complete(Success(()))
         }
@@ -564,9 +569,9 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
     }
 
     def javaCompile(): Unit = {
-      log("javac: start")
       val javaSources = files.filter(_.endsWith(".java"))
       if (javaSources.nonEmpty) {
+        log("javac: start")
         javaTimer.start()
         javaDone.completeWith(Future {
           val opts = java.util.Arrays.asList("-d", command.settings.outdir.value, "-cp", command.settings.outdir.value + File.pathSeparator + originalClassPath)
@@ -574,12 +579,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
           compileTask.setProcessors(Collections.emptyList())
           compileTask.call()
           javaTimer.stop()
+          log(f"javac: done ${javaTimer.durationMs}%.0f ms")
           ()
         })
       } else {
         javaDone.complete(Success(()))
       }
-      log("javac: done")
     }
     def log(msg: String): Unit = println(this.label + ": " + msg)
   }
@@ -597,7 +602,12 @@ class PipelineMainClass(label: String, parallelism: Int, strategy: BuildStrategy
       endNanos = System.nanoTime()
     }
     def startMs: Double = startNanos.toDouble / 1000 / 1000
-    def durationMs: Double = (endNanos - startNanos).toDouble / 1000 / 1000
+    def durationMs: Double = {
+      val result = (endNanos - startNanos).toDouble / 1000 / 1000
+      if (result < 0)
+        getClass
+      result
+    }
     def startMicros: Double = startNanos.toDouble / 1000d
     def durationMicros: Double = (endNanos - startNanos).toDouble / 1000d
   }
@@ -652,10 +662,10 @@ object PipelineMain {
 object PipelineMainTest {
   def main(args: Array[String]): Unit = {
     var i = 0
-    val argsFiles = Files.walk(Paths.get("/code/boxer")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
-    for (_ <- 1 to 1; n <- List(parallel.availableProcessors); strat <- List(Pipeline)) {
+    val argsFiles = Files.walk(Paths.get("/code/guardian-frontend")).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
+    for (_ <- 1 to 2; n <- List(parallel.availableProcessors); strat <- List(Pipeline)) {
       i += 1
-      val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles, useJars = true)
+      val main = new PipelineMainClass(strat + "-" + i, n, strat, argsFiles, useJars = false)
       println(s"====== ITERATION $i=======")
       val result = main.process()
       if (!result)
