@@ -844,20 +844,22 @@ abstract class TreeGen {
       atPos(rhs.pos)(Apply(Select(rhs, nme.withFilter), visitor :: Nil))
     }
 
-  /** If tree is a variable pattern, return Some("its name and type").
-   *  Otherwise return none */
+  /** If tree is a variable pattern, return Some("its name and type"), otherwise none. */
   private def matchVarPattern(tree: Tree): Option[(Name, Tree)] = {
-    def wildType(t: Tree): Option[Tree] = t match {
+    def typeOfWildcard(t: Tree): Option[Tree] = t match {
       case Ident(x) if x.toTermName == nme.WILDCARD             => Some(TypeTree())
       case Typed(Ident(x), tpt) if x.toTermName == nme.WILDCARD => Some(tpt)
       case _                                                    => None
     }
-    (tree match {
+    val maybe = tree match {
       case Ident(name)             => Some((name, TypeTree()))
-      case Bind(name, body)        => wildType(body) map (x => (name, x))
+      case Bind(name, body)        =>
+        if (tree.hasAttachment[ForAttachment.type]) typeOfWildcard(body).map(x => (name, x))  // exclude user-written x @ _
+        else None
       case Typed(Ident(name), tpt) => Some((name, tpt))
       case _                       => None
-    }).filter {
+    }
+    maybe.filter {
       case (nme.WILDCARD, _) => false
       case _                 => true
     }
@@ -931,15 +933,18 @@ abstract class TreeGen {
     override def transform(tree: Tree): Tree = tree match {
       case Ident(name) if treeInfo.isVarPattern(tree) && name != nme.WILDCARD =>
         atPos(tree.pos) {
-          val b = Bind(name, atPos(tree.pos.focus) (Ident(nme.WILDCARD)))
-          if (forFor && isPatVarWarnable) b updateAttachment NoWarnAttachment
-          else b
+          val b = Bind(name, atPos(tree.pos.focus) { Ident(nme.WILDCARD) })
+          if (forFor) {
+            b.updateAttachment(ForAttachment)
+            if (isPatVarWarnable) b.updateAttachment(NoWarnAttachment)
+          }
+          b
         }
       case Typed(id @ Ident(name), tpt) if treeInfo.isVarPattern(id) && name != nme.WILDCARD =>
         atPos(tree.pos.withPoint(id.pos.point)) {
-          Bind(name, atPos(tree.pos.withStart(tree.pos.point)) {
-            Typed(Ident(nme.WILDCARD), tpt)
-          })
+          val b = Bind(name, atPos(tree.pos.withStart(tree.pos.point)) { Typed(Ident(nme.WILDCARD), tpt) })
+          if (forFor) b.updateAttachment(ForAttachment)
+          b
         }
       case Apply(fn @ Apply(_, _), args) =>
         treeCopy.Apply(tree, transform(fn), transformTrees(args))
