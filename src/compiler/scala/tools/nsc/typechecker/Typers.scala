@@ -3923,9 +3923,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       // begin typedAnnotation
       val treeInfo.Applied(fun0, targs, argss) = ann
-      if (fun0.isErroneous)
-        return finish(ErroneousAnnotation)
-      val typedFun0 = typed(fun0, mode.forFunMode)
+      if (fun0.isErroneous) return finish(ErroneousAnnotation)
+      val typedFun0 = context.withinAnnotationCore { typed(fun0, mode.forFunMode) }
       val typedFunPart = (
         // If there are dummy type arguments in typeFun part, it suggests we
         // must type the actual constructor call, not only the select. The value
@@ -3935,10 +3934,15 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         else
           typedFun0
       )
+      if (typedFunPart.isErroneous) return finish(ErroneousAnnotation)
+
       val treeInfo.Applied(typedFun @ Select(New(annTpt), _), _, _) = typedFunPart
       val annType = annTpt.tpe // for a polymorphic annotation class, this type will have unbound type params (see context.undetparams)
       val annTypeSym = annType.typeSymbol
       val isJava = annType != null && annTypeSym.isJavaDefined
+
+      val pt = (if (typedFun0.symbol.isJavaAnnotation) AnnotationClass else AnnotationClass).tpe //TODO first should be JavaAnnotationClass
+      if (!typedFun0.tpe <:< pt) NotAnAnnotationError(tree, typedFun0.symbol)
 
       @inline def constantly = {
         // Arguments of Java annotations and ConstantAnnotations are checked to be constants and
@@ -4722,10 +4726,15 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         val tp = tpt1.tpe
         val sym = tp.typeSymbol.initialize
-        if ((sym.isAbstractType || sym.hasAbstractFlag)
-            && !(sym.isJavaAnnotation && context.inAnnotation))
-          IsAbstractError(tree, sym)
-        else if (isPrimitiveValueClass(sym)) {
+
+        if (tpt.isErroneous) {
+          setError(tpt)
+        } else if (context.typingAnnotationCore && !sym.isJavaAnnotation && !(sym isNonBottomSubClass AnnotationClass)) {
+          DoesNotExtendAnnotation(tree, sym)
+        } else if ((sym.isAbstractType || sym.hasAbstractFlag)
+            && !(sym.isJavaAnnotation && context.inAnnotation)) {
+          IsAbstractError(tree, sym, context)
+        } else if (isPrimitiveValueClass(sym)) {
           NotAMemberError(tpt, TypeTree(tp), nme.CONSTRUCTOR, startingIdentContext)
           setError(tpt)
         }

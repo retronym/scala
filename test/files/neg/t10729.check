@@ -1,0 +1,13 @@
+AbstractAnnotation.scala:6: error: class AbstractAnnotation is abstract; cannot be used as an annotation
+  1: @AbstractAnnotation
+      ^
+ArrayAsAnnotation.scala:2: error: class Array does not extend scala.annotation.Annotation
+  1: @Array(10)
+      ^
+SeqAsAnnotation.scala:2: error: trait Seq does not extend scala.annotation.Annotation
+  1: @Seq(10)
+      ^
+TraitAnnotation.scala:6: error: trait TraitAnnotation is abstract; cannot be used as an annotation
+  1: @TraitAnnotation
+      ^
+four errors found
