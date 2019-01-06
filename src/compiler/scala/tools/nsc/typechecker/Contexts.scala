@@ -57,6 +57,8 @@ trait Contexts { self: Analyzer =>
     LookupAmbiguous(s"it is imported twice in the same scope by\n$imp1\nand $imp2")
   def ambiguousDefnAndImport(owner: Symbol, imp: ImportInfo) =
     LookupAmbiguous(s"it is both defined in $owner and imported subsequently by \n$imp")
+  def ambiguousDefinitions(owner: Symbol, other: Symbol) =
+    LookupAmbiguous(s"it is both defined in $owner and available as ${other.fullLocationString}")
 
   private lazy val startContext = NoContext.make(
     Template(List(), noSelfType, List()) setSymbol global.NoSymbol setType global.NoType,
@@ -1259,7 +1261,7 @@ trait Contexts { self: Analyzer =>
         finish(qual, sym)
       }
 
-      def lookupInPrefix(name: Name)    = {
+      def lookupInPrefix(name: Name): Symbol = {
         val sym = pre.member(name).filter(qualifies)
         def isNonPackageNoModuleClass(sym: Symbol) =
           sym.isClass && !sym.isModuleClass && !sym.isPackageClass
@@ -1321,15 +1323,17 @@ trait Contexts { self: Analyzer =>
       }
 
       // cx.scope eq null arises during FixInvalidSyms in Duplicators
-      while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
-        pre    = cx.enclClass.prefix
-        defSym = lookupInScope(cx.owner, cx.enclClass.prefix, cx.scope) match {
-          case NoSymbol                  => searchPrefix
-          case found                     => found
+      def nextDefinition(): Unit =
+        while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
+          pre    = cx.enclClass.prefix
+          defSym = lookupInScope(cx.owner, cx.enclClass.prefix, cx.scope) match {
+            case NoSymbol                  => searchPrefix
+            case found                     => found
+          }
+          if (!defSym.exists)
+            cx = cx.outer // push further outward
         }
-        if (!defSym.exists)
-          cx = cx.outer // push further outward
-      }
+      nextDefinition()
       if (symbolDepth < 0)
         symbolDepth = cx.depth
 
@@ -1369,23 +1373,47 @@ trait Contexts { self: Analyzer =>
           importCursor.advanceImp1Imp2()
       }
 
+      val preferDef =
       if (defSym.exists && impSym.exists) {
         // 4) root imported symbols have same (lowest) precedence as package-owned symbols in different compilation units.
         if (imp1.depth < symbolDepth && imp1.isRootImport && foreignDefined)
-          impSym = NoSymbol
+          true
         // 4) imported symbols have higher precedence than package-owned symbols in different compilation units.
         else if (imp1.depth >= symbolDepth && foreignDefined)
-          defSym = NoSymbol
+          false
         // Defined symbols take precedence over erroneous imports.
         else if (impSym.isError || impSym.name == nme.CONSTRUCTOR)
-          impSym = NoSymbol
+          true
         // Try to reconcile them before giving up, at least if the def is not visible
         else if (foreignDefined && reconcileAmbiguousImportAndDef(name, impSym, defSym))
-          impSym = NoSymbol
+          true
         // Otherwise they are irreconcilably ambiguous
         else
           return ambiguousDefnAndImport(defSym.alternatives.head.owner, imp1)
+      } else defSym.exists
+
+      // If the defSym is at 4, and there is a def at 1 in scope, then the reference is ambiguous.
+      if (foreignDefined && !defSym.isPackage) {
+        val defSym0 = defSym
+        val pre0    = pre
+        val cx0     = cx
+        defSym = NoSymbol
+        while ((cx ne NoContext) && cx.depth >= symbolDepth)
+          cx = cx.outer
+        while ((cx ne NoContext) && (!defSym.exists || foreignDefined))
+          nextDefinition()
+        if (defSym.exists && (defSym ne defSym0)) {
+          val ambiguity =
+            if (preferDef) ambiguousDefinitions(owner = defSym.owner, defSym0)
+            else ambiguousDefnAndImport(owner = defSym.owner, imp1)
+          return ambiguity
+        }
+        defSym = defSym0
+        pre    = pre0
+        cx     = cx0
       }
+
+      if (preferDef) impSym = NoSymbol else defSym = NoSymbol
 
       // At this point only one or the other of defSym and impSym might be set.
       if (defSym.exists)
