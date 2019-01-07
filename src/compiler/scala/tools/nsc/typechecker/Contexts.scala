@@ -1242,11 +1242,8 @@ trait Contexts { self: Analyzer =>
      */
     def lookupSymbol(name: Name, qualifies: Symbol => Boolean): NameLookup = {
       var lookupError: NameLookup  = null       // set to non-null if a definite error is encountered
-      var inaccessible: NameLookup = null       // records inaccessible symbol for error reporting in case none is found
-      var defSym: Symbol           = NoSymbol   // the directly found symbol
-      var pre: Type                = NoPrefix   // the prefix type of defSym, if a class member
-      var cx: Context              = this       // the context under consideration
-      var symbolDepth: Int         = -1         // the depth of the directly found symbol
+      val definitionCursor = new DefinitionCursor(this, name, qualifies)
+      import definitionCursor.{defSym, pre, symbolDepth, cx, inaccessible}
 
       def finish(qual: Tree, sym: Symbol): NameLookup = (
         if (lookupError ne null) lookupError
@@ -1261,79 +1258,12 @@ trait Contexts { self: Analyzer =>
         finish(qual, sym)
       }
 
-      def lookupInPrefix(name: Name): Symbol = {
-        val sym = pre.member(name).filter(qualifies)
-        def isNonPackageNoModuleClass(sym: Symbol) =
-          sym.isClass && !sym.isModuleClass && !sym.isPackageClass
-        if (!sym.exists && unit.isJava && isNonPackageNoModuleClass(pre.typeSymbol)) {
-          // TODO factor out duplication with Typer::inCompanionForJavaStatic
-          val pre1 = companionSymbolOf(pre.typeSymbol, this).typeOfThis
-          pre1.member(name).filter(qualifies).andAlso(_ => pre = pre1)
-        } else sym
-      }
-      def accessibleInPrefix(s: Symbol) = isAccessible(s, pre, superAccess = false)
-
-      def searchPrefix = {
-        cx = cx.enclClass
-        val found0 = lookupInPrefix(name)
-        val found1 = found0 filter accessibleInPrefix
-        if (found0.exists && !found1.exists && inaccessible == null)
-          inaccessible = LookupInaccessible(found0, analyzer.lastAccessCheckDetails)
-
-        found1
-      }
-
-      def lookupInScope(owner: Symbol, pre: Type, scope: Scope): Symbol = {
-        var e = scope.lookupEntry(name)
-        while (e != null && !qualifies(e.sym)) {
-          e = scope.lookupNextEntry(e)
-        }
-        if (e == null) {
-          NoSymbol
-        } else {
-          val e1 = e
-          val e1Sym = e.sym
-          var syms: mutable.ListBuffer[Symbol] = null
-          e = scope.lookupNextEntry(e)
-          while (e ne null) {
-            if (e.depth == e1.depth && e.sym != e1Sym && qualifies(e.sym)) {
-              if (syms eq null) {
-                syms = new mutable.ListBuffer[Symbol]
-                syms += e1Sym
-              }
-              syms += e.sym
-            }
-            e = scope.lookupNextEntry(e)
-          }
-          // we have a winner: record the symbol depth
-          symbolDepth = (cx.depth - cx.scope.nestingLevel) + e1.depth
-
-          if (syms eq null) e1Sym
-          else owner.newOverloaded(pre, syms.toList)
-        }
-      }
+      definitionCursor.nextDefinition()
 
       // Constructor lookup should only look in the decls of the enclosing class
       // not in the self-type, nor in the enclosing context, nor in imports (scala/bug#4460, scala/bug#6745)
-      if (name == nme.CONSTRUCTOR) {
-        val enclClassSym = cx.enclClass.owner
-        val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
-        val constructorSym = lookupInScope(enclClassSym, cx.enclClass.prefix, scope)
-        return finishDefSym(constructorSym, cx.enclClass.prefix)
-      }
+      if (name == nme.CONSTRUCTOR) return finishDefSym(definitionCursor.defSym, definitionCursor.pre)
 
-      // cx.scope eq null arises during FixInvalidSyms in Duplicators
-      def nextDefinition(): Unit =
-        while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
-          pre    = cx.enclClass.prefix
-          defSym = lookupInScope(cx.owner, cx.enclClass.prefix, cx.scope) match {
-            case NoSymbol                  => searchPrefix
-            case found                     => found
-          }
-          if (!defSym.exists)
-            cx = cx.outer // push further outward
-        }
-      nextDefinition()
       if (symbolDepth < 0)
         symbolDepth = cx.depth
 
@@ -1342,7 +1272,7 @@ trait Contexts { self: Analyzer =>
       import importCursor.{imp1, imp2}
 
       def lookupImport(imp: ImportInfo, requireExplicit: Boolean) =
-        importedAccessibleSymbol(imp, name, requireExplicit, record = true) filter qualifies
+        importedAccessibleSymbol(imp, name, requireExplicit, record = true).filter(qualifies)
 
       /* Java: A single-type-import declaration d in a compilation unit c of package p
        * that imports a type named n shadows, throughout c, the declarations of:
@@ -1367,7 +1297,7 @@ trait Contexts { self: Analyzer =>
         else foreignDefined
       )
 
-      while (!impSym.exists && importCursor.imp1Exists && importCanShadowAtDepth(importCursor.imp1)) {
+      while (!impSym.exists && importCursor.imp1Exists && importCanShadowAtDepth(imp1)) {
         impSym = lookupImport(imp1, requireExplicit = false)
         if (!impSym.exists)
           importCursor.advanceImp1Imp2()
@@ -1394,23 +1324,18 @@ trait Contexts { self: Analyzer =>
 
       // If the defSym is at 4, and there is a def at 1 in scope, then the reference is ambiguous.
       if (foreignDefined && !defSym.isPackage) {
-        val defSym0 = defSym
-        val pre0    = pre
-        val cx0     = cx
-        defSym = NoSymbol
-        while ((cx ne NoContext) && cx.depth >= symbolDepth)
-          cx = cx.outer
-        while ((cx ne NoContext) && (!defSym.exists || foreignDefined))
-          nextDefinition()
-        if (defSym.exists && (defSym ne defSym0)) {
+        val definitionCursor1 = new DefinitionCursor(this, name, qualifies)
+        import definitionCursor1.{cx => cx1, defSym => defSym1}
+        while ((cx1 ne NoContext) && cx1.depth >= symbolDepth)
+          cx1 = cx1.outer
+        while ((cx1 ne NoContext) && (!defSym1.exists || isPackageOwnedInDifferentUnit(defSym1)))
+          definitionCursor1.nextDefinition()
+        if (defSym1.exists && (defSym1 ne defSym)) {
           val ambiguity =
-            if (preferDef) ambiguousDefinitions(owner = defSym.owner, defSym0)
-            else ambiguousDefnAndImport(owner = defSym.owner, imp1)
+            if (preferDef) ambiguousDefinitions(owner = defSym1.owner, defSym)
+            else ambiguousDefnAndImport(owner = defSym1.owner, imp1)
           return ambiguity
         }
-        defSym = defSym0
-        pre    = pre0
-        cx     = cx0
       }
 
       if (preferDef) impSym = NoSymbol else defSym = NoSymbol
@@ -1799,6 +1724,86 @@ trait Contexts { self: Analyzer =>
     private def imp2Exists = imp2Ctx.importOrNull != null
     private def imp1Explicit = imp1 isExplicitImport name
     private def imp2Explicit = imp2 isExplicitImport name
+  }
+
+  /** Result of walking contexts for definition. */
+  private final class DefinitionCursor(ctx: Context, name: Name, qualifies: Symbol => Boolean) {
+    var inaccessible: NameLookup = null       // records inaccessible symbol for error reporting in case none is found
+    var defSym: Symbol           = NoSymbol   // the directly found symbol
+    var pre: Type                = NoPrefix   // the prefix type of defSym, if a class member
+    var cx: Context              = ctx        // the context under consideration
+    var symbolDepth: Int         = -1         // the depth of the directly found symbol
+
+    private def lookupInPrefix(name: Name): Symbol = {
+      val sym = pre.member(name).filter(qualifies)
+      def isNonPackageNoModuleClass(sym: Symbol) =
+        sym.isClass && !sym.isModuleClass && !sym.isPackageClass
+      if (!sym.exists && ctx.unit.isJava && isNonPackageNoModuleClass(pre.typeSymbol)) {
+        // TODO factor out duplication with Typer::inCompanionForJavaStatic
+        val pre1 = companionSymbolOf(pre.typeSymbol, ctx).typeOfThis
+        pre1.member(name).filter(qualifies).andAlso(_ => pre = pre1)
+      } else sym
+    }
+    private def accessibleInPrefix(s: Symbol) = ctx.isAccessible(s, pre, superAccess = false)
+
+    private def searchPrefix = {
+      cx = cx.enclClass
+      val found0 = lookupInPrefix(name)
+      val found1 = found0 filter accessibleInPrefix
+      if (found0.exists && !found1.exists && inaccessible == null)
+        inaccessible = LookupInaccessible(found0, analyzer.lastAccessCheckDetails)
+
+      found1
+    }
+
+    def lookupInScope(owner: Symbol, pre: Type, scope: Scope): Symbol = {
+      var e = scope.lookupEntry(name)
+      while (e != null && !qualifies(e.sym)) {
+        e = scope.lookupNextEntry(e)
+      }
+      if (e == null) {
+        NoSymbol
+      } else {
+        val e1 = e
+        val e1Sym = e.sym
+        var syms: mutable.ListBuffer[Symbol] = null
+        e = scope.lookupNextEntry(e)
+        while (e ne null) {
+          if (e.depth == e1.depth && e.sym != e1Sym && qualifies(e.sym)) {
+            if (syms eq null) {
+              syms = new mutable.ListBuffer[Symbol]
+              syms += e1Sym
+            }
+            syms += e.sym
+          }
+          e = scope.lookupNextEntry(e)
+        }
+        // we have a winner: record the symbol depth
+        symbolDepth = (cx.depth - cx.scope.nestingLevel) + e1.depth
+
+        if (syms eq null) e1Sym
+        else owner.newOverloaded(pre, syms.toList)
+      }
+    }
+
+    // cx.scope eq null arises during FixInvalidSyms in Duplicators
+    def nextDefinition(): Unit =
+      if (name == nme.CONSTRUCTOR) {
+        val enclClassSym = cx.enclClass.owner
+        val scope = cx.enclClass.prefix.baseType(enclClassSym).decls
+        pre    = cx.enclClass.prefix
+        defSym = lookupInScope(enclClassSym, cx.enclClass.prefix, scope)
+      } else {
+        while (defSym == NoSymbol && (cx ne NoContext) && (cx.scope ne null)) {
+          pre    = cx.enclClass.prefix
+          defSym = lookupInScope(cx.owner, pre, cx.scope) match {
+            case NoSymbol                  => searchPrefix
+            case found                     => found
+          }
+          if (!defSym.exists)
+            cx = cx.outer // push further outward
+        }
+      }
   }
 }
 
