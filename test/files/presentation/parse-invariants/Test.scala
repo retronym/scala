@@ -29,7 +29,7 @@ object Test extends InteractiveTest {
     if (id2 == id + 1) {
       reporter.println("NoNewSymbolsEntered OK")
     } else {
-      reporter.println("NoNewSymbolsEntered FAILED")
+      reporter.println("NoNewSymbolsEntered FAILED. ")
     }
   }
 

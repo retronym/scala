@@ -1072,14 +1072,25 @@ trait Contexts { self: Analyzer =>
           || unit.exists && s.sourceFile != unit.source.file
         )
       )
-      def lookupInPrefix(name: Name)    = {
+      def lookupInPrefix(name: Name): Symbol    = {
         val sym = pre.member(name).filter(qualifies)
         def isNonPackageNoModuleClass(sym: Symbol) =
           sym.isClass && !sym.isModuleClass && !sym.isPackageClass
         if (!sym.exists && unit.isJava && isNonPackageNoModuleClass(pre.typeSymbol)) {
+          var baseClasses = pre.baseClasses
+          while (baseClasses != Nil) {
+            val base = baseClasses.head
+            val pre1 = companionSymbolOf(base, this).typeOfThis
+            val sym = pre1.member(name).filter(qualifies)
+              .andAlso(_ => pre = pre1)
+            if (sym != NoSymbol) {
+              pre = pre1
+              return sym
+            }
+            baseClasses = baseClasses.tail
+          }
+          NoSymbol
           // TODO factor out duplication with Typer::inCompanionForJavaStatic
-          val pre1 = companionSymbolOf(pre.typeSymbol, this).typeOfThis
-          pre1.member(name).filter(qualifies).andAlso(_ => pre = pre1)
         } else sym
       }
       def accessibleInPrefix(s: Symbol) = isAccessible(s, pre, superAccess = false)
