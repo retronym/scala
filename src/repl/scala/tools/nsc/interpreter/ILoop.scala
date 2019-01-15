@@ -363,7 +363,8 @@ class ILoop(in0: Option[BufferedReader], protected val out: JPrintWriter) extend
   }
 
   private def changeSettings(line: String): Result = {
-    def showSettings() = for (s <- settings.userSetSettings.toSeq.sorted) echo(s.toString)
+    val settings1 = settings
+    def showSettings() = for (s <- settings1.userSetSettings.toSeq.sorted) echo(s.toString)
     if (line.isEmpty) showSettings() else { updateSettings(line) ; () }
   }
   private def updateSettings(line: String) = {
