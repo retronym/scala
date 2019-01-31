@@ -101,6 +101,8 @@ trait Unapplies extends ast.TreeDSL {
     }
   }
 
+  private def applyShouldInheritAccess(mods: Modifiers) = mods.hasFlag(PRIVATE) || (!mods.hasFlag(PROTECTED) && mods.hasAccessBoundary)
+
   /** The module corresponding to a case class; overrides toString to show the module's name
    */
   def caseModuleDef(cdef: ClassDef): ModuleDef = {
@@ -108,7 +110,7 @@ trait Unapplies extends ast.TreeDSL {
     def inheritFromFun = !cdef.mods.hasAbstractFlag && cdef.tparams.isEmpty && (params match {
       case List(ps) if ps.length <= MaxFunctionArity => true
       case _ => false
-    })
+    }) && !applyShouldInheritAccess(constrMods(cdef))
     def createFun = {
       def primaries = params.head map (_.tpt)
       gen.scalaFunctionConstr(primaries, toIdent(cdef), abstractFun = true)
@@ -146,9 +148,20 @@ trait Unapplies extends ast.TreeDSL {
     )
   }
 
+
+  private def constrMods(cdef: ClassDef): Modifiers = treeInfo.firstConstructorMods(cdef.impl.body)
+
   /** The apply method corresponding to a case class
    */
-  def caseModuleApplyMeth(cdef: ClassDef): DefDef = factoryMeth(caseMods, nme.apply, cdef)
+  def caseModuleApplyMeth(cdef: ClassDef): DefDef = {
+    val inheritedMods = constrMods(cdef)
+    val mods =
+      if (applyShouldInheritAccess(inheritedMods))
+        (caseMods | (inheritedMods.flags & PRIVATE)).copy(privateWithin = inheritedMods.privateWithin)
+      else
+        caseMods
+    factoryMeth(mods, nme.apply, cdef)
+  }
 
   /** The unapply method corresponding to a case class
    */
@@ -231,8 +244,9 @@ trait Unapplies extends ast.TreeDSL {
       val classTpe = classType(cdef, tparams)
       val argss = mmap(paramss)(toIdent)
       val body: Tree = New(classTpe, argss)
+      val inheritedMods = constrMods(cdef)
       val copyDefDef = atPos(cdef.pos.focus)(
-        DefDef(Modifiers(SYNTHETIC), nme.copy, tparams, paramss, TypeTree(), body)
+        DefDef(Modifiers(SYNTHETIC | (inheritedMods.flags & AccessFlags), inheritedMods.privateWithin), nme.copy, tparams, paramss, TypeTree(), body)
       )
       Some(copyDefDef)
     }
