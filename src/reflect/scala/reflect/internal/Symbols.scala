@@ -668,6 +668,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Qualities of MethodSymbols, always false for TypeSymbols
      *  and other TermSymbols.
      */
+    final def isMethod = hasFlag(METHOD)
     def isCaseAccessorMethod = false
     def isLiftedMethod       = false
     def isSourceMethod       = false
@@ -2841,7 +2842,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     override def isBridge           = this hasFlag BRIDGE
     override def isEarlyInitialized = this hasFlag PRESUPER
-    override def isMethod           = this hasFlag METHOD
     override def isModule           = this hasFlag MODULE
     override def isOverloaded       = this hasFlag OVERLOADED
     /*** !!! TODO: shouldn't we do something like the following:

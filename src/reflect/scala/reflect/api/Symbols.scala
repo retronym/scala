@@ -215,7 +215,7 @@ trait Symbols { self: Universe =>
      *
      *  @group Tests
      */
-    def isMethod: Boolean = false
+    def isMethod: Boolean
 
     /** Does this method represent a constructor?
      *
@@ -761,7 +761,6 @@ trait Symbols { self: Universe =>
    *  @group API
    */
   trait MethodSymbolApi extends TermSymbolApi { this: MethodSymbol =>
-    final override def isMethod = true
     final override def asMethod = this
 
     /** Does this symbol denote the primary constructor of its enclosing class?
