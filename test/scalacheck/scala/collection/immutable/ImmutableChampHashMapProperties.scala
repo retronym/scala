@@ -14,15 +14,11 @@ object ImmutableChampHashMapProperties extends Properties("HashMap") {
   type V = Int
   type T = (K, V)
 
-  //  override def overrideParameters(p: org.scalacheck.Test.Parameters) =
-  //    p.withMinSuccessfulTests(1000)
-
-  property("convertToScalaMapAndCheckSize") = forAll { input: HashMap[K, V] =>
+  property("convertToScalaMapAndCheckSize") = forAll { (input: HashMap[K, V]) =>
     convertToScalaMapAndCheckSize(input)
   }
 
-  private def convertToScalaMapAndCheckSize(input: HashMap[K, V]) =
-    HashMap.from(input).size == input.size
+  private def convertToScalaMapAndCheckSize(input: HashMap[K, V]) = HashMap.from(input).size == input.size
 
   property("convertToScalaMapAndCheckHashCode") = forAll { input: HashMap[K, V] =>
     convertToScalaMapAndCheckHashCode(input)
@@ -139,11 +135,11 @@ object ImmutableChampHashMapProperties extends Properties("HashMap") {
 
   property("left.merged(right) { select left } is the same as right concat left") =
     forAll { (left: HashMap[K, V], right: HashMap[K, V]) =>
-      left.merged(right)((left, _) => left) == right.concat(left)
+      left.merged(right)((left, _) => left) ?= right.concat(left)
     }
   property("left.merged(right) { select right } is the same as left concat right") =
     forAll { (left: HashMap[K, V], right: HashMap[K, V]) =>
-      left.merged(right)((_, right) => right) == left.concat(right)
+      left.merged(right)((_, right) => right) ?= left.concat(right)
     }
   property("merged passes through all key-values in either map that aren't in the other") =
     forAll { (left: HashMap[K, V], right: HashMap[K, V], mergedValue: V) =>
@@ -187,6 +183,7 @@ object ImmutableChampHashMapProperties extends Properties("HashMap") {
         builder.result()
       }
   }
+
   property("xs.filter(p) does not perform any hashes") =
     forAll { (xs: HashMap[Int, Int], p: ((Int, Int)) => Boolean, flipped: Boolean) =>
       // container which tracks the number of times its hashCode() is called
@@ -239,5 +236,33 @@ object ImmutableChampHashMapProperties extends Properties("HashMap") {
     val expected: collection.Map[Int, Int] = left.view.filterKeys(!right.contains(_)).toMap
     val actual: collection.Map[Int, Int] = left -- right
     actual ?= expected
+  }
+
+  property("hm.removedAll(list) == list.foldLeft(hm)(_ - _)") = forAll { (hm: HashMap[K, V], l: List[K]) =>
+    hm.removedAll(l) ?= l.foldLeft(hm)(_ - _)
+  }
+
+  property("hm.removedAll(list) does not mutate hm") = forAll { (hm: HashMap[K, V], l: List[K]) =>
+    val clone = hm.to(List).to(HashMap)
+    hm.removedAll(l)
+    hm ?= clone
+  }
+  property("hm.concat(list) == list.foldLeft(hm)(_ + _)") = forAll { (hm: HashMap[K, V], l: List[(K, V)]) =>
+    hm.concat(l) ?= l.foldLeft(hm)((m, tuple) => m + tuple)
+  }
+
+  property("hm.concat(list) does not mutate hm") = forAll { (hm: HashMap[K, V], l: List[K]) =>
+    val clone = hm.to(List).to(HashMap)
+    hm.concat(l)
+    hm ?= clone
+  }
+
+  property("hm.removedAll(hashSet) == hashSet.foldLeft(this)(_ - _)") = forAll { (hm: HashMap[K, V], hs: HashSet[K]) =>
+    hm.removedAll(hs) ?= hs.foldLeft(hm)(_ - _)
+  }
+  property("hm.removedAll(hashSet) does not mutate hm") = forAll { (hm: HashMap[K, V], hs: HashSet[K]) =>
+    val clone = hm.to(List).to(HashMap)
+    hm.removedAll(hs)
+    hm ?= clone
   }
 }
