@@ -82,11 +82,11 @@ decomposes into the three identifiers `big_bob`, `++=`, and
 The rules for pattern matching further distinguish between
 _variable identifiers_, which start with a lower case letter, and
 _constant identifiers_, which do not. For this purpose,
-underscore `‘_‘` is taken as lower case, and the ‘\$’ character
+underscore `‘_‘` is taken as lower case, and the ‘$’ character
 is taken as upper case.
 
-The ‘\$’ character is reserved for compiler-synthesized identifiers.
-User programs should not define identifiers which contain ‘\$’ characters.
+The ‘$’ character is reserved for compiler-synthesized identifiers.
+User programs should not define identifiers which contain ‘$’ characters.
 
 The following names are reserved words instead of being members of the
 syntactic class `id` of lexical identifiers.
@@ -103,7 +103,7 @@ val         var         while       with        yield
 _    :    =    =>    <-    <:    <%     >:    #    @
 ```
 
-The Unicode operators `\u21D2` ‘$\Rightarrow$’ and `\u2190` ‘$\leftarrow$’, which have the ASCII
+The Unicode operators `\u21D2` ‘´\Rightarrow´’ and `\u2190` ‘´\leftarrow´’, which have the ASCII
 equivalents `=>` and `<-`, are also reserved.
 
 > Here are examples of identifiers:
@@ -351,9 +351,9 @@ is _pt_. The numeric ranges given by these types are:
 
 |                |                          |
 |----------------|--------------------------|
-|`Byte`          | $-2\^7$ to $2\^7-1$      |
-|`Short`         | $-2\^{15}$ to $2\^{15}-1$|
-|`Char`          | $0$ to $2\^{16}-1$       |
+|`Byte`          | ´-2\^7´ to ´2\^7-1´      |
+|`Short`         | ´-2\^{15}´ to ´2\^{15}-1´|
+|`Char`          | ´0´ to ´2\^{16}-1´       |
 
 The digits of a numeric literal may be separated by
 arbitrarily many underscores for purposes of legibility.
@@ -507,11 +507,11 @@ of the escape sequences [here](#escape-sequences) are interpreted.
 #### Interpolated string
 
 ```ebnf
-interpolatedString ::= alphaid ‘"’ {printableChar \ (‘"’ | ‘\$’) | escape} ‘"’ 
-                         |  alphaid ‘"""’ {[‘"’] [‘"’] char \ (‘"’ | ‘\$’) | escape} {‘"’} ‘"""’
-escape                 ::= ‘\$\$’ 
-                         | ‘\$’ id
-                         | ‘\$’ BlockExpr
+interpolatedString ::= alphaid ‘"’ {printableChar \ (‘"’ | ‘$’) | escape} ‘"’ 
+                         |  alphaid ‘"""’ {[‘"’] [‘"’] char \ (‘"’ | ‘$’) | escape} {‘"’} ‘"""’
+escape                 ::= ‘$$’ 
+                         | ‘$’ id
+                         | ‘$’ BlockExpr
 alphaid                ::= upper idrest
                          |  varid
 
@@ -526,24 +526,24 @@ or multi-line (triple quote).
 Inside a interpolated string none of the usual escape characters are interpreted 
 (except for unicode escapes) no matter whether the string literal is normal 
 (enclosed in single quotes) or multi-line (enclosed in triple quotes). 
-Instead, there is are two new forms of dollar sign escape. 
-The most general form encloses an expression in \${ and }, i.e. \${expr}. 
-The expression enclosed in the braces that follow the leading \$ character is of 
+Instead, there are two new forms of dollar sign escape. 
+The most general form encloses an expression in `${` and `}`, i.e. `${expr}`. 
+The expression enclosed in the braces that follow the leading `$` character is of 
 syntactical category BlockExpr. Hence, it can contain multiple statements, 
-and newlines are significant. Single ‘\$’-signs are not permitted in isolation 
-in a interpolated string. A single ‘\$’-sign can still be obtained by doubling the ‘\$’ 
-character: ‘\$\$’.
+and newlines are significant. Single ‘$’-signs are not permitted in isolation 
+in a interpolated string. A single ‘$’-sign can still be obtained by doubling the ‘$’ 
+character: ‘$$’.
 
-The simpler form consists of a ‘\$’-sign followed by an identifier starting with 
+The simpler form consists of a ‘$’-sign followed by an identifier starting with 
 a letter and followed only by letters, digits, and underscore characters, 
-e.g \$id. The simpler form is expanded by putting braces around the identifier, 
-e.g \$id is equivalent to \${id}. In the following, unless we explicitly state otherwise, 
+e.g `$id`. The simpler form is expanded by putting braces around the identifier, 
+e.g `$id` is equivalent to `${id}`. In the following, unless we explicitly state otherwise, 
 we assume that this expansion has already been performed.
 
-The expanded expression is type checked normally. Usually, StringContext will resolve to 
+The expanded expression is type checked normally. Usually, `StringContext` will resolve to 
 the default implementation in the scala package, 
 but it could also be user-defined. Note that new interpolators can also be added through 
-implicit conversion of the built-in scala.StringContext.
+implicit conversion of the built-in `scala.StringContext`.
 
 One could write an extension
 ```scala
@@ -577,8 +577,8 @@ symbolLiteral  ::=  ‘'’ plainid
 ```
 
 A symbol literal `'x` is a shorthand for the expression `scala.Symbol("x")` and
-is of the [literal type](03-types#literal-types) `'x`. `Symbol` is a [case
-class](05-classes-and-objects.html#case-classes), which is defined as follows.
+is of the [literal type](03-types#literal-types) `'x`.  
+`Symbol` is a [case class](05-classes-and-objects.html#case-classes), which is defined as follows.
 
 ```scala
 package scala

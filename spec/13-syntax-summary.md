@@ -21,7 +21,7 @@ The lexical syntax of Scala is given by the following grammar in EBNF form:
 
 ```ebnf
 whiteSpace       ::=  ‘\u0020’ | ‘\u0009’ | ‘\u000D’ | ‘\u000A’
-upper            ::=  ‘A’ | … | ‘Z’ | ‘\$’ | ‘_’  // and Unicode category Lu
+upper            ::=  ‘A’ | … | ‘Z’ | ‘$’ | ‘_’  // and Unicode category Lu
 lower            ::=  ‘a’ | … | ‘z’ // and Unicode category Ll
 letter           ::=  upper | lower // and Unicode categories Lo, Lt, Nl
 digit            ::=  ‘0’ | … | ‘9’
@@ -82,7 +82,7 @@ symbolLiteral    ::=  ‘'’ plainid
 comment          ::=  ‘/*’ “any sequence of characters; nested comments are allowed” ‘*/’
                    |  ‘//’ “any sequence of characters up to end of line”
 
-nl               ::=  $\mathit{“new line character”}$
+nl               ::=  ´\mathit{“new line character”}´
 semi             ::=  ‘;’ |  nl {nl}
 ```
 
