@@ -53,9 +53,11 @@ jobs:
           - ruby -v
           - bundler --version
           - bundle install
+          - sudo apt-get install wkhtmltopdf
         script:
         - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then (cd admin && ./init.sh); fi'
         - bundle exec jekyll build -s spec/ -d build/spec
+        - ./scripts/generate-spec-pdf.sh
         after_success:
         - 'if [ "$TRAVIS_PULL_REQUEST" = "false" ]; then ./scripts/travis-publish-spec.sh; fi'
 
