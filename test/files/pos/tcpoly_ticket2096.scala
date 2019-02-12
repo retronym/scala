@@ -11,11 +11,19 @@ trait MBraceSeq[C[X] <: MBrace[C,X] with Seq[X],A] extends MBrace[C,A]
 case class MSequitor[A]( a_ : A* ) extends Seq[A] with MBrace[MSequitor,A]
 {
  override def nest( a : A ) = new MSequitor[A]( a )
+ // temporary workaround
+ override def flatten[T <: MSequitor[MSequitor[A]]]( bsq : T ) : MSequitor[A] = {
+   bsq.foldLeft(new MSequitor[A]())(
+     ( acc : MSequitor[A], e : MSequitor[A] ) => ( acc ++ e ).asInstanceOf[MSequitor[A]]
+   )
+ }
+ /*
  override def flatten[T <: MSequitor[MSequitor[A]]]( bsq : T ) : MSequitor[A] = {
    (new MSequitor[A]( ) /: bsq)( {
      ( acc : MSequitor[A], e : MSequitor[A] ) => ( acc ++ e ).asInstanceOf[MSequitor[A]]
    } )
  }
+ */
  override def length = a_.length
  override def iterator = a_.iterator
  override def apply( n : Int ) = a_.apply( n )

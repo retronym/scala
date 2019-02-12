@@ -121,4 +121,7 @@ trait StdAttachments {
   class QualTypeSymAttachment(val sym: Symbol)
 
   case object ConstructorNeedsFence extends PlainAttachment
+
+  /** Apply is right associative. */
+  case object RightAssociative extends PlainAttachment
 }

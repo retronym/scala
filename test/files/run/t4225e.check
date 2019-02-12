@@ -1,6 +1,7 @@
 t4225e.scala:12: warning: a pure expression does nothing in statement position; multiline expressions might require enclosing parentheses
     def andThen_:(b : Bar) = { println("pre") ; b ; println("post") }
                                                 ^
+foo
 bar
 foo
 pre
@@ -11,9 +12,9 @@ bar
 pre
 post
 
-bar
 foo
 pre
+bar
 post
 
 foo

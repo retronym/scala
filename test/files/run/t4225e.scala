@@ -24,7 +24,6 @@ object Test extends App {
 
   println
 
-  // bar should be deferred but isn't due to scala/bug#10693
   mkBarString andThenByName_: mkFoo
 
   println
