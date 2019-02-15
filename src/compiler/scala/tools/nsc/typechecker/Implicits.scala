@@ -862,12 +862,15 @@ trait Implicits {
 
         typingStack.showAdapt(itree0, itree3, pt, context)
 
-        def hasMatchingSymbol(tree: Tree): Boolean = (tree.symbol == info.sym) || {
+        def hasMatchingSymbol(tree: Tree, view: Boolean): Boolean = {
           tree match {
-            case Apply(fun, _)          => hasMatchingSymbol(fun)
-            case TypeApply(fun, _)      => hasMatchingSymbol(fun)
-            case Select(pre, nme.apply) => pre.symbol == info.sym
-            case _                      => false
+            case Apply(fun, _)           => hasMatchingSymbol(fun, view)
+            case TypeApply(fun, _)       => hasMatchingSymbol(fun, view)
+            case i @ Ident(_)            => i.symbol == info.sym && (info.pre eq NoPrefix)
+            case sel @ Select(pre, name) =>
+              def matchesPre = (sel.qualifier.tpe =:= info.pre || (info.pre.typeSymbol.isPackageClass && sel.qualifier.tpe =:= info.pre.typeSymbol.packageObject.typeOfThis))
+              (view && name == nme.apply && hasMatchingSymbol(pre, false)) || (sel.symbol == info.sym && matchesPre)
+            case _                       => false
           }
         }
 
@@ -875,7 +878,7 @@ trait Implicits {
           fail("hasMatchingSymbol reported error: " + context.reporter.firstError.get.errMsg)
         else if (itree3.isErroneous)
           fail("error typechecking implicit candidate")
-        else if (isLocalToCallsite && !hasMatchingSymbol(itree2))
+        else if (isLocalToCallsite && !hasMatchingSymbol(itree2, isView))
           fail("candidate implicit %s is shadowed by %s".format(
             info.sym.fullLocationString, itree2.symbol.fullLocationString))
         else {
@@ -1009,8 +1012,6 @@ trait Implicits {
      *                             enclosing scope, and so on.
      */
     class ImplicitComputation(iss: Infoss, isLocalToCallsite: Boolean) {
-      private val shadower: Shadower = if (isLocalToCallsite) new LocalShadower else NoShadower
-
       private var best: SearchResult = SearchFailure
 
       private def isIneligible(info: ImplicitInfo) = (
@@ -1024,7 +1025,6 @@ trait Implicits {
       def survives(info: ImplicitInfo) = (
            !isIneligible(info)                      // cyclic, erroneous, shadowed, or specially excluded
         && isPlausiblyCompatible(info.tpe, wildPt)  // optimization to avoid matchesPt
-        && !shadower.isShadowed(info.name)          // OPT rare, only check for plausible candidates
         && matchesPt(info)                          // stable and matches expected type
       )
       /** The implicits that are not valid because they come later in the source and
@@ -1078,11 +1078,7 @@ trait Implicits {
       /** Sorted list of eligible implicits.
        */
       val eligible = {
-        val matches = iss flatMap { is =>
-          val result = is filter (info => checkValid(info.sym) && survives(info))
-          shadower addInfos is
-          result
-        }
+        val matches = iss flatMap {_ filter (info => checkValid(info.sym) && survives(info))}
 
         if (currentRun.isScala213) matches
         else {
@@ -1827,25 +1823,6 @@ trait Implicits {
           Some(s"The type parameter$ess ${unboundNames mkString ", "} referenced in the message of the @$annotationName annotation $bee not $where.")
       }
     }
-  }
-
-  private abstract class Shadower {
-    def addInfos(infos: Infos): Unit
-    def isShadowed(name: Name): Boolean
-  }
-
-  /** Used for exclude implicits from outer scopes that are shadowed by same-named implicits */
-  private final class LocalShadower extends Shadower {
-    val shadowed = util.HashSet[Name](512)
-    def addInfos(infos: Infos): Unit = {
-      infos.foreach(i => shadowed.addEntry(i.name))
-    }
-    def isShadowed(name: Name) = shadowed(name)
-  }
-  /** Used for the implicits of expected type, when no shadowing checks are needed. */
-  private object NoShadower extends Shadower {
-    def addInfos(infos: Infos): Unit = {}
-    def isShadowed(name: Name) = false
   }
 }
 
