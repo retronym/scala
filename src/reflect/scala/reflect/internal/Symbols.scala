@@ -1517,41 +1517,45 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Get type info associated with symbol at current phase, after
      *  ensuring that symbol is initialized (i.e. type is completed).
      */
-    def info: Type = try {
+    def info: Type = {
       var cnt = 0
-      while (validTo == NoPeriod) {
-        assert(infos ne null, this.name)
-        assert(infos.prev eq null, this.name)
-        val tp = infos.info
-
-        if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
-          lock {
-            setInfo(ErrorType)
-            throw CyclicReference(this, tp)
-          }
-        } else {
-          _rawflags |= LOCKED
-          // TODO another commented out lines - this should be solved in one way or another
-//          activeLocks += 1
- //         lockedSyms += this
-        }
-        val current = phase
-        try {
-          assertCorrectThread()
-          phase = phaseOf(infos.validFrom)
-          tp.complete(this)
-        } finally {
-          unlock()
-          phase = current
-        }
+      while (_validTo == NoPeriod) {
+        completeInfo()
         cnt += 1
         // allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        if (cnt == 3) abort(s"no progress in completing $this: $tp")
+        def abortNoProgress() = abort(s"no progress in completing $this: ${infos.info}")
+        if (cnt == 3) abortNoProgress()
       }
       rawInfo
     }
-    catch {
+
+    private def completeInfo(): Unit = try {
+      assert(infos ne null, this.name)
+      assert(infos.prev eq null, this.name)
+      val tp = infos.info
+
+      if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
+        lock {
+          setInfo(ErrorType)
+          throw CyclicReference(this, tp)
+        }
+      } else {
+        _rawflags |= LOCKED
+        // TODO another commented out lines - this should be solved in one way or another
+//          activeLocks += 1
+//         lockedSyms += this
+      }
+      val current = phase
+      try {
+        assertCorrectThread()
+        phase = phaseOf(infos.validFrom)
+        tp.complete(this)
+      } finally {
+        unlock()
+        phase = current
+      }
+    } catch {
       case ex: CyclicReference =>
         devWarning("... hit cycle trying to complete " + this.fullLocationString)
         throw ex
@@ -1609,46 +1613,54 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def rawInfo: Type = {
       var infos = this.infos
       assert(infos != null)
-      val curPeriod = currentPeriod
-      val curPid = phaseId(curPeriod)
 
-      if (validTo != NoPeriod) {
+      if (_validTo != NoPeriod) {
+        val curPeriod = currentPeriod
+        val curPid = phaseId(curPeriod)
+
         // skip any infos that concern later phases
         while (curPid < phaseId(infos.validFrom) && infos.prev != null)
           infos = infos.prev
 
-        if (validTo < curPeriod) {
+        if (_validTo < curPeriod) {
           assertCorrectThread()
           // adapt any infos that come from previous runs
-          val current = phase
+          val curPhase = phase
           try {
             infos = adaptInfos(infos)
 
             //assert(runId(validTo) == currentRunId, name)
             //assert(runId(infos.validFrom) == currentRunId, name)
 
-            if (validTo < curPeriod) {
-              var itr = nextFrom(phaseId(validTo))
-              infoTransformers = itr; // caching optimization
-              while (itr.pid != NoPhase.id && itr.pid < current.id) {
-                phase = phaseWithId(itr.pid)
-                val info1 = itr.transform(this, infos.info)
-                if (info1 ne infos.info) {
-                  infos = TypeHistory(currentPeriod + 1, info1, infos)
-                  this.infos = infos
-                }
-                _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
-                itr = itr.next
-              }
-              _validTo = if (itr.pid == NoPhase.id) curPeriod
-                         else period(currentRunId, itr.pid)
+            if (_validTo < curPeriod) {
+              infos = transformInfos(infos, curPhase, curPeriod)
             }
           } finally {
-            phase = current
+            phase = curPhase
           }
         }
       }
       infos.info
+    }
+
+    private def transformInfos(infos0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
+      var infos = infos0
+
+      var itr = nextFrom(phaseId(_validTo))
+      infoTransformers = itr; // caching optimization
+      while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
+        phase = phaseWithId(itr.pid)
+        val info1 = itr.transform(this, infos.info)
+        if (info1 ne infos.info) {
+          infos = TypeHistory(currentPeriod + 1, info1, infos)
+          this.infos = infos
+        }
+        _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
+        itr = itr.next
+      }
+      _validTo = if (itr.pid == NoPhase.id) curPeriod
+      else period(currentRunId, itr.pid)
+      infos
     }
 
     // adapt to new run in fsc.
