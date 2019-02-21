@@ -309,6 +309,19 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       null
     }
 
+    private def hasName(sym: Symbol, name: Name, phaseFlatClasses: Boolean) = {
+      if (phaseFlatClasses)
+        sym.name eq name
+      else
+        sym.rawname eq name // opt: avoid calls to Symbol.needsFlatClasses inside the loops below
+    }
+    private def hasSameName(sym1: Symbol, sym2: Symbol, phaseFlatClasses: Boolean) = {
+      if (phaseFlatClasses)
+        sym1.name eq sym2.name
+      else
+        sym1.rawname eq sym2.rawname // opt: avoid calls to Symbol.needsFlatClasses inside the loops below
+    }
+
     /** lookup a symbol entry matching given name.
      *  @note from Martin: I believe this is a hotspot or will be one
      *  in future versions of the type system. I have reverted the previous
@@ -317,14 +330,16 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     def lookupEntry(name: Name): ScopeEntry = {
       val startTime = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.scopeLookupTime) else null
       var e: ScopeEntry = null
+      val phaseFlatClasses = phase.flatClasses
+
       if (hashtable ne null) {
         e = hashtable(name.start & HASHMASK)
-        while ((e ne null) && (e.sym.name ne name)) {
+        while ((e ne null) && !hasName(e.sym, name, phaseFlatClasses)) {
           e = e.tail
         }
       } else {
         e = elems
-        while ((e ne null) && (e.sym.name ne name)) {
+        while ((e ne null) && !hasName(e.sym, name, phaseFlatClasses)) {
           e = e.next
         }
       }
@@ -339,10 +354,12 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
       var e = entry
+      val phaseFlatClasses = phase.flatClasses
+
       if (hashtable ne null)
-        do { e = e.tail } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.tail } while ((e ne null) && !hasSameName(e.sym, entry.sym, phaseFlatClasses))
       else
-        do { e = e.next } while ((e ne null) && e.sym.name != entry.sym.name)
+        do { e = e.next } while ((e ne null) && !hasSameName(e.sym, entry.sym, phaseFlatClasses))
       e
     }
 
