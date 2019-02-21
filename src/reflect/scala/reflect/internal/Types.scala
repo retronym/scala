@@ -4025,7 +4025,7 @@ trait Types
 
   // Optimization to avoid creating unnecessary new typerefs.
   def copyTypeRef(tp: Type, pre: Type, sym: Symbol, args: List[Type]): Type = tp match {
-    case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.name == sym.name =>
+    case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.rawname == sym.rawname =>
       if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
         throw new RecoverableCyclicReference(sym)
 
