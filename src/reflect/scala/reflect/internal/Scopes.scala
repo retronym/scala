@@ -328,7 +328,6 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      *  change to use iterators as too costly.
      */
     def lookupEntry(name: Name): ScopeEntry = {
-      val startTime = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.scopeLookupTime) else null
       var e: ScopeEntry = null
       val phaseFlatClasses = phase.flatClasses
 
@@ -343,7 +342,6 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
           e = e.next
         }
       }
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.scopeLookupTime, startTime)
       e
     }
 
@@ -540,5 +538,4 @@ trait ScopeStats {
   self: Statistics =>
   val scopeCountView = newView("#created scopes")(symbolTable.scopeCount)
   val scopePopulationTime = newTimer("time spent in scope population")
-  val scopeLookupTime = newTimer("time spent in scope lookup")
 }
