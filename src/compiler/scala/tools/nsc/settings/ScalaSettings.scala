@@ -524,4 +524,14 @@ trait ScalaSettings extends AbsScalaSettings
     else
       None
   }
+
+  val Ysplain = BooleanSetting("-Ysplain", "activate the splain error formatter engine")
+  val YsplainNoColor = BooleanSetting("-Ysplain-no-color", "don't colorize type errors formatted by splain")
+  val YsplainTruncRefined = IntSetting("-Ysplain-trunc-refined", "truncate refined types as F {...}", 0, Some((0, Int.MaxValue)), str => Some(str.toInt))
+  val YsplainNoBoundsImplicit = BooleanSetting("-Ysplain-no-bounds-implicit", "suppress any implicit bounds errors")
+  val YsplainNoTree = BooleanSetting("-Ysplain-no-tree", "don't display implicit chains in tree layout")
+  val YsplainVerboseTree = BooleanSetting("-Ysplain-verbose-tree", "display all intermediate implicits in a chain")
+  val YsplainBreakInfix = IntSetting("-Ysplain-break-infix", "break infix types into multiple lines when exceeding this number of characters", 0, Some((0, Int.MaxValue)), str => Some(str.toInt))
+  val YsplainNoInfix = BooleanSetting("-Ysplain-no-infix", "don't format infix types")
+  val YsplainNoFoundReq = BooleanSetting("-Ysplain-no-found-req", "don't format found/required type errors")
 }

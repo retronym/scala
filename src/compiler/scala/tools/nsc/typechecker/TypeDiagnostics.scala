@@ -39,7 +39,9 @@ import scala.annotation.tailrec
  *  @author Paul Phillips
  *  @version 1.0
  */
-trait TypeDiagnostics {
+trait TypeDiagnostics
+extends splain.SplainDiagnostics
+{
   self: Analyzer with StdAttachments =>
 
   import global._
@@ -308,7 +310,7 @@ trait TypeDiagnostics {
   // when the message will never be seen.  I though context.reportErrors
   // being false would do that, but if I return "<suppressed>" under
   // that condition, I see it.
-  def foundReqMsg(found: Type, req: Type): String = {
+  def builtinFoundReqMsg(found: Type, req: Type): String = {
     val foundWiden = found.widen
     val reqWiden = req.widen
     val sameNamesDifferentPrefixes =
@@ -337,6 +339,9 @@ trait TypeDiagnostics {
         )
     }
   }
+
+  def foundReqMsg(found: Type, req: Type): String =
+    splainFoundReqMsg(found, req).getOrElse(builtinFoundReqMsg(found, req))
 
   def typePatternAdvice(sym: Symbol, ptSym: Symbol) = {
     val clazz = if (sym.isModuleClass) sym.companionClass else sym

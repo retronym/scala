@@ -22,7 +22,9 @@ import scala.tools.nsc.util.stackTraceString
 import scala.reflect.io.NoAbstractFile
 import scala.reflect.internal.util.NoSourceFile
 
-trait ContextErrors {
+trait ContextErrors
+extends splain.SplainErrors
+{
   self: Analyzer =>
 
   import global._
@@ -150,7 +152,7 @@ trait ContextErrors {
     MacroIncompatibleEngineError("macro cannot be expanded, because it was compiled by an incompatible macro engine", internalMessage)
 
   def NoImplicitFoundError(tree: Tree, param: Symbol)(implicit context: Context): Unit = {
-    def errMsg = {
+    def defaultErrMsg = {
       val paramName = param.name
       val paramTp = param.tpe
       def evOrParam =
@@ -163,7 +165,8 @@ trait ContextErrors {
         .orElse(ImplicitNotFoundMsg.unapply(paramTp.typeSymbolDirect).map(_.formatDefSiteMessage(paramTp)))
         .getOrElse(s"could not find implicit value for $evOrParam $paramTp")
     }
-    issueNormalTypeError(tree, errMsg)
+    val errMsg = splainPushOrReportNotFound(tree, param)
+    issueNormalTypeError(tree, errMsg.getOrElse(defaultErrMsg))
   }
 
   trait TyperContextErrors {

@@ -33,7 +33,7 @@ import scala.language.implicitConversions
  *  @author  Martin Odersky
  *  @version 1.0
  */
-trait Implicits {
+trait Implicits extends splain.SplainData {
   self: Analyzer =>
 
   import global._
@@ -106,12 +106,14 @@ trait Implicits {
     if (shouldPrint)
       typingStack.printTyping(tree, "typing implicit: %s %s".format(tree, context.undetparamsString))
     val implicitSearchContext = context.makeImplicit(reportAmbiguous)
+    ImplicitErrors.startSearch(pt)
     val dpt = if (isView) pt else dropByName(pt)
     val isByName = dpt ne pt
     val search = new ImplicitSearch(tree, dpt, isView, implicitSearchContext, pos, isByName)
     pluginsNotifyImplicitSearch(search)
     val result = search.bestImplicit
     pluginsNotifyImplicitSearchResult(result)
+    ImplicitErrors.finishSearch(result.isSuccess, pt)
 
     if (result.isFailure && saveAmbiguousDivergent && implicitSearchContext.reporter.hasErrors)
       implicitSearchContext.reporter.propagateImplicitTypeErrorsTo(context.reporter)
@@ -896,7 +898,8 @@ trait Implicits {
             // bounds check on the expandee tree
             itree3.attachments.get[MacroExpansionAttachment] match {
               case Some(MacroExpansionAttachment(exp @ TypeApply(fun, targs), _)) =>
-                checkBounds(exp, NoPrefix, NoSymbol, fun.symbol.typeParams, targs.map(_.tpe), "inferred ")
+                val withinBounds = checkBounds(exp, NoPrefix, NoSymbol, fun.symbol.typeParams, targs.map(_.tpe), "inferred ")
+                if (!withinBounds) splainPushNonconformantBonds(pt, tree, targs.map(_.tpe), undetParams, None)
               case _ => ()
             }
 
@@ -942,6 +945,7 @@ trait Implicits {
 
             context.reporter.firstError match {
               case Some(err) =>
+                splainPushImplicitSearchFailure(itree3, pt, err)
                 fail("typing TypeApply reported errors for the implicit tree: " + err.errMsg)
               case None      =>
                 val result = new SearchResult(unsuppressMacroExpansion(itree3), subst, context.undetparams)

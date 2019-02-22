@@ -1,0 +1,22 @@
+warning: there was one deprecation warning (since 2.13.0); re-run with -deprecation for details
+newSource1.scala:13: error: implicit error;
+!I e: II
+ImplicitChain.g invalid because
+!I impPar3: I1
+⋮
+――ImplicitChain.i1 invalid because
+  !I impPar7: I3
+  implicitly[II]
+            ^
+newSource1.scala:6: error: type mismatch;
+  L|R
+  f(new L)
+    ^
+newSource1.scala:7: error: implicit error;
+!I e: F[Arg]
+Bounds.g invalid because
+nonconformant bounds;
+[Arg, Nothing]
+[A <: Bounds.Base, B]
+  implicitly[F[Arg]]
+            ^
