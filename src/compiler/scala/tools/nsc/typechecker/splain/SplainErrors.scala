@@ -24,7 +24,7 @@ trait SplainErrors { self: Analyzer with SplainFormatting =>
       .foreach(err => ImplicitErrors.push(err))
 
   def splainPushOrReportNotFound(tree: Tree, param: Symbol): Option[String] =
-    if (splainSettingEnable)
+    if (settings.splainSettingEnable)
       if (ImplicitErrors.nested) {
         splainPushNotFound(tree, param)
         None

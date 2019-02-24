@@ -174,16 +174,11 @@ extends SplainFormatters
 { self: Analyzer =>
   import global._
 
-  def splainSettingEnable: Boolean = settings.Ysplain.value
-  def splainSettingNoInfix: Boolean = settings.YsplainNoInfix.value
   def splainSettingBreakInfix: Option[Int] = {
     val value = settings.YsplainBreakInfix.value
     if (value == 0) None else Some(value)
   }
-  def splainSettingNoColor: Boolean = settings.YsplainNoColor.value
-  def splainSettingVerboseTree: Boolean = settings.YsplainVerboseTree.value
-  def splainSettingNoTree: Boolean = settings.YsplainNoTree.value
-  def splainSettingNoBoundsImplicits: Boolean = settings.YsplainNoBoundsImplicit.value
+
   def splainSettingTruncRefined: Option[Int] = {
     val value = settings.YsplainTruncRefined.value
     if (value == 0) None else Some(value)
@@ -193,7 +188,7 @@ extends SplainFormatters
     msg.formatDefSiteMessage(tpe)
 
   implicit def colors =
-    if(splainSettingNoColor) StringColors.noColor
+    if(settings.splainSettingNoColor) StringColors.noColor
     else StringColors.color
 
   def dealias(tpe: Type) =
@@ -461,7 +456,7 @@ extends SplainFormatters
   def formatTypeImpl(tpe: Type, top: Boolean): Formatted = {
     val dtpe = dealias(tpe)
     val rec = (tp: Type) => (t: Boolean) => formatType(tp, t)
-    if (splainSettingNoInfix) Simple(dtpe.toLongString)
+    if (settings.splainSettingNoInfix) Simple(dtpe.toLongString)
     else formatWithInfix(dtpe, extractArgs(dtpe), top, rec)
   }
 
@@ -527,7 +522,7 @@ extends SplainFormatters
   }
 
   def hideImpError(error: ImplicitError): Boolean =
-    (ImplicitError.candidateName(error).toString == "mkLazy") || (splainSettingNoBoundsImplicits && (
+    (ImplicitError.candidateName(error).toString == "mkLazy") || (settings.splainSettingNoBoundsImplicits && (
       error.specifics match {
         case ImplicitErrorSpecifics.NonconformantBounds(_, _, _) => true
         case ImplicitErrorSpecifics.NotFound(_) => false
@@ -578,12 +573,12 @@ extends SplainFormatters
   }
 
   def formatImplicitChainTree(chain: List[ImplicitError]): List[String] = {
-    val compact = if (splainSettingVerboseTree) None else formatImplicitChainTreeCompact(chain)
+    val compact = if (settings.splainSettingVerboseTree) None else formatImplicitChainTreeCompact(chain)
     compact getOrElse formatImplicitChainTreeFull(chain)
   }
 
   def formatImplicitChain(chain: List[ImplicitError]): List[String] = {
-    if (splainSettingNoTree) formatImplicitChainFlat(chain)
+    if (settings.splainSettingNoTree) formatImplicitChainFlat(chain)
     else formatImplicitChainTree(chain)
   }
 

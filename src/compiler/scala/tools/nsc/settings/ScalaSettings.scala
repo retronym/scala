@@ -525,13 +525,48 @@ trait ScalaSettings extends AbsScalaSettings
       None
   }
 
-  val Ysplain = BooleanSetting("-Ysplain", "activate the splain error formatter engine")
-  val YsplainNoColor = BooleanSetting("-Ysplain-no-color", "don't colorize type errors formatted by splain")
-  val YsplainTruncRefined = IntSetting("-Ysplain-trunc-refined", "truncate refined types as F {...}", 0, Some((0, Int.MaxValue)), str => Some(str.toInt))
-  val YsplainNoBoundsImplicit = BooleanSetting("-Ysplain-no-bounds-implicit", "suppress any implicit bounds errors")
-  val YsplainNoTree = BooleanSetting("-Ysplain-no-tree", "don't display implicit chains in tree layout")
-  val YsplainVerboseTree = BooleanSetting("-Ysplain-verbose-tree", "display all intermediate implicits in a chain")
-  val YsplainBreakInfix = IntSetting("-Ysplain-break-infix", "break infix types into multiple lines when exceeding this number of characters", 0, Some((0, Int.MaxValue)), str => Some(str.toInt))
-  val YsplainNoInfix = BooleanSetting("-Ysplain-no-infix", "don't format infix types")
-  val YsplainNoFoundReq = BooleanSetting("-Ysplain-no-found-req", "don't format found/required type errors")
+  object YsplainChoices extends MultiChoiceEnumeration {
+    val enable = Choice("enable", "activate the splain error formatting engine")
+    val noColor = Choice("no-color", "don't colorize type errors formatted by splain")
+    val noBoundsImplicit = Choice("no-bounds-implicit", "suppress any implicit bounds errors")
+    val noTree = Choice("no-tree", "don't display implicit chains in tree layout")
+    val verboseTree = Choice("verbose-tree", "display all intermediate implicits in a chain")
+    val noInfix = Choice("no-infix", "don't format infix types")
+    val noFoundReq = Choice("no-found-req", "don't format found/required type errors")
+  }
+
+  val Ysplain: MultiChoiceSetting[YsplainChoices.type] =
+    MultiChoiceSetting(
+      name = "-Ysplain",
+      helpArg = "feature",
+      descr = "activate the splain error formatter engine",
+      domain = YsplainChoices,
+      default = None,
+    )
+
+  val YsplainTruncRefined: IntSetting =
+    IntSetting(
+      "-Ysplain-trunc-refined",
+      "truncate refined types as F {...}",
+      0,
+      Some((0, Int.MaxValue)),
+      str => Some(str.toInt),
+    )
+
+  val YsplainBreakInfix: IntSetting =
+    IntSetting(
+      "-Ysplain-break-infix",
+      "break infix types into multiple lines when exceeding this number of characters",
+      0,
+      Some((0, Int.MaxValue)),
+      str => Some(str.toInt),
+    )
+
+  def splainSettingEnable: Boolean = Ysplain.contains(YsplainChoices.enable)
+  def splainSettingNoFoundReq: Boolean = Ysplain.contains(YsplainChoices.noFoundReq)
+  def splainSettingNoInfix: Boolean =Ysplain.contains(YsplainChoices.noInfix)
+  def splainSettingNoColor: Boolean = Ysplain.contains(YsplainChoices.noColor)
+  def splainSettingVerboseTree: Boolean = Ysplain.contains(YsplainChoices.verboseTree)
+  def splainSettingNoTree: Boolean = Ysplain.contains(YsplainChoices.noTree)
+  def splainSettingNoBoundsImplicits: Boolean = Ysplain.contains(YsplainChoices.noBoundsImplicit)
 }

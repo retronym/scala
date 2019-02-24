@@ -3,7 +3,7 @@ import scala.tools.partest._
 object Test
 extends DirectTest
 {
-  override def extraSettings: String = "-usejavacp -Ysplain -Ysplain-no-color"
+  override def extraSettings: String = "-usejavacp -Ysplain:enable -Ysplain:no-color"
 
   def code = """
 object ImplicitChain

@@ -21,9 +21,6 @@ extends SplainFormatting
 { self: Analyzer with SplainData =>
   import global._
 
-  def splainSettingNoFoundReq: Boolean =
-    settings.YsplainNoFoundReq.value
-
   def showStats[A](desc: String, run: => A): A = {
     val ret = run
     if (sys.env.contains("SPLAIN_CACHE_STATS"))
@@ -40,6 +37,6 @@ extends SplainFormatting
     }
 
   def splainFoundReqMsg(found: Type, req: Type): Option[String] =
-    if (!splainSettingEnable || splainSettingNoFoundReq) None
+    if (!settings.splainSettingEnable || settings.splainSettingNoFoundReq) None
     else foundReqMsgShort(found, req).map(a => ";\n" + a.indent.joinLines)
 }
