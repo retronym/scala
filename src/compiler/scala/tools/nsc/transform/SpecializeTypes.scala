@@ -1209,7 +1209,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *  primitive type losing the annotation.
    */
   private def subst(env: TypeEnv, tpe: Type): Type = {
-    class FullTypeMap(from: List[Symbol], to: List[Type]) extends SubstTypeMap(from, to) with AnnotationFilter {
+    class FullTypeMap(symMap: SymbolMap[Type]) extends SubstTypeMap(symMap) with AnnotationFilter {
       def keepAnnotation(annot: AnnotationInfo) = !(annot matches uncheckedVarianceClass)
 
       override def mapOver(tp: Type): Type = tp match {
@@ -1223,8 +1223,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           super.mapOver(tp)
       }
     }
-    val (keys, values) = env.toList.unzip
-    (new FullTypeMap(keys, values))(tpe)
+    (new FullTypeMap(new MapSymbolMap(env)))(tpe)
   }
 
   private def subst(env: TypeEnv)(decl: Symbol): Symbol =
@@ -1345,7 +1344,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     val global: SpecializeTypes.this.global.type = SpecializeTypes.this.global
   } with typechecker.Duplicators {
     private val (castfrom, castto) = casts.unzip
-    private object CastMap extends SubstTypeMap(castfrom.toList, castto.toList)
+    private object CastMap extends SubstTypeMap(new FromToListsSymbolMap(castfrom.toList, castto.toList))
 
     class BodyDuplicator(_context: Context) extends super.BodyDuplicator(_context) {
       override def castType(tree: Tree, pt: Type): Tree = {
@@ -1408,11 +1407,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
                               to: List[Symbol],
                               targetClass: Symbol,
                               addressFields: Boolean) extends TreeSymSubstituter(from, to) {
-    override val symSubst = new SubstSymMap(from, to) {
-      override def matches(sym1: Symbol, sym2: Symbol) =
-        if (sym2.isTypeSkolem) sym2.deSkolemize eq sym1
-        else sym1 eq sym2
-    }
+    override val symSubst = new SubstSymMap(
+      new FromToListsSymbolMap[Symbol](from, to) {
+        override protected def matches(sym1: Symbol, sym2: Symbol): Boolean =
+          if (sym2.isTypeSkolem) sym2.deSkolemize eq sym1
+          else sym1 eq sym2
+      }
+    )
 
     private def isAccessible(sym: Symbol): Boolean =
       if (currentOwner.isAnonymousFunction) {

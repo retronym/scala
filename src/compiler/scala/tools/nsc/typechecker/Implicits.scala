@@ -166,7 +166,7 @@ trait Implicits {
   def allViewsFrom(tp: Type, context: Context, tpars: List[Symbol]): List[(SearchResult, List[TypeConstraint])] = {
     // my untouchable typevars are better than yours (they can't be constrained by them)
     val tvars = tpars map (TypeVar untouchable _)
-    val tpSubsted = tp.subst(tpars, tvars)
+    val tpSubsted = tp.subst(new FromToListsSymbolMap(tpars, tvars))
 
     val search = new ImplicitSearch(EmptyTree, functionType(List(tpSubsted), AnyTpe), true, context.makeImplicit(reportAmbiguousErrors = false))
 
@@ -462,8 +462,8 @@ trait Implicits {
       def core(tp: Type): Type = tp.dealiasWiden match {
         case RefinedType(parents, defs)         => intersectionType(parents map core, tp.typeSymbol.owner)
         case AnnotatedType(annots, tp)          => core(tp)
-        case ExistentialType(tparams, result)   => core(result).subst(tparams, tparams map (t => core(t.info.upperBound)))
-        case PolyType(tparams, result)          => core(result).subst(tparams, tparams map (t => core(t.info.upperBound)))
+        case ExistentialType(tparams, result)   => core(result).subst(new FromListFunSymbolMap(tparams, t => core(t.info.upperBound)))
+        case PolyType(tparams, result)          => core(result).subst(new FromListFunSymbolMap(tparams, t => core(t.info.upperBound)))
         case _                                  => tp
       }
       def stripped(tp: Type): Type = {

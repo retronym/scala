@@ -609,7 +609,7 @@ trait Namers extends MethodSynthesis {
       def assignParamTypes(copyDef: DefDef, sym: Symbol): Unit = {
         val clazz = sym.owner
         val constructorType = clazz.primaryConstructor.tpe
-        val subst = new SubstSymMap(clazz.typeParams, copyDef.tparams map (_.symbol))
+        val subst = new SubstSymMap(new FromListToListFunSymbolMap[TypeDef, Symbol](clazz.typeParams, copyDef.tparams, _.symbol))
         val classParamss = constructorType.paramss
 
         foreach2(copyDef.vparamss, classParamss)((copyParams, classParams) =>

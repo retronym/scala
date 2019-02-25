@@ -511,7 +511,8 @@ trait Infer extends Checkable {
       if (!sameLength(formals, argtpes))
         throw new NoInstance("parameter lists differ in length")
 
-      val restpeInst = restpe.instantiateTypeParams(tparams, tvars)
+      val symMap = new FromToListsSymbolMap[Type](tparams, tvars)
+      val restpeInst = restpe.instantiateTypeParams(symMap)
 
       // first check if typevars can be fully defined from the expected type.
       // The return value isn't used so I'm making it obvious that this side
@@ -535,8 +536,8 @@ trait Infer extends Checkable {
 
       // Then define remaining type variables from argument types.
       map2(argtpes, formals) { (argtpe, formal) =>
-        val tp1 = argtpe.deconst.instantiateTypeParams(tparams, tvars)
-        val pt1 = formal.instantiateTypeParams(tparams, tvars)
+        val tp1 = argtpe.deconst.instantiateTypeParams(symMap)
+        val pt1 = formal.instantiateTypeParams(symMap)
 
         // Note that isCompatible side-effects: subtype checks involving typevars
         // are recorded in the typevar's bounds (see TypeConstraint)
@@ -905,7 +906,7 @@ trait Infer extends Checkable {
     def inferArgumentInstance(tree: Tree, undetparams: List[Symbol], strictPt: Type, lenientPt: Type) {
       printTyping(tree, s"inferring arg instance based on pt0=$strictPt, pt1=$lenientPt")
       var targs = exprTypeArgs(undetparams, tree.tpe, strictPt, useWeaklyCompatible = false)
-      if ((targs eq null) || !(tree.tpe.subst(undetparams, targs) <:< strictPt))
+      if ((targs eq null) || !(tree.tpe.subst(new FromToListsSymbolMap(undetparams, targs)) <:< strictPt))
         targs = exprTypeArgs(undetparams, tree.tpe, lenientPt, useWeaklyCompatible = false)
 
       substExpr(tree, undetparams, targs, lenientPt)

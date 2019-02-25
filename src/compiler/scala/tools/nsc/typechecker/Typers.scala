@@ -256,7 +256,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         for(param <- params) {
           var paramTp = param.tpe
           for(ar <- argResultsBuff)
-            paramTp = paramTp.subst(ar.subst.from, ar.subst.to)
+            paramTp = paramTp.subst(new FromToListsSymbolMap(ar.subst.from, ar.subst.to))
 
           val res =
             if (paramFailed || (paramTp.isErroneous && {paramFailed = true; true})) SearchFailure
@@ -2105,12 +2105,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
             // This allows defining "def foo[T](a: T = 1)"
             val tparams = sym.owner.skipConstructor.info.typeParams
-            val subst = new SubstTypeMap(tparams, tparams map (_ => WildcardType)) {
-              override def matches(sym: Symbol, sym1: Symbol) =
-                if (sym.isSkolem) matches(sym.deSkolemize, sym1)
-                else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
-                else super.matches(sym, sym1)
-            }
+            val subst = new SubstTypeMap(
+              new FromListToConstantSymbolMap[Type](tparams, WildcardType){
+                override protected def matches(sym: Symbol, sym1: Symbol): Boolean =
+                  if (sym.isSkolem) matches(sym.deSkolemize, sym1)
+                  else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
+                  else super.matches(sym, sym1)
+              }
+            )
             // allow defaults on by-name parameters
             if (sym hasFlag BYNAMEPARAM)
               if (tpt1.tpe.typeArgs.isEmpty) WildcardType // during erasure tpt1 is Function0
@@ -5304,7 +5306,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
               typedHigherKindedType(arg, mode, pt)
             }
-            val argtypes = mapList(args1)(treeTpe)
+            val symMap = new FromListToListFunSymbolMap(tparams, args1, treeTpe)
 
             foreach2(args, tparams) { (arg, tparam) =>
               // note: can't use args1 in selector, because Binds got replaced
@@ -5313,7 +5315,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               def tbounds = tparam.info.bounds
               def enhanceBounds(): Unit = {
                 val TypeBounds(lo0, hi0) = abounds
-                val TypeBounds(lo1, hi1) = tbounds.subst(tparams, argtypes)
+                val TypeBounds(lo1, hi1) = tbounds.subst(symMap)
                 val lo = lub(List(lo0, lo1))
                 val hi = glb(List(hi0, hi1))
                 if (!(lo =:= lo0 && hi =:= hi0))
@@ -5330,6 +5332,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 }
               }
             }
+            val argtypes = mapList(args1)(treeTpe)
             val original = treeCopy.AppliedTypeTree(tree, tpt1, args1)
             val result = TypeTree(appliedType(tpt1.tpe, argtypes)) setOriginal original
             if (isPoly) // did the type application (performed by appliedType) involve an unchecked beta-reduction?

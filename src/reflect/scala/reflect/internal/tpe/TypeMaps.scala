@@ -724,11 +724,25 @@ private[internal] trait TypeMaps {
     override def toString = s"AsSeenFromMap($seenFromPrefix, $seenFromClass)"
   }
 
-  /** A base class to compute all substitutions */
-  abstract class SubstMap[T](from: List[Symbol], to: List[T]) extends TypeMap {
-    // OPT this check was 2-3% of some profiles, demoted to -Xdev
-    if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
+  /** A SymbolMap of T is just a finite mapping from Symbols to an element of type T.
+    * This is a restricted version of the maps from the Scala collections.
+    * We want to allow functions that are just constants, functions, or access on an array. */
+  trait SymbolMap[+T] {
+    def hasTermKey: Boolean
+    def isEmpty: Boolean
+    def find(sym: Symbol): Option[T]
+    def hasKey(sym: Symbol): Boolean
+    def hasAnyKeyIn(syms: List[Symbol]): Boolean = syms.exists(hasKey)
+  }
 
+  class SinglePairSymbolMap[+T](from: Symbol, to: T) extends SymbolMap[T]{
+    override def isEmpty: Boolean = false
+    override def hasTermKey: Boolean = from.isTerm
+    override def find(sym: Symbol): Option[T] = if (from eq sym) Some(to) else None
+    override def hasKey(sym: Symbol): Boolean = from eq sym
+  }
+
+  abstract class FromListSymbolMap[+T](from: List[Symbol]) extends SymbolMap[T] {
     private[this] var fromHasTermSymbol = false
     private[this] var fromMin = Int.MaxValue
     private[this] var fromMax = Int.MinValue
@@ -741,54 +755,89 @@ private[internal] trait TypeMaps {
         if (sym.isTerm) fromHasTermSymbol = true
     }
 
+    def hasTermKey: Boolean = fromHasTermSymbol
+
     /** Are `sym` and `sym1` the same? Can be tuned by subclasses. */
     protected def matches(sym: Symbol, sym1: Symbol): Boolean = sym eq sym1
 
+    def fromContains(sym: Symbol) = hasKey(sym)
+    def hasKey(sym: Symbol): Boolean = {
+      // OPT Try cheap checks based on the range of symbol ids in from first.
+      //     Equivalent to `from.contains(sym)`
+      val symId = sym.id
+      val fromMightContainSym = symId >= fromMin && symId <= fromMax
+      fromMightContainSym && (
+        symId == fromMin || symId == fromMax || (fromSize > 2 && from.contains(sym))
+      )
+    }
+
+    override final def isEmpty: Boolean = from.isEmpty
+  }
+
+  class FromToListsSymbolMap[+T](val from: List[Symbol], val to: List[T]) extends FromListSymbolMap[T](from) {
+    // OPT this check was 2-3% of some profiles, demoted to -Xdev
+    if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
+
+    def find(sym: Symbol): Option[T] = {
+      @tailrec def loop(from: List[Symbol], to: List[T]): Option[T] =
+        if (from.isEmpty) None
+        else if (matches(from.head, sym)) Some(to.head)
+        else loop(from.tail, to.tail)
+      loop(from, to)
+    }
+  }
+
+  class MapSymbolMap[+T](env: immutable.Map[Symbol, T]) extends SymbolMap[T]{
+    override def isEmpty: Boolean = env.isEmpty
+    override val hasTermKey: Boolean = env.keysIterator.exists(_.isTerm)
+    override def find(sym: Symbol): Option[T] = env.get(sym)
+    override def hasKey(sym: Symbol): Boolean = env.contains(sym)
+  }
+
+  class FromListToConstantSymbolMap[+T](from: List[Symbol], const: T) extends FromListSymbolMap[T](from) {
+    def find(sym: Symbol): Option[T] =
+      if (from.exists(matches(_, sym))) Some(const) else None
+  }
+
+  class FromListFunSymbolMap[+T](from: List[Symbol], fun: Symbol => T) extends FromListSymbolMap[T](from) {
+    def find(sym: Symbol): Option[T] =
+      if (from.exists(matches(_, sym))) Some(fun(sym)) else None
+  }
+
+  class FromListToListFunSymbolMap[A, +T](from: List[Symbol], to: List[A], toFun: A => T) extends FromListSymbolMap[T](from){
+    def find(sym: Symbol): Option[T] = {
+      @tailrec def loop(from: List[Symbol], to: List[A]): Option[T] =
+        if (from.isEmpty) None
+        else if (matches(from.head, sym)) Some(toFun(to.head))
+        else loop(from.tail, to.tail)
+      loop(from, to)
+    }
+  }
+
+  /** A base class to compute all substitutions */
+  abstract class SubstMap[T](protected val symMap: SymbolMap[T]) extends TypeMap {
     /** Map target to type, can be tuned by subclasses */
     protected def toType(fromtp: Type, tp: T): Type
 
     // We don't need to recurse into the `restpe` below because we will encounter
     // them in the next level of recursion, when the result of this method is passed to `mapOver`.
     protected def renameBoundSyms(tp: Type): Type = tp match {
-      case MethodType(ps, restp) if fromHasTermSymbol && fromContains(ps) =>
+      case MethodType(ps, restp) if symMap.hasTermKey && ps.exists(symMap.hasKey) =>
         createFromClonedSymbols(ps, restp)((ps1, tp1) => copyMethodType(tp, ps1, tp1))
-      case PolyType(bs, restp) if fromContains(bs) =>
+      case PolyType(bs, restp) if bs.exists(symMap.hasKey) =>
         createFromClonedSymbols(bs, restp)((ps1, tp1) => PolyType(ps1, tp1))
-      case ExistentialType(bs, restp) if fromContains(bs) =>
+      case ExistentialType(bs, restp) if bs.exists (symMap.hasKey) =>
         createFromClonedSymbols(bs, restp)(newExistentialType)
       case _ =>
         tp
     }
 
-    @tailrec private def subst(tp: Type, sym: Symbol, from: List[Symbol], to: List[T]): Type = (
-      if (from.isEmpty) tp
-      // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(tp, from))
-      else if (matches(from.head, sym)) toType(tp, to.head)
-      else subst(tp, sym, from.tail, to.tail)
-      )
+    private def subst(tp: Type, sym: Symbol): Type =
+      symMap.find(sym).fold(tp)(toType(tp, _))
 
-    private def fromContains(syms: List[Symbol]): Boolean = {
-      def fromContains(sym: Symbol): Boolean = {
-        // OPT Try cheap checks based on the range of symbol ids in from first.
-        //     Equivalent to `from.contains(sym)`
-        val symId = sym.id
-        val fromMightContainSym = symId >= fromMin && symId <= fromMax
-        fromMightContainSym && (
-          symId == fromMin || symId == fromMax || (fromSize > 2 && from.contains(sym))
-        )
-      }
-      var syms1 = syms
-      while (syms1 ne Nil) {
-        val sym = syms1.head
-        if (fromContains(sym)) return true
-        syms1 = syms1.tail
-      }
-      false
-    }
-
-    def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
+    def apply(tp0: Type): Type = if (symMap.isEmpty) tp0 else {
       val tp                    = mapOver(renameBoundSyms(tp0))
-      def substFor(sym: Symbol) = subst(tp, sym, from, to)
+      def substFor(sym: Symbol) = subst(tp, sym)
 
       tp match {
         // @M
@@ -821,23 +870,16 @@ private[internal] trait TypeMaps {
   }
 
   /** A map to implement the `substSym` method. */
-  class SubstSymMap(from: List[Symbol], to: List[Symbol]) extends SubstMap(from, to) {
-    def this(pairs: (Symbol, Symbol)*) = this(pairs.toList.map(_._1), pairs.toList.map(_._2))
+  class SubstSymMap(symMap: SymbolMap[Symbol]) extends SubstMap(symMap) {
 
     protected def toType(fromtp: Type, sym: Symbol) = fromtp match {
       case TypeRef(pre, _, args) => copyTypeRef(fromtp, pre, sym, args)
       case SingleType(pre, _) => singleType(pre, sym)
     }
-    @tailrec private def subst(sym: Symbol, from: List[Symbol], to: List[Symbol]): Symbol = (
-      if (from.isEmpty) sym
-      // else if (to.isEmpty) error("Unexpected substitution on '%s': from = %s but to == Nil".format(sym, from))
-      else if (matches(from.head, sym)) to.head
-      else subst(sym, from.tail, to.tail)
-      )
-    private def substFor(sym: Symbol) = subst(sym, from, to)
+    private def substFor(sym: Symbol) = symMap.find(sym) getOrElse sym
 
     override def apply(tp: Type): Type = (
-      if (from.isEmpty) tp
+      if (symMap.isEmpty) tp
       else tp match {
         case TypeRef(pre, sym, args) if pre ne NoPrefix =>
           val newSym = substFor(sym)
@@ -855,10 +897,7 @@ private[internal] trait TypeMaps {
     object mapTreeSymbols extends TypeMapTransformer {
       val strictCopy = newStrictTreeCopier
 
-      def termMapsTo(sym: Symbol) = from indexOf sym match {
-        case -1   => None
-        case idx  => Some(to(idx))
-      }
+      def termMapsTo(sym: Symbol) = symMap.find(sym)
 
       // if tree.symbol is mapped to another symbol, passes the new symbol into the
       // constructor `trans` and sets the symbol and the type on the resulting tree.
@@ -889,17 +928,16 @@ private[internal] trait TypeMaps {
   }
 
   /** A map to implement the `subst` method. */
-  class SubstTypeMap(val from: List[Symbol], val to: List[Type]) extends SubstMap(from, to) {
+  class SubstTypeMap(override val symMap: SymbolMap[Type]) extends SubstMap(symMap) {
     protected def toType(fromtp: Type, tp: Type) = tp
 
     override def mapOver(tree: Tree, giveup: () => Nothing): Tree = {
       object trans extends TypeMapTransformer {
         override def transform(tree: Tree) = tree match {
           case Ident(name) =>
-            from indexOf tree.symbol match {
-              case -1   => super.transform(tree)
-              case idx  =>
-                val totpe = to(idx)
+            symMap.find(tree.symbol) match {
+              case None   => super.transform(tree)
+              case Some(totpe)  =>
                 if (totpe.isStable) tree.duplicate setType totpe
                 else giveup()
             }
