@@ -10,7 +10,7 @@ t5429.scala:22: error: overriding method nullary in class A of type => Int;
   object nullary needs `override` modifier
   object nullary    // fail
          ^
-t5429.scala:23: error: overriding method emptyArg in class A of type ()Int;
+t5429.scala:23: error: overriding method emptyArg in class A of type (): Int;
   object emptyArg needs `override` modifier
   object emptyArg   // fail
          ^
@@ -26,7 +26,7 @@ t5429.scala:29: error: overriding method nullary in class A0 of type => Any;
   object nullary needs `override` modifier
   object nullary    // fail
          ^
-t5429.scala:30: error: overriding method emptyArg in class A0 of type ()Any;
+t5429.scala:30: error: overriding method emptyArg in class A0 of type (): Any;
   object emptyArg needs `override` modifier
   object emptyArg   // fail
          ^
@@ -42,7 +42,7 @@ t5429.scala:37: error: overriding method nullary in class A of type => Int;
   object nullary has incompatible type
   override object nullary   // fail
                   ^
-t5429.scala:38: error: overriding method emptyArg in class A of type ()Int;
+t5429.scala:38: error: overriding method emptyArg in class A of type (): Int;
   object emptyArg has incompatible type
   override object emptyArg  // fail
                   ^
@@ -72,7 +72,7 @@ t5429.scala:52: error: overriding method nullary in class A of type => Int;
   value nullary needs `override` modifier
   val nullary = 5     // fail
       ^
-t5429.scala:53: error: overriding method emptyArg in class A of type ()Int;
+t5429.scala:53: error: overriding method emptyArg in class A of type (): Int;
   value emptyArg needs `override` modifier
   val emptyArg = 10   // fail
       ^
@@ -97,7 +97,7 @@ t5429.scala:67: error: overriding method nullary in class A of type => Int;
   method nullary needs `override` modifier
   def nullary = 5     // fail
       ^
-t5429.scala:68: error: overriding method emptyArg in class A of type ()Int;
+t5429.scala:68: error: overriding method emptyArg in class A of type (): Int;
   method emptyArg needs `override` modifier
   def emptyArg = 10   // fail
       ^
@@ -126,7 +126,7 @@ t5429.scala:82: error: overriding method nullary in class A of type => Int;
   lazy value nullary needs `override` modifier
   lazy val nullary = 5     // fail
            ^
-t5429.scala:83: error: overriding method emptyArg in class A of type ()Int;
+t5429.scala:83: error: overriding method emptyArg in class A of type (): Int;
   lazy value emptyArg needs `override` modifier
   lazy val emptyArg = 10   // fail
            ^

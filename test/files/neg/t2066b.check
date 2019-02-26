@@ -1,4 +1,4 @@
-t2066b.scala:7: error: overriding method f in trait A of type [T[_]](x: T[Int])T[Any];
+t2066b.scala:7: error: overriding method f in trait A of type [T[_]](x: T[Int]): T[Any];
   method f has incompatible type
 	 def f[T[+_]](x : T[Int]) : T[Any] = x
              ^
