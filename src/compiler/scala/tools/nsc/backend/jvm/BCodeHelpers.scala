@@ -641,7 +641,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
       // without it.  This is particularly bad because the availability of
       // generic information could disappear as a consequence of a seemingly
       // unrelated change.
-         settings.Ynogenericsig
+         settings.Ynogenericsig.value
       || sym.isArtifact
       || sym.isLiftedMethod
       || sym.isBridge
