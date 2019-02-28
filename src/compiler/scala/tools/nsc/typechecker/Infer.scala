@@ -48,12 +48,24 @@ trait Infer extends Checkable {
          (removeRepeated || numFormals != numArgs)
       && isVarArgTypes(formals1)
     )
-    def lastType = formals1.last.dealiasWiden.typeArgs.head
-    def expanded(n: Int) = (1 to n).toList map (_ => lastType)
 
-    if (expandLast)
-      formals1.init ::: expanded(numArgs - numFormals + 1)
-    else
+    if (expandLast) {
+      val lastType = if (formals1 eq Nil) NoType else formals1.last.dealiasWiden.typeArgs.head
+      val n = numArgs - numFormals + 1
+      // Optimized version of: formals1.init ::: List.fill(n)(lastTyped)
+      val result = mutable.ListBuffer[Type]()
+      var fs = formals1
+      while ((fs ne Nil) && (fs.tail ne Nil)) {
+        result.addOne(fs.head)
+        fs = fs.tail
+      }
+      var i = 0
+      while (i < n) {
+        result += lastType
+        i += 1
+      }
+      result.toList
+    } else
       formals1
   }
 
