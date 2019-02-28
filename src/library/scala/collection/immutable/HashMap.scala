@@ -1570,6 +1570,10 @@ object HashMap extends MapFactory[HashMap] {
   def newBuilder[K, V]: ReusableBuilder[(K, V), HashMap[K, V]] = new HashMapBuilder[K, V]
 }
 
+object HashMapBuilder {
+  private val emptyContentArray = new Array[Any](0)
+  private val emptyHashArray = new Array[Int](0)
+}
 
 /** A Builder for a HashMap.
   * $multipleResults
@@ -1579,7 +1583,7 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
   import MapNode._
 
 
-  private def newEmptyRootNode = new BitmapIndexedMapNode[K, V](0, 0, Array(), Array(), 0, 0)
+  private def newEmptyRootNode = new BitmapIndexedMapNode[K, V](0, 0, HashMapBuilder.emptyContentArray, HashMapBuilder.emptyHashArray, 0, 0)
 
   /** The last given out HashMap as a return value of `result()`, if any, otherwise null.
     * Indicates that on next add, the elements should be copied to an identical structure, before continuing
