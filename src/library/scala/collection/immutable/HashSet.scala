@@ -1480,6 +1480,11 @@ object HashSet extends IterableFactory[HashSet] {
   def newBuilder[A]: ReusableBuilder[A, HashSet[A]] = new HashSetBuilder
 }
 
+object HashSetBuilder {
+  private val emptyContentArray = new Array[Any](0)
+  private val emptyHashArray = new Array[Int](0)
+}
+
 /** Builder for HashSet.
   * $multipleResults
   */
@@ -1487,7 +1492,7 @@ private[collection] final class HashSetBuilder[A] extends ReusableBuilder[A, Has
   import Node._
   import SetNode._
 
-  private def newEmptyRootNode = new BitmapIndexedSetNode[A](0, 0, Array(), Array(), 0, 0)
+  private def newEmptyRootNode = new BitmapIndexedSetNode[A](0, 0, HashSetBuilder.emptyContentArray, HashSetBuilder.emptyHashArray, 0, 0)
 
   /** The last given out HashSet as a return value of `result()`, if any, otherwise null.
     * Indicates that on next add, the elements should be copied to an identical structure, before continuing
