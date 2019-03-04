@@ -17,6 +17,7 @@ package io
 import java.io.{ IOException, InputStream, OutputStream, BufferedOutputStream, ByteArrayOutputStream }
 import java.io.{ File => JFile }
 import java.net.URL
+import java.nio.ByteBuffer
 
 /**
  * An abstraction over files for use in the reflection/compiler libraries.
@@ -192,6 +193,7 @@ abstract class AbstractFile extends Iterable[AbstractFile] {
         out.toByteArray()
     }
   }
+  def toByteBuffer: ByteBuffer = ByteBuffer.wrap(toByteArray)
 
   /** Returns all abstract subfiles of this abstract directory. */
   def iterator: Iterator[AbstractFile]
