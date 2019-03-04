@@ -1261,7 +1261,7 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
         else getClassSymbol(parent.value).tpe_*
         val ifaceCount = u2
         var ifacesTypes = ifaces.filterNot(_ eq null).map(x => getClassSymbol(x.value).tpe_*)
-        if (jflags.isAnnotation) ifaces ::= ClassfileAnnotationClass.tpe
+        if (jflags.isAnnotation) ifacesTypes ::= ClassfileAnnotationClass.tpe
         ClassInfoType(superType :: ifacesTypes, instanceScope, clazz)
       }
       sym.setInfo(info)
