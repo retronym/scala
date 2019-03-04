@@ -1257,9 +1257,10 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
   private final class ClassTypeCompleter(name: Name, jflags: JavaAccFlags, parent: NameOrString, ifaces: List[NameOrString]) extends JavaTypeCompleter {
     override def complete(sym: symbolTable.Symbol): Unit = {
       val info = if (sig != null) sigToType(sym, sig) else {
-        val superType = if (jflags.isAnnotation) { u2; AnnotationClass.tpe }
-        else getClassSymbol(parent.value).tpe_*
-        val ifaceCount = u2
+        val superType =
+          if (parent == null) AnyClass.tpe_*
+          else if (jflags.isAnnotation) { u2; AnnotationClass.tpe }
+          else getClassSymbol(parent.value).tpe_*
         var ifacesTypes = ifaces.filterNot(_ eq null).map(x => getClassSymbol(x.value).tpe_*)
         if (jflags.isAnnotation) ifacesTypes ::= ClassfileAnnotationClass.tpe
         ClassInfoType(superType :: ifacesTypes, instanceScope, clazz)
