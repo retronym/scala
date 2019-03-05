@@ -1593,6 +1593,24 @@ trait Types
       else TypeBounds(lo1, hi1)
     }
     override def foldOver(folder: TypeFolder): Unit = { folder(lo); folder(hi) }
+    //OPT specialize hashCode
+    override final def computeHashCode = {
+      import scala.util.hashing.MurmurHash3._
+      var h = productSeed
+      h = mix(h, lo.hashCode)
+      h = mix(h, hi.hashCode)
+      val length = 2
+      finalizeHash(h, length)
+    }
+    //OPT specialize equals
+    override final def equals(other: Any): Boolean = {
+      if (this eq other.asInstanceOf[AnyRef]) true
+      else other match {
+        case otherTypeRef: TypeBounds =>
+          Objects.equals(lo, otherTypeRef.lo) && Objects.equals(hi, otherTypeRef.hi)
+        case _ => false
+      }
+    }
   }
 
   final class UniqueTypeBounds(lo: Type, hi: Type) extends TypeBounds(lo, hi)
