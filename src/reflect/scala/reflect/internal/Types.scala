@@ -922,6 +922,19 @@ trait Types
      */
     def baseTypeIndex(sym: Symbol): Int = baseTypeSeq.baseTypeIndex(sym)
 
+    final def isSubClass(sym: Symbol): Boolean = {
+      if (sym.isClass) {
+        val typeSym = typeSymbol
+        sym == typeSym || {
+          val bts = typeSym.info.baseTypeSeq
+          if (bts.hasAbstractType)
+            baseTypeIndex(sym) != -1
+          else
+            typeSym.isSubClass(sym)
+        }
+      } else baseTypeIndex(sym) != -1
+    }
+
     /** If this is a ExistentialType, PolyType or MethodType, a copy with cloned type / value parameters
      *  owned by `owner`. Identity for all other types.
      */

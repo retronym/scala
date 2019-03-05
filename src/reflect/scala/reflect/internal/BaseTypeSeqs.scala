@@ -52,12 +52,16 @@ trait BaseTypeSeqs {
   self =>
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqCount)
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqLenTotal, elems.length)
+    private[this] var _hasAbstractType = false
+    final def hasAbstractType: Boolean = _hasAbstractType
     private[this] val typeSymbols = {
       val tmp = new Array[Int](elems.length)
       var i = 0
       while (i < elems.length) {
-        tmp(i) = elems(i).typeSymbol.id
+        val sym = elems(i).typeSymbol
+        tmp(i) = sym.id
         i += 1
+        _hasAbstractType &&= sym.isAbstractType
       }
       tmp
     }

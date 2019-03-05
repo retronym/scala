@@ -580,7 +580,7 @@ private[internal] trait TypeMaps {
         else
           // In the general case, we look at the base type sequence of the prefix itself,
           // which can have more concrete base classes than `.typeSymbol.baseClasses` (example: t5294, t6161)
-          (pre1.widen.typeSymbol isSubClass clazz) || pre1.widen.baseTypeIndex(clazz) != -1
+          pre1.widen.isSubClass(clazz)
       )
     }
 
