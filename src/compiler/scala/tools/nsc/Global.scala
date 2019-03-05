@@ -1552,6 +1552,9 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
 
       reporting.summarizeErrors()
 
+      // val allNamesArray: Array[String] = allNames().map(_.toString).toArray.sorted
+      // allNamesArray.foreach(println(_))
+
       if (traceSymbolActivity)
         units map (_.body) foreach (traceSymbols recordSymbolsInTree _)
 
@@ -1579,6 +1582,8 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
 
       // Clear any sets or maps created via perRunCaches.
       perRunCaches.clearAll()
+      if (settings.verbose)
+        println("Name table size after compilation: " + nameTableSize + " chars")
     }
 
     /** Compile list of abstract files. */
