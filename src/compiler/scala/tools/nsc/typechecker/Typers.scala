@@ -4110,23 +4110,26 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
         }
 
+        // OPT: hoist lambda out of type map below.
+        lazy val addIdentIfLocal = (arg: Tree) => {
+          arg match {
+            case Ident(_) =>
+              // Check the symbol of an Ident, unless the
+              // Ident's type is already over an existential.
+              // (If the type is already over an existential,
+              // then remap the type, not the core symbol.)
+              if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
+                addIfLocal(arg.symbol, arg.tpe)
+            case _ => ()
+          }
+        }
+
         for (t <- tp) {
           t match {
             case ExistentialType(tparams, _) =>
               boundSyms ++= tparams
             case AnnotatedType(annots, _) =>
-              for (annot <- annots; arg <- annot.args) {
-                arg match {
-                  case Ident(_) =>
-                    // Check the symbol of an Ident, unless the
-                    // Ident's type is already over an existential.
-                    // (If the type is already over an existential,
-                    // then remap the type, not the core symbol.)
-                    if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
-                      addIfLocal(arg.symbol, arg.tpe)
-                  case _ => ()
-                }
-              }
+              annots.foreach(_.args.foreach(addIdentIfLocal))
             case _ =>
           }
           addIfLocal(t.termSymbol, t)
