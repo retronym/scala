@@ -3518,8 +3518,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
             val (args1, argTpes) = context.savingUndeterminedTypeParams() {
               val amode = forArgMode(fun, mode)
+              val args1X: ListBuffer[Tree] = ListBuffer.empty[Tree]
+              val argsTpesX: ListBuffer[Type] = ListBuffer.empty[Type]
 
-              map2(args, altArgPts) { (arg, argPtAlts) =>
+              foreach2(args, altArgPts) { (arg, argPtAlts) =>
                 def typedArg0(tree: Tree) = {
                   // if we have an overloaded HOF such as `(f: Int => Int)Int <and> (f: Char => Char)Char`,
                   // and we're typing a function like `x => x` for the argument, try to collapse
@@ -3533,7 +3535,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   (argTyped, argTyped.tpe.deconst)
                 }
 
-                arg match {
+                val (arg1,argTpe1) = arg match {
                   // scala/bug#8197/scala/bug#4592 call for checking whether this named argument could be interpreted as an assign
                   // infer.checkNames must not use UnitType: it may not be a valid assignment, or the setter may return another type from Unit
                   // TODO: just make it an error to refer to a non-existent named arg, as it's far more likely to be
@@ -3551,7 +3553,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   case _ =>
                     typedArg0(arg)
                 }
-              }.unzip
+                args1X += arg1
+                argsTpesX += argTpe1
+              }
+              (args1X.toList, argsTpesX.toList)
             }
             if (context.reporter.hasErrors)
               setError(tree)
