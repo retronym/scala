@@ -308,4 +308,15 @@ object Test2 {
   @Test def hideDeprecatedTrait1(): Unit =
     checkDeprecated("@deprecated trait T1; val x: T", "T1")
 
+  // fails if uncommented, but even `new D` doesn't give a deprecation warning, so it's apparently not
+  // tab completion's fault, there seems to be some deeper problem with deprecated implicit classes
+  // not resulting in deprecation warnings
+  // @Test def hideDeprecatedImplicitClass(): Unit =
+  //   checkDeprecated("class C; @deprecated implicit class D(val c: C) { def foo = 0 }; (new C).f", "foo")
+
+  // gah: (TypeMember(object DefaultMap,<notype>,true,false,<none>),object DefaultMap,false)
+  // we get this even though there is no such companion object!! grr
+  //@Test def hideDeprecatedTrait2(): Unit =
+  //  checkDeprecated("scala.collection.D", "DefaultMap")
+
 }
