@@ -524,6 +524,12 @@ trait Symbols { self: Universe =>
       */
     def isJavaAnnotation: Boolean
 
+    /** Does this symbol represent an entity with the `@deprecated` annotation?
+      *
+      *  @group Tests
+      */
+    def isDeprecated: Boolean
+
     /******************* helpers *******************/
 
     /** Provides an alternate if symbol is a NoSymbol.
