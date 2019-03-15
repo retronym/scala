@@ -118,22 +118,25 @@ object ClassTag {
     }
   }
 
-  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] =
-    runtimeClass1 match {
-      case java.lang.Byte.TYPE      => ClassTag.Byte.asInstanceOf[ClassTag[T]]
-      case java.lang.Short.TYPE     => ClassTag.Short.asInstanceOf[ClassTag[T]]
-      case java.lang.Character.TYPE => ClassTag.Char.asInstanceOf[ClassTag[T]]
-      case java.lang.Integer.TYPE   => ClassTag.Int.asInstanceOf[ClassTag[T]]
-      case java.lang.Long.TYPE      => ClassTag.Long.asInstanceOf[ClassTag[T]]
-      case java.lang.Float.TYPE     => ClassTag.Float.asInstanceOf[ClassTag[T]]
-      case java.lang.Double.TYPE    => ClassTag.Double.asInstanceOf[ClassTag[T]]
-      case java.lang.Boolean.TYPE   => ClassTag.Boolean.asInstanceOf[ClassTag[T]]
-      case java.lang.Void.TYPE      => ClassTag.Unit.asInstanceOf[ClassTag[T]]
-      case ObjectTYPE               => ClassTag.Object.asInstanceOf[ClassTag[T]]
-      case NothingTYPE              => ClassTag.Nothing.asInstanceOf[ClassTag[T]]
-      case NullTYPE                 => ClassTag.Null.asInstanceOf[ClassTag[T]]
-      case _                        => new GenericClassTag[T](runtimeClass1)
-    }
+  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] = runtimeClass1 match {
+    case x if x.isPrimitive => primitiveClassTag(runtimeClass1)
+    case ObjectTYPE         => ClassTag.Object.asInstanceOf[ClassTag[T]]
+    case NothingTYPE        => ClassTag.Nothing.asInstanceOf[ClassTag[T]]
+    case NullTYPE           => ClassTag.Null.asInstanceOf[ClassTag[T]]
+    case _                  => new GenericClassTag[AnyRef](runtimeClass1).asInstanceOf[ClassTag[T]]
+  }
+
+  private def primitiveClassTag[T](runtimeClass1: Class[_]): ClassTag[T] = runtimeClass1 match {
+    case java.lang.Byte.TYPE      => ClassTag.Byte.asInstanceOf[ClassTag[T]]
+    case java.lang.Short.TYPE     => ClassTag.Short.asInstanceOf[ClassTag[T]]
+    case java.lang.Character.TYPE => ClassTag.Char.asInstanceOf[ClassTag[T]]
+    case java.lang.Integer.TYPE   => ClassTag.Int.asInstanceOf[ClassTag[T]]
+    case java.lang.Long.TYPE      => ClassTag.Long.asInstanceOf[ClassTag[T]]
+    case java.lang.Float.TYPE     => ClassTag.Float.asInstanceOf[ClassTag[T]]
+    case java.lang.Double.TYPE    => ClassTag.Double.asInstanceOf[ClassTag[T]]
+    case java.lang.Boolean.TYPE   => ClassTag.Boolean.asInstanceOf[ClassTag[T]]
+    case java.lang.Void.TYPE      => ClassTag.Unit.asInstanceOf[ClassTag[T]]
+  }
 
   def unapply[T](ctag: ClassTag[T]): Option[Class[_]] = Some(ctag.runtimeClass)
 }
