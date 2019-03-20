@@ -122,9 +122,36 @@ final class HashMap[K, +V] private[immutable] (private[immutable] val rootNode: 
       }
       newHashMapOrThis(newRootNode)
     case _ =>
-      super.concat(that)
-  }
+      val iter = that.iterator
+      var current: BitmapIndexedMapNode[K, V1] = rootNode
+      while (iter.hasNext) {
+        val (key, value) = iter.next()
+        val originalHash = key.##
+        val improved = improve(originalHash)
+        current = current.updated(key, value, originalHash, improved, 0).asInstanceOf[BitmapIndexedMapNode[K, V]]
 
+        if (current ne rootNode) {
+          // Note: We could have started with shallowlyMutableNodeMap = 0, however this way, in the case that
+          // the first changed key ended up in a subnode beneath root, we mark that root right away as being
+          // shallowly mutable.
+          //
+          // since key->value has just been inserted, and certainly caused a new root node to be created, we can say with
+          // certainty that it either caused a new subnode to be created underneath `current`, in which case we should
+          // carry on mutating that subnode, or it ended up as a child data pair of the root, in which case, no harm is
+          // done by including its bit position in the shallowlyMutableNodeMap anyways.
+          var shallowlyMutableNodeMap = Node.bitposFrom(Node.maskFrom(improved, 0))
+
+          while (iter.hasNext) {
+            val (key, value) = iter.next()
+            val originalHash = key.##
+            val improved = improve(originalHash)
+            shallowlyMutableNodeMap = current.updateWithShallowMutations(key, value, originalHash, improved, 0, shallowlyMutableNodeMap)
+          }
+          return new HashMap(current)
+        }
+      }
+      this
+  }
 
   override def tail: HashMap[K, V] = this - head._1
 
@@ -201,12 +228,26 @@ final class HashMap[K, +V] private[immutable] (private[immutable] val rootNode: 
             val originalHash = next.##
             val improved = improve(originalHash)
             curr = curr.removed(next, originalHash, improved, 0)
-            if (curr.size <= 0) {
-              return HashMap.empty
+            if (curr ne rootNode) {
+              if (curr.size == 0) {
+                return HashMap.empty
+              }
+              while (iter.hasNext) {
+                val next = iter.next()
+                val originalHash = next.##
+                val improved = improve(originalHash)
+
+                curr.removeWithShallowMutations(next, originalHash,improved)
+
+                if (curr.size == 0) {
+                  return HashMap.empty
+                }
+              }
+              return new HashMap(curr)
             }
           }
 
-          if (curr eq rootNode) this else new HashMap(curr)
+          this
       }
     }
   }
@@ -393,16 +434,12 @@ private final class BitmapIndexedMapNode[K, +V](
 
     if ((dataMap & bitpos) != 0) {
       val index = indexFrom(dataMap, mask, bitpos)
-      val key0 = this.getKey(index)
-      return if (key == key0) this.getValue(index) else throw new NoSuchElementException
+      if (key == getKey(index)) getValue(index) else throw new NoSuchElementException
+    } else if ((nodeMap & bitpos) != 0) {
+      getNode(indexFrom(nodeMap, mask, bitpos)).apply(key, originalHash, keyHash, shift + BitPartitionSize)
+    } else {
+      throw new NoSuchElementException
     }
-
-    if ((nodeMap & bitpos) != 0) {
-      val index = indexFrom(nodeMap, mask, bitpos)
-      return this.getNode(index).apply(key, originalHash, keyHash, shift + BitPartitionSize)
-    }
-
-    throw new NoSuchElementException
   }
 
   def get(key: K, originalHash: Int, keyHash: Int, shift: Int): Option[V] = {
@@ -412,16 +449,15 @@ private final class BitmapIndexedMapNode[K, +V](
     if ((dataMap & bitpos) != 0) {
       val index = indexFrom(dataMap, mask, bitpos)
       val key0 = this.getKey(index)
-      return if (key == key0) Some(this.getValue(index)) else None
-    }
-
-    if ((nodeMap & bitpos) != 0) {
+      if (key == key0) Some(this.getValue(index)) else None
+    } else if ((nodeMap & bitpos) != 0) {
       val index = indexFrom(nodeMap, mask, bitpos)
-      return this.getNode(index).get(key, originalHash, keyHash, shift + BitPartitionSize)
+      this.getNode(index).get(key, originalHash, keyHash, shift + BitPartitionSize)
+    } else {
+      None
     }
-
-    None
   }
+
   def getOrElse[V1 >: V](key: K, originalHash: Int, keyHash: Int, shift: Int, f: => V1): V1 = {
     val mask = maskFrom(keyHash, shift)
     val bitpos = bitposFrom(mask)
@@ -429,14 +465,13 @@ private final class BitmapIndexedMapNode[K, +V](
     if ((dataMap & bitpos) != 0) {
       val index = indexFrom(dataMap, mask, bitpos)
       val key0 = this.getKey(index)
-      return if (key == key0) this.getValue(index) else f
-    }
-
-    if ((nodeMap & bitpos) != 0) {
+      if (key == key0) getValue(index) else f
+    } else if ((nodeMap & bitpos) != 0) {
       val index = indexFrom(nodeMap, mask, bitpos)
-      return this.getNode(index).getOrElse(key, originalHash, keyHash, shift + BitPartitionSize, f)
+      this.getNode(index).getOrElse(key, originalHash, keyHash, shift + BitPartitionSize, f)
+    } else {
+      f
     }
-    f
   }
 
   override def containsKey(key: K, originalHash: Int, keyHash: Int, shift: Int): Boolean = {
@@ -446,16 +481,14 @@ private final class BitmapIndexedMapNode[K, +V](
     if ((dataMap & bitpos) != 0) {
       val index = indexFrom(dataMap, mask, bitpos)
       // assert(hashes(index) == computeHash(this.getKey(index)), (hashes.toSeq, content.toSeq, index, key, keyHash, shift))
-      return (originalHashes(index) == originalHash) && key == this.getKey(index)
+      (originalHashes(index) == originalHash) && key == getKey(index)
+    } else if ((nodeMap & bitpos) != 0) {
+      getNode(indexFrom(nodeMap, mask, bitpos)).containsKey(key, originalHash, keyHash, shift + BitPartitionSize)
+    } else {
+      false
     }
-
-    if ((nodeMap & bitpos) != 0) {
-      val index = indexFrom(nodeMap, mask, bitpos)
-      return this.getNode(index).containsKey(key, originalHash, keyHash, shift + BitPartitionSize)
-    }
-
-    false
   }
+
 
   def updated[V1 >: V](key: K, value: V1, originalHash: Int, keyHash: Int, shift: Int): BitmapIndexedMapNode[K, V1] = {
     val mask = maskFrom(keyHash, shift)
@@ -467,33 +500,113 @@ private final class BitmapIndexedMapNode[K, +V](
       val key0UnimprovedHash = getHash(index)
       if (key0UnimprovedHash == originalHash && key0 == key) {
         val value0 = this.getValue(index)
-        return (
-          if ((key0.asInstanceOf[AnyRef] eq key.asInstanceOf[AnyRef]) && (value0.asInstanceOf[AnyRef] eq value.asInstanceOf[AnyRef]))
-            this
-          else copyAndSetValue(bitpos, key, value)
-        )
+        if ((key0.asInstanceOf[AnyRef] eq key.asInstanceOf[AnyRef]) && (value0.asInstanceOf[AnyRef] eq value.asInstanceOf[AnyRef]))
+          this
+        else copyAndSetValue(bitpos, key, value)
+      } else {
+        val value0 = this.getValue(index)
+        val key0Hash = improve(key0UnimprovedHash)
+        val subNodeNew = mergeTwoKeyValPairs(key0, value0, key0UnimprovedHash, key0Hash, key, value, originalHash, keyHash, shift + BitPartitionSize)
+
+        copyAndMigrateFromInlineToNode(bitpos, key0Hash, subNodeNew)
+      }
+    } else if ((nodeMap & bitpos) != 0) {
+      val index = indexFrom(nodeMap, mask, bitpos)
+      val subNode = this.getNode(index)
+      val subNodeNew = subNode.updated(key, value, originalHash, keyHash, shift + BitPartitionSize)
+
+      if (subNodeNew eq subNode) this else copyAndSetNode(bitpos, subNode, subNodeNew)
+    } else copyAndInsertValue(bitpos, key, originalHash, keyHash, value)
+  }
+
+  /** A variant of `updated` which performs shallow mutations on the root (`this`), and if possible, on immediately
+    * descendant child nodes (only one level beneath `this`)
+    *
+    * The caller should pass a bitmap of child nodes of this node, which this method may mutate.
+    * If this method may mutate a child node, then if the updated key-value is located in that child node, it will
+    * be shallowly mutated (its children will not be mutated).
+    *
+    * If instead this method may not mutate the child node in which the to-be-updated key-value pair is located, then
+    * that child will be updated immutably, but the result will be mutably re-inserted as a child of this node.
+    *
+    * @param key the key to update
+    * @param value the value to set `key` to
+    * @param originalHash key.##
+    * @param keyHash the improved hash
+    * @param shallowlyMutableNodeMap bitmap of child nodes of this node, which can be shallowly mutated
+    *                                during the call to this method
+    *
+    * @return Int which is the bitwise OR of shallowlyMutableNodeMap and any freshly created nodes, which will be
+    *         available for mutations in subsequent calls.
+    */
+  def updateWithShallowMutations[V1 >: V](key: K, value: V1, originalHash: Int, keyHash: Int, shift: Int, shallowlyMutableNodeMap: Int): Int = {
+    val mask = maskFrom(keyHash, shift)
+    val bitpos = bitposFrom(mask)
+
+    if ((dataMap & bitpos) != 0) {
+      val index = indexFrom(dataMap, mask, bitpos)
+      val key0 = getKey(index)
+      val key0UnimprovedHash = getHash(index)
+      if (key0UnimprovedHash == originalHash && key0 == key) {
+        val value0 = this.getValue(index)
+        if (!((key0.asInstanceOf[AnyRef] eq key.asInstanceOf[AnyRef]) && (value0.asInstanceOf[AnyRef] eq value.asInstanceOf[AnyRef]))) {
+          val dataIx = dataIndex(bitpos)
+          val idx = TupleLength * dataIx
+          content(idx + 1) = value
+        }
+        shallowlyMutableNodeMap
       } else {
         val value0 = this.getValue(index)
         val key0Hash = improve(key0UnimprovedHash)
 
         val subNodeNew = mergeTwoKeyValPairs(key0, value0, key0UnimprovedHash, key0Hash, key, value, originalHash, keyHash, shift + BitPartitionSize)
-        return copyAndMigrateFromInlineToNode(bitpos, key0Hash, subNodeNew)
+        migrateFromInlineToNodeInPlace(bitpos, key0Hash, subNodeNew)
+        shallowlyMutableNodeMap | bitpos
       }
-    }
-
-    if ((nodeMap & bitpos) != 0) {
+    } else if ((nodeMap & bitpos) != 0) {
       val index = indexFrom(nodeMap, mask, bitpos)
       val subNode = this.getNode(index)
+      val subNodeSize = subNode.size
+      val subNodeCachedJavaKeySetHashCode = subNode.cachedJavaKeySetHashCode
 
-      val subNodeNew = subNode.updated(key, value, originalHash, keyHash, shift + BitPartitionSize)
-      if (subNodeNew eq subNode) {
-        return this
-      } else {
-        return copyAndSetNode(bitpos, subNode, subNodeNew)
+      var returnShallowlyMutableNodeMap = shallowlyMutableNodeMap
+
+      val subNodeNew: MapNode[K, V1] = subNode match {
+        case subNodeBm: BitmapIndexedMapNode[K, V] if (bitpos & shallowlyMutableNodeMap) != 0 =>
+          subNodeBm.updateWithShallowMutations(key, value, originalHash, keyHash, shift + BitPartitionSize, 0)
+          subNodeBm
+        case _ =>
+          val result = subNode.updated(key, value, originalHash, keyHash, shift + BitPartitionSize)
+          if (result ne subNode) {
+            returnShallowlyMutableNodeMap |= bitpos
+          }
+          result
       }
-    }
 
-    copyAndInsertValue(bitpos, key, originalHash, keyHash, value)
+      this.content(this.content.length - 1 - this.nodeIndex(bitpos)) = subNodeNew
+      this.size = this.size - subNodeSize + subNodeNew.size
+      this.cachedJavaKeySetHashCode = this.cachedJavaKeySetHashCode - subNodeCachedJavaKeySetHashCode + subNodeNew.cachedJavaKeySetHashCode
+      returnShallowlyMutableNodeMap
+    } else {
+      val dataIx = dataIndex(bitpos)
+      val idx = TupleLength * dataIx
+
+      val src = this.content
+      val dst = new Array[Any](src.length + TupleLength)
+
+      // copy 'src' and insert 2 element(s) at position 'idx'
+      arraycopy(src, 0, dst, 0, idx)
+      dst(idx) = key
+      dst(idx + 1) = value
+      arraycopy(src, idx, dst, idx + TupleLength, src.length - idx)
+
+      this.dataMap |= bitpos
+      this.content = dst
+      this.originalHashes = insertElement(originalHashes, dataIx, originalHash)
+      this.size += 1
+      this.cachedJavaKeySetHashCode += keyHash
+      shallowlyMutableNodeMap
+    }
   }
 
   def removed[V1 >: V](key: K, originalHash: Int, keyHash: Int, shift: Int): BitmapIndexedMapNode[K, V1] = {
@@ -512,15 +625,12 @@ private final class BitmapIndexedMapNode[K, +V](
            */
           val newDataMap = if (shift == 0) (dataMap ^ bitpos) else bitposFrom(maskFrom(keyHash, 0))
           if (index == 0)
-            return new BitmapIndexedMapNode[K, V1](newDataMap, 0, Array(getKey(1), getValue(1)), Array(originalHashes(1)), 1, improve(getHash(1)))
+            new BitmapIndexedMapNode[K, V1](newDataMap, 0, Array(getKey(1), getValue(1)), Array(originalHashes(1)), 1, improve(getHash(1)))
           else
-            return new BitmapIndexedMapNode[K, V1](newDataMap, 0, Array(getKey(0), getValue(0)), Array(originalHashes(0)), 1, improve(getHash(0)))
-        }
-        else return copyAndRemoveValue(bitpos, keyHash)
-      } else return this
-    }
-
-    if ((nodeMap & bitpos) != 0) {
+            new BitmapIndexedMapNode[K, V1](newDataMap, 0, Array(getKey(0), getValue(0)), Array(originalHashes(0)), 1, improve(getHash(0)))
+        } else copyAndRemoveValue(bitpos, keyHash)
+      } else this
+    } else if ((nodeMap & bitpos) != 0) {
       val index = indexFrom(nodeMap, mask, bitpos)
       val subNode = this.getNode(index)
 
@@ -537,18 +647,109 @@ private final class BitmapIndexedMapNode[K, +V](
         if (this.size == subNode.size) {
           // subNode is the only child (no other data or node children of `this` exist)
           // escalate (singleton or empty) result
-          return subNodeNew.asInstanceOf[BitmapIndexedMapNode[K, V1]]
+          subNodeNew.asInstanceOf[BitmapIndexedMapNode[K, V]]
         } else {
           // inline value (move to front)
-          return copyAndMigrateFromNodeToInline(bitpos, subNode, subNodeNew)
+          copyAndMigrateFromNodeToInline(bitpos, subNode, subNodeNew)
         }
       } else if (subNodeNewSize > 1) {
         // modify current node (set replacement node)
-        return copyAndSetNode(bitpos, subNode, subNodeNew)
-      }
-    }
+        copyAndSetNode(bitpos, subNode, subNodeNew)
+      } else this
+    } else this
+  }
 
-    this
+  /** Variant of `removed` which will perform mutation on only the top-level node (`this`), rather than return a new
+    * node
+    *
+    * Should only be called on root nodes, because shift is assumed to be 0
+    *
+    * @param key the key to remove
+    * @param originalHash the original hash of `key`
+    * @param keyHash the improved hash of `key`
+    */
+  def removeWithShallowMutations[V1 >: V](key: K, originalHash: Int, keyHash: Int): this.type  = {
+    val mask = maskFrom(keyHash, 0)
+    val bitpos = bitposFrom(mask)
+
+    if ((dataMap & bitpos) != 0) {
+      val index = indexFrom(dataMap, mask, bitpos)
+      val key0 = this.getKey(index)
+
+      if (key0 == key) {
+        if (this.payloadArity == 2 && this.nodeMap == 0) {
+          val newDataMap = dataMap ^ bitpos
+          if (index == 0) {
+            val newContent = Array[Any](this.content(2), this.content(3))
+            val newOriginalHashes = Array(originalHashes(1))
+            val newCachedJavaKeySetHashCode = improve(getHash(1))
+            this.content = newContent
+            this.originalHashes = newOriginalHashes
+            this.cachedJavaKeySetHashCode = newCachedJavaKeySetHashCode
+          } else {
+            val newContent = Array[Any](this.content(0), this.content(1))
+            val newOriginalHashes = Array(originalHashes(0))
+            val newCachedJavaKeySetHashCode = improve(getHash(0))
+            this.content = newContent
+            this.originalHashes = newOriginalHashes
+            this.cachedJavaKeySetHashCode = newCachedJavaKeySetHashCode
+          }
+          this.dataMap = newDataMap
+          this.nodeMap = 0
+          this.size = 1
+          this
+        }
+        else {
+          val dataIx = dataIndex(bitpos)
+          val idx = TupleLength * dataIx
+
+          val src = this.content
+          val dst = new Array[Any](src.length - TupleLength)
+
+          // copy 'src' and remove 2 element(s) at position 'idx'
+          arraycopy(src, 0, dst, 0, idx)
+          arraycopy(src, idx + TupleLength, dst, idx, src.length - idx - TupleLength)
+
+          val dstHashes = removeElement(originalHashes, dataIx)
+
+          this.dataMap = this.dataMap ^ bitpos
+          this.content = dst
+          this.originalHashes = dstHashes
+          this.size -= 1
+          this.cachedJavaKeySetHashCode -= keyHash
+          this
+        }
+      } else this
+    } else if ((nodeMap & bitpos) != 0) {
+      val index = indexFrom(nodeMap, mask, bitpos)
+      val subNode = this.getNode(index)
+
+      val subNodeNew = subNode.removed(key, originalHash, keyHash, BitPartitionSize).asInstanceOf[BitmapIndexedMapNode[K, V]]
+
+      if (subNodeNew eq subNode) return this
+
+      if (subNodeNew.size == 1) {
+        if (this.payloadArity == 0 && this.nodeArity == 1) {
+          this.dataMap = subNodeNew.dataMap
+          this.nodeMap = subNodeNew.nodeMap
+          this.content = subNodeNew.content
+          this.originalHashes = subNodeNew.originalHashes
+          this.size = subNodeNew.size
+          this.cachedJavaKeySetHashCode = subNodeNew.cachedJavaKeySetHashCode
+          this
+        }
+        else {
+          migrateFromNodeToInlineInPlace(bitpos, subNode, subNodeNew)
+          this
+        }
+      } else {
+        // size must be > 1
+        this.content(this.content.length - 1 - this.nodeIndex(bitpos)) = subNodeNew
+        this.size -= 1
+        this.cachedJavaKeySetHashCode = this.cachedJavaKeySetHashCode - subNode.cachedJavaKeySetHashCode + subNodeNew.cachedJavaKeySetHashCode
+        this
+      }
+    } else this
   }
 
   def mergeTwoKeyValPairs[V1 >: V](key0: K, value0: V1, originalHash0: Int, keyHash0: Int, key1: K, value1: V1, originalHash1: Int, keyHash1: Int, shift: Int): MapNode[K, V1] = {
@@ -887,6 +1088,8 @@ private final class BitmapIndexedMapNode[K, +V](
     throw new UnsupportedOperationException("Trie nodes do not support hashing.")
 
   override def concat[V1 >: V](that: MapNode[K, V1], shift: Int): BitmapIndexedMapNode[K, V1] = that match {
+    case bm: BitmapIndexedMapNode[K, V] if bm eq this =>
+      this
     case bm: BitmapIndexedMapNode[K, V] =>
       if (size == 0) return bm
       else if (bm.size == 0 || (bm eq this)) return this
@@ -1602,6 +1805,15 @@ private final class MapNodeRemoveAllSetNodeIterator[K](rootSetNode: SetNode[K]) 
         shift = 0
       )
       currentValueCursor += 1
+      if (curr ne rootMapNode) {
+        while (curr.size > 0 && hasNext) {
+          val key = currentValueNode.getPayload(currentValueCursor)
+          val originalHash = currentValueNode.getHash(currentValueCursor)
+          curr.removeWithShallowMutations(key, originalHash, improve(originalHash))
+          currentValueCursor += 1
+        }
+        return curr
+      }
     }
     curr
   }
@@ -1695,51 +1907,6 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
     bm.cachedJavaKeySetHashCode += keyHash
   }
 
-  /** Removes element at index `ix` from array `as`, shifting the trailing elements right */
-  private def removeElement(as: Array[Int], ix: Int): Array[Int] = {
-    if (ix < 0) throw new ArrayIndexOutOfBoundsException
-    if (ix > as.length - 1) throw new ArrayIndexOutOfBoundsException
-    val result = new Array[Int](as.length - 1)
-    arraycopy(as, 0, result, 0, ix)
-    arraycopy(as, ix + 1, result, ix, as.length - ix - 1)
-    result
-  }
-
-  /** Mutates `bm` to replace inline data at bit position `bitpos` with node `node` */
-  private def migrateFromInlineToNode(bm: BitmapIndexedMapNode[K, V], keyHash: Int, bitpos: Int, node: MapNode[K, V]): Unit = {
-    val dataIx = bm.dataIndex(bitpos)
-    val idxOld = TupleLength * dataIx
-    val idxNew = bm.content.length - TupleLength - bm.nodeIndex(bitpos)
-
-    val src = bm.content
-    val dst = new Array[Any](src.length - TupleLength + 1)
-
-    // copy 'src' and remove 2 element(s) at position 'idxOld' and
-    // insert 1 element(s) at position 'idxNew'
-    // assert(idxOld <= idxNew)
-    arraycopy(src, 0, dst, 0, idxOld)
-    arraycopy(src, idxOld + TupleLength, dst, idxOld, idxNew - idxOld)
-    dst(idxNew) = node
-    arraycopy(src, idxNew + TupleLength, dst, idxNew + 1, src.length - idxNew - TupleLength)
-
-    val dstHashes = removeElement(bm.originalHashes, dataIx)
-
-    bm.dataMap ^= bitpos
-    bm.nodeMap |= bitpos
-    bm.content = dst
-    bm.originalHashes = dstHashes
-    bm.size = bm.size - 1 + node.size
-    bm.cachedJavaKeySetHashCode += node.cachedJavaKeySetHashCode - keyHash
-  }
-
-  /** Mutates `bm` to replace inline data at bit position `bitpos` with updated key/value */
-  private def setValue[V1 >: V](bm: BitmapIndexedMapNode[K, V], bitpos: Int, newKey: K, newValue: V1): Unit = {
-    val dataIx = bm.dataIndex(bitpos)
-    val idx = TupleLength * dataIx
-    //bm.content(idx) = newKey
-    bm.content(idx + 1) = newValue
-  }
-
   /** Upserts a key/value pair into mapNode, mutably */
   private[immutable] def update(mapNode: MapNode[K, V], key: K, value: V, originalHash: Int, keyHash: Int, shift: Int): Unit = {
     mapNode match {
@@ -1752,7 +1919,7 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
           val key0UnimprovedHash = bm.getHash(index)
 
           if (key0UnimprovedHash == originalHash && key0 == key) {
-            setValue(bm, bitpos, key, value)
+            bm.content(TupleLength * index + 1) = value
           } else {
             val value0 = bm.getValue(index)
             val key0Hash = improve(key0UnimprovedHash)
@@ -1760,7 +1927,7 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
             val subNodeNew: MapNode[K, V] =
               bm.mergeTwoKeyValPairs(key0, value0, key0UnimprovedHash, key0Hash, key, value, originalHash, keyHash, shift + BitPartitionSize)
 
-            migrateFromInlineToNode(bm, key0Hash, bitpos, subNodeNew)
+            bm.migrateFromInlineToNodeInPlace(bitpos, key0Hash, subNodeNew)
           }
 
         } else if ((bm.nodeMap & bitpos) != 0) {

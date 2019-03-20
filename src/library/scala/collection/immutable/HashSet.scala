@@ -80,8 +80,38 @@ final class HashSet[A] private[immutable](private[immutable] val rootNode: Bitma
 
   override def concat(that: IterableOnce[A])(implicit dummy: DummyImplicit): HashSet[A] =
     that match {
-      case hs: HashSet[A] => newHashSetOrThis(rootNode.concat(hs.rootNode, 0))
-      case _ => super.concat(that)
+      case hs: HashSet[A] =>
+        newHashSetOrThis(rootNode.concat(hs.rootNode, 0))
+      case _ =>
+        val iter = that.iterator
+        var current = rootNode
+        while (iter.hasNext) {
+          val element = iter.next()
+          val originalHash = element.##
+          val improved = improve(originalHash)
+          current = current.updated(element, originalHash, improved, 0)
+
+          if (current ne rootNode) {
+            assert(current.content ne rootNode.content)
+            // Note: We could have started with shallowlyMutableNodeMap = 0, however this way, in the case that
+            // the first changed key ended up in a subnode beneath root, we mark that root right away as being
+            // shallowly mutable.
+            //
+            // since `element` has just been inserted, and certainly caused a new root node to be created, we can say with
+            // certainty that it either caused a new subnode to be created underneath `current`, in which case we should
+            // carry on mutating that subnode, or it ended up as a child data pair of the root, in which case, no harm is
+            // done by including its bit position in the shallowlyMutableNodeMap anyways.
+            var shallowlyMutableNodeMap = Node.bitposFrom(Node.maskFrom(improved, 0))
+            while (iter.hasNext) {
+              val element = iter.next()
+              val originalHash = element.##
+              val improved = improve(originalHash)
+              shallowlyMutableNodeMap = current.updateWithShallowMutations(element, originalHash, improved, 0, shallowlyMutableNodeMap)
+            }
+            return new HashSet(current)
+          }
+        }
+        this
     }
 
   override def tail: HashSet[A] = this - head
@@ -139,21 +169,7 @@ final class HashSet[A] private[immutable](private[immutable] val rootNode: Bitma
           } else if (thatKnownSize <= size) {
             /* this branch intentionally includes the case of thatKnownSize == -1. We know that HashSets are quite fast at look-up, so
             we're likely to be the faster of the two at that. */
-            val iter = other.iterator
-            var curr = rootNode
-            while(iter.hasNext) {
-              // TODO: add mutable.hashSet#contains(elem, hashCode)
-              // in order to avoid rehashing elements
-              val next = iter.next()
-              val originalHash = next.##
-              val improved = improve(originalHash)
-              curr = curr.removed(next, originalHash, improved, 0)
-              if (curr.size <= 0) {
-                return HashSet.empty
-              }
-            }
-
-            newHashSetOrThis(curr)
+            removedAllWithShallowMutations(other)
           } else {
             // TODO: Develop more sophisticated heuristic for which branch to take
             filterNot(other.contains)
@@ -161,6 +177,39 @@ final class HashSet[A] private[immutable](private[immutable] val rootNode: Bitma
       }
 
     }
+  }
+
+  /** Immutably removes all elements of `that` from this HashSet
+    *
+    * Mutation is used internally, but only on root SetNodes which this method itself creates.
+    */
+  private[this] def removedAllWithShallowMutations(that: IterableOnce[A]): HashSet[A] = {
+    val iter = that.iterator
+    var curr = rootNode
+    while (iter.hasNext) {
+      val next = iter.next()
+      val originalHash = next.##
+      val improved = improve(originalHash)
+      curr = curr.removed(next, originalHash, improved, 0)
+      if (curr ne rootNode) {
+        if (curr.size == 0) {
+          return HashSet.empty
+        }
+        while (iter.hasNext) {
+          val next = iter.next()
+          val originalHash = next.##
+          val improved = improve(originalHash)
+
+          curr.removeWithShallowMutations(next, originalHash, improved)
+
+          if (curr.size == 0) {
+            return HashSet.empty
+          }
+        }
+        return new HashSet(curr)
+      }
+    }
+    this
   }
 
   override def removedAll(that: IterableOnce[A]): HashSet[A] = that match {
@@ -172,18 +221,7 @@ final class HashSet[A] private[immutable](private[immutable] val rootNode: Bitma
       }
 
     case _ =>
-      val iter = that.iterator
-      var curr = rootNode
-      while (iter.hasNext) {
-        val next = iter.next()
-        val originalHash = next.##
-        val improved = improve(originalHash)
-        curr = curr.removed(next, originalHash, improved, 0)
-        if (curr.size <= 0) {
-          return HashSet.empty
-        }
-      }
-      newHashSetOrThis(curr)
+      removedAllWithShallowMutations(that)
   }
 
   override def partition(p: A => Boolean): (HashSet[A], HashSet[A]) = {
@@ -498,7 +536,8 @@ private final class BitmapIndexedSetNode[A](
       val subNode = this.getNode(index)
 
       val subNodeNew = subNode.removed(element, originalHash, elementHash, shift + BitPartitionSize)
-      // assert(subNodeNew.size != 0, "Sub-node must have at least one element.")
+
+      if (subNodeNew eq subNode) return this
 
       // cache just in case subNodeNew is a hashCollision node, in which in which case a little arithmetic is avoided
       // in Vector#length
@@ -1102,7 +1141,7 @@ private final class BitmapIndexedSetNode[A](
           newCachedHashCode = newCachedHashCode
         )
       }
-    case hashCollisionSetNode: HashCollisionSetNode[A] =>
+    case _: HashCollisionSetNode[A] =>
       // this branch should never happen, because HashCollisionSetNodes and BitMapIndexedSetNodes do not occur at the
       // same depth
       throw new RuntimeException("BitmapIndexedSetNode diff HashCollisionSetNode")
@@ -1812,43 +1851,6 @@ private[collection] final class HashSetBuilder[A] extends ReusableBuilder[A, Has
     bm.cachedJavaKeySetHashCode += keyHash
   }
 
-  /** Removes element at index `ix` from array `as`, shifting the trailing elements right */
-  private def removeElement(as: Array[Int], ix: Int): Array[Int] = {
-    if (ix < 0) throw new ArrayIndexOutOfBoundsException
-    if (ix > as.length - 1) throw new ArrayIndexOutOfBoundsException
-    val result = new Array[Int](as.length - 1)
-    arraycopy(as, 0, result, 0, ix)
-    arraycopy(as, ix + 1, result, ix, as.length - ix - 1)
-    result
-  }
-
-  /** Mutates `bm` to replace inline data at bit position `bitpos` with node `node` */
-  private def migrateFromInlineToNode(bm: BitmapIndexedSetNode[A], elementHash: Int, bitpos: Int, node: SetNode[A]): Unit = {
-    val dataIx = bm.dataIndex(bitpos)
-    val idxOld = TupleLength * dataIx
-    val idxNew = bm.content.length - TupleLength - bm.nodeIndex(bitpos)
-
-    val src = bm.content
-    val dst = new Array[Any](src.length - TupleLength + 1)
-
-    // copy 'src' and remove 2 element(s) at position 'idxOld' and
-    // insert 1 element(s) at position 'idxNew'
-    // assert(idxOld <= idxNew)
-    arraycopy(src, 0, dst, 0, idxOld)
-    arraycopy(src, idxOld + TupleLength, dst, idxOld, idxNew - idxOld)
-    dst(idxNew) = node
-    arraycopy(src, idxNew + TupleLength, dst, idxNew + 1, src.length - idxNew - TupleLength)
-
-    val dstHashes = removeElement(bm.originalHashes, dataIx)
-
-    bm.dataMap ^= bitpos
-    bm.nodeMap |= bitpos
-    bm.content = dst
-    bm.originalHashes = dstHashes
-    bm.size = bm.size - 1 + node.size
-    bm.cachedJavaKeySetHashCode = bm.cachedJavaKeySetHashCode - elementHash + node.cachedJavaKeySetHashCode
-  }
-
   /** Mutates `bm` to replace inline data at bit position `bitpos` with updated key/value */
   private def setValue[A1 >: A](bm: BitmapIndexedSetNode[A], bitpos: Int, elem: A): Unit = {
     val dataIx = bm.dataIndex(bitpos)
@@ -1872,7 +1874,7 @@ private[collection] final class HashSetBuilder[A] extends ReusableBuilder[A, Has
           } else {
             val element0Hash = improve(element0UnimprovedHash)
             val subNodeNew = bm.mergeTwoKeyValPairs(element0, element0UnimprovedHash, element0Hash, element, originalHash, elementHash, shift + BitPartitionSize)
-            migrateFromInlineToNode(bm, element0Hash, bitpos, subNodeNew)
+            bm.migrateFromInlineToNodeInPlace(bitpos, element0Hash, subNodeNew)
           }
         } else if ((bm.nodeMap & bitpos) != 0) {
           val index = indexFrom(bm.nodeMap, mask, bitpos)
