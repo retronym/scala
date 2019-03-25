@@ -1616,23 +1616,32 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
+      // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
+      //      likely to inline into hot callers of .info
+      val outer = Symbols.this
+
       var infos = this.infos
-      assert(infos != null)
+      outer.assert(infos != null)
 
       if (_validTo != NoPeriod) {
-        val curPeriod = currentPeriod
-        val curPid = phaseId(curPeriod)
+        val curPeriod = outer.currentPeriod
+        val curPid = outer.phaseId(curPeriod)
 
         // skip any infos that concern later phases
-        while (curPid < phaseId(infos.validFrom) && infos.prev != null)
+        while (curPid < outer.phaseId(infos.validFrom) && infos.prev != null)
           infos = infos.prev
 
         if (_validTo < curPeriod) {
-          assertCorrectThread()
           // adapt any infos that come from previous runs
-          val curPhase = phase
+          val curPhase = outer.phase
           try {
-            infos = adaptInfos(infos)
+            if (infos == null || outer.runId(infos.validFrom) == outer.currentRunId) {
+            } else {
+              // scala/bug#8871 Discard all but the first element of type history. Specialization only works in the resident
+              // compiler / REPL if re-run its info transformer in this run to correctly populate its
+              // per-run caches, e.g. typeEnv
+              infos = adaptInfo(infos.oldest)
+            }
 
             //assert(runId(validTo) == currentRunId, name)
             //assert(runId(infos.validFrom) == currentRunId, name)
@@ -1641,7 +1650,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
               infos = transformInfos(infos, curPhase, curPeriod)
             }
           } finally {
-            phase = curPhase
+            outer.phase = curPhase
           }
         }
       }
@@ -1649,8 +1658,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     private def transformInfos(infos0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
+      assertCorrectThread()
       var infos = infos0
-
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
       while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
@@ -1669,35 +1678,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     // adapt to new run in fsc.
-    private def adaptInfos(infos: TypeHistory): TypeHistory = {
+    private def adaptInfo(oldest: TypeHistory): TypeHistory = {
       assert(isCompilerUniverse)
-      if (infos == null || runId(infos.validFrom) == currentRunId) {
-        infos
-      } else if (infos ne infos.oldest) {
-        // scala/bug#8871 Discard all but the first element of type history. Specialization only works in the resident
-        // compiler / REPL if re-run its info transformer in this run to correctly populate its
-        // per-run caches, e.g. typeEnv
-        adaptInfos(infos.oldest)
+      assert(oldest.prev == null)
+      val pid = phaseId(oldest.validFrom)
+
+      _validTo = period(currentRunId, pid)
+      phase   = phaseWithId(pid)
+
+      val info1 = adaptToNewRunMap(oldest.info)
+      if (info1 eq oldest.info) {
+        oldest.validFrom = validTo
+        this.infos = oldest
+        oldest
       } else {
-        val prev1 = adaptInfos(infos.prev)
-        if (prev1 ne infos.prev) prev1
-        else {
-          val pid = phaseId(infos.validFrom)
-
-          _validTo = period(currentRunId, pid)
-          phase   = phaseWithId(pid)
-
-          val info1 = adaptToNewRunMap(infos.info)
-          if (info1 eq infos.info) {
-            infos.validFrom = validTo
-            infos
-          } else {
-            this.infos = TypeHistory(validTo, info1, prev1)
-            this.infos
-          }
-        }
+        this.infos = TypeHistory(validTo, info1, null)
+        this.infos
       }
     }
+
 
     /** Raises a `MissingRequirementError` if this symbol is a `StubSymbol` */
     def failIfStub(): Unit = {}
