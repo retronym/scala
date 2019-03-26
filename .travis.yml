@@ -40,10 +40,10 @@ jobs:
       - stage: build
         if: type = pull_request
         script:
-          - find $HOME/.sbt/boot/scala-2.12.7/org.scala-sbt/sbt/1.2.8/org.scala-sbt-compiler-bridge_2.13.0-M2-1.2.5-bin_2.13.0-M5-5eef812__*/ -name '*.jar'
-          - javap -private -c -cp $HOME/.sbt/boot/scala-2.12.7/org.scala-sbt/sbt/1.2.8/org.scala-sbt-compiler-bridge_2.13.0-M2-1.2.5-bin_2.13.0-M5-5eef812__*/org.scala-sbt-compiler-bridge_2.13.0-M2-1.2.5-bin_2.13.0-M5-5eef812__*.jar xsbt.ExtractAPI | grep -i extension
-          - sbt evicted 'show compilers'
+          - rm -vrf $HOME/.sbt/boot/org.scala-sbt/sbt/1.2.7/org.scala-sbt-compiler-bridge*
+          - rm -vrf $HOME/.sbt/1.0/zinc/*
           - sbt setupPublishCore generateBuildCharacterPropertiesFile headerCheck publishLocal
+          - javap -private -c -cp $HOME/.sbt/boot/scala-2.12.7/org.scala-sbt/sbt/1.2.8/org.scala-sbt-compiler-bridge_2.13.0-M2-1.2.5-bin_2.13.0-M5-5eef812__*/org.scala-sbt-compiler-bridge_2.13.0-M2-1.2.5-bin_2.13.0-M5-5eef812__*.jar xsbt.ExtractAPI | grep -i extension
           - STARR=`cat buildcharacter.properties | grep ^maven.version.number | cut -d= -f2` && echo $STARR
           - sbt -Dstarr.version=$STARR -warn setupValidateTest test:compile info testAll
           - sbt -Dscala.build.compileWithDotty=true library/compile
