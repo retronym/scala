@@ -197,7 +197,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   }
 
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
-  def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
+  def freshNameCreatorFor(context: Context): FreshNameCreator = freshNameCreatorFor(context.outermostContextAtCurrentPos.enclClassOrMethod.owner)
+
+  def freshNameCreatorFor(key: Symbol): FreshNameCreator = {
+    typerFreshNameCreators.getOrElseUpdate(key, new FreshNameCreator)
+  }
 
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit

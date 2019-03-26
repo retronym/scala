@@ -19,6 +19,7 @@ import scala.reflect.NameTransformer
 
 class FreshNameCreator(creatorPrefix: String = "") {
   protected val counters = new ConcurrentHashMap[String, AtomicLong]()
+  var associatedOwner: SymbolTable#Symbol = null
 
   /**
    * Create a fresh name with the given prefix. It is guaranteed

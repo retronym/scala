@@ -18,7 +18,14 @@ trait Names {
 
   import global._
 
-  def freshNameCreator = self.callsiteTyper.fresh
+  def freshNameCreator = {
+    macroApplication match {
+      case global.treeInfo.Applied(_, _, List(List(t : MemberDef))) if t.symbol != null =>
+        self.universe.analyzer.freshNameCreatorFor(t.symbol)
+      case _ =>
+        self.callsiteTyper.fresh
+    }
+  }
 
   def fresh(): String =
     freshName()
@@ -47,6 +54,9 @@ trait Names {
     // In the meanwhile I will also keep open the original issue: scala/bug#6879 "c.freshName is broken".
     val prefix = if (name.endsWith("$")) name else name + "$" // scala/bug#8425
     val sortOfUniqueSuffix = freshNameCreator.newName(nme.FRESH_SUFFIX)
+    println(sortOfUniqueSuffix)
+    if (sortOfUniqueSuffix == "macro$1")
+      println(self.callsiteTyper.fresh)
     prefix + sortOfUniqueSuffix
   }
 
