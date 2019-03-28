@@ -695,7 +695,11 @@ trait Types
         )
         if (trivial) this
         else {
-          val m     = new AsSeenFromMap(pre.normalize, clazz)
+          val pre1 = pre match {
+            case tp: ClassNoArgsTypeRef => tp
+            case tp => tp.normalize
+          }
+          val m     = new AsSeenFromMap(pre1, clazz)
           val tp    = m(this)
           val tp1   = existentialAbstraction(m.capturedParams, tp)
 
@@ -2477,6 +2481,7 @@ trait Types
 
     final override def baseType(clazz: Symbol): Type =
       if (clazz eq sym) this
+      else if (clazz eq AnyClass) AnyTpe
       // NOTE: this first goes to requested base type, *then* does asSeenFrom prefix & instantiates args
       else if (sym.isClass) relativize(sym.info.baseType(clazz))
       else baseTypeOfNonClassTypeRef(clazz)

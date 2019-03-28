@@ -2116,7 +2116,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       sym.filterAnnotations(_ != UnmappableAnnotation)
 
       val tpt1 = checkNoEscaping.privates(this, sym, typedType(vdef.tpt))
-      checkNonCyclic(vdef, tpt1)
+      if (!isPastTyper)
+        checkNonCyclic(vdef, tpt1)
 
       // allow trait accessors: it's the only vehicle we have to hang on to annotations that must be passed down to
       // the field that's mixed into a subclass
@@ -2349,7 +2350,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             StarParamNotLastError(vparam1)
 
         val tpt1 = checkNoEscaping.privates(this, meth, typedType(ddef.tpt))
-        checkNonCyclic(ddef, tpt1)
+        if (!isPastTyper)
+          checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
         var rhs1 =
@@ -4251,7 +4253,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       case PolyType(tparams, restpe) if tparams.nonEmpty =>
         if (sameLength(tparams, args)) {
           val targs = mapList(args)(treeTpe)
-          checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
+          if (!isPastTyper)
+            checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
           if (fun.symbol.rawname == nme.classOf && currentRun.runDefinitions.isPredefClassOf(fun.symbol))
             typedClassOf(tree, args.head, noGen = true)
           else {
@@ -5168,7 +5171,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             handleMissing
           }
           else {
-            if ((sym ne NoSymbol) && !qual.tpe.isStable && argsDependOnPrefix(sym)) {
+            if ((sym ne NoSymbol) && !isPastTyper && !qual.tpe.isStable && argsDependOnPrefix(sym)) {
               // Rewrites "qual.name ..." to "{ val lhs = qual ; lhs.name ... }" in cases where
               // qual is not stable and name has a method type which depends on its prefix. If
               // this is the case then hoisting qual out as a stable val means that members of

@@ -15,10 +15,11 @@ package reflect
 package internal
 package tpe
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.{immutable, mutable}
 import Flags._
 import scala.annotation.tailrec
 import Variance._
+import scala.reflect.internal.util.TriState
 
 private[internal] trait TypeMaps {
   self: SymbolTable =>
@@ -440,7 +441,7 @@ private[internal] trait TypeMaps {
 
     private[this] var _capturedSkolems: List[Symbol] = Nil
     private[this] var _capturedParams: List[Symbol]  = Nil
-    private[this] val isStablePrefix = seenFromPrefix.isStable
+    private[this] lazy val isStablePrefix = seenFromPrefix.isStable
 
     // isBaseClassOfEnclosingClassOrInfoIsNotYetComplete would be a more accurate
     // but less succinct name.

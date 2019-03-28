@@ -290,7 +290,7 @@ private final class SetBuilderImpl[A] extends ReusableBuilder[A, Set[A]] {
     if (switchedToHashSetBuilder) {
       hashSetBuilder.addOne(elem)
     } else if (elems.size < 4) {
-      elems = elems + elem
+      elems = elems.incl(elem)
     } else {
       // assert(elems.size == 4)
       if (elems.contains(elem)) {

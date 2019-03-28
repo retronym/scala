@@ -235,6 +235,7 @@ private[internal] trait GlbLubs {
   def lub(ts: List[Type]): Type = ts match {
     case Nil      => NothingTpe
     case t :: Nil => t
+    case t1 :: t2 :: _ if t1 eq t2 => t1
     case _        =>
       if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(lubCount)
       val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.pushTimer(typeOpsStack, lubNanos) else null
