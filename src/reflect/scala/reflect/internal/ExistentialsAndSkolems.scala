@@ -108,7 +108,7 @@ trait ExistentialsAndSkolems {
     // Higher-kinded existentials are not yet supported, but this is
     // tpeHK for when they are: "if a type constructor is expected/allowed,
     // tpeHK must be called instead of tpe."
-    val doSubstMap = new FromListToListFunSymbolMap[Symbol, Type](rawSyms, typeParams, _.tpeHK)
+    val doSubstMap = new ZippedMapSM[Symbol, Type](rawSyms, typeParams, _.tpeHK)
     def doSubst(info: Type) = info.subst(doSubstMap)
 
     typeParams foreach (_ modifyInfo doSubst)

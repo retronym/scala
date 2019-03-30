@@ -1223,7 +1223,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           super.mapOver(tp)
       }
     }
-    (new FullTypeMap(new MapSymbolMap(env)))(tpe)
+    (new FullTypeMap(new MapSM(env)))(tpe)
   }
 
   private def subst(env: TypeEnv)(decl: Symbol): Symbol =
@@ -1344,7 +1344,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     val global: SpecializeTypes.this.global.type = SpecializeTypes.this.global
   } with typechecker.Duplicators {
     private val (castfrom, castto) = casts.unzip
-    private object CastMap extends SubstTypeMap(new FromToListsSymbolMap(castfrom.toList, castto.toList))
+    private object CastMap extends SubstTypeMap(new ZipSM(castfrom.toList, castto.toList))
 
     class BodyDuplicator(_context: Context) extends super.BodyDuplicator(_context) {
       override def castType(tree: Tree, pt: Type): Tree = {
@@ -1408,7 +1408,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
                               targetClass: Symbol,
                               addressFields: Boolean) extends TreeSymSubstituter(from, to) {
     override val symSubst = new SubstSymMap(
-      new FromToListsSymbolMap[Symbol](from, to) {
+      new ZipSM[Symbol](from, to) {
         override protected def matches(sym1: Symbol, sym2: Symbol): Boolean =
           if (sym2.isTypeSkolem) sym2.deSkolemize eq sym1
           else sym1 eq sym2

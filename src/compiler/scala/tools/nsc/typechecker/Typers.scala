@@ -256,7 +256,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         for(param <- params) {
           var paramTp = param.tpe
           for(ar <- argResultsBuff)
-            paramTp = paramTp.subst(new FromToListsSymbolMap(ar.subst.from, ar.subst.to))
+            paramTp = paramTp.subst(new ZipSM(ar.subst.from, ar.subst.to))
 
           val res =
             if (paramFailed || (paramTp.isErroneous && {paramFailed = true; true})) SearchFailure
@@ -2106,7 +2106,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             // This allows defining "def foo[T](a: T = 1)"
             val tparams = sym.owner.skipConstructor.info.typeParams
             val subst = new SubstTypeMap(
-              new FromListToConstantSymbolMap[Type](tparams, WildcardType){
+              new KeysConstantSM[Type](tparams, WildcardType){
                 override protected def matches(sym: Symbol, sym1: Symbol): Boolean =
                   if (sym.isSkolem) matches(sym.deSkolemize, sym1)
                   else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
@@ -5306,7 +5306,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
               typedHigherKindedType(arg, mode, pt)
             }
-            val symMap = new FromListToListFunSymbolMap(tparams, args1, treeTpe)
+            val symMap = new ZippedMapSM(tparams, args1, treeTpe)
 
             foreach2(args, tparams) { (arg, tparam) =>
               // note: can't use args1 in selector, because Binds got replaced

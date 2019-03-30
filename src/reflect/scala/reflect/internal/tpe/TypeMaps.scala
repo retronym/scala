@@ -724,25 +724,33 @@ private[internal] trait TypeMaps {
     override def toString = s"AsSeenFromMap($seenFromPrefix, $seenFromClass)"
   }
 
-  /** A SymbolMap of T is just a finite mapping from Symbols to an element of type T.
+  /**
+    * A SymbolMap of T is just a finite mapping from Symbols to elements of a generic type T.
     * This is a restricted version of the maps from the Scala collections.
-    * We want to allow functions that are just constants, functions, or access on an array. */
+    * We want to allow functions that are just constants, functions, or access on an array. 
+    */
   trait SymbolMap[+T] {
-    def hasTermKey: Boolean
     def isEmpty: Boolean
+    def hasTermKey: Boolean
     def find(sym: Symbol): Option[T]
     def hasKey(sym: Symbol): Boolean
-    def hasAnyKeyIn(syms: List[Symbol]): Boolean = syms.exists(hasKey)
   }
 
-  class SinglePairSymbolMap[+T](from: Symbol, to: T) extends SymbolMap[T]{
+  class SingletonSM[+T](key: Symbol, value: T) extends SymbolMap[T]{
     override def isEmpty: Boolean = false
-    override def hasTermKey: Boolean = from.isTerm
-    override def find(sym: Symbol): Option[T] = if (from eq sym) Some(to) else None
-    override def hasKey(sym: Symbol): Boolean = from eq sym
+    override def hasTermKey: Boolean = key.isTerm
+    override def find(sym: Symbol): Option[T] = if (key eq sym) Some(value) else None
+    override def hasKey(sym: Symbol): Boolean = key eq sym
   }
 
-  abstract class FromListSymbolMap[+T](from: List[Symbol]) extends SymbolMap[T] {
+  class MapSM[+T](env: scala.collection.Map[Symbol, T]) extends SymbolMap[T]{
+    override final def isEmpty: Boolean = env.isEmpty
+    override final val hasTermKey: Boolean = env.keysIterator.exists(_.isTerm)
+    override def find(sym: Symbol): Option[T] = env.get(sym)
+    override final def hasKey(sym: Symbol): Boolean = env.contains(sym)
+  }
+
+  abstract class KeysListSM[+T](from: List[Symbol]) extends SymbolMap[T] {
     private[this] var fromHasTermSymbol = false
     private[this] var fromMin = Int.MaxValue
     private[this] var fromMax = Int.MinValue
@@ -755,13 +763,12 @@ private[internal] trait TypeMaps {
         if (sym.isTerm) fromHasTermSymbol = true
     }
 
-    def hasTermKey: Boolean = fromHasTermSymbol
+    final def hasTermKey: Boolean = fromHasTermSymbol
 
     /** Are `sym` and `sym1` the same? Can be tuned by subclasses. */
     protected def matches(sym: Symbol, sym1: Symbol): Boolean = sym eq sym1
 
-    def fromContains(sym: Symbol) = hasKey(sym)
-    def hasKey(sym: Symbol): Boolean = {
+    final def hasKey(sym: Symbol): Boolean = {
       // OPT Try cheap checks based on the range of symbol ids in from first.
       //     Equivalent to `from.contains(sym)`
       val symId = sym.id
@@ -774,7 +781,17 @@ private[internal] trait TypeMaps {
     override final def isEmpty: Boolean = from.isEmpty
   }
 
-  class FromToListsSymbolMap[+T](val from: List[Symbol], val to: List[T]) extends FromListSymbolMap[T](from) {
+  class KeysConstantSM[+T](from: List[Symbol], const: T) extends KeysListSM[T](from) {
+    def find(sym: Symbol): Option[T] =
+      if (from.exists(matches(_, sym))) Some(const) else None
+  }
+
+  class KeysFunctionSM[+T](from: List[Symbol], fun: Symbol => T) extends KeysListSM[T](from) {
+    def find(sym: Symbol): Option[T] =
+      if (from.exists(matches(_, sym))) Some(fun(sym)) else None
+  }
+
+  class ZipSM[+T](val from: List[Symbol], val to: List[T]) extends KeysListSM[T](from) {
     // OPT this check was 2-3% of some profiles, demoted to -Xdev
     if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
 
@@ -787,24 +804,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  class MapSymbolMap[+T](env: immutable.Map[Symbol, T]) extends SymbolMap[T]{
-    override def isEmpty: Boolean = env.isEmpty
-    override val hasTermKey: Boolean = env.keysIterator.exists(_.isTerm)
-    override def find(sym: Symbol): Option[T] = env.get(sym)
-    override def hasKey(sym: Symbol): Boolean = env.contains(sym)
-  }
-
-  class FromListToConstantSymbolMap[+T](from: List[Symbol], const: T) extends FromListSymbolMap[T](from) {
-    def find(sym: Symbol): Option[T] =
-      if (from.exists(matches(_, sym))) Some(const) else None
-  }
-
-  class FromListFunSymbolMap[+T](from: List[Symbol], fun: Symbol => T) extends FromListSymbolMap[T](from) {
-    def find(sym: Symbol): Option[T] =
-      if (from.exists(matches(_, sym))) Some(fun(sym)) else None
-  }
-
-  class FromListToListFunSymbolMap[A, +T](from: List[Symbol], to: List[A], toFun: A => T) extends FromListSymbolMap[T](from){
+  class ZippedMapSM[A, +T](from: List[Symbol], to: List[A], toFun: A => T) extends KeysListSM[T](from){
     def find(sym: Symbol): Option[T] = {
       @tailrec def loop(from: List[Symbol], to: List[A]): Option[T] =
         if (from.isEmpty) None

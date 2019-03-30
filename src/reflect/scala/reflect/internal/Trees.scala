@@ -1593,14 +1593,14 @@ trait Trees extends api.Trees {
   }
 
   class TreeTypeSubstituter(val from: List[Symbol], val to: List[Type])
-      extends TypeMapTreeSubstituter(new SubstTypeMap(new FromToListsSymbolMap(from, to))) {
+      extends TypeMapTreeSubstituter(new SubstTypeMap(new ZipSM(from, to))) {
     def isEmpty = from.isEmpty && to.isEmpty
     override def toString() = "TreeTypeSubstituter("+from+","+to+")"
   }
 
   lazy val EmptyTreeTypeSubstituter = new TreeTypeSubstituter(List(), List())
 
-  class TreeSymSubstTraverser(val from: List[Symbol], val to: List[Symbol]) extends TypeMapTreeSubstituter(new SubstSymMap(new FromToListsSymbolMap(from, to))) {
+  class TreeSymSubstTraverser(val from: List[Symbol], val to: List[Symbol]) extends TypeMapTreeSubstituter(new SubstSymMap(new ZipSM(from, to))) {
     override def toString() = "TreeSymSubstTraverser/" + substituterString("Symbol", "Symbol", from, to)
   }
 
@@ -1614,7 +1614,7 @@ trait Trees extends api.Trees {
    *  a symbol in `from` will have a new type assigned.
    */
   class TreeSymSubstituter(from: List[Symbol], to: List[Symbol]) extends Transformer {
-    val symSubst = new SubstSymMap(new FromToListsSymbolMap(from, to))
+    val symSubst = new SubstSymMap(new ZipSM(from, to))
     private var mutatedSymbols: List[Symbol] = Nil
     override def transform(tree: Tree): Tree = {
       def subst(from: List[Symbol], to: List[Symbol]) {

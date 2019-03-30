@@ -208,7 +208,7 @@ private[internal] trait TypeConstraints {
     foreachWithIndex(tparams){(tparam, ix) =>
       if (getVariance(tparam).isContravariant) areContravariant += ix
     }
-    val symMap = new FromToListsSymbolMap(tparams, tvars)
+    val symMap = new ZipSM(tparams, tvars)
 
     def solveOne(tvar: TypeVar, ix: Int): Unit = {
       val tparam = tvar.origin.typeSymbol

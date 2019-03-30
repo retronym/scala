@@ -109,14 +109,14 @@ trait Types
 
   /** Caching the most recent map has a 75-90% hit rate. */
   private object substTypeMapCache {
-    private[this] var cached: SubstTypeMap = new SubstTypeMap(new FromToListsSymbolMap(Nil, Nil))
+    private[this] var cached: SubstTypeMap = new SubstTypeMap(new ZipSM(Nil, Nil))
     private[this] var cachedFrom: List[Symbol] = Nil
     private[this] var cachedTo: List[Type] = Nil
     def apply(from: List[Symbol], to: List[Type]): SubstTypeMap = {
       if ((cachedFrom ne from) || (cachedTo ne to)){
         cachedFrom = from
         cachedTo = to
-        cached = new SubstTypeMap(new FromToListsSymbolMap(from, to))
+        cached = new SubstTypeMap(new ZipSM(from, to))
       }
       cached
     }
@@ -254,7 +254,7 @@ trait Types
         result
     }
     def substituteSymbols(from: List[Symbol], to: List[Symbol]): Type = substSym(from, to)
-    def substituteTypes(from: List[Symbol], to: List[Type]): Type = subst(new FromToListsSymbolMap(from, to))
+    def substituteTypes(from: List[Symbol], to: List[Type]): Type = subst(new ZipSM(from, to))
 
     // the only thingies that we want to splice are: 1) type parameters, 2) abstract type members
     // the thingies that we don't want to splice are: 1) concrete types (obviously), 2) existential skolems
@@ -495,7 +495,7 @@ trait Types
      * Amounts to substitution except for higher-kinded types. (See overridden method in TypeRef) -- @M
      */
     final def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
-      if (sameLength(formals, actuals)) this.instantiateTypeParams(new FromToListsSymbolMap(formals, actuals)) else ErrorType
+      if (sameLength(formals, actuals)) this.instantiateTypeParams(new ZipSM(formals, actuals)) else ErrorType
     def instantiateTypeParams(symMap: SymbolMap[Type]): Type = this.subst(symMap)
 
     /** If this type is an existential, turn all existentially bound variables to type skolems.
@@ -759,7 +759,7 @@ trait Types
      */
     final def substSym(from: List[Symbol], to: List[Symbol]): Type =
       if ((from eq to) || from.isEmpty) this
-      else new SubstSymMap(new FromToListsSymbolMap(from, to)) apply this
+      else new SubstSymMap(new ZipSM(from, to)) apply this
     final def substSym(symMap: SymbolMap[Symbol]): Type =
       if (symMap.isEmpty) this else new SubstSymMap(symMap) apply this
 
