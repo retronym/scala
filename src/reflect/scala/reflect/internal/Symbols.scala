@@ -3673,7 +3673,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    */
   def deriveTypeWithWildcards(syms: List[Symbol])(tpe: Type): Type = {
     if (syms.isEmpty) tpe
-    else tpe.instantiateTypeParams(syms, syms map (_ => WildcardType))
+    else tpe.instantiateTypeParams(new KeysConstantSM(syms, WildcardType))
   }
   /** Convenience functions which derive symbols by cloning.
    */

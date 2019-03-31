@@ -636,8 +636,11 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         newClassTParams = produceTypeParameters(oldClassTParams, sClass, env) map subst(env)
         // log("new tparams " + newClassTParams.zip(newClassTParams map {s => (s.tpe, s.tpe.upperBound)}) + ", in env: " + env)
 
-        def applyContext(tpe: Type) =
-          subst(env, tpe).instantiateTypeParams(oldClassTParams, newClassTParams map (_.tpe))
+        def applyContext(tpe: Type) = {
+          val itm = new ZippedMapSM(oldClassTParams, newClassTParams, (x: Symbol) => x.tpe)
+          subst(env, tpe).instantiateTypeParams(itm)
+        }
+
 
         /* Return a list of specialized parents to be re-mixed in a specialized subclass.
          * Assuming env = [T -> Int] and
@@ -926,7 +929,6 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           val tps          = survivingParams(sym.info.typeParams, env0)
           val specMember   = sym.cloneSymbol(owner, (sym.flags | SPECIALIZED) & ~DEFERRED)  // <-- this needs newName = ...
           val env          = mapAnyRefsInSpecSym(env0, sym, specMember)
-          val (keys, vals) = env.toList.unzip
 
           specMember setName specializedName(sym, env)  // <-- but the name is calculated based on the cloned symbol
           // debuglog("%s normalizes to %s%s".format(sym, specMember,
@@ -934,10 +936,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
           typeEnv(specMember) = outerEnv ++ env
           val tps1 = produceTypeParameters(tps, specMember, env)
-          tps1 foreach (_ modifyInfo (_.instantiateTypeParams(keys, vals)))
+          val instSymMap = new MapSM(env)
+          tps1 foreach (_ modifyInfo (_.instantiateTypeParams(instSymMap)))
 
           // the cloneInfo is necessary so that method parameter symbols are cloned at the new owner
-          val methodType = sym.info.resultType.instantiateTypeParams(keys ++ tps, vals ++ tps1.map(_.tpe)).cloneInfo(specMember)
+          val menv = foldLeft2(tps, tps1)(env){ (en, tp, tp1) => en + (tp -> tp1.tpe) }
+          val methInstSM = new MapSM(menv)
+          val methodType = sym.info.resultType.instantiateTypeParams(methInstSM).cloneInfo(specMember)
           specMember setInfo GenPolyType(tps1, methodType)
 
           debuglog("%s expands to %s in %s".format(sym, specMember.name.decode, pp(env)))
