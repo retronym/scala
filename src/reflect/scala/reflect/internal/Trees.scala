@@ -96,7 +96,7 @@ trait Trees extends api.Trees {
     }
 
     private[scala] def copyAttrs(tree: Tree): this.type = {
-      rawatt = tree.rawatt
+      rawatt = tree.rawatt.copy()
       setType(tree.tpe)
       if (hasSymbolField) symbol = tree.symbol
       this

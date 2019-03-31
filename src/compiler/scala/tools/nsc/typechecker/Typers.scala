@@ -5348,7 +5348,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             // scala/bug#5967 Important to replace param type A* with Seq[A] when seen from from a reference, to avoid
             //         inference errors in pattern matching.
               stabilize(tree2, pre2, mode, pt) modifyType dropIllegalStarTypes
-            }) setAttachments tree.attachments
+            }) setAttachments tree.attachments.copy()
           }
         }
 
