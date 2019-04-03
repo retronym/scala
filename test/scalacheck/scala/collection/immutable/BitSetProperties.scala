@@ -1,8 +1,12 @@
 package scala.collection.immutable
 
+import java.util
+
 import org.scalacheck._
 import org.scalacheck.Prop._
 import Gen._
+
+import scala.collection.mutable.ArrayBuffer
 
 object BitSetProperties extends Properties("immutable.BitSet") {
 
@@ -52,5 +56,25 @@ object BitSetProperties extends Properties("immutable.BitSet") {
     val p = (i: Int) => i % 2 == 0
     val (left, right) = bs.partition(p)
     (left ?= bs.filter(p)) && (right ?= bs.filterNot(p))
+  }
+
+  property("stepper vs j.u.BitSet") = forAll { (bs: BitSet) =>
+    val jbs = java.util.BitSet.valueOf(bs.toBitMask)
+    import scala.jdk.StreamConverters.Ops._
+    jbs.stream().toScala(Iterator).sameElements(bs.stepper.iterator)
+  }
+
+  property("iterator vs j.u.BitSet") = forAll { (bs: BitSet) =>
+    val jbs = java.util.BitSet.valueOf(bs.toBitMask)
+    import scala.jdk.StreamConverters.Ops._
+    jbs.stream().toScala(Iterator).sameElements(bs.iterator)
+  }
+
+  property("foreach vs j.u.BitSet") = forAll { (bs: BitSet) =>
+    val buf = new ArrayBuffer[Int]()
+    bs.foreach(buf += _)
+    val jbs = java.util.BitSet.valueOf(bs.toBitMask)
+    import scala.jdk.StreamConverters.Ops._
+    jbs.stream().toScala(Iterator).sameElements(buf.iterator)
   }
 }
