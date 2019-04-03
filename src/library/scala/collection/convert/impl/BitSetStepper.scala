@@ -35,7 +35,7 @@ with IntStepper {
     if (i0 >= iN) false
     else {
       val ix = i0 >> LogWL
-      if (ix == cacheIndex || ix == cacheIndex+1) {
+      if (ix == cacheIndex || ix == cacheIndex + 1) {
         val i = scanLong(if (ix == cacheIndex) cache0 else cache1, i0 & (WordLength - 1))
         if (i >= 0) {
           i0 = (i0 & ~(WordLength - 1)) | i
@@ -47,7 +47,7 @@ with IntStepper {
           findNext()
         }
       }
-      else if (underlying eq null) { 
+      else if (underlying eq null) {
         i0 = iN
         found = false
         found
@@ -55,7 +55,7 @@ with IntStepper {
       else {
         cacheIndex = ix
         cache0 = underlying.word(cacheIndex)
-        cache1 = if ((iN - 1) >> LogWL == ix) -1L else underlying.word(cacheIndex+1)
+        cache1 = if ((iN - 1) >> LogWL == ix) -1L else underlying.word(cacheIndex + 1)
         findNext()
       }
     }
@@ -76,10 +76,10 @@ with IntStepper {
       if (found) ans.found = true
 
       // Advance old stepper to breakpoint
-      val ixOld0 = half       >> LogWL
+      val ixOld0 = half >> LogWL
       if (ixOld0 > cacheIndex + 1) {
         cache0 = underlying.word(ixOld0)
-        cache1 = if (((iN - 1) >> LogWL) == ixOld0) -1L else underlying.word(ixOld0+1)
+        cache1 = if (((iN - 1) >> LogWL) == ixOld0) -1L else underlying.word(ixOld0 + 1)
         cacheIndex = ixOld0
         i0 = half
         found = false
@@ -89,11 +89,14 @@ with IntStepper {
       ans
     }
 
-  @annotation.tailrec
-  private[this] def scanLong(bits: Long, from: Int): Int =
+  private[this] def scanLong(bits: Long, from: Int): Int = {
     if (from >= WordLength) -1
-    else if ((bits & (1L << from)) != 0) from
-    else scanLong(bits, from + 1)
+    else {
+      val shifted = bits & (-1L << from)
+      if (shifted == 0) -1
+      else java.lang.Long.numberOfTrailingZeros(shifted)
+    }
+  }
 
   def nextStep(): Int =
     if (found || findNext()) { 
