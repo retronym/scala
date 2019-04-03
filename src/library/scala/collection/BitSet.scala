@@ -18,6 +18,7 @@ import java.io.{ObjectInputStream, ObjectOutputStream}
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.Stepper.EfficientSplit
 import scala.collection.mutable.Builder
+import java.lang.Long.{numberOfLeadingZeros, numberOfTrailingZeros}
 
 
 /** Base type of bitsets.
@@ -159,7 +160,7 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     while(i < thisnwords) {
       val currentWord = word(i)
       if (currentWord != 0L) {
-        return java.lang.Long.numberOfTrailingZeros(currentWord) + (i * WordLength)
+        return numberOfTrailingZeros(currentWord) + (i * WordLength)
       }
       i += 1
     }
@@ -171,7 +172,7 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     while(i >= 0) {
       val currentWord = word(i)
       if (currentWord != 0L) {
-        return ((i + 1) * WordLength) - java.lang.Long.numberOfLeadingZeros(currentWord) - 1
+        return ((i + 1) * WordLength) - numberOfLeadingZeros(currentWord) - 1
       }
       i -= 1
     }
@@ -309,6 +310,94 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     val left = filter(p)
     (left, this &~ left)
   }
+
+  /**
+   * Return the index of the first set bit at or after the given index, or -1 if there is no such bit.
+   *
+   * @param from The (inclusive) starting index
+   * @return the index of the next set bit, or -1 if there is no such bit.
+   */
+  final def nextSetBit(from: Int): Int = {
+    if (from < 0) throw new IllegalArgumentException("from must be non-negative: " + from)
+    val nwords = this.nwords
+    val wordIndex = from >> LogWL
+    var i = wordIndex
+    while (i < nwords) {
+      val w = if (i == wordIndex) bitsAfter(word(i), from) else word(i)
+      if (w != 0) {
+        return i * WordLength + numberOfTrailingZeros(w)
+      }
+      i += 1
+    }
+    -1
+  }
+
+  /**
+   * Return the index of the first clear bit at or after the given index.
+   *
+   * @param from The (inclusive) starting index
+   * @return the index of the next clear bit
+   */
+  final def nextClearBit(from: Int): Int = {
+    if (from < 0) throw new IllegalArgumentException("from must be non-negative: " + from)
+    val nwords = this.nwords
+    val wordIndex = from >> LogWL
+    var i = wordIndex
+    while (i < nwords) {
+      val w = if (i == wordIndex) bitsAfter(~word(i), from) else ~word(i)
+      if (w != 0) {
+        return i * WordLength + numberOfTrailingZeros(w)
+      }
+      i += 1
+    }
+    math.max(nwords * WordLength, from)
+  }
+
+  /**
+   * Return the index of the prior set bit at or before the given index, or -1 if there is no such bit or if `from` is -1.
+   *
+   * @param from The (inclusive) starting index
+   * @return the index of the previous set bit, or -1 if there is no such bit or if `from` is -1
+   */
+  final def previousSetBit(from: Int): Int = {
+    if (from == -1) -1
+    else if (from < 0) throw new IllegalArgumentException("from must be >= -1: " + from)
+    else {
+      val wordIndex = from >> LogWL
+      var i = wordIndex
+      while (i >= 0) {
+        val w = if (i == wordIndex) bitsBefore(word(i), from) else word(i)
+        if (w != 0) {
+          return (i + 1) * WordLength - 1 - numberOfLeadingZeros(w)
+        }
+        i -= 1
+      }
+      -1
+    }
+  }
+
+  /**
+   * Return the index of the previous clear bit at or after the given index.
+   *
+   * @param from The (inclusive) starting index
+   * @return the index of the previous clear bit, or -1 if there is no such bit.
+   */
+  final def previousClearBit(from: Int): Int = {
+    if (from == -1) -1
+    else if (from < 0) throw new IllegalArgumentException("from must be >= -1: " + from)
+    else {
+      val wordIndex = from >> LogWL
+      var i = wordIndex
+      while (i >= 0) {
+        val w = if (i == wordIndex) bitsBefore(~word(i), from) else ~word(i)
+        if (w != 0) {
+          return (i + 1) * WordLength - 1 - numberOfLeadingZeros(w)
+        }
+        i -= 1
+      }
+      -1
+    }
+  }
 }
 
 object BitSetOps {
@@ -349,4 +438,6 @@ object BitSetOps {
       }
       w
     }
+  private def bitsAfter(bits: Long, fromInclusive: Int) = bits & (-1L << fromInclusive)
+  private def bitsBefore(bits: Long, fromInclusive: Int) = bits & (-1L >>> -(fromInclusive + 1))
 }

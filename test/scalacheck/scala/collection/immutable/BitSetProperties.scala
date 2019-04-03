@@ -77,4 +77,23 @@ object BitSetProperties extends Properties("immutable.BitSet") {
     import scala.jdk.StreamConverters.Ops._
     jbs.stream().toScala(Iterator).sameElements(buf.iterator)
   }
+
+  property("next/prev set/clear bit vs j.u.BitSet") = forAll { (bs: BitSet) =>
+    def check: Prop = {
+      val jbs = java.util.BitSet.valueOf(bs.toBitMask)
+      var i = -1
+      val max = bs.maxOption.getOrElse(0) + 65
+      while (i <= max) {
+        if (i != -1) {
+          if (jbs.nextClearBit(i) != bs.nextClearBit(i)) return Prop.falsified.label("nextClearBit(" + i + ")")
+          if (jbs.nextSetBit(i) != bs.nextSetBit(i)) return Prop.falsified.label("nextSetBit(" + i + ")")
+        }
+        if (jbs.previousClearBit(i) != bs.previousClearBit(i)) return Prop.falsified.label("previousClearBit(" + i + ")")
+        if (jbs.previousSetBit(i) != bs.previousSetBit(i)) return Prop.falsified.label("previousSetBit(" + i + ")")
+        i += 1
+      }
+      true
+    }
+    check
+  }
 }
