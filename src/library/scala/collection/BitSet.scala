@@ -191,20 +191,10 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     else super.min(ord)
 
   override def foreach[U](f: Int => U): Unit = {
-    /* NOTE: while loops are significantly faster as of 2.11 and
-       one major use case of bitsets is performance. Also, there
-       is nothing to do when all bits are clear, so use that as
-       the inner loop condition. */
-    var i = 0
-    while (i < nwords) {
-      var w = word(i)
-      var j = i * WordLength
-      while (w != 0L) {
-        if ((w&1L) == 1L) f(j)
-        w = w >>> 1
-        j += 1
-      }
-      i += 1
+    var i = nextSetBit(0)
+    while (i != -1) {
+      f(i)
+      i = nextSetBit(i + 1)
     }
   }
 
