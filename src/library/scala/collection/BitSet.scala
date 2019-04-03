@@ -155,28 +155,17 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
   override def isEmpty: Boolean = 0 until nwords forall (i => word(i) == 0)
 
   @inline private[this] def smallestInt: Int = {
-    val thisnwords = nwords
-    var i = 0
-    while(i < thisnwords) {
-      val currentWord = word(i)
-      if (currentWord != 0L) {
-        return numberOfTrailingZeros(currentWord) + (i * WordLength)
-      }
-      i += 1
+    nextSetBit(0) match {
+      case -1 => throw new UnsupportedOperationException("empty.smallestInt")
+      case i => i
     }
-    throw new UnsupportedOperationException("empty.smallestInt")
   }
 
   @inline private[this] def largestInt: Int = {
-    var i = nwords - 1
-    while(i >= 0) {
-      val currentWord = word(i)
-      if (currentWord != 0L) {
-        return ((i + 1) * WordLength) - numberOfLeadingZeros(currentWord) - 1
-      }
-      i -= 1
+    previousSetBit(nwords * WordLength) match {
+      case -1 => throw new UnsupportedOperationException("empty.largestInt")
+      case i => i
     }
-    throw new UnsupportedOperationException("empty.largestInt")
   }
 
   override def max[B >: Int](implicit ord: Ordering[B]): Int =
