@@ -120,14 +120,16 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
   def iterator: Iterator[Int] = iteratorFrom(0)
 
   def iteratorFrom(start: Int): Iterator[Int] = new AbstractIterator[Int] {
-    private[this] var current = start
-    private[this] val end = nwords * WordLength
+    private[this] var current = nextSetBit(start)
     def hasNext: Boolean = {
-      while (current != end && !self.contains(current)) current += 1
-      current != end
+      current != -1
     }
     def next(): Int =
-      if (hasNext) { val r = current; current += 1; r }
+      if (hasNext) {
+        val r = current;
+        current = nextSetBit(r + 1);
+        r
+      }
       else Iterator.empty.next()
   }
 

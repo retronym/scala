@@ -70,6 +70,13 @@ object BitSetProperties extends Properties("immutable.BitSet") {
     jbs.stream().toScala(Iterator).sameElements(bs.iterator)
   }
 
+  property("iteratorFrom vs iterator") = forAll { (bs: BitSet, i: Int) =>
+    (bs.nonEmpty && i > 0) ==> {
+      val from = bs.maxOption.getOrElse(0) % i
+      bs.iteratorFrom(from).sameElements(bs.iterator.dropWhile(_ < from))
+    }
+  }
+
   property("foreach vs j.u.BitSet") = forAll { (bs: BitSet) =>
     val buf = new ArrayBuffer[Int]()
     bs.foreach(buf += _)
