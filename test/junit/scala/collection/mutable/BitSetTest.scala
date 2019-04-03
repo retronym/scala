@@ -124,4 +124,12 @@ class BitSetTest {
     assert((1 to 1000).to(BitSet) == BitSet().tap(bs => (1 to 1000).foreach(bs.addOne)))
 
   }
+
+  @Test def x(): Unit = {
+    val bs = BitSet(9763)
+    val jbs = new java.util.BitSet()
+    jbs.set(9763)
+    println(jbs.length())
+    println(bs.length)
+  }
 }

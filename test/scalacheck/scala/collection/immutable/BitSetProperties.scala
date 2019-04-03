@@ -103,4 +103,9 @@ object BitSetProperties extends Properties("immutable.BitSet") {
     }
     check
   }
+
+  property("length bit vs j.u.BitSet") = forAll { (bs: BitSet) =>
+    val jbs = java.util.BitSet.valueOf(bs.toBitMask)
+    bs.length ?= jbs.length()
+  }
 }

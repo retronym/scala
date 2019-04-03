@@ -344,7 +344,7 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     if (from == -1) -1
     else if (from < 0) throw new IllegalArgumentException("from must be >= -1: " + from)
     else {
-      val wordIndex = from >> LogWL
+      val wordIndex = math.min(from, length) >> LogWL
       var i = wordIndex
       while (i >= 0) {
         val w = if (i == wordIndex) bitsBefore(word(i), from) else word(i)
@@ -367,7 +367,7 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
     if (from == -1) -1
     else if (from < 0) throw new IllegalArgumentException("from must be >= -1: " + from)
     else {
-      val wordIndex = from >> LogWL
+      val wordIndex = math.min(from, length) >> LogWL
       var i = wordIndex
       while (i >= 0) {
         val w = if (i == wordIndex) bitsBefore(~word(i), from) else ~word(i)
@@ -377,6 +377,22 @@ trait BitSetOps[+C <: BitSet with BitSetOps[C]]
         i -= 1
       }
       -1
+    }
+  }
+
+  /** The number of elements the sequence of boolean values representing elements in this bitset */
+  final def length: Int = {
+    if (isEmpty) 0
+    else {
+      var i = nwords
+      while (true) {
+        val leading = numberOfLeadingZeros(word(nwords - 1))
+        if (leading != WordLength) {
+          return nwords * WordLength - leading
+        }
+        i -= 1
+      }
+      throw new IllegalStateException()
     }
   }
 }
