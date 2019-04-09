@@ -653,6 +653,9 @@ trait Definitions extends api.StandardDefinitions {
         // add initialization from its generic class constructor
         val genericName = nme.unspecializedName(sym.name)
         val member = sym.owner.info.decl(genericName.toTypeName)
+        if (member.isOverloaded)
+          abort("Unexpected overloader: " + member.alternatives.map(_.debugLocationString))
+
         member
       }
       else sym

@@ -680,6 +680,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def isRootSymbol        = false   // RootPackage and RootClass.  TODO: also NoSymbol.
     def isEmptyPackage      = false
     def isEmptyPackageClass = false
+    final def isNoSymbol: Boolean = this.isInstanceOf[NoSymbol]
 
     /** Is this symbol an effective root for fullname string?
      */
@@ -832,7 +833,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def isDelambdafyFunction = isSynthetic && (name containsName tpnme.DELAMBDAFY_LAMBDA_CLASS_NAME)
     final def isDelambdafyTarget  = isArtifact && isMethod && hasAttachment[DelambdafyTarget.type]
     final def isDefinedInPackage  = effectiveOwner.isPackageClass
-    final def needsFlatClasses    = phase.flatClasses && (rawowner ne NoSymbol) && !rawowner.isPackageClass && !isMethod
+    final def needsFlatClasses    = phase.flatClasses && !rawowner.isNoSymbol && !rawowner.isPackageClass && !isMethod
 
     // TODO introduce a flag for these?
     final def isPatternTypeVariable: Boolean =
@@ -2881,8 +2882,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     override def isLocalDummy       = nme.isLocalDummyName(name)
 
-    override def isClassConstructor = name == nme.CONSTRUCTOR
-    override def isMixinConstructor = name == nme.MIXIN_CONSTRUCTOR
+    override def isClassConstructor = rawname == nme.CONSTRUCTOR
+    override def isMixinConstructor = rawname == nme.MIXIN_CONSTRUCTOR
     override def isConstructor      = isClassConstructor || isMixinConstructor
 
     override def isPackageObject    = isModule && (name == nme.PACKAGE)
