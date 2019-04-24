@@ -55,67 +55,29 @@ trait Names {
   @deprecated("use explicit `TypeName(s)` instead", "2.11.0")
   implicit def stringToTypeName(s: String): TypeName = TypeName(s)
 
+  type NameTable <: NameTableApi
+
+  val nameTable: NameTable
+
   /** The abstract type of names.
    *  @group Names
    */
-  type Name >: Null <: AnyRef with NameApi
+  type Name >: Null <: AnyRef with nameTable.NameApi
 
   /** The abstract type of names representing terms.
    *  @group Names
    */
-  type TypeName >: Null <: TypeNameApi with Name
-
-  /** Has no special methods. Is here to provides erased identity for `TypeName`.
-   *  @group API
-   */
-  trait TypeNameApi
+  type TypeName >: Null <: nameTable.TypeNameApi with Name
 
   /** The abstract type of names representing types.
    *  @group Names
    */
-  type TermName >: Null <: TermNameApi with Name
-
-  /** Has no special methods. Is here to provides erased identity for `TermName`.
-   *  @group API
-   */
-  trait TermNameApi
+  type TermName >: Null <: nameTable.TermNameApi with Name
 
   /** The API of Name instances.
    *  @group API
    */
-  abstract class NameApi {
-    /** Checks whether the name is a term name */
-    def isTermName: Boolean
-
-    /** Checks whether the name is a type name */
-    def isTypeName: Boolean
-
-    /** Returns a term name that wraps the same string as `this` */
-    def toTermName: TermName
-
-    /** Returns a type name that wraps the same string as `this` */
-    def toTypeName: TypeName
-
-    /** Replaces all occurrences of \$op_names in this name by corresponding operator symbols.
-     *  Example: `foo_\$plus\$eq` becomes `foo_+=`
-     */
-    @deprecated("use `decodedName.toString` instead", "2.11.0")
-    def decoded: String
-
-    /** Replaces all occurrences of operator symbols in this name by corresponding \$op_names.
-     *  Example: `foo_+=` becomes `foo_\$plus\$eq`.
-     */
-    @deprecated("use `encodedName.toString` instead", "2.11.0")
-    def encoded: String
-
-    /** The decoded name, still represented as a name.
-     */
-    def decodedName: Name
-
-    /** The encoded name, still represented as a name.
-     */
-    def encodedName: Name
-  }
+  type NameApi <: nameTable.NameApi
 
   /** Create a new term name.
    *  @group Names
@@ -154,4 +116,62 @@ trait Names {
     def apply(s: String): TypeName
     def unapply(name: TypeName): Option[String]
   }
+}
+
+trait NameTableApi {
+  /** The abstract type of names.
+   *  @group Names
+   */
+  type Name >: Null <: AnyRef with NameApi
+
+  type TypeName >: Null <: TypeNameApi with Name
+
+  /** Has no special methods. Is here to provides erased identity for `TypeName`.
+   *  @group API
+   */
+  trait TypeNameApi
+
+  /** The abstract type of names representing types.
+   *  @group Names
+   */
+  type TermName >: Null <: TermNameApi with Name
+  /** Has no special methods. Is here to provides erased identity for `TermName`.
+   *  @group API
+   */
+  trait TermNameApi
+
+  abstract class NameApi {
+    /** Checks whether the name is a term name */
+    def isTermName: Boolean
+
+    /** Checks whether the name is a type name */
+    def isTypeName: Boolean
+
+    /** Returns a term name that wraps the same string as `this` */
+    def toTermName: TermName
+
+    /** Returns a type name that wraps the same string as `this` */
+    def toTypeName: TypeName
+
+    /** Replaces all occurrences of \$op_names in this name by corresponding operator symbols.
+     *  Example: `foo_\$plus\$eq` becomes `foo_+=`
+     */
+    @deprecated("use `decodedName.toString` instead", "2.11.0")
+    def decoded: String
+
+    /** Replaces all occurrences of operator symbols in this name by corresponding \$op_names.
+     *  Example: `foo_+=` becomes `foo_\$plus\$eq`.
+     */
+    @deprecated("use `encodedName.toString` instead", "2.11.0")
+    def encoded: String
+
+    /** The decoded name, still represented as a name.
+     */
+    def decodedName: Name
+
+    /** The encoded name, still represented as a name.
+     */
+    def encodedName: Name
+  }
+
 }

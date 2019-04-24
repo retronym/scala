@@ -1305,11 +1305,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (sym.isRoot || sym.isRootPackage || sym == NoSymbol || sym.owner.isEffectiveRoot) {
           val capacity = size + nSize
           b = new java.lang.StringBuffer(capacity)
-          b.append(chrs, symName.start, nSize)
+          b.append(nameTable.chrs, symName.start, nSize)
         } else {
           loop(size + nSize + 1, sym.effectiveOwner.enclClass)
           b.append(separator)
-          b.append(chrs, symName.start, nSize)
+          b.append(nameTable.chrs, symName.start, nSize)
         }
       }
       loop(suffix.length(), this)

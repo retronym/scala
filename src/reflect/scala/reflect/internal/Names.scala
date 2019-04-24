@@ -15,10 +15,112 @@ package reflect
 package internal
 
 import scala.language.implicitConversions
-
 import scala.io.Codec
+import scala.reflect.api.NameTableApi
 
 trait Names extends api.Names {
+  type NameTable = scala.reflect.internal.NameTable
+
+  override val nameTable: NameTable = newNameTable
+  protected def synchronizeNames: Boolean = false
+  protected def newNameTable: NameTable = new NameTable(synchronizeNames)
+
+  type Name = nameTable.Name
+  type TermName = nameTable.TermName
+  type TypeName = nameTable.TypeName
+
+  implicit val NameTag = ClassTag[Name](classOf[Name])
+
+  implicit val TermNameTag = ClassTag[TermName](classOf[TermName])
+  object TermName extends TermNameExtractor {
+    def apply(s: String) = newTermName(s)
+    def unapply(name: TermName): Option[String] = Some(name.toString)
+  }
+  implicit val TypeNameTag = ClassTag[TypeName](classOf[TypeName])
+  object TypeName extends TypeNameExtractor {
+    def apply(s: String) = newTypeName(s)
+    def unapply(name: TypeName): Option[String] = Some(name.toString)
+  }
+
+  final def nameTableSize: Int = nameTable.nameTableSize
+  final def allNames(): Iterator[TermName] = nameTable.allNames()
+
+  final def newTermName(cs: Array[Char], offset: Int, len: Int): TermName =
+    newTermName(cs, offset, len, cachedString = null)
+
+  final def newTermName(cs: Array[Char]): TermName = nameTable.newTermName(cs)
+
+  final def newTypeName(cs: Array[Char]): TypeName = nameTable.newTypeName(cs)
+
+  /** Create a term name from the characters in cs[offset..offset+len-1].
+   *  TODO - have a mode where name validation is performed at creation time
+   *  (e.g. if a name has the string "$class" in it, then fail if that
+   *  string is not at the very end.)
+   *
+   *  @param len0 the length of the name. Negative lengths result in empty names.
+   */
+  final def newTermName(cs: Array[Char], offset: Int, len0: Int, cachedString: String): TermName = nameTable.newTermName(cs, offset, len0, cachedString)
+
+  final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName = nameTable.newTypeName(cs, offset, len, cachedString)
+
+  /** Create a term name from string. */
+  @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
+  final def newTermName(s: String): TermName = nameTable.newTermName(s)
+
+  /** Create a type name from string. */
+  @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
+  final def newTypeName(s: String): TypeName = nameTable.newTypeName(s)
+
+  /** Create a term name from the UTF8 encoded bytes in bs[offset..offset+len-1]. */
+  final def newTermName(bs: Array[Byte], offset: Int, len: Int): TermName = nameTable.newTermName(bs, offset, len)
+
+  final def newTermNameCached(s: String): TermName = nameTable.newTermNameCached(s)
+
+  final def newTypeNameCached(s: String): TypeName = nameTable.newTypeNameCached(s)
+
+  /** Create a type name from the characters in cs[offset..offset+len-1]. */
+  final def newTypeName(cs: Array[Char], offset: Int, len: Int): TypeName = nameTable.newTypeName(cs, offset, len)
+
+  /** Create a type name from the UTF8 encoded bytes in bs[offset..offset+len-1]. */
+  final def newTypeName(bs: Array[Byte], offset: Int, len: Int): TypeName = nameTable.newTypeName(bs, offset, len)
+
+  /**
+   * Used by test code only.
+   */
+  final def lookupTypeName(cs: Array[Char]): TypeName = nameTable.lookupTypeName(cs)
+
+  implicit def AnyNameOps(name: Name): NameOps[Name]          = new NameOps(name)
+  implicit def TermNameOps(name: TermName): NameOps[TermName] = new NameOps(name)
+  implicit def TypeNameOps(name: TypeName): NameOps[TypeName] = new NameOps(name)
+
+  /** FIXME: This is a good example of something which is pure "value class" but cannot
+   *  reap the benefits because an (unused) $outer pointer so it is not single-field.
+   */
+  final class NameOps[T <: Name](name: T) {
+    import NameTransformer._
+    def stripSuffix(suffix: String): T = if (name endsWith suffix) dropRight(suffix.length) else name // OPT avoid creating a Name with `suffix`
+    def stripSuffix(suffix: Name): T   = if (name endsWith suffix) dropRight(suffix.length) else name
+    def take(n: Int): T                = name.subName(0, n).asInstanceOf[T]
+    def drop(n: Int): T                = name.subName(n, name.length).asInstanceOf[T]
+    def dropRight(n: Int): T           = name.subName(0, name.length - n).asInstanceOf[T]
+    def dropLocal: TermName            = name.toTermName stripSuffix LOCAL_SUFFIX_STRING
+    def dropSetter: TermName           = name.toTermName stripSuffix SETTER_SUFFIX_STRING
+    def dropModule: T                  = this stripSuffix MODULE_SUFFIX_STRING
+    def localName: TermName            = getterName append LOCAL_SUFFIX_STRING
+    def setterName: TermName           = getterName append SETTER_SUFFIX_STRING
+    def getterName: TermName           = dropTraitSetterSeparator.dropSetter.dropLocal
+
+    private def dropTraitSetterSeparator: TermName =
+      name indexOf TRAIT_SETTER_SEPARATOR_STRING match {
+        case -1  => name.toTermName
+        case idx => name.toTermName drop idx drop TRAIT_SETTER_SEPARATOR_STRING.length
+      }
+  }
+
+
+}
+
+final class NameTable(synchronizeNames: Boolean) extends NameTableApi {
   private final val HASH_SIZE  = 0x8000
   private final val HASH_MASK  = 0x7FFF
   private final val NAME_SIZE  = 0x20000
@@ -34,7 +136,6 @@ trait Names extends api.Names {
   // detect performance regressions.
   //
   // Discussion: https://groups.google.com/forum/#!search/biased$20scala-internals/scala-internals/0cYB7SkJ-nM/47MLhsgw8jwJ
-  protected def synchronizeNames: Boolean = false
   private[this] val nameLock: Object = new Object
 
   /** Memory to store all names sequentially. */
@@ -48,7 +149,9 @@ trait Names extends api.Names {
   /** Hashtable for finding type names quickly. */
   private[this] val typeHashtable = new Array[TypeName](HASH_SIZE)
 
-  final def allNames(): Iterator[TermName] = termHashtable.iterator.filter(_ ne null).flatMap(n => Iterator.iterate(n)(_.next).takeWhile(_ ne null))
+  final def allNames(): Iterator[TermName] = nameLock.synchronized {
+    termHashtable.iterator.filter(_ ne null).flatMap(n => Iterator.iterate(n)(_.next).takeWhile(_ ne null))
+  }
 
   /**
    * The hashcode of a name depends on the first, the last and the middle character,
@@ -141,12 +244,10 @@ trait Names extends api.Names {
     newTermName(cs, offset, len, cachedString).toTypeName
 
   /** Create a term name from string. */
-  @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
-  def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
+  final def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
 
   /** Create a type name from string. */
-  @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
-  def newTypeName(s: String): TypeName = newTermName(s).toTypeName
+  final def newTypeName(s: String): TypeName = newTermName(s).toTypeName
 
   /** Create a term name from the UTF8 encoded bytes in bs[offset..offset+len-1]. */
   final def newTermName(bs: Array[Byte], offset: Int, len: Int): TermName = {
@@ -475,36 +576,6 @@ trait Names extends api.Names {
     def debugString = { val s = decode ; if (isTypeName) s + "!" else s }
   }
 
-  implicit def AnyNameOps(name: Name): NameOps[Name]          = new NameOps(name)
-  implicit def TermNameOps(name: TermName): NameOps[TermName] = new NameOps(name)
-  implicit def TypeNameOps(name: TypeName): NameOps[TypeName] = new NameOps(name)
-
-  /** FIXME: This is a good example of something which is pure "value class" but cannot
-   *  reap the benefits because an (unused) $outer pointer so it is not single-field.
-   */
-  final class NameOps[T <: Name](name: T) {
-    import NameTransformer._
-    def stripSuffix(suffix: String): T = if (name endsWith suffix) dropRight(suffix.length) else name // OPT avoid creating a Name with `suffix`
-    def stripSuffix(suffix: Name): T   = if (name endsWith suffix) dropRight(suffix.length) else name
-    def take(n: Int): T                = name.subName(0, n).asInstanceOf[T]
-    def drop(n: Int): T                = name.subName(n, name.length).asInstanceOf[T]
-    def dropRight(n: Int): T           = name.subName(0, name.length - n).asInstanceOf[T]
-    def dropLocal: TermName            = name.toTermName stripSuffix LOCAL_SUFFIX_STRING
-    def dropSetter: TermName           = name.toTermName stripSuffix SETTER_SUFFIX_STRING
-    def dropModule: T                  = this stripSuffix MODULE_SUFFIX_STRING
-    def localName: TermName            = getterName append LOCAL_SUFFIX_STRING
-    def setterName: TermName           = getterName append SETTER_SUFFIX_STRING
-    def getterName: TermName           = dropTraitSetterSeparator.dropSetter.dropLocal
-
-    private def dropTraitSetterSeparator: TermName =
-      name indexOf TRAIT_SETTER_SEPARATOR_STRING match {
-        case -1  => name.toTermName
-        case idx => name.toTermName drop idx drop TRAIT_SETTER_SEPARATOR_STRING.length
-      }
-  }
-
-  implicit val NameTag = ClassTag[Name](classOf[Name])
-
   /** A name that contains no operator chars nor dollar signs.
    *  TODO - see if it's any faster to do something along these lines.
    *  Cute: now that exhaustivity kind of works, the mere presence of
@@ -575,13 +646,6 @@ trait Names extends api.Names {
     protected def createCompanionName(next: TypeName): TypeName
   }
 
-  implicit val TermNameTag = ClassTag[TermName](classOf[TermName])
-
-  object TermName extends TermNameExtractor {
-    def apply(s: String) = newTermName(s)
-    def unapply(name: TermName): Option[String] = Some(name.toString)
-  }
-
   sealed abstract class TypeName(index0: Int, len0: Int, val next: TypeName) extends Name(index0, len0) with TypeNameApi {
     type ThisNameType = TypeName
     protected[this] def thisName: TypeName = this
@@ -609,12 +673,5 @@ trait Names extends api.Names {
 
     def nameKind = "type"
     override def decode = if (nameDebug) super.decode + "!" else super.decode
-  }
-
-  implicit val TypeNameTag = ClassTag[TypeName](classOf[TypeName])
-
-  object TypeName extends TypeNameExtractor {
-    def apply(s: String) = newTypeName(s)
-    def unapply(name: TypeName): Option[String] = Some(name.toString)
   }
 }
