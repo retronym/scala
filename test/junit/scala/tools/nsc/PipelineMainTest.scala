@@ -51,6 +51,7 @@ class PipelineMainTest {
     parallelism = java.lang.Runtime.getRuntime.availableProcessors,
     cacheMacro = true,
     cachePlugin = true,
+    cacheNameTable = true,
     stripExternalClassPath = true,
     useTraditionalForLeaf = true,
     createReporter = ((s: Settings) => if (debug) new ConsoleReporter(s) else new StoreReporter())

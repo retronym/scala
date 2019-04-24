@@ -426,6 +426,8 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
       command.settings.YcacheMacroClassLoader.value = "always"
     if (cachePlugin)
       command.settings.YcachePluginClassLoader.value = "always"
+    if (cacheNameTable)
+      command.settings.YcacheNameTable.value = true
 
     if (strategy != Traditional) {
       command.settings.YpickleJava.value = true
@@ -686,7 +688,7 @@ object PipelineMain {
   case object Traditional extends BuildStrategy
 
   case class PipelineSettings(label: String, parallelism: Int, strategy: BuildStrategy, useJars: Boolean,
-                              configuredPickleCache: Option[Path], cacheMacro: Boolean, cachePlugin: Boolean,
+                              configuredPickleCache: Option[Path], cacheMacro: Boolean, cachePlugin: Boolean, cacheNameTable: Boolean,
                               stripExternalClassPath: Boolean, useTraditionalForLeaf: Boolean, logDir: Option[Path],
                               createReporter: (Settings => Reporter))
   def defaultSettings: PipelineSettings = {
@@ -696,12 +698,13 @@ object PipelineMain {
     val useJars = java.lang.Boolean.getBoolean("scala.pipeline.use.jar")
     val cacheMacro = java.lang.Boolean.getBoolean("scala.pipeline.cache.macro.classloader")
     val cachePlugin = java.lang.Boolean.getBoolean("scala.pipeline.cache.plugin.classloader")
+    val cacheNameTable = java.lang.Boolean.getBoolean("scala.pipeline.cache.name.table")
     val stripExternalClassPath = java.lang.Boolean.getBoolean("scala.pipeline.strip.external.classpath")
     val useTraditionalForLeaf = java.lang.Boolean.getBoolean("scala.pipeline.use.traditional.for.leaf")
     val configuredPickleCache = Option(System.getProperty("scala.pipeline.picklecache")).map(Paths.get(_))
     val logDir = Paths.get(".")
     new PipelineSettings("1", parallelism, strategy, useJars, configuredPickleCache,
-      cacheMacro, cachePlugin, stripExternalClassPath, useTraditionalForLeaf, Some(logDir), new ConsoleReporter(_))
+      cacheMacro, cachePlugin, cacheNameTable, stripExternalClassPath, useTraditionalForLeaf, Some(logDir), new ConsoleReporter(_))
   }
 
   def main(args: Array[String]): Unit = {
