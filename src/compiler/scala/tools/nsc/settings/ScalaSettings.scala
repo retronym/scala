@@ -244,6 +244,7 @@ trait ScalaSettings extends AbsScalaSettings
   val YpartialUnification = BooleanSetting ("-Ypartial-unification", "Enable partial unification in type constructor inference")
   val Yvirtpatmat     = BooleanSetting    ("-Yvirtpatmat", "Enable pattern matcher virtualization")
   val Youtline        = BooleanSetting    ("-Youtline", "Don't compile method bodies. Use together with `-Ystop-afer:pickler to generate the pickled signatures for all source files.").internalOnly()
+  val YcacheNameTable = BooleanSetting  ("-Ycache-name-table", "Share a single name table for concurrently running instances of the compiler")
 
   val exposeEmptyPackage = BooleanSetting ("-Yexpose-empty-package", "Internal only: expose the empty package.").internalOnly()
   val Ydelambdafy        = ChoiceSetting  ("-Ydelambdafy", "strategy", "Strategy used for translating lambdas into JVM code.", List("inline", "method"), "method")

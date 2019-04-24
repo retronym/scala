@@ -25,7 +25,10 @@ trait Names extends api.Names {
 
   final val nameDebug = false
 
-  protected val nameTable: Names = this
+  private final val nameTable: Names = newNameTable
+  protected def newNameTable: Names = {
+    this
+  }
 
   // Ideally we would just synchronize unconditionally and let HotSpot's Biased Locking
   // kick in in the compiler universe, where access to the lock is single threaded. But,
@@ -41,6 +44,7 @@ trait Names extends api.Names {
 
   /** Memory to store all names sequentially. */
   var chrs: Array[Char] = new Array[Char](NAME_SIZE)
+  final def nameTableChrs: Array[Char] = if (nameTable ne this) nameTable.chrs else chrs
   private var nc = 0
 
   /** Hashtable for finding term names quickly. */
@@ -176,7 +180,7 @@ trait Names extends api.Names {
    *
    * can-multi-thread: names are added to the hash tables only after they are fully constructed.
    */
-  final def lookupTypeName(cs: Array[Char]): TypeName = if (nameTable != this) nameTable.lookupTypeName(cs) else {
+  final def lookupTypeName(cs: Array[Char]): TypeName = if (nameTable != this) nameTable.lookupTypeName(cs).asInstanceOf[TypeName] else {
     val hash = hashValue(cs, 0, cs.length) & HASH_MASK
     var typeName = typeHashtable(hash)
 
