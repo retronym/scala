@@ -23,7 +23,7 @@ import io.{AbstractFile, SourceReader}
 import util.{ClassPath, returning}
 import reporters.{Reporter => LegacyReporter}
 import scala.reflect.ClassTag
-import scala.reflect.internal.{Reporter => InternalReporter}
+import scala.reflect.internal.{NameTable, Reporter => InternalReporter}
 import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ScriptSourceFile, SourceFile}
 import scala.reflect.internal.pickling.PickleBuffer
 import symtab.{Flags, SymbolTable, SymbolTrackers}
@@ -41,6 +41,7 @@ import scala.tools.nsc.classpath._
 import scala.tools.nsc.profile.Profiler
 import scala.util.control.NonFatal
 import java.io.Closeable
+
 import scala.annotation.tailrec
 
 class Global(var currentSettings: Settings, reporter0: LegacyReporter)
@@ -60,6 +61,13 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
 
   override def isCompilerUniverse = true
   override val useOffsetPositions = !currentSettings.Yrangepos
+  override protected def newNameTable: NameTable = {
+    if (currentSettings.YcacheNameTable) {
+      val NoFiles = Nil
+      Global.nameTableCache.getOrCreate(NoFiles, () => new NameTable(synchronizeNames = true), closeableRegistry, checkStamps = true)
+    }
+    else super.newNameTable
+  }
 
   type RuntimeClass = java.lang.Class[_]
   implicit val RuntimeClassTag: ClassTag[RuntimeClass] = ClassTag[RuntimeClass](classOf[RuntimeClass])
@@ -1743,4 +1751,7 @@ object Global {
     override def keepsTypeParams = false
     def run(): Unit = { throw new Error("InitPhase.run") }
   }
+
+  // TODO factor reference counting caching out of FileBasedCache for use in spots like this.
+  private val nameTableCache = new FileBasedCache[NameTable]
 }

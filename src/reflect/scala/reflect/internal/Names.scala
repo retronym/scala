@@ -23,7 +23,9 @@ trait Names extends api.Names {
 
   override val nameTable: NameTable = newNameTable
   protected def synchronizeNames: Boolean = false
-  protected def newNameTable: NameTable = new NameTable(synchronizeNames)
+  protected def newNameTable: NameTable = {
+    new NameTable(synchronizeNames)
+  }
 
   type Name = nameTable.Name
   type TermName = nameTable.TermName
