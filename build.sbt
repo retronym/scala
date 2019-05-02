@@ -89,6 +89,10 @@ import com.typesafe.tools.mima.core._
 val mimaFilterSettings = Seq(
   mimaBinaryIssueFilters ++= Seq(
     ProblemFilters.exclude[Problem]("scala.reflect.internal.*"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.Settings.isScala212"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.Settings.isScala213"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.Settings.isScala214"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.Settings.isScala300"),
   ),
 )
 

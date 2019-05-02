@@ -63,8 +63,8 @@ abstract class MutableSettings extends AbsSettings {
 
   def Yrecursion: IntSetting
 
-  def isScala212: Boolean
-  private[scala] def isScala213: Boolean
+  private[scala] def isScala214: Boolean
+  private[scala] def isScala300: Boolean
 }
 
 object MutableSettings {
