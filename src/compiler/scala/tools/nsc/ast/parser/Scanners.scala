@@ -498,7 +498,7 @@ trait Scanners extends ScannersCommon {
             nextChar()
             ch match {
               case 'x' | 'X' => base = 16 ; nextChar()
-              case _         => base = 8    // single decimal zero, perhaps
+              case _         => base = 10 ; putChar('0')
             }
           }
           fetchLeadingZero()
@@ -973,23 +973,17 @@ trait Scanners extends ScannersCommon {
     /** Convert current strVal, base to long value.
      *  This is tricky because of max negative value.
      *
-     *  Conversions in base 10 and 16 are supported. As a permanent migration
-     *  path, attempts to write base 8 literals except `0` emit a verbose error.
+     *  Conversions in base 10 and 16 are supported.
      */
     def intVal(negated: Boolean): Long = {
       def intConvert: Long = {
         def malformed: Long = { syntaxError("malformed integer number") ; 0 }
         def tooBig: Long = { syntaxError("integer number too large") ; 0 }
-        val len = strVal.length
-        if (len == 0) {
-          if (base != 8) syntaxError("missing integer number")  // e.g., 0x;
-          0                                                     // 0 still looks like octal prefix
-        } else {
-          if (base == 8) {
-            if (settings.warnOctalLiteral)
-              deprecationWarning("Decimal integer literals should not have a leading zero. (Octal syntax is obsolete.)" , since="2.10")
-            base = 10
-          }
+        strVal.length match {
+        case 0 => syntaxError("missing integer number") ; 0L  // e.g., 0x;
+        case len =>
+          if (settings.warnOctalLiteral && strVal.charAt(0) == '0')
+            deprecationWarning("Decimal integer literals should not have a leading zero. (Octal syntax is obsolete.)", since="2.10")
           val divider     = if (base == 10) 1 else 2
           val limit: Long = if (token == LONGLIT) Long.MaxValue else Int.MaxValue
           @tailrec def convert(value: Long, i: Int): Long =
@@ -1061,10 +1055,8 @@ trait Scanners extends ScannersCommon {
 
     def doubleVal: Double = doubleVal(negated = false)
 
-    def checkNoLetter(): Unit = {
-      if (isIdentifierPart(ch) && ch >= ' ')
-        syntaxError("Invalid literal number")
-    }
+    def checkNoLetter(): Unit =
+      if (isIdentifierPart(ch) && ch >= ' ') syntaxError("invalid literal number")
 
     @inline private def isNumberSeparator(c: Char): Boolean = c == '_' //|| c == '\''
 
@@ -1074,22 +1066,20 @@ trait Scanners extends ScannersCommon {
     // disallow trailing numeric separator char, but let lexing limp along
     def checkNoTrailingSeparator(): Unit =
       if (cbuf.nonEmpty && isNumberSeparator(cbuf.last)) {
-        val caret = offset + cbuf.length - (if (base == 8) 0 else 1)
-        syntaxError(caret, "trailing separator is not allowed")
+        syntaxError(offset + cbuf.length - 1, "illegal separator")
         cbuf.setLength(cbuf.length - 1)
       }
 
     /** Read a number into strVal.
      *
-     *  The `base` can be 8, 10 or 16, where base 8 flags a leading zero.
-     *  For ints, base 8 is legal only for the case of exactly one zero.
+     *  The `base` can be 10 or 16.
      */
     protected def getNumber(): Unit = {
-      // consume digits of a radix
-      def consumeDigits(radix: Int): Unit = {
-        if (isNumberSeparator(ch))
-          syntaxError(offset + (if (base == 8) 1 else 0), "separator is not allowed")
-        while (isNumberSeparator(ch) || digit2int(ch, radix) >= 0) {
+      // consume digits of the current radix
+      def consumeDigits(): Unit = {
+        if (base == 16 && isNumberSeparator(ch))
+          syntaxError(offset + 2, "illegal separator")  // 0x_42
+        while (isNumberSeparator(ch) || digit2int(ch, base) >= 0) {
           putChar(ch)
           nextChar()
         }
@@ -1105,18 +1095,18 @@ trait Scanners extends ScannersCommon {
         val msg = "Lowercase el for long is not recommended because it is easy to confuse with numeral 1; use uppercase L instead"
         if (ch == 'l') deprecationWarning(offset + cbuf.length, msg, since="2.13.0")
       }
-      // after int: 5e7f, 42L, 42.toDouble but not 42b. Repair 0d.
+      // after int: 5e7f, 42L, 42.toDouble but not 42b.
       def restOfNumber(): Unit = {
         ch match {
           case 'e' | 'E' | 'f' | 'F' |
-               'd' | 'D' => if (cbuf.isEmpty) putChar('0'); getFraction()
+               'd' | 'D' => getFraction()
           case 'l' | 'L' => lintel() ; token = LONGLIT ; setStrVal() ; nextChar()
           case _         => token = INTLIT  ; setStrVal() ; checkNoLetter()
         }
       }
 
       // consume leading digits, provisionally an Int
-      consumeDigits(if (base == 16) 16 else 10)
+      consumeDigits()
 
       checkNoTrailingSeparator()
 

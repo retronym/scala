@@ -17,7 +17,11 @@ trait T {
   def u = 0x_42
   def v = 0_x42
 
+  def `error: malformed double precision floating point number` = 0_1.1
+  def w = 0_1
   def x = 00_
   def y = 0_
   def z = 0
+
+  def wtf = 0x    // see neg/literals.scala
 }
