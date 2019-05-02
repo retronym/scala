@@ -11,6 +11,13 @@ trait T {
   def p = 3.1_4_
   def q = 3.1_4_d
   def r = 3.1_4_dd
+  def s = 3_.14
+  def t = 3._14   // member selection
 
+  def u = 0x_42
+  def v = 0_x42
+
+  def x = 00_
+  def y = 0_
   def z = 0
 }

@@ -1074,7 +1074,8 @@ trait Scanners extends ScannersCommon {
     // disallow trailing numeric separator char, but let lexing limp along
     def checkNoTrailingSeparator(): Unit =
       if (cbuf.nonEmpty && isNumberSeparator(cbuf.last)) {
-        syntaxError(offset + cbuf.length - 1, "trailing separator is not allowed")
+        val caret = offset + cbuf.length - (if (base == 8) 0 else 1)
+        syntaxError(caret, "trailing separator is not allowed")
         cbuf.setLength(cbuf.length - 1)
       }
 
@@ -1085,11 +1086,14 @@ trait Scanners extends ScannersCommon {
      */
     protected def getNumber(): Unit = {
       // consume digits of a radix
-      def consumeDigits(radix: Int): Unit =
+      def consumeDigits(radix: Int): Unit = {
+        if (isNumberSeparator(ch))
+          syntaxError(offset + (if (base == 8) 1 else 0), "separator is not allowed")
         while (isNumberSeparator(ch) || digit2int(ch, radix) >= 0) {
           putChar(ch)
           nextChar()
         }
+      }
       // at dot with digit following
       def restOfNonIntegralNumber(): Unit = {
         putChar('.')

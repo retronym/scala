@@ -25,4 +25,22 @@ t6124.scala:13: error: trailing separator is not allowed
 t6124.scala:13: error: Invalid literal number
   def r = 3.1_4_dd
           ^
-9 errors found
+t6124.scala:14: error: trailing separator is not allowed
+  def s = 3_.14
+           ^
+t6124.scala:17: error: separator is not allowed
+  def u = 0x_42
+          ^
+t6124.scala:18: error: separator is not allowed
+  def v = 0_x42
+           ^
+t6124.scala:18: error: Invalid literal number
+  def v = 0_x42
+          ^
+t6124.scala:20: error: trailing separator is not allowed
+  def x = 00_
+            ^
+t6124.scala:21: error: separator is not allowed
+  def y = 0_
+           ^
+15 errors found
