@@ -498,6 +498,9 @@ trait Scanners extends ScannersCommon {
             nextChar()
             ch match {
               case 'x' | 'X' => base = 16 ; nextChar()
+                // check 0x followed by valid hex digit, consume the literal on error
+                if (isNumberSeparator(ch)) { syntaxError(numberOffset, "illegal separator") ; putChar(ch) ; nextChar() }
+                else if (digit2int(ch, 16) < 0) syntaxError("invalid literal number")
               case _         => base = 10 ; putChar('0')
             }
           }
@@ -937,13 +940,15 @@ trait Scanners extends ScannersCommon {
         if (lookahead.ch == '+' || lookahead.ch == '-') {
           lookahead.nextChar()
         }
-        if ('0' <= lookahead.ch && lookahead.ch <= '9') {
+        if ('0' <= lookahead.ch && lookahead.ch <= '9' || isNumberSeparator(lookahead.ch)) {
           putChar(ch)
           nextChar()
           if (ch == '+' || ch == '-') {
             putChar(ch)
             nextChar()
           }
+          if (isNumberSeparator(ch))
+            syntaxError(offset + cbuf.length, "illegal separator")
           while ('0' <= ch && ch <= '9' || isNumberSeparator(ch)) {
             putChar(ch)
             nextChar()
@@ -1063,10 +1068,12 @@ trait Scanners extends ScannersCommon {
     @inline private def removeNumberSeparators(s: String): String =
       if (s.indexOf('_') > 0) s.replaceAllLiterally("_", "") /*.replaceAll("'","")*/ else s
 
+    @inline private def numberOffset = offset + (if (base == 16) 2 else 0)
+
     // disallow trailing numeric separator char, but let lexing limp along
     def checkNoTrailingSeparator(): Unit =
       if (cbuf.nonEmpty && isNumberSeparator(cbuf.last)) {
-        syntaxError(offset + cbuf.length - 1, "illegal separator")
+        syntaxError(numberOffset + cbuf.length - 1, "illegal separator")
         cbuf.setLength(cbuf.length - 1)
       }
 
@@ -1076,14 +1083,11 @@ trait Scanners extends ScannersCommon {
      */
     protected def getNumber(): Unit = {
       // consume digits of the current radix
-      def consumeDigits(): Unit = {
-        if (base == 16 && isNumberSeparator(ch))
-          syntaxError(offset + 2, "illegal separator")  // 0x_42
+      def consumeDigits(): Unit =
         while (isNumberSeparator(ch) || digit2int(ch, base) >= 0) {
           putChar(ch)
           nextChar()
         }
-      }
       // at dot with digit following
       def restOfNonIntegralNumber(): Unit = {
         putChar('.')
@@ -1093,7 +1097,7 @@ trait Scanners extends ScannersCommon {
       // 1l is an acknowledged bad practice
       def lintel(): Unit = {
         val msg = "Lowercase el for long is not recommended because it is easy to confuse with numeral 1; use uppercase L instead"
-        if (ch == 'l') deprecationWarning(offset + cbuf.length, msg, since="2.13.0")
+        if (ch == 'l') deprecationWarning(numberOffset + cbuf.length, msg, since="2.13.0")
       }
       // after int: 5e7f, 42L, 42.toDouble but not 42b.
       def restOfNumber(): Unit = {

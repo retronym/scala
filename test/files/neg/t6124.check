@@ -7,9 +7,9 @@ t6124.scala:4: error: illegal separator
 t6124.scala:7: error: illegal separator
   def f = 3_14_E-2
               ^
-t6124.scala:8: error: invalid literal number
+t6124.scala:8: error: illegal separator
   def e = 3_14E-_2
-          ^
+                ^
 t6124.scala:9: error: illegal separator
   def d = 3_14E-2_
                  ^
@@ -43,7 +43,16 @@ t6124.scala:22: error: illegal separator
 t6124.scala:23: error: illegal separator
   def y = 0_
            ^
-t6124.scala:26: error: missing integer number
+t6124.scala:26: error: invalid literal number
   def wtf = 0x    // see neg/literals.scala
             ^
-16 errors found
+t6124.scala:30: error: illegal separator
+  def `caret positions` = 0x___________
+                            ^
+t6124.scala:30: error: illegal separator
+  def `caret positions` = 0x___________
+                                      ^
+t6124.scala:31: error: illegal separator
+  def `minimal cascade` = 0x_42 + 1
+                            ^
+19 errors found
