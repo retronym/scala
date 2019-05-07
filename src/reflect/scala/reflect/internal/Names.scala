@@ -25,6 +25,8 @@ trait Names extends api.Names {
 
   final val nameDebug = false
 
+  protected val nameTable: Names = this
+
   // Ideally we would just synchronize unconditionally and let HotSpot's Biased Locking
   // kick in in the compiler universe, where access to the lock is single threaded. But,
   // objects created in the first 4seconds of the JVM startup aren't eligible for biased
@@ -100,39 +102,42 @@ trait Names extends api.Names {
    *
    *  @param len0 the length of the name. Negative lengths result in empty names.
    */
-  final def newTermName(cs: Array[Char], offset: Int, len0: Int, cachedString: String): TermName = {
-    def body = {
-      require(offset >= 0, "offset must be non-negative, got " + offset)
-      val len = math.max(len0, 0)
-      val h = hashValue(cs, offset, len) & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
-        n = n.next
+  final def newTermName(cs: Array[Char], offset: Int, len0: Int, cachedString: String): TermName =
+    if (nameTable != this)
+      nameTable.newTermName(cs, offset, len0, cachedString).asInstanceOf[TermName]
+    else {
+      def body = {
+        require(offset >= 0, "offset must be non-negative, got " + offset)
+        val len = math.max(len0, 0)
+        val h = hashValue(cs, offset, len) & HASH_MASK
+        var n = termHashtable(h)
+        while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+          n = n.next
 
-      if (n ne null) n
-      else {
-        // The logic order here is future-proofing against the possibility
-        // that name.toString will become an eager val, in which case the call
-        // to enterChars cannot follow the construction of the TermName.
-        var startIndex = 0
-        if (cs == chrs) {
-          // Optimize for subName, the new name is already stored in chrs
-          startIndex = offset
-        } else {
-          startIndex = nc
-          enterChars(cs, offset, len)
+        if (n ne null) n
+        else {
+          // The logic order here is future-proofing against the possibility
+          // that name.toString will become an eager val, in which case the call
+          // to enterChars cannot follow the construction of the TermName.
+          var startIndex = 0
+          if (cs == chrs) {
+            // Optimize for subName, the new name is already stored in chrs
+            startIndex = offset
+          } else {
+            startIndex = nc
+            enterChars(cs, offset, len)
+          }
+          val next = termHashtable(h)
+          val termName =
+            if (cachedString ne null) new TermName_S(startIndex, len, next, cachedString)
+            else new TermName_R(startIndex, len, next)
+          // Add the new termName to the hashtable only after it's been fully constructed
+          termHashtable(h) = termName
+          termName
         }
-        val next = termHashtable(h)
-        val termName =
-          if (cachedString ne null) new TermName_S(startIndex, len, next, cachedString)
-          else new TermName_R(startIndex, len, next)
-        // Add the new termName to the hashtable only after it's been fully constructed
-        termHashtable(h) = termName
-        termName
       }
+      if (synchronizeNames) nameLock.synchronized(body) else body
     }
-    if (synchronizeNames) nameLock.synchronized(body) else body
-  }
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
@@ -171,7 +176,7 @@ trait Names extends api.Names {
    *
    * can-multi-thread: names are added to the hash tables only after they are fully constructed.
    */
-  final def lookupTypeName(cs: Array[Char]): TypeName = {
+  final def lookupTypeName(cs: Array[Char]): TypeName = if (nameTable != this) nameTable.lookupTypeName(cs) else {
     val hash = hashValue(cs, 0, cs.length) & HASH_MASK
     var typeName = typeHashtable(hash)
 
