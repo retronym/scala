@@ -132,19 +132,19 @@ object FunctionOne extends Function(1) {
   override def moreMethods = """
   /** Composes two instances of Function1 in a new Function1, with this function applied last.
    *
-   *  @tparam   A   the type to which function `g` can be applied
-   *  @param    g   a function A => T1
+   *  @tparam   A1  the type to which function `g` can be applied
+   *  @param    g   a function A1 => T1
    *  @return       a new function `f` such that `f(x) == apply(g(x))`
    */
-  @annotation.unspecialized def compose[A](g: A => T1): A => R = { x => apply(g(x)) }
+  @annotation.unspecialized def compose[A1](g: A1 => T1): A1 => R = { x => apply(g(x)) }
 
   /** Composes two instances of Function1 in a new Function1, with this function applied first.
    *
-   *  @tparam   A   the result type of function `g`
-   *  @param    g   a function R => A
+   *  @tparam   A1  the result type of function `g`
+   *  @param    g   a function R => A1
    *  @return       a new function `f` such that `f(x) == g(apply(x))`
    */
-  @annotation.unspecialized def andThen[A](g: R => A): T1 => A = { x => g(apply(x)) }
+  @annotation.unspecialized def andThen[A1](g: R => A1): T1 => A1 = { x => g(apply(x)) }
 """
   override def companionObject =
 """

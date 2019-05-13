@@ -52,8 +52,8 @@ object SeqView {
   }
 
   @SerialVersionUID(3L)
-  class Map[+A, +B](underlying: SomeSeqOps[A], f: A => B) extends View.Map[A, B](underlying, f) with SeqView[B] {
-    def apply(idx: Int): B = f(underlying(idx))
+  class Map[+A1, +B1](underlying: SomeSeqOps[A1], f: A1 => B1) extends View.Map[A1, B1](underlying, f) with SeqView[B1] {
+    def apply(idx: Int): B1 = f(underlying(idx))
     def length: Int = underlying.length
   }
 

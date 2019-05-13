@@ -216,7 +216,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
     forwarder.info.foreach {
       case TypeRef(_, tparam, _) if tparam.isTypeParameter && !isForwarderTparam(tparam) =>
         symTparams.get(tparam.name).foreach{ symTparam =>
-          debuglog(s"Renaming ${symTparam} (owned by ${symTparam.owner}, a mixin forwarder hosted in ${forwarder.enclClass.fullNameString}) to avoid shadowing enclosing type parameter of ${tparam.owner.fullNameString})")
+          println(s"Renaming ${symTparam} (owned by ${symTparam.owner}, a mixin forwarder hosted in ${forwarder.enclClass.fullNameString}) to avoid shadowing enclosing type parameter of ${tparam.owner.fullNameString})")
           symTparam.name = symTparam.name.append(NameTransformer.NAME_JOIN_STRING)
           symTparams.remove(tparam.name) // only rename once
         }

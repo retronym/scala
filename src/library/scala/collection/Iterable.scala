@@ -523,7 +523,7 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *  $willForceEvaluation
     *
     *  @param f     the discriminator function.
-    *  @tparam K    the type of keys returned by the discriminator function.
+    *  @tparam K1    the type of keys returned by the discriminator function.
     *  @return      A map from keys to ${coll}s such that the following invariant holds:
     *               {{{
     *                 (xs groupBy f)(k) = xs filter (x => f(x) == k)
@@ -532,8 +532,8 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *               for which `f(x)` equals `k`.
     *
     */
-  def groupBy[K](f: A => K): immutable.Map[K, C] = {
-    val m = mutable.Map.empty[K, Builder[A, C]]
+  def groupBy[K1](f: A => K1): immutable.Map[K1, C] = {
+    val m = mutable.Map.empty[K1, Builder[A, C]]
     val it = iterator
     while (it.hasNext) {
       val elem = it.next()
@@ -541,7 +541,7 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
       val bldr = m.getOrElseUpdate(key, newSpecificBuilder)
       bldr += elem
     }
-    var result = immutable.HashMap.empty[K, C]
+    var result = immutable.HashMap.empty[K1, C]
     val mapIt = m.iterator
     while (mapIt.hasNext) {
       val (k, v) = mapIt.next()
@@ -567,17 +567,17 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *
     * @param key the discriminator function
     * @param f the element transformation function
-    * @tparam K the type of keys returned by the discriminator function
-    * @tparam B the type of values returned by the transformation function
+    * @tparam K1 the type of keys returned by the discriminator function
+    * @tparam B1 the type of values returned by the transformation function
     */
-  def groupMap[K, B](key: A => K)(f: A => B): immutable.Map[K, CC[B]] = {
-    val m = mutable.Map.empty[K, Builder[B, CC[B]]]
+  def groupMap[K1, B1](key: A => K1)(f: A => B1): immutable.Map[K1, CC[B1]] = {
+    val m = mutable.Map.empty[K1, Builder[B1, CC[B1]]]
     for (elem <- this) {
       val k = key(elem)
-      val bldr = m.getOrElseUpdate(k, iterableFactory.newBuilder[B])
+      val bldr = m.getOrElseUpdate(k, iterableFactory.newBuilder[B1])
       bldr += f(elem)
     }
-    var result = immutable.Map.empty[K, CC[B]]
+    var result = immutable.Map.empty[K1, CC[B1]]
     m.foreach { case (k, v) =>
       result = result + ((k, v.result()))
     }
@@ -598,8 +598,8 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *
     * $willForceEvaluation
     */
-  def groupMapReduce[K, B](key: A => K)(f: A => B)(reduce: (B, B) => B): immutable.Map[K, B] = {
-    val m = mutable.Map.empty[K, B]
+  def groupMapReduce[K1, B1](key: A => K1)(f: A => B1)(reduce: (B1, B1) => B1): immutable.Map[K1, B1] = {
+    val m = mutable.Map.empty[K1, B1]
     for (elem <- this) {
       val k = key(elem)
       val v =

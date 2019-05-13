@@ -110,14 +110,14 @@ trait PartialFunction[-A, +B] extends (A => B) { self =>
    *   other `andThen` method is used (note its cautions).
    *
    *   @param  k  the transformation function
-   *   @tparam C  the result type of the transformation function.
+   *   @tparam B1  the result type of the transformation function.
    *   @return a partial function with the domain of this partial function,
    *           possibly narrowed by the specified function, which maps
    *           arguments `x` to `k(this(x))`.
    */
-  override def andThen[C](k: B => C): PartialFunction[A, C] = k match {
-    case pf: PartialFunction[B, C] => andThen(pf)
-    case _                         => new AndThen[A, B, C](this, k)
+  override def andThen[B1](k: B => B1): PartialFunction[A, B1] = k match {
+    case pf: PartialFunction[B, B1] => andThen(pf)
+    case _                          => new AndThen[A, B, B1](this, k)
   }
 
   /**
@@ -129,12 +129,12 @@ trait PartialFunction[-A, +B] extends (A => B) { self =>
    * instead of [[isDefinedAt]] / [[apply]] for efficiency.
    *
    * @param  k  the transformation function
-   * @tparam C  the result type of the transformation function.
+   * @tparam C1  the result type of the transformation function.
    * @return a partial function with the domain of this partial function narrowed by
    *         other partial function, which maps arguments `x` to `k(this(x))`.
    */
-  def andThen[C](k: PartialFunction[B, C]): PartialFunction[A, C] =
-    new Combined[A, B, C](this, k)
+  def andThen[C1](k: PartialFunction[B, C1]): PartialFunction[A, C1] =
+    new Combined[A, B, C1](this, k)
 
   /**
    * Composes another partial function `k` with this partial function so that this
@@ -145,12 +145,12 @@ trait PartialFunction[-A, +B] extends (A => B) { self =>
    * instead of [[isDefinedAt]] / [[apply]] for efficiency.
    *
    * @param  k  the transformation function
-   * @tparam R  the parameter type of the transformation function.
+   * @tparam A1  the parameter type of the transformation function.
    * @return a partial function with the domain of other partial function narrowed by
    *         this partial function, which maps arguments `x` to `this(k(x))`.
    */
-  def compose[R](k: PartialFunction[R, A]): PartialFunction[R, B] =
-    new Combined[R, A, B](k, this)
+  def compose[A1](k: PartialFunction[A1, A]): PartialFunction[A1, B] =
+    new Combined[A1, A, B](k, this)
 
   /** Turns this partial function into a plain function returning an `Option` result.
    *  @see     Function.unlift

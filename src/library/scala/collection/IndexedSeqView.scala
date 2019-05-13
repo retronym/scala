@@ -148,8 +148,8 @@ object IndexedSeqView {
     extends SeqView.DropRight[A](underlying, n) with IndexedSeqView[A]
 
   @SerialVersionUID(3L)
-  class Map[A, B](underlying: SomeIndexedSeqOps[A], f: A => B)
-    extends SeqView.Map(underlying, f) with IndexedSeqView[B]
+  class Map[A1, B1](underlying: SomeIndexedSeqOps[A1], f: A1 => B1)
+    extends SeqView.Map(underlying, f) with IndexedSeqView[B1]
 
   @SerialVersionUID(3L)
   class Reverse[A](underlying: SomeIndexedSeqOps[A]) extends SeqView.Reverse[A](underlying) with IndexedSeqView[A] {
