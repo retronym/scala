@@ -13,9 +13,13 @@
 package scala
 
 /** `Null` is - together with [[scala.Nothing]] - at the bottom of the Scala type hierarchy.
- *
- *  `Null` is a subtype of all reference types; its only instance is the `null` reference.
- *  Since `Null` is not a subtype of value types, `null` is not a member of any such type.  For instance,
- *  it is not possible to assign `null` to a variable of type [[scala.Int]].
- */
+  *
+  * `Null` is the type of the `null` literal. It is a subtype of every type
+  * except those of value classes (that is, classes which are subtypes of [[AnyVal]]).
+  * This includes primitive types such as [[Int]] and [[Boolean]], as well
+  * as types of user-defined value classes.
+  *
+  * Since `Null` is not a subtype of value types, `null` is not a member of any such type.
+  * For instance, it is not possible to assign `null` to a variable of type [[scala.Int]].
+  */
 sealed trait Null
