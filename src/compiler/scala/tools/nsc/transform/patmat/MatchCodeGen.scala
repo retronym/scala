@@ -206,12 +206,15 @@ trait MatchCodeGen extends Interface {
         def one(res: Tree): Tree = matchEnd APPLY (res) // a jump to a case label is special-cased in typedApply
         protected final def zero: Tree = nextCase APPLY ()
         override def ifThenElseZero(c: Tree, thenp: Tree): Tree = {
-          thenp match {
-            case Block(stats, expr) =>
-              Block(If(NOT(c), zero, EmptyTree) :: stats, expr)
-            case _ =>
-              Block(If(NOT(c), zero, EmptyTree) :: Nil, thenp)
-          }
+          if (settings.YpatmatFlatAST.value) {
+            val z = zero
+            thenp match {
+              case Block(stats, expr) =>
+                Block(If(NOT(c), zero, EmptyTree) :: stats, expr)
+              case _ =>
+                Block(If(NOT(c), zero, EmptyTree) :: Nil, thenp)
+            }
+          } else super.ifThenElseZero(c, thenp)
         }
 
         // prev: MatchMonad[T]
@@ -231,7 +234,6 @@ trait MatchCodeGen extends Interface {
             case _ =>
               BLOCK(
                 ValDef(prevSym, prev),
-                // must be isEmpty and get as we don't control the target of the call (prev is an extractor call)
                 nextTree
               )
           }

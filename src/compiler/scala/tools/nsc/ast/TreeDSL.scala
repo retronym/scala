@@ -137,7 +137,7 @@ trait TreeDSL {
     def NEW(tpt: Tree, args: Tree*): Tree   = New(tpt, List(args.toList))
 
     def NOT(tree: Tree)   = tree match {
-      case Select(qual, _) if tree.symbol eq Boolean_not => qual
+      case Select(qual, _) if (tree.symbol eq Boolean_not) && settings.YpatmatFlatAST => qual
       case _ => Select(tree, Boolean_not)
     }
 

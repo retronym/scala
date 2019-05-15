@@ -254,6 +254,7 @@ trait ScalaSettings extends AbsScalaSettings
   val YjarCompressionLevel = IntSetting("-Yjar-compression-level", "compression level to use when writing jar files",
     Deflater.DEFAULT_COMPRESSION, Some((Deflater.DEFAULT_COMPRESSION,Deflater.BEST_COMPRESSION)), (x: String) => None)
   val YpickleJava = BooleanSetting("-Ypickle-java", "Pickler phase should compute pickles for .java defined symbols for use by build tools").internalOnly()
+  val YpatmatFlatAST = BooleanSetting("-Ypatmat-flat-ast", "Pattern Matcher should avoid needlessly nested if/else ASTs")
 
   sealed abstract class CachePolicy(val name: String, val help: String)
   object CachePolicy {
