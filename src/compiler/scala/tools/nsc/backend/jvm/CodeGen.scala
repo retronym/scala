@@ -41,8 +41,10 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
       generatedClasses += GeneratedClass(mainClassNode, fullSymbolName, position, isArtifact = false)
       if (bTypes.isTopLevelModuleClass(sym)) {
         if (sym.companionClass == NoSymbol) {
-          val mirrorClassNode = genMirrorClass(sym, unit)
-          generatedClasses += GeneratedClass(mirrorClassNode, fullSymbolName, position, isArtifact = true)
+          if (!settings.noForwarders) {
+            val mirrorClassNode = genMirrorClass(sym, unit)
+            generatedClasses += GeneratedClass(mirrorClassNode, fullSymbolName, position, isArtifact = true)
+          }
         }
         else
           log(s"No mirror class for module with linked class: ${sym.fullName}")
