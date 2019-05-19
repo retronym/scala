@@ -437,14 +437,13 @@ trait ContextErrors {
       }
 
       //typedNew
-      def IsAbstractError(tree: Tree, sym: Symbol, context: Context) = {
-        issueNormalTypeError(tree, s"$sym is abstract; cannot be ${if(context.typingAnnotationCore) "used as an annotation" else "instantiated"}")
+      def IsAbstractError(tree: Tree, sym: Symbol) = {
+        issueNormalTypeError(tree, sym + " is abstract; cannot be instantiated")
         setError(tree)
       }
 
       def DoesNotExtendAnnotation(tree: Tree, sym: Symbol) = {
-        issueNormalTypeError(tree, s"$sym does not extend ${AnnotationClass.fullName}")
-        setError(tree)
+        NormalTypeError(tree, s"$sym does not extend ${AnnotationClass.fullName}")
       }
 
       def DoesNotConformToSelfTypeError(tree: Tree, sym: Symbol, tpe0: Type) = {

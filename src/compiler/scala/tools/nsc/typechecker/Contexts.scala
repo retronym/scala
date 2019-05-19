@@ -455,7 +455,6 @@ trait Contexts { self: Analyzer =>
     def inReturnExpr                          = this(ReturnExpr)
     def inTypeConstructorAllowed              = this(TypeConstructorAllowed)
     def inAnnotation                          = this(TypingAnnotation)
-    def typingAnnotationCore                  = this(TypingAnnotationCore)
 
     def defaultModeForTyped: Mode = if (inTypeConstructorAllowed) Mode.NOmode else Mode.EXPRmode
 
@@ -591,7 +590,6 @@ trait Contexts { self: Analyzer =>
     @inline final def withinSecondTry[T](op: => T): T                      = withMode(enabled = SecondTry)(op)
     @inline final def withinPatAlternative[T](op: => T): T                 = withMode(enabled = PatternAlternative)(op)
     @inline final def withinAnnotation[T](op: => T): T                     = withMode(enabled = TypingAnnotation)(op)
-    @inline final def withinAnnotationCore[T](op: => T): T                 = withMode(enabled = TypingAnnotationCore)(op)
 
 
     @inline final def withSuppressDeadArgWarning[T](suppress: Boolean)(op: => T): T =
@@ -1891,10 +1889,6 @@ object ContextMode {
     * When set, Java annotations may be instantiated directly.
     */
   final val TypingAnnotation: ContextMode         = 1 << 19
-
-  /** Are we currently typing the the core of an annotation?
-    */
-  final val TypingAnnotationCore: ContextMode = 1 << 20
 
   /** TODO: The "sticky modes" are EXPRmode, PATTERNmode, TYPEmode.
    *  To mimic the sticky mode behavior, when captain stickyfingers
