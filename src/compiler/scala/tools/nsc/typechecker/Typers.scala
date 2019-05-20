@@ -3943,8 +3943,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       typedFun0 match {
         case Select(New(a), _) =>
-          val annType = (if (typedFun0.symbol.isJavaAnnotation) JavaAnnotation else AnnotationClass).tpe
-          val typedFun0ExtendsAnn = a.symbol.isJavaAnnotation || a.tpe <:< annType
+          val typedFun0ExtendsAnn = a.symbol.isJavaAnnotation || a.tpe <:< AnnotationClass.tpe
           if (!typedFun0ExtendsAnn){
             reportAnnotationError(DoesNotExtendAnnotation(typedFun0, a.tpe.typeSymbol.initialize))
             return finish(ErroneousAnnotation)
