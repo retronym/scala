@@ -591,7 +591,6 @@ trait Contexts { self: Analyzer =>
     @inline final def withinPatAlternative[T](op: => T): T                 = withMode(enabled = PatternAlternative)(op)
     @inline final def withinAnnotation[T](op: => T): T                     = withMode(enabled = TypingAnnotation)(op)
 
-
     @inline final def withSuppressDeadArgWarning[T](suppress: Boolean)(op: => T): T =
       if (suppress) withMode(enabled = SuppressDeadArgWarning)(op) else withMode(disabled = SuppressDeadArgWarning)(op)
 
