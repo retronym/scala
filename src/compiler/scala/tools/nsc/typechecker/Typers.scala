@@ -3937,13 +3937,16 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       if (typedFunPart.isErroneous) return finish(ErroneousAnnotation)
 
       val treeInfo.Applied(typedFun @ Select(New(annTpt), _), _, _) = typedFunPart
-      val annType = annTpt.tpe // for a polymorphic annotation class, this type will have unbound type params (see context.undetparams)
+      val annType = annTpt.tpe // for a polymorphic annotation class, th/t10497is type will have unbound type params (see context.undetparams)
       val annTypeSym = annType.typeSymbol
       val isJava = annType != null && annTypeSym.isJavaDefined
 
       typedFun0 match {
         case Select(New(a), _) =>
-          val typedFun0ExtendsAnn = a.symbol.isJavaAnnotation || a.tpe <:< AnnotationClass.tpe
+
+          // test/files/jvm/annotations/Test_2.scala:97 fails if I just use a.symbol.isJavaAnnotation. Seems like it might be a bug?
+          val typedFun0ExtendsAnn = a.tpe <:< AnnotationClass.tpe || a.symbol.baseClasses.exists(x => x.isJavaAnnotation)
+
           if (!typedFun0ExtendsAnn){
             reportAnnotationError(DoesNotExtendAnnotation(typedFun0, a.tpe.typeSymbol.initialize))
             return finish(ErroneousAnnotation)
