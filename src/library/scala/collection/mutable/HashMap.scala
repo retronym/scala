@@ -147,8 +147,7 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
         contentSize -= 1
 
       case (None, Some(value)) =>
-        if (previousNode == null) table(indexedHash) = new Node[K, V](key, hash, value, null)
-        else previousNode.next = new Node[K, V](key, hash, value, null)
+        table(indexedHash) = new Node[K, V](key, hash, value, table(indexedHash))
         contentSize += 1
 
       case (Some(_), Some(newValue)) => foundNode.value = newValue
