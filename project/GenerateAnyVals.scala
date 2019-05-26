@@ -473,12 +473,12 @@ override def getClass(): Class[Boolean] = ???
 
     override def boxUnboxInterpolations = Map(
       "@boxRunTimeDoc@" -> """
- *  The result of `(x : Any)` where `x` is of type `Unit` is `scala.runtime.BoxedUnit.UNIT`.
- *  This method is not intended for use in source code, which can use `UNIT` directly.
+ *  This method is not intended for use in source code. Use `(x : Any)` where `x` is of type `Unit`.
+ *  The runtime representation of this value is platform-specific.
  *""",
       "@unboxRunTimeDoc@" -> """
- *  The result of unboxing the value `scala.runtime.BoxedUnit.UNIT` (or `null`) is `()`.
  *  This method is not intended for use in source code.
+ *  The result of successfully unboxing a value is `()`.
  *""",
       "@unboxDoc@" -> "the Unit value ()",
       "@boxImpl@" -> "scala.runtime.BoxedUnit.UNIT",

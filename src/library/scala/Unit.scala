@@ -32,8 +32,8 @@ object Unit extends AnyValCompanion {
 
   /** Transform a value type into a boxed reference type.
    *
-   *  The result of `(x : Any)` where `x` is of type `Unit` is `scala.runtime.BoxedUnit.UNIT`.
-   *  This method is not intended for use in source code, which can use `UNIT` directly.
+   *  This method is not intended for use in source code. Use `(x : Any)` where `x` is of type `Unit`.
+   *  The runtime representation of this value is platform-specific.
    *
    *  @param  x   the Unit to be boxed
    *  @return     a scala.runtime.BoxedUnit offering `x` as its underlying value.
@@ -44,8 +44,8 @@ object Unit extends AnyValCompanion {
    *  method is not typesafe: it accepts any Object, but will throw
    *  an exception if the argument is not a scala.runtime.BoxedUnit.
    *
-   *  The result of unboxing the value `scala.runtime.BoxedUnit.UNIT` (or `null`) is `()`.
    *  This method is not intended for use in source code.
+   *  The result of successfully unboxing a value is `()`.
    *
    *  @param  x   the scala.runtime.BoxedUnit to be unboxed.
    *  @throws     ClassCastException  if the argument is not a scala.runtime.BoxedUnit
