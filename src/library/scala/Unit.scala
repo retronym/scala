@@ -32,7 +32,7 @@ object Unit extends AnyValCompanion {
 
   /** Transform a value type into a boxed reference type.
    *
-   *  This method is not intended for use in source code. Use `(x : Any)` where `x` is of type `Unit`.
+   *  This method is not intended for use in source code.
    *  The runtime representation of this value is platform-specific.
    *
    *  @param  x   the Unit to be boxed

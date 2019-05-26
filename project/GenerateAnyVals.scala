@@ -473,7 +473,7 @@ override def getClass(): Class[Boolean] = ???
 
     override def boxUnboxInterpolations = Map(
       "@boxRunTimeDoc@" -> """
- *  This method is not intended for use in source code. Use `(x : Any)` where `x` is of type `Unit`.
+ *  This method is not intended for use in source code.
  *  The runtime representation of this value is platform-specific.
  *""",
       "@unboxRunTimeDoc@" -> """
