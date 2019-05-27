@@ -248,15 +248,23 @@ class ArrayDeque[A] protected (
         reset(array = array2, start = 0, end = finalLength)
       } else if (2*idx <= finalLength) { // Cheaper to move the prefix right
         var i = suffixStart
+        while(i > removals) {
+          i -= 1
+          _set(i, _get(i - removals))
+        }
         while(i >= 0) {
           i -= 1
-          _set(i, if (i >= removals) _get(i - removals) else null.asInstanceOf[A])
+          _set(i, null.asInstanceOf[A])
         }
         start = start_+(removals)
       } else {  // Cheaper to move the suffix left
         var i = idx
+        while(i < finalLength) {
+          _set(i, _get(i + removals))
+          i += 1
+        }
         while(i < n) {
-          _set(i, if (i < finalLength) _get(i + removals) else null.asInstanceOf[A])
+          _set(i, null.asInstanceOf[A])
           i += 1
         }
         end = end_-(removals)
