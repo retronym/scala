@@ -338,13 +338,14 @@ self =>
 
     /** Are we inside the Scala package? Set for files that start with package scala
      */
-    private var inScalaPackage = false
-    private var currentPackage = ""
+    private var packageStack: List[Tree] = Nil
     def resetPackage(): Unit = {
-      inScalaPackage = false
-      currentPackage = ""
+      packageStack = Nil
     }
-    private def inScalaRootPackage = inScalaPackage && currentPackage == "scala"
+    private def inScalaRootPackage = packageStack match {
+      case Ident(nme.scala_) :: Nil => true
+      case _ => false
+    }
 
     def parseStartRule: () => Tree
 
@@ -1294,14 +1295,10 @@ self =>
     }
     /** Calls `qualId()` and manages some package state. */
     private def pkgQualId() = {
-      if (in.token == IDENTIFIER && in.name.encode == nme.scala_)
-        inScalaPackage = true
-
       val pkg = qualId()
       newLineOptWhenFollowedBy(LBRACE)
 
-      if (currentPackage == "") currentPackage = pkg.toString
-      else currentPackage = currentPackage + "." + pkg
+      packageStack ::= pkg
 
       pkg
     }
@@ -3351,6 +3348,8 @@ self =>
           } else {
             in.flushDoc
             val pkg = pkgQualId()
+            val saved = packageStack
+            packageStack ::= pkg
 
             if (in.token == EOF) {
               ts += makePackaging(start, pkg, List())
@@ -3362,6 +3361,7 @@ self =>
               acceptStatSepOpt()
               ts ++= topStatSeq()
             }
+            packageStack = saved
           }
         } else {
           ts ++= topStatSeq()

@@ -67,23 +67,35 @@ object NameTransformer {
    *  @return     the string with all recognized opchars replaced with their encoding
    */
   def encode(name: String): String = {
-    var buf: StringBuilder = null
+    encode(name: CharSequence) match {
+      case s: String => s
+      case sb: java.lang.StringBuilder => sb.toString
+    }
+  }
+
+  /** Replace operator symbols by corresponding `\$opname`.
+   *
+   *  @param name the text to encode
+   *  @return     the text with all recognized opchars replaced with their encoding
+   */
+  def encode(name: CharSequence): CharSequence /* String | java.lang.StringBuilder */ = {
+    var buf: java.lang.StringBuilder = null
     val len = name.length()
     var i = 0
     while (i < len) {
       val c = name charAt i
       if (c < nops && (op2code(c.toInt) ne null)) {
         if (buf eq null) {
-          buf = new StringBuilder()
-          buf.append(name.substring(0, i))
+          buf = new java.lang.StringBuilder()
+          buf.append(name.subSequence(0, i))
         }
         buf.append(op2code(c.toInt))
       /* Handle glyphs that are not valid Java/JVM identifiers */
       }
       else if (!Character.isJavaIdentifierPart(c)) {
         if (buf eq null) {
-          buf = new StringBuilder()
-          buf.append(name.substring(0, i))
+          buf = new java.lang.StringBuilder()
+          buf.append(name.subSequence(0, i))
         }
         buf.append("$u%04X".format(c.toInt))
       }
@@ -92,7 +104,7 @@ object NameTransformer {
       }
       i += 1
     }
-    if (buf eq null) name else buf.toString()
+    if (buf eq null) name else buf
   }
 
   /** Replace `\$opname` by corresponding operator symbol.

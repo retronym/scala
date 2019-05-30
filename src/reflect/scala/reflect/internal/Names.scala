@@ -444,9 +444,8 @@ trait Names extends api.Names {
 
     /** Replace operator symbols by corresponding \$op_name. */
     def encode: ThisNameType = {
-      val str = toString
-      val res = NameTransformer.encode(str)
-      if (res == str) thisName else newName(res)
+      val res = NameTransformer.encode(this)
+      if (res eq this) thisName else newName(res.toString)
     }
 
     /** Replace \$op_name by corresponding operator symbol. */
@@ -519,12 +518,18 @@ trait Names extends api.Names {
   /** TermName_S and TypeName_S have fields containing the string version of the name.
    *  TermName_R and TypeName_R recreate it each time toString is called.
    */
-  private final class TermName_S(index0: Int, len0: Int, next0: TermName, override val toString: String) extends TermName(index0, len0, next0) {
-    protected def createCompanionName(next: TypeName): TypeName = new TypeName_S(index, len, next, toString)
+  private final class TermName_S(index0: Int, len0: Int, next0: TermName, cachedString: String) extends TermName(index0, len0, next0) {
+    protected def createCompanionName(next: TypeName): TypeName = new TypeName_S(index, len, next, cachedString)
     override def newName(str: String): TermName = newTermNameCached(str)
+    override def toString: String = {
+      cachedString
+    }
   }
-  private final class TypeName_S(index0: Int, len0: Int, next0: TypeName, override val toString: String) extends TypeName(index0, len0, next0) {
+  private final class TypeName_S(index0: Int, len0: Int, next0: TypeName, cachedString: String) extends TypeName(index0, len0, next0) {
     override def newName(str: String): TypeName = newTypeNameCached(str)
+    override def toString: String = {
+      cachedString
+    }
   }
 
   private final class TermName_R(index0: Int, len0: Int, next0: TermName) extends TermName(index0, len0, next0) {
