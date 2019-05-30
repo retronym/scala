@@ -111,6 +111,10 @@ object ClassTag {
   val Nothing : ClassTag[scala.Nothing]    = Manifest.Nothing
   val Null    : ClassTag[scala.Null]       = Manifest.Null
 
+  private[this] val cache = new ClassValue[ClassTag[_]] {
+    override def computeValue(runtimeClass: jClass[_]): ClassTag[_] = new GenericClassTag[AnyRef](runtimeClass)
+  }
+
   @SerialVersionUID(1L)
   private class GenericClassTag[T](val runtimeClass: jClass[_]) extends ClassTag[T] {
     override def newArray(len: Int): Array[T] = {
@@ -119,11 +123,11 @@ object ClassTag {
   }
 
   def apply[T](runtimeClass1: jClass[_]): ClassTag[T] = runtimeClass1 match {
-    case x if x.isPrimitive => primitiveClassTag(runtimeClass1)
+    case x if x.isPrimitive =>  primitiveClassTag(runtimeClass1)
     case ObjectTYPE         => ClassTag.Object.asInstanceOf[ClassTag[T]]
     case NothingTYPE        => ClassTag.Nothing.asInstanceOf[ClassTag[T]]
     case NullTYPE           => ClassTag.Null.asInstanceOf[ClassTag[T]]
-    case _                  => new GenericClassTag[AnyRef](runtimeClass1).asInstanceOf[ClassTag[T]]
+    case _                  => cache.get(runtimeClass1).asInstanceOf[ClassTag[T]]
   }
 
   private def primitiveClassTag[T](runtimeClass1: Class[_]): ClassTag[T] = runtimeClass1 match {
