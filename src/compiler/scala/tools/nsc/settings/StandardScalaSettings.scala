@@ -21,7 +21,7 @@ import scala.tools.util.PathResolver.Defaults
  *  implemented in MutableSettings rather than mutation-generically.
  */
 trait StandardScalaSettings {
-  self: AbsScalaSettings =>
+  self: MutableSettings =>
 
   /** Path related settings.
    */
@@ -45,12 +45,21 @@ trait StandardScalaSettings {
   val nowarn =         BooleanSetting ("-nowarn", "Generate no warnings.") withAbbreviation "--no-warnings"
   val optimise:        BooleanSetting // depends on post hook which mutates other settings
   val print =          BooleanSetting ("-print", "Print program with Scala-specific features removed.") withAbbreviation "--print"
-  val target =         ChoiceSettingForcedDefault ("-target", "target", "Target platform for object files. All JVM 1.5 - 1.7 targets are deprecated.",
-                          List("jvm-1.5", "jvm-1.6", "jvm-1.7", "jvm-1.8"), "jvm-1.8") withAbbreviation "--target"
+  val target =         ChoiceSetting  ("-target", "target", "Target platform for object files.", (MinTargetVersion to MaxTargetVersion).map(_.toString).toList, "8") withPreSetHook normalizeTarget _ withAbbreviation "--target"
   val unchecked =      BooleanSetting ("-unchecked", "Enable additional warnings where generated code depends on assumptions.") withAbbreviation "--unchecked"
   val uniqid =         BooleanSetting ("-uniqid", "Uniquely tag all identifiers in debugging output.") withAbbreviation "--unique-id"
   val usejavacp =      BooleanSetting ("-usejavacp", "Utilize the java.class.path in classpath resolution.") withAbbreviation "--use-java-class-path"
   val usemanifestcp =  BooleanSetting ("-usemanifestcp", "Utilize the manifest in classpath resolution.") withAbbreviation "--use-manifest-class-path"
   val verbose =        BooleanSetting ("-verbose", "Output messages about what the compiler is doing.") withAbbreviation "--verbose"
   val version =        BooleanSetting ("-version", "Print product version and exit.") withAbbreviation "--version"
+
+  final val MinTargetVersion = 8
+  final val MaxTargetVersion = 12 // this one goes to twelve
+
+  // Support passe prefixes of -target values:
+  //   - `jvm-` (from back when we also had `msil`)
+  //   - `1.` (from back when Java 2 was a possibility)
+  // `-target:1.jvm-13` is ridiculous, though.
+  private[this] def normalizeTarget(in: String): String =
+    in stripPrefix "jvm-" stripPrefix "1."
 }
