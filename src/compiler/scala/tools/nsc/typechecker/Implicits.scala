@@ -1000,8 +1000,8 @@ trait Implicits {
       /** Sorted list of eligible implicits.
        */
       private def eligibleNew = {
-        final case class Candidate(info: ImplicitInfo, level: Int)
-        var matches: java.util.ArrayList[Candidate] = null
+        var matches: java.util.ArrayList[ImplicitInfo] = null
+        var matchLevels: Array[Int] = null
         var matchesNames: java.util.HashSet[Name] = null
 
         var maxCandidateLevel = 0
@@ -1017,9 +1017,17 @@ trait Implicits {
               if (checkValid(info.sym) && survives(info, NoShadower)) {
                 if (matches == null) {
                   matches = new java.util.ArrayList(16)
+                  matchLevels = new Array[Int](16)
                   matchesNames = new java.util.HashSet(16)
                 }
-                matches.add(Candidate(info, i))
+                matches.add(info)
+                if (i >= matchLevels.length) {
+                  val temp = matchLevels
+                  matchLevels = new Array[Int](matchLevels.length * 2)
+                  System.arraycopy(temp, 0, matchLevels, 0, temp.length)
+                }
+                matchLevels(matches.size() - 1) = i
+
                 matchesNames.add(info.name)
                 maxCandidateLevel = i
               }
@@ -1047,7 +1055,7 @@ trait Implicits {
                   val numMatches = matches.size()
                   while (j < numMatches) {
                     val matchInfo = matches.get(j)
-                    if (matchInfo != null && matchInfo.info.name == info.name && matchInfo.level > i) {
+                    if (matchInfo != null && matchInfo.name == info.name && matchLevels(j) > i) {
                       // Shadowed. For now set to null, so as not to mess up the indexing our current loop.
                       matches.set(j, null)
                       removed = true
@@ -1063,9 +1071,9 @@ trait Implicits {
             if (removed) matches.removeIf(_ == null) // remove for real now.
           }
           // most frequent one first. Sort in-place.
-          matches.sort(((x, y) => java.lang.Integer.compare(y.info.useCount(isView), x.info.useCount(isView))))
+          matches.sort(((x, y) => java.lang.Integer.compare(y.useCount(isView), x.useCount(isView))))
           val result = new ListBuffer[ImplicitInfo]
-          matches.forEach(x => result += x.info)
+          matches.forEach(x => result += x)
           result.toList
         }
       }
