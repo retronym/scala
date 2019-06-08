@@ -262,7 +262,7 @@ final class HashMap[K, +V] private[immutable] (private[immutable] val rootNode: 
           val (mergedK, mergedV) = mergef(payload, thatPayload)
           val mergedOriginalHash = mergedK.##
           val mergedImprovedHash = improve(mergedOriginalHash)
-          new HashMap(that.rootNode.updated(mergedK, mergedV, mergedOriginalHash, mergedImprovedHash, 0, replaceValue = true))
+          new HashMap(that.rootNode.removed(thatPayload._1, originalHash, improved, 0).updated(mergedK, mergedV, mergedOriginalHash, mergedImprovedHash, 0, replaceValue = true))
         } else {
           new HashMap(that.rootNode.updated(k, v, originalHash, improved, 0, replaceValue = true))
         }
