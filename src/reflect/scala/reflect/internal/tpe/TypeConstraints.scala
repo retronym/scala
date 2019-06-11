@@ -230,9 +230,17 @@ private[internal] trait TypeConstraints {
         foreachWithIndex(tvars) { (tvarOther, ix) =>
           val tparamOther = tvarOther.origin.typeSymbol
           // don't use =:= -- we just want to know whether the tparam occurs (using =:= is overly lax and caused https://github.com/scala/bug/issues/11558
-          if ((tparamOther ne tparam) && ((bound contains tparamOther) || (tparamTycon == toBound(!up, tparamOther).dealias))) {
-            if (tvarOther.constr.inst eq null) cyclic = true // came back to a tvar that's being solved --> cycle! (note that we capture the `cyclic` var)
-            solveOne(tvarOther, areContravariant(ix))
+          if ((tparamOther ne tparam)) {
+            val boundContainsOther = bound contains tparamOther
+            val otherBoundIsTparam = tparam == toBound(!up, tparamOther).typeSymbol
+
+            if (boundContainsOther || otherBoundIsTparam) {
+              val cycleFound = tvarOther.constr.inst eq null
+              if (cycleFound) {
+                cyclic = true // came back to a tvar that's being solved --> cycle! (note that we capture the `cyclic` var)
+              }
+              solveOne(tvarOther, areContravariant(ix))
+            }
           }
         }
 
@@ -252,7 +260,7 @@ private[internal] trait TypeConstraints {
           tvars.foreach { tvarOther =>
             val tparamOther = tvarOther.origin.typeSymbol
             // don't use =:= -- we just want to know whether the tparam occurs (using =:= is overly lax and caused https://github.com/scala/bug/issues/11558
-            if ((tparamOther ne tparam) && (tparamTycon == toBound(!up, tparamOther).dealias)) {
+            if ((tparamOther ne tparam) && (tparam == toBound(!up, tparamOther).typeSymbol)) {
               if (up) tvar.addHiBound(tvarOther)
               else tvar.addLoBound(tvarOther)
             }
@@ -265,7 +273,12 @@ private[internal] trait TypeConstraints {
           if (up || tvar.constr.hiBounds.exists(isSingleType)) { // If we have a singleton upper bound then we should use it.
             if (depth.isAnyDepth) glb(tvar.constr.hiBounds) else glb(tvar.constr.hiBounds, depth)
           } else {
-            if (depth.isAnyDepth) lub(tvar.constr.loBounds) else lub(tvar.constr.loBounds, depth)
+            def getInst(tp: Type): Type = tp match {
+              case tv: TypeVar => tv.inst
+              case _ => tp
+            }
+            val loBounds = tvar.constr.loBounds.map(getInst).filterNot(typeIsNothing)
+            if (depth.isAnyDepth) lub(loBounds) else lub(loBounds, depth)
           }
 
         // debuglog(s"$tvar setInst $newInst")

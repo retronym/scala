@@ -5206,6 +5206,7 @@ trait Types
     tp.dealias match {
       case PolyType(_, tp) => typeIsNothing(tp)
       case TypeRef(_, NothingClass, _) => true
+      case tv : TypeVar => typeIsNothing(tv.inst)
       case _ => false
     }
 
