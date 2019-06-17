@@ -23,6 +23,7 @@ import io.{AbstractFile, Path, SourceReader}
 import reporters.Reporter
 import util.{ClassPath, returning}
 import scala.reflect.ClassTag
+import scala.reflect.internal.{NameTable, Names}
 import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ScalaClassLoader, ScriptSourceFile, SourceFile, StatisticsStatics}
 import scala.reflect.internal.pickling.PickleBuffer
 import symtab.{Flags, SymbolTable, SymbolTrackers}
@@ -35,7 +36,6 @@ import transform.patmat.PatternMatching
 import transform._
 import backend.{JavaPlatform, ScalaPrimitives}
 import backend.jvm.{BackendStats, GenBCode}
-import scala.concurrent.Future
 import scala.language.postfixOps
 import scala.tools.nsc.ast.{TreeGen => AstTreeGen}
 import scala.tools.nsc.classpath._
@@ -59,6 +59,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   override def isCompilerUniverse = true
   override val useOffsetPositions = !currentSettings.Yrangepos
+  override protected def newNameTable: NameTable[this.type] = {
+    if (currentSettings.YcacheNameTable) {
+      val NoFiles = Nil
+      Global.nameTableCache.getOrCreate(NoFiles, () => new NameTable[Names.dummyNamesInstance.type](synchronizeNames = true, Names.dummyNamesInstance), closeableRegistry, checkStamps = true).asInstanceOf[NameTable[this.type]]
+    }
+    else super.newNameTable
+  }
 
   type RuntimeClass = java.lang.Class[_]
   implicit val RuntimeClassTag: ClassTag[RuntimeClass] = ClassTag[RuntimeClass](classOf[RuntimeClass])
@@ -1736,4 +1743,7 @@ object Global {
     override def keepsTypeParams = false
     def run() { throw new Error("InitPhase.run") }
   }
+
+  // TODO factor reference counting caching out of FileBasedCache for use in spots like this.
+  private val nameTableCache = new FileBasedCache[NameTable[_]]
 }
