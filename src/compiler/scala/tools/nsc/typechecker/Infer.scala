@@ -13,7 +13,8 @@
 package scala.tools.nsc
 package typechecker
 
-import scala.collection.{ mutable, immutable }
+import scala.collection.mutable.ListBuffer
+import scala.collection.{immutable, mutable}
 import scala.util.control.ControlThrowable
 import symtab.Flags._
 import scala.reflect.internal.Depth
@@ -136,20 +137,20 @@ trait Infer extends Checkable {
    *
    *  @param tvars      All type variables to be instantiated.
    *  @param tparams    The type parameters corresponding to `tvars`
-   *  @param variances  The variances of type parameters; need to reverse
+   *  @param getVariance Function to extract variances of type parameters; we need to reverse
    *                    solution direction for all contravariant variables.
    *  @param upper      When `true` search for max solution else min.
    *  @throws NoInstance
    */
-  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], variances: List[Variance], upper: Boolean, depth: Depth): List[Type] = {
+  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: Depth): List[Type] = {
     if (tvars.isEmpty) Nil else {
-      printTyping("solving for " + parentheses((tparams, tvars).zipped map ((p, tv) => s"${p.name}: $tv")))
+      printTyping("solving for " + parentheses(map2(tparams, tvars)((p, tv) => s"${p.name}: $tv")))
       // !!! What should be done with the return value of "solve", which is at present ignored?
       // The historical commentary says "no panic, it's good enough to just guess a solution,
       // we'll find out later whether it works", meaning don't issue an error here when types
       // don't conform to bounds. That means you can never trust the results of implicit search.
       // For an example where this was not being heeded, scala/bug#2421.
-      solve(tvars, tparams, variances, upper, depth)
+      solve(tvars, tparams, getVariance, upper, depth)
       tvars map instantiate
     }
   }
@@ -283,8 +284,10 @@ trait Infer extends Checkable {
           )
           tree setSymbol sym1 setType (
             pre match {
-              case _: SuperType => owntype map (tp => if (tp eq pre) site.symbol.thisType else tp)
-              case _            => owntype
+              // OPT: avoid lambda allocation and Type.map for super constructor calls
+              case _: SuperType if !sym.isConstructor && !owntype.isInstanceOf[OverloadedType] =>
+                owntype map ((tp: Type) => if (tp eq pre) site.symbol.thisType else tp)
+              case _ => owntype
             }
           )
       }
@@ -345,19 +348,27 @@ trait Infer extends Checkable {
      *  by existentially bound variables.
      */
     def makeFullyDefined(tp: Type): Type = {
-      var tparams: List[Symbol] = Nil
-      def addTypeParam(bounds: TypeBounds): Type = {
-        val tparam = context.owner.newExistential(newTypeName("_"+tparams.size), context.tree.pos.focus) setInfo bounds
-        tparams ::= tparam
-        tparam.tpe
+      object typeMap extends TypeMap {
+        def tparamsList: List[Symbol] = if (tparams_ == null) Nil else tparams_.toList
+        private var tparams_ : ListBuffer[Symbol] = null
+        private var i = 0
+        private def nextI(): Int = try i finally i += 1
+        private def addTypeParam(bounds: TypeBounds): Type = {
+          val tparam = context.owner.newExistential(nme.existentialName(nextI()), context.tree.pos.focus) setInfo bounds
+          if (tparams_ == null) tparams_ = ListBuffer.empty
+          tparams_ += tparam
+          tparam.tpe
+        }
+
+        override def apply(tp: Type): Type = mapOver(tp) match {
+          case WildcardType                => addTypeParam(TypeBounds.empty)
+          case BoundedWildcardType(bounds) => addTypeParam(bounds)
+          case tp => tp
+        }
       }
-      val tp1 = tp map {
-        case WildcardType                => addTypeParam(TypeBounds.empty)
-        case BoundedWildcardType(bounds) => addTypeParam(bounds)
-        case t                           => t
-      }
+      val tp1 = typeMap(tp)
       if (tp eq tp1) tp
-      else existentialAbstraction(tparams.reverse, tp1)
+      else existentialAbstraction(typeMap.tparamsList, tp1)
     }
     def ensureFullyDefined(tp: Type): Type = if (isFullyDefined(tp)) tp else makeFullyDefined(tp)
 
@@ -376,7 +387,7 @@ trait Infer extends Checkable {
         case mt: MethodType if mt.isImplicit && isFullyDefined(pt) => MethodType(mt.params, AnyTpe)
         case _                                                     => restpe
       }
-      def solve() = solvedTypes(tvars, tparams, tparams map varianceInType(variance), upper = false, lubDepth(restpe :: pt :: Nil))
+      def solve() = solvedTypes(tvars, tparams, varianceInType(variance), upper = false, lubDepth(restpe :: pt :: Nil))
 
       if (conforms)
         try solve() catch { case _: NoInstance => null }
@@ -447,8 +458,11 @@ trait Infer extends Checkable {
      *  @return map from tparams to inferred arg, if inference was successful, tparams that map to None are considered left undetermined
      *    type parameters that are inferred as `scala.Nothing` and that are not covariant in `restpe` are taken to be undetermined
      */
-    def adjustTypeArgs(tparams: List[Symbol], tvars: List[TypeVar], targs: List[Type], restpe: Type = WildcardType): AdjustedTypeArgs.Result  = {
-      val buf = AdjustedTypeArgs.Result.newBuilder[Symbol, Option[Type]]
+    def adjustTypeArgs(tparams: List[Symbol], tvars: List[TypeVar], targs: List[Type], restpe: Type = WildcardType): AdjustedTypeArgs  = {
+      val okParams = ListBuffer[Symbol]()
+      val okArgs = ListBuffer[Type]()
+      val undetParams = ListBuffer[Symbol]()
+      val allArgs = ListBuffer[Type]()
 
       foreach3(tparams, tvars, targs) { (tparam, tvar, targ) =>
         val retract = (
@@ -456,18 +470,23 @@ trait Infer extends Checkable {
           && (restpe.isWildcard || !varianceInType(restpe)(tparam).isPositive)  // don't retract covariant occurrences
         )
 
-        buf += ((tparam,
-          if (retract) None
-          else Some(
-            if (targ.typeSymbol == RepeatedParamClass)     targ.baseType(SeqClass)
+        if (retract) {
+          undetParams += tparam
+          allArgs += NothingTpe
+        } else {
+          val arg =
+            if (targ.typeSymbol == RepeatedParamClass) targ.baseType(SeqClass)
             else if (targ.typeSymbol == JavaRepeatedParamClass) targ.baseType(ArrayClass)
             // this infers Foo.type instead of "object Foo" (see also widenIfNecessary)
             else if (targ.typeSymbol.isModuleClass || tvar.constr.avoidWiden) targ
             else targ.widen
-          )
-        ))
+          okParams += tparam
+          okArgs += arg
+          allArgs += arg
+        }
       }
-      buf.result()
+
+      AdjustedTypeArgs(okParams.toList, okArgs.toList, undetParams.toList, allArgs.toList)
     }
 
     /** Return inferred type arguments, given type parameters, formal parameters,
@@ -487,7 +506,7 @@ trait Infer extends Checkable {
      *  @throws                  NoInstance
      */
     def methTypeArgs(fn: Tree, tparams: List[Symbol], formals: List[Type], restpe: Type,
-                     argtpes: List[Type], pt: Type): AdjustedTypeArgs.Result = {
+                     argtpes: List[Type], pt: Type): AdjustedTypeArgs = {
       val tvars = tparams map freshVar
       if (!sameLength(formals, argtpes))
         throw new NoInstance("parameter lists differ in length")
@@ -526,7 +545,7 @@ trait Infer extends Checkable {
             "argument expression's type is not compatible with formal parameter type" + foundReqMsg(tp1, pt1))
         }
       }
-      val targs = solvedTypes(tvars, tparams, tparams map varianceInTypes(formals), upper = false, lubDepth(formals) max lubDepth(argtpes))
+      val targs = solvedTypes(tvars, tparams, varianceInTypes(formals), upper = false, lubDepth(formals) max lubDepth(argtpes))
       // Can warn about inferring Any/AnyVal as long as they don't appear
       // explicitly anywhere amongst the formal, argument, result, or expected type.
       // ...or lower bound of a type param, since they're asking for it.
@@ -703,12 +722,13 @@ trait Infer extends Checkable {
       )
       def tryInstantiating(args: List[Type]) = falseIfNoInstance {
         val restpe = mt resultType args
-        val AdjustedTypeArgs.Undets(okparams, okargs, leftUndet) = methTypeArgs(EmptyTree, undetparams, formals, restpe, args, pt)
-        val restpeInst = restpe.instantiateTypeParams(okparams, okargs)
+        val adjusted = methTypeArgs(EmptyTree, undetparams, formals, restpe, args, pt)
+        import adjusted.{okParams, okArgs, undetParams}
+        val restpeInst = restpe.instantiateTypeParams(okParams, okArgs)
         // #2665: must use weak conformance, not regular one (follow the monomorphic case above)
-        exprTypeArgs(leftUndet, restpeInst, pt, useWeaklyCompatible = true) match {
+        exprTypeArgs(undetParams, restpeInst, pt, useWeaklyCompatible = true) match {
           case null => false
-          case _    => isWithinBounds(NoPrefix, NoSymbol, okparams, okargs)
+          case _    => isWithinBounds(NoPrefix, NoSymbol, okParams, okArgs)
         }
       }
       def typesCompatible(args: List[Type]) = undetparams match {
@@ -911,15 +931,16 @@ trait Infer extends Checkable {
         substExpr(tree, tparams, targsStrict, pt)
         List()
       } else {
-        val AdjustedTypeArgs.Undets(okParams, okArgs, leftUndet) = adjustTypeArgs(tparams, tvars, targsStrict)
+        val adjusted = adjustTypeArgs(tparams, tvars, targsStrict)
+        import adjusted.{okParams, okArgs, undetParams}
         def solved_s = map2(okParams, okArgs)((p, a) => s"$p=$a") mkString ","
-        def undet_s = leftUndet match {
+        def undet_s = undetParams match {
           case Nil => ""
           case ps  => ps.mkString(", undet=", ",", "")
         }
         printTyping(tree, s"infer solved $solved_s$undet_s")
         substExpr(tree, okParams, okArgs, pt)
-        leftUndet
+        undetParams
       }
     }
 
@@ -941,13 +962,13 @@ trait Infer extends Checkable {
      *  `fn(args)`, given prototype `pt`.
      *
      *  @param fn          fn: the function that needs to be instantiated.
-     *  @param undetparams the parameters that need to be determined
+     *  @param undetParams the parameters that need to be determined
      *  @param args        the actual arguments supplied in the call.
      *  @param pt0         the expected type of the function application
      *  @return            The type parameters that remain uninstantiated,
      *                     and that thus have not been substituted.
      */
-    def inferMethodInstance(fn: Tree, undetparams: List[Symbol],
+    def inferMethodInstance(fn: Tree, undetParams: List[Symbol],
                             args: List[Tree], pt0: Type): List[Symbol] = fn.tpe match {
       case mt @ MethodType(params0, _) =>
         try {
@@ -956,15 +977,15 @@ trait Infer extends Checkable {
           val argtpes = tupleIfNecessary(formals, args map (x => elimAnonymousClass(x.tpe.deconst)))
           val restpe  = fn.tpe.resultType(argtpes)
 
-          val AdjustedTypeArgs.AllArgsAndUndets(okparams, okargs, allargs, leftUndet) =
-            methTypeArgs(fn, undetparams, formals, restpe, argtpes, pt)
+          val adjusted = methTypeArgs(fn, undetParams, formals, restpe, argtpes, pt)
+          import adjusted.{okParams, okArgs, allArgs}
 
-          if (checkBounds(fn, NoPrefix, NoSymbol, undetparams, allargs, "inferred ")) {
-            val treeSubst = new TreeTypeSubstituter(okparams, okargs)
+          if (checkBounds(fn, NoPrefix, NoSymbol, undetParams, allArgs, "inferred ")) {
+            val treeSubst = new TreeTypeSubstituter(okParams, okArgs)
             treeSubst traverseTrees fn :: args
-            notifyUndetparamsInferred(okparams, okargs)
+            notifyUndetparamsInferred(okParams, okArgs)
 
-            leftUndet match {
+            adjusted.undetParams match {
               case Nil  => Nil
               case xs   =>
                 // #3890
@@ -1005,13 +1026,12 @@ trait Infer extends Checkable {
           try {
             // debuglog("TVARS "+ (tvars map (_.constr)))
             // look at the argument types of the primary constructor corresponding to the pattern
-            val variances  =
-              if (ctorTp.paramTypes.isEmpty) undetparams map varianceInType(ctorTp)
-              else undetparams map varianceInTypes(ctorTp.paramTypes)
+            val varianceFun: Variance.Extractor[Symbol] =
+              if (ctorTp.paramTypes.isEmpty) varianceInType(ctorTp) else varianceInTypes(ctorTp.paramTypes)
 
             // Note: this is the only place where solvedTypes (or, indirectly, solve) is called
             // with upper = true.
-            val targs = solvedTypes(tvars, undetparams, variances, upper = true, lubDepth(resTp :: pt :: Nil))
+            val targs = solvedTypes(tvars, undetparams, varianceFun, upper = true, lubDepth(resTp :: pt :: Nil))
             // checkBounds(tree, NoPrefix, NoSymbol, undetparams, targs, "inferred ")
             // no checkBounds here. If we enable it, test bug602 fails.
             // TODO: reinstate checkBounds, return params that fail to meet their bounds to undetparams
@@ -1062,36 +1082,40 @@ trait Infer extends Checkable {
       }
     }
 
-    def instBounds(tvar: TypeVar): TypeBounds = {
-      val tparam               = tvar.origin.typeSymbol
-      val instType             = toOrigin(tvar.constr.inst)
-      val TypeBounds(lo, hi)   = tparam.info.bounds
-      val (loBounds, hiBounds) =
-        if (isFullyDefined(instType)) (List(instType), List(instType))
-        else (tvar.constr.loBounds, tvar.constr.hiBounds)
-
+    @inline
+    private[this] def instBounds(tvar: TypeVar): TypeBounds = {
+      val tparam   = tvar.origin.typeSymbol
+      val instType = toOrigin(tvar.constr.inst)
+      val lo       = tparam.info.lowerBound
+      val hi       = tparam.info.upperBound
+      val ifd      = isFullyDefined(instType)
+      val loBounds = if (ifd) List(instType) else tvar.constr.loBounds
+      val hiBounds = if (ifd) List(instType) else tvar.constr.hiBounds
       TypeBounds(
         lub(lo :: loBounds map toOrigin),
         glb(hi :: hiBounds map toOrigin)
       )
     }
 
-    def isInstantiatable(tvars: List[TypeVar]) = {
+    @inline
+    private[this] def isInstantiatable(tvars: List[TypeVar]) = {
       val tvars1 = tvars map (_.cloneInternal)
       // Note: right now it's not clear that solving is complete, or how it can be made complete!
       // So we should come back to this and investigate.
-      solve(tvars1, tvars1 map (_.origin.typeSymbol), tvars1 map (_ => Variance.Covariant), upper = false, Depth.AnyDepth)
+      solve(tvars1, tvars1.map(_.origin.typeSymbol), (_ => Variance.Covariant), upper = false, Depth.AnyDepth)
     }
 
     // this is quite nasty: it destructively changes the info of the syms of e.g., method type params
     // (see #3692, where the type param T's bounds were set to > : T <: T, so that parts looped)
     // the changes are rolled back by restoreTypeBounds, but might be unintentionally observed in the mean time
-    def instantiateTypeVar(tvar: TypeVar) {
-      val tparam                    = tvar.origin.typeSymbol
-      val TypeBounds(lo0, hi0)      = tparam.info.bounds
+    private[this] def instantiateTypeVar(tvar: TypeVar): Unit = {
+      val tparam   = tvar.origin.typeSymbol
+      val tpinfo   = tparam.info
+      val lo0      = tpinfo.lowerBound
+      val hi0      = tpinfo.upperBound
       val tb @ TypeBounds(lo1, hi1) = instBounds(tvar)
-      val enclCase                  = context.enclosingCaseDef
-      def enclCase_s                = enclCase.toString.replaceAll("\\n", " ").take(60)
+      val enclCase   = context.enclosingCaseDef
+      def enclCase_s = enclCase.toString.replaceAll("\\n", " ").take(60)
 
       if (enclCase.savedTypeBounds.nonEmpty) log(
         sm"""|instantiateTypeVar with nonEmpty saved type bounds {
@@ -1427,35 +1451,5 @@ trait Infer extends Checkable {
     }
   }
 
-  /** [Martin] Can someone comment this please? I have no idea what it's for
-    *  and the code is not exactly readable.
-    */
-  object AdjustedTypeArgs {
-    val Result  = mutable.LinkedHashMap
-    type Result = mutable.LinkedHashMap[Symbol, Option[Type]]
-
-    def unapply(m: Result): Some[(List[Symbol], List[Type])] = Some(toLists(
-      (m collect {case (p, Some(a)) => (p, a)}).unzip  ))
-
-    object Undets {
-      def unapply(m: Result): Some[(List[Symbol], List[Type], List[Symbol])] = Some(toLists{
-        val (ok, nok) = m.map{case (p, a) => (p, a.getOrElse(null))}.partition(_._2 ne null)
-        val (okArgs, okTparams) = ok.unzip
-        (okArgs, okTparams, nok.keys)
-      })
-    }
-
-    object AllArgsAndUndets {
-      def unapply(m: Result): Some[(List[Symbol], List[Type], List[Type], List[Symbol])] = Some(toLists{
-        val (ok, nok) = m.map{case (p, a) => (p, a.getOrElse(null))}.partition(_._2 ne null)
-        val (okArgs, okTparams) = ok.unzip
-        (okArgs, okTparams, m.values.map(_.getOrElse(NothingTpe)), nok.keys)
-      })
-    }
-
-    private def toLists[A1, A2](pxs: (Iterable[A1], Iterable[A2])) = (pxs._1.toList, pxs._2.toList)
-    private def toLists[A1, A2, A3](pxs: (Iterable[A1], Iterable[A2], Iterable[A3])) = (pxs._1.toList, pxs._2.toList, pxs._3.toList)
-    private def toLists[A1, A2, A3, A4](pxs: (Iterable[A1], Iterable[A2], Iterable[A3], Iterable[A4])) = (pxs._1.toList, pxs._2.toList, pxs._3.toList, pxs._4.toList)
-  }
-
+  final case class AdjustedTypeArgs(okParams: List[Symbol], okArgs: List[Type], undetParams: List[Symbol], allArgs: List[Type])
 }

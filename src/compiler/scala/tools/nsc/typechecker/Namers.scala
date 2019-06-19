@@ -582,34 +582,38 @@ trait Namers extends MethodSynthesis {
         }
       }
 
-      def noDuplicates(names: List[Name], check: DuplicatesErrorKinds.Value) {
-        def loop(xs: List[Name]): Unit = xs match {
-          case Nil      => ()
-          case hd :: tl =>
-            if (hd == nme.WILDCARD || !(tl contains hd)) loop(tl)
-            else DuplicatesError(tree, hd, check)
-        }
-        loop(names filterNot (x => x == null || x == nme.WILDCARD))
-      }
       selectors foreach checkSelector
 
+      def noDuplicates(): Unit = {
+        @inline def isRename(hd: ImportSelector): Boolean =
+          hd.rename != null && hd.rename != nme.WILDCARD && hd.rename != hd.name
+        def loop(xs: List[ImportSelector]): Unit = xs match {
+          case Nil      => ()
+          case hd :: tl =>
+            if (hd.name != nme.WILDCARD && tl.exists(x => ! (x.name == nme.WILDCARD) && x.name == hd.name))
+              DuplicatesError(tree, hd.name, RenamedTwice)
+            else if (isRename(hd) && tl.exists(x => isRename(hd) && x.rename == hd.rename))
+              DuplicatesError(tree, hd.rename, AppearsTwice)
+            else loop(tl)
+        }
+        loop(selectors)
+      }
       // checks on the whole set
-      noDuplicates(selectors map (_.name), RenamedTwice)
-      noDuplicates(selectors map (_.rename), AppearsTwice)
+      noDuplicates()
     }
 
     def copyMethodCompleter(copyDef: DefDef): TypeCompleter = {
       /* Assign the types of the class parameters to the parameters of the
        * copy method. See comment in `Unapplies.caseClassCopyMeth`
        */
-      def assignParamTypes(copyDef: DefDef, sym: Symbol) {
+      def assignParamTypes(copyDef: DefDef, sym: Symbol): Unit = {
         val clazz = sym.owner
         val constructorType = clazz.primaryConstructor.tpe
         val subst = new SubstSymMap(clazz.typeParams, copyDef.tparams map (_.symbol))
         val classParamss = constructorType.paramss
 
-        map2(copyDef.vparamss, classParamss)((copyParams, classParams) =>
-          map2(copyParams, classParams)((copyP, classP) =>
+        foreach2(copyDef.vparamss, classParamss)((copyParams, classParams) =>
+          foreach2(copyParams, classParams)((copyP, classP) =>
             copyP.tpt setType subst(classP.tpe)
           )
         )
@@ -1307,7 +1311,11 @@ trait Namers extends MethodSynthesis {
 
       val resTpGiven =
         if (tpt.isEmpty) WildcardType
-        else typer.typedType(tpt).tpe
+        else {
+          val tptTyped = typer.typedType(tpt)
+          context.unit.transformed(tpt) = tptTyped
+          tptTyped.tpe
+        }
 
 
       // ignore missing types unless we can look to overridden method to recover the missing information
@@ -1530,7 +1538,7 @@ trait Namers extends MethodSynthesis {
         assert(!overrides || vparams.length == baseParamss.head.length, ""+ meth.fullName + ", "+ overridden.fullName)
         val rvparams = rvparamss(previous.length)
         var baseParams = if (overrides) baseParamss.head else Nil
-        map2(vparams, rvparams)((vparam, rvparam) => {
+        foreach2(vparams, rvparams){ (vparam, rvparam) =>
           val sym = vparam.symbol
           // true if the corresponding parameter of the base class has a default argument
           val baseHasDefault = overrides && baseParams.head.hasDefault
@@ -1572,8 +1580,7 @@ trait Namers extends MethodSynthesis {
                     // if we use Wildcard as expected, we get "Nothing => Nothing", and the default is not usable.
                     // TODO: this is a very brittle approach; I sincerely hope that Denys's research into hygiene
                     //       will open the doors to a much better way of doing this kind of stuff
-                    val tparamNames = defTparams map { case TypeDef(_, name, _, _) => name }
-                    val eraseAllMentionsOfTparams = new TypeTreeSubstituter(tparamNames contains _)
+                    val eraseAllMentionsOfTparams = new TypeTreeSubstituter(x => defTparams.exists(_.name == x))
                     eraseAllMentionsOfTparams(rvparam.tpt match {
                       // default getter for by-name params
                       case AppliedTypeTree(_, List(arg)) if sym.hasFlag(BYNAMEPARAM) => arg
@@ -1603,7 +1610,7 @@ trait Namers extends MethodSynthesis {
           }
           posCounter += 1
           if (overrides) baseParams = baseParams.tail
-        })
+        }
         if (overrides) baseParamss = baseParamss.tail
         previous :+ vparams
       }
@@ -1720,7 +1727,11 @@ trait Namers extends MethodSynthesis {
 
             tptFromRhsUnderPt
           }
-        } else typer.typedType(tpt).tpe
+        } else {
+          val tptTyped = typer.typedType(tpt)
+          context.unit.transformed(tpt) = tptTyped
+          tptTyped.tpe
+        }
 
 //      println(s"val: $result / ${vdef.tpt.tpe} / ")
 
@@ -2066,7 +2077,7 @@ trait Namers extends MethodSynthesis {
     if (defnSym.isTerm) {
       // for polymorphic DefDefs, create type skolems and assign them to the tparam trees.
       val skolems = deriveFreshSkolems(tparams map (_.symbol))
-      map2(tparams, skolems)(_ setSymbol _)
+      foreach2(tparams, skolems)(_ setSymbol _)
     }
 
     def completeImpl(sym: Symbol) = {

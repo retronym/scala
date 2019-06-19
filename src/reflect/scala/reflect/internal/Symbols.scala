@@ -1310,11 +1310,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (sym.isRoot || sym.isRootPackage || sym == NoSymbol || sym.owner.isEffectiveRoot) {
           val capacity = size + nSize
           b = new java.lang.StringBuffer(capacity)
-          b.append(chrs, symName.start, nSize)
+          symName.appendTo(b, 0, nSize)
         } else {
           loop(size + nSize + 1, sym.effectiveOwner.enclClass)
           b.append(separator)
-          b.append(chrs, symName.start, nSize)
+          symName.appendTo(b, 0, nSize)
         }
       }
       loop(suffix.length(), this)
@@ -2170,6 +2170,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def superClass: Symbol = if (info.parents.isEmpty) NoSymbol else info.parents.head.typeSymbol
     def parentSymbols: List[Symbol] = info.parents map (_.typeSymbol)
 
+    def parentSymbolsIterator: Iterator[Symbol] = info.parents.iterator.map(_.typeSymbol)
     /** The directly or indirectly inherited mixins of this class
      *  except for mixin classes inherited by the superclass. Mixin classes appear
      *  in linearization order.
@@ -3622,7 +3623,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    */
   def deriveSymbols(syms: List[Symbol], symFn: Symbol => Symbol): List[Symbol] = {
     val syms1 = mapList(syms)(symFn)
-    mapList(syms1)(_ substInfo (syms, syms1))
+    syms1.foreach(_.substInfo(syms, syms1))
+    syms1
   }
 
   /** Derives a new list of symbols from the given list by mapping the given
@@ -3637,7 +3639,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    */
   def deriveSymbols2[A](syms: List[Symbol], as: List[A], symFn: (Symbol, A) => Symbol): List[Symbol] = {
     val syms1 = map2(syms, as)(symFn)
-    mapList(syms1)(_ substInfo (syms, syms1))
+    syms1.foreach(_.substInfo(syms, syms1))
+    syms1
   }
 
   /** Derives a new Type by first deriving new symbols as in deriveSymbols,
@@ -3692,10 +3695,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
    *  @param    infoFn  the function to apply to the infos
    *  @return           the newly created, info-adjusted symbols
    */
-  def cloneSymbolsAndModify(syms: List[Symbol], infoFn: Type => Type): List[Symbol] =
-    mapList(cloneSymbols(syms))(_ modifyInfo infoFn)
-  def cloneSymbolsAtOwnerAndModify(syms: List[Symbol], owner: Symbol, infoFn: Type => Type): List[Symbol] =
-    mapList(cloneSymbolsAtOwner(syms, owner))(_ modifyInfo infoFn)
+  def cloneSymbolsAndModify(syms: List[Symbol], infoFn: Type => Type): List[Symbol] = {
+    val cloned = cloneSymbols(syms)
+    cloned foreach (_ modifyInfo infoFn)
+    cloned
+  }
+  def cloneSymbolsAtOwnerAndModify(syms: List[Symbol], owner: Symbol, infoFn: Type => Type): List[Symbol] = {
+    val cloned = cloneSymbolsAtOwner(syms, owner)
+    cloned foreach (_ modifyInfo infoFn)
+    cloned
+  }
 
   /** Functions which perform the standard clone/substituting on the given symbols and type,
    *  then call the creator function with the new symbols and type as arguments.
@@ -3712,6 +3721,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   /** A deep map on a symbol's paramss.
    */
   def mapParamss[T](sym: Symbol)(f: Symbol => T): List[List[T]] = mmap(sym.info.paramss)(f)
+
+  def foreachParamss(sym: Symbol)(f: Symbol => Unit): Unit = mforeach(sym.info.paramss)(f)
 
   def existingSymbols(syms: List[Symbol]): List[Symbol] =
     syms filter (s => (s ne null) && (s ne NoSymbol))

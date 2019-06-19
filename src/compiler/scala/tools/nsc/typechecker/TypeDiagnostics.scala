@@ -224,8 +224,8 @@ trait TypeDiagnostics {
         val params    = req.typeConstructor.typeParams
 
         if (foundArgs.nonEmpty && foundArgs.length == reqArgs.length) {
-          val relationships = (foundArgs, reqArgs, params).zipped map {
-            case (arg, reqArg, param) =>
+          val relationships = map3(foundArgs, reqArgs, params){
+            (arg, reqArg, param) =>
               def mkMsg(isSubtype: Boolean) = {
                 val op      = if (isSubtype) "<:" else ">:"
                 val suggest = if (isSubtype) "+" else "-"
@@ -549,7 +549,7 @@ trait TypeDiagnostics {
         }
 
         if (t.tpe ne null) {
-          for (tp <- t.tpe if !treeTypes(tp)) {
+          for (tp <- t.tpe) if (!treeTypes(tp)) {
             // Include references to private/local aliases (which might otherwise refer to an enclosing class)
             val isAlias = {
               val td = tp.typeSymbolDirect

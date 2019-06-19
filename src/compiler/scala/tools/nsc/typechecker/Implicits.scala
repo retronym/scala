@@ -21,10 +21,10 @@ package typechecker
 
 import scala.annotation.tailrec
 import scala.collection.mutable
-import mutable.{ LinkedHashMap, ListBuffer }
+import mutable.{LinkedHashMap, ListBuffer}
 import scala.util.matching.Regex
 import symtab.Flags._
-import scala.reflect.internal.util.{TriState, Statistics, StatisticsStatics}
+import scala.reflect.internal.util.{ReusableInstance, Statistics, StatisticsStatics, TriState}
 import scala.reflect.internal.TypesStats
 import scala.language.implicitConversions
 
@@ -598,11 +598,10 @@ trait Implicits {
                 if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(matchesPtInstMismatch1)
                 false
               } else {
-                val targs = solvedTypes(tvars, allUndetparams, allUndetparams map varianceInType(wildPt), upper = false, lubDepth(tpInstantiated :: wildPt :: Nil))
-                val AdjustedTypeArgs(okParams, okArgs) = adjustTypeArgs(allUndetparams, tvars, targs)
-                val remainingUndet = allUndetparams diff okParams
-                val tpSubst = deriveTypeWithWildcards(remainingUndet)(tp.instantiateTypeParams(okParams, okArgs))
-                if(!matchesPt(tpSubst, wildPt, remainingUndet)) {
+                val targs = solvedTypes(tvars, allUndetparams, varianceInType(wildPt), upper = false, lubDepth(tpInstantiated :: wildPt :: Nil))
+                val adjusted = adjustTypeArgs(allUndetparams, tvars, targs)
+                val tpSubst = deriveTypeWithWildcards(adjusted.undetParams)(tp.instantiateTypeParams(adjusted.okParams, adjusted.okArgs))
+                if(!matchesPt(tpSubst, wildPt, adjusted.undetParams)) {
                   if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(matchesPtInstMismatch2)
                   false
                 } else true
@@ -797,7 +796,7 @@ trait Implicits {
             if (tvars.nonEmpty)
               typingLog("solve", ptLine("tvars" -> tvars, "tvars.constr" -> tvars.map(_.constr)))
 
-            val targs = solvedTypes(tvars, undetParams, undetParams map varianceInType(pt), upper = false, lubDepth(itree3.tpe :: pt :: Nil))
+            val targs = solvedTypes(tvars, undetParams, varianceInType(pt), upper = false, lubDepth(itree3.tpe :: pt :: Nil))
 
             // #2421: check that we correctly instantiated type parameters outside of the implicit tree:
             checkBounds(itree3, NoPrefix, NoSymbol, undetParams, targs, "inferred ")
@@ -820,7 +819,8 @@ trait Implicits {
             // filter out failures from type inference, don't want to remove them from undetParams!
             // we must be conservative in leaving type params in undetparams
             // prototype == WildcardType: want to remove all inferred Nothings
-            val AdjustedTypeArgs(okParams, okArgs) = adjustTypeArgs(undetParams, tvars, targs)
+            val adjusted = adjustTypeArgs(undetParams, tvars, targs)
+            import adjusted.{okParams, okArgs}
 
             val subst: TreeTypeSubstituter =
               if (okParams.isEmpty) EmptyTreeTypeSubstituter
@@ -919,8 +919,6 @@ trait Implicits {
      *                             enclosing scope, and so on.
      */
     class ImplicitComputation(iss: Infoss, isLocalToCallsite: Boolean) {
-      private val shadower: Shadower = if (isLocalToCallsite) new LocalShadower else NoShadower
-
       private var best: SearchResult = SearchFailure
 
       private def isIneligible(info: ImplicitInfo) = (
@@ -931,7 +929,7 @@ trait Implicits {
 
       /** True if a given ImplicitInfo (already known isValid) is eligible.
        */
-      def survives(info: ImplicitInfo) = (
+      def survives(info: ImplicitInfo, shadower: Shadower) = (
            !isIneligible(info)                      // cyclic, erroneous, shadowed, or specially excluded
         && isPlausiblyCompatible(info.tpe, wildPt)  // optimization to avoid matchesPt
         && !shadower.isShadowed(info.name)          // OPT rare, only check for plausible candidates
@@ -987,9 +985,9 @@ trait Implicits {
 
       /** Sorted list of eligible implicits.
        */
-      val eligible = {
+      val eligible = Shadower.using(isLocalToCallsite){ shadower =>
         val matches = iss flatMap { is =>
-          val result = is filter (info => checkValid(info.sym) && survives(info))
+          val result = is filter (info => checkValid(info.sym) && survives(info, shadower))
           shadower addInfos is
           result
         }
@@ -1655,14 +1653,26 @@ trait Implicits {
     def addInfos(infos: Infos): Unit
     def isShadowed(name: Name): Boolean
   }
+  object Shadower {
+    private[this] val localShadowerCache = new ReusableInstance[LocalShadower](() => new LocalShadower)
+
+    def using[T](local: Boolean)(f: Shadower => T): T =
+      if (local) localShadowerCache.using { shadower =>
+        shadower.clear()
+        f(shadower)
+      }
+      else f(NoShadower)
+  }
 
   /** Used for exclude implicits from outer scopes that are shadowed by same-named implicits */
   private final class LocalShadower extends Shadower {
-    val shadowed = util.HashSet[Name](512)
+    // OPT: using j.l.HashSet as that retains the internal array on clear(), which makes it worth caching.
+    val shadowed = new java.util.HashSet[Name](512)
     def addInfos(infos: Infos): Unit = {
-      infos.foreach(i => shadowed.addEntry(i.name))
+      infos.foreach(i => shadowed.add(i.name))
     }
-    def isShadowed(name: Name) = shadowed(name)
+    def isShadowed(name: Name) = shadowed.contains(name)
+    def clear(): Unit = shadowed.clear()
   }
   /** Used for the implicits of expected type, when no shadowing checks are needed. */
   private object NoShadower extends Shadower {

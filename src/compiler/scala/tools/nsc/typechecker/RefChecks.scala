@@ -394,11 +394,11 @@ abstract class RefChecks extends Transform {
             //Console.println(infoString(member) + " shadows1 " + infoString(other) " in " + clazz);//DEBUG
             return
           }
-          if (clazz.parentSymbols exists (p => subOther(p) && subMember(p) && deferredCheck)) {
+          if (clazz.parentSymbolsIterator exists (p => subOther(p) && subMember(p) && deferredCheck)) {
             //Console.println(infoString(member) + " shadows2 " + infoString(other) + " in " + clazz);//DEBUG
             return
           }
-          if (clazz.parentSymbols forall (p => subOther(p) == subMember(p))) {
+          if (clazz.parentSymbolsIterator forall (p => subOther(p) == subMember(p))) {
             //Console.println(infoString(member) + " shadows " + infoString(other) + " in " + clazz);//DEBUG
             return
           }
@@ -686,16 +686,20 @@ abstract class RefChecks extends Transform {
               val matchingArity      = matchingName filter { m =>
                 !m.isDeferred &&
                 (m.name == underlying.name) &&
-                (m.paramLists.length == abstractParamLists.length) &&
-                (m.paramLists.map(_.length).sum == abstractParamLists.map(_.length).sum) &&
-                (m.tpe.typeParams.size == underlying.tpe.typeParams.size)
+                sameLength(m.paramLists, abstractParamLists) &&
+                sumSize(m.paramLists, 0) == sumSize(abstractParamLists, 0) &&
+                sameLength(m.tpe.typeParams, underlying.tpe.typeParams)
               }
 
               matchingArity match {
                 // So far so good: only one candidate method
                 case Scope(concrete)   =>
-                  val mismatches  = abstractParamLists.flatten.map(_.tpe) zip concrete.paramLists.flatten.map(_.tpe) filterNot { case (x, y) => x =:= y }
-                  mismatches match {
+                  val aplIter = abstractParamLists .iterator.flatten
+                  val cplIter = concrete.paramLists.iterator.flatten
+                  def mismatch(apl: Symbol, cpl: Symbol): Option[(Type, Type)] =
+                    if (apl.tpe =:= cpl.tpe) None else Some(apl.tpe -> cpl.tpe)
+                  
+                  mapFilter2(aplIter, cplIter)(mismatch).take(2).toList match {
                     // Only one mismatched parameter: say something useful.
                     case (pa, pc) :: Nil  =>
                       val abstractSym = pa.typeSymbol
@@ -724,7 +728,7 @@ abstract class RefChecks extends Transform {
                       )
 
                       undefined("\n(Note that %s does not match %s%s)".format(pa, pc, addendum))
-                    case xs =>
+                    case _ =>
                       undefined("")
                   }
                 case _ =>
@@ -1235,9 +1239,8 @@ abstract class RefChecks extends Transform {
           reporter.error(tree0.pos, ex.getMessage())
           if (settings.explaintypes) {
             val bounds = tparams map (tp => tp.info.instantiateTypeParams(tparams, argtps).bounds)
-            (argtps, bounds).zipped map ((targ, bound) => explainTypes(bound.lo, targ))
-            (argtps, bounds).zipped map ((targ, bound) => explainTypes(targ, bound.hi))
-            ()
+            foreach2(argtps, bounds)((targ, bound) => explainTypes(bound.lo, targ))
+            foreach2(argtps, bounds)((targ, bound) => explainTypes(targ, bound.hi))
           }
       }
     private def isIrrefutable(pat: Tree, seltpe: Type): Boolean = pat match {
@@ -1311,16 +1314,20 @@ abstract class RefChecks extends Transform {
       && (otherSym isLessAccessibleThan memberSym.enclClass)
     )
     private def lessAccessibleSymsInType(other: Type, memberSym: Symbol): List[Symbol] = {
-      val extras = other match {
-        case TypeRef(pre, _, args) =>
+      val res: ListBuffer[Symbol] = ListBuffer.empty[Symbol]
+      def loop(tp: Type): Unit = {
+        if (lessAccessible(tp.typeSymbol, memberSym))
+          res += tp.typeSymbol
+        tp match {
           // checking the prefix here gives us spurious errors on e.g. a private[process]
           // object which contains a type alias, which normalizes to a visible type.
-          args filterNot (_ eq NoPrefix) flatMap (tp => lessAccessibleSymsInType(tp, memberSym))
-        case _ =>
-          Nil
+          case TypeRef(pre, _, args) =>
+            args foreach { arg => if (arg ne NoPrefix) loop(arg) }
+          case _ => ()
+        }
       }
-      if (lessAccessible(other.typeSymbol, memberSym)) other.typeSymbol :: extras
-      else extras
+      loop(other)
+      res.toList
     }
     private def warnLessAccessible(otherSym: Symbol, memberSym: Symbol) {
       val comparison = accessFlagsToString(memberSym) match {
@@ -1357,9 +1364,9 @@ abstract class RefChecks extends Transform {
       }
 
       // types of the value parameters
-      mapParamss(member)(p => checkAccessibilityOfType(p.tpe))
+      foreachParamss(member)(p => checkAccessibilityOfType(p.tpe))
       // upper bounds of type parameters
-      member.typeParams.map(_.info.upperBound.widen) foreach checkAccessibilityOfType
+      member.typeParams.foreach(tp => checkAccessibilityOfType(tp.info.upperBound.widen))
     }
 
     private def checkByNameRightAssociativeDef(tree: DefDef) {
@@ -1437,8 +1444,8 @@ abstract class RefChecks extends Transform {
         }
 
         val annotsBySymbol = new mutable.LinkedHashMap[Symbol, ListBuffer[AnnotationInfo]]()
-        val transformedAnnots = annots.map(_.transformArgs(transformTrees))
-        for (transformedAnnot <- transformedAnnots) {
+        annots foreach { annot =>
+          val transformedAnnot = annot.transformArgs(transformTrees)
           val buffer = annotsBySymbol.getOrElseUpdate(transformedAnnot.symbol, new ListBuffer)
           buffer += transformedAnnot
         }
@@ -1601,7 +1608,8 @@ abstract class RefChecks extends Transform {
               if qual1.symbol == rd.StringContext_apply &&
                 treeInfo.isQualifierSafeToElide(qual) &&
                 lits.forall(lit => treeInfo.isLiteralString(lit)) &&
-                lits.length == (args.length + 1) =>
+                lits.length == (args.length + 1) &&
+                args.lengthCompare(64) <= 0 => // TODO make more robust to large input so that we can drop this condition, chunk the concatenations in manageable batches
               val isRaw = sym == rd.StringContext_raw
               if (isRaw) Some((lits, args))
               else {

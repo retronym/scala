@@ -197,35 +197,49 @@ final class FileBasedCache[T] {
   private case class Stamp(lastModified: FileTime, size: Long, fileKey: Object)
   private case class Entry(stamps: Seq[Stamp], t: T) {
     val referenceCount: AtomicInteger = new AtomicInteger(1)
+    var timerTask: TimerTask = null
+    def cancelTimer(): Unit = {
+      timerTask match {
+        case null =>
+        case t => t.cancel()
+      }
+    }
   }
   private val cache = collection.mutable.Map.empty[Seq[Path], Entry]
 
-  private def referenceCountDecrementer(e: Entry, paths: Seq[Path]): Closeable = new Closeable {
-    var closed = false
-    override def close(): Unit = {
-      if (!closed) {
-        closed = true
-        val count = e.referenceCount.decrementAndGet()
-        if (count == 0) {
-          e.t match {
-            case cl: Closeable =>
-              FileBasedCache.timer match {
-                case Some(timer) =>
-                  val task = new TimerTask {
-                    override def run(): Unit = {
-                      cache.synchronized {
-                        if (e.referenceCount.compareAndSet(0, -1)) {
-                          cache.remove(paths)
-                          cl.close()
+  private def referenceCountDecrementer(e: Entry, paths: Seq[Path]): Closeable = {
+    // Cancel the deferred close timer (if any) that was started when the reference count
+    // last dropped to zero.
+    e.cancelTimer()
+
+    new Closeable {
+      var closed = false
+      override def close(): Unit = {
+        if (!closed) {
+          closed = true
+          val count = e.referenceCount.decrementAndGet()
+          if (count == 0) {
+            e.t match {
+              case cl: Closeable =>
+                FileBasedCache.timer match {
+                  case Some(timer) =>
+                    val task = new TimerTask {
+                      override def run(): Unit = {
+                        cache.synchronized {
+                          if (e.referenceCount.compareAndSet(0, -1)) {
+                            cache.remove(paths)
+                            cl.close()
+                          }
                         }
                       }
                     }
-                  }
-                  timer.schedule(task, FileBasedCache.deferCloseMs.toLong)
-                case None =>
-                  cl.close()
-              }
-            case _ =>
+                    e.timerTask = task
+                    timer.schedule(task, FileBasedCache.deferCloseMs.toLong)
+                  case None =>
+                    cl.close()
+                }
+              case _ =>
+            }
           }
         }
       }
@@ -236,8 +250,8 @@ final class FileBasedCache[T] {
     import scala.reflect.io.{AbstractFile, Path}
     lazy val urlsAndFiles = urls.filterNot(_.getProtocol == "jrt").map(u => u -> AbstractFile.getURL(u))
     lazy val paths = urlsAndFiles.map(t => Path(t._2.file).jfile.toPath)
-    if (!checkStamps) Right(paths)
-    else if (disableCache) Left("caching is disabled due to a policy setting")
+    if (disableCache) Left("caching is disabled due to a policy setting")
+    else if (!checkStamps) Right(paths)
     else {
       val nonJarZips = urlsAndFiles.filter { case (url, file) => file == null || !Jar.isJarOrZip(file.file) }
       if (nonJarZips.nonEmpty) Left(s"caching is disabled because of the following classpath elements: ${nonJarZips.map(_._1).mkString(", ")}.")

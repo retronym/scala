@@ -1532,10 +1532,13 @@ trait Contexts { self: Analyzer =>
       var selectors = tree.selectors
       @inline def current = selectors.head
       while ((selectors ne Nil) && result == NoSymbol) {
-        if (current.rename == name.toTermName)
+        def sameName(name: Name, other: Name) = {
+          (name eq other) || (name ne null) && name.start == other.start && name.length == other.length
+        }
+        if (sameName(current.rename, name))
           result = qual.tpe.nonLocalMember( // new to address #2733: consider only non-local members for imports
             if (name.isTypeName) current.name.toTypeName else current.name)
-        else if (current.name == name.toTermName)
+        else if (sameName(current.name, name))
           renamed = true
         else if (current.name == nme.WILDCARD && !renamed && !requireExplicit)
           result = qual.tpe.nonLocalMember(name)
@@ -1567,7 +1570,7 @@ trait Contexts { self: Analyzer =>
     private def transformImport(selectors: List[ImportSelector], sym: Symbol): List[Symbol] = selectors match {
       case List() => List()
       case List(ImportSelector(nme.WILDCARD, _, _, _)) => List(sym)
-      case ImportSelector(from, _, to, _) :: _ if from == sym.name =>
+      case ImportSelector(from, _, to, _) :: _ if from == (if (from.isTermName) sym.name.toTermName else sym.name.toTypeName) =>
         if (to == nme.WILDCARD) List()
         else List(sym.cloneSymbol(sym.owner, sym.rawflags, to))
       case _ :: rest => transformImport(rest, sym)
