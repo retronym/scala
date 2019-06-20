@@ -619,14 +619,18 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
             }
           }
           val fileManager = ToolProvider.getSystemJavaCompiler.getStandardFileManager(null, null, null)
-          val compileTask = compiler.getTask(null, fileManager, listener, opts, null, fileManager.getJavaFileObjects(javaSources.toArray: _*))
-          compileTask.setProcessors(Collections.emptyList())
-          if (compileTask.call()) {
-            javaTimer.stop()
-            log(f"javac: done ${javaTimer.durationMs}%.0f ms ")
-          } else {
-            javaTimer.stop()
-            log(f"javac: error ${javaTimer.durationMs}%.0f ms ")
+          try {
+            val compileTask = compiler.getTask(null, fileManager, listener, opts, null, fileManager.getJavaFileObjects(javaSources.toArray: _*))
+            compileTask.setProcessors(Collections.emptyList())
+            if (compileTask.call()) {
+              javaTimer.stop()
+              log(f"javac: done ${javaTimer.durationMs}%.0f ms ")
+            } else {
+              javaTimer.stop()
+              log(f"javac: error ${javaTimer.durationMs}%.0f ms ")
+            }
+          } finally {
+            fileManager.close()
           }
           ()
         })
