@@ -4,3 +4,7 @@
 0:isDefinedAt
 1:isDefinedAt
 2:apply
+false
+true
+Vector(1, 2, 3, 4, 5)
+Vector(1, 2, 3, 4, 5)

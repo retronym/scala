@@ -81,8 +81,17 @@ object Test {
     chained(())
   }
 
+  def fromFunctionLiteralTest(): Unit = {
+    def isEven(n: Int): Boolean = PartialFunction.cond(n)(_ % 2 == 0)
+    println(isEven(1))
+    println(isEven(2))
+    println((1 to 5).map(_.toString))
+    println((1 to 5).collect(_.toString))
+  }
+
   def main(args: Array[String]): Unit = {
     collectTest()
     orElseTest()
+    fromFunctionLiteralTest()
   }
 }
