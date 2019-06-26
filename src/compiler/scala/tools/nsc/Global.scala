@@ -1554,6 +1554,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       if (traceSymbolActivity)
         units map (_.body) foreach (traceSymbols recordSymbolsInTree _)
 
+      if (settings.verbose) {
+        inform(s"[name table stats: ${nameTableStats()}]")
+      }
+
       // In case no phase was specified for -Xshow-class/object, show it now for sure.
       if (settings.Yshow.isDefault)
         showMembers()

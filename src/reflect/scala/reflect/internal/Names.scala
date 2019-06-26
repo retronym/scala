@@ -54,6 +54,25 @@ trait Names extends api.Names {
 
   final def allNames(): Iterator[TermName] = termHashtable.iterator.filter(_ ne null).flatMap(n => Iterator.iterate(n)(_.next).takeWhile(_ ne null))
 
+  final def nameTableStats(): NameTableStats = {
+    val numTermNames = termHashtable.count(_ ne null)
+    val numTypeNames = typeHashtable.count(_ ne null)
+    val numChars = termHashtable.iterator.filter(_ ne null).map(_.length).sum
+    val RefSize = 4
+    val CharSize = 2
+    val TermNameSize = 32
+    val TypeNameSize = TermNameSize
+    val size = (numTermNames + numTypeNames) * RefSize + numChars * CharSize + numTermNames * TermNameSize + numTypeNames * TypeNameSize
+    val slack = ((termHashtable.length - numTermNames) + (typeHashtable.length - numTypeNames)) * RefSize + (_chrs.length - numChars) * CharSize
+    new NameTableStats(numTermNames, numTypeNames, size, slack)
+  }
+
+  final class NameTableStats(val numTermNames: Int, val numTypeNames: Int, val size: Long, val slack: Long) {
+    override def toString() = {
+      s"Name table contains ${numTermNames} terms and ${numTypeNames} types consuming $size bytes. There are also $slack bytes of slack space for a total of ${size + slack} bytes."
+    }
+  }
+
   private def hashValue(cs: Array[Char], offset: Int, len: Int): Int = {
     var h = 0
     var i = 0
