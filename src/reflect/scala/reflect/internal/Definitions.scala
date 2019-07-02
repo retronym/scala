@@ -582,6 +582,8 @@ trait Definitions extends api.StandardDefinitions {
     lazy val NoneModule: ModuleSymbol   = requiredModule[scala.None.type]
     lazy val SomeModule: ModuleSymbol   = requiredModule[scala.Some.type]
 
+    private[scala] lazy val ScalacticPosition: Symbol = getClassIfDefined("org.scalactic.source.Position")
+
     def compilerTypeFromTag(tt: ApiUniverse # WeakTypeTag[_]): Type = tt.in(rootMirror).tpe
     def compilerSymbolFromTag(tt: ApiUniverse # WeakTypeTag[_]): Symbol = tt.in(rootMirror).tpe.typeSymbol
 

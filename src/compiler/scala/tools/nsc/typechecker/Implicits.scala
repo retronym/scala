@@ -421,7 +421,7 @@ trait Implicits {
     def pos = if (pos0 != NoPosition) pos0 else tree.pos
 
     @inline final def failure(what: Any, reason: => String, pos: Position = this.pos): SearchResult = {
-      if (settings.XlogImplicits)
+      if (settings.XlogImplicits.value || pt.typeSymbol == definitions.ScalacticPosition)
         reporter.echo(pos, what+" is not a valid implicit value for "+pt+" because:\n"+reason)
       SearchFailure
     }
