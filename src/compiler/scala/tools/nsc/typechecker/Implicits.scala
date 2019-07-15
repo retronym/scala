@@ -627,7 +627,7 @@ trait Implicits {
             loop(restpe, pt)
           else pt match {
             case tr @ TypeRef(pre, sym, args) =>
-              if (sym.isAliasType) loop(tp, pt.dealias)
+              if (sym.isAliasType) loop(tp, pt.normalize)
               else if (sym.isAbstractType) loop(tp, pt.lowerBound)
               else {
                 val ptFunctionArity = functionArity(pt)
