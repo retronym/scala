@@ -52,8 +52,21 @@ abstract class ClassfileWriters {
      */
     def close(): Unit
 
-    protected def classRelativePath(className: InternalName, suffix: String = ".class"): String =
-      className.replace('.', '/') + suffix
+    protected def classRelativePath(className: InternalName, suffix: String = ".class"): String = {
+      val builder = new java.lang.StringBuilder(className.length + suffix.length)
+      appendReplace(builder, className, '.', '/')
+      builder.append(suffix)
+      builder.toString
+    }
+  }
+
+  private def appendReplace(builder: java.lang.StringBuilder, s: String, oldChar: Char, newChar: Char): Unit = {
+    builder.append(s)
+    var i = s.indexOf(oldChar, 0)
+    while (i >= 0) {
+      builder.setCharAt(i, oldChar)
+      i = s.indexOf(newChar, i)
+    }
   }
 
   object ClassfileWriter {
