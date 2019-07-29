@@ -2242,9 +2242,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** The top-level class containing this symbol, using the current owner chain. */
     def enclosingTopLevelClass: Symbol =
-      if (isTopLevel) {
+      if (rawowner.hasPackageFlag) {
         if (isClass) this else moduleClass
-      } else owner.enclosingTopLevelClass
+      } else rawowner.enclosingTopLevelClass
 
     /** The top-level class or local dummy symbol containing this symbol, using the original owner chain. */
     def originalEnclosingTopLevelClassOrDummy: Symbol =
