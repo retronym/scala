@@ -2301,7 +2301,7 @@ trait Types
     override def decls: Scope = sym.info.decls
 
     protected[Types] def baseTypeSeqImpl: BaseTypeSeq =
-      if (sym.info.baseTypeSeq exists (_.typeSymbolDirect.isAbstractType))
+      if (sym.info.baseTypeSeq.hasAbstractTypeSymbol)
         // scala/bug#8046 base type sequence might have more elements in a subclass, we can't map it element wise.
         relativize(sym.info).baseTypeSeq
       else
