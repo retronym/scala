@@ -57,7 +57,7 @@ trait BaseTypeSeqs {
       val tmp = new Array[Int](elems.length)
       var i = 0
       while (i < elems.length) {
-        hasAbstractTypeSymbol ||= elems(i).typeSymbolDirect.isAbstractType
+        _hasAbstractTypeSymbol ||= elems(i).typeSymbolDirect.isAbstractType
         tmp(i) = elems(i).typeSymbol.id
         i += 1
       }
