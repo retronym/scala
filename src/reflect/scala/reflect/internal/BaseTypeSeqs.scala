@@ -162,7 +162,16 @@ trait BaseTypeSeqs {
 
     def lateMap(f: Type => Type): BaseTypeSeq = newMappedBaseTypeSeq(this, f)
 
-    def exists(p: Type => Boolean): Boolean = elems exists p
+    @inline
+    final def exists(p: Type => Boolean): Boolean = {
+      var i = 0
+      val es = elems
+      while (i < es.length) {
+        if (p(es(i))) return true
+        i += 1
+      }
+      false
+    }
 
     lazy val maxDepth = maxDepthOfElems
 
