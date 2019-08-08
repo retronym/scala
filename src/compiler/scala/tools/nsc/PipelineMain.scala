@@ -312,6 +312,14 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
       writeChromeTrace(dir, projects)
     }
     deleteTempPickleCache()
+    fsInfo.foreach { fsInfo =>
+      try {
+        fsInfo.getClass.getDeclaredMethod("clearCache").invoke(fsInfo)
+      } catch {
+        case _: Throwable =>
+          // ignore
+      }
+    }
     !reporter.hasErrors
   }
 
