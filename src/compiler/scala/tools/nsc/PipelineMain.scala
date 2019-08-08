@@ -57,6 +57,10 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
 
   private var reporter: Reporter = _
 
+  private lazy val fsInfo: Option[Any] = {
+    Try(Class.forName("com.sun.tools.javac.file.CacheFSInfo").newInstance()).toOption
+  }
+
   private object handler extends UncaughtExceptionHandler {
     override def uncaughtException(t: Thread, e: Throwable): Unit = {
       e.printStackTrace()
@@ -568,8 +572,20 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
             }
           }
           val fileManager = ToolProvider.getSystemJavaCompiler.getStandardFileManager(null, null, null)
+          fsInfo.foreach { fsInfo =>
+            try {
+              val fsInfoField = fileManager.getClass.getDeclaredField("fsInfo")
+              fsInfoField.setAccessible(true)
+              fsInfoField.set(fileManager, fsInfo)
+            } catch {
+              case t: Throwable =>
+                t.printStackTrace()
+            }
+          }
           val compileTask = compiler.getTask(null, fileManager, listener, opts, null, fileManager.getJavaFileObjects(javaSources.toArray: _*))
           compileTask.setProcessors(Collections.emptyList())
+          try
+
           if (compileTask.call()) {
             javaTimer.stop()
             log(f"javac: done ${javaTimer.durationMs}%.0f ms ")
