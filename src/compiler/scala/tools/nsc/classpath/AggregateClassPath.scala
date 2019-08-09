@@ -30,13 +30,13 @@ import scala.tools.nsc.util.ClassRepresentation
 case class AggregateClassPath(aggregates: Seq[ClassPath]) extends ClassPath {
   override def findClassFile(className: String): Option[AbstractFile] = {
     val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
-    aggregatesForPackage(pkg).iterator.map(_.findClassFile(className)).collectFirst {
+    aggregatesForPackage(PackageName(pkg)).iterator.map(_.findClassFile(className)).collectFirst {
       case Some(x) => x
     }
   }
   private[this] val packageIndex: collection.mutable.Map[String, Seq[ClassPath]] = collection.mutable.Map()
-  private def aggregatesForPackage(pkg: String): Seq[ClassPath] = packageIndex.synchronized {
-    packageIndex.getOrElseUpdate(pkg, aggregates.filter(_.hasPackage(pkg)))
+  private def aggregatesForPackage(pkg: PackageName): Seq[ClassPath] = packageIndex.synchronized {
+    packageIndex.getOrElseUpdate(pkg.dottedString, aggregates.filter(_.hasPackage(pkg)))
   }
 
   // This method is performance sensitive as it is used by SBT's ExtractDependencies phase.
@@ -44,7 +44,7 @@ case class AggregateClassPath(aggregates: Seq[ClassPath]) extends ClassPath {
     val (pkg, simpleClassName) = PackageNameUtils.separatePkgAndClassNames(className)
 
     def findEntry(isSource: Boolean): Option[ClassRepresentation] = {
-      aggregatesForPackage(pkg).iterator.map(_.findClass(className)).collectFirst {
+      aggregatesForPackage(PackageName(pkg)).iterator.map(_.findClass(className)).collectFirst {
         case Some(s: SourceFileEntry) if isSource => s
         case Some(s: ClassFileEntry) if !isSource => s
       }
@@ -66,19 +66,20 @@ case class AggregateClassPath(aggregates: Seq[ClassPath]) extends ClassPath {
 
   override def asSourcePathString: String = ClassPath.join(aggregates map (_.asSourcePathString): _*)
 
-  override private[nsc] def packages(inPackage: String): Seq[PackageEntry] = {
+  override private[nsc] def packages(inPackage: PackageName): Seq[PackageEntry] = {
     val aggregatedPackages = aggregates.flatMap(_.packages(inPackage)).distinct
     aggregatedPackages
   }
 
-  override private[nsc] def classes(inPackage: String): Seq[ClassFileEntry] =
+  override private[nsc] def classes(inPackage: PackageName): Seq[ClassFileEntry] =
     getDistinctEntries(_.classes(inPackage))
 
-  override private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] =
+  override private[nsc] def sources(inPackage: PackageName): Seq[SourceFileEntry] =
     getDistinctEntries(_.sources(inPackage))
 
-  override private[nsc] def hasPackage(pkg: String) = aggregates.exists(_.hasPackage(pkg))
-  override private[nsc] def list(inPackage: String): ClassPathEntries = {
+  override private[nsc] def hasPackage(pkg: PackageName) = aggregates.exists(_.hasPackage(pkg))
+  override private[nsc] def list(inPackage: PackageName): ClassPathEntries = {
+
     val (packages, classesAndSources) = aggregates.map { cp =>
       try {
         cp.list(inPackage)

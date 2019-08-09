@@ -36,39 +36,36 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
   private val archive = new FileZipArchive(zipFile, release)
   override def close(): Unit = archive.close()
 
-  override private[nsc] def packages(inPackage: String): Seq[PackageEntry] = {
-    val prefix = PackageNameUtils.packagePrefix(inPackage)
+  override private[nsc] def packages(inPackage: PackageName): Seq[PackageEntry] = {
     for {
       dirEntry <- findDirEntry(inPackage).toSeq
       entry <- dirEntry.iterator if entry.isPackage
-    } yield PackageEntryImpl(prefix + entry.name)
+    } yield PackageEntryImpl(inPackage.entryName(entry.name))
   }
 
-  protected def files(inPackage: String): Seq[FileEntryType] =
+  protected def files(inPackage: PackageName): Seq[FileEntryType] =
     for {
       dirEntry <- findDirEntry(inPackage).toSeq
       entry <- dirEntry.iterator if isRequiredFileType(entry)
     } yield createFileEntry(entry)
 
-  protected def file(inPackage: String, name: String): Option[FileEntryType] =
+  protected def file(inPackage: PackageName, name: String): Option[FileEntryType] =
     for {
       dirEntry <- findDirEntry(inPackage)
       entry <- Option(dirEntry.lookupName(name, directory = false))
       if isRequiredFileType(entry)
     } yield createFileEntry(entry)
 
-  override private[nsc] def hasPackage(pkg: String) = findDirEntry(pkg).isDefined
-  override private[nsc] def list(inPackage: String): ClassPathEntries = {
+  override private[nsc] def hasPackage(pkg: PackageName) = findDirEntry(pkg).isDefined
+  override private[nsc] def list(inPackage: PackageName): ClassPathEntries = {
     val foundDirEntry = findDirEntry(inPackage)
 
     foundDirEntry map { dirEntry =>
       val pkgBuf = collection.mutable.ArrayBuffer.empty[PackageEntry]
       val fileBuf = collection.mutable.ArrayBuffer.empty[FileEntryType]
-      val prefix = PackageNameUtils.packagePrefix(inPackage)
-
       for (entry <- dirEntry.iterator) {
         if (entry.isPackage)
-          pkgBuf += PackageEntryImpl(prefix + entry.name)
+          pkgBuf += PackageEntryImpl(inPackage.entryName(entry.name))
         else if (isRequiredFileType(entry))
           fileBuf += createFileEntry(entry)
       }
@@ -76,14 +73,12 @@ trait ZipArchiveFileLookup[FileEntryType <: ClassRepresentation] extends ClassPa
     } getOrElse ClassPathEntries.empty
   }
 
-  private def findDirEntry(pkg: String): Option[archive.DirEntry] = {
-    archive.allDirs.get(dottedToPath(pkg))
+  private def findDirEntry(pkg: PackageName): Option[archive.DirEntry] = {
+    archive.allDirs.get(pkg.dirPathTrailingSlash)
   }
 
-  private def dottedToPath(dotted: String): String = {
-    dotted.replace('.', '/') + "/"
-  }
 
   protected def createFileEntry(file: FileZipArchive#Entry): FileEntryType
   protected def isRequiredFileType(file: AbstractFile): Boolean
 }
+

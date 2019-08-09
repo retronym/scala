@@ -32,6 +32,23 @@ trait SourceFileEntry extends ClassRepresentation {
   def file: AbstractFile
 }
 
+case class PackageName(dottedString: String) {
+  def isRoot: Boolean = dottedString.isEmpty
+  val dirPath: String = FileUtils.dirPath(dottedString)
+  val dirPathTrailingSlash: String = dirPath + "/"
+
+  val packagePrefix = PackageNameUtils.packagePrefix(dottedString)
+  def entryName(entry: String): String = {
+    if (isRoot) entry else {
+      val builder = new java.lang.StringBuilder(dottedString.length + 1 + entry.length)
+      builder.append(dottedString)
+      builder.append('.')
+      builder.append(entry)
+      builder.toString
+    }
+  }
+}
+
 trait PackageEntry {
   def name: String
 }
@@ -61,10 +78,10 @@ private[nsc] case class PackageEntryImpl(name: String) extends PackageEntry
 
 private[nsc] trait NoSourcePaths {
   final def asSourcePathString: String = ""
-  final private[nsc] def sources(inPackage: String): Seq[SourceFileEntry] = Seq.empty
+  final private[nsc] def sources(inPackage: PackageName): Seq[SourceFileEntry] = Seq.empty
 }
 
 private[nsc] trait NoClassPaths {
   final def findClassFile(className: String): Option[AbstractFile] = None
-  private[nsc] final def classes(inPackage: String): Seq[ClassFileEntry] = Seq.empty
+  private[nsc] final def classes(inPackage: PackageName): Seq[ClassFileEntry] = Seq.empty
 }
