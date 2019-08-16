@@ -729,9 +729,6 @@ private[internal] trait TypeMaps {
 
   /** A base class to compute all substitutions */
   abstract class SubstMap[T](from: List[Symbol], to: List[T]) extends TypeMap {
-    // OPT this check was 2-3% of some profiles, demoted to -Xdev
-    if (isDeveloper) assert(sameLength(from, to), "Unsound substitution from "+ from +" to "+ to)
-
     private[this] var fromHasTermSymbol = false
     private[this] var fromMin = Int.MaxValue
     private[this] var fromMax = Int.MinValue
