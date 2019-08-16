@@ -5690,7 +5690,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     def typed(tree: Tree, mode: Mode, pt: Type): Tree = {
       lastTreeToTyper = tree
-      val statsEnabled = StatisticsStatics.areSomeHotStatsEnabled() && statistics.areHotStatsLocallyEnabled
+      val statsEnabled = StatisticsStatics.areSomeHotStatsEnabled && statistics.areHotStatsLocallyEnabled
       val startByType = if (statsEnabled) statistics.pushTimer(byTypeStack, byTypeNanos(tree.getClass)) else null
       if (statsEnabled) statistics.incCounter(visitsByType, tree.getClass)
       val shouldPrintTyping = printTypings && !phase.erasedTypes && !noPrintTyping(tree)
