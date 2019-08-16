@@ -830,7 +830,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def isDelambdafyFunction = isSynthetic && (name containsName tpnme.DELAMBDAFY_LAMBDA_CLASS_NAME)
     final def isDelambdafyTarget  = isArtifact && isMethod && hasAttachment[DelambdafyTarget.type]
     final def isDefinedInPackage  = effectiveOwner.isPackageClass
-    final def needsFlatClasses    = phase.flatClasses && (rawowner ne NoSymbol) && !rawowner.isPackageClass && !isMethod
+    final def needsFlatClasses    = phase.flatClasses && !rawowner.isNoSymbol && !rawowner.isPackageClass && !isMethod
 
     // TODO introduce a flag for these?
     final def isPatternTypeVariable: Boolean =
@@ -1086,6 +1086,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         supersym == NoSymbol || supersym.isIncompleteIn(base)
       }
 
+    final def isNoSymbol: Boolean = isInstanceOf[NoSymbol]
     def exists: Boolean = !isTopLevel || {
       val isSourceLoader = rawInfo match {
         case sl: SymLoader => sl.fromSource
