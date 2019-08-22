@@ -161,4 +161,8 @@ class JavaUniverse extends InternalSymbolTable with JavaUniverseForce with Refle
     // TODO Convert this into a macro
     force()
   }
+
+  def close(): Unit = {
+    closeAllThreadLocalStorage()
+  }
 }

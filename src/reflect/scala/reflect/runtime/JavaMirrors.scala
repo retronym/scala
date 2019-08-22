@@ -15,26 +15,22 @@ package reflect
 package runtime
 
 import scala.language.existentials
-
 import scala.ref.WeakReference
 import scala.collection.mutable.WeakHashMap
-
 import java.lang.{Class => jClass, Package => jPackage}
-import java.lang.reflect.{
-  Method => jMethod, Constructor => jConstructor, Field => jField,
-  Member => jMember, Type => jType, TypeVariable => jTypeVariable,
-  Parameter => jParameter, GenericDeclaration, GenericArrayType,
-  ParameterizedType, WildcardType, AnnotatedElement }
+import java.lang.reflect.{AnnotatedElement, GenericArrayType, GenericDeclaration, ParameterizedType, WildcardType, Constructor => jConstructor, Field => jField, Member => jMember, Method => jMethod, Parameter => jParameter, Type => jType, TypeVariable => jTypeVariable}
 import java.lang.annotation.{Annotation => jAnnotation}
 import java.io.IOException
-import scala.reflect.internal.{ MissingRequirementError, JavaAccFlags }
+
+import scala.reflect.internal.{JavaAccFlags, MissingRequirementError}
 import internal.pickling.ByteCodecs
 import internal.pickling.UnPickler
 import scala.collection.mutable.ListBuffer
 import internal.Flags._
 import ReflectionUtils._
 import scala.reflect.api.TypeCreator
-import scala.runtime.{ScalaRunTime, BoxesRunTime}
+import scala.reflect.internal.util.CachedReference
+import scala.runtime.{BoxesRunTime, ScalaRunTime}
 
 private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUniverse with TwoWayCaches { thisUniverse: SymbolTable =>
 
@@ -105,20 +101,30 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private val fieldCache       = new TwoWayCache[jField, TermSymbol]
     private val tparamCache      = new TwoWayCache[jTypeVariable[_ <: GenericDeclaration], TypeSymbol]
 
-    private[this] object typeTagCache extends ClassValue[TypeTag[_]]() {
+    private[this] object typeTagCache extends ClassValue[CachedReference[TypeTag[_]]]() {
       val typeCreator = new ThreadLocal[TypeCreator]()
 
-      override protected def computeValue(cls: jClass[_]): TypeTag[_] = {
+      override protected def computeValue(cls: jClass[_]): CachedReference[TypeTag[_]] = {
         val creator = typeCreator.get()
         assert(creator.getClass == cls, (creator, cls))
-        TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], creator)
+        new CachedReference(TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], creator))
       }
     }
 
     final def typeTag(typeCreator: TypeCreator): TypeTag[_] = {
       typeTagCache.typeCreator.set(typeCreator)
       try {
-        typeTagCache.get(typeCreator.getClass)
+        val ref = typeTagCache.get(typeCreator.getClass)
+        ref.singleShotGet match {
+          case null =>
+            ref.weakRef.get match {
+              case null =>
+                typeTagCache.remove(typeCreator.getClass)
+                TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], typeCreator)
+              case x => x
+            }
+          case x => x
+        }
       } finally  {
         typeTagCache.typeCreator.remove()
       }
@@ -263,6 +269,11 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       val staticClazz = classTag[T].runtimeClass
       val dynamicClazz = instance.getClass
       if (staticClazz.isPrimitive) staticClazz else dynamicClazz
+    }
+
+    override def close(): Unit = {
+      typeTagCache.typeCreator.remove()
+      super.close()
     }
 
     private class JavaInstanceMirror[T: ClassTag](val instance: T) extends InstanceMirror {

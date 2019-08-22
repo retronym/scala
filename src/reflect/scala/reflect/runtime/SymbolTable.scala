@@ -39,3 +39,4 @@ private[scala] trait SymbolTable extends internal.SymbolTable with JavaMirrors w
    */
   override def isCompilerUniverse = false
 }
+
