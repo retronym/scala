@@ -122,7 +122,7 @@ object ScriptCommands {
   }
 
   val enableOptimizer = Seq(
-    scalacOptions in Compile in ThisBuild ++= Seq("-opt:l:inline", "-opt-inline-from:scala/**")
+    scalacOptions in Compile in ThisBuild ++= Seq("-opt:l:inline,omit-pattern-vars", "-opt-inline-from:scala/**")
   )
 
   val noDocs = Seq(
