@@ -52,15 +52,18 @@ trait BaseTypeSeqs {
   self =>
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqCount)
     if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(baseTypeSeqLenTotal, elems.length)
+    private[this] var _hasAbstractTypeSymbol = false
     private[this] val typeSymbols = {
       val tmp = new Array[Int](elems.length)
       var i = 0
       while (i < elems.length) {
+        _hasAbstractTypeSymbol ||= elems(i).typeSymbolDirect.isAbstractType
         tmp(i) = elems(i).typeSymbol.id
         i += 1
       }
       tmp
     }
+    def hasAbstractTypeSymbol: Boolean = _hasAbstractTypeSymbol
 
     /** The number of types in the sequence */
     def length: Int = elems.length
@@ -162,7 +165,16 @@ trait BaseTypeSeqs {
 
     def lateMap(f: Type => Type): BaseTypeSeq = newMappedBaseTypeSeq(this, f)
 
-    def exists(p: Type => Boolean): Boolean = elems exists p
+    @inline
+    final def exists(p: Type => Boolean): Boolean = {
+      var i = 0
+      val es = elems
+      while (i < es.length) {
+        if (p(es(i))) return true
+        i += 1
+      }
+      false
+    }
 
     lazy val maxDepth = maxDepthOfElems
 
@@ -269,8 +281,8 @@ trait BaseTypeSeqs {
     override def copy(head: Type, offset: Int) = (orig map f).copy(head, offset)
     override def map(g: Type => Type) = lateMap(g)
     override def lateMap(g: Type => Type) = orig.lateMap(x => g(f(x)))
-    override def exists(p: Type => Boolean) = elems exists (x => p(f(x)))
     override protected def maxDepthOfElems: Depth = elems.map(x => typeDepth(f(x))).max
+    override def hasAbstractTypeSymbol: Boolean = elems exists (x => (f(x)).typeSymbolDirect.isAbstractType)
     override def toString = elems.mkString("MBTS(", ",", ")")
   }
 
