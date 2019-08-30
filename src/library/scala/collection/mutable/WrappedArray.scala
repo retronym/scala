@@ -178,6 +178,30 @@ object WrappedArray {
       case that: ofInt => Arrays.equals(array, that.array)
       case _ => super.equals(that)
     }
+    override def sum[B >: Int](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.IntIsIntegral) {
+      var z = 0
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z += as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
+    override def product[B >: Int](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.IntIsIntegral) {
+      var z = 0
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z *= as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
   }
 
   final class ofLong(val array: Array[Long]) extends WrappedArray[Long] with Serializable {
@@ -189,6 +213,30 @@ object WrappedArray {
     override def equals(that: Any) = that match {
       case that: ofLong => Arrays.equals(array, that.array)
       case _ => super.equals(that)
+    }
+    override def sum[B >: Long](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.LongIsIntegral) {
+      var z = 0L
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z += as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
+    override def product[B >: Long](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.LongIsIntegral) {
+      var z = 0L
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z *= as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
     }
   }
 
@@ -202,6 +250,30 @@ object WrappedArray {
       case that: ofFloat => Arrays.equals(array, that.array)
       case _ => super.equals(that)
     }
+    override def sum[B >: Float](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.FloatIsFractional) {
+      var z = 0f
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z += as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
+    override def product[B >: Float](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.FloatIsFractional) {
+      var z = 0f
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z *= as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
   }
 
   final class ofDouble(val array: Array[Double]) extends WrappedArray[Double] with Serializable {
@@ -213,6 +285,30 @@ object WrappedArray {
     override def equals(that: Any) = that match {
       case that: ofDouble => Arrays.equals(array, that.array)
       case _ => super.equals(that)
+    }
+    override def sum[B >: Double](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.DoubleIsFractional) {
+      var z = 0d
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z += as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
+    }
+    override def product[B >: Double](implicit num: Numeric[B]): B = if (num eq scala.math.Numeric.DoubleIsFractional) {
+      var z = 0d
+      var i = 0
+      val as = array
+      while (i < as.length) {
+        z *= as(i)
+        i += 1
+      }
+      z
+    } else {
+      super.sum[B]
     }
   }
 
