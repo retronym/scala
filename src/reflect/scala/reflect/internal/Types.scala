@@ -115,6 +115,7 @@ trait Types
         cached = new SubstTypeMap(from, to)
 
       cached
+      new SubstTypeMap(from, to)
     }
   }
 
@@ -2446,7 +2447,9 @@ trait Types
     //  to true, as ErrorType is always a sub/super type....)
     final def relativize(tp: Type): Type =
       if (tp.isTrivial) tp
-      else if (args.isEmpty && (phase.erasedTypes || !isHigherKinded || isRawIfWithoutArgs(sym))) tp.asSeenFrom(pre, sym.owner)
+      else if (args.isEmpty && (phase.erasedTypes || !isHigherKinded || isRawIfWithoutArgs(sym))) {
+        tp.asSeenFrom(pre, sym.owner)
+      }
       else {
         // The type params and type args should always match in length,
         // though a mismatch can arise when a typevar is encountered for which
@@ -2483,7 +2486,10 @@ trait Types
 
         tp match {
           case PolyType(`formals`, result) => PolyType(formals, seenFromOwnerInstantiated(result))
-          case _ => seenFromOwnerInstantiated(tp)
+          case _ =>
+            val result = seenFromOwnerInstantiated(tp)
+            //println(s"TypeRef(_, ${sym.name}, ${args.mkString(",")})).relative(${tp.safeToString}) = ${result.safeToString}")
+            result
         }
       }
 
