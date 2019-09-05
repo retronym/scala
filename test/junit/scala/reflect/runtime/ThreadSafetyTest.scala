@@ -14,7 +14,12 @@ package scala.reflect.runtime
 
 import java.util.concurrent.{Callable, Executors}
 
-import org.junit.Test
+object ThreadSafetyTestMain {
+  def main(args: Array[String]): Unit = {
+    val t = new ThreadSafetyTest
+    t.test()
+  }
+}
 
 class ThreadSafetyTest {
   import scala.reflect.runtime.universe._
@@ -66,7 +71,6 @@ class ThreadSafetyTest {
     }
   }
 
-  @Test
   def test(): Unit = {
     val executor = Executors.newFixedThreadPool(16)
     for (i <- (0 to 128)) {
