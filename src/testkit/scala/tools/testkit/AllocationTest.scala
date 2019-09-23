@@ -53,6 +53,18 @@ trait AllocationTest {
     result.result
   }
 
+  def onlyAllocates[T: Manifest](size:Int)(fn: => T)(implicit execution: AllocationExecution = AllocationExecution()): T = {
+    val result = allocationInfo(fn)
+
+    if (result.min > size) {
+      result.allocations foreach {
+        x => println(s"allocation $x")
+      }
+      fail(s"allocating min = ${result.min}")
+    }
+    result.result
+  }
+
   def allocationInfo[T](fn: => T)(implicit execution: AllocationExecution = AllocationExecution()): AllocationInfo[T] = {
     val expected = fn
     val id = Thread.currentThread().getId

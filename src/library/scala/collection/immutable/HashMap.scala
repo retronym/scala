@@ -237,10 +237,13 @@ final class HashMap[K, +V] private[immutable] (private[immutable] val rootNode: 
     }
 
   override def hashCode(): Int = {
-    val hashIterator = new MapKeyValueTupleHashIterator(rootNode)
-    val hash = MurmurHash3.unorderedHash(hashIterator, MurmurHash3.mapSeed)
-    // assert(hash == super.hashCode())
-    hash
+    if (isEmpty) MurmurHash3.emptyMapHash
+    else {
+      val hashIterator = new MapKeyValueTupleHashIterator(rootNode)
+      val hash = MurmurHash3.unorderedHash(hashIterator, MurmurHash3.mapSeed)
+      // assert(hash == super.hashCode())
+      hash
+    }
   }
 
   override protected[this] def className = "HashMap"

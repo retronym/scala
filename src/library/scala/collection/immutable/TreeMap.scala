@@ -18,6 +18,7 @@ import scala.collection.Stepper.EfficientSplit
 import scala.collection.generic.DefaultSerializable
 import scala.collection.immutable.{RedBlackTree => RB}
 import scala.collection.mutable.ReusableBuilder
+import scala.util.hashing.MurmurHash3
 
 /** An immutable SortedMap whose values are stored in a red-black tree.
   *
@@ -25,7 +26,7 @@ import scala.collection.mutable.ReusableBuilder
   * or when traversal in order of an ordering is desired.
   * If you only need key lookups, and don't care in which order key-values
   * are traversed in, consider using * [[scala.collection.immutable.HashMap]],
-  * which will generally have better performance. If you need insertion order, 
+  * which will generally have better performance. If you need insertion order,
   * consider a * [[scala.collection.immutable.SeqMap]], which does not need to
   * have an ordering supplied.
   *
@@ -251,6 +252,16 @@ final class TreeMap[K, +V] private (private val tree: RB.Tree[K, V])(implicit va
     val t2 = RB.transform[K, V, W](tree, f)
     if(t2 eq tree) this.asInstanceOf[TreeMap[K, W]]
     else new TreeMap(t2)
+  }
+
+  override def hashCode(): Int = {
+    if (isEmpty) {
+      MurmurHash3.emptyMapHash
+    } else {
+      val hasher = new Map.HashCodeAccumulator()
+      RB.foreachEntry(tree, hasher)
+      hasher.finalizeHash
+    }
   }
 
   override protected[this] def className = "TreeMap"

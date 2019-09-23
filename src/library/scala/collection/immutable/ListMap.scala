@@ -18,6 +18,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.ReusableBuilder
 import scala.collection.generic.DefaultSerializable
 import scala.runtime.Statics.releaseFence
+import scala.util.hashing.MurmurHash3
 
 /**
   * This class implements immutable maps using a list-based data structure. List map iterators and
@@ -77,6 +78,16 @@ sealed class ListMap[K, +V]
       curr = curr.next
     }
     res
+  }
+
+  override def hashCode(): Int = {
+    if (isEmpty) {
+      MurmurHash3.emptyMapHash
+    } else {
+      val hasher = new Map.HashCodeAccumulator()
+      foreachEntry(hasher)
+      hasher.finalizeHash
+    }
   }
 
   private[immutable] def key: K = throw new NoSuchElementException("key of empty map")
