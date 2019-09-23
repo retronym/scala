@@ -276,6 +276,7 @@ trait ScalaSettings extends AbsScalaSettings
     val compactLocals           = Choice("compact-locals",            "Eliminate empty slots in the sequence of local variables.")
     val copyPropagation         = Choice("copy-propagation",          "Eliminate redundant local variables and unused values (including closures). Enables unreachable-code.")
     val redundantCasts          = Choice("redundant-casts",           "Eliminate redundant casts using a type propagation analysis.")
+    val omitPatternVars         = Choice("omit-pattern-vars",         "Omit local variables in pattern translation and repeat selection from accessors.")
     val boxUnbox                = Choice("box-unbox",                 "Eliminate box-unbox pairs within the same method (also tuples, xRefs, value class instances). Enables unreachable-code.")
     val nullnessTracking        = Choice("nullness-tracking",         "Track nullness / non-nullness of local variables and apply optimizations.")
     val closureInvocations      = Choice("closure-invocations" ,      "Rewrite closure invocations to the implementation method.")
@@ -341,6 +342,7 @@ trait ScalaSettings extends AbsScalaSettings
   def optNullnessTracking        = optEnabled(optChoices.nullnessTracking)
   def optClosureInvocations      = optEnabled(optChoices.closureInvocations)
   def optInlinerEnabled          = optEnabled(optChoices.inline)
+  def optOmitPatternVars         = optEnabled(optChoices.omitPatternVars)
 
   // deprecated inliner levels
   def optLProject                = optEnabled(optChoices.lProject)

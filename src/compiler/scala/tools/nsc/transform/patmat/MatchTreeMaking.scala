@@ -131,7 +131,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
     }
 
     // unless we're optimizing, emit local variable bindings for all subpatterns of extractor/case class patterns
-    protected val debugInfoEmitVars = !settings.optimise.value
+    protected val debugInfoEmitVars = !(settings.optimise.value || settings.optOmitPatternVars)
 
     sealed trait PreserveSubPatBinders extends TreeMaker {
       val subPatBinders: List[Symbol]
