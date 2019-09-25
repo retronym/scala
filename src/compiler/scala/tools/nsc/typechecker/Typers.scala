@@ -195,6 +195,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
   }
 
+  class NonCyclicStack {
+    lazy val map = collection.mutable.HashMap[Symbol, mutable.ListBuffer[Type]]()
+  }
+
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
   def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
 
@@ -391,41 +395,61 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     /** Check that type `tp` is not a subtype of itself.
      */
-    def checkNonCyclic(pos: Position, tp: Type): Boolean = {
-      def checkNotLocked(sym: Symbol) = {
-        sym.initialize.lockOK || { CyclicAliasingOrSubtypingError(pos, sym); false }
+    def checkNonCyclic(pos: Position, tp: Type)(stack: NonCyclicStack): Boolean = {
+      def checkNotLocked(pre: Type, sym: Symbol) = {
+        val isTypeMember = sym.isAliasType && sym.owner.isClass
+        val lockOkay = if (isTypeMember) !stack.map.get(sym).exists(_.exists(_ =:= pre)) else sym.initialize.lockOK
+        lockOkay || { CyclicAliasingOrSubtypingError(pos, sym); false }
       }
       tp match {
         case TypeRef(pre, sym, args) =>
-          checkNotLocked(sym) &&
-          ((!sym.isNonClassType) || checkNonCyclic(pos, appliedType(pre.memberInfo(sym), args), sym))
+          checkNotLocked(pre, sym) &&
+          ((!sym.isNonClassType) || checkNonCyclic(pos, appliedType(pre.memberInfo(sym), args), sym, pre)(stack))
           // @M! info for a type ref to a type parameter now returns a polytype
           // @M was: checkNonCyclic(pos, pre.memberInfo(sym).subst(sym.typeParams, args), sym)
 
         case SingleType(pre, sym) =>
-          checkNotLocked(sym)
+          checkNotLocked(pre, sym)
         case st: SubType =>
-          checkNonCyclic(pos, st.supertype)
+          checkNonCyclic(pos, st.supertype)(stack)
         case ct: CompoundType =>
-          ct.parents forall (x => checkNonCyclic(pos, x))
+          ct.parents forall (x => checkNonCyclic(pos, x)(stack))
         case _ =>
           true
       }
     }
 
-    def checkNonCyclic(pos: Position, tp: Type, lockedSym: Symbol): Boolean = try {
-      if (!lockedSym.lock(CyclicReferenceError(pos, tp, lockedSym))) false
-      else checkNonCyclic(pos, tp)
-    } finally {
-      lockedSym.unlock()
+    def checkNonCyclic(pos: Position, tp: Type, lockedSym: Symbol, pre: Type)(stack: NonCyclicStack): Boolean = {
+      val isTypeMember = lockedSym.isAliasType && lockedSym.owner.isClass
+      if (isTypeMember) {
+        val pres = stack.map.getOrElseUpdate(lockedSym, new ListBuffer)
+        if (pres.exists(_ =:= pre)) {
+          CyclicReferenceError(pos, tp, lockedSym)
+          false
+        } else {
+          pres.+=:(pre)
+          try {
+            checkNonCyclic(pos, tp)(stack)
+          } finally {
+            pres.remove(0)
+          }
+        }
+      } else {
+        try {
+          if (!lockedSym.lock(CyclicReferenceError(pos, tp, lockedSym))) false
+          else checkNonCyclic(pos, tp)(stack)
+        } finally {
+          lockedSym.unlock()
+        }
+      }
     }
 
-    def checkNonCyclic(sym: Symbol) {
-      if (!checkNonCyclic(sym.pos, sym.tpe_*)) sym.setInfo(ErrorType)
+    def checkNonCyclic(sym: Symbol)(stack: NonCyclicStack) {
+      if (!checkNonCyclic(sym.pos, sym.tpe_*)(stack)) sym.setInfo(ErrorType)
     }
 
-    def checkNonCyclic(defn: Tree, tpt: Tree) {
-      if (!checkNonCyclic(defn.pos, tpt.tpe, defn.symbol)) {
+    def checkNonCyclic(defn: Tree, tpt: Tree)(stack: NonCyclicStack) {
+      if (!checkNonCyclic(defn.pos, tpt.tpe, defn.symbol, NoPrefix)(stack)) {
         tpt setType ErrorType
         defn.symbol.setInfo(ErrorType)
       }
@@ -2067,7 +2091,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       sym.annotations.map(_.completeInfo())
       val tpt1 = checkNoEscaping.privates(this, sym, transformedOr(vdef.tpt, typedType(vdef.tpt)))
-      checkNonCyclic(vdef, tpt1)
+      checkNonCyclic(vdef, tpt1)(new NonCyclicStack)
 
       // allow trait accessors: it's the only vehicle we have to hang on to annotations that must be passed down to
       // the field that's mixed into a subclass
@@ -2295,7 +2319,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             StarParamNotLastError(vparam1)
 
         val tpt1 = checkNoEscaping.privates(this, meth, transformedOr(ddef.tpt, typedType(ddef.tpt)))
-        checkNonCyclic(ddef, tpt1)
+        checkNonCyclic(ddef, tpt1)(new NonCyclicStack)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
         var rhs1 =
@@ -2376,7 +2400,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       val rhs1 = checkNoEscaping.privates(this, tdef.symbol, typedType(tdef.rhs))
-      checkNonCyclic(tdef.symbol)
+      checkNonCyclic(tdef.symbol)(new NonCyclicStack)
       if (tdef.symbol.owner.isType)
         rhs1.tpe match {
           case TypeBounds(lo1, hi1) if (!(lo1 <:< hi1)) => LowerBoundError(tdef, lo1, hi1)

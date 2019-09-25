@@ -875,7 +875,7 @@ trait Namers extends MethodSynthesis {
 
         if (needsCycleCheck) {
           log(s"Needs cycle check: ${sym.debugLocationString}")
-          if (!typer.checkNonCyclic(tree.pos, tp))
+          if (!typer.checkNonCyclic(tree.pos, tp)(new NonCyclicStack))
             sym setInfo ErrorType
         }
 
