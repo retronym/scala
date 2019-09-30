@@ -868,7 +868,10 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
               case ex: AbortMacroException => MacroGeneratedAbort(expandee, ex)
               case ex: ControlThrowable => throw ex
               case ex: TypeError => MacroGeneratedTypeError(expandee, ex)
-              case NonFatal(_) => MacroGeneratedException(expandee, realex)
+              case NonFatal(_) =>
+                if (typer.context.isSearchingForImplicitParam)
+                  typer.context.openImplicits
+                MacroGeneratedException(expandee, realex)
               case fatal => throw fatal
             }
         } finally {

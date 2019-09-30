@@ -782,9 +782,18 @@ trait Implicits {
           }
         }
 
-        if (context.reporter.hasErrors)
-          fail("hasMatchingSymbol reported error: " + context.reporter.firstError.get.errMsg)
-        else if (itree3.isErroneous)
+        if (context.reporter.hasErrors) {
+          val msg = context.reporter.firstError.get.errMsg
+          val isTopLevelWhiteboxMacro = info.sym.isMacro && !isBlackbox(info.sym) && msg.contains("during macro expansion") && context.openImplicits.lengthCompare(1) == 0
+          if (isTopLevelWhiteboxMacro) {
+            val saved = settings.XlogImplicits.value
+            if (info.sym.isMacro && !isBlackbox(info.sym) && msg.contains("during macro expansion") && context.openImplicits.lengthCompare(1) == 0) settings.XlogImplicits.value = true
+            try fail("exception typechecking implicit candidate (a whitebox macro): " + msg)
+            finally settings.XlogImplicits.value = saved
+          } else {
+            fail("error typechecking implicit candidate: " + msg)
+          }
+        } else if (itree3.isErroneous)
           fail("error typechecking implicit candidate")
         else if (isLocalToCallsite && !hasMatchingSymbol(itree2))
           fail("candidate implicit %s is shadowed by %s".format(
