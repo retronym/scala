@@ -18,6 +18,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.ReusableBuilder
 import scala.collection.generic.DefaultSerializable
 import scala.runtime.Statics.releaseFence
+import scala.util.hashing.MurmurHash3
 
 /**
   * This class implements immutable maps using a list-based data structure. List map iterators and
@@ -79,6 +80,17 @@ sealed class ListMap[K, +V]
     res
   }
 
+  /** Apply `f` to each key/value pair for its side effects
+   * Note: [U] parameter needed to help scalac's type inference.
+   */
+  override def foreachEntry[U](f: (K, V) => U): Unit = {
+    var curr: ListMap[K, V] = this
+    while (curr.nonEmpty) {
+      f(curr.key, curr.value)
+      curr = curr.next
+    }
+  }
+
   private[immutable] def key: K = throw new NoSuchElementException("key of empty map")
   private[immutable] def value: V = throw new NoSuchElementException("value of empty map")
   private[immutable] def next: ListMap[K, V] = throw new NoSuchElementException("next of empty map")
@@ -109,7 +121,6 @@ object ListMap extends MapFactory[ListMap] {
     private[immutable] var _value: V,
     private[immutable] var _init: ListMap[K, V]
   ) extends ListMap[K, V] {
-
     releaseFence()
 
     override private[immutable] def value: V = _value
