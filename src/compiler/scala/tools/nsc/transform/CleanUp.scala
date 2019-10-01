@@ -61,9 +61,6 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
     }
     private def mkTerm(prefix: String): TermName = unit.freshTermName(prefix)
 
-    //private val classConstantMeth = new HashMap[String, Symbol]
-    //private val symbolStaticFields = new HashMap[String, (Symbol, Tree, Tree)]
-
     private var localTyper: analyzer.Typer = null
 
     private def typedWithPos(pos: Position)(tree: Tree) =
@@ -383,6 +380,77 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       }
     }
 
+    // transform scrutinee of all matches to ints
+    def transformSwitch(sw: Match): Tree = { import CODE._
+      sw.selector.tpe match {
+        case IntTpe => sw // can switch directly on ints
+        case StringTpe =>
+          // these assumptions about the shape of the tree are justified by the codegen in MatchOptimization
+          val Match(Typed(selTree: Ident, _), cases) = sw
+          val sel = selTree.symbol
+          val restpe = sw.tpe
+          val swPos = sw.pos.focus
+
+          // genbcode isn't thrilled about seeing labels with Unit arguments, so `success`'s type is one of
+          // `${sw.tpe} => ${sw.tpe}` or `() => Unit` depending.
+          val success = {
+            val lab = currentOwner.newLabel(unit.freshTermName("matchEnd"), swPos)
+            if (restpe =:= UnitTpe) {
+              lab.setInfo(MethodType(Nil, restpe))
+            } else {
+              lab.setInfo(MethodType(lab.newValueParameter(nme.x_1).setInfo(restpe) :: Nil, restpe))
+            }
+          }
+          def succeed(res: Tree): Tree = {
+            if (restpe =:= UnitTpe) BLOCK(res, REF(success) APPLY Nil) else REF(success) APPLY res
+          }
+
+          val failure = currentOwner.newLabel(unit.freshTermName("matchEnd"), swPos).setInfo(MethodType(Nil, NothingTpe))
+          def fail(): Tree = atPos(swPos) { Apply(REF(failure), Nil) }
+
+          val newSel = atPos(sel.pos) { IF (sel OBJ_EQ NULL) THEN LIT(0) ELSE (Apply(REF(sel) DOT Object_hashCode, Nil)) }
+          var dfltBody = fail()
+          object StringsPattern {
+            def unapply(arg: Tree): Option[List[String]] = arg match {
+              case Literal(Constant(value: String)) => Some(value :: Nil)
+              case Literal(Constant(null)) => Some(null :: Nil)
+              case Alternative(alts)      => traverseOpt(alts)(unapply).map(_.flatten)
+              case _                      => None
+            }
+          }
+          val casesByHash =
+            cases.flatMap {
+              case cd@CaseDef(StringsPattern(strs), _, body) => strs.map((_, body, cd.pat.pos))
+              case cd@CaseDef(Ident(nme.WILDCARD), _, body) =>
+                if (!cd.hasAttachment[SynthDefaultCase.type]) dfltBody = body
+                None
+              case cd => globalError(s"unhandled in switch: $cd"); None
+            }.groupBy(_._1.##)
+          val newCases = casesByHash.toList.sortBy(_._1).map {
+            case (hash, cases) =>
+              val newBody = cases.foldLeft(fail()) {
+                case (next, (pat, body, pos)) =>
+                  val comparison = if (pat == null) Object_eq else Object_equals
+                  atPos(pos) {
+                    IF(LIT(pat) DOT comparison APPLY REF(sel)) THEN body ELSE next
+                  }
+              }
+              CaseDef(LIT(hash), EmptyTree, newBody)
+          }
+          val res = Block(
+            succeed(Match(newSel, newCases :+ CaseDef(Ident(nme.WILDCARD), EmptyTree, dfltBody))),
+            LabelDef(failure, Nil, Throw(New(definitions.MatchErrorClass.tpe_*, REF(sel)))),
+            if (restpe =:= UnitTpe) {
+              LabelDef(success, Nil, gen.mkLiteralUnit)
+            } else {
+              LabelDef(success, success.info.params.head :: Nil, REF(success.info.params.head))
+            }
+          )
+          localTyper.typedPos(sw.pos)(res)
+        case _ => globalError(s"unhandled switch scrutinee type ${sw.selector.tpe}: $sw"); sw
+      }
+    }
+
     override def transform(tree: Tree): Tree = tree match {
       case _: ClassDef if genBCode.codeGen.CodeGenImpl.isJavaEntryPoint(tree.symbol, currentUnit, settings.mainClass.valueSetByUser.map(_.toString)) =>
         // collecting symbols for entry points here (as opposed to GenBCode where they are used)
@@ -497,6 +565,9 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
         reducingTransformListApply(rest.elems.length) {
           super.transform(localTyper.typedPos(tree.pos)(consed))
         }
+
+      case switch: Match =>
+        super.transform(transformSwitch(switch))
 
       case _ =>
         super.transform(tree)
