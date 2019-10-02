@@ -78,7 +78,7 @@ class PipelineMainTest {
     }
   }
 
-  private lazy val allBuilds = List(m1, b2, b3, b4, b5SuperAccessor)
+  private lazy val allBuilds = List(m1, b2, b3, b4, b5SuperAccessor, b6LocalChild)
 
   // Build containing a macro definition and a reference to it from another internal subproject
   private lazy val m1: Build = {
@@ -215,6 +215,23 @@ class PipelineMainTest {
         |package b5.p2
         |class ScalaSub extends b5.p1.NeedSuperAccessor {
         |}
+      """.stripMargin)
+    build
+  }
+
+  // Build containing motivating test case for special handling of local children of sealed classes
+  // in outline typechecking implementation.
+  private lazy val b6LocalChild: Build = {
+    val build = new Build(projectsBase, "b6")
+    val p1 = build.project("p1")
+    p1.withSource("b6/p1/LocalChild.scala")(
+      """
+        |package b6.p1
+        |sealed class LooseSeal
+        |class C {
+        |  def test = { class localChild extends LooseSeal
+        |}
+        |
       """.stripMargin)
     build
   }
