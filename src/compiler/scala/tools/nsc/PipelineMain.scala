@@ -37,7 +37,7 @@ import PipelineMain.{OutlineTypePipeline, Pipeline, Traditional}
 class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.PipelineSettings) {
   import pipelineSettings._
   private val pickleCache: Path = configuredPickleCache.getOrElse(Files.createTempDirectory("scala.picklecache"))
-  private def cachePath(file: Path): Path = {
+  def cachePath(file: Path): Path = {
     val newExtension = if (useJars) ".jar" else ""
     val root = file.getRoot
     // An empty component on Unix, just the drive letter on Windows

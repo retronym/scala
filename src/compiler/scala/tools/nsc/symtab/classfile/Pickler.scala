@@ -239,6 +239,7 @@ abstract class Pickler extends SubComponent {
             val children =
               if (locals.isEmpty) globals
               else {
+                println(s"========= pickling local child of $sym ========")
                 // The LOCAL_CHILD was introduced in 12a2b3b to fix Aladdin bug 1055. When a sealed
                 // class/trait has local subclasses, a single <local child> class symbol is added
                 // as pickled child (instead of a reference to the anonymous class; that was done

@@ -10,18 +10,21 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import FileUtils._
+import scala.reflect.io.RootPath
 import scala.tools.nsc.PipelineMain._
 import scala.tools.nsc.reporters.{ConsoleReporter, StoreReporter}
 
 class PipelineMainTest {
   private var base: Path = _
+  private var baseTemp: Path = _
 
   // Enables verbose output to console to help understand what the test is doing.
-  private val debug = false
-  private var deleteBaseAfterTest = true
+  private val debug = true
+  private var deleteBaseAfterTest = false
 
   @Before def before(): Unit = {
     base = Files.createTempDirectory("pipelineBase")
+    baseTemp = Files.createDirectory(base.resolve("tmp"))
   }
 
   @After def after(): Unit = {
@@ -31,19 +34,23 @@ class PipelineMainTest {
   }
 
   private def projectsBase = createDir(base, "projects")
+//
+//  @Test def pipelineMainBuildsSeparate(): Unit = {
+//    check(allBuilds.map(_.projects))
+//  }
+//
+//  @Test def pipelineMainBuildsCombined(): Unit = {
+//    check(List(allBuilds.flatMap(_.projects)))
+//  }
+//
+//  @Test def pipelineMainBuildsJavaAccessor(): Unit = {
+//    // Tests the special case in Typer:::canSkipRhs to make outline typing descend into method bodies might
+//    // give rise to super accssors
+//    check(List(b5SuperAccessor.projects), altStrategies = List(OutlineTypePipeline))
+//  }
 
-  @Test def pipelineMainBuildsSeparate(): Unit = {
-    check(allBuilds.map(_.projects))
-  }
-
-  @Test def pipelineMainBuildsCombined(): Unit = {
-    check(List(allBuilds.flatMap(_.projects)))
-  }
-
-  @Test def pipelineMainBuildsJavaAccessor(): Unit = {
-    // Tests the special case in Typer:::canSkipRhs to make outline typing descend into method bodies might
-    // give rise to super accssors
-    check(List(b5SuperAccessor.projects), altStrategies = List(OutlineTypePipeline))
+  @Test def pipelineMainBuildsLocalChild(): Unit = {
+    check(List(b6LocalChild.projects), altStrategies = List(OutlineTypePipeline))
   }
 
   private val pipelineSettings = PipelineMain.defaultSettings.copy(
@@ -56,24 +63,49 @@ class PipelineMainTest {
     createReporter = ((s: Settings) => if (debug) new ConsoleReporter(s) else new StoreReporter())
   )
 
+  private def pickleCachPath = base.resolve("pickleCache")
+
   private def check(projectss: List[List[Build#Project]], altStrategies: List[BuildStrategy] = List(Pipeline, OutlineTypePipeline)): Unit = {
-    def build(strategy: BuildStrategy): Unit = {
+    def build(strategy: BuildStrategy) = {
+      val cachePaths = mutable.Map[Path, Path]()
       for (projects <- projectss) {
         val argsFiles = projects.map(_.argsFile(Nil))
-        val main = new PipelineMainClass(argsFiles, pipelineSettings.copy(strategy = strategy, logDir = Some(base.resolve(strategy.toString))))
+        val main = new PipelineMainClass(argsFiles, pipelineSettings.copy(strategy = strategy, logDir = Some(base.resolve(strategy.toString)), configuredPickleCache = Some(pickleCachPath)))
+        for (project <- projects) {
+          cachePaths(project.out) = main.cachePath(project.out)
+        }
         assert(main.process())
       }
+      cachePaths
     }
     build(Traditional)
 
     val reference = snapshotClasses(Traditional)
     clean()
     for (strategy <- altStrategies) {
-      build(strategy)
+      val cachePaths = build(strategy)
       val recompiled = snapshotClasses(strategy)
       // Bytecode should be identical regardless of compilation strategy.
       deleteBaseAfterTest = false
       assertDirectorySame(reference, recompiled, strategy.toString)
+      if (strategy == OutlineTypePipeline) {
+        for (project <- projectss.iterator.flatten) {
+          val out = project.out
+          val sigs = cachePaths(out)
+          assert(Files.exists(sigs))
+          val referencePath = Files.createTempFile(baseTemp, "", ".reference.jar")
+          PickleExtractor.process(out, referencePath)
+          assert(Files.exists(referencePath))
+          val referenceRoot = RootPath(referencePath, writable = false)
+          val outlinedRoot = RootPath(sigs, writable = false)
+          try {
+            assertDirectorySame(referenceRoot.root, outlinedRoot.root, ".sigs from outline typechecking")
+          } finally {
+            referenceRoot.close()
+            outlinedRoot.close()
+          }
+        }
+      }
       deleteBaseAfterTest = true
     }
   }
@@ -229,7 +261,8 @@ class PipelineMainTest {
         |package b6.p1
         |sealed class LooseSeal
         |class C {
-        |  def test = { class localChild extends LooseSeal
+        |  type ExplicitReturnType = String
+        |  def test: ExplicitReturnType = { class localChild extends LooseSeal; "" }
         |}
         |
       """.stripMargin)

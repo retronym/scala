@@ -4309,7 +4309,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             Some((op, fn1))
           case Assign(lhs, _) if matches(lhs) => Some((nme.updateDynamic, lhs))
           case _ if matches(t)                => Some((nme.selectDynamic, t))
-          case _                              => t.children.flatMap(findSelection).headOption
+            case _                              => t.children.flatMap(findSelection).headOption
         }
         findSelection(cxTree) map { case (opName, treeInfo.Applied(_, targs, _)) =>
           val fun = gen.mkTypeApply(Select(qual, opName), targs)
@@ -5941,8 +5941,17 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     @inline
     final def transformedOrTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
       lookupTransformed(tree) match {
+        case _ if phase.erasedTypes =>
+          typed(tree, mode, pt)
         case Some(tree1) => tree1
-        case _           => if (canSkipRhs(tree)) EmptyTree else typed(tree, mode, pt)
+        case _           =>
+//          context.withMode(enabled = ContextMode.Outlining) {
+//            typed(tree, mode, pt)
+//          }
+          if (canSkipRhs(tree))
+            EmptyTree
+          else
+            typed(tree, mode, pt)
       }
     }
     final def lookupTransformed(tree: Tree): Option[Tree] =
@@ -5950,10 +5959,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       else transformed remove tree
 
     private final def canSkipRhs(tree: Tree) = settings.Youtline.value && !tree.exists {
-      case Super(qual, mix) =>
+      case Select(Super(qual, tpnme.EMPTY), nme.CONSTRUCTOR) =>
+        false
+      case Select(Super(qual, mix), _) =>
         // conservative approximation of method bodies that may give rise to super accessors which must be
         // stored in pickle.
         context.owner.enclClass.isTrait || mix != tpnme.EMPTY
+        false
       case _ => false
     }
   }

@@ -21,6 +21,7 @@ object FileUtils {
           finally showDetail -= 1
         }
         diff.diffString(builder, showDiff)
+        builder.append(", ")
       }
       builder.toString
     }
@@ -54,7 +55,11 @@ object FileUtils {
   def diff(dir1: Path, dir2: Path): List[Diff] = {
     val diffs = collection.mutable.ListBuffer[Diff]()
     def allFiles(dir: Path): Map[Path, Map[String, Path]] = {
-      val classFiles: List[(Path, Path)] = Files.walk(dir).iterator().asScala.map(x => (dir.relativize(x), x)).toList.filter(_._2.getFileName.toString.endsWith(".class")).toList
+      def isClassOrSig(p: Path) = !Files.isDirectory(p) && {
+        val fileNameString = p.getFileName.toString
+        fileNameString.endsWith(".class") || fileNameString.endsWith(".sig")
+      }
+      val classFiles: List[(Path, Path)] = Files.walk(dir).iterator().asScala.map(x => (dir.relativize(x), x)).toList.filter(pair => isClassOrSig(pair._2)).toList
       classFiles.groupBy(_._1).mapValues(ps => ps.map { case (_, p) => (p.getFileName.toString, p)}.toMap).toMap
     }
     val dir1Files = allFiles(dir1)

@@ -1677,6 +1677,11 @@ object ContextMode {
   /** Were default arguments used? */
   final val DiagUsedDefaults: ContextMode         = 1 << 18
 
+  /** Outline typing does not need the type of the subtree, the typechecker need only typecheck trees that
+   *  will influence the pickled signatures in some way (for instance, a local class extending a sealed class
+   *  adds the `<local-child>` direct known subclass) */
+  final val Outlining: ContextMode                = 1 << 19
+
   /** TODO: The "sticky modes" are EXPRmode, PATTERNmode, TYPEmode.
    *  To mimic the sticky mode behavior, when captain stickyfingers
    *  comes around we need to propagate those modes but forget the other
@@ -1702,7 +1707,8 @@ object ContextMode {
     SecondTry              -> "SecondTry",
     TypeConstructorAllowed -> "TypeConstructorAllowed",
     SuppressDeadArgWarning -> "SuppressDeadArgWarning",
-    DiagUsedDefaults       -> "DiagUsedDefaults"
+    DiagUsedDefaults       -> "DiagUsedDefaults",
+    Outlining              -> "Outlining"
   )
 }
 
