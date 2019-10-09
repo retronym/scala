@@ -10,6 +10,8 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import FileUtils._
+import scala.reflect.internal.ForwardingReporter
+import scala.reflect.internal.util.Position
 import scala.reflect.io.RootPath
 import scala.tools.nsc.PipelineMain._
 import scala.tools.nsc.reporters.{ConsoleReporter, StoreReporter}
@@ -60,8 +62,20 @@ class PipelineMainTest {
     cachePlugin = true,
     stripExternalClassPath = true,
     useTraditionalForLeaf = true,
-    createReporter = ((s: Settings) => if (debug) new ConsoleReporter(s) else new StoreReporter())
+    createReporter = ((s: Settings) => if (debug) new StoringConsoleReporter(s) else new StoreReporter())
   )
+
+  class StoringConsoleReporter(s: Settings) extends StoreReporter {
+    val delegate = new ConsoleReporter(s)
+    override protected def info0(pos: Position, msg: String, severity: Severity, force: Boolean): Unit = {
+      severity match {
+        case ERROR   => delegate.error(pos, msg)
+        case WARNING => delegate.warning(pos, msg)
+        case _       => if (force) delegate.echo(pos, msg) else delegate.info(pos, msg, force = false)
+      }
+      super.info0(pos, msg, severity, force)
+    }
+  }
 
   private def pickleCachPath = base.resolve("pickleCache")
 
@@ -88,24 +102,25 @@ class PipelineMainTest {
       // Bytecode should be identical regardless of compilation strategy.
       deleteBaseAfterTest = false
       assertDirectorySame(reference, recompiled, strategy.toString)
-      if (strategy == OutlineTypePipeline) {
-        for (project <- projectss.iterator.flatten) {
-          val out = project.out
-          val sigs = cachePaths(out)
-          assert(Files.exists(sigs))
-          val referencePath = Files.createTempFile(baseTemp, "", ".reference.jar")
-          PickleExtractor.process(out, referencePath)
-          assert(Files.exists(referencePath))
-          val referenceRoot = RootPath(referencePath, writable = false)
-          val outlinedRoot = RootPath(sigs, writable = false)
-          try {
-            assertDirectorySame(referenceRoot.root, outlinedRoot.root, ".sigs from outline typechecking")
-          } finally {
-            referenceRoot.close()
-            outlinedRoot.close()
-          }
-        }
-      }
+
+//      if (strategy == OutlineTypePipeline) {
+//        for (project <- projectss.iterator.flatten) {
+//          val out = project.out
+//          val sigs = cachePaths(out)
+//          assert(Files.exists(sigs))
+//          val referencePath = Files.createTempFile(baseTemp, "", ".reference.jar")
+//          PickleExtractor.process(out, referencePath, processJava = false)
+//          assert(Files.exists(referencePath))
+//          val referenceRoot = RootPath(referencePath, writable = false)
+//          val outlinedRoot = RootPath(sigs, writable = false)
+//          try {
+//            assertDirectorySame(referenceRoot.root, outlinedRoot.root, ".sigs from outline typechecking")
+//          } finally {
+//            referenceRoot.close()
+//            outlinedRoot.close()
+//          }
+//        }
+//      }
       deleteBaseAfterTest = true
     }
   }
@@ -259,10 +274,27 @@ class PipelineMainTest {
     p1.withSource("b6/p1/LocalChild.scala")(
       """
         |package b6.p1
-        |sealed class LooseSeal
+        |sealed abstract class LooseSeal
+        |case object NonLocalChild extends LooseSeal
         |class C {
         |  type ExplicitReturnType = String
         |  def test: ExplicitReturnType = { class localChild extends LooseSeal; "" }
+        |}
+        |
+      """.stripMargin)
+    val p2 = build.project("p2")
+    p2.classpath += p1.out
+    p2.withSource("b6/p2/Client.scala")(
+      """
+        |package b6.p2
+        |
+        |import b6.p1._
+        |
+        |class Client {
+        |  def test(x: LooseSeal) = x match {
+        |    case NonLocalChild =>
+        |      // should be a non-exhaustive warning.
+        |  }
         |}
         |
       """.stripMargin)

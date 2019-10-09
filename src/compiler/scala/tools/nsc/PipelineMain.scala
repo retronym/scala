@@ -56,6 +56,7 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
   }
 
   private var reporter: Reporter = _
+  final def createdReporter: Reporter = reporter
 
   private object handler extends UncaughtExceptionHandler {
     override def uncaughtException(t: Thread, e: Throwable): Unit = {

@@ -1,7 +1,7 @@
 package scala.tools.nsc
 
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
+import java.nio.file.{FileSystems, FileVisitResult, Files, Path, SimpleFileVisitor}
 
 import difflib.DiffUtils
 
@@ -25,7 +25,8 @@ object FileUtils {
       }
       builder.toString
     }
-    assert(diffs.isEmpty, s"Difference detected between recompiling $dir2Label Run:\njardiff -r $dir1 $dir2\n$diffText")
+    def printDir(p: Path): String = if (p.getFileSystem != FileSystems.getDefault && p.getParent == null) p.getFileSystem.toString else p.toString
+    assert(diffs.isEmpty, s"Difference detected between recompiling $dir2Label Run:\njardiff -r ${printDir(dir1)} ${printDir(dir2)}\n$diffText")
   }
   sealed abstract class Diff(path: Path) {
     def diffString(builder: java.lang.StringBuilder, showDiff: Boolean): Unit = builder.append(toString)
@@ -54,18 +55,18 @@ object FileUtils {
 
   def diff(dir1: Path, dir2: Path): List[Diff] = {
     val diffs = collection.mutable.ListBuffer[Diff]()
-    def allFiles(dir: Path): Map[Path, Map[String, Path]] = {
+    def allFiles(dir: Path): Map[String, Map[String, Path]] = {
       def isClassOrSig(p: Path) = !Files.isDirectory(p) && {
         val fileNameString = p.getFileName.toString
         fileNameString.endsWith(".class") || fileNameString.endsWith(".sig")
       }
       val classFiles: List[(Path, Path)] = Files.walk(dir).iterator().asScala.map(x => (dir.relativize(x), x)).toList.filter(pair => isClassOrSig(pair._2)).toList
-      classFiles.groupBy(_._1).mapValues(ps => ps.map { case (_, p) => (p.getFileName.toString, p)}.toMap).toMap
+      classFiles.groupBy(_._1.getParent.toString).mapValues(ps => ps.map { case (_, p) => (p.getFileName.toString, p)}.toMap).toMap
     }
     val dir1Files = allFiles(dir1)
     val dir2Files = allFiles(dir2)
     val allSubDirs = dir1Files.keySet ++ dir2Files.keySet
-    for (subDir <- allSubDirs.toList.sortBy(_.iterator().asScala.map(_.toString).toIterable)) {
+    for (subDir <- allSubDirs.toList.sorted) {
       val files1 = dir1Files.getOrElse(subDir, Map.empty)
       val files2 = dir2Files.getOrElse(subDir, Map.empty)
       val allFileNames = files1.keySet ++ files2.keySet

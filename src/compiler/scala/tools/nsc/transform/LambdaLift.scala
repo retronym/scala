@@ -174,6 +174,7 @@ abstract class LambdaLift extends InfoTransform {
         else {
           val ss = symSet(free, enclosure)
           if (!ss(sym)) {
+
             ss += sym
             renamable += sym
             changedFreeVars = true

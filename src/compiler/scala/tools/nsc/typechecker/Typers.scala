@@ -4861,6 +4861,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       def typedApply(tree: Apply) = tree match {
+        case _ if (context.apply(ContextMode.Outlining)) =>
+          treeCopy.Apply(typed1(tree.fun)), args.map(typed1(_)))
         case Apply(Block(stats, expr), args) =>
           typed1(atPos(tree.pos)(Block(stats, Apply(expr, args) setPos tree.pos.makeTransparent)), mode, pt)
         case Apply(fun, args) =>
@@ -4999,7 +5001,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       /* Attribute a selection where `tree` is `qual.name`.
        * `qual` is already attributed.
        */
-      def typedSelect(tree: Tree, qual: Tree, name: Name): Tree = {
+      def typedSelect(tree: Tree, qual: Tree, name: Name): Tree = if (context.apply(ContextMode.Outlining)) tree else {
         // note: on error, we discard the work we did in type checking tree.qualifier into qual
         // (tree is either Select or SelectFromTypeTree, and qual may be different from tree.qualifier because it has been type checked)
         val qualTp = qual.tpe
@@ -5945,13 +5947,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           typed(tree, mode, pt)
         case Some(tree1) => tree1
         case _           =>
-//          context.withMode(enabled = ContextMode.Outlining) {
-//            typed(tree, mode, pt)
-//          }
-          if (canSkipRhs(tree))
-            EmptyTree
-          else
+          context.withMode(enabled = ContextMode.Outlining) {
             typed(tree, mode, pt)
+          }
+//          if (canSkipRhs(tree))
+//            EmptyTree
+//          else
+//            typed(tree, mode, pt)
       }
     }
     final def lookupTransformed(tree: Tree): Option[Tree] =
@@ -5959,13 +5961,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       else transformed remove tree
 
     private final def canSkipRhs(tree: Tree) = settings.Youtline.value && !tree.exists {
+      case _: ImplDef =>
+        true // might add a sealed subclass
       case Select(Super(qual, tpnme.EMPTY), nme.CONSTRUCTOR) =>
         false
       case Select(Super(qual, mix), _) =>
         // conservative approximation of method bodies that may give rise to super accessors which must be
         // stored in pickle.
         context.owner.enclClass.isTrait || mix != tpnme.EMPTY
-        false
       case _ => false
     }
   }

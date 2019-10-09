@@ -30,7 +30,7 @@ object PickleExtractor {
       case _ =>
     }
   }
-  def process(input: Path, output: Path): Unit = {
+  def process(input: Path, output: Path, processJava: Boolean = true): Unit = {
     val inputPath = RootPath(input, writable = false)
     val outputPath = RootPath(output, writable = true)
     try {
