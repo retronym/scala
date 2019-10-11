@@ -367,7 +367,8 @@ trait Positions extends api.Positions { self: SymbolTable =>
     if (useOffsetPositions || !pos.isOpaqueRange) {
       posAssigner.pos = pos
       posAssigner.traverse(tree)
-      tree
+      try tree
+      finally posAssigner.currentOwner = NoSymbol
     }
     else {
       if (!tree.isEmpty && tree.canHaveAttrs && tree.pos == NoPosition) {

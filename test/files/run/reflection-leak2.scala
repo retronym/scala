@@ -8,6 +8,9 @@ import scala.tools
 // 3) unpickling works okay even we unpickle the same symbol a lot of times
 
 object Test extends App {
+  def test = {
+
+  }
 
   val executors = Executors.newFixedThreadPool(16)
   try {

@@ -43,15 +43,15 @@ private[reflect] trait ThreadLocalStorage {
       values.clear()
     }
   }
-  @inline final def mkThreadLocalStorage[T](x: => T): ThreadLocalStorage[T] = {
+  @inline final def mkThreadLocalStorage[T](x: => T): ThreadLocalStorage[T] = all.synchronized {
     val result = new MyThreadLocalStorage(x)
     all += result
     result
   }
 
-  private val all = collection.mutable.Buffer[MyThreadLocalStorage[_]]()
+  private lazy val all = collection.mutable.Buffer[MyThreadLocalStorage[_]]()
 
-  final def closeAllThreadLocalStorage(): Unit = {
+  final def closeAllThreadLocalStorage(): Unit = all.synchronized {
     all.foreach(_.close())
     all.clear()
   }

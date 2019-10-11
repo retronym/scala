@@ -1711,6 +1711,10 @@ trait Trees extends api.Trees {
     }
   }
   object duplicateAndResetPos extends Transformer {
+    def apply(t: Tree): Tree = {
+      try transform(t)
+      finally currentOwner = NoSymbol
+    }
     override val treeCopy = newStrictTreeCopier
     override def transform(t: Tree) = {
       val t1 = super.transform(t)

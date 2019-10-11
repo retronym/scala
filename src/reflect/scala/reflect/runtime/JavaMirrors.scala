@@ -101,13 +101,26 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private val fieldCache       = new TwoWayCache[jField, TermSymbol]
     private val tparamCache      = new TwoWayCache[jTypeVariable[_ <: GenericDeclaration], TypeSymbol]
 
-    private[this] object typeTagCache extends ClassValue[CachedReference[TypeTag[_]]]() {
+    private[this] object typeTagCache extends ClassValue[java.lang.ref.WeakReference[TypeTag[_]]]() {
       val typeCreator = new ThreadLocal[TypeCreator]()
 
-      override protected def computeValue(cls: jClass[_]): CachedReference[TypeTag[_]] = {
+      override protected def computeValue(cls: jClass[_]): java.lang.ref.WeakReference[TypeTag[_]] = {
         val creator = typeCreator.get()
         assert(creator.getClass == cls, (creator, cls))
-        new CachedReference(TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], creator))
+        seenClasses.synchronized {
+          seenClasses += new java.lang.ref.WeakReference(cls)
+        }
+        new java.lang.ref.WeakReference(TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], creator))
+      }
+      private[this] val seenClasses = collection.mutable.ArrayBuffer[java.lang.ref.WeakReference[Class[_]]]()
+      def clear(): Unit = {
+        seenClasses.synchronized {
+          for (ref <- seenClasses) {
+            val cls = ref.get
+            if (cls != null) remove(cls)
+          }
+        }
+        seenClasses.clear()
       }
     }
 
@@ -115,16 +128,12 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       typeTagCache.typeCreator.set(typeCreator)
       try {
         val ref = typeTagCache.get(typeCreator.getClass)
-        ref.singleShotGet match {
-          case null =>
-            ref.weakRef.get match {
-              case null =>
-                typeTagCache.remove(typeCreator.getClass)
-                TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], typeCreator)
-              case x => x
-            }
-          case x => x
+        var tag = ref.get
+        if (tag == null) {
+          typeTagCache.remove(typeCreator.getClass)
+          tag = TypeTagImpl[AnyRef](thisMirror.asInstanceOf[Mirror], typeCreator)
         }
+        tag
       } finally  {
         typeTagCache.typeCreator.remove()
       }
@@ -273,6 +282,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
 
     override def close(): Unit = {
       typeTagCache.typeCreator.remove()
+      typeTagCache.clear()
       super.close()
     }
 
