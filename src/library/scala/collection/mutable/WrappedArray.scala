@@ -114,13 +114,44 @@ object WrappedArray {
     case x: Array[Unit]    => new ofUnit(x)
   }).asInstanceOf[WrappedArray[T]]
 
-  implicit def canBuildFrom[T](implicit m: ClassTag[T]): CanBuildFrom[WrappedArray[_], T, WrappedArray[T]] =
+  implicit def canBuildFrom[T](implicit m: ClassTag[T]): CanBuildFrom[WrappedArray[_], T, WrappedArray[T]] = {
+    val tag = implicitly[ClassTag[T]]
+    (tag.runtimeClass match {
+      case java.lang.Byte.TYPE      => cbfByteArray
+      case java.lang.Short.TYPE     => cbfShortArray
+      case java.lang.Character.TYPE => cbfCharArray
+      case java.lang.Integer.TYPE   => cbfIntArray
+      case java.lang.Long.TYPE      => cbfLongArray
+      case java.lang.Float.TYPE     => cbfFloatArray
+      case java.lang.Double.TYPE    => cbfDoubleArray
+      case java.lang.Boolean.TYPE   => cbfBooleanArray
+      case java.lang.Void.TYPE      => cbfUnitArray
+      case ObjectClass              => cbfObjectArray
+      case _ => makeCBF[T]
+    }).asInstanceOf[CanBuildFrom[WrappedArray[_], T, WrappedArray[T]]]
+  }
+
+  private[this] val ObjectClass = classOf[Object]
+
+  private[this] val cbfBooleanArray = makeCBF[Boolean]
+  private[this] val cbfByteArray    = makeCBF[Byte]
+  private[this] val cbfCharArray    = makeCBF[Char]
+  private[this] val cbfDoubleArray  = makeCBF[Double]
+  private[this] val cbfFloatArray   = makeCBF[Float]
+  private[this] val cbfIntArray     = makeCBF[Int]
+  private[this] val cbfLongArray    = makeCBF[Long]
+  private[this] val cbfShortArray   = makeCBF[Short]
+  private[this] val cbfUnitArray    = makeCBF[Unit]
+  private[this] val cbfObjectArray  = makeCBF[Object]
+  private[this] def makeCBF[T](implicit m: ClassTag[T]): CanBuildFrom[WrappedArray[_], T, WrappedArray[T]] =
     new CanBuildFrom[WrappedArray[_], T, WrappedArray[T]] {
       def apply(from: WrappedArray[_]): Builder[T, WrappedArray[T]] =
         ArrayBuilder.make[T]()(m) mapResult WrappedArray.make[T]
+
       def apply: Builder[T, WrappedArray[T]] =
         ArrayBuilder.make[T]()(m) mapResult WrappedArray.make[T]
-  }
+    }
+
 
   def newBuilder[A]: Builder[A, IndexedSeq[A]] = new ArrayBuffer
 

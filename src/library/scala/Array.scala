@@ -61,7 +61,35 @@ object Array extends FallbackArrayBuilding {
   val emptyShortArray   = new Array[Short](0)
   val emptyObjectArray  = new Array[Object](0)
 
-  implicit def canBuildFrom[T](implicit t: ClassTag[T]): CanBuildFrom[Array[_], T, Array[T]] =
+  implicit def canBuildFrom[T](implicit t: ClassTag[T]): CanBuildFrom[Array[_], T, Array[T]] = {
+    val tag = implicitly[ClassTag[T]]
+    (tag.runtimeClass match {
+      case java.lang.Byte.TYPE      => cbfByteArray
+      case java.lang.Short.TYPE     => cbfShortArray
+      case java.lang.Character.TYPE => cbfCharArray
+      case java.lang.Integer.TYPE   => cbfIntArray
+      case java.lang.Long.TYPE      => cbfLongArray
+      case java.lang.Float.TYPE     => cbfFloatArray
+      case java.lang.Double.TYPE    => cbfDoubleArray
+      case java.lang.Boolean.TYPE   => cbfBooleanArray
+      case java.lang.Void.TYPE      => cbfUnitArray
+      case ObjectClass              => cbfObjectArray
+      case _ => makeCBF[T]
+    }).asInstanceOf[CanBuildFrom[Array[_], T, Array[T]]]
+  }
+  private[this] val ObjectClass = classOf[Object]
+
+  private[this] val cbfBooleanArray = makeCBF[Boolean]
+  private[this] val cbfByteArray    = makeCBF[Byte]
+  private[this] val cbfCharArray    = makeCBF[Char]
+  private[this] val cbfDoubleArray  = makeCBF[Double]
+  private[this] val cbfFloatArray   = makeCBF[Float]
+  private[this] val cbfIntArray     = makeCBF[Int]
+  private[this] val cbfLongArray    = makeCBF[Long]
+  private[this] val cbfShortArray   = makeCBF[Short]
+  private[this] val cbfUnitArray    = makeCBF[Unit]
+  private[this] val cbfObjectArray  = makeCBF[Object]
+  private[this] def makeCBF[T](implicit t: ClassTag[T]): CanBuildFrom[Array[_], T, Array[T]] =
     new CanBuildFrom[Array[_], T, Array[T]] {
       def apply(from: Array[_]) = ArrayBuilder.make[T]()(t)
       def apply() = ArrayBuilder.make[T]()(t)
