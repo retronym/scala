@@ -1554,7 +1554,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
-      infos = TypeHistory(currentPeriod, info, null)
+      if ((infos ne null) && (infos ne noTypeHistory)){
+        infos.validFrom = currentPeriod
+        infos.info = info
+        infos.prev = null
+      } else
+        infos = TypeHistory(currentPeriod, info, null)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
     }
@@ -1677,7 +1682,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         this.infos = oldest
         oldest
       } else {
-        this.infos = TypeHistory(validTo, info1, null)
+        if ((this.infos ne null) && (this.infos ne noTypeHistory)){
+          this.infos.validFrom = validTo
+          this.infos.info = info1
+          this.infos.prev = null
+        } else
+            this.infos = TypeHistory(validTo, info1, null)
         this.infos
       }
     }
@@ -3597,7 +3607,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     privateWithin = this
 
     override def info_=(info: Type) = {
-      infos = TypeHistory(1, NoType, null)
+      infos = noTypeHistory
       unlock()
       validTo = currentPeriod
     }
@@ -3769,7 +3779,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
 
   /** A class for type histories */
-  private final case class TypeHistory(var validFrom: Period, info: Type, prev: TypeHistory) {
+  private final case class TypeHistory(var validFrom: Period, var info: Type, var prev: TypeHistory) {
     assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
     assert(validFrom != NoPeriod, this)
 
@@ -3779,10 +3789,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     override def toString = toList.reverseIterator map (_.phaseString) mkString ", "
 
-    def toList: List[TypeHistory] = this :: ( if (prev eq null) Nil else prev.toList )
+    private def toList: List[TypeHistory] = this :: ( if (prev eq null) Nil else prev.toList )
 
     @tailrec def oldest: TypeHistory = if (prev == null) this else prev.oldest
   }
+  private[this] final val noTypeHistory = TypeHistory(1, NoType, null)
 
 // ----- Hoisted closures and convenience methods, for compile time reductions -------
 
