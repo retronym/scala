@@ -27,7 +27,6 @@ trait TraversableView[+A, +Coll] extends TraversableViewLike[A, Coll, Traversabl
 object TraversableView {
   private[this] val reusedNoBuilder = new NoBuilder[Any]
   private[collection] def noBuilder[A] = reusedNoBuilder.asInstanceOf[NoBuilder[A]]
-  @deprecated("use noBuilder")
   //should be private
   class NoBuilder[A] extends Builder[A, Nothing] {
     def +=(elem: A): this.type = this
