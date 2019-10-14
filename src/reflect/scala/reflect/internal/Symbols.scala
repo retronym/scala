@@ -1554,12 +1554,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
-      if ((infos ne null) && (infos ne noTypeHistory)){
-        infos.validFrom = currentPeriod
-        infos.info = info
-        infos.prev = null
-      } else
-        infos = TypeHistory(currentPeriod, info, null)
+      infos = if (infos ne null) infos.reset(currentPeriod, info) else TypeHistory(currentPeriod, info, null)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
     }
@@ -1677,19 +1672,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       phase   = phaseWithId(pid)
 
       val info1 = adaptToNewRunMap(oldest.info)
-      if (info1 eq oldest.info) {
-        oldest.validFrom = validTo
-        this.infos = oldest
-        oldest
-      } else {
-        if ((this.infos ne null) && (this.infos ne noTypeHistory)){
-          this.infos.validFrom = validTo
-          this.infos.info = info1
-          this.infos.prev = null
-        } else
-            this.infos = TypeHistory(validTo, info1, null)
-        this.infos
-      }
+      this.infos = if (this.infos ne null) infos.reset(validTo, info1) else TypeHistory(validTo, info1, null)
+      this.infos
     }
 
 
@@ -3779,9 +3763,24 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   }
 
   /** A class for type histories */
-  private final case class TypeHistory(var validFrom: Period, var info: Type, var prev: TypeHistory) {
+  private final case class TypeHistory private (private var _validFrom: Period, private var _info: Type, private var _prev: TypeHistory) {
+    def validFrom: Period = _validFrom
+    def info: Type = _info
+    def prev: TypeHistory = _prev
+
     assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
     assert(validFrom != NoPeriod, this)
+
+    // OPT: mutate the current TypeHistory rather than creating a new one. TypeHistory instances should not be shared.
+    final def reset(validFrom: Period, info: Type): TypeHistory = {
+      if (this ne noTypeHistory) TypeHistory(validFrom, info, null)
+      else {
+        this._validFrom = validFrom
+        this._info = info
+        this._prev = null
+        this
+      }
+    }
 
     private def phaseString = {
       val phase = phaseOf(validFrom)
