@@ -45,3 +45,7 @@ ProblemFilters.exclude[IncompatibleResultTypeProblem]("scala.reflect.io.FileZipA
 ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.typeConstructor")
 
 ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.TraversableView.noBuilder")
+
+ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.scala$reflect$runtime$SynchronizedTypes$$super$defineNormalized")
+ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.defineNormalized")
+ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.defineNormalized")

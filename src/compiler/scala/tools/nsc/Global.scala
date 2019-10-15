@@ -546,19 +546,19 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val runsRightAfter = None
   } with TailCalls
 
-  // phaseName = "explicitouter"
-  object explicitOuter extends {
-    val global: Global.this.type = Global.this
-    val runsAfter = List("tailcalls")
-    val runsRightAfter = None
-  } with ExplicitOuter
-
   // phaseName = "specialize"
   object specializeTypes extends {
     val global: Global.this.type = Global.this
     val runsAfter = List("")
     val runsRightAfter = Some("tailcalls")
   } with SpecializeTypes
+
+  // phaseName = "explicitouter"
+  object explicitOuter extends {
+    val global: Global.this.type = Global.this
+    val runsAfter = List("specialize")
+    val runsRightAfter = None
+  } with ExplicitOuter
 
   // phaseName = "erasure"
   override object erasure extends {
@@ -578,7 +578,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // phaseName = "lambdalift"
   object lambdaLift extends {
     val global: Global.this.type = Global.this
-    val runsAfter = List("erasure")
+    val runsAfter = List("posterasure")
     val runsRightAfter = None
   } with LambdaLift
 
@@ -599,7 +599,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // phaseName = "mixin"
   object mixer extends {
     val global: Global.this.type = Global.this
-    val runsAfter = List("flatten", "constructors")
+    val runsAfter = List("flatten")
     val runsRightAfter = None
   } with Mixin
 
@@ -1605,7 +1605,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         profiler.afterPhase(Global.InitPhase, snap)
         compileSources(sources)
       }
-      catch { case ex: IOException => globalError(ex.getMessage()) }
+      catch {
+        case ex: InterruptedException => reporter.cancelled = true
+        case ex: IOException => globalError(ex.getMessage())
+      }
     }
 
     /** If this compilation is scripted, convert the source to a script source. */
