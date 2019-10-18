@@ -705,12 +705,23 @@ private[internal] trait TypeMaps {
     protected def find(sym: Symbol): T
 
     protected def findIndex(sym: Symbol): Int = {
-      @tailrec def loop(syms: List[Symbol], ix: Int, sym: Symbol): Int = syms match {
-        case Nil => -1
-        case x :: _ if matches(x, sym) => ix
-        case _ :: xs => loop(xs, ix+1, sym)
+      if (getClass == classOf[SubstSymMap]) {
+        @tailrec def loop(syms: List[Symbol], ix: Int, sym: Symbol): Int = syms match {
+          case x :: _ if x eq sym => ix
+          case _ :: xs => loop(xs, ix+1, sym)
+          case _ => -1
+        }
+        val symId = sym.id
+        val fromMightContainSym = symId >= fromMin && symId <= fromMax
+        if (fromMightContainSym) loop(from, 0, sym) else -1
+      } else {
+        @tailrec def loop(syms: List[Symbol], ix: Int, sym: Symbol): Int = syms match {
+          case x :: _ if matches(x, sym) => ix
+          case _ :: xs => loop(xs, ix+1, sym)
+          case _ => -1
+        }
+        loop(from, 0, sym)
       }
-      loop(from, 0, sym)
     }
 
     private def fromContains(syms: List[Symbol]): Boolean = {
