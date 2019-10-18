@@ -67,4 +67,8 @@ class ListBenchmark {
   @Benchmark def mapConserve_modifyMid: Any = {
     values.mapConserve(x => if (x == mid) replacement else x)
   }
+
+  @Benchmark def applyMid: Any = {
+    values.apply(size / 2)
+  }
 }

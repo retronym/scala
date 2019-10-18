@@ -87,8 +87,21 @@ sealed abstract class List[+A]
 
   override def iterableFactory: SeqFactory[List] = List
 
+  // OPT: override for performance
+  override final def apply(n: Int): A = {
+    var these = this
+    var j = n
+    while (j >= 0) {
+      if (j == 0) return these.head
+      else if (these.isEmpty) throw new IndexOutOfBoundsException(n.toString)
+      else these = these.tail
+      j -= 1
+    }
+    throw new IndexOutOfBoundsException(n.toString)
+  }
   /** Adds an element at the beginning of this list.
-    *  @param elem the element to prepend.
+   *
+   *  @param elem the element to prepend.
     *  @return  a list which contains `x` as first element and
     *           which continues with this list.
     *  Example:
