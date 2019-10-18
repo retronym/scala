@@ -57,6 +57,20 @@ class SubstSymBenchmark {
     changed
   }
 
+  @Benchmark def substWildcard(bh: Blackhole): Int = {
+    val data = this.data
+    import data._
+    var i = 0
+    var changed = 0
+    while (i < types.length) {
+      val substituted = substWild.apply(types(i))
+      if (substituted ne types(i)) changed += 1
+      i += 1
+    }
+    assert(changed > 0)
+    changed
+  }
+
   @Benchmark def substSymNoOpBenchmark(bh: Blackhole): Int = {
     val data = this.data
     import data._
@@ -79,6 +93,7 @@ object SubstSymBenchmark {
     def tparams: List[Symbol] = _tparams.asInstanceOf[List[Symbol]]
     def tparams2: List[Symbol] = _tparams2.asInstanceOf[List[Symbol]]
     val substSym = new SubstSymMap(tparams, tparams2)
+    val substWild = new SubstByWildcardTypeMap(tparams)
     val substSymNoOp = new SubstSymMap(tparams2, tparams)
   }
 }
