@@ -13,20 +13,23 @@
 package scala.tools.nsc
 package transform
 
+import scala.collection.mutable
+
 /** A base class for transforms.
- *  A transform contains a compiler phase which applies a tree transformer.
+ * A transform contains a compiler phase which applies a tree transformer.
  */
 trait TypingTransformers {
 
   val global: Global
   import global._
 
+  private def newLocalTyper(unit: CompilationUnit) = if (phase.erasedTypes)
+    erasure.newTyper(erasure.rootContextPostTyper(unit, EmptyTree)).asInstanceOf[analyzer.Typer]
+  else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??
+    analyzer.newTyper(analyzer.rootContextPostTyper(unit, EmptyTree))
+
   abstract class TypingTransformer(unit: CompilationUnit) extends Transformer {
-    var localTyper: analyzer.Typer =
-      if (phase.erasedTypes)
-        erasure.newTyper(erasure.rootContextPostTyper(unit, EmptyTree)).asInstanceOf[analyzer.Typer]
-      else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??
-        analyzer.newTyper(analyzer.rootContextPostTyper(unit, EmptyTree))
+    var localTyper: analyzer.Typer = newLocalTyper(unit)
     protected var curTree: Tree = _
 
     override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
@@ -44,9 +47,13 @@ trait TypingTransformers {
       tree match {
         case Template(_, _, _) =>
           // enter template into context chain
-          atOwner(currentOwner) { tree.transform(this) }
+          atOwner(currentOwner) {
+            tree.transform(this)
+          }
         case PackageDef(_, _) =>
-          atOwner(tree.symbol) { tree.transform(this) }
+          atOwner(tree.symbol) {
+            tree.transform(this)
+          }
         case _ =>
           tree.transform(this)
       }
@@ -55,24 +62,44 @@ trait TypingTransformers {
 
   // Like TypingTransfomer, but mutates `Context` rather than creating new when recursing into each new owner.
   abstract class LightTypingTransformer(unit: CompilationUnit) extends Transformer {
-    var localTyper: analyzer.Typer =
-      if (phase.erasedTypes)
-        erasure.newTyper(erasure.rootContextPostTyper(unit, EmptyTree)).asInstanceOf[analyzer.Typer]
-      else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??
-        analyzer.newTyper(analyzer.rootContextPostTyper(unit, EmptyTree))
+    var localTyper: analyzer.Typer = newLocalTyper(unit)
     protected var curTree: Tree = _
 
-    override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
+    private val treeStack = mutable.Stack[Tree](localTyper.context.tree)
+    private val ownerStack = mutable.Stack[Symbol](localTyper.context.owner)
 
-    def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+    private def pushOwner(owner: Symbol, tree: Tree): Unit = {
+      ownerStack.push(owner)
+      treeStack.push(tree)
+      currentOwner = owner
       val context = localTyper.context
-      val savedOwner = context.owner
-      val savedTree = context.tree
+      context.enclClass = context
       context.tree = tree
       context.owner = if (owner.isModuleNotMethod) owner.moduleClass else owner
-      val result = super.atOwner(owner)(trans)
-      context.tree = savedTree
-      context.owner = savedOwner
+    }
+
+    private def popOwner(): Unit = {
+      ownerStack.pop()
+      treeStack.pop()
+      val prevOwner = ownerStack.top
+      val prevTree = treeStack.top
+      val context = localTyper.context
+      context.tree = prevTree
+      context.owner = if (prevOwner.isModuleNotMethod) prevOwner.moduleClass else prevOwner
+      currentOwner = prevOwner
+    }
+
+    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = {
+      pushOwner(owner, curTree)
+      val result = trans
+      popOwner()
+      result
+    }
+
+    @inline final def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+      pushOwner(owner, tree)
+      val result = trans
+      popOwner()
       result
     }
 
@@ -81,13 +108,18 @@ trait TypingTransformers {
       tree match {
         case Template(_, _, _) =>
           // enter template into context chain
-          atOwner(currentOwner) { tree.transform(this) }
+          atOwner(currentOwner) {
+            tree.transform(this)
+          }
         case PackageDef(_, _) =>
-          atOwner(tree.symbol) { tree.transform(this) }
+          atOwner(tree.symbol) {
+            tree.transform(this)
+          }
         case _ =>
           tree.transform(this)
       }
     }
   }
+
 }
 
