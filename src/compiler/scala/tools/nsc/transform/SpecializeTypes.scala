@@ -1472,7 +1472,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     && originalClass(clazz).parentSymbolsIterator.exists(p => hasSpecializedParams(p) && !p.isTrait)
   )
 
-  class SpecializationTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class SpecializationTransformer(unit: CompilationUnit) extends LightTypingTransformer(unit) {
 
     override def transformUnit(unit: CompilationUnit): Unit = if (!settings.nospecialization) {
       informProgress("specializing " + unit)
