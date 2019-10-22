@@ -33,7 +33,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
   private val guardedCtorStats: mutable.Map[Symbol, List[Tree]] = perRunCaches.newMap[Symbol, List[Tree]]()
   private val ctorParams: mutable.Map[Symbol, List[Symbol]] = perRunCaches.newMap[Symbol, List[Symbol]]()
 
-  class ConstructorTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class ConstructorTransformer(unit: CompilationUnit) extends LightTypingTransformer(unit) {
     /*
      * Inspect for obvious out-of-order initialization; concrete, eager vals or vars, declared in this class,
      * for which a reference to the member precedes its definition.
