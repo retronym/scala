@@ -985,7 +985,7 @@ abstract class Erasure extends InfoTransform
      *   - Remove all instance creations new C(arg) where C is an inlined class.
      *   - Reset all other type attributes to null, thus enforcing a retyping.
      */
-    private val preTransformer = new TypingTransformer(unit) {
+    private val preTransformer = new LightTypingTransformer(unit) {
       // Work around some incomplete path unification :( there are similar casts in SpecializeTypes
       def context: Context = localTyper.context.asInstanceOf[Context]
 

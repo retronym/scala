@@ -329,11 +329,12 @@ trait Trees extends api.Trees {
 
   case class ClassDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], impl: Template)
        extends ImplDef with ClassDefApi {
-    override def transform(transformer: Transformer): Tree =
+    override def transform(transformer: Transformer): Tree = {
       transformer.atOwner(this.symbol) {
         transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
           transformer.transformTypeDefs(tparams), transformer.transformTemplate(impl))
       }
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
