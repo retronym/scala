@@ -219,7 +219,7 @@ trait Contexts { self: Analyzer =>
    * @param scope The current scope
    * @param _outer The next outer context.
    */
-  class Context private[typechecker](val tree: Tree, val owner: Symbol, val scope: Scope,
+  class Context private[typechecker](var tree: Tree, var owner: Symbol, val scope: Scope,
                                      val unit: CompilationUnit, _outer: Context,
                                      private[this] var _reporter: ContextReporter = new ThrowingReporter) {
     private def outerIsNoContext = _outer eq null

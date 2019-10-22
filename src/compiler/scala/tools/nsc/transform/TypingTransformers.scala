@@ -52,5 +52,42 @@ trait TypingTransformers {
       }
     }
   }
+
+  // Like TypingTransfomer, but mutates `Context` rather than creating new when recursing into each new owner.
+  abstract class LightTypingTransformer(unit: CompilationUnit) extends Transformer {
+    var localTyper: analyzer.Typer =
+      if (phase.erasedTypes)
+        erasure.newTyper(erasure.rootContextPostTyper(unit, EmptyTree)).asInstanceOf[analyzer.Typer]
+      else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??
+        analyzer.newTyper(analyzer.rootContextPostTyper(unit, EmptyTree))
+    protected var curTree: Tree = _
+
+    override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
+
+    def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+      val context = localTyper.context
+      val savedOwner = context.owner
+      val savedTree = context.tree
+      context.tree = tree
+      context.owner = if (owner.isModuleNotMethod) owner.moduleClass else owner
+      val result = super.atOwner(owner)(trans)
+      context.tree = savedTree
+      context.owner = savedOwner
+      result
+    }
+
+    override def transform(tree: Tree): Tree = {
+      curTree = tree
+      tree match {
+        case Template(_, _, _) =>
+          // enter template into context chain
+          atOwner(currentOwner) { tree.transform(this) }
+        case PackageDef(_, _) =>
+          atOwner(tree.symbol) { tree.transform(this) }
+        case _ =>
+          tree.transform(this)
+      }
+    }
+  }
 }
 
