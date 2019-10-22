@@ -402,11 +402,19 @@ trait Trees extends api.Trees {
   }
 
   case class ValDef(mods: Modifiers, name: TermName, tpt: Tree, rhs: Tree) extends ValOrDefDef with ValDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
-          name, transformer.transform(tpt), transformer.transform(rhs))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case transformer: LightTransformer =>
+        // OPT duplicated code to inline and avoid the closure
+        transformer.atOwner(this.symbol) {
+          transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
+            name, transformer.transform(tpt), transformer.transform(rhs))
+        }
+      case _ =>
+        transformer.atOwner(this.symbol) {
+          transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
+            name, transformer.transform(tpt), transformer.transform(rhs))
+        }
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -421,12 +429,21 @@ trait Trees extends api.Trees {
 
   case class DefDef(mods: Modifiers, name: TermName, tparams: List[TypeDef],
                     vparamss: List[List[ValDef]], tpt: Tree, rhs: Tree) extends ValOrDefDef with DefDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
-          transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
-          transformer.transform(tpt), transformer.transform(rhs))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case transformer: LightTransformer =>
+        // OPT duplicated code to inline and avoid the closure
+        transformer.atOwner(this.symbol) {
+          transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
+            transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
+            transformer.transform(tpt), transformer.transform(rhs))
+        }
+      case _ =>
+        transformer.atOwner(this.symbol) {
+          transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
+            transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
+            transformer.transform(tpt), transformer.transform(rhs))
+        }
+    }
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)

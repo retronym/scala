@@ -61,14 +61,16 @@ trait TypingTransformers {
   }
 
   // Like TypingTransfomer, but mutates `Context` rather than creating new when recursing into each new owner.
-  abstract class LightTypingTransformer(unit: CompilationUnit) extends Transformer {
+  abstract class LightTypingTransformer(unit: CompilationUnit) extends Transformer with LightTransformer {
     var localTyper: analyzer.Typer = newLocalTyper(unit)
     protected var curTree: Tree = _
 
     private val treeStack = mutable.Stack[Tree](localTyper.context.tree)
     private val ownerStack = mutable.Stack[Symbol](localTyper.context.owner)
 
-    private def pushOwner(owner: Symbol, tree: Tree): Unit = {
+    final def currentTree: Tree = curTree
+
+    final def pushOwner(owner: Symbol, tree: Tree): Unit = {
       ownerStack.push(owner)
       treeStack.push(tree)
       currentOwner = owner
@@ -78,7 +80,7 @@ trait TypingTransformers {
       context.owner = if (owner.isModuleNotMethod) owner.moduleClass else owner
     }
 
-    private def popOwner(): Unit = {
+    final def popOwner(): Unit = {
       ownerStack.pop()
       treeStack.pop()
       val prevOwner = ownerStack.top
@@ -87,20 +89,6 @@ trait TypingTransformers {
       context.tree = prevTree
       context.owner = if (prevOwner.isModuleNotMethod) prevOwner.moduleClass else prevOwner
       currentOwner = prevOwner
-    }
-
-    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = {
-      pushOwner(owner, curTree)
-      val result = trans
-      popOwner()
-      result
-    }
-
-    @inline final def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
-      pushOwner(owner, tree)
-      val result = trans
-      popOwner()
-      result
     }
 
     override def transform(tree: Tree): Tree = {

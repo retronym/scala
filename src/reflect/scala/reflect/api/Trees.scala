@@ -2523,7 +2523,7 @@ trait Trees { self: Universe =>
     }
 
     /** Performs a traversal with a given owner symbol. */
-    def atOwner(owner: Symbol)(traverse: => Unit): Unit = {
+    @inline final def atOwner(owner: Symbol)(traverse: => Unit): Unit = {
       val prevOwner = currentOwner
       currentOwner = owner
       traverse
@@ -2626,6 +2626,26 @@ trait Trees { self: Universe =>
       currentOwner = prevOwner
       result
     }
+  }
+
+  trait LightTransformer extends Transformer {
+    def pushOwner(owner: Symbol, tree: Tree): Unit
+    def popOwner(): Unit
+    def currentTree: Tree
+    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = {
+      pushOwner(owner, currentTree)
+      val result = trans
+      popOwner()
+      result
+    }
+
+    @inline final def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+      pushOwner(owner, tree)
+      val result = trans
+      popOwner()
+      result
+    }
+
   }
 
   /** Delegates the transformation strategy to `scala.reflect.internal.Trees`,
