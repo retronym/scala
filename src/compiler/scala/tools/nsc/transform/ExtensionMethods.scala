@@ -260,7 +260,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
   }
 
   final class SubstututeRecursion(origMeth: Symbol, extensionMeth: Symbol,
-                            unit: CompilationUnit) extends TypingTransformer(unit) {
+                            unit: CompilationUnit) extends LightTypingTransformer(unit) {
     override def transform(tree: Tree): Tree = tree match {
       // scala/bug#6574 Rewrite recursive calls against the extension method so they can
       //         be tail call optimized later. The tailcalls phases comes before
