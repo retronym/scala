@@ -77,7 +77,12 @@ abstract class BTypes {
      *  - int[]: [I
      *  - Object m(String s, double d): (Ljava/lang/String;D)Ljava/lang/Object;
      */
-    final def descriptor = toString
+    final def descriptor: String = toString
+    final def descriptor(reusableBuffer: java.lang.StringBuilder): String = {
+      reusableBuffer.setLength(0)
+      buildString(reusableBuffer)
+      reusableBuffer.toString
+    }
 
     /**
      * @return 0 for void, 2 for long and double, 1 otherwise
@@ -239,6 +244,15 @@ abstract class BTypes {
     def asArrayBType     : ArrayBType     = this.asInstanceOf[ArrayBType]
     def asClassBType     : ClassBType     = this.asInstanceOf[ClassBType]
     def asPrimitiveBType : PrimitiveBType = this.asInstanceOf[PrimitiveBType]
+  }
+
+  final class DescriptorOf {
+    private[this] val reusableBuffer = new java.lang.StringBuilder(64)
+    def apply(tpe: BType): String = {
+      reusableBuffer.setLength(0)
+      tpe.buildString(reusableBuffer)
+      reusableBuffer.toString
+    }
   }
 
   sealed abstract class PrimitiveBType(val desc: Char, val asmType: asm.Type) extends BType {

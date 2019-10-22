@@ -524,6 +524,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
    */
   def buildInlineInfoFromClassSymbol(classSym: Symbol): InlineInfo = {
     val isEffectivelyFinal = classSym.isEffectivelyFinal
+    val descriptorOf = new DescriptorOf
 
     val sam = {
       val considerSam = !classSym.isEffectivelyFinal && {
@@ -538,7 +539,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
         // but an anonymous subclasss can be spun up by scalac after making just the single abstract method concrete)
         val samSym = exitingPickler(definitions.samOf(classSym.tpe))
         if (samSym == NoSymbol) None
-        else Some(samSym.javaSimpleName.toString + methodBTypeFromSymbol(samSym).descriptor)
+        else Some(samSym.javaSimpleName.toString + descriptorOf(methodBTypeFromSymbol(samSym)))
       }
     }
 
@@ -566,7 +567,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
           Nil
         } else {
           val name = methodSym.javaSimpleName.toString // same as in genDefDef
-          val signature = (name, methodBTypeFromSymbol(methodSym).descriptor)
+          val signature = (name, descriptorOf(methodBTypeFromSymbol(methodSym)))
 
           // In `trait T { object O }`, `oSym.isEffectivelyFinalOrNotOverridden` is true, but the
           // method is abstract in bytecode, `defDef.rhs.isEmpty`. Abstract methods are excluded
@@ -587,7 +588,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
             val staticMethodType = methodSym.info match {
               case mt@MethodType(params, res) => copyMethodType(mt, selfParam :: params, res)
             }
-            val staticMethodSignature = (staticName, methodBTypeFromMethodType(staticMethodType, isConstructor = false).descriptor)
+            val staticMethodSignature = (staticName, descriptorOf(methodBTypeFromMethodType(staticMethodType, isConstructor = false)))
             val staticMethodInfo = MethodInlineInfo(
               effectivelyFinal = true,
               annotatedInline = info.annotatedInline,

@@ -68,6 +68,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     var claszSymbol: Symbol        = null
     var isCZParcelable             = false
     var isCZStaticModule           = false
+    val descriptorOf = new DescriptorOf
 
     /* ---------------- idiomatic way to ask questions to typer ---------------- */
 
@@ -106,7 +107,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       isCZParcelable      = isAndroidParcelableClass(claszSymbol)
       isCZStaticModule    = isStaticModuleClass(claszSymbol)
       thisBType           = classBTypeFromSymbol(claszSymbol)
-      thisBTypeDescriptor = thisBType.descriptor
+      thisBTypeDescriptor = descriptorOf(thisBType)
       cnode = new ClassNode1()
 
       initJClass(cnode)
@@ -184,7 +185,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         cnode.visitSource(cunit.source.toString, null /* SourceDebugExtension */)
       }
 
-      enclosingMethodAttribute(claszSymbol, internalName, methodBTypeFromSymbol(_).descriptor) match {
+      enclosingMethodAttribute(claszSymbol, internalName, sym => descriptorOf(methodBTypeFromSymbol(sym))) match {
         case Some(EnclosingMethodEntry(className, methodName, methodDescriptor)) =>
           cnode.visitOuterClass(className, methodName, methodDescriptor)
         case _ => ()
@@ -239,7 +240,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     }
 
     protected def assignModuleInstanceField(meth: asm.MethodVisitor): Unit = {
-      meth.visitFieldInsn(asm.Opcodes.PUTSTATIC, thisBType.internalName, strMODULE_INSTANCE_FIELD, thisBType.descriptor)
+      meth.visitFieldInsn(asm.Opcodes.PUTSTATIC, thisBType.internalName, strMODULE_INSTANCE_FIELD, thisBTypeDescriptor)
     }
     /*
      * must-single-thread
@@ -270,7 +271,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         val jfield = new asm.tree.FieldNode(
           flags,
           f.javaSimpleName.toString,
-          symInfoTK(f).descriptor,
+          descriptorOf(symInfoTK(f)),
           javagensig,
           null // no initial value
         )
@@ -565,7 +566,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         if (isMethSymStaticCtor) CLASS_CONSTRUCTOR_NAME
         else jMethodName
 
-      val mdesc = methodBTypeFromSymbol(methSymbol).descriptor
+      val mdesc = descriptorOf(methodBTypeFromSymbol(methSymbol))
       mnode = cnode.visitMethod(
         flags,
         bytecodeName,
@@ -714,7 +715,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         val callee = methSymbol.enclClass.primaryConstructor
         val jname  = callee.javaSimpleName.toString
         val jowner = internalName(callee.owner)
-        val jtype  = methodBTypeFromSymbol(callee).descriptor
+        val jtype  = descriptorOf(methodBTypeFromSymbol(callee))
         insnModB   = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESPECIAL, jowner, jname, jtype, false)
       }
 
@@ -723,7 +724,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       // android creator code
       if (isCZParcelable) {
         // add a static field ("CREATOR") to this class to cache android.os.Parcelable$Creator
-        val andrFieldDescr = classBTypeFromSymbol(AndroidCreatorClass).descriptor
+        val andrFieldDescr = descriptorOf(classBTypeFromSymbol(AndroidCreatorClass))
         cnode.visitField(
           asm.Opcodes.ACC_STATIC | asm.Opcodes.ACC_FINAL,
           "CREATOR",
@@ -735,7 +736,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         val callee = definitions.getMember(claszSymbol.companionModule, androidFieldName)
         val jowner = internalName(callee.owner)
         val jname  = callee.javaSimpleName.toString
-        val jtype  = methodBTypeFromSymbol(callee).descriptor
+        val jtype  = descriptorOf(methodBTypeFromSymbol(callee))
         insnParcA  = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESTATIC, jowner, jname, jtype, false)
         // PUTSTATIC `thisBType.internalName`.CREATOR;
         insnParcB  = new asm.tree.FieldInsnNode(asm.Opcodes.PUTSTATIC, thisBType.internalName, "CREATOR", andrFieldDescr)
@@ -752,7 +753,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     def emitLocalVarScope(sym: Symbol, start: asm.Label, end: asm.Label, force: Boolean = false): Unit = {
       val Local(tk, name, idx, isSynth) = locals(sym)
       if (force || !isSynth) {
-        mnode.visitLocalVariable(name, tk.descriptor, null, start, end, idx)
+        mnode.visitLocalVariable(name, descriptorOf(tk), null, start, end, idx)
       }
     }
 

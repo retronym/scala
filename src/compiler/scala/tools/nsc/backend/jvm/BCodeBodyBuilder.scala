@@ -309,7 +309,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val bootstrapArgs = staticArgs.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos)})
           val descriptor = methodBTypeFromMethodType(qual.symbol.info, false)
           genLoadArguments(dynamicArgs, qual.symbol.info.params.map(param => typeToBType(param.info)))
-          mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, descriptor.descriptor, bootstrapDescriptor, bootstrapArgs : _*)
+          mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, descriptorOf(descriptor), bootstrapDescriptor, bootstrapArgs : _*)
 
         case ApplyDynamic(qual, args) => abort("No invokedynamic support yet.")
 
@@ -463,7 +463,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val sym       = const.symbolValue
           val ownerName = internalName(sym.owner)
           val fieldName = sym.javaSimpleName.toString
-          val fieldDesc = typeToBType(sym.tpe.underlying).descriptor
+          val fieldDesc = descriptorOf(typeToBType(sym.tpe.underlying))
           mnode.visitFieldInsn(
             asm.Opcodes.GETSTATIC,
             ownerName,
@@ -598,7 +598,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               argsSize match {
                 case 1 => bc newarray elemKind
                 case _ => // this is currently dead code in Scalac, unlike in Dotty
-                  val descr = ("[" * argsSize) + elemKind.descriptor // denotes the same as: arrayN(elemKind, argsSize).descriptor
+                  val descr = ("[" * argsSize) + descriptorOf(elemKind) // denotes the same as: arrayN(elemKind, argsSize).descriptor
                   mnode.visitMultiANewArrayInsn(descr, argsSize)
               }
 
@@ -622,7 +622,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val nativeKind = typeToBType(fun.symbol.firstParam.info)
           genLoad(expr, nativeKind)
           val MethodNameAndType(mname, methodType) = srBoxesRuntimeBoxToMethods(nativeKind)
-          bc.invokestatic(srBoxesRunTimeRef.internalName, mname, methodType.descriptor, itf = false, app.pos)
+          bc.invokestatic(srBoxesRunTimeRef.internalName, mname, descriptorOf(methodType), itf = false, app.pos)
           generatedType = boxResultType(fun.symbol)
 
         case Apply(fun, expr :: Nil) if currentRun.runDefinitions.isUnbox(fun.symbol) =>
@@ -630,7 +630,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           val boxType = unboxResultType(fun.symbol)
           generatedType = boxType
           val MethodNameAndType(mname, methodType) = srBoxesRuntimeUnboxToMethods(boxType)
-          bc.invokestatic(srBoxesRunTimeRef.internalName, mname, methodType.descriptor, itf = false, app.pos)
+          bc.invokestatic(srBoxesRunTimeRef.internalName, mname, descriptorOf(methodType), itf = false, app.pos)
 
         case app @ Apply(fun, args) =>
           val sym = fun.symbol
@@ -670,7 +670,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               // Emitting `def f(c: C) = c.clone()` as `Object.clone()` gives a VerifyError.
               val target: String = tpeTK(qual).asRefBType.classOrArrayType
               val methodBType = methodBTypeFromSymbol(sym)
-              bc.invokevirtual(target, sym.javaSimpleName.toString, methodBType.descriptor, app.pos)
+              bc.invokevirtual(target, sym.javaSimpleName.toString, descriptorOf(methodBType), app.pos)
               generatedType = methodBType.returnType
             } else {
               val receiverClass = if (!invokeStyle.isVirtual) null else {
@@ -947,7 +947,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           asm.Opcodes.GETSTATIC,
           mbt.internalName /* + "$" */ ,
           strMODULE_INSTANCE_FIELD,
-          mbt.descriptor // for nostalgics: typeToBType(module.tpe).descriptor
+          descriptorOf(mbt)  // for nostalgics: typeToBType(module.tpe).descriptor
         )
       }
     }
@@ -1066,13 +1066,13 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
       val jname  = method.javaSimpleName.toString
       val bmType = methodBTypeFromSymbol(method)
-      val mdescr = bmType.descriptor
+      val mdescr = descriptorOf(bmType)
 
       val isInterface = receiverBType.isInterface.get
       import InvokeStyle._
       if (style == Super) {
         if (receiverClass.isTrait && !method.isJavaDefined) {
-          val staticDesc = MethodBType(typeToBType(method.owner.info) :: bmType.argumentTypes, bmType.returnType).descriptor
+          val staticDesc = descriptorOf(MethodBType(typeToBType(method.owner.info) :: bmType.argumentTypes, bmType.returnType))
           val staticName = traitSuperAccessorName(method)
           bc.invokestatic(receiverName, staticName, staticDesc, isInterface, pos)
         } else {
