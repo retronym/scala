@@ -452,7 +452,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
   } // GuardianOfCtorStmts
 
   private class TemplateTransformer(val unit: CompilationUnit, val impl: Template)
-    extends TypingTransformer(unit)
+    extends LightTypingTransformer(unit)
     with    StaticsTransformer
     with    DelayedInitHelper
     with    OmittablesHelper
