@@ -99,7 +99,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       stpe
   }
 
-  class Extender(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class Extender(unit: CompilationUnit) extends LightTypingTransformer(unit) {
     private val extensionDefs = mutable.Map[Symbol, mutable.ListBuffer[Tree]]()
 
     @tailrec
