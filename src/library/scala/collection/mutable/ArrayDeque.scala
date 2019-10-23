@@ -88,6 +88,8 @@ class ArrayDeque[A] protected (
     prependAssumingCapacity(elem)
   }
 
+  override def head: A = apply(0)
+
   @inline private[ArrayDeque] def appendAssumingCapacity(elem: A): this.type = {
     array(end) = elem.asInstanceOf[AnyRef]
     end = end_+(1)
