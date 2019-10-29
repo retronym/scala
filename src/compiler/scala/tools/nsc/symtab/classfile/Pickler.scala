@@ -24,7 +24,6 @@ import scala.reflect.internal.util.shortClassOfInstance
 import scala.collection.mutable
 import PickleFormat._
 import Flags._
-import scala.reflect.io.PlainFile
 
 /**
  * Serialize a top-level module and/or class.
@@ -62,7 +61,7 @@ abstract class Pickler extends SubComponent {
     import global.genBCode.postProcessor.classfileWriters.FileWriter
     private lazy val sigWriter: Option[FileWriter] =
       if (settings.YpickleWrite.isSetByUser && !settings.YpickleWrite.value.isEmpty)
-        Some(FileWriter(global, new PlainFile(settings.YpickleWrite.value), None))
+        Some(FileWriter(global, settings.pathFactory.getDirectory(settings.YpickleWrite.value), None))
       else
         None
 
