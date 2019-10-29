@@ -104,6 +104,8 @@ trait StdAttachments {
     tree
   }
 
+  case class DeferBlackboxMacroExpanesionAttachment(f: () => Tree)
+
   /** Determines whether a tree should not be expanded, because someone has put SuppressMacroExpansionAttachment on it or one of its children.
    */
   def isMacroExpansionSuppressed(tree: Tree): Boolean =

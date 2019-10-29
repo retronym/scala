@@ -232,7 +232,7 @@ trait ScalaSettings extends AbsScalaSettings
   val Yvalidatepos    = PhasesSetting     ("-Yvalidate-pos", s"Validate positions after the given phases (implies ${Yrangepos.name})") withPostSetHook (_ => Yrangepos.value = true)
   val Ymemberpos      = StringSetting     ("-Yshow-member-pos", "output style", s"Show start and end positions of members (implies ${Yrangepos.name})", "") withPostSetHook (_ => Yrangepos.value = true)
   val Yreifycopypaste = BooleanSetting    ("-Yreify-copypaste", "Dump the reified trees in copypasteable representation.")
-  val Ymacroexpand    = ChoiceSetting     ("-Ymacro-expand", "policy", "Control expansion of macros, useful for scaladoc and presentation compiler.", List(MacroExpand.Normal, MacroExpand.None, MacroExpand.Discard), MacroExpand.Normal)
+  val Ymacroexpand    = ChoiceSetting     ("-Ymacro-expand", "policy", "Control expansion of macros, useful for scaladoc and presentation compiler.", List(MacroExpand.Normal, MacroExpand.None, MacroExpand.DeferBlackbox, MacroExpand.Discard), MacroExpand.Normal)
   val Ymacronoexpand  = BooleanSetting    ("-Ymacro-no-expand", "Don't expand macros. Might be useful for scaladoc and presentation compiler, but will crash anything which uses macros and gets past typer.") withDeprecationMessage(s"Use ${Ymacroexpand.name}:${MacroExpand.None}") withPostSetHook(_ => Ymacroexpand.value = MacroExpand.None)
   val YmacroFresh     = BooleanSetting    ("-Ymacro-global-fresh-names", "Should fresh names in macros be unique across all compilation units")
   val Yreplsync       = BooleanSetting    ("-Yrepl-sync", "Do not use asynchronous code for repl startup")
@@ -487,6 +487,7 @@ trait ScalaSettings extends AbsScalaSettings
 
   object MacroExpand {
     val None = "none"
+    val DeferBlackbox = "defer-blackbox"
     val Normal = "normal"
     val Discard = "discard"
   }
