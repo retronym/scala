@@ -19,7 +19,6 @@ import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.tools.nsc.settings.ScalaVersion
 import scala.tools.nsc.settings.NoScalaVersion
-
 import symtab.Flags._
 import transform.Transform
 
@@ -698,7 +697,7 @@ abstract class RefChecks extends Transform {
                   val cplIter = concrete.paramLists.iterator.flatten
                   def mismatch(apl: Symbol, cpl: Symbol): Option[(Type, Type)] =
                     if (apl.tpe =:= cpl.tpe) None else Some(apl.tpe -> cpl.tpe)
-                  
+
                   mapFilter2(aplIter, cplIter)(mismatch).take(2).toList match {
                     // Only one mismatched parameter: say something useful.
                     case (pa, pc) :: Nil  =>
@@ -1884,7 +1883,10 @@ abstract class RefChecks extends Transform {
           case ValDef(_, _, _, _) if treeInfo.hasSynthCaseSymbol(result) =>
             deriveValDef(result)(transform) // scala/bug#7716 Don't refcheck the tpt of the synthetic val that holds the selector.
           case _ =>
-            super.transform(result)
+            super.transform(result.getAndRemoveAttachment[analyzer.DeferBlackboxMacroExpanesionAttachment] match {
+              case Some(analyzer.DeferBlackboxMacroExpanesionAttachment(f)) => f()
+              case None => result
+            })
         }
         result1 match {
           case ClassDef(_, _, _, _)

@@ -1158,27 +1158,33 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                               => applyPossible
           }
         }
+        def vanillaAdaptLast(tree: Tree): Tree =
+          if (mode.typingConstructorPattern)
+            typedConstructorPattern(tree, pt)
+          else if (shouldInsertApply(tree))
+            insertApply()
+          else if (hasUndetsInMonoMode) { // (9)
+            assert(!context.inTypeConstructorAllowed, context) //@M
+            instantiatePossiblyExpectingUnit(tree, mode, pt)
+          }
+          else if (tree.tpe <:< pt)
+            tree
+          else if (mode.inPatternMode && { inferModulePattern(tree, pt); isPopulated(tree.tpe, approximateAbstracts(pt)) })
+            tree
+          else {
+            val constFolded = constfold(tree, pt)
+            if (constFolded.tpe <:< pt) adapt(constFolded, mode, pt, original) // set stage for (0)
+            else adaptExprNotFunMode() // (10) -- (15)
+          }
+
         if (tree.isType)
           adaptType()
         else if (mode.typingExprNotFun && treeInfo.isMacroApplication(tree) && !isMacroExpansionSuppressed(tree))
-          macroExpand(this, tree, mode, pt)
-        else if (mode.typingConstructorPattern)
-          typedConstructorPattern(tree, pt)
-        else if (shouldInsertApply(tree))
-          insertApply()
-        else if (hasUndetsInMonoMode) { // (9)
-          assert(!context.inTypeConstructorAllowed, context) //@M
-          instantiatePossiblyExpectingUnit(tree, mode, pt)
-        }
-        else if (tree.tpe <:< pt)
-          tree
-        else if (mode.inPatternMode && { inferModulePattern(tree, pt); isPopulated(tree.tpe, approximateAbstracts(pt)) })
-          tree
-        else {
-          val constFolded = constfold(tree, pt)
-          if (constFolded.tpe <:< pt) adapt(constFolded, mode, pt, original) // set stage for (0)
-          else adaptExprNotFunMode() // (10) -- (15)
-        }
+          if (settings.Ymacroexpand.value == settings.MacroExpand.DeferBlackbox && isBlackbox(tree)) {
+            vanillaAdaptLast(tree.updateAttachment(DeferBlackboxMacroExpanesionAttachment(() => macroExpand(this, tree, mode, pt))))
+          } else
+            macroExpand(this, tree, mode, pt)
+        else vanillaAdaptLast(tree)
       }
 
       // begin adapt
