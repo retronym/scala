@@ -138,15 +138,16 @@ abstract class Pickler(early: Boolean) extends SubComponent {
   private[this] var _index: Index = _
   private[this] var _entries: Entries = _
 
+  private val include: Symbol => Boolean = if (early) (sym) => (sym.owner.isTrait && sym.isAccessor) || !sym.isPrivate else _ => true
   final def initPickle(root: Symbol)(f: Pickle => Unit): Pickle = {
     if (_index eq null)   { _index   = new Index(InitEntriesSize) }
     if (_entries eq null) { _entries = new Entries(InitEntriesSize) }
-    val pickle = new Pickle(root, _index, _entries)
+    val pickle = new Pickle(root, _index, _entries, include)
     try f(pickle) finally { pickle.close(); _index.clear(); fill(_entries, null) }
     pickle
   }
 
-  class Pickle private[Pickler](root: Symbol, private var index: Index, private var entries: Entries)
+  class Pickle private[Pickler](root: Symbol, private var index: Index, private var entries: Entries, includeSym: Symbol => Boolean = _ => true)
       extends PickleBuffer(new Array[Byte](4096), -1, 0) {
     private val rootName  = root.name.toTermName
     private val rootOwner = root.owner
@@ -246,6 +247,8 @@ abstract class Pickler(early: Boolean) extends SubComponent {
       else sym
     }
 
+    private def putDecl(sym: Symbol) = if (includeSym(sym)) putSymbol(sym)
+
     /** Store symbol in index. If symbol is local, also store everything it references.
      */
     def putSymbol(sym0: Symbol) {
@@ -316,7 +319,7 @@ abstract class Pickler(early: Boolean) extends SubComponent {
         case tp: CompoundType =>
           putSymbol(tp.typeSymbol)
           putTypes(tp.parents)
-          putSymbols(tp.decls.toList)
+          tp.decls.toList.foreach(putDecl)
         case MethodType(params, restpe) =>
           putType(restpe)
           putSymbols(params)

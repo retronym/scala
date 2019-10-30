@@ -468,7 +468,7 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
     def fullCompile(): Unit = {
       command.settings.Youtline.value = false
       command.settings.stopAfter.value = Nil
-      command.settings.Ymacroexpand.value = command.settings.MacroExpand.Normal
+      command.settings.Ymacroexpand.value = command.settings.MacroExpand.DeferBlackbox
       command.settings.YpickleWrite.value = ""
 
       val groupCount = groups.size
