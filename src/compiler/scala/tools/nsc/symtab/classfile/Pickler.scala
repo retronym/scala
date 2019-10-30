@@ -138,7 +138,7 @@ abstract class Pickler(early: Boolean) extends SubComponent {
   private[this] var _index: Index = _
   private[this] var _entries: Entries = _
 
-  private val include: Symbol => Boolean = if (early) (sym) => (sym.owner.isTrait && sym.isAccessor) || !sym.isPrivate else _ => true
+  private val include: Symbol => Boolean = if (early) (sym) => true else _ => true
   final def initPickle(root: Symbol)(f: Pickle => Unit): Pickle = {
     if (_index eq null)   { _index   = new Index(InitEntriesSize) }
     if (_entries eq null) { _entries = new Entries(InitEntriesSize) }
