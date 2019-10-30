@@ -23,7 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.{CRC32, Deflater, ZipEntry, ZipOutputStream}
 
 import scala.reflect.internal.util.NoPosition
-import scala.reflect.io.PlainNioFile
+import scala.reflect.io.{PlainFile, PlainNioFile}
 import scala.tools.nsc.Global
 import scala.tools.nsc.backend.jvm.BTypes.InternalName
 import scala.tools.nsc.io.AbstractFile
@@ -181,7 +181,13 @@ abstract class ClassfileWriters {
       } else if (file.isDirectory) {
         new DirEntryWriter(file.file.toPath)
       } else {
-        throw new IllegalStateException(s"don't know how to handle an output of $file [${file.getClass}]")
+        file match {
+          case _: PlainFile =>
+            file.file.mkdirs()
+            new DirEntryWriter(file.file.toPath)
+          case _ =>
+            throw new IllegalStateException(s"don't know how to handle an output of $file [${file.getClass}]")
+        }
       }
     }
   }
