@@ -657,6 +657,11 @@ object PipelineMain {
   }
 
   def main(args: Array[String]): Unit = {
+    val status = if (doMain(args)) 0 else 1
+    System.exit(status)
+  }
+
+  def doMain(args: Array[String]): Boolean = {
     val argFiles: Seq[Path] = args match {
       case Array(path) if Files.isDirectory(Paths.get(path)) =>
         Files.walk(Paths.get(path)).iterator().asScala.filter(_.getFileName.toString.endsWith(".args")).toList
@@ -664,11 +669,7 @@ object PipelineMain {
         args.map(Paths.get(_))
     }
     val main = new PipelineMainClass(argFiles, defaultSettings)
-    val result = main.process()
-    if (!result)
-      System.exit(1)
-    else
-      System.exit(0)
+    main.process()
   }
 }
 
