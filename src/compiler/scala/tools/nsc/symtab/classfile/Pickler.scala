@@ -62,17 +62,18 @@ abstract class Pickler(early: Boolean) extends SubComponent {
             if (shouldPickle(sym)) {
               val pickle = initPickle(sym) { pickle =>
                 def reserveDeclEntries(sym: Symbol): Unit = {
-                  pickle.reserveEntry(sym)
-                  if (sym.isClass) sym.info.decls.foreach(reserveDeclEntries)
-                  else if (sym.isModule) reserveDeclEntries(sym.moduleClass)
+                  if (pickle.reserveEntry(sym)) {
+                    if (sym.isClass) sym.info.decls.foreach(reserveDeclEntries)
+                    else if (sym.isModule) reserveDeclEntries(sym.moduleClass)
+                  }
                 }
 
                 val companion = sym.companionSymbol.filter(_.owner == sym.owner) // exclude companionship between package- and package object-owned symbols.
                 val syms = sym :: (if (shouldPickle(companion)) companion :: Nil else Nil)
                 syms.foreach(reserveDeclEntries)
                 syms.foreach { sym =>
-                  pickle.putSymbol(sym)
-                  symData(sym) = pickle
+                  if (pickle.putDecl(sym))
+                    symData(sym) = pickle
                 }
               }
               writeSigFile(sym, pickle)
@@ -191,9 +192,10 @@ abstract class Pickler(early: Boolean) extends SubComponent {
 
     // Phase 1 methods: Populate entries/index ------------------------------------
     private val reserved = mutable.BitSet()
-    final def reserveEntry(sym: Symbol): Unit = {
+    final def reserveEntry(sym: Symbol): Boolean = include(sym) && {
       reserved(ep) = true
       putEntry(sym)
+      true
     }
 
     /** Store entry e in index at next available position unless
@@ -247,7 +249,7 @@ abstract class Pickler(early: Boolean) extends SubComponent {
       else sym
     }
 
-    private def putDecl(sym: Symbol) = if (includeSym(sym)) putSymbol(sym)
+    def putDecl(sym: Symbol): Boolean = includeSym(sym) && { putSymbol(sym); true }
 
     /** Store symbol in index. If symbol is local, also store everything it references.
      */
