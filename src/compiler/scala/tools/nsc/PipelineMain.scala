@@ -509,7 +509,7 @@ class PipelineMainClass(argFiles: Seq[Path], pipelineSettings: PipelineMain.Pipe
       try {
         val run2 = new compiler.Run() {
           override def advancePhase(): Unit = {
-            if (compiler.phase == this.picklerPhase) {
+            if (compiler.phase.name == "earlypickler") {
               outlineTimer.stop()
               log(f"scalac outline: done ${outlineTimer.durationMs}%.0f ms")
               outlineDone.complete(Success(()))

@@ -14,6 +14,7 @@ package scala.tools.nsc
 package typechecker
 
 import scala.reflect.internal.util.StatisticsStatics
+import scala.tools.nsc.symtab.classfile.Pickler
 
 /** The main attribution phase.
  */
@@ -82,48 +83,9 @@ trait Analyzer extends AnyRef
 
   object earlyPickler extends {
     val global: Analyzer.this.global.type = Analyzer.this.global
-  } with SubComponent {
-    val phaseName = "earlypickler"
+  } with Pickler(early = true) {
     val runsAfter = List[String]()
     val runsRightAfter= Some("packageobjects")
-
-    def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
-      override val checkable = false
-      import global._
-
-      def pickle(tree: Tree): Unit = tree match {
-        case PackageDef(_, stats) =>
-          tree.symbol.initialize; stats.foreach(pickle(_))
-        case ClassDef(_, _, _, _) | ModuleDef(_, _, _) =>
-          val sym = tree.symbol.initialize
-          def shouldPickle(sym: Symbol) = currentRun.compiles(sym)
-          if (shouldPickle(sym)) {
-            val b = new java.lang.StringBuilder
-            def skip(sym: Symbol) = sym.isPrivateThis || (sym.isPrivate && !sym.owner.isTrait)
-            def printSym(sym: Symbol, level: Int): Unit = if (!skip(sym)){
-              sym.initialize
-              val indent = " " * (level * 2)
-              def p(s: String): Unit = {
-                b.append(indent)
-                b.append(s)
-                b.append("\n")
-              }
-              p(sym.defString)
-              if (sym.isClass) {
-                sym.info.decls.foreach(sym => printSym(sym, level + 1))
-              } else if (sym.isClass) {
-                sym.moduleClass.info.decls.foreach(sym => printSym(sym, level + 1))
-              }
-            }
-            printSym(sym, 0)
-            println(b.toString)
-          }
-        case _ =>
-      }
-      def apply(unit: CompilationUnit): Unit = {
-        pickle(unit.body)
-      }
-    }
   }
 
   object typerFactory extends {

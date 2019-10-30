@@ -511,7 +511,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
     val runsAfter = List("extmethods")
     val runsRightAfter = None
-  } with Pickler
+  } with Pickler(early = false)
 
   // phaseName = "refchecks"
   object refChecks extends {
@@ -1166,6 +1166,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val symSource = new mutable.HashMap[Symbol, AbstractFile]
 
     /** A map from compiled top-level symbols to their picklers */
+    val earlySymData = new mutable.AnyRefMap[Symbol, PickleBuffer]
     val symData = new mutable.AnyRefMap[Symbol, PickleBuffer]
 
     private var phasec: Int  = 0   // phases completed

@@ -34,17 +34,18 @@ import scala.reflect.io.PlainFile
  * @author Martin Odersky
  * @version 1.0
  */
-abstract class Pickler extends SubComponent {
+abstract class Pickler(early: Boolean) extends SubComponent {
   import global._
 
-  val phaseName = "pickler"
+  val phaseName = if (early) "earlypickler" else "pickler"
 
   def newPhase(prev: Phase): StdPhase = new PicklePhase(prev)
 
   class PicklePhase(prev: Phase) extends StdPhase(prev) {
+    private val symData = if (early) currentRun.earlySymData else currentRun.symData
     import global.genBCode.postProcessor.classfileWriters.FileWriter
     private lazy val sigWriter: Option[FileWriter] =
-      if (settings.YpickleWrite.isSetByUser && !settings.YpickleWrite.value.isEmpty)
+      if (early && settings.YpickleWrite.isSetByUser && !settings.YpickleWrite.value.isEmpty)
         Some(FileWriter(global, new PlainFile(settings.YpickleWrite.value), None))
       else
         None
@@ -53,10 +54,11 @@ abstract class Pickler extends SubComponent {
       def pickle(tree: Tree): Unit = {
         tree match {
           case PackageDef(_, stats) =>
+            tree.symbol.initialize
             stats foreach pickle
           case ClassDef(_, _, _, _) | ModuleDef(_, _, _) =>
-            val sym = tree.symbol
-            def shouldPickle(sym: Symbol) = currentRun.compiles(sym) && !currentRun.symData.contains(sym)
+            val sym = tree.symbol.initialize
+            def shouldPickle(sym: Symbol) = currentRun.compiles(sym) && !symData.contains(sym)
             if (shouldPickle(sym)) {
               val pickle = initPickle(sym) { pickle =>
                 def reserveDeclEntries(sym: Symbol): Unit = {
@@ -70,18 +72,18 @@ abstract class Pickler extends SubComponent {
                 syms.foreach(reserveDeclEntries)
                 syms.foreach { sym =>
                   pickle.putSymbol(sym)
-                  currentRun.symData(sym) = pickle
+                  symData(sym) = pickle
                 }
               }
               writeSigFile(sym, pickle)
-              currentRun registerPickle sym
+              if (!early) currentRun registerPickle sym
             }
           case _ =>
         }
       }
 
       try {
-        pickle(unit.body)
+        if (!early || sigWriter.isDefined) pickle(unit.body)
       } catch {
         case e: FatalError =>
           for (t <- unit.body) {
