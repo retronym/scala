@@ -46,6 +46,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree
 
+  case class LazyTree(f: () => Tree) extends SymTree
+
   // --- factory methods ----------------------------------------------------------
 
   /** Factory method for a primary constructor super call `super.<init>(args_1)...(args_n)`
@@ -94,6 +96,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
       traverser.traverse(arg)
     case TypeTreeWithDeferredRefCheck() =>
       // (and rewrap the result? how to update the deferred check? would need to store wrapped tree instead of returning it from check)
+    case LazyTree(_) =>
+      throw new UnsupportedOperationException()
     case _ => super.xtraverse(traverser, tree)
   }
 
@@ -169,6 +173,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
         tree, transformer.transform(arg))
     case TypeTreeWithDeferredRefCheck() =>
       transformer.treeCopy.TypeTreeWithDeferredRefCheck(tree)
+    case LazyTree(_) =>
+      throw new UnsupportedOperationException()
   }
 
   // Finally, no one uses resetAllAttrs anymore, so I'm removing it from the compiler.
