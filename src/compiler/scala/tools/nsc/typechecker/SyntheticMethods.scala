@@ -97,8 +97,8 @@ trait SyntheticMethods extends ast.TreeDSL {
     def accessors = clazz.caseFieldAccessors
     val arity = accessors.size
 
-    def forwardToRuntime(method: Symbol): Tree =
-      forwardMethod(method, getMember(ScalaRunTimeModule, (method.name prepend "_")))(mkThis :: _)
+    def forwardToRuntime(method: Symbol): LazyTree =
+      forwardMethod(method, getMember(ScalaRunTimeModule, method.name prepend "_"))(mkThis :: _)
 
     def callStaticsMethodName(name: TermName)(args: Tree*): Tree = {
       val method = RuntimeStaticsModule.info.member(name)
@@ -118,14 +118,14 @@ trait SyntheticMethods extends ast.TreeDSL {
         (m0 ne meth) && !m0.isDeferred && !m0.isSynthetic && (m0.owner != AnyValClass) && (typeInClazz(m0) matches typeInClazz(meth))
       }
     }
-    def productIteratorMethod = {
+    def productIteratorMethod: LazyTree = {
       createMethod(nme.productIterator, iteratorOfType(AnyTpe))(_ =>
         gen.mkMethodCall(ScalaRunTimeModule, nme.typedProductIterator, List(AnyTpe), List(mkThis))
       )
     }
 
     /* Common code for productElement and (currently disabled) productElementName */
-    def perElementMethod(name: Name, returnType: Type)(caseFn: Symbol => Tree): Tree =
+    def perElementMethod(name: Name, returnType: Type)(caseFn: Symbol => Tree): LazyTree =
       createSwitchMethod(name, accessors.indices, returnType)(idx => caseFn(accessors(idx)))
 
     // def productElementNameMethod = perElementMethod(nme.productElementName, StringTpe)(x => LIT(x.name.toString))
@@ -135,7 +135,7 @@ trait SyntheticMethods extends ast.TreeDSL {
     /* The canEqual method for case classes.
      *   def canEqual(that: Any) = that.isInstanceOf[This]
      */
-    def canEqualMethod: Tree = {
+    def canEqualMethod: LazyTree = {
       syntheticCanEqual = true
       createMethod(nme.canEqual_, List(AnyTpe), BooleanTpe) { m =>
         Ident(m.firstParam) IS_OBJ classExistentialType(context.prefix, clazz)
@@ -214,10 +214,10 @@ trait SyntheticMethods extends ast.TreeDSL {
      *      }
      *   }
      */
-    def equalsCaseClassMethod: Tree = createMethod(nme.equals_, List(AnyTpe), BooleanTpe) { m =>
+    def equalsCaseClassMethod: LazyTree = createMethod(nme.equals_, List(AnyTpe), BooleanTpe) { m =>
       if (accessors.isEmpty)
         if (clazz.isFinal) thatTest(m)
-        else thatTest(m) AND ((thatCast(m) DOT nme.canEqual_)(mkThis))
+        else thatTest(m) AND (thatCast(m) DOT nme.canEqual_)(mkThis)
       else
         (mkThis ANY_EQ Ident(m.firstParam)) OR equalsCore(m, accessors)
     }
@@ -228,14 +228,14 @@ trait SyntheticMethods extends ast.TreeDSL {
      *    val x$1 = that.asInstanceOf[this.C]
      *    (this.underlying == that.underlying
      */
-    def equalsDerivedValueClassMethod: Tree = createMethod(nme.equals_, List(AnyTpe), BooleanTpe) { m =>
+    def equalsDerivedValueClassMethod: LazyTree = createMethod(nme.equals_, List(AnyTpe), BooleanTpe) { m =>
       equalsCore(m, List(clazz.derivedValueClassUnbox))
     }
 
     /* The hashcode method for value classes
      * def hashCode(): Int = this.underlying.hashCode
      */
-    def hashCodeDerivedValueClassMethod: Tree = createMethod(nme.hashCode_, Nil, IntTpe) { m =>
+    def hashCodeDerivedValueClassMethod: LazyTree = createMethod(nme.hashCode_, Nil, IntTpe) { m =>
       Select(mkThisSelect(clazz.derivedValueClassUnbox), nme.hashCode_)
     }
 
@@ -253,7 +253,7 @@ trait SyntheticMethods extends ast.TreeDSL {
     ****/
 
     // methods for both classes and objects
-    def productMethods = {
+    def productMethods: List[(Symbol, () => LazyTree)] = {
       List(
         Product_productPrefix   -> (() => constantNullary(nme.productPrefix, clazz.name.decode)),
         Product_productArity    -> (() => constantNullary(nme.productArity, arity)),
@@ -279,7 +279,7 @@ trait SyntheticMethods extends ast.TreeDSL {
       }
     }
 
-    def specializedHashcode = {
+    def specializedHashcode: LazyTree = {
       createMethod(nme.hashCode_, Nil, IntTpe) { m =>
         val accumulator = m.newVariable(newTermName("acc"), m.pos, SYNTHETIC) setInfo IntTpe
         val valdef      = ValDef(accumulator, Literal(Constant(0xcafebabe)))
@@ -294,7 +294,7 @@ trait SyntheticMethods extends ast.TreeDSL {
         Block(valdef :: mixes, finish)
       }
     }
-    def chooseHashcode = {
+    def chooseHashcode: LazyTree = {
       if (accessors exists (x => isPrimitiveValueType(x.tpe.finalResultType)))
         specializedHashcode
       else
@@ -303,20 +303,20 @@ trait SyntheticMethods extends ast.TreeDSL {
 
     def valueClassMethods = List(
       Any_hashCode -> (() => hashCodeDerivedValueClassMethod),
-      Any_equals -> (() => equalsDerivedValueClassMethod)
+      Any_equals ->   (() => equalsDerivedValueClassMethod)
     )
 
-    def caseClassMethods = productMethods ++ /*productNMethods ++*/ Seq(
+    def caseClassMethods: List[(Symbol, () => LazyTree)] = productMethods ++ /*productNMethods ++*/ Seq(
       Object_hashCode -> (() => chooseHashcode),
       Object_toString -> (() => forwardToRuntime(Object_toString)),
       Object_equals   -> (() => equalsCaseClassMethod)
     )
 
-    def valueCaseClassMethods = productMethods ++ /*productNMethods ++*/ valueClassMethods ++ Seq(
+    def valueCaseClassMethods: List[(Symbol, () => LazyTree)] = productMethods ++ /*productNMethods ++*/ valueClassMethods ++ Seq(
       Any_toString -> (() => forwardToRuntime(Object_toString))
     )
 
-    def caseObjectMethods = productMethods ++ Seq(
+    def caseObjectMethods: List[(Symbol, () => LazyTree)] = productMethods ++ Seq(
       Object_hashCode -> (() => constantMethod(nme.hashCode_, clazz.name.decode.hashCode)),
       Object_toString -> (() => constantMethod(nme.toString_, clazz.name.decode))
       // Not needed, as reference equality is the default.
@@ -336,20 +336,18 @@ trait SyntheticMethods extends ast.TreeDSL {
       && clazz.isStatic
     )
 
-    def synthesize(): List[Tree] = {
-      val methods = (
-        if (clazz.isCase)
-          if (clazz.isDerivedValueClass) valueCaseClassMethods
-          else if (clazz.isModuleClass) caseObjectMethods
-          else caseClassMethods
-        else if (clazz.isDerivedValueClass) valueClassMethods
-        else Nil
-      )
+    def synthesize(): List[LazyTree] = {
+      val methods = if (clazz.isCase)
+        if (clazz.isDerivedValueClass) valueCaseClassMethods
+        else if (clazz.isModuleClass) caseObjectMethods
+        else caseClassMethods
+      else if (clazz.isDerivedValueClass) valueClassMethods
+      else Nil
 
       /* Always generate overrides for equals and hashCode in value classes,
        * so they can appear in universal traits without breaking value semantics.
        */
-      def impls = {
+      def impls: List[LazyTree] = {
         def shouldGenerate(m: Symbol) = {
           !hasOverridingImplementation(m) || {
             clazz.isDerivedValueClass && (m == Any_hashCode || m == Any_equals) && {
@@ -365,7 +363,7 @@ trait SyntheticMethods extends ast.TreeDSL {
         }
         for ((m, impl) <- methods ; if shouldGenerate(m)) yield impl()
       }
-      def extras = {
+      def extras: List[LazyTree] = {
         if (needsReadResolve) {
           // Aha, I finally decoded the original comment.
           // This method should be generated as private, but apparently if it is, then
@@ -405,7 +403,7 @@ trait SyntheticMethods extends ast.TreeDSL {
           newAcc.makePublic
           newAcc resetFlag (ACCESSOR | PARAMACCESSOR | OVERRIDE)
           ddef.rhs.duplicate
-        }
+        }.f()
         // TODO: shouldn't the next line be: `original resetFlag CASEACCESSOR`?
         ddef.symbol resetFlag CASEACCESSOR
         lb += logResult("case accessor new")(newAcc)
@@ -413,12 +411,12 @@ trait SyntheticMethods extends ast.TreeDSL {
         renamedInClassMap(original.name.toTermName) = newAcc.symbol.name.toTermName
       }
 
-      (lb ++= templ.body ++= synthesize()).toList
+      (lb ++= templ.body ++= synthesize().map(_.f())).toList
     }
 
     deriveTemplate(templ)(body =>
       if (clazz.isCase) caseTemplateBody()
-      else synthesize() match {
+      else synthesize().map(_.f()) match {
         case Nil  => body // avoiding unnecessary copy
         case ms   => body ++ ms
       }

@@ -67,40 +67,41 @@ trait MethodSynthesis {
       original.cloneSymbol(clazz, newMethodFlags(original), name) setPos clazz.pos.focus
     }
 
-    private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
+    private def createInternal(name: Name, f: Symbol => Tree, info: Type): LazyTree = {
       val m = newMethodSymbol(name)
-      finishMethod(m setInfoAndEnter info, f)
+      lazyMember(m.owner.info.decls.enter(m), () => info, (sym) => localTyper.typed(mkDef(m, f(sym))))
     }
 
-    private def createInternal(name: Name, f: Symbol => Tree, infoFn: Symbol => Type): Tree = {
+    private def createInternal(name: Name, f: Symbol => Tree, infoFn: Symbol => Type): LazyTree = {
       val m = newMethodSymbol(name)
-      finishMethod(m setInfoAndEnter infoFn(m), f)
+      lazyMember(m.owner.info.decls.enter(m), () => infoFn(m), (sym) => localTyper.typed(mkDef(m, f(sym))))
     }
 
-    private def cloneInternal(original: Symbol, f: Symbol => Tree, name: Name): Tree = {
+    private def cloneInternal(original: Symbol, f: Symbol => Tree, name: Name): LazyTree = {
       val m = clonedMethodSymbol(original, name)
-      finishMethod(clazz.info.decls enter m, f)
+      val info = m.info
+      lazyMember(clazz.info.decls.enter(m), () => info, sym => localTyper.typed(mkDef(sym, f(sym))))
     }
 
     def clazzMember(name: Name)  = clazz.info nonPrivateMember name
     def typeInClazz(sym: Symbol) = clazz.thisType memberType sym
 
-    def deriveMethod(original: Symbol, nameFn: Name => Name)(f: Symbol => Tree): Tree =
+    def deriveMethod(original: Symbol, nameFn: Name => Name)(f: Symbol => Tree): LazyTree =
       cloneInternal(original, f, nameFn(original.name))
 
-    def createMethod(name: Name, paramTypes: List[Type], returnType: Type)(f: Symbol => Tree): Tree =
+    def createMethod(name: Name, paramTypes: List[Type], returnType: Type)(f: Symbol => Tree): LazyTree =
       createInternal(name, f, (m: Symbol) => MethodType(m newSyntheticValueParams paramTypes, returnType))
 
-    def createMethod(name: Name, returnType: Type)(f: Symbol => Tree): Tree =
+    def createMethod(name: Name, returnType: Type)(f: Symbol => Tree): LazyTree =
       createInternal(name, f, NullaryMethodType(returnType))
 
-    def createMethod(original: Symbol)(f: Symbol => Tree): Tree =
+    def createMethod(original: Symbol)(f: Symbol => Tree): LazyTree =
       createInternal(original.name, f, original.info)
 
-    def forwardMethod(original: Symbol, newMethod: Symbol)(transformArgs: List[Tree] => List[Tree]): Tree =
+    def forwardMethod(original: Symbol, newMethod: Symbol)(transformArgs: List[Tree] => List[Tree]): LazyTree =
       createMethod(original)(m => gen.mkMethodCall(newMethod, transformArgs(m.paramss.head map Ident)))
 
-    def createSwitchMethod(name: Name, range: Seq[Int], returnType: Type)(f: Int => Tree) = {
+    def createSwitchMethod(name: Name, range: Seq[Int], returnType: Type)(f: Int => Tree): LazyTree = {
       createMethod(name, List(IntTpe), returnType) { m =>
         val arg0    = Ident(m.firstParam)
         val default = DEFAULT ==> Throw(IndexOutOfBoundsExceptionClass.tpe_*, fn(arg0, nme.toString_))
@@ -111,12 +112,12 @@ trait MethodSynthesis {
     }
 
     // def foo() = constant
-    def constantMethod(name: Name, value: Any): Tree = {
+    def constantMethod(name: Name, value: Any): LazyTree = {
       val constant = Constant(value)
       createMethod(name, Nil, constant.tpe)(_ => Literal(constant))
     }
     // def foo = constant
-    def constantNullary(name: Name, value: Any): Tree = {
+    def constantNullary(name: Name, value: Any): LazyTree = {
       val constant = Constant(value)
       createMethod(name, constant.tpe)(_ => Literal(constant))
     }
