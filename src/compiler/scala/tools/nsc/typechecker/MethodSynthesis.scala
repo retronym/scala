@@ -26,7 +26,6 @@ trait MethodSynthesis {
   import definitions._
   import CODE._
 
-
   class ClassMethodSynthesis(val clazz: Symbol, localTyper: Typer) {
     def mkThis = This(clazz) setPos clazz.pos.focus
     def mkThisSelect(sym: Symbol) = atPos(clazz.pos.focus)(
@@ -50,14 +49,17 @@ trait MethodSynthesis {
     private def finishMethod(method: Symbol, f: Symbol => Tree): Tree =
       localTyper.typed(mkDef(method, f(method)))
 
-    private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
+    private def newMethodSymbol(name: Name): MethodSymbol = {
       val name1 = name.toTermName
-      val m = clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
+      clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
+    }
+
+    private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
+      val m = newMethodSymbol(name)
       finishMethod(m setInfoAndEnter info, f)
     }
     private def createInternal(name: Name, f: Symbol => Tree, infoFn: Symbol => Type): Tree = {
-      val name1 = name.toTermName
-      val m = clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
+      val m = newMethodSymbol(name)
       finishMethod(m setInfoAndEnter infoFn(m), f)
     }
     private def cloneInternal(original: Symbol, f: Symbol => Tree, name: Name): Tree = {
