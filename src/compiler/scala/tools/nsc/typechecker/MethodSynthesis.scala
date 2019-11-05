@@ -54,16 +54,22 @@ trait MethodSynthesis {
       clazz.newMethod(name1, clazz.pos.focus, newMethodFlags(name1))
     }
 
+    private def clonedMethodSymbol(original: Symbol, name: Name): Symbol = {
+      original.cloneSymbol(clazz, newMethodFlags(original), name) setPos clazz.pos.focus
+    }
+
     private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
       val m = newMethodSymbol(name)
       finishMethod(m setInfoAndEnter info, f)
     }
+
     private def createInternal(name: Name, f: Symbol => Tree, infoFn: Symbol => Type): Tree = {
       val m = newMethodSymbol(name)
       finishMethod(m setInfoAndEnter infoFn(m), f)
     }
+
     private def cloneInternal(original: Symbol, f: Symbol => Tree, name: Name): Tree = {
-      val m = original.cloneSymbol(clazz, newMethodFlags(original), name) setPos clazz.pos.focus
+      val m = clonedMethodSymbol(original, name)
       finishMethod(clazz.info.decls enter m, f)
     }
 
