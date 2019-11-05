@@ -45,11 +45,10 @@ trait MethodSynthesis {
       (method.flags | overrideFlag | SYNTHETIC) & ~DEFERRED
     }
 
+    def mkDef(method: Symbol, rhs: Tree): Tree = if (method.isLazy) ValDef(method, rhs) else DefDef(method, rhs)
+
     private def finishMethod(method: Symbol, f: Symbol => Tree): Tree =
-      localTyper typed (
-        if (method.isLazy) ValDef(method, f(method))
-        else DefDef(method, f(method))
-      )
+      localTyper.typed(mkDef(method, f(method)))
 
     private def createInternal(name: Name, f: Symbol => Tree, info: Type): Tree = {
       val name1 = name.toTermName
