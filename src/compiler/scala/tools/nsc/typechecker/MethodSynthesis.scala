@@ -31,6 +31,15 @@ trait MethodSynthesis {
     def mkThisSelect(sym: Symbol) = atPos(clazz.pos.focus)(
       if (clazz.isClass) Select(This(clazz), sym) else Ident(sym)
     )
+    final class SyntheticLazyType(tp: () => Type, tree: Tree) extends TypeCompleterBase[Tree](tree) {
+      override def completeImpl(sym: global.Symbol): Unit = sym.setInfo(tp())
+    }
+
+    private def lazyMember(sym: Symbol, info: () => Type, tree: Symbol => Tree): LazyTree = {
+      val lazyTree = LazyTree(() => tree(sym)).setSymbol(sym)
+      sym.setInfo(new SyntheticLazyType(info, lazyTree))
+      lazyTree
+    }
 
     private def isOverride(name: TermName) =
       clazzMember(name).alternatives exists (sym => !sym.isDeferred && (sym.owner != clazz))
