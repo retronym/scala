@@ -46,7 +46,9 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   /** emitted by typer, eliminated by refchecks */
   case class TypeTreeWithDeferredRefCheck()(val check: () => TypeTree) extends TypTree
 
-  case class LazyTree(f: () => Tree) extends SymTree
+  case class LazyTree(f: () => Tree) extends SymTree {
+    lazy val force: Tree = f()
+  }
 
   // --- factory methods ----------------------------------------------------------
 

@@ -386,8 +386,8 @@ trait SyntheticMethods extends ast.TreeDSL {
      * because synthesized methods need refer to the new symbols.
      * Care must also be taken to preserve the case accessor order.
      */
-    def caseTemplateBody(): List[Tree] = {
-      val lb = ListBuffer[Tree]()
+    def caseTemplateBody(): List[LazyTree] = {
+      val lb = ListBuffer[LazyTree]()
       def isRewrite(sym: Symbol) = sym.isCaseAccessorMethod && !sym.isPublic
 
       for (ddef @ DefDef(_, _, _, _, _, _) <- templ.body ; if isRewrite(ddef.symbol)) {
@@ -403,23 +403,22 @@ trait SyntheticMethods extends ast.TreeDSL {
           newAcc.makePublic
           newAcc resetFlag (ACCESSOR | PARAMACCESSOR | OVERRIDE)
           ddef.rhs.duplicate
-        }.f()
+        }
         // TODO: shouldn't the next line be: `original resetFlag CASEACCESSOR`?
         ddef.symbol resetFlag CASEACCESSOR
         lb += logResult("case accessor new")(newAcc)
         val renamedInClassMap = renamedCaseAccessors.getOrElseUpdate(clazz, mutable.Map() withDefault(x => x))
         renamedInClassMap(original.name.toTermName) = newAcc.symbol.name.toTermName
       }
-
-      (lb ++= templ.body ++= synthesize().map(_.f())).toList
+      lb.result
     }
 
+    val prepend = if (!clazz.isCase) Nil else caseTemplateBody().map(_.force)
+    val append = synthesize().map(_.force)
+
     deriveTemplate(templ)(body =>
-      if (clazz.isCase) caseTemplateBody()
-      else synthesize().map(_.f()) match {
-        case Nil  => body // avoiding unnecessary copy
-        case ms   => body ++ ms
-      }
+      if (prepend.isEmpty && append.isEmpty) body
+      else prepend ::: body ::: append
     )
   }
 }
