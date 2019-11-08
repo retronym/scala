@@ -288,6 +288,8 @@ abstract class Pickler extends SubComponent {
       }
     }
 
+    private def putSymbols(syms: Scope) =
+      syms foreach putSymbol
     private def putSymbols(syms: List[Symbol]) =
       syms foreach putSymbol
 
@@ -317,7 +319,7 @@ abstract class Pickler extends SubComponent {
         case tp: CompoundType =>
           putSymbol(tp.typeSymbol)
           putTypes(tp.parents)
-          putSymbols(tp.decls.toList)
+          putSymbols(tp.decls)
         case MethodType(params, restpe) =>
           putType(restpe)
           putSymbols(params)
