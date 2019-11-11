@@ -591,7 +591,7 @@ trait Types
     def decl(name: Name): Symbol = findDecl(name, 0)
 
     /** A list of all non-private members defined or declared in this type. */
-    def nonPrivateDecls: List[Symbol] = decls.filterNot(_.isPrivate).toList
+    def nonPrivateDecls: List[Symbol] = decls.iterator.filterNot(_.isPrivate).toList
 
     /** The non-private defined or declared members with name `name` in this type;
      *  an OverloadedSymbol if several exist, NoSymbol if none exist.

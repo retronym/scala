@@ -131,7 +131,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     private final val MIN_HASH = 8
 
     /** Returns a new scope with the same content as this one. */
-    def cloneScope: Scope = newScopeWith(this.toList: _*)
+    def cloneScope: Scope = newScopeWith(this.iterator)
 
     /** is the scope empty? */
     override def isEmpty: Boolean = elems eq null
@@ -435,9 +435,27 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       symbols
     }
 
+    final def toArray: Array[Symbol] = {
+      if (isEmpty) emptySymbolArray
+      else {
+        val result = new Array[Symbol](size)
+        iterator.copyToArray(result)
+        result
+      }
+    }
+
     /** Vanilla scope - symbols are stored in declaration order.
      */
     def sorted: List[Symbol] = toList
+
+
+    /** Selects the last element.
+     * $orderDependent
+     *
+     * @return The last element of this $coll.
+     * @throws NoSuchElementException If the $coll is empty.
+     */
+    override def last: Symbol = if (elems == null) Nil.last else elems.sym
 
     /** Return the nesting level of this scope, i.e. the number of times this scope
      *  was nested in another */
@@ -563,6 +581,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       abort("EmptyScope.enter")
     }
   }
+  private def emptySymbolArray = Array[Symbol]()
 
   /** The error scope.
    */

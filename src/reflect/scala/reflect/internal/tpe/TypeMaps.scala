@@ -124,10 +124,23 @@ private[internal] trait TypeMaps {
 
     /** Map this function over given scope */
     def mapOver(scope: Scope): Scope = {
-      val elems = scope.toList
-      val elems1 = mapOver(elems)
-      if (elems1 eq elems) scope
-      else newScopeWith(elems1: _*)
+      scope.size match {
+        case 0 => scope
+        case 1 =>
+          val sym = scope.last
+          val info = sym.info
+          val info1 = applyToSymbolInfo(sym, info)
+          if (info1 eq info) scope
+          else {
+            val sym1 = sym.cloneSymbol
+            sym1.modifyInfo(this)
+            val scope1 = newScope
+            scope1.enter(sym1)
+            scope1
+          }
+        case _ =>
+          newScopeWith(mapOver(scope.toList): _*)
+      }
     }
 
     /** Map this function over given list of symbols */
@@ -234,8 +247,7 @@ private[internal] trait TypeMaps {
     def foldOver(syms: List[Symbol]): Unit = syms.foreach( sym => apply(sym.info) )
 
     def foldOver(scope: Scope): Unit = {
-      val elems = scope.toList
-      foldOver(elems)
+      scope.foreach(sym => apply(sym.info))
     }
 
     def foldOverAnnotations(annots: List[AnnotationInfo]): Unit =
