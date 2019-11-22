@@ -85,7 +85,7 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * In addition to the data slices (`prefix1`, `prefix2`, ..., `dataN`, ..., `suffix2`, `suffix1`) we store a running
   * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
-sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
+sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final val length: Int)
   extends AbstractSeq[A]
     with IndexedSeq[A]
     with IndexedSeqOps[A, NVector, NVector[A]]
@@ -176,10 +176,9 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
 
 
 /** Empty vector */
-private final object NVector0 extends NVector[Nothing](null) {
+private final object NVector0 extends NVector[Nothing](null, 0) {
   import NVectorStatics._
 
-  def length = 0
   def apply(index: Int) = throw ioob(index)
 
   override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw ioob(index)
@@ -224,10 +223,8 @@ private final object NVector0 extends NVector[Nothing](null) {
 
 
 /** Flat ArraySeq-like structure */
-private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
+private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1, _data1.length) {
   import NVectorStatics._
-
-  @inline def length = prefix1.length
 
   @inline def apply(index: Int): A =
     try prefix1(index).asInstanceOf[A]
@@ -289,7 +286,7 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
 private final class NVector2[+A](_prefix1: Arr1, len1: Int,
                                  data2: Arr2,
                                  suffix1: Arr1,
-                                 val length: Int) extends NVector[A](_prefix1) {
+                                 length: Int) extends NVector[A](_prefix1, length) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -386,7 +383,7 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
                                  prefix2: Arr2, len12: Int,
                                  data3: Arr3,
                                  suffix2: Arr2, suffix1: Arr1,
-                                 val length: Int) extends NVector[A](_prefix1) {
+                                 length: Int) extends NVector[A](_prefix1, length) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -507,7 +504,7 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
                                  prefix3: Arr3, len123: Int,
                                  data4: Arr4,
                                  suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 val length: Int) extends NVector[A](_prefix1) {
+                                 length: Int) extends NVector[A](_prefix1, length) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -650,7 +647,7 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
                                  prefix4: Arr4, len1234: Int,
                                  data5: Arr5,
                                  suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 val length: Int) extends NVector[A](_prefix1) {
+                                 length: Int) extends NVector[A](_prefix1, length) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -815,7 +812,7 @@ private final class NVector6[+A](_prefix1: Arr1, len1: Int,
                                  prefix5: Arr5, len12345: Int,
                                  data6: Arr6,
                                  suffix5: Arr5, suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 val length: Int) extends NVector[A](_prefix1) {
+                                 length: Int) extends NVector[A](_prefix1, length) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
