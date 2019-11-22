@@ -174,20 +174,27 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final
     catch { case _: NullPointerException => throw ioob(0) }
 
   override final def apply(index: Int): A = {
+    def bounds(): Unit = if(index < 0 || index >= length) throw ioob(index)
     (depth: @switch) match {
       case 0 =>
-        NVector0.apply0(index)
+        throw ioob(index)
       case 1 =>
-        this.asInstanceOf[NVector1[A]].apply0(index)
+        try prefix1(index).asInstanceOf[A]
+        catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
       case 2 =>
+        bounds()
         this.asInstanceOf[NVector2[A]].apply0(index)
       case 3 =>
+        bounds()
         this.asInstanceOf[NVector3[A]].apply0(index)
       case 4 =>
+        bounds()
         this.asInstanceOf[NVector4[A]].apply0(index)
       case 5 =>
+        bounds()
         this.asInstanceOf[NVector5[A]].apply0(index)
       case 6 =>
+        bounds()
         this.asInstanceOf[NVector6[A]].apply0(index)
     }
   }
@@ -197,8 +204,6 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final
 /** Empty vector */
 private final object NVector0 extends NVector[Nothing](null, 0, 0) {
   import NVectorStatics._
-
-  def apply0(index: Int) = throw ioob(index)
 
   override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw ioob(index)
 
@@ -244,10 +249,6 @@ private final object NVector0 extends NVector[Nothing](null, 0, 0) {
 /** Flat ArraySeq-like structure */
 private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1, _data1.length, 1) {
   import NVectorStatics._
-
-  @inline def apply0(index: Int): A =
-    try prefix1(index).asInstanceOf[A]
-    catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
     if(index < 0 || index >= length) throw ioob(index)
