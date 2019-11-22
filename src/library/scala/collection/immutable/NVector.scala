@@ -85,7 +85,7 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * In addition to the data slices (`prefix1`, `prefix2`, ..., `dataN`, ..., `suffix2`, `suffix1`) we store a running
   * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
-sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final val length: Int)
+sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final val length: Int, depth: Int)
   extends AbstractSeq[A]
     with IndexedSeq[A]
     with IndexedSeqOps[A, NVector, NVector[A]]
@@ -172,14 +172,33 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1, final
   override final def head: A =
     try prefix1(0).asInstanceOf[A]
     catch { case _: NullPointerException => throw ioob(0) }
+
+  override final def apply(index: Int): A = {
+    (depth: @switch) match {
+      case 0 =>
+        NVector0.apply0(index)
+      case 1 =>
+        this.asInstanceOf[NVector1[A]].apply0(index)
+      case 2 =>
+        this.asInstanceOf[NVector2[A]].apply0(index)
+      case 3 =>
+        this.asInstanceOf[NVector3[A]].apply0(index)
+      case 4 =>
+        this.asInstanceOf[NVector4[A]].apply0(index)
+      case 5 =>
+        this.asInstanceOf[NVector5[A]].apply0(index)
+      case 6 =>
+        this.asInstanceOf[NVector6[A]].apply0(index)
+    }
+  }
 }
 
 
 /** Empty vector */
-private final object NVector0 extends NVector[Nothing](null, 0) {
+private final object NVector0 extends NVector[Nothing](null, 0, 0) {
   import NVectorStatics._
 
-  def apply(index: Int) = throw ioob(index)
+  def apply0(index: Int) = throw ioob(index)
 
   override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw ioob(index)
 
@@ -223,10 +242,10 @@ private final object NVector0 extends NVector[Nothing](null, 0) {
 
 
 /** Flat ArraySeq-like structure */
-private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1, _data1.length) {
+private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1, _data1.length, 1) {
   import NVectorStatics._
 
-  @inline def apply(index: Int): A =
+  @inline def apply0(index: Int): A =
     try prefix1(index).asInstanceOf[A]
     catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
@@ -286,7 +305,7 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1, _data1
 private final class NVector2[+A](_prefix1: Arr1, len1: Int,
                                  data2: Arr2,
                                  suffix1: Arr1,
-                                 length: Int) extends NVector[A](_prefix1, length) {
+                                 length: Int) extends NVector[A](_prefix1, length, 2) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -295,7 +314,7 @@ private final class NVector2[+A](_prefix1: Arr1, len1: Int,
                                  length: Int = length) =
     new NVector2(prefix1, len1, data2, suffix1, length)
 
-  @inline def apply(index: Int): A = {
+  @inline def apply0(index: Int): A = {
     if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1) {
       val io = index - len1
@@ -383,7 +402,7 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
                                  prefix2: Arr2, len12: Int,
                                  data3: Arr3,
                                  suffix2: Arr2, suffix1: Arr1,
-                                 length: Int) extends NVector[A](_prefix1, length) {
+                                 length: Int) extends NVector[A](_prefix1, length, 3) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -393,7 +412,7 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
                                  length: Int = length) =
     new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, suffix1, length)
 
-  @inline def apply(index: Int): A = {
+  @inline def apply0(index: Int): A = {
     if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12) {
       val io = index - len12
@@ -504,7 +523,7 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
                                  prefix3: Arr3, len123: Int,
                                  data4: Arr4,
                                  suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 length: Int) extends NVector[A](_prefix1, length) {
+                                 length: Int) extends NVector[A](_prefix1, length, 4) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -515,7 +534,7 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
                                  length: Int = length) =
     new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length)
 
-  @inline def apply(index: Int): A = {
+  @inline def apply0(index: Int): A = {
     if(index < 0 || index >= length) throw ioob(index)
     if(index >= len123) {
       val io = index - len123
@@ -647,7 +666,7 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
                                  prefix4: Arr4, len1234: Int,
                                  data5: Arr5,
                                  suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 length: Int) extends NVector[A](_prefix1, length) {
+                                 length: Int) extends NVector[A](_prefix1, length, 5) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -659,7 +678,7 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
                                  length: Int = length) =
     new NVector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, length)
 
-  @inline def apply(index: Int): A = {
+  @inline def apply0(index: Int): A = {
     if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1234) {
       val io = index - len1234
@@ -812,7 +831,7 @@ private final class NVector6[+A](_prefix1: Arr1, len1: Int,
                                  prefix5: Arr5, len12345: Int,
                                  data6: Arr6,
                                  suffix5: Arr5, suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
-                                 length: Int) extends NVector[A](_prefix1, length) {
+                                 length: Int) extends NVector[A](_prefix1, length, 6) {
   import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
@@ -825,7 +844,7 @@ private final class NVector6[+A](_prefix1: Arr1, len1: Int,
                                  length: Int = length) =
     new NVector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, length)
 
-  @inline def apply(index: Int): A = {
+  @inline def apply0(index: Int): A = {
     if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12345) {
       val io = index - len12345
