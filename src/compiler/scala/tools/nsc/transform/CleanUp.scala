@@ -480,13 +480,13 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       //
       // See scala/bug#6611; we must *only* do this for literal vararg arrays.
       case Apply(appMeth, Apply(wrapRefArrayMeth, (arg @ StripCast(ArrayValue(_, _))) :: Nil) :: _ :: Nil)
-      if wrapRefArrayMeth.symbol == currentRun.runDefinitions.wrapVarargsRefArrayMethod && appMeth.symbol == ArrayModule_genericApply =>
+      if wrapRefArrayMeth.symbol == currentRun.runDefinitions.wrapVarargsRefArrayMethod && appMeth.symbol == ArrayModule_genericApply && treeInfo.isQualifierSafeToElide(appMeth) =>
         arg.transform(this)
       case Apply(appMeth, elem0 :: Apply(wrapArrayMeth, (rest @ ArrayValue(elemtpt, _)) :: Nil) :: Nil)
-      if wrapArrayMeth.symbol == wrapVarargsArrayMethod(elemtpt.tpe) && appMeth.symbol == ArrayModule_apply(elemtpt.tpe) =>
+      if wrapArrayMeth.symbol == wrapVarargsArrayMethod(elemtpt.tpe) && appMeth.symbol == ArrayModule_apply(elemtpt.tpe) && treeInfo.isQualifierSafeToElide(appMeth) =>
         treeCopy.ArrayValue(rest, rest.elemtpt, elem0 :: rest.elems).transform(this)
       case Apply(appMeth, elem :: (nil: RefTree) :: Nil)
-      if nil.symbol == NilModule && appMeth.symbol == ArrayModule_apply(elem.tpe.widen) && treeInfo.isExprSafeToInline(nil) =>
+      if nil.symbol == NilModule && appMeth.symbol == ArrayModule_apply(elem.tpe.widen) && treeInfo.isExprSafeToInline(nil) && treeInfo.isQualifierSafeToElide(appMeth) =>
         localTyper.typedPos(elem.pos) {
           ArrayValue(TypeTree(elem.tpe), elem :: Nil)
         } transform this
