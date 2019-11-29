@@ -1320,12 +1320,12 @@ trait Contexts { self: Analyzer =>
     override final def firstImport  = Some(impInfo)
     override final def importOrNull = impInfo
     override final lazy val isRootImport = !tree.pos.isDefined || {
-      val head = {
-        val all = impInfo.allImportedSymbols.iterator
-        if (all.hasNext) all.next else null
+      impInfo.tree.selectors match {
+        case x :: Nil if x.name.string_==(definitions.Interpreter_iw_name) =>
+          impInfo.tree.expr.tpe.typeSymbol == definitions.Interpreter_iw.owner
+        case _ =>
+          false
       }
-      //definitions.Interpreter_iw == head
-      head != null && definitions.Interpreter_iw.fullName == head.fullName
     }
     override final def toString     = s"${super.toString} with ImportContext { $impInfo; outer.owner = ${outer.owner} }"
   }

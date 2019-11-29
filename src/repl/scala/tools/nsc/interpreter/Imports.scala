@@ -148,8 +148,10 @@ trait Imports {
     // imports from Predef are relocated to the template header to allow hiding.
     def checkHeader(h: ImportHandler) = h.referencedNames contains PredefModule.name
 
+    val imports = new StringBuilder()
+
     // loop through previous requests, adding imports for each one
-    def addLevelChangingImport() = code.append("import _root_.scala.tools.nsc.interpreter.`{{`\n")
+    def addLevelChangingImport() = imports.append("import _root_.scala.tools.nsc.interpreter.`{{`\n")
 
     // Reusing a single temporary value when import from a line with multiple definitions.
     val tempValLines = mutable.Set[Int]()
@@ -164,10 +166,10 @@ trait Imports {
         // level if the import might conflict with some other import
         case x: ImportHandler if x.importsWildcard =>
           addLevelChangingImport()
-          code append (x.member + "\n")
+          imports append (x.member + "\n")
         case x: ImportHandler =>
           addLevelChangingImport()
-          code append (x.member + "\n")
+          imports append (x.member + "\n")
           currentImps ++= x.importedNames
 
         case x if isClassBased =>
@@ -175,14 +177,14 @@ trait Imports {
             addLevelChangingImport()
             x match {
               case _: ClassHandler =>
-                code.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
+                imports.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
               case _ =>
                 val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
                 if (!tempValLines.contains(req.lineRep.lineId)) {
                   code.append(s"val $valName: ${objName}.type = $objName\n")
                   tempValLines += req.lineRep.lineId
                 }
-                code.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
+                imports.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
             }
             currentImps += sym.name
           }
@@ -194,7 +196,7 @@ trait Imports {
         case x =>
           for (sym <- x.definedSymbols) {
             addLevelChangingImport()
-            code append s"import ${x.path}\n"
+            imports append s"import ${x.path}\n"
             currentImps += sym.name
           }
       }
@@ -204,7 +206,7 @@ trait Imports {
       addLevelChangingImport()
 
     val computedHeader = if (predefEscapes) header.toString else ""
-    ComputedImports(computedHeader, code.toString, trailingBraces.toString, accessPath.toString)
+    ComputedImports(computedHeader + "\n" + imports.toString, code.toString, trailingBraces.toString, accessPath.toString)
   }
 
   private def allReqAndHandlers =

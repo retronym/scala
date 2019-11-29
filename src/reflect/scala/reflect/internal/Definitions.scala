@@ -559,7 +559,8 @@ trait Definitions extends api.StandardDefinitions {
          def MacroContextTreeType         = BlackboxContextClass.map(sym => getTypeMember(sym, tpnme.Tree))
     lazy val MacroImplAnnotation          = requiredClass[scala.reflect.macros.internal.macroImpl]
 
-    lazy val Interpreter_iw               = getModuleIfDefined("scala.tools.nsc.interpreter.$u007B$u007B") //{{
+         val Interpreter_iw_name          = "$u007B$u007B"
+    lazy val Interpreter_iw               = getModuleIfDefined("scala.tools.nsc.interpreter." + Interpreter_iw_name) //{{
 
     lazy val StringContextClass           = requiredClass[scala.StringContext]
     lazy val StringContextModule          = requiredModule[scala.StringContext.type]
