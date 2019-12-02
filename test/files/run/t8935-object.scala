@@ -9,9 +9,9 @@ object Test extends SessionTest {
     s
   }
   */
-  def session =
+  override def session =
 """
-scala> 42
+scala> 41+1
 res0: Int = 42
 
 scala> $intp.valueOfTerm($intp.mostRecentVar)

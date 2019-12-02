@@ -321,10 +321,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   /** For class based repl mode we use an .INSTANCE accessor. */
   val readInstanceName = if (isClassBased) ".INSTANCE" else ""
   def translateOriginalPath(p: String): String = {
-    if (isClassBased) {
-      val readName = java.util.regex.Matcher.quoteReplacement(sessionNames.read)
-      p.replaceFirst(readName, readName + readInstanceName)
-    } else p
+    if (isClassBased) p.replace(sessionNames.read, sessionNames.read + readInstanceName) else p
   }
   def flatPath(sym: Symbol): String      = flatOp shift sym.javaClassName
 
@@ -973,12 +970,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     }
 
     // the type symbol of the owner of the member that supplies the result value
-    lazy val resultSymbol = {
-      val sym =
-      lineRep.resolvePathToSymbol(fullAccessPath)
-      // plow through the INSTANCE member when -Yrepl-class-based
-      if (sym.isTerm && sym.nameString == "INSTANCE") sym.typeSignature.typeSymbol else sym
-    }
+    lazy val resultSymbol = lineRep.resolvePathToSymbol(fullAccessPath)
 
     def applyToResultMember[T](name: Name, f: Symbol => T) = exitingTyper(f(resultSymbol.info.nonPrivateDecl(name)))
 

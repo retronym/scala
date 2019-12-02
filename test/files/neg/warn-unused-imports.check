@@ -39,17 +39,17 @@ warn-unused-imports_2.scala:132: warning: Unused import
 warn-unused-imports_2.scala:143: warning: Unused import
     import Sample.Implicits.useless     // warn
                             ^
-warn-unused-imports_2.scala:147: warning: Unused import
-    import java.io.File                 // warn
-                   ^
-warn-unused-imports_2.scala:148: warning: Unused import
-    import scala.concurrent.Future      // warn
-                            ^
-warn-unused-imports_2.scala:149: warning: Unused import
-    import scala.concurrent.ExecutionContext.Implicits.global // warn
-                                                       ^
 warn-unused-imports_2.scala:150: warning: Unused import
     import p1.A                         // warn
               ^
+warn-unused-imports_2.scala:149: warning: Unused import
+    import scala.concurrent.ExecutionContext.Implicits.global // warn
+                                                       ^
+warn-unused-imports_2.scala:148: warning: Unused import
+    import scala.concurrent.Future      // warn
+                            ^
+warn-unused-imports_2.scala:147: warning: Unused import
+    import java.io.File                 // warn
+                   ^
 16 warnings found
 one error found

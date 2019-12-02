@@ -9,7 +9,7 @@ scala> import Predef.{ any2stringadd => _, _ }
 import Predef.{any2stringadd=>_, _}
 
 scala> x + " works"
-<console>:14: error: value + is not a member of Any
+<console>:16: error: value + is not a member of Any
        x + " works"
          ^
 
@@ -26,7 +26,7 @@ scala> import Predef._
 import Predef._
 
 scala> f
-<console>:14: error: not found: value f
+<console>:16: error: not found: value f
        f
        ^
 

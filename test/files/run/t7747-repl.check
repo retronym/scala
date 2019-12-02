@@ -110,7 +110,7 @@ scala> 55 ; ((2 + 2)) ; (1, 2, 3)
 res15: (Int, Int, Int) = (1,2,3)
 
 scala> 55 ; (x: Int) => x + 1 ; () => ((5))
-<console>:14: warning: a pure expression does nothing in statement position; multiline expressions may require enclosing parentheses
+<console>:13: warning: a pure expression does nothing in statement position; multiline expressions may require enclosing parentheses
        55 ; (x: Int) => x + 1 ;;
        ^
 res16: () => Int = <function0>
@@ -246,25 +246,24 @@ scala> case class Bingo()
 defined class Bingo
 
 scala> List(BippyBups(), PuppyPups(), Bingo()) // show
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line44.$read.INSTANCE.BippyBups
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line44.$read.INSTANCE.BippyBups
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line45.$read.INSTANCE.PuppyPups
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line45.$read.INSTANCE.PuppyPups
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line46.$read.INSTANCE.Bingo
+import _root_.scala.tools.nsc.interpreter.$u007B$u007B
+import $line46.$read.INSTANCE.Bingo
 sealed class $read extends _root_.java.io.Serializable {
   def <init>() = {
     super.<init>;
     ()
   };
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line44.$read.INSTANCE.BippyBups;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line44.$read.INSTANCE.BippyBups;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line45.$read.INSTANCE.PuppyPups;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line45.$read.INSTANCE.PuppyPups;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line46.$read.INSTANCE.Bingo;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
-  import $line46.$read.INSTANCE.Bingo;
-  import _root_.scala.tools.nsc.interpreter.$u007B$u007B;
   val res3 = List(BippyBups, PuppyPups, Bingo)
 }
 object $read extends scala.AnyRef {

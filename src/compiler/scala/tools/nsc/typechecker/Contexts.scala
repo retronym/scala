@@ -1310,8 +1310,20 @@ trait Contexts { self: Analyzer =>
 
   /** A `Context` focussed on an `Import` tree */
   trait ImportContext extends Context {
-    private[this] lazy val impInfo: ImportInfo = {
-      val info = new ImportInfo(tree.asInstanceOf[Import], outerDepth)
+    private def importTree = tree.asInstanceOf[Import]
+    override final val isRootImport = !tree.pos.isDefined || {
+      importTree.selectors match {
+        case x :: Nil if x.name.string_==(definitions.Interpreter_iw_name) =>
+          importTree.symbol.info match {
+            case ImportType(expr) => expr.tpe.typeSymbol == definitions.Interpreter_iw.owner
+            case _ => false
+          }
+        case _ =>
+          false
+      }
+    }
+    private[this] val impInfo: ImportInfo = {
+      val info = new ImportInfo(importTree, outerDepth)
       if (settings.warnUnusedImport && openMacros.isEmpty && !isRootImport) // excludes java.lang/scala/Predef imports
         allImportInfos(unit) ::= info
       info
@@ -1319,14 +1331,7 @@ trait Contexts { self: Analyzer =>
     override final def imports      = impInfo :: super.imports
     override final def firstImport  = Some(impInfo)
     override final def importOrNull = impInfo
-    override final lazy val isRootImport = !tree.pos.isDefined || {
-      impInfo.tree.selectors match {
-        case x :: Nil if x.name.string_==(definitions.Interpreter_iw_name) =>
-          impInfo.tree.expr.tpe.typeSymbol == definitions.Interpreter_iw.owner
-        case _ =>
-          false
-      }
-    }
+
     override final def toString     = s"${super.toString} with ImportContext { $impInfo; outer.owner = ${outer.owner} }"
   }
 

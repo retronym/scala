@@ -102,8 +102,7 @@ trait Imports {
   case class ComputedImports(header: String, prepend: String, append: String, access: String)
 
   protected def importsCode(wanted: Set[Name], definesClass: Boolean, generousImports: Boolean): ComputedImports = {
-    val header, code, trailingBraces, accessPath = new StringBuilder
-    val currentImps = mutable.HashSet[Name]()
+    val header, code = new StringBuilder
     var predefEscapes = false      // only emit predef import header if name not resolved in history, loosely
 
     /** Narrow down the list of requests from which imports
@@ -170,23 +169,22 @@ trait Imports {
         case x: ImportHandler =>
           addLevelChangingImport()
           imports append (x.member + "\n")
-          currentImps ++= x.importedNames
 
         case x if isClassBased =>
           for (sym <- x.definedSymbols) {
             addLevelChangingImport()
             x match {
               case _: ClassHandler =>
-                imports.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
+                val imp = s"import ${objName}${req.accessPath}.`${sym.name}`\n"
+                imports.append(imp)
               case _ =>
                 val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
                 if (!tempValLines.contains(req.lineRep.lineId)) {
-                  code.append(s"val $valName: ${objName}.type = $objName\n")
+                  imports.append(s"val $valName: ${objName}.type = $objName\n")
                   tempValLines += req.lineRep.lineId
                 }
                 imports.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
             }
-            currentImps += sym.name
           }
         // For other requests, import each defined name.
         // import them explicitly instead of with _, so that
@@ -196,8 +194,8 @@ trait Imports {
         case x =>
           for (sym <- x.definedSymbols) {
             addLevelChangingImport()
-            imports append s"import ${x.path}\n"
-            currentImps += sym.name
+            val imp = s"import ${x.path}\n"
+            imports append imp
           }
       }
     }
@@ -205,8 +203,13 @@ trait Imports {
     if (predefEscapes || code.nonEmpty)
       addLevelChangingImport()
 
-    val computedHeader = if (predefEscapes) header.toString else ""
-    ComputedImports(computedHeader + "\n" + imports.toString, code.toString, trailingBraces.toString, accessPath.toString)
+    val iw = nme.INTERPRETER_IMPORT_WRAPPER.toString
+    val computedHeader = (if (predefEscapes) header.toString else "")
+    if (isClassBased) {
+      val code = s"final class $iw extends _root_.scala.Serializable {\n${imports.toString}\n"
+      ComputedImports(computedHeader + "\n", imports.toString + "\n" + code.toString, s"}\nval $iw = new $iw", s".${iw}")
+    } else
+      ComputedImports(computedHeader + "\n" + imports.toString, code.toString, "", "")
   }
 
   private def allReqAndHandlers =

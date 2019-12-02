@@ -552,9 +552,7 @@ trait Namers extends MethodSynthesis {
           }
         }
 
-        def isReplMagic(importInfo: ImportInfo): Boolean = importInfo.isExplicitImport(Interpreter_iw.name)
-
-        if (!tree.symbol.isSynthetic && expr.symbol != null && !context.imports.exists(isReplMagic)) {
+        if (!tree.symbol.isSynthetic && expr.symbol != null) {
           if (base.member(from) != NoSymbol)
             check(to0)
           if (base.member(from.toTypeName) != NoSymbol)

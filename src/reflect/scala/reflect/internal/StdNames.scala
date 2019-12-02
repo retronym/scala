@@ -333,6 +333,7 @@ trait StdNames {
     val EXPAND_SEPARATOR_STRING        = "$$"
     val FRESH_TERM_NAME_PREFIX         = "x$"
     val LOCALDUMMY_PREFIX              = "<local "       // owner of local blocks
+    val INTERPRETER_IMPORT_WRAPPER     = "$iw"
     val INTERPRETER_WRAPPER            = "$read"
     val PROTECTED_PREFIX               = "protected$"
     val PROTECTED_SET_PREFIX           = PROTECTED_PREFIX + "set"
@@ -392,7 +393,7 @@ trait StdNames {
     def isLocalName(name: Name)             = name endsWith LOCAL_SUFFIX_STRING
     def isLoopHeaderLabel(name: Name)       = (name startsWith WHILE_PREFIX) || (name startsWith DO_WHILE_PREFIX)
     def isProtectedAccessorName(name: Name) = name startsWith PROTECTED_PREFIX
-    def isReplWrapperName(name: Name)       = name containsName INTERPRETER_WRAPPER
+    def isReplWrapperName(name: Name)       = (name containsName INTERPRETER_WRAPPER) || (name containsName INTERPRETER_IMPORT_WRAPPER)
     def isSetterName(name: Name)            = name endsWith SETTER_SUFFIX
     def isTraitSetterName(name: Name)       = isSetterName(name) && (name containsName TRAIT_SETTER_SEPARATOR_STRING)
     def isSingletonName(name: Name)         = name endsWith SINGLETON_SUFFIX
