@@ -386,6 +386,50 @@ trait Collections {
     }
   }
 
+  private val TupleOfNil = (Nil, Nil)
+  final def partitionConserve[A](xs: List[A])(pred: A => Boolean): (List[A], List[A]) = {
+    if (xs.isEmpty) TupleOfNil
+    else {
+      val p0 = pred(xs.head)
+      var canConserve = true
+      var ys = xs
+      var ayes: ListBuffer[A] = null
+      var nays: ListBuffer[A] = null
+      var n = 0
+      while (!ys.isEmpty) {
+        val y = ys.head
+        val p = if (n == 0) p0 else pred(y)
+        val newCanConserve = canConserve && p == p0
+        if (canConserve && !newCanConserve) {
+          ayes = new ListBuffer[A]
+          nays = new ListBuffer[A]
+          val prefix = if (p0) ayes else nays
+          var j = 0
+          var zs = xs
+          while (j < n) {
+            prefix += zs.head
+            zs = zs.tail
+            j += 1
+          }
+          canConserve = newCanConserve
+        }
+        if (!canConserve) {
+          val result = if (p) ayes else nays
+          result += y
+        }
+        n += 1
+        ys = ys.tail
+      }
+      if (canConserve) {
+        if (p0) (xs, Nil) else (Nil, xs)
+      } else {
+        val r = (ayes.toList, nays.toList)
+        println(r)
+        r
+      }
+    }
+  }
+
   final def bitSetByPredicate[A](xs: List[A])(pred: A => Boolean): mutable.BitSet = {
     val bs = new mutable.BitSet()
     var ys = xs
