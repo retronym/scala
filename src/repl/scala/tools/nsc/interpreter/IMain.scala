@@ -244,7 +244,8 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   protected def newCompiler(settings: Settings, reporter: reporters.Reporter): ReplGlobal = {
     settings.outputDirs setSingleOutput replOutput.dir
     settings.exposeEmptyPackage.value = true
-    new Global(settings, reporter) with ReplGlobal { override def toString: String = "<global>" }
+    val g = new Global(settings, reporter) with ReplGlobal { override def toString: String = "<global>" }
+    g
   }
 
   /**
