@@ -63,7 +63,9 @@ trait DirectoryLookup[FileEntryType <: ClassRepresentation] extends EfficientCla
       case None => emptyFiles
       case Some(directory) => listChildren(directory, Some(isPackage))
     }
-    nestedDirs.map(f => PackageEntryImpl(inPackage.entryName(getName(f))))
+    scala.collection.immutable.ArraySeq.unsafeWrapArray(
+      nestedDirs.map(f => PackageEntryImpl(inPackage.entryName(getName(f))))
+    )
   }
 
   protected def files(inPackage: PackageName): Seq[FileEntryType] = {
@@ -230,7 +232,7 @@ final class JrtClassPath(fs: java.nio.file.FileSystem) extends ClassPath with No
 final class CtSymClassPath(ctSym: java.nio.file.Path, release: Int) extends ClassPath with NoSourcePaths with Closeable {
   import java.nio.file.Path, java.nio.file._
 
-  private val fileSystem: FileSystem = FileSystems.newFileSystem(ctSym, null)
+  private val fileSystem: FileSystem = FileSystems.newFileSystem(ctSym, null: ClassLoader)
   private val root: Path = fileSystem.getRootDirectories.iterator.next
   private val roots = Files.newDirectoryStream(root).iterator.asScala.toList
 
@@ -317,7 +319,7 @@ case class DirectorySourcePath(dir: File) extends JFileDirectoryLookup[SourceFil
 
   private def findSourceFile(className: String): Option[AbstractFile] = {
     val relativePath = FileUtils.dirPath(className)
-    val sourceFile = Stream("scala", "java")
+    val sourceFile = Iterator("scala", "java")
       .map(ext => new File(s"$dir/$relativePath.$ext"))
       .collectFirst { case file if file.exists() => file }
 
