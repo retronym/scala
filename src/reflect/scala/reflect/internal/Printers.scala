@@ -104,9 +104,13 @@ trait Printers extends api.Printers { self: SymbolTable =>
         case x :: rest => printelem(x); printsep; printSeq(rest)(printelem)(printsep)
       }
 
-    def printColumn(ts: List[Tree], start: String, sep: String, end: String) = {
-      print(start); indent(); println()
-      printSeq(ts){print(_)}{print(sep); println()}; undent(); println(); print(end)
+    def printColumn(ts: List[Tree], start: String, sep: String, end: String, min: Int = 0) = {
+      def nlOrSpace() = if (ts.size > min) println() else print(" ")
+      print(start)
+        indent(); nlOrSpace()
+        printSeq(ts)(print(_)){ print(sep); nlOrSpace() }
+      undent(); nlOrSpace()
+      print(end)
     }
 
     def printRow(ts: List[Tree], start: String, sep: String, end: String): Unit = {
@@ -319,7 +323,7 @@ trait Printers extends api.Printers { self: SymbolTable =>
     }
 
     protected def printBlock(stats: List[Tree], expr: Tree) =
-      printColumn(stats ::: List(expr), "{", ";", "}")
+      printColumn(stats ::: List(expr), "{", ";", "}", min = 2)
 
     def printTree(tree: Tree) = {
       tree match {
@@ -656,8 +660,8 @@ trait Printers extends api.Printers { self: SymbolTable =>
     override def printOpt(prefix: String, tree: Tree) =
       if (!isEmptyTree(tree)) super.printOpt(prefix, tree)
 
-    override def printColumn(ts: List[Tree], start: String, sep: String, end: String) = {
-      super.printColumn(ts.filter(!syntheticToRemove(_)), start, sep, end)
+    override def printColumn(ts: List[Tree], start: String, sep: String, end: String, min: Int) = {
+      super.printColumn(ts.filter(!syntheticToRemove(_)), start, sep, end, min)
     }
 
     def printFlags(mods: Modifiers, primaryCtorParam: Boolean = false): Unit = {
