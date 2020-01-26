@@ -74,8 +74,8 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   // Used in a test case.
   def showDirectory() = replOutput.show(out)
 
-  lazy val isClassBased: Boolean = settings.Yreplclassbased.value
-  private[interpreter] lazy val useMagicImport: Boolean = settings.YreplMagicImport.value
+  def isClassBased: Boolean                        = settings.Yreplclassbased.value
+  private[interpreter] def useMagicImport: Boolean = settings.YreplMagicImport.value
 
   private[nsc] var printResults               = true        // whether to print result lines
   private[nsc] var totalSilence               = false       // whether to print anything
@@ -321,7 +321,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   def originalPath(sym: Symbol): String  = translateOriginalPath(typerOp path sym)
 
   /** For class based repl mode we use an .INSTANCE accessor. */
-  val readInstanceName = if (isClassBased) ".INSTANCE" else ""
+  def readInstanceName = if (isClassBased) ".INSTANCE" else ""
   def translateOriginalPath(p: String): String = {
     if (isClassBased) p.replace(sessionNames.read, sessionNames.read + readInstanceName) else p
   }
