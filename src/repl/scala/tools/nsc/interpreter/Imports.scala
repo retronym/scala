@@ -192,31 +192,28 @@ trait Imports {
           code append (x.member + "\n")
           currentImps ++= x.importedNames
 
-        case x if isClassBased =>
-          for (sym <- x.definedSymbols) {
-            maybeWrap(sym.name)
-            x match {
-              case _: ClassHandler =>
-                code.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
-              case _ =>
-                val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
-                if (!tempValLines.contains(req.lineRep.lineId)) {
-                  code.append(s"private val $valName: ${objName}.type = $objName; ")
-                  tempValLines += req.lineRep.lineId
-                }
-                code.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
-            }
-            currentImps += sym.name
-          }
-        // For other requests, import each defined name.
-        // import them explicitly instead of with _, so that
-        // ambiguity errors will not be generated. Also, quote
-        // the name of the variable, so that we don't need to
-        // handle quoting keywords separately.
         case x =>
           for (sym <- x.definedSymbols) {
+            // For other requests, import each defined name.
+            // import them explicitly instead of with _, so that
+            // ambiguity errors will not be generated. Also, quote
+            // the name of the variable, so that we don't need to
+            // handle quoting keywords separately.
             maybeWrap(sym.name)
-            code append s"import ${x.path}\n"
+            if (isClassBased) {
+              x match {
+                case _: ClassHandler =>
+                  code.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
+                case _ =>
+                  val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
+                  if (!tempValLines.contains(req.lineRep.lineId)) {
+                    code.append(s"private val $valName: ${objName}.type = $objName; ")
+                    tempValLines += req.lineRep.lineId
+                  }
+                  code.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
+              }
+            }
+            else code append s"import ${x.path}\n"
             currentImps += sym.name
           }
       }
