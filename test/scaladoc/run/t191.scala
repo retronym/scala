@@ -60,7 +60,7 @@ object Test extends ScaladocModelTest {
     check(test._method("foo"), 1)
     check(test._method("bar"), 0)
     check(test._method("barr"), 2)
-    check(test._method("baz"), 0)
+    check(test._method("baz"), 1)
 
     val expectedUrls = collection.mutable.Set[String](
                          "scala/collection/Map",
