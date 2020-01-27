@@ -33,7 +33,7 @@ object Test extends ScaladocModelTest {
     """
 
   def scalaURL = "http://bog.us"
-  val jdkUrl = "http://java.us"
+  val jdkURL = "http://java.us"
 
   override def scaladocSettings = {
     val samplePath = getClass.getClassLoader.getResource("scala/Function1.class").getPath
@@ -43,7 +43,7 @@ object Test extends ScaladocModelTest {
     } else { // individual class files on disk
       samplePath.replace('\\', '/').dropRight("scala/Function1.class".length)
     }
-    s"-no-link-warnings -doc-external-doc $scalaLibPath#$scalaURL jdk-api-doc-base $jdkUrl"
+    s"-no-link-warnings -doc-external-doc $scalaLibPath#$scalaURL -jdk-api-doc-base $jdkURL"
   }
 
   def testModel(rootPackage: Package): Unit = {
@@ -52,7 +52,9 @@ object Test extends ScaladocModelTest {
 
     def check(memberDef: Def, expected: Int): Unit = {
       val externals = memberDef.valueParams(0)(0).resultType.refEntity collect {
-        case (_, (LinkToExternalTpl(name, url, _), _)) => assert(url.contains(scalaURL)); name
+        case (_, (LinkToExternalTpl(name, url, _), _)) =>
+          assert(url.contains(scalaURL) || url.contains(jdkURL))
+          name
       }
       assert(externals.size == expected)
     }
@@ -74,7 +76,7 @@ object Test extends ScaladocModelTest {
                       ).map( _.split("#").toSeq ).map({
                         case Seq(one)      => scalaURL + "/" + one + ".html"
                         case Seq(one, two) => scalaURL + "/" + one + ".html#" + two
-                      }) ++ Set(s"$jdkUrl/java/lang.Throwable")
+                      }) ++ Set(s"$jdkURL/java/lang/Throwable.html")
 
     def isExpectedExternalLink(l: EntityLink) = l.link match {
       case LinkToExternalTpl(name, baseUrlString, tpl: TemplateEntity) =>
@@ -86,7 +88,7 @@ object Test extends ScaladocModelTest {
       case _ => false
     }
 
-    assert(countLinks(test.comment.get, isExpectedExternalLink) == 8,
-            "${countLinks(test.comment.get, isExpectedExternalLink)} == 8")
+    assert(countLinks(test.comment.get, isExpectedExternalLink) == 9,
+            "${countLinks(test.comment.get, isExpectedExternalLink)} == 9")
   }
 }
