@@ -18,6 +18,7 @@ import java.io.{BufferedOutputStream, ByteArrayOutputStream, IOException, InputS
 import java.io.{File => JFile}
 import java.net.URL
 import java.nio.ByteBuffer
+import java.nio.file.Paths
 
 import scala.collection.AbstractIterable
 
@@ -263,6 +264,15 @@ abstract class AbstractFile extends AbstractIterable[AbstractFile] {
   def subdirectoryNamed(name: String): AbstractFile = {
     assert (isDirectory, "Tried to find '%s' in '%s' but it is not a directory".format(name, path))
     fileOrSubdirectoryNamed(name, isDir = true)
+  }
+
+  /**
+   * Check if this file is a child of the given directory string. Can only be used
+   * on directories that actually exist in the file system.
+   */
+  def isChildOf(dir: String): Boolean = {
+    val parent = Paths.get(dir).toAbsolutePath().toString
+    canonicalPath.startsWith(parent)
   }
 
   protected def unsupported(): Nothing = unsupported(null)

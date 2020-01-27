@@ -19,6 +19,7 @@ object Test extends ScaladocModelTest {
          *  - [[scala]] Linking to a package
          *  - [[scala.AbstractMethodError]] Linking to a member in the package object
          *  - [[scala.Predef.String]] Linking to a member in an object
+         *  - [[java.lang.Throwable]] Linking to a class in the JDK
          *
          *  Don't look at:
          *  - [[scala.NoLink]] Not linking :)
@@ -32,6 +33,7 @@ object Test extends ScaladocModelTest {
     """
 
   def scalaURL = "http://bog.us"
+  val jdkUrl = "http://java.us"
 
   override def scaladocSettings = {
     val samplePath = getClass.getClassLoader.getResource("scala/Function1.class").getPath
@@ -41,7 +43,7 @@ object Test extends ScaladocModelTest {
     } else { // individual class files on disk
       samplePath.replace('\\', '/').dropRight("scala/Function1.class".length)
     }
-    s"-no-link-warnings -doc-external-doc $scalaLibPath#$scalaURL"
+    s"-no-link-warnings -doc-external-doc $scalaLibPath#$scalaURL jdk-api-doc-base $jdkUrl"
   }
 
   def testModel(rootPackage: Package): Unit = {
@@ -72,7 +74,7 @@ object Test extends ScaladocModelTest {
                       ).map( _.split("#").toSeq ).map({
                         case Seq(one)      => scalaURL + "/" + one + ".html"
                         case Seq(one, two) => scalaURL + "/" + one + ".html#" + two
-                      })
+                      }) ++ Set(s"$jdkUrl/java/lang.Throwable")
 
     def isExpectedExternalLink(l: EntityLink) = l.link match {
       case LinkToExternalTpl(name, baseUrlString, tpl: TemplateEntity) =>
