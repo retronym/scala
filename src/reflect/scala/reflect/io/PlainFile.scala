@@ -151,7 +151,7 @@ final class PlainNioFile(val nioPath: java.nio.file.Path) extends AbstractFile {
         if (nioPath.getNameCount > 2 && nioPath.startsWith("/modules")) {
           // TODO limit this to OpenJDK based JVMs?
           val moduleName = nioPath.getName(1)
-          Some(new PlainNioFile(Paths.get(System.getProperty("java.home"), "jmods", moduleName.toString + ".jmod")))
+          Some(new PlainNioFile(Paths.get(scala.util.Properties.javaHome, "jmods", moduleName.toString + ".jmod")))
         } else None
       case _ => None
     }

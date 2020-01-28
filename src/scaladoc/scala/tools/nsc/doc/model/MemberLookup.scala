@@ -98,7 +98,7 @@ trait MemberLookup extends base.MemberLookupBase {
   }
 
   private def isJDK(sym: Symbol) =
-    sym.associatedFile.underlyingSource.map(f => isChildOf(f, (sys.props("java.home")))).getOrElse(false)
+    sym.associatedFile.underlyingSource.map(f => isChildOf(f, scala.util.Properties.javaHome)).getOrElse(false)
 
   def jdkUrl(path: String): String = {
     if (path.endsWith(".jmod")) {
