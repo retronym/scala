@@ -14,7 +14,10 @@ package scala.tools.nsc
 package doc
 package model
 
+import java.nio.file.Paths
+
 import base._
+import scala.tools.nsc.io.AbstractFile
 
 /** This trait extracts all required information for documentation from compilation units */
 trait MemberLookup extends base.MemberLookupBase {
@@ -85,8 +88,17 @@ trait MemberLookup extends base.MemberLookupBase {
     }
   }
 
+  /**
+   * Check if this file is a child of the given directory string. Can only be used
+   * on directories that actually exist in the file system.
+   */
+  def isChildOf(f: AbstractFile, dir: String): Boolean = {
+    val parent = Paths.get(dir).toAbsolutePath().toString
+    f.canonicalPath.startsWith(parent)
+  }
+
   private def isJDK(sym: Symbol) =
-    sym.associatedFile.underlyingSource.map(_.isChildOf(sys.props("java.home"))).getOrElse(false)
+    sym.associatedFile.underlyingSource.map(f => isChildOf(f, (sys.props("java.home")))).getOrElse(false)
 
   def jdkUrl(path: String): String = {
     if (path.endsWith(".jmod")) {
