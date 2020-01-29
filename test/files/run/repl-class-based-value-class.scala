@@ -9,7 +9,7 @@ object Test extends ReplTest with Hashless {
   }
 
   def code = """
-    |class Meter(val value: Int) // extends AnyVal // show
+    |class Meter(val value: Int) extends AnyVal // show
     |val x = new Meter(1) // show
     |""".stripMargin
 }

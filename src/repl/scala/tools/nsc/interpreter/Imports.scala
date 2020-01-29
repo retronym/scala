@@ -200,20 +200,17 @@ trait Imports {
             // the name of the variable, so that we don't need to
             // handle quoting keywords separately.
             maybeWrap(sym.name)
-            if (isClassBased) {
-              x match {
-                case _: ClassHandler =>
-                  code.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
-                case _ =>
-                  val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
-                  if (!tempValLines.contains(req.lineRep.lineId)) {
-                    code.append(s"private val $valName: ${objName}.type = $objName; ")
-                    tempValLines += req.lineRep.lineId
-                  }
-                  code.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
-              }
+            x match {
+              case _: ClassHandler =>
+                code.append(s"import ${objName}${req.accessPath}.`${sym.name}`\n")
+              case _ =>
+                val valName = s"${req.lineRep.packageName}${req.lineRep.readName}"
+                if (!tempValLines.contains(req.lineRep.lineId)) {
+                  code.append(s"private val $valName: ${objName}.type = $objName; ")
+                  tempValLines += req.lineRep.lineId
+                }
+                code.append(s"import ${valName}${req.accessPath}.`${sym.name}`\n")
             }
-            else code append s"import ${x.path}\n"
             currentImps += sym.name
           }
       }

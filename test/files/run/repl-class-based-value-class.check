@@ -1,25 +1,22 @@
 
-scala> class Meter(val value: Int) // extends AnyVal // show
-sealed class $read extends _root_.java.io.Serializable {
+scala> class Meter(val value: Int) extends AnyVal // show
+object $read extends scala.AnyRef {
   def <init>() = { super.<init>; () };
-  sealed class $iw extends _root_.java.io.Serializable {
+  object $iw extends scala.AnyRef {
     def <init>() = { super.<init>; () };
-    class Meter extends scala.AnyRef {
+    class Meter extends AnyVal {
       <paramaccessor> val value: Int = _;
       def <init>(value: Int) = { super.<init>; () }
     }
   };
-  val $iw = new $iw.<init>
-}
-object $read extends scala.AnyRef {
-  def <init>() = { super.<init>; () };
-  val INSTANCE = new $read.<init>
+  val INSTANCE = this
 }
 defined class Meter
 
 scala> val x = new Meter(1) // show
 sealed class $read extends _root_.java.io.Serializable {
   def <init>() = { super.<init>; () };
+  import $line3.$read.INSTANCE.$iw.Meter;
   import $line3.$read.INSTANCE.$iw.Meter;
   sealed class $iw extends _root_.java.io.Serializable {
     def <init>() = { super.<init>; () };

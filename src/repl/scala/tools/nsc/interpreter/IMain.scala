@@ -833,6 +833,10 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
       case _: ClassHandler => true
       case _ => false
     }
+    val definesTopLevel = handlers.forall {
+      case _: ClassHandler | _: ModuleHandler => true
+      case _                                  => false
+    }
 
     def defHandlers = handlers collect { case x: MemberDefHandler => x }
 
@@ -921,7 +925,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     }
 
     private[interpreter] lazy val ObjectSourceCode: Wrapper =
-      if (isClassBased) new ClassBasedWrapper else new ObjectBasedWrapper
+      if (isClassBased && !definesTopLevel) new ClassBasedWrapper else new ObjectBasedWrapper
 
     private object ResultObjectSourceCode extends IMain.CodeAssembler[MemberHandler] {
       /** We only want to generate this code when the result
