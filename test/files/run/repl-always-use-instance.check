@@ -1,16 +1,16 @@
 
 scala> case class Name(value: String) // show
-sealed class $read extends _root_.java.io.Serializable {
+object $read extends scala.AnyRef {
   def <init>() = {
     super.<init>;
     ()
   };
-  sealed class $iw extends _root_.java.io.Serializable {
+  object $iw extends scala.AnyRef {
     def <init>() = {
       super.<init>;
       ()
     };
-    sealed class $iw extends _root_.java.io.Serializable {
+    object $iw extends scala.AnyRef {
       def <init>() = {
         super.<init>;
         ()
@@ -22,50 +22,34 @@ sealed class $read extends _root_.java.io.Serializable {
           ()
         }
       }
-    };
-    val $iw = new $iw.<init>
+    }
   };
-  val $iw = new $iw.<init>
+  val INSTANCE = this
 }
+defined class Name
+
+scala> val x = Name("foo") // show
 object $read extends scala.AnyRef {
   def <init>() = {
     super.<init>;
     ()
   };
-  val INSTANCE = new $read.<init>
-}
-defined class Name
-
-scala> val x = Name("foo") // show
-sealed class $read extends _root_.java.io.Serializable {
-  def <init>() = {
-    super.<init>;
-    ()
-  };
-  sealed class $iw extends _root_.java.io.Serializable {
+  object $iw extends scala.AnyRef {
     def <init>() = {
       super.<init>;
       ()
     };
     import $line3.$read.INSTANCE.$iw.$iw.Name;
     import $line3.$read.INSTANCE.$iw.$iw.Name;
-    sealed class $iw extends _root_.java.io.Serializable {
+    object $iw extends scala.AnyRef {
       def <init>() = {
         super.<init>;
         ()
       };
       val x = Name("foo")
-    };
-    val $iw = new $iw.<init>
+    }
   };
-  val $iw = new $iw.<init>
-}
-object $read extends scala.AnyRef {
-  def <init>() = {
-    super.<init>;
-    ()
-  };
-  val INSTANCE = new $read.<init>
+  val INSTANCE = this
 }
 x: Name = Name(foo)
 
@@ -73,39 +57,29 @@ scala> val y = Name("bar")
 y: Name = Name(bar)
 
 scala> val z = Name(x.value + y.value) // show
-sealed class $read extends _root_.java.io.Serializable {
+object $read extends scala.AnyRef {
   def <init>() = {
     super.<init>;
     ()
   };
-  sealed class $iw extends _root_.java.io.Serializable {
+  object $iw extends scala.AnyRef {
     def <init>() = {
       super.<init>;
       ()
     };
     import $line3.$read.INSTANCE.$iw.$iw.Name;
     import $line3.$read.INSTANCE.$iw.$iw.Name;
-    val $line4$read: $line4.$read.INSTANCE.type = $line4.$read.INSTANCE;
-    import $line4$read.$iw.$iw.x;
-    val $line5$read: $line5.$read.INSTANCE.type = $line5.$read.INSTANCE;
-    import $line5$read.$iw.$iw.y;
-    sealed class $iw extends _root_.java.io.Serializable {
+    import $line4.$read.INSTANCE.$iw.$iw.x;
+    import $line5.$read.INSTANCE.$iw.$iw.y;
+    object $iw extends scala.AnyRef {
       def <init>() = {
         super.<init>;
         ()
       };
       val z = Name(x.value.+(y.value))
-    };
-    val $iw = new $iw.<init>
+    }
   };
-  val $iw = new $iw.<init>
-}
-object $read extends scala.AnyRef {
-  def <init>() = {
-    super.<init>;
-    ()
-  };
-  val INSTANCE = new $read.<init>
+  val INSTANCE = this
 }
 z: Name = Name(foobar)
 
