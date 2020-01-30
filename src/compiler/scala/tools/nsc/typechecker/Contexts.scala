@@ -83,16 +83,34 @@ trait Contexts { self: Analyzer =>
 
   val rootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]
 
-  val excludedRootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]
-
-  // register an import for the narrow purpose of excluding root imports of predef modules
-  def registerImport(ctx: Context, imp: Import): Unit = {
-    val sym = imp.expr.symbol
-    if (sym != null && !sym.isPackage && ctx.enclosingNonImportContext.owner.isPackage && rootImports(ctx.unit).contains(sym)) {
-      var current = excludedRootImportsCached.get(ctx.unit).getOrElse(Nil)
-      current = sym :: current
-      excludedRootImportsCached += ctx.unit -> current
+  private final class ExcludedImport(unit: CompilationUnit) {
+    // register an import for the narrow purpose of excluding root imports of predef modules
+    def registerTopLevelImport(c: Context): Unit = {
+      if (lastTopLevelImport == ContextAlreadyUsed) {
+        c.reporter.error(c.tree.pos, "Internal error: all top level imports must be registered before analysing them to exclude root imports like Predef._.")
+      } else {
+        lastTopLevelImport = c
+      }
     }
+    private val ContextAlreadyUsed: Context = null
+    private var lastTopLevelImport: Context = NoContext
+    lazy val excluded: List[Symbol] = {
+      var cx = lastTopLevelImport
+      lastTopLevelImport = ContextAlreadyUsed
+      val syms = mutable.ListBuffer[Symbol]()
+      while (cx != NoContext) {
+        val imp = cx.importOrNull.tree
+        val sym = imp.expr.symbol
+        if (!sym.isPackage && rootImports(unit).contains(sym))
+          syms += sym
+        cx = cx.outer.enclosingImport
+      }
+      syms.toList
+    }
+  }
+  private val excludedImport = perRunCaches.newMap[CompilationUnit, ExcludedImport]
+  def registerTopLevelImport(context: Context): Unit = {
+    excludedImport.getOrElse(context.unit, new ExcludedImport(context.unit)).registerTopLevelImport(context)
   }
 
   /** List of symbols to import from in a root context.  By default, that
@@ -1220,8 +1238,9 @@ trait Contexts { self: Analyzer =>
       if (isExcludedRootImport(imp)) NoSymbol
       else sym.filter(isAccessible(_, imp.qual.tpe, superAccess = false))
 
-    private def isExcludedRootImport(imp: ImportInfo): Boolean =
-      imp.isRootImport && excludedRootImportsCached.get(unit).exists(_.contains(imp.qual.symbol))
+    private def isExcludedRootImport(imp: ImportInfo): Boolean = {
+      imp.isRootImport && excludedImport.get(unit).exists(_.excluded.contains(imp.qual.symbol))
+    }
 
     private[Contexts] def requiresQualifier(s: Symbol): Boolean = (
           s.owner.isClass

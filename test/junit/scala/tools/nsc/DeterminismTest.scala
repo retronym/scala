@@ -301,6 +301,25 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def testPredefUnimport(): Unit = {
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          | import scala.Predef.{wrapString => _, assert}
+          | class A(val x: String)
+          |
+      """.stripMargin),
+      source("b.scala",
+        """
+          | object B {
+          |   new A(null)
+          | }
+          |
+      """.stripMargin)
+    )
+    test(List(code))
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
   private def test(groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")
