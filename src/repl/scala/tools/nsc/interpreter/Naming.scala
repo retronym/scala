@@ -67,7 +67,8 @@ trait Naming {
     // Prefixes used in repl machinery.  Default to $line, $read, etc.
     def line   = propOr("line")
     def read   = "$read"
-    def iw   = "$iw"
+    def inst   = "INSTANCE"
+    def iw     = "$iw"
     def eval   = propOr("eval")
     def print  = propOr("print")
     def result = propOr("result")

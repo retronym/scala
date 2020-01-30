@@ -246,8 +246,8 @@ class Scripted(@BeanProperty val factory: ScriptEngineFactory, settings: Setting
           intp recordRequest duplicate(req)
           null
         } else {
-          val instance = s"val $$INSTANCE = new ${req.lineRep.readPath};"
-          val newline  = (defines map (s => s"val ${s.name} = $$INSTANCE${req.accessPath}.${s.name}")).mkString(instance, ";", ";")
+          val instance = s"val $$${req.lineRep.instName} = new ${req.lineRep.readPath};"
+          val newline  = (defines map (s => s"val ${s.name} = $$${req.lineRep.instName}${req.accessPath}.${s.name}")).mkString(instance, ";", ";")
           val newreq   = intp.requestFromLine(newline).right.get
           val ok = newreq.compile
 

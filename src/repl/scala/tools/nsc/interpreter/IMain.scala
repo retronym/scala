@@ -321,7 +321,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
   def originalPath(sym: Symbol): String  = translateOriginalPath(typerOp path sym)
 
   /** For class based repl mode we use an .INSTANCE accessor. */
-  def readInstanceName = if (isClassBased) ".INSTANCE" else ""
+  def readInstanceName = if (isClassBased) "." + sessionNames.inst else ""
   def translateOriginalPath(p: String): String = {
     if (isClassBased) p.replace(sessionNames.read, sessionNames.read + readInstanceName) else p
   }
@@ -703,6 +703,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
 
     val packageName = sessionNames.line + lineId
     val readName    = sessionNames.read
+    val instName    = sessionNames.inst
     val evalName    = sessionNames.eval
     val printName   = sessionNames.print
     val resultName  = sessionNames.result
@@ -909,7 +910,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
                           |$importsTrailer
                           |}
                           |object ${lineRep.readName} {
-                          |   val INSTANCE = new ${lineRep.readName}();
+                          |   val ${lineRep.instName} = new ${lineRep.readName}();
                           |}
                           |""".stripMargin
 
@@ -1007,7 +1008,7 @@ class IMain(initialSettings: Settings, protected val out: JPrintWriter) extends 
     /** String representations of same. */
     lazy val typeOf         = typeMap[String](tp => exitingTyper {
       val s = tp.toString
-      if (isClassBased) s.stripPrefix("INSTANCE.") else s
+      if (isClassBased) s.stripPrefix(sessionNames.inst + ".") else s
     })
 
     lazy val definedSymbols = (
