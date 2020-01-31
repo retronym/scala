@@ -102,7 +102,7 @@ trait Imports {
    */
   case class ComputedImports(header: String, prepend: String, append: String, access: String)
 
-  protected def importsCode(wanted: Set[Name], wrapper: Request#Wrapper, definesClass: Boolean, generousImports: Boolean): ComputedImports = {
+  protected def importsCode(wanted: Set[Name], wrapper: Request#Wrapper, generousImports: Boolean): ComputedImports = {
     val header, code, trailingBraces, accessPath = new StringBuilder
     val currentImps = mutable.HashSet[Name]()
     var predefEscapes = false      // only emit predef import header if name not resolved in history, loosely
