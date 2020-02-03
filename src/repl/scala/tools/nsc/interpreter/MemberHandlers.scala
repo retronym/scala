@@ -66,6 +66,17 @@ trait MemberHandlers {
 
   private def isTermMacro(ddef: DefDef): Boolean = ddef.mods.isMacro
 
+  private def isMacroContextVal(vdef: ValDef): Boolean =
+    vdef.tpt match {
+      case Select(_, TypeName("Context")) => true // approximating with a syntactic check
+      case Ident(TypeName("Context"))     => true
+    }
+
+  private def isMacroImpl(tree: Tree): Boolean = tree match {
+    case DefDef(_, _, _, List(vdef) :: _, _, _) => isMacroContextVal(vdef)
+    case _                                      => false
+  }
+
   def chooseHandler(member: Tree): MemberHandler = member match {
     case member: DefDef if isTermMacro(member) => new TermMacroHandler(member)
     case member: DefDef                        => new DefHandler(member)
@@ -100,6 +111,7 @@ trait MemberHandlers {
     def symbol          = if (member.symbol eq null) NoSymbol else member.symbol
     def definesImplicit = false
     def definesValueClass = false
+    def definesMacroImpl  = false
     def definesValue    = false
 
     def definesTerm     = Option.empty[TermName]
@@ -158,6 +170,7 @@ trait MemberHandlers {
 
   class DefHandler(member: DefDef) extends MemberDefHandler(member) {
     override def definesValue = flattensToEmpty(member.vparamss) // true if 0-arity
+    override def definesMacroImpl = isMacroImpl(member)
     override def resultExtractionCode(req: Request) = {
       val nameString = colorName(name)
       val typeString = colorType(req typeOf name)
@@ -198,6 +211,7 @@ trait MemberHandlers {
   class ModuleHandler(module: ModuleDef) extends MemberDefHandler(module) {
     override def definesTerm = Some(name.toTermName)
     override def definesValue = true
+    override def definesMacroImpl = module.impl.body.exists(isMacroImpl)
 
     override def resultExtractionCode(req: Request) = codegenln("defined object ", name)
   }
@@ -209,6 +223,12 @@ trait MemberHandlers {
     override final def definesValueClass: Boolean = member.impl.parents match {
       case Ident(tpnme.AnyVal) :: _ => true // approximating with a syntactic check
       case _ =>false
+    }
+    override def definesMacroImpl = {
+      member.impl.body.exists {
+        case DefDef(_, nme.CONSTRUCTOR, Nil, List(List(vdef)), _, _) => isMacroContextVal(vdef)
+        case _                                                       => false
+      }
     }
 
     override def resultExtractionCode(req: Request) =
