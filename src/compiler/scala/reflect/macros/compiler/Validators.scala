@@ -39,9 +39,12 @@ trait Validators {
       val implicitParams = aparamss.flatten filter (_.isImplicit)
       if (implicitParams.nonEmpty) MacroImplNonTagImplicitParameters(implicitParams)
       val effectiveOwner = if (isImplMethod) macroImplOwner else macroImplOwner.owner
-      val effectivelyStatic = effectiveOwner.isStaticOwner || effectiveOwner.moduleClass.isStaticOwner
-      val correctBundleness = if (isImplMethod) macroImplOwner.isModuleClass else macroImplOwner.isClass && !macroImplOwner.isModuleClass
-      if (!effectivelyStatic || !correctBundleness) MacroImplReferenceWrongShapeError()
+      val replClassBasedStatic = effectiveOwner.enclosingTopLevelClass.isInterpreterWrapper // TODO check all intermediate owners are $iw
+      if (!replClassBasedStatic) {
+        val effectivelyStatic = effectiveOwner.isStaticOwner || effectiveOwner.moduleClass.isStaticOwner
+        val correctBundleness = if (isImplMethod) macroImplOwner.isModuleClass else macroImplOwner.isClass && !macroImplOwner.isModuleClass
+        if (!effectivelyStatic || !correctBundleness) MacroImplReferenceWrongShapeError()
+      }
     }
 
     private def checkMacroDefMacroImplCorrespondence() = {
