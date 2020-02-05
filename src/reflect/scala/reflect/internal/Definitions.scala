@@ -678,9 +678,8 @@ trait Definitions extends api.StandardDefinitions {
 
     private def macroBundleParamInfo(tp: Type) = {
       val ctor = tp.erasure.typeSymbol.primaryConstructor
-
       ctor.paramss match {
-        case List(_ :+ c) =>
+        case List(List(c)) =>
           val sym = c.info.typeSymbol
           val isContextCompatible = sym.isNonBottomSubClass(BlackboxContextClass) || sym.isNonBottomSubClass(WhiteboxContextClass)
           if (isContextCompatible) c.info else NoType

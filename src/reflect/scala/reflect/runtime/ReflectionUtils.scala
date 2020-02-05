@@ -87,27 +87,6 @@ object ReflectionUtils {
     accessor invoke outer
   }
 
-  def interpreterInstance(wrapperClass: Class[_]): AnyRef = {
-    // Special case to let for REPL -Yclass-based users define macro implementations.
-    // Reflectively call `$read$.MODULE$.$iw().$iw().$iw()` to get the `this` of the macro implementation.
-    val loader = wrapperClass.getClassLoader
-    var readClass = wrapperClass.getEnclosingClass
-    while (readClass.getEnclosingClass != null) {
-      readClass = readClass.getEnclosingClass
-    }
-    val read = ReflectionUtils.staticSingletonInstance(loader, readClass.getName)
-    val instanceMethod = read.getClass.getMethod("INSTANCE")
-    val instance = instanceMethod.invoke(read)
-    val iwName = wrapperClass.getSimpleName
-    var outer = instance
-    var iwInstance = ReflectionUtils.innerSingletonInstance(instance, iwName)
-    while (iwInstance.getClass != wrapperClass) {
-      outer = iwInstance
-      iwInstance = ReflectionUtils.innerSingletonInstance(outer, iwName)
-    }
-    iwInstance
-  }
-
   object PrimitiveOrArray {
     def unapply(jclazz: jClass[_]) = jclazz.isPrimitive || jclazz.isArray
   }
