@@ -13,15 +13,15 @@ import language.experimental.macros
 
 def impl1(c: Context) = { import c.universe._; c.Expr[Unit](q"()") }
 def foo1: Unit = macro impl1
-foo1
+// foo1
 
 def impl2(c: Context)() = { import c.universe._; c.Expr[Unit](q"()") }
 def foo2(): Unit = macro impl2
-foo2()
+// foo2()
 
 def impl3(c: Context)(x: c.Expr[Int])(y: c.Expr[Int]) = { import c.universe._; c.Expr[Unit](q"()") }
 def foo3(x: Int)(y: Int): Unit = macro impl3
-foo3(2)(3)
+// foo3(2)(3)
 
 
 import scala.reflect
@@ -45,14 +45,14 @@ def fooSRWBC: Unit  = macro implSRWBC
 def fooRSRBBC: Unit = macro implRSRBBC
 def fooRSRWBC: Unit = macro implRSRWBC
 
-fooBBC
-fooWBC
-fooRBBC
-fooRWBC
-fooSRBBC
-fooSRWBC
-fooRSRBBC
-fooRSRWBC
+// fooBBC
+// fooWBC
+// fooRBBC
+// fooRWBC
+// fooSRBBC
+// fooSRWBC
+// fooRSRBBC
+// fooRSRWBC
 
 
 object MacrosModule {
@@ -75,14 +75,14 @@ def barSRWBC: Unit  = macro MacrosModule.implSRWBC
 def barRSRBBC: Unit = macro MacrosModule.implRSRBBC
 def barRSRWBC: Unit = macro MacrosModule.implRSRWBC
 
-barBBC
-barWBC
-barRBBC
-barRWBC
-barSRBBC
-barSRWBC
-barRSRBBC
-barRSRWBC
+// barBBC
+// barWBC
+// barRBBC
+// barRWBC
+// barSRBBC
+// barSRWBC
+// barRSRBBC
+// barRSRWBC
 
 
 class MacroBundleBBC(val c: blackbox.Context)                                { def impl = c.universe.reify(()) }
@@ -102,14 +102,14 @@ def bazSRBBC: Unit  = macro MacroBundleSRBBC.impl
 def bazSRWBC: Unit  = macro MacroBundleSRWBC.impl
 def bazRSRBBC: Unit = macro MacroBundleRSRBBC.impl
 def bazRSRWBC: Unit = macro MacroBundleRSRWBC.impl
-
-bazBBC
-bazWBC
-bazRBBC
-bazRWBC
-bazSRBBC
-bazSRWBC
-bazRSRBBC
-bazRSRWBC
+//
+// bazBBC
+// bazWBC
+// bazRBBC
+// bazRWBC
+// bazSRBBC
+// bazSRWBC
+// bazRSRBBC
+// bazRSRWBC
   """
 }
