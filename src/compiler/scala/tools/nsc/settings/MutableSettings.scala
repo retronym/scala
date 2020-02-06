@@ -227,7 +227,6 @@ class MutableSettings(val errorFn: String => Unit)
   }
 
   def BooleanSetting(name: String, descr: String) = add(new BooleanSetting(name, descr))
-  def BooleanTrueSetting(name: String, descr: String) = add(new BooleanTrueSetting(name, descr))
   def ChoiceSetting(name: String, helpArg: String, descr: String, choices: List[String], default: String, choicesHelp: List[String]) =
     add(new ChoiceSetting(name, helpArg, descr, choices, default, choicesHelp))
   def ChoiceSettingForcedDefault(name: String, helpArg: String, descr: String, choices: List[String], default: String, choicesHelp: List[String]) =
@@ -367,6 +366,8 @@ class MutableSettings(val errorFn: String => Unit)
    *  Subclasses each define a `value` field of the appropriate type.
    */
   abstract class Setting(val name: String, val helpDescription: String) extends AbsSetting with SettingValue with Mutable {
+    def withDefault(value: T): this.type = { v = value; this }
+
     /** Will be called after this Setting is set for any extra work. */
     private var _postSetHook: this.type => Unit = (x: this.type) => ()
     override def postSetHook(): Unit = _postSetHook(this)
@@ -479,14 +480,6 @@ class MutableSettings(val errorFn: String => Unit)
         } else errorAndValue(s"'$x' is not a valid choice for '$name'", None)
       case _       => errorAndValue(s"'$name' accepts only one boolean value", None)
     }
-  }
-
-  /** A BooleanSetting, which defaults to true. */
-  class BooleanTrueSetting private[nsc](
-      name: String,
-      descr: String)
-  extends BooleanSetting(name, descr) {
-    v = true
   }
 
   /** A special setting for accumulating arguments like -Dfoo=bar. */
