@@ -81,9 +81,8 @@ trait Warnings {
   // created using the standard factory methods.
 
   val warnValueOverrides = {
-    val flag = new BooleanSetting("value-overrides", "Generated value class method overrides an implementation.")
-    flag.value = false
-    flag
+    new BooleanSetting("value-overrides", "Generated value class method overrides an implementation.")
+      .withDefault(false)
   }
 
   // Lint warnings

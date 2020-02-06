@@ -233,7 +233,7 @@ class MutableSettings(val errorFn: String => Unit)
     ChoiceSetting(name, helpArg, descr, choices, default, choicesHelp).withPostSetHook(sett =>
       if (sett.value != default) {
         sett.withDeprecationMessage(s"${name}:${sett.value} is deprecated, forcing use of $default")
-        sett.value = default
+        sett.withDefault(default)
       }
     )
   def IntSetting(name: String, descr: String, default: Int, range: Option[(Int, Int)], parser: String => Option[Int]) =
@@ -590,12 +590,17 @@ class MutableSettings(val errorFn: String => Unit)
     private[nsc] val outputDirs: OutputDirs,
     default: String)
     extends StringSetting("-d", "directory|jar", "destination for generated classfiles.", default, None) {
-      value = default
+      withDefault(default)
+      setDir(default)
+
       override def value_=(str: String) {
         super.value_=(str)
+        setDir(str)
+      }
+
+      private def setDir(str: String) =
         try outputDirs.setSingleOutput(str)
         catch { case FatalError(msg) => errorFn(msg) }
-      }
   }
 
   /**
