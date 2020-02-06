@@ -816,6 +816,7 @@ trait StdNames {
     val unapply: NameType              = "unapply"
     val unapplySeq: NameType           = "unapplySeq"
     val unbox: NameType                = "unbox"
+    val unit: NameType                 = "unit"
     val universe: NameType             = "universe"
     val UnliftListElementwise: NameType = "UnliftListElementwise"
     val UnliftListOfListsElementwise: NameType = "UnliftListOfListsElementwise"
@@ -830,13 +831,15 @@ trait StdNames {
     val zero: NameType                 = "zero"
 
     // async
-    val result        : NameType       = "result$async"
-    val completed     : NameType       = "completed$async"
-    val stateMachine  : NameType       = "stateMachine$async"
-    val state         : NameType       = "state$async"
-    val execContext   : NameType       = "execContext$async"
-    val tr            : NameType       = "tr$async"
-    val t             : NameType       = "throwable$async"
+    val result           : NameType       = "result$async"
+    val completed        : NameType       = "completed$async"
+    val stateMachine     : NameType       = "stateMachine$async"
+    val state            : NameType       = "state$async"
+    val execContextTemp  : NameType       = "execContext0$async"
+    val execContext      : NameType       = "execContext$async"
+    val tr               : NameType       = "tr$async"
+    val t                : NameType       = "throwable$async"
+    val future           : NameType       = "future"
 
     // quasiquote interpolators:
     val q: NameType  = "q"
