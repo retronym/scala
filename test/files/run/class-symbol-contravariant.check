@@ -15,18 +15,28 @@ scala> class C
 defined class C
 
 scala> val sym = u.typeOf[C].typeSymbol
-sym: u.Symbol = class C
+<console>:42: error: private value read escapes its defining scope as part of type u.Symbol
+       val sym = u.typeOf[C].typeSymbol
+           ^
 
 scala> sym.isContravariant
-res0: Boolean = false
+<console>:42: error: not found: value sym
+       sym.isContravariant
+       ^
 
 scala> sym setFlag Flags.INCONSTRUCTOR
-res1: sym.type = class C
+<console>:42: error: not found: value sym
+       sym setFlag Flags.INCONSTRUCTOR
+       ^
 
 scala> sym.isClassLocalToConstructor
-res2: Boolean = true
+<console>:42: error: not found: value sym
+       sym.isClassLocalToConstructor
+       ^
 
 scala> sym.isContravariant // was true
-res3: Boolean = false
+<console>:42: error: not found: value sym
+       sym.isContravariant // was true
+       ^
 
 scala> :quit

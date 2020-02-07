@@ -18,7 +18,9 @@ scala> @showAsInfix type Mappy[T, U] = Map[T, U]
 defined type alias Mappy
 
 scala> def foo: Int Mappy (Boolean && String) = ???
-foo: Int Mappy (Boolean && String)
+<console>:14: error: private value read escapes its defining scope as part of type Int Mappy (Boolean && String)
+       def foo: Int Mappy (Boolean && String) = ???
+                    ^
 
 scala> @showAsInfix(false) class ||[T,U]
 defined class $bar$bar

@@ -27,7 +27,9 @@ scala> type anotherint = Int
 defined type alias anotherint
 
 scala> val four: anotherint = 4
-four: anotherint = 4
+<console>:12: error: private value read escapes its defining scope as part of type anotherint
+       val four: anotherint = 4
+                 ^
 
 scala> val bogus: anotherint = "hello"
 <console>:12: error: type mismatch;
@@ -36,6 +38,9 @@ scala> val bogus: anotherint = "hello"
     (which expands to)  Int
        val bogus: anotherint = "hello"
                                ^
+<console>:12: error: private value read escapes its defining scope as part of type anotherint
+       val bogus: anotherint = "hello"
+                  ^
 
 scala> trait PointlessTrait
 defined trait PointlessTrait

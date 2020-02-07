@@ -20,11 +20,28 @@ tree: reflect.runtime.universe.Apply =
 }()
 
 scala> {val tb = reflect.runtime.currentMirror.mkToolBox(); tb.typecheck(tree): Any}
-res0: Any =
-{
-  {
-    O.apply()
-  }
-}
+scala.tools.reflect.ToolBoxError: reflective typecheck has failed: value read cannot be accessed in $iw
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.$anonfun$typecheck$1(ToolBoxFactory.scala:193)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.$anonfun$transformDuringTyper$4(ToolBoxFactory.scala:161)
+  at scala.tools.nsc.typechecker.Contexts$Context.withMode(Contexts.scala:401)
+  at scala.tools.nsc.typechecker.Contexts$Context.withMacrosEnabled(Contexts.scala:409)
+  at scala.tools.nsc.typechecker.Contexts$Context.withMacros(Contexts.scala:411)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.$anonfun$transformDuringTyper$3(ToolBoxFactory.scala:161)
+  at scala.tools.nsc.typechecker.Contexts$Context.withMode(Contexts.scala:401)
+  at scala.tools.nsc.typechecker.Contexts$Context.withImplicitsEnabled(Contexts.scala:405)
+  at scala.tools.nsc.typechecker.Contexts$Context.withImplicits(Contexts.scala:408)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.$anonfun$transformDuringTyper$1(ToolBoxFactory.scala:160)
+  at scala.reflect.internal.Trees.wrappingIntoTerm(Trees.scala:1756)
+  at scala.reflect.internal.Trees.wrappingIntoTerm$(Trees.scala:1753)
+  at scala.reflect.internal.SymbolTable.wrappingIntoTerm(SymbolTable.scala:28)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.withWrapping$1(ToolBoxFactory.scala:130)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.transformDuringTyper(ToolBoxFactory.scala:131)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal.typecheck(ToolBoxFactory.scala:185)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl.$anonfun$typecheck$6(ToolBoxFactory.scala:390)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$withCompilerApi$.liftedTree2$1(ToolBoxFactory.scala:370)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$withCompilerApi$.apply(ToolBoxFactory.scala:370)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl.typecheck(ToolBoxFactory.scala:382)
+  at scala.tools.reflect.ToolBoxFactory$ToolBoxImpl.typecheck(ToolBoxFactory.scala:37)
+  ... 85 elided
 
 scala> :quit

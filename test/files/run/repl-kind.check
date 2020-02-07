@@ -43,13 +43,13 @@ scala> import Bar.Bop
 import Bar.Bop
 
 scala> :kind Bop
-Bar.Bop's kind is A
+<console>: error: type Bop was not found
 
 scala> type IntTuple[+A] = (Int, A)
 defined type alias IntTuple
 
 scala> :kind IntTuple
-IntTuple's kind is F[+A]
+<console>: error: type IntTuple was not found
 
 scala> :kind ({type l[A] = Either[Int, A]})#l
 scala.util.Either[Int,?]'s kind is F[+A]
@@ -61,7 +61,7 @@ scala> type ~>[-F1[_], +F2[_]] = Nat[F1, F2]
 defined type alias $tilde$greater
 
 scala> :kind ({type l[F[-_]] = F ~> List})#l
-Nat[?,[+A]List[A]]'s kind is X[-F[A]]
+<console>: error: type ({type l[F[-_]] = F ~> List})#l was not found
 
 scala> :kind 5
 <console>: error: type 5 was not found
