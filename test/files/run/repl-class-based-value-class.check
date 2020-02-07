@@ -1,12 +1,21 @@
 
 scala> class Meter(val value: Int) extends AnyVal // show
 object $read extends scala.AnyRef {
-  def <init>() = { super.<init>; () };
+  def <init>() = {
+    super.<init>;
+    ()
+  };
   object $iw extends scala.AnyRef {
-    def <init>() = { super.<init>; () };
+    def <init>() = {
+      super.<init>;
+      ()
+    };
     class Meter extends AnyVal {
       <paramaccessor> val value: Int = _;
-      def <init>(value: Int) = { super.<init>; () }
+      def <init>(value: Int) = {
+        super.<init>;
+        ()
+      }
     }
   };
   val INSTANCE = this
@@ -15,17 +24,26 @@ defined class Meter
 
 scala> val x = new Meter(1) // show
 sealed class $read extends _root_.java.io.Serializable {
-  def <init>() = { super.<init>; () };
+  def <init>() = {
+    super.<init>;
+    ()
+  };
   import $line3.$read.INSTANCE.$iw.Meter;
   import $line3.$read.INSTANCE.$iw.Meter;
   sealed class $iw extends _root_.java.io.Serializable {
-    def <init>() = { super.<init>; () };
+    def <init>() = {
+      super.<init>;
+      ()
+    };
     val x = new Meter.<init>(1)
   };
   val $iw = new $iw.<init>
 }
 object $read extends scala.AnyRef {
-  def <init>() = { super.<init>; () };
+  def <init>() = {
+    super.<init>;
+    ()
+  };
   val INSTANCE = new $read.<init>
 }
 x: Meter = Meter@XXXXXXXX
