@@ -70,6 +70,7 @@ trait MemberHandlers {
     vdef.tpt match {
       case Select(_, TypeName("Context")) => true // approximating with a syntactic check
       case Ident(TypeName("Context"))     => true
+      case _                              => false
     }
 
   private def isMacroImpl(tree: Tree): Boolean = tree match {
