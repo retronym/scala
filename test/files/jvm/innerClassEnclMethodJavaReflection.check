@@ -1,0 +1,2 @@
+(scala.collection.immutable.HashMap$HashMapKeys,java.lang.IncompatibleClassChangeError: scala.collection.immutable.HashMap and scala.collection.immutable.HashMap$HashMapKeys disagree on InnerClasses attribute)
+(scala.collection.immutable.HashMap$HashMapValues,java.lang.IncompatibleClassChangeError: scala.collection.immutable.HashMap and scala.collection.immutable.HashMap$HashMapValues disagree on InnerClasses attribute)
