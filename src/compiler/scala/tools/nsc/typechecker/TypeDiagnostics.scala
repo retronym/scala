@@ -491,7 +491,8 @@ trait TypeDiagnostics {
 
   object UnusedPrivates {
     val ignoreNames: Set[TermName] = Set(
-      "readResolve", "readObject", "writeObject", "writeReplace"
+      "readResolve", "readObject", "writeObject", "writeReplace",
+      "$eval", "$iw", "$line", "$print", "$print", "$read", "$read", "$result", "INSTANCE",
     ).map(TermName(_))
   }
 
@@ -508,7 +509,7 @@ trait TypeDiagnostics {
     def localVars   = defnSymbols filter (t => t.isLocalToBlock && t.isVar)
 
     def qualifiesTerm(sym: Symbol) = (
-      (sym.isModule || sym.isMethod || sym.isPrivateLocal || sym.isLocalToBlock || (sym.isPrivate && sym.owner.isInterpreterWrapper))
+      (sym.isModule || sym.isMethod || sym.isPrivateLocal || sym.isLocalToBlock || sym.owner.isInterpreterWrapper)
         && !nme.isLocalName(sym.name)
         && !sym.isParameter
         && !sym.isParamAccessor       // could improve this, but it's a pain
@@ -582,7 +583,7 @@ trait TypeDiagnostics {
     def isUnusedType(m: Symbol): Boolean = (
       m.isType
         && !m.isTypeParameterOrSkolem // would be nice to improve this
-        && (m.isPrivate || m.isLocalToBlock)
+        && (m.isPrivate || m.isLocalToBlock || m.owner.isInterpreterWrapper)
         && !(treeTypes.exists(_.exists(_.typeSymbolDirect == m)))
       )
     def isSyntheticWarnable(sym: Symbol) = (
@@ -591,10 +592,10 @@ trait TypeDiagnostics {
     def isUnusedTerm(m: Symbol): Boolean = (
       m.isTerm
         && (!m.isSynthetic || isSyntheticWarnable(m))
-        && ((m.isPrivate && !(m.isConstructor && m.owner.isAbstract)) || m.isLocalToBlock)
+        && ((m.isPrivate && !(m.isConstructor && m.owner.isAbstract)) || m.isLocalToBlock || (m.owner.isInterpreterWrapper && !m.isConstructor))
         && !targets(m)
         && !(m.name == nme.WILDCARD)              // e.g. val _ = foo
-        && (m.isValueParameter || !ignoreNames(m.name.toTermName)) // serialization methods
+        && (m.isValueParameter || !ignoreNames(m.name.toTermName)) // serialization/repl methods
         && !isConstantType(m.info.resultType)     // subject to constant inlining
         && !treeTypes.exists(_ contains m)        // e.g. val a = new Foo ; new a.Bar
       )
