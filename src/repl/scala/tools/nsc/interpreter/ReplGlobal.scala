@@ -56,8 +56,12 @@ trait ReplGlobal extends Global {
     override val runsAfter: List[String] = List("refchecks")
     /** Name of the phase that this phase must follow immediately. */
     override val runsRightAfter: Option[String] = None
-    override protected def newTransformer(unit: CompilationUnit): Transformer = new WrapperCleanupTransformer(unit)
-    class WrapperCleanupTransformer(unit: CompilationUnit) extends Transformer {
+    override protected def newTransformer(unit: CompilationUnit): Transformer = new WrapperCleanupTransformer
+    class WrapperCleanupTransformer extends Transformer {
+      override def transformUnit(unit: CompilationUnit): Unit = {
+        if (settings.Yreplclassbased.value) super.transformUnit(unit)
+      }
+
       def newUnusedPrivates: analyzer.UnusedPrivates = new analyzer.UnusedPrivates() {
         override lazy val ignoreNames = super.ignoreNames ++ {
           val sn = sessionNames
