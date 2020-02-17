@@ -72,7 +72,15 @@ private[async] trait AnfTransform extends TransformUtils {
         blockToList(transform(tree))
       }
 
-      def transformToBlock(tree: Tree): Block = listToBlock(transformToList(tree))
+      def transformToBlock(tree: Tree): Block = {
+        mode = Linearizing;
+        transform(tree) match {
+          case blk: Block =>
+            blk
+          case tree =>
+            Block(Nil, tree).setPos(tree.pos).setType(tree.tpe)
+        }
+      }
 
       def _transformToList(tree: Tree): List[Tree] = trace(tree) {
         val stats :+ expr = _anf.transformToList(tree)
