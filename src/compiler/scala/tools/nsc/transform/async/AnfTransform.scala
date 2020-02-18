@@ -12,7 +12,7 @@
 
 package scala.tools.nsc.transform.async
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.internal.Flags
 
 private[async] trait AnfTransform extends TransformUtils {
@@ -282,25 +282,29 @@ private[async] trait AnfTransform extends TransformUtils {
             val exprs1 = linearize.transformToList(blk.expr)
             val trees = stats1 ::: exprs1
 
-            def groupsEndingWith[T](ts: List[T])(f: T => Boolean): List[List[T]] = if (ts.isEmpty) Nil else {
-              ts.indexWhere(f) match {
-                case -1 => List(ts)
+            def foreachGroupsEndingWith(ts: List[Tree])(isGroupEnd: Tree => Boolean, onGroup: Array[Tree] => Unit, onTail: List[Tree] => Unit): Unit = if (ts.isEmpty) () else {
+              ts.indexWhere(isGroupEnd) match {
+                case -1 => onTail(ts)
                 case i =>
-                  val (ts1, ts2) = ts.splitAt(i + 1)
-                  ts1 :: groupsEndingWith(ts2)(f)
+                  val group = new Array[Tree](i + 1)
+                  ts.copyToArray(group)
+                  onGroup(group)
+                  foreachGroupsEndingWith(ts.drop(i + 1))(isGroupEnd, onGroup, onTail)
               }
             }
-
-            val matchGroups = groupsEndingWith(trees) { case MatchEnd(_) => true; case _ => false }
-            val trees1 = matchGroups.flatMap(group => eliminateMatchEndLabelParameter(tree.pos, group))
-
-            trees1 foreach {
+            def addToStats(t: Tree): Unit = t match {
               case blk1: Block =>
                 stats ++= blk1.stats
                 stats += blk1.expr
               case t =>
                 stats += t
             }
+
+            foreachGroupsEndingWith(trees)(
+              isGroupEnd = ({ case MatchEnd(_) => true; case _ => false }),
+              onGroup = (ts: Array[Tree]) => eliminateMatchEndLabelParameter(tree.pos, ts).foreach(addToStats),
+              onTail = (ts: List[Tree]) => ts.foreach(addToStats)
+            )
 
           case ValDef(mods, name, tpt, rhs) =>
             if (containsAwait(rhs)) {
@@ -376,7 +380,7 @@ private[async] trait AnfTransform extends TransformUtils {
     //   - extract a `matchRes` variable
     //   - rewrite the terminal label def to take no parameters, and instead read this temp variable
     //   - change jumps to the terminal label to an assignment and a no-arg label application
-    def eliminateMatchEndLabelParameter(pos: Position, statsExpr: List[Tree]): List[Tree] = {
+    def eliminateMatchEndLabelParameter(pos: Position, statsExpr: Array[Tree]): Iterator[Tree] = {
       val caseDefToMatchResult = collection.mutable.Map[Symbol, Symbol]()
 
       val matchResults = collection.mutable.Buffer[Tree]()
@@ -405,30 +409,35 @@ private[async] trait AnfTransform extends TransformUtils {
         }
       }
 
-      val statsExpr0 = statsExpr.reverse.flatMap {
+      val statsExpr0: ArrayBuffer[Tree] = new ArrayBuffer[Tree](statsExpr.length)
+
+      statsExpr.reverseIterator.foreach {
         case ld@LabelDef(_, param :: Nil, _) =>
           val (ld1, after) = modifyLabelDef(ld)
-          List(after, ld1)
+          statsExpr0 += after
+          statsExpr0 += ld1
         case a@ValDef(mods, name, tpt, ld@LabelDef(_, param :: Nil, _)) =>
           val (ld1, after) = modifyLabelDef(ld)
-          List(treeCopy.ValDef(a, mods, name, tpt, after), ld1)
+          statsExpr0 += treeCopy.ValDef(a, mods, name, tpt, after)
+          statsExpr0 += ld1
         case t =>
-          if (caseDefToMatchResult.isEmpty) t :: Nil
+          if (caseDefToMatchResult.isEmpty) statsExpr0 += t
           else {
             val matchResultTransformer = new MatchResultTransformer(caseDefToMatchResult)
             val tree1 = matchResultTransformer.transformAtOwner(owner, t)
-            tree1 :: Nil
+            statsExpr0 += tree1
           }
       }
+
       matchResults.toList match {
         case _ if caseDefToMatchResult.isEmpty =>
-          statsExpr // return the original trees if nothing changed
+          statsExpr.iterator // return the original trees if nothing changed
         case Nil =>
-          statsExpr0.reverse :+ literalUnit // must have been a unit-typed match, no matchRes variable to definne or refer to
+          statsExpr0.reverseIterator ++ List(literalUnit) // must have been a unit-typed match, no matchRes variable to definne or refer to
         case r1 :: Nil =>
           // { var matchRes = _; ....; matchRes }
-          (r1 +: statsExpr0.reverse) :+ atPos(pos)(gen.mkAttributedIdent(r1.symbol))
-        case _ => error(pos, "Internal error: unexpected tree encountered during ANF transform " + statsExpr); statsExpr
+          List(r1).iterator ++ statsExpr0.reverseIterator ++ List(atPos(pos)(gen.mkAttributedIdent(r1.symbol)))
+        case _ => error(pos, "Internal error: unexpected tree encountered during ANF transform " + statsExpr); statsExpr.iterator
       }
     }
 
