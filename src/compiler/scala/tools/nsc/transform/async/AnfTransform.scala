@@ -68,10 +68,6 @@ private[async] trait AnfTransform extends TransformUtils {
       typedAt(lhs.pos, Assign(Ident(varSym), lhs))
 
     object linearize {
-      def transformToList(tree: Tree): List[Tree] = {
-        mode = Linearizing;
-        blockToList(transform(tree))
-      }
       def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
         mode = Linearizing;
         transform(tree) match {
@@ -211,12 +207,6 @@ private[async] trait AnfTransform extends TransformUtils {
     }
 
     object _anf {
-      import treeInfo.Applied
-
-      def transformToList(tree: Tree): List[Tree] = {
-        mode = Anf;
-        blockToList(transform(tree))
-      }
       def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
         mode = Anf;
         transform(tree) match {
