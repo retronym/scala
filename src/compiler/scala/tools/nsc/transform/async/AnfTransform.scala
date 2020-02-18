@@ -101,20 +101,11 @@ private[async] trait AnfTransform extends TransformUtils {
           stats :+ expr :+ typedAt(expr.pos, Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
 
         expr match {
-          case Apply(fun, args) if currentTransformState.ops.isAwait(fun) =>
+          case Apply(fun, _) if currentTransformState.ops.isAwait(fun) =>
             val awaitResType = transformType(expr.tpe)
             val valDef = defineVal(name.await(), expr, tree.pos)(awaitResType)
             val ref = gen.mkAttributedStableRef(valDef.symbol).setType(awaitResType)
-            // https://github.com/scala/async/issues/74
-            // Use a cast to hide from "pure expression does nothing" error
-            // TODO avoid creating a ValDef for the result of this await to avoid this tree shape altogether.
-            // This will require some deeper changes to the later parts of the macro which currently assume regular
-            // tree structure around `await` calls.
-            val refNoPureExpr =
-            if (!isPastErasure && typeEqualsUnit(ref.tpe)) typedAt(tree.pos, gen.mkCast(ref, ref.tpe))
-            else atPos(tree.pos)(ref)
-
-            stats :+ valDef :+ refNoPureExpr
+            stats :+ valDef :+ atPos(tree.pos)(ref)
 
           case If(cond, thenp, elsep) =>
             // If we run the ANF transform post patmat, deal with trees like `(if (cond) jump1(){String} else jump2(){String}){String}`
