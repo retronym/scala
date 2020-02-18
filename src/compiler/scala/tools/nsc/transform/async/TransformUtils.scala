@@ -41,8 +41,6 @@ trait PhasedTransform extends TypingTransformers {
 
   def literalNull = Literal(Constant(null))
 
-  def typeEqualsNothing(tp: Type) = tp =:= definitions.NothingTpe
-
   def typeEqualsUnit(tp: Type) = tp =:= definitions.UnitTpe || (isPastErasure && tp =:= definitions.BoxedUnitTpe)
 
   def assignUnitType(t: Tree): t.type =
@@ -436,12 +434,19 @@ private[async] trait TransformUtils extends PhasedTransform {
       ld2
     }
   }
+
+  val isMatchEnd: (Tree) => Boolean = t => MatchEnd.unapply(t).isDefined
   object MatchEnd {
     def unapply(t: Tree): Option[LabelDef] = t match {
       case ValDef(_, _, _, t) => unapply(t)
       case ld: LabelDef if ld.name.toString.startsWith("matchEnd") => Some(ld)
       case _ => None
     }
+  }
+
+  final def flattenBlock(tree: Tree)(f: Tree => Unit): Unit = tree match {
+    case Block(stats, expr) => stats.foreach(f); f(expr)
+    case _ => f(tree)
   }
 }
 

@@ -1503,6 +1503,7 @@ trait Trees extends api.Trees {
   }
 
   class ChangeOwnerTraverser(val oldowner: Symbol, val newowner: Symbol) extends Traverser {
+    assert(newowner != NoSymbol, oldowner)
     final def change(sym: Symbol) = {
       if (sym != NoSymbol && sym.owner == oldowner) {
         sym.owner = newowner

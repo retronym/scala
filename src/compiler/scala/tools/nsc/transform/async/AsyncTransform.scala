@@ -221,6 +221,7 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
     // fields. Similarly, replace references to them with references to the field.
     object UseFields extends explicitOuter.OuterPathTransformer(currentTransformState.unit) {
       private def fieldSel(tree: Tree) = {
+        assert(currentOwner != NoSymbol)
         val outerOrThis = if (stateMachineClass == currentClass) This(stateMachineClass) else {
           tree.symbol.makeNotPrivate(tree.symbol.owner)
           outerPath(outerValue, currentClass.outerClass, stateMachineClass)
