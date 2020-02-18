@@ -91,21 +91,31 @@ private[async] trait AnfTransform extends TransformUtils {
       }
 
       def _transformToList(tree: Tree): List[Tree] = trace(tree) {
-        val stats :+ expr = _anf.transformToList(tree)
+        val stats = new ListBuffer[Tree]()
+        _transformToList(tree, stats)
+        stats.toList
+      }
+
+      def _transformToList(tree: Tree, statsBuffer: ListBuffer[Tree]): Unit = {
+        val expr = _anf.transformToStatsExpr(tree, statsBuffer)
 
         def statsExprUnit = {
-          stats :+ expr :+ typedAt(expr.pos, literalUnit)
+          statsBuffer += expr
+          statsBuffer += typedAt(expr.pos, literalUnit)
         }
 
-        def statsExprThrow =
-          stats :+ expr :+ typedAt(expr.pos, Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
+        def statsExprThrow = {
+          statsBuffer += expr
+          statsBuffer += typedAt(expr.pos, Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
+        }
 
         expr match {
           case Apply(fun, _) if currentTransformState.ops.isAwait(fun) =>
             val awaitResType = transformType(expr.tpe)
             val valDef = defineVal(name.await(), expr, tree.pos)(awaitResType)
             val ref = gen.mkAttributedStableRef(valDef.symbol).setType(awaitResType)
-            stats :+ valDef :+ atPos(tree.pos)(ref)
+            statsBuffer += valDef
+            statsBuffer += atPos(tree.pos)(ref)
 
           case If(cond, thenp, elsep) =>
             // If we run the ANF transform post patmat, deal with trees like `(if (cond) jump1(){String} else jump2(){String}){String}`
@@ -141,11 +151,15 @@ private[async] trait AnfTransform extends TransformUtils {
               }
 
               val ifWithAssign = assignUnitType(treeCopy.If(tree, cond, branchWithAssign(thenp), branchWithAssign(elsep)))
-              stats :+ varDef :+ ifWithAssign :+ atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
+              statsBuffer += varDef
+              statsBuffer += ifWithAssign
+              statsBuffer += atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
             }
           case ld@LabelDef(name, params, rhs) =>
             if (isUnitType(ld.symbol.info.resultType)) statsExprUnit
-            else stats :+ expr
+            else {
+              statsBuffer += expr
+            }
 
           case Match(scrut, cases) =>
             // if type of match is Unit don't introduce assignment,
@@ -170,10 +184,12 @@ private[async] trait AnfTransform extends TransformUtils {
               }
               val matchWithAssign = assignUnitType(treeCopy.Match(tree, scrut, casesWithAssign))
               require(matchWithAssign.tpe != null, matchWithAssign)
-              stats :+ varDef :+ matchWithAssign :+ atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
+              statsBuffer += varDef
+              statsBuffer += matchWithAssign
+              statsBuffer += atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
             }
           case _ =>
-            stats :+ expr
+            statsBuffer += expr
         }
       }
 
@@ -200,6 +216,13 @@ private[async] trait AnfTransform extends TransformUtils {
       def transformToList(tree: Tree): List[Tree] = {
         mode = Anf;
         blockToList(transform(tree))
+      }
+      def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
+        mode = Anf;
+        transform(tree) match {
+          case blk: Block => stats ++= blk.stats; blk.expr
+          case expr => expr
+        }
       }
 
       def _transformToList(tree: Tree): List[Tree] = trace(tree) {
@@ -269,11 +292,11 @@ private[async] trait AnfTransform extends TransformUtils {
             stats += typedNewApply
 
           case blk: Block =>
-            val stats1 = blk.stats.flatMap(linearize.transformToList).filterNot(isLiteralUnit)
-            val exprs1 = linearize.transformToList(blk.expr)
-            val trees = stats1 ::: exprs1
+            val trees = new ListBuffer[Tree]
+            blk.stats.foreach(stat => {val expr = linearize.transformToStatsExpr(stat, trees); if (!isLiteralUnit(expr)) trees += expr})
+            trees += linearize.transformToStatsExpr(blk.expr, trees)
 
-            def foreachGroupsEndingWith(ts: List[Tree])(isGroupEnd: Tree => Boolean, onGroup: Array[Tree] => Unit, onTail: List[Tree] => Unit): Unit = if (ts.isEmpty) () else {
+            def foreachGroupsEndingWith(ts: List[Tree])(isGroupEnd: Tree => Boolean, onGroup: Array[Tree] => Unit, onTail: List[Tree] => Unit): Unit = if (!ts.isEmpty) {
               ts.indexWhere(isGroupEnd) match {
                 case -1 => onTail(ts)
                 case i =>
@@ -291,7 +314,7 @@ private[async] trait AnfTransform extends TransformUtils {
                 stats += t
             }
 
-            foreachGroupsEndingWith(trees)(
+            foreachGroupsEndingWith(trees.toList)(
               isGroupEnd = ({ case MatchEnd(_) => true; case _ => false }),
               onGroup = (ts: Array[Tree]) => eliminateMatchEndLabelParameter(tree.pos, ts).foreach(addToStats),
               onTail = (ts: List[Tree]) => ts.foreach(addToStats)
