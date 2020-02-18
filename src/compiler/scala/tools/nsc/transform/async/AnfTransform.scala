@@ -60,12 +60,8 @@ private[async] trait AnfTransform extends TransformUtils {
       }
     }
 
-    def typed(tree: Tree) = localTyper.typed(tree)
-
-    def typedAt(exprPos: Position, tree: Tree) = localTyper.typed(atPos(exprPos)(tree))
-
     def typedAssign(lhs: Tree, varSym: Symbol) =
-      typedAt(lhs.pos, Assign(Ident(varSym), lhs))
+      localTyper.typedPos(lhs.pos)(Assign(Ident(varSym), lhs))
 
     object linearize {
       def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
@@ -97,12 +93,12 @@ private[async] trait AnfTransform extends TransformUtils {
 
         def statsExprUnit = {
           statsBuffer += expr
-          statsBuffer += typedAt(expr.pos, literalUnit)
+          statsBuffer += localTyper.typedPos(expr.pos)(literalUnit)
         }
 
         def statsExprThrow = {
           statsBuffer += expr
-          statsBuffer += typedAt(expr.pos, Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
+          statsBuffer += localTyper.typedPos(expr.pos)(Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
         }
 
         expr match {
@@ -258,7 +254,7 @@ private[async] trait AnfTransform extends TransformUtils {
                   val argName = param.name.toTermName
                   val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
                   stats += valDef
-                  typedAt(tree.pos.makeTransparent, gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
+                  localTyper.typedPos(tree.pos.makeTransparent)(gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
               }
             }
 
@@ -349,7 +345,7 @@ private[async] trait AnfTransform extends TransformUtils {
             stats += treeCopy.Match(tree, scrutExpr, caseDefs)
 
           case LabelDef(name, params, rhs) =>
-            stats += treeCopy.LabelDef(tree, name, params, typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
+            stats += treeCopy.LabelDef(tree, name, params, localTyper.typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
 
           case TypeApply(fun, targs) =>
             val simpleFun = linearize.transformToStatsExpr(fun, stats)
@@ -380,14 +376,14 @@ private[async] trait AnfTransform extends TransformUtils {
 
         def unitLabelDef = {
           setUnitMethodInfo(ld.symbol)
-          assignUnitType(treeCopy.LabelDef(ld, ld.name, Nil, typed(literalUnit)))
+          assignUnitType(treeCopy.LabelDef(ld, ld.name, Nil, localTyper.typed(literalUnit)))
         }
 
         if (isUnitType(ld.params.head.tpe)) {
           // Unit typed match: eliminate the label def parameter, but don't create a matchres temp variable to
           // store the result for cleaner generated code.
           caseDefToMatchResult(ld.symbol) = NoSymbol
-          (unitLabelDef, substituteTrees(ld.rhs, param.symbol :: Nil, typed(literalUnit) :: Nil))
+          (unitLabelDef, substituteTrees(ld.rhs, param.symbol :: Nil, localTyper.typed(literalUnit) :: Nil))
         } else {
           // Otherwise, create the matchres var. We'll callers of the label def below.
           // Remember: we're iterating through the statement sequence in reverse, so we'll get
