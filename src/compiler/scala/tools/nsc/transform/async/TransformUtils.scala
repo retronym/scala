@@ -215,16 +215,15 @@ private[async] trait TransformUtils extends PhasedTransform {
     *
     * @param args The original argument trees
     * @param f  A function from argument (with '_*' unwrapped) and argument index to argument.
-    * @tparam A The type of the auxillary result
     */
-  private def mapArguments[A](args: List[Tree])(f: (Tree, Int) => (A, Tree)): (List[A], List[Tree]) = {
+  private def mapArguments(args: List[Tree])(f: (Tree, Int) => (Tree)): (List[Tree]) = {
     args match {
       case args :+ Typed(tree, Ident(tpnme.WILDCARD_STAR)) =>
-        val (a, argExprs :+ lastArgExpr) = (args :+ tree).zipWithIndex.map(f.tupled).unzip
+        val (argExprs :+ lastArgExpr) = (args :+ tree).zipWithIndex.map(f.tupled)
         val exprs = argExprs :+ atPos(lastArgExpr.pos.makeTransparent)(Typed(lastArgExpr, Ident(tpnme.WILDCARD_STAR)))
-        (a, exprs)
+        (exprs)
       case args                                            =>
-        args.zipWithIndex.map(f.tupled).unzip
+        args.zipWithIndex.map(f.tupled)
     }
   }
 
@@ -241,14 +240,14 @@ private[async] trait TransformUtils extends PhasedTransform {
    * @param argss The argument lists
    * @return      (auxillary results, mapped argument trees)
    */
-  def mapArgumentss[A](fun: Tree, argss: List[List[Tree]])(f: Arg => (A, Tree)): (List[List[A]], List[List[Tree]]) = {
+  def mapArgumentss(fun: Tree, argss: List[List[Tree]])(f: Arg => Tree): List[List[Tree]] = {
     val isByNamess: (Int, Int) => Boolean = isByName(fun)
     val argNamess: (Int, Int) => TermName = argName(fun)
     argss.zipWithIndex.map { case (args, i) =>
-      mapArguments[A](args) {
+      mapArguments(args) {
         (tree, j) => f(Arg(tree, isByNamess(i, j), argNamess(i, j)))
       }
-    }.unzip
+    }
   }
 
 
@@ -266,6 +265,8 @@ private[async] trait TransformUtils extends PhasedTransform {
     case trees @ (init :+ last) =>
       val pos = trees.map(_.pos).reduceLeft(_ union _)
       Block(init, last).setType(last.tpe).setPos(pos)
+    case Nil =>
+      throw new MatchError(trees)
   }
 
   def emptyConstructor: DefDef = {

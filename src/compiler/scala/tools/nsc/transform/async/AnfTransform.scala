@@ -12,6 +12,7 @@
 
 package scala.tools.nsc.transform.async
 
+import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.Flags
 
 private[async] trait AnfTransform extends TransformUtils {
@@ -70,6 +71,13 @@ private[async] trait AnfTransform extends TransformUtils {
       def transformToList(tree: Tree): List[Tree] = {
         mode = Linearizing;
         blockToList(transform(tree))
+      }
+      def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
+        mode = Linearizing;
+        transform(tree) match {
+          case blk: Block => stats ++= blk.stats; blk.expr
+          case expr => expr
+        }
       }
 
       def transformToBlock(tree: Tree): Block = {
@@ -204,46 +212,54 @@ private[async] trait AnfTransform extends TransformUtils {
       }
 
       def _transformToList(tree: Tree): List[Tree] = trace(tree) {
+        val trees = new ListBuffer[Tree]
+        _transformToList(tree, trees)
+        trees.toList
+      }
+
+      def _transformToList(tree: Tree, stats: ListBuffer[Tree]): Unit = {
         if (!containsAwait(tree)) {
           tree match {
-            case Block(stats, expr) =>
+            case blk : Block =>
               // avoids nested block in `while(await(false)) ...`.
               // TODO I think `containsAwait` really should return true if the code contains a label jump to an enclosing
               // while/doWhile and there is an await *anywhere* inside that construct.
-              stats :+ expr
-            case _ => List(tree)
+              stats ++= blk.stats
+              stats += blk.expr
+            case _ =>
+              stats += tree
           }
         } else tree match {
           case Select(qual, sel) =>
-            val stats :+ expr = linearize.transformToList(qual)
-            stats :+ treeCopy.Select(tree, expr, sel)
+            val expr = linearize.transformToStatsExpr(qual, stats)
+            stats += treeCopy.Select(tree, expr, sel)
 
           case Throw(expr) =>
-            val stats :+ expr1 = linearize.transformToList(expr)
-            stats :+ treeCopy.Throw(tree, expr1)
+            val expr1 = linearize.transformToStatsExpr(expr, stats)
+            stats += treeCopy.Throw(tree, expr1)
 
           case Typed(expr, tpt) =>
-            val stats :+ expr1 = linearize.transformToList(expr)
-            stats :+ treeCopy.Typed(tree, expr1, tpt)
+            val expr1 = linearize.transformToStatsExpr(expr, stats)
+            stats += treeCopy.Typed(tree, expr1, tpt)
 
           case ArrayValue(elemtp, elems) =>
-            val blks = elems.map(elem => linearize.transformToBlock(elem))
-            blks.flatMap(_.stats) :+ treeCopy.ArrayValue(tree, elemtp, blks.map(_.expr))
+            val elemExprs = elems.map(elem => linearize.transformToStatsExpr(elem, stats))
+            stats += treeCopy.ArrayValue(tree, elemtp, elemExprs)
 
           case Applied(fun, targs, argss) if argss.nonEmpty =>
             // we can assume that no await call appears in a by-name argument position,
             // this has already been checked.
-            val funStats :+ simpleFun = linearize.transformToList(fun)
-            val (argStatss, argExprss): (List[List[List[Tree]]], List[List[Tree]]) =
-              mapArgumentss[List[Tree]](fun, argss) {
-                case Arg(expr, byName, _) if byName /*|| isPure(expr) TODO */ => (Nil, expr)
+            val simpleFun = linearize.transformToStatsExpr(fun, stats)
+            val argExprss: List[List[Tree]] =
+              mapArgumentss(fun, argss) {
+                case Arg(expr, byName, _) if byName /*|| isPure(expr) TODO */ => expr
                 case Arg(expr, _, argName) =>
-                  linearize.transformToList(expr) match {
-                    case stats :+ expr1 =>
+                  linearize.transformToStatsExpr(expr, stats) match {
+                    case expr1 =>
                       val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
                       require(valDef.tpe != null, valDef)
-                      val stats1 = stats :+ valDef
-                      (stats1, atPos(tree.pos.makeTransparent)(gen.stabilize(gen.mkAttributedIdent(valDef.symbol))))
+                      stats += valDef
+                      atPos(tree.pos.makeTransparent)(gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
                   }
               }
 
@@ -259,11 +275,11 @@ private[async] trait AnfTransform extends TransformUtils {
 
             val typedNewApply = copyApplied(tree, argss.length)
 
-            funStats ++ argStatss.flatten.flatten :+ typedNewApply
+            stats += typedNewApply
 
-          case Block(stats, expr) =>
-            val stats1 = stats.flatMap(linearize.transformToList).filterNot(isLiteralUnit)
-            val exprs1 = linearize.transformToList(expr)
+          case blk: Block =>
+            val stats1 = blk.stats.flatMap(linearize.transformToList).filterNot(isLiteralUnit)
+            val exprs1 = linearize.transformToList(blk.expr)
             val trees = stats1 ::: exprs1
 
             def groupsEndingWith[T](ts: List[T])(f: T => Boolean): List[List[T]] = if (ts.isEmpty) Nil else {
@@ -277,31 +293,45 @@ private[async] trait AnfTransform extends TransformUtils {
 
             val matchGroups = groupsEndingWith(trees) { case MatchEnd(_) => true; case _ => false }
             val trees1 = matchGroups.flatMap(group => eliminateMatchEndLabelParameter(tree.pos, group))
-            val result = trees1 flatMap {
-              case Block(stats, expr) => stats :+ expr
-              case t => t :: Nil
+
+            trees1 foreach {
+              case blk1: Block =>
+                stats ++= blk1.stats
+                stats += blk1.expr
+              case t =>
+                stats += t
             }
-            result
 
           case ValDef(mods, name, tpt, rhs) =>
             if (containsAwait(rhs)) {
-              val stats :+ expr = atOwner(currentOwner.owner)(linearize.transformToList(rhs))
-              stats.foreach(_.changeOwner((currentOwner, currentOwner.owner)))
-              stats :+ treeCopy.ValDef(tree, mods, name, tpt, expr)
-            } else List(tree)
+              // Capture current cursor of a non-empty `stats` buffer so we can efficiently restrict the
+              // `changeOwner` to the newly added items...
+              var statsIterator = if (stats.isEmpty) null else stats.iterator
+
+              val expr = atOwner(currentOwner.owner)(linearize.transformToStatsExpr(rhs, stats))
+
+              // But, ListBuffer.empty.iterator doesn't reflect later mutation. Luckily we can just start
+              // from the beginning of the buffer
+              if (statsIterator == null) statsIterator = stats.iterator
+              statsIterator.foreach(_.changeOwner((currentOwner, currentOwner.owner)))
+
+              stats += treeCopy.ValDef(tree, mods, name, tpt, expr)
+            } else {
+              stats += tree
+            }
 
           case Assign(lhs, rhs) =>
-            val stats :+ expr = linearize.transformToList(rhs)
-            stats :+ treeCopy.Assign(tree, lhs, expr)
+            val expr = linearize.transformToStatsExpr(rhs, stats)
+            stats += treeCopy.Assign(tree, lhs, expr)
 
           case If(cond, thenp, elsep) =>
-            val condStats :+ condExpr = linearize.transformToList(cond)
+            val condExpr = linearize.transformToStatsExpr(cond, stats)
             val thenBlock = linearize.transformToBlock(thenp)
             val elseBlock = linearize.transformToBlock(elsep)
-            condStats :+ treeCopy.If(tree, condExpr, thenBlock, elseBlock)
+            stats += treeCopy.If(tree, condExpr, thenBlock, elseBlock)
 
           case Match(scrut, cases) =>
-            val scrutStats :+ scrutExpr = linearize.transformToList(scrut)
+            val scrutExpr = linearize.transformToStatsExpr(scrut, stats)
             val caseDefs = cases map {
               case CaseDef(pat, guard, body) =>
                 // extract local variables for all names bound in `pat`, and rewrite `body`
@@ -319,20 +349,20 @@ private[async] trait AnfTransform extends TransformUtils {
                 val newBlock = treeCopy.Block(b, valDefs ++ stats1, expr1)
                 treeCopy.CaseDef(tree, pat, guard, newBlock)
             }
-            scrutStats :+ treeCopy.Match(tree, scrutExpr, caseDefs)
+            stats += treeCopy.Match(tree, scrutExpr, caseDefs)
 
           case LabelDef(name, params, rhs) =>
             if (!isPastErasure && isUnitType(tree.symbol.info)) // erasure has already inserted unit
-            List(treeCopy.LabelDef(tree, name, params, typed(Block(linearize.transformToList(rhs), literalUnit))).setSymbol(tree.symbol))
+              stats += treeCopy.LabelDef(tree, name, params, typed(Block(linearize.transformToList(rhs), literalUnit))).setSymbol(tree.symbol)
             else
-            List(treeCopy.LabelDef(tree, name, params, typed(listToBlock(linearize.transformToList(rhs)))).setSymbol(tree.symbol))
+              stats += treeCopy.LabelDef(tree, name, params, typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
 
           case TypeApply(fun, targs) =>
-            val funStats :+ simpleFun = linearize.transformToList(fun)
-            funStats :+ treeCopy.TypeApply(tree, simpleFun, targs)
+            val simpleFun = linearize.transformToStatsExpr(fun, stats)
+            stats += treeCopy.TypeApply(tree, simpleFun, targs)
 
           case _ =>
-            List(tree)
+            stats += tree
         }
       }
     }
