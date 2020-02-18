@@ -179,7 +179,7 @@ private[async] trait TransformUtils extends PhasedTransform {
 
   lazy val IllegalStateExceptionClass = rootMirror.staticClass("java.lang.IllegalStateException")
 
-  private lazy val Boolean_ShortCircuits: Set[Symbol] = {
+  lazy val Boolean_ShortCircuits: Set[Symbol] = {
     import definitions.BooleanClass
     def BooleanTermMember(name: String) = BooleanClass.typeSignature.member(TermName(name).encodedName)
     val Boolean_&& = BooleanTermMember("&&")
@@ -226,30 +226,6 @@ private[async] trait TransformUtils extends PhasedTransform {
         args.zipWithIndex.map(f.tupled)
     }
   }
-
-  case class Arg(expr: Tree, isByName: Boolean, argName: TermName)
-
-  /**
-   * Transform a list of argument lists, producing the transformed lists, and lists of auxillary
-   * results.
-   *
-   * The function `f` need not concern itself with varargs arguments e.g (`xs : _*`). It will
-   * receive `xs`, and it's result will be re-wrapped as `f(xs) : _*`.
-   *
-   * @param fun   The function being applied
-   * @param argss The argument lists
-   * @return      (auxillary results, mapped argument trees)
-   */
-  def mapArgumentss(fun: Tree, argss: List[List[Tree]])(f: Arg => Tree): List[List[Tree]] = {
-    val isByNamess: (Int, Int) => Boolean = isByName(fun)
-    val argNamess: (Int, Int) => TermName = argName(fun)
-    argss.zipWithIndex.map { case (args, i) =>
-      mapArguments(args) {
-        (tree, j) => f(Arg(tree, isByNamess(i, j), argNamess(i, j)))
-      }
-    }
-  }
-
 
   def statsAndExpr(tree: Tree): (List[Tree], Tree) = tree match {
     case Block(stats, expr) => (stats, expr)

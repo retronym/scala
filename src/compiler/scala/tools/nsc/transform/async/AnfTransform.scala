@@ -260,36 +260,19 @@ private[async] trait AnfTransform extends TransformUtils {
             val elemExprs = elems.mapConserve(elem => linearize.transformToStatsExpr(elem, stats))
             stats += treeCopy.ArrayValue(tree, elemtp, elemExprs)
 
-          case Applied(fun, targs, argss) if argss.nonEmpty =>
-            // we can assume that no await call appears in a by-name argument position,
-            // this has already been checked.
+          case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
             val simpleFun = linearize.transformToStatsExpr(fun, stats)
-            val argExprss: List[List[Tree]] =
-              mapArgumentss(fun, argss) {
-                case Arg(expr, byName, _) if byName /*|| isPure(expr) TODO */ => expr
-                case Arg(expr, _, argName) =>
-                  linearize.transformToStatsExpr(expr, stats) match {
-                    case expr1 =>
-                      val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
-                      require(valDef.tpe != null, valDef)
-                      stats += valDef
-                      atPos(tree.pos.makeTransparent)(gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
-                  }
-              }
-
-            def copyApplied(tree: Tree, depth: Int): Tree = {
-              tree match {
-                case TypeApply(_, targs) => treeCopy.TypeApply(tree, simpleFun, targs)
-                case _ if depth == 0 => simpleFun
-                case Apply(fun, args) =>
-                  val newTypedArgs = map2(args.map(_.pos), argExprss(depth - 1))((pos, arg) => typedAt(pos, arg))
-                  treeCopy.Apply(tree, copyApplied(fun, depth - 1), newTypedArgs)
+            val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
+              linearize.transformToStatsExpr(arg, stats) match {
+                case expr1 =>
+                  val argName = param.name.toTermName
+                  val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
+                  stats += valDef
+                  typedAt(tree.pos.makeTransparent, gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
               }
             }
 
-            val typedNewApply = copyApplied(tree, argss.length)
-
-            stats += typedNewApply
+            stats += treeCopy.Apply(tree, simpleFun, argExprss)
 
           case blk: Block =>
             val trees = new ListBuffer[Tree]
