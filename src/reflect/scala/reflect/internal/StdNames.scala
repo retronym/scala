@@ -832,6 +832,7 @@ trait StdNames {
 
     // async
     val result           : NameType       = "result$async"
+    val awaitable        : NameType       = "awaitable$async"
     val completed        : NameType       = "completed$async"
     val stateMachine     : NameType       = "stateMachine$async"
     val state            : NameType       = "state$async"
