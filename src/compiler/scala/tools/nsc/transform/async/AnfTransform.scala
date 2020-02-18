@@ -204,7 +204,7 @@ private[async] trait AnfTransform extends TransformUtils {
 
       val lhsOwned = lhs.changeOwner((currentOwner, sym))
       val rhs =
-        if (isPastErasure && isUnitType(tp)) Block(lhsOwned :: Nil, literalUnit)
+        if (isUnitType(tp)) Block(lhsOwned :: Nil, literalUnit)
         else lhsOwned
       ValDef(sym, rhs).setType(NoType).setPos(pos)
 
@@ -376,10 +376,7 @@ private[async] trait AnfTransform extends TransformUtils {
             stats += treeCopy.Match(tree, scrutExpr, caseDefs)
 
           case LabelDef(name, params, rhs) =>
-            if (!isPastErasure && isUnitType(tree.symbol.info)) // erasure has already inserted unit
-              stats += treeCopy.LabelDef(tree, name, params, typed(Block(linearize.transformToList(rhs), literalUnit))).setSymbol(tree.symbol)
-            else
-              stats += treeCopy.LabelDef(tree, name, params, typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
+            stats += treeCopy.LabelDef(tree, name, params, typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
 
           case TypeApply(fun, targs) =>
             val simpleFun = linearize.transformToStatsExpr(fun, stats)
