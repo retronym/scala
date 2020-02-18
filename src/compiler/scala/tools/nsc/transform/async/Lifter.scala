@@ -38,6 +38,7 @@ trait Lifter extends ExprBuilder {
         // when lifting.
         for {
           cd@ClassDef(_, _, _, _) <- defs
+          // TODO rework this for post-erasure async where the ModuleDef is compiled to a LazyRef
           md@ModuleDef(_, _, _) <- defs
           if (cd.name.toTermName == md.name)
         } record(cd.symbol, md.symbol)
@@ -80,7 +81,7 @@ trait Lifter extends ExprBuilder {
     val defSymToReferenced: mutable.LinkedHashMap[Symbol, List[Symbol]] = defs.map {
       case (tree, _) => (tree.symbol, tree.collect {
         case rt: RefTree if symToDefiningState.contains(rt.symbol) => rt.symbol
-      })
+      } ::: tree.symbol.info.collect { case TypeRef(_, sym, _) if symToDefiningState.contains(sym) => sym })
     }
 
     // The direct references of each block, excluding references of `DefTree`-s which
@@ -146,6 +147,7 @@ trait Lifter extends ExprBuilder {
             }
             treeCopy.ClassDef(cd, Modifiers(sym.flags), sym.name, tparams, impl)
           case md@ModuleDef(_, _, impl)                     =>
+            // TODO rework this for post-erasure async where the ModuleDef is compiled to a LazyRef
             companionship.companionOf(md.symbol) match {
               case NoSymbol    =>
                 sym.setName(name.freshen(sym.name.toTermName))

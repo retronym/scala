@@ -35,6 +35,26 @@ class AnnotationDrivenAsync {
   }
 
   @Test
+  def testTemp(): Unit = {
+    val code =
+      """import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+         import scala.async.Async.{async, await}
+
+         object Test {
+           def test: Future[Int] = async {
+             val x = if ("1".isEmpty) me(1).me(2).me(3).hashCode else { if ("2".isEmpty) "".charAt(0) else await(f('c')) }
+             val y = await(f(if(this.hashCode == 0) "a" else "b")) + await(f("32"))
+             (x, y).hashCode
+           }
+           def me(a: Int) = this
+
+           def f[T](x: T): Future[T] = Future.successful(x)
+         }
+        """
+    run(code)
+  }
+
+  @Test
   def testScalaConcurrentAsyncNested(): Unit = {
     val code =
       """
@@ -168,7 +188,7 @@ class AnnotationDrivenAsync {
       |
       |    "" match {
       |      case _ if id(false) => ???;
-      |      case _              => "okay"
+      |      case _              => id("okay")
       |    }
       |  }
       |}
@@ -223,6 +243,7 @@ class AnnotationDrivenAsync {
       settings.outdir.value = out.getAbsolutePath
       settings.embeddedDefaults(getClass.getClassLoader)
       // settings.debug.value = true
+      // settings.uniqid.value = true
       // settings.processArgumentString("-Xprint:all -nowarn")
       // sys.props("scala.async.trace") = "true"
       // sys.props("scala.async.debug") = "true"
@@ -381,6 +402,10 @@ object CustomFutureFutureSystem extends FutureSystem {
     def tryType(tp: Type): Type = appliedType(Either_class, tp)
     def tryTypeToResult(tp: Type): Type = tp.baseType(Either_class).typeArgs.headOption.getOrElse(NoType)
 
+    override def promType(tp: u.Type): u.Type = ???
+    override def createProm[A](resultType: u.Type): Expr[CustomFuture[A]] = ???
+    override def promiseToFuture[A](prom: Expr[CustomFuture[A]]): Expr[CustomPromise[A]] = ???
+
     def future(a: Tree, execContext: Tree): Tree =
       Apply(Select(gen.mkAttributedStableRef(Future_class.companionModule), TermName("_apply")), List(a))
 
@@ -388,7 +413,7 @@ object CustomFutureFutureSystem extends FutureSystem {
       mkAttributedSelectApplyIfNeeded(gen.mkAttributedStableRef(Future_class.companionModule), Future_unit)
 
     def onComplete[A, B](future: Expr[Fut[A]], fun: Expr[scala.util.Try[A] => B],
-                         execContext: Expr[ExecContext]): Expr[Unit] = {
+                         execContext: Expr[ExecContext], aTp: u.Type): Expr[Unit] = {
       Apply(Select(future, Future_onComplete), fun :: Nil)
     }
 
@@ -415,7 +440,7 @@ object CustomFutureFutureSystem extends FutureSystem {
       mkAttributedSelectApplyIfNeeded(gen.mkCast(tryy, Right_class.tpe_*), Right_get)
     }
 
-    def tryySuccess[A](a: Expr[A]): Expr[Tryy[A]] = {
+    def tryySuccess[A](a: Expr[A], aTp: u.Type): Expr[Tryy[A]] = {
       assert(isPastErasure)
       New(Right_class, a)
     }

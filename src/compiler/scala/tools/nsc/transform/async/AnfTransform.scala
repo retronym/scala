@@ -12,348 +12,255 @@
 
 package scala.tools.nsc.transform.async
 
+import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.internal.Flags
 
 private[async] trait AnfTransform extends TransformUtils {
   import global._
+
+  /**
+   * Transform `tree` into "A-Normal Form", such that within subtrees that enclose an `await`:
+   *
+   *   - `if`, `match`, and other control-flow constructs are only used as statements; they cannot be used as expressions;
+   *   - calls to `await` are not allowed in compound expressions;
+   *   - execution order is reified in the tree by extracting temporary vals
+   */
   final def anfTransform(tree: Tree, owner: Symbol): Block = {
-    val trans = new AnfTransform(owner)
     // Must prepend the () for issue #31.
-    val block = typecheck(atPos(tree.pos)(Block(List(literalUnit), tree))).setType(tree.tpe)
+    val block = atPos(tree.pos)(Block(literalUnit :: Nil, tree)).setType(tree.tpe)
     val tree1 = adjustTypeOfTranslatedPatternMatches(block, owner)
-    trans.transformAtOwner(owner, tree1).asInstanceOf[Block]
+
+    val trans = new AnfTransformer()
+    trans.atOwner(tree1, owner) { trans.apply(tree1) }
   }
 
-  class AnfTransform(owner: Symbol) extends TypingTransformer(currentTransformState.unit) {
-
-    sealed abstract class AnfMode
-
-    case object Anf extends AnfMode
-
-    case object Linearizing extends AnfMode
-
-    var mode: AnfMode = Anf
-
-    object trace {
-      private var indent = -1
-
-      private def indentString = "  " * indent
-
-      def apply[T](args: Any)(t: => T): T = {
-        def prefix = mode.toString.toLowerCase
-
-        indent += 1
-
-        def oneLine(s: Any) = s.toString.replaceAll("""\n""", "\\\\n").take(127)
-
-        try {
-          if (AsyncUtils.trace)
-            AsyncUtils.trace(s"$indentString$prefix(${oneLine(args)})")
-          val result = t
-          if (AsyncUtils.trace)
-            AsyncUtils.trace(s"$indentString= ${oneLine(result)}")
-          result
-        } finally {
-          indent -= 1
-        }
+  private final class AnfTransformer() extends TypingTransformer(currentTransformState.unit) {
+    /** Main entry point to the ANF transform. */
+    def apply(tree: Tree): Block = {
+      transformNewControlFlowBlock(tree) match {
+        case blk: Block => blk
+        case t => atPos(t.pos)(Block(Nil, t).setType(t.tpe))
       }
     }
 
-    def typedAssign(lhs: Tree, varSym: Symbol) =
-      localTyper.typedPos(lhs.pos)(Assign(Ident(varSym), lhs))
+    // This transform typically transforms a single tree into a list of trees. This is somewhat awkward to
+    // express as the standard `Transformer` doesn't support the notion of `Thickets` (a tree representing
+    // as list of trees that will be flattened into its enclosing tree).
+    //
+    // Instead, `AnfTransformer` uses this mutable side-channel for the statements of the
+    // current control flow block. This is convenient but requires some discipline: we need to
+    // make sure we perform recursive transforms in the correct order (e.g. transform the
+    // `qual` before the `args` of a `Apply`). This is the default transform behaviour and the
+    // conventional way to write transforms in any case.
+    private var currentStats = ListBuffer[Tree]()
 
-    object linearize {
-      def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
-        mode = Linearizing;
-        transform(tree) match {
-          case blk: Block => stats ++= blk.stats; blk.expr
-          case expr => expr
-        }
-      }
-
-      def transformToBlock(tree: Tree): Block = {
-        mode = Linearizing;
-        transform(tree) match {
-          case blk: Block =>
-            blk
-          case tree =>
-            Block(Nil, tree).setPos(tree.pos).setType(tree.tpe)
-        }
-      }
-
-      def _transformToList(tree: Tree): List[Tree] = trace(tree) {
-        val stats = new ListBuffer[Tree]()
-        _transformToList(tree, stats)
-        stats.toList
-      }
-
-      def _transformToList(tree: Tree, statsBuffer: ListBuffer[Tree]): Unit = {
-        val expr = _anf.transformToStatsExpr(tree, statsBuffer)
-
-        def statsExprUnit = {
-          statsBuffer += expr
-          statsBuffer += localTyper.typedPos(expr.pos)(literalUnit)
-        }
-
-        def statsExprThrow = {
-          statsBuffer += expr
-          statsBuffer += localTyper.typedPos(expr.pos)(Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
-        }
-
-        expr match {
-          case Apply(fun, _) if currentTransformState.ops.isAwait(fun) =>
-            val awaitResType = transformType(expr.tpe)
-            val valDef = defineVal(name.await(), expr, tree.pos)(awaitResType)
-            val ref = gen.mkAttributedStableRef(valDef.symbol).setType(awaitResType)
-            statsBuffer += valDef
-            statsBuffer += atPos(tree.pos)(ref)
-
-          case If(cond, thenp, elsep) =>
-            // If we run the ANF transform post patmat, deal with trees like `(if (cond) jump1(){String} else jump2(){String}){String}`
-            // as though it was typed with `Unit`.
-            def isPatMatGeneratedJump(t: Tree): Boolean = t match {
-              case Block(_, expr) => isPatMatGeneratedJump(expr)
-              case If(_, thenp, elsep) => isPatMatGeneratedJump(thenp) && isPatMatGeneratedJump(elsep)
-              case _: Apply if isLabel(t.symbol) => true
-              case _ => false
-            }
-
-            if (isPatMatGeneratedJump(expr))
-              assignUnitType(expr)
-
-            // if type of if-else is Unit don't introduce assignment,
-            // but add Unit value to bring it into form expected by async transform
-            if (typeEqualsUnit(expr.tpe)) {
-              statsExprUnit
-            } else if (typeEqualsNothing(expr.tpe)) {
-              statsExprThrow
-            } else {
-              val varDef = defineVar(name.ifRes(), expr.tpe, tree.pos)
-
-              def branchWithAssign(t: Tree): Tree = {
-                t match {
-                  case MatchEnd(ld) =>
-                    deriveLabelDef(ld, branchWithAssign)
-                  case blk@Block(thenStats, thenExpr) =>
-                    assignUnitType(treeCopy.Block(blk, thenStats, branchWithAssign(thenExpr)))
-                  case _ =>
-                    typedAssign(t, varDef.symbol)
-                }
-              }
-
-              val ifWithAssign = assignUnitType(treeCopy.If(tree, cond, branchWithAssign(thenp), branchWithAssign(elsep)))
-              statsBuffer += varDef
-              statsBuffer += ifWithAssign
-              statsBuffer += atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
-            }
-          case ld@LabelDef(name, params, rhs) =>
-            if (isUnitType(ld.symbol.info.resultType)) statsExprUnit
-            else {
-              statsBuffer += expr
-            }
-
-          case Match(scrut, cases) =>
-            // if type of match is Unit don't introduce assignment,
-            // but add Unit value to bring it into form expected by async transform
-            if (typeEqualsUnit(expr.tpe)) {
-              statsExprUnit
-            } else if (typeEqualsNothing(expr.tpe)) {
-              statsExprThrow
-            } else {
-              val varDef = defineVar(name.matchRes(), expr.tpe, tree.pos)
-              val casesWithAssign = cases map {
-                case cd@CaseDef(pat, guard, body) =>
-                  def bodyWithAssign(t: Tree): Tree = {
-                    t match {
-                      case MatchEnd(ld) => deriveLabelDef(ld, bodyWithAssign)
-                      case b@Block(caseStats, caseExpr) => assignUnitType(treeCopy.Block(b, caseStats, bodyWithAssign(caseExpr)))
-                      case _ => typedAssign(t, varDef.symbol)
-                    }
+    override def transform(tree: Tree): Tree = trace(tree) {
+      val treeContainsAwait = containsAwait(tree)
+      tree match {
+        case _: ClassDef | _: ModuleDef | _: Function | _: DefDef =>
+          tree
+        case _: RefTree if tree.symbol.hasPackageFlag =>
+          tree
+        case _ if !treeContainsAwait =>
+          tree
+        case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
+          val lastAwaitArgIndex: Int = args.lastIndexWhere(containsAwait)
+          val simpleFun = transform(fun)
+          var i = 0
+          val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
+            transform(arg) match {
+              case expr1 =>
+                val argName = param.name.toTermName
+                // No need to extract the argument into a val if is non-side-effecting or if we are beyond the final
+                // argument containing an `await` calls.
+                val elideVal = treeInfo.isExprSafeToInline(expr1) || lastAwaitArgIndex < 0 || i > lastAwaitArgIndex || !treeContainsAwait
+                val result = if (elideVal) {
+                  expr1
+                } else {
+                  if (isUnitType(expr1.tpe)) {
+                    currentStats += expr1
+                    literalBoxedUnit
+                  } else {
+                    val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)
+                    currentStats += valDef
+                    gen.mkAttributedIdent(valDef.symbol)
                   }
-
-                  assignUnitType(treeCopy.CaseDef(cd, pat, guard, bodyWithAssign(body)))
-              }
-              val matchWithAssign = assignUnitType(treeCopy.Match(tree, scrut, casesWithAssign))
-              require(matchWithAssign.tpe != null, matchWithAssign)
-              statsBuffer += varDef
-              statsBuffer += matchWithAssign
-              statsBuffer += atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
-            }
-          case _ =>
-            statsBuffer += expr
-        }
-      }
-
-      def defineVar(name: TermName, tp: Type, pos: Position): ValDef = {
-        val sym = currentOwner.newTermSymbol(name, pos, Flags.MUTABLE | Flags.SYNTHETIC).setInfo(transformType(tp))
-        ValDef(sym, mkZero(tp, pos)).setType(NoType).setPos(pos)
-      }
-    }
-
-    def defineVal(name: TermName, lhs: Tree, pos: Position)(tp: Type = transformType(lhs.tpe)): ValDef = {
-      val sym = currentOwner.newTermSymbol(name, pos, Flags.SYNTHETIC).setInfo(tp)
-
-      val lhsOwned = lhs.changeOwner((currentOwner, sym))
-      val rhs =
-        if (isUnitType(tp)) Block(lhsOwned :: Nil, literalUnit)
-        else lhsOwned
-      ValDef(sym, rhs).setType(NoType).setPos(pos)
-
-    }
-
-    object _anf {
-      def transformToStatsExpr(tree: Tree, stats: ListBuffer[Tree]): Tree = {
-        mode = Anf;
-        transform(tree) match {
-          case blk: Block => stats ++= blk.stats; blk.expr
-          case expr => expr
-        }
-      }
-
-      def _transformToList(tree: Tree): List[Tree] = trace(tree) {
-        val trees = new ListBuffer[Tree]
-        _transformToList(tree, trees)
-        trees.toList
-      }
-
-      def _transformToList(tree: Tree, stats: ListBuffer[Tree]): Unit = {
-        if (!containsAwait(tree)) {
-          tree match {
-            case blk : Block =>
-              // avoids nested block in `while(await(false)) ...`.
-              // TODO I think `containsAwait` really should return true if the code contains a label jump to an enclosing
-              // while/doWhile and there is an await *anywhere* inside that construct.
-              stats ++= blk.stats
-              stats += blk.expr
-            case _ =>
-              stats += tree
-          }
-        } else tree match {
-          case Select(qual, sel) =>
-            val expr = linearize.transformToStatsExpr(qual, stats)
-            stats += treeCopy.Select(tree, expr, sel)
-
-          case Throw(expr) =>
-            val expr1 = linearize.transformToStatsExpr(expr, stats)
-            stats += treeCopy.Throw(tree, expr1)
-
-          case Typed(expr, tpt) =>
-            val expr1 = linearize.transformToStatsExpr(expr, stats)
-            stats += treeCopy.Typed(tree, expr1, tpt)
-
-          case ArrayValue(elemtp, elems) =>
-            val elemExprs = elems.mapConserve(elem => linearize.transformToStatsExpr(elem, stats))
-            stats += treeCopy.ArrayValue(tree, elemtp, elemExprs)
-
-          case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
-            val simpleFun = linearize.transformToStatsExpr(fun, stats)
-            val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
-              linearize.transformToStatsExpr(arg, stats) match {
-                case expr1 =>
-                  val argName = param.name.toTermName
-                  val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
-                  stats += valDef
-                  localTyper.typedPos(tree.pos.makeTransparent)(gen.stabilize(gen.mkAttributedIdent(valDef.symbol)))
-              }
-            }
-
-            stats += treeCopy.Apply(tree, simpleFun, argExprss)
-
-          case blk: Block =>
-            val trees = new ListBuffer[Tree]
-            blk.stats.foreach(stat => {val expr = linearize.transformToStatsExpr(stat, trees); if (!isLiteralUnit(expr)) trees += expr})
-            trees += linearize.transformToStatsExpr(blk.expr, trees)
-
-            def foreachGroupsEndingWith(ts: List[Tree])(isGroupEnd: Tree => Boolean, onGroup: Array[Tree] => Unit, onTail: List[Tree] => Unit): Unit = if (!ts.isEmpty) {
-              ts.indexWhere(isGroupEnd) match {
-                case -1 => onTail(ts)
-                case i =>
-                  val group = new Array[Tree](i + 1)
-                  ts.copyToArray(group)
-                  onGroup(group)
-                  foreachGroupsEndingWith(ts.drop(i + 1))(isGroupEnd, onGroup, onTail)
-              }
-            }
-            def addToStats(t: Tree): Unit = t match {
-              case blk1: Block =>
-                stats ++= blk1.stats
-                stats += blk1.expr
-              case t =>
-                stats += t
-            }
-
-            foreachGroupsEndingWith(trees.toList)(
-              isGroupEnd = ({ case MatchEnd(_) => true; case _ => false }),
-              onGroup = (ts: Array[Tree]) => eliminateMatchEndLabelParameter(tree.pos, ts).foreach(addToStats),
-              onTail = (ts: List[Tree]) => ts.foreach(addToStats)
-            )
-
-          case ValDef(mods, name, tpt, rhs) =>
-            if (containsAwait(rhs)) {
-              // Capture current cursor of a non-empty `stats` buffer so we can efficiently restrict the
-              // `changeOwner` to the newly added items...
-              var statsIterator = if (stats.isEmpty) null else stats.iterator
-
-              val expr = atOwner(currentOwner.owner)(linearize.transformToStatsExpr(rhs, stats))
-
-              // But, ListBuffer.empty.iterator doesn't reflect later mutation. Luckily we can just start
-              // from the beginning of the buffer
-              if (statsIterator == null) statsIterator = stats.iterator
-              statsIterator.foreach(_.changeOwner((currentOwner, currentOwner.owner)))
-
-              stats += treeCopy.ValDef(tree, mods, name, tpt, expr)
-            } else {
-              stats += tree
-            }
-
-          case Assign(lhs, rhs) =>
-            val expr = linearize.transformToStatsExpr(rhs, stats)
-            stats += treeCopy.Assign(tree, lhs, expr)
-
-          case If(cond, thenp, elsep) =>
-            val condExpr = linearize.transformToStatsExpr(cond, stats)
-            val thenBlock = linearize.transformToBlock(thenp)
-            val elseBlock = linearize.transformToBlock(elsep)
-            stats += treeCopy.If(tree, condExpr, thenBlock, elseBlock)
-
-          case Match(scrut, cases) =>
-            val scrutExpr = linearize.transformToStatsExpr(scrut, stats)
-            val caseDefs = cases mapConserve {
-              case CaseDef(pat, guard, body) =>
-                // extract local variables for all names bound in `pat`, and rewrite `body`
-                // to refer to these.
-                // TODO we can move this into ExprBuilder once we get rid of `AsyncDefinitionUseAnalyzer`.
-                val block = linearize.transformToBlock(body)
-                val newBlockStats = ListBuffer[Tree]()
-                val from = ListBuffer[Symbol]()
-                val to = ListBuffer[Symbol]()
-                pat foreach {
-                  case b@Bind(bindName, _) =>
-                    val vd = defineVal(name.freshen(bindName.toTermName), gen.mkAttributedStableRef(b.symbol).setPos(b.pos), b.pos)()
-                    vd.symbol.updateAttachment(SyntheticBindVal)
-                    newBlockStats += vd
-                    from += b.symbol
-                    to += vd.symbol
-                  case _ =>
                 }
-                val b@Block(stats1, expr1) = block.substituteSymbols(from.toList, to.toList).asInstanceOf[Block]
-                newBlockStats ++= stats1
-                val newBlock = treeCopy.Block(b, newBlockStats.toList, expr1)
-                treeCopy.CaseDef(tree, pat, guard, newBlock)
+                i += 1
+                result
             }
-            stats += treeCopy.Match(tree, scrutExpr, caseDefs)
+          }
+          val simpleApply = treeCopy.Apply(tree, simpleFun, argExprss)
+          simpleApply.attachments.remove[ContainsAwait.type]
+          val isAwait = currentTransformState.ops.isAwait(fun)
+          if (isAwait) {
+            val valDef = defineVal(name.await(), treeCopy.Apply(tree, fun, argExprss), tree.pos)
+            val ref = gen.mkAttributedStableRef(valDef.symbol).setType(tree.tpe)
+            currentStats += valDef
+            atPos(tree.pos)(ref)
+          } else {
+            simpleApply
+          }
 
-          case LabelDef(name, params, rhs) =>
-            stats += treeCopy.LabelDef(tree, name, params, localTyper.typed(linearize.transformToBlock(rhs))).setSymbol(tree.symbol)
+        case Block(stats, expr) =>
+          // First, transform the block contents into a separate List[Tree]
+          val (trees, _) = withNewControlFlowBlock {
+            stats.foreach(stat => {
+              val expr = transform(stat);
+              if (!isLiteralUnit(expr)) currentStats += expr
+            })
+            currentStats += transform(expr)
+            ()
+          }
 
-          case TypeApply(fun, targs) =>
-            val simpleFun = linearize.transformToStatsExpr(fun, stats)
-            stats += treeCopy.TypeApply(tree, simpleFun, targs)
+          // Identify groups of statements compiled from pattern matches and process them separately to
+          // replace the label parameter of the `matchEnd` `LabelDef` with a `var matchRes: T` result var.
+          //
+          // The results are appended into the ambient `currentStats`, which has the desired effect of flattening
+          // nested blocks.
+          foreachGroupsEndingWith(trees)(
+            isGroupEnd = isMatchEnd,
+            onGroup = (ts: Array[Tree]) => eliminateMatchEndLabelParameter(tree.pos, ts).foreach(t => flattenBlock(t)(currentStats += _)),
+            onTail = (ts: List[Tree]) => ts.foreach(t => flattenBlock(t)(currentStats += _))
+          )
 
-          case _ =>
-            stats += tree
+          // However, we let `onTail` add the expr to `currentStats` (that was more efficient than using `ts.dropRight(1).foreach(addToStats)`)
+          // Compensate by removing it from the buffer and returning the expr.
+          currentStats.remove(currentStats.size - 1)
+
+        case ValDef(mods, name, tpt, rhs) => atOwner(tree.symbol) {
+          // Capture current cursor of a non-empty `stats` buffer so we can efficiently restrict the
+          // `changeOwner` to the newly added items...
+          var statsIterator = if (currentStats.isEmpty) null else currentStats.iterator
+
+          val expr = atOwner(currentOwner.owner)(transform(rhs))
+
+          // But, ListBuffer.empty.iterator doesn't reflect later mutation. Luckily we can just start
+          // from the beginning of the buffer
+          if (statsIterator == null) statsIterator = currentStats.iterator
+
+          // Definitions within stats lifted out of the `ValDef` rhs should no longer be owned by the
+          // the ValDef.
+          statsIterator.foreach(_.changeOwner((currentOwner, currentOwner.owner)))
+
+          treeCopy.ValDef(tree, mods, name, tpt, expr)
         }
+
+        case If(cond, thenp, elsep) =>
+          val needsResultVar = (containsAwait(thenp) || containsAwait(elsep))
+          transformMatchOrIf(tree, needsResultVar, name.ifRes) { varSym =>
+            val condExpr = transform(cond)
+            val thenBlock = transformNewControlFlowBlock(thenp)
+            val elseBlock = transformNewControlFlowBlock(elsep)
+            treeCopy.If(tree, condExpr, pushAssignmentIntoExpr(varSym, thenBlock), pushAssignmentIntoExpr(varSym, elseBlock))
+          }
+
+        case Match(scrut, cases) =>
+          val needResultVar = cases.exists(containsAwait)
+          transformMatchOrIf(tree, needResultVar, name.matchRes) { varSym =>
+            val scrutExpr = transform(scrut)
+            val casesWithAssign = cases map {
+              case cd@CaseDef(pat, guard, body) =>
+                assignUnitType(treeCopy.CaseDef(cd, pat, transformNewControlFlowBlock(guard), pushAssignmentIntoExpr(varSym, transformNewControlFlowBlock(body))))
+            }
+            treeCopy.Match(tree, scrutExpr, casesWithAssign)
+          }
+
+        case LabelDef(name, params, rhs) =>
+          treeCopy.LabelDef(tree, name, params, transformNewControlFlowBlock(rhs))
+
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    private def pushAssignmentIntoExpr(varSym: Symbol, t: Tree): Tree = {
+      t match {
+        case _ if varSym == NoSymbol || t.tpe.typeSymbol == definitions.NothingClass => t
+        case MatchEnd(ld) => deriveLabelDef(ld, t => pushAssignmentIntoExpr(varSym, t))
+        case b@Block(caseStats, caseExpr) => assignUnitType(treeCopy.Block(b, caseStats, pushAssignmentIntoExpr(varSym, caseExpr)))
+        case _ => typedAssign(t, varSym)
+      }
+    }
+
+    @tailrec
+    private def transformMatchOrIf[T <: Tree](tree: Tree, needsResultVar: Boolean, nameSource: asyncNames.NameSource[TermName])(core: Symbol => T): Tree = {
+      // if type of if/match is Unit don't introduce assignment,
+      // but add Unit value to bring it into form expected by async transform
+      if (typeEqualsUnit(tree.tpe)) {
+        currentStats += assignUnitType(core(NoSymbol))
+        atPos(tree.pos)(literalUnit)
+      } else if (tree.tpe =:= definitions.NothingTpe) {
+        currentStats += assignUnitType(core(NoSymbol))
+        localTyper.typedPos(tree.pos)(Throw(New(IllegalStateExceptionClass)))
+      } else if (isPatMatGeneratedJump(tree)) {
+        transformMatchOrIf(assignUnitType(tree), needsResultVar, nameSource)(core)
+      } else if (!needsResultVar) {
+        core(NoSymbol)
+      } else {
+        val varDef = defineVar(nameSource(), tree.tpe, tree.pos)
+        currentStats += varDef
+        currentStats += assignUnitType(core(varDef.symbol))
+        atPos(tree.pos)(gen.mkAttributedStableRef(varDef.symbol)).setType(tree.tpe)
+      }
+    }
+
+    // Transform `tree` into with a new block. A new `currentStats` buffer will be pushed onto the stack and
+    // the resulting stats will be included in the returned `Tree`. Use when the `tree` is not sequentially evaluated
+    // after the preceding sibling, but rather will be the target of a control flow jump.
+    private def transformNewControlFlowBlock(tree: Tree): Tree = {
+      val savedStats = currentStats
+      this.currentStats = new ListBuffer[Tree]
+      try transform(tree) match {
+        case b@Block(stats, expr) =>
+          treeCopy.Block(b, currentStats.prependToList(stats), expr)
+        case expr => currentStats.toList match {
+          case Nil => expr
+          case stats => treeCopy.Block(expr, stats, expr)
+        }
+      } finally {
+        this.currentStats = savedStats
+      }
+    }
+
+    private def withNewControlFlowBlock[T](f: => T): (List[Tree], T) = {
+      val savedStats = currentStats
+      this.currentStats = new ListBuffer[Tree]
+      try {
+        val result = f
+        (currentStats.toList, result)
+      } finally {
+        this.currentStats = savedStats
+      }
+    }
+
+    // If we run the ANF transform post patmat, deal with trees like `(if (cond) jump1(){String} else jump2(){String}){String}`
+    // as though it was typed with `Unit`.
+    private def isPatMatGeneratedJump(t: Tree): Boolean = t match {
+      case Block(_, expr) => isPatMatGeneratedJump(expr)
+      case If(_, thenp, elsep) => isPatMatGeneratedJump(thenp) && isPatMatGeneratedJump(elsep)
+      case _: Apply if isLabel(t.symbol) => true
+      case _ => false
+    }
+
+    /**
+     * Identifies groups in a list of elements by a predicate on the terminal element.
+     *
+     * @param ts          The elements to be grouped
+     * @param isGroupEnd  Identifies the terminal element of a group
+     * @param onGroup     Callback to process each group
+     * @param onTail      Callback to process the tail of the list that does not satisfy `isGroupEnd`
+     */
+    @tailrec
+    private def foreachGroupsEndingWith[T <: AnyRef : reflect.ClassTag](ts: List[T])(isGroupEnd: T => Boolean, onGroup: Array[T] => Unit, onTail: List[T] => Unit): Unit = if (!ts.isEmpty) {
+      ts.indexWhere(isGroupEnd) match {
+        case -1 => onTail(ts)
+        case i =>
+          val group = new Array[T](i + 1)
+          ts.copyToArray(group)
+          onGroup(group)
+          foreachGroupsEndingWith(ts.drop(i + 1))(isGroupEnd, onGroup, onTail)
       }
     }
 
@@ -376,19 +283,19 @@ private[async] trait AnfTransform extends TransformUtils {
 
         def unitLabelDef = {
           setUnitMethodInfo(ld.symbol)
-          assignUnitType(treeCopy.LabelDef(ld, ld.name, Nil, localTyper.typed(literalUnit)))
+          assignUnitType(treeCopy.LabelDef(ld, ld.name, Nil, literalUnit))
         }
 
         if (isUnitType(ld.params.head.tpe)) {
           // Unit typed match: eliminate the label def parameter, but don't create a matchres temp variable to
           // store the result for cleaner generated code.
           caseDefToMatchResult(ld.symbol) = NoSymbol
-          (unitLabelDef, substituteTrees(ld.rhs, param.symbol :: Nil, localTyper.typed(literalUnit) :: Nil))
+          (unitLabelDef, substituteTrees(ld.rhs, param.symbol :: Nil, literalUnit :: Nil))
         } else {
           // Otherwise, create the matchres var. We'll callers of the label def below.
           // Remember: we're iterating through the statement sequence in reverse, so we'll get
           // to the LabelDef and mutate `matchResults` before we'll get to its callers.
-          val matchResult = linearize.defineVar(name.matchRes(), param.tpe, ld.pos)
+          val matchResult = defineVar(name.matchRes(), param.tpe, ld.pos)
           matchResults += matchResult
           caseDefToMatchResult(ld.symbol) = matchResult.symbol
           (unitLabelDef, ld.rhs.substituteSymbols(param.symbol :: Nil, matchResult.symbol :: Nil))
@@ -410,7 +317,7 @@ private[async] trait AnfTransform extends TransformUtils {
           if (caseDefToMatchResult.isEmpty) statsExpr0 += t
           else {
             val matchResultTransformer = new MatchResultTransformer(caseDefToMatchResult)
-            val tree1 = matchResultTransformer.transformAtOwner(owner, t)
+            val tree1 = matchResultTransformer.transformAtOwner(currentOwner, t)
             statsExpr0 += tree1
           }
       }
@@ -422,45 +329,71 @@ private[async] trait AnfTransform extends TransformUtils {
           statsExpr0.reverseIterator ++ List(literalUnit) // must have been a unit-typed match, no matchRes variable to definne or refer to
         case r1 :: Nil =>
           // { var matchRes = _; ....; matchRes }
-          List(r1).iterator ++ statsExpr0.reverseIterator ++ List(atPos(pos)(gen.mkAttributedIdent(r1.symbol)))
+          List(r1).iterator ++ statsExpr0.reverseIterator
         case _ => error(pos, "Internal error: unexpected tree encountered during ANF transform " + statsExpr); statsExpr.iterator
       }
     }
 
-    def anfLinearize(tree: Tree): Block = {
-      val trees: List[Tree] = mode match {
-        case Anf => _anf._transformToList(tree)
-        case Linearizing => linearize._transformToList(tree)
-      }
-      listToBlock(trees)
+    @inline final def trace[T](args: Any)(t: => T): T = {
+      if (AsyncUtils.trace) {
+        tracing.apply("", args)({val tree = t; ("" + currentStats.mkString(";") + " ;; " + tree, tree)})
+      } else t
     }
 
-    override def transform(tree: Tree): Tree = {
-      tree match {
-        case _: ValDef | _: DefDef | _: Function | _: ClassDef | _: TypeDef =>
-          atOwner(tree.symbol)(anfLinearize(tree))
-        case _: ModuleDef =>
-          atOwner(tree.symbol.asModule.moduleClass orElse tree.symbol)(anfLinearize(tree))
-        case _ =>
-          anfLinearize(tree)
+    def defineVal(name: global.TermName, rhs: global.Tree, pos: Position): ValDef = {
+      val sym = currentOwner.newTermSymbol(name, pos, Flags.SYNTHETIC).setInfo(rhs.tpe)
+      ValDef(sym, rhs.changeOwner((currentOwner, sym))).setType(NoType)
+    }
+
+    def defineVar(name: TermName, tp: Type, pos: Position): ValDef = {
+      val sym = currentOwner.newTermSymbol(name, pos, Flags.MUTABLE | Flags.SYNTHETIC).setInfo(tp)
+      ValDef(sym, gen.mkZero(tp).setPos(pos)).setType(NoType)
+    }
+  }
+
+  private def typedAssign(lhs: Tree, varSym: Symbol) =
+    Assign(gen.mkAttributedRef(varSym), lhs).setType(definitions.UnitTpe).setPos(lhs.pos)
+
+  val tracing: Tracing
+  class Tracing {
+    private var indent = -1
+
+    private def indentString = "  " * indent
+
+    def apply[T](prefix: String, args: Any)(t: => (String, T)): T = {
+
+      indent += 1
+
+      def oneLine(s: Any) = s.toString.replaceAll("""\n""", "\\\\n").take(300)
+
+      try {
+        if (AsyncUtils.trace)
+          AsyncUtils.trace(s"$indentString$prefix(${oneLine(args)})")
+        val result = t
+        if (AsyncUtils.trace)
+          AsyncUtils.trace(s"$indentString= ${oneLine(result._1)}")
+        result._2
+      } finally {
+        indent -= 1
       }
     }
   }
 
   final class MatchResultTransformer(caseDefToMatchResult: collection.Map[Symbol, Symbol]) extends TypingTransformer(currentTransformState.unit) {
     override def transform(tree: Tree): Tree = {
-      def typedPos(pos: Position)(t: Tree): Tree = localTyper.typed(atPos(pos)(t))
-
       tree match {
         case Apply(fun, arg :: Nil) if isLabel(fun.symbol) && caseDefToMatchResult.contains(fun.symbol) =>
           val temp = caseDefToMatchResult(fun.symbol)
           if (temp == NoSymbol)
-            typedPos(tree.pos)(Block(transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil)))
-          else
-          // setType needed for LateExpansion.shadowingRefinedType test case. There seems to be an inconsistency
-          // in the trees after pattern matcher.
-          // TODO miminize the problem in patmat and fix in scalac.
-            typedPos(tree.pos)(Block(Assign(Ident(temp), transform(arg.setType(transformType(fun.tpe.paramLists.head.head.info)))) :: Nil, treeCopy.Apply(tree, fun, Nil)))
+            treeCopy.Block(tree, transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil))
+          else if (arg.tpe.typeSymbol == definitions.NothingClass) {
+            transform(arg)
+          } else {
+            // setType needed for LateExpansion.shadowingRefinedType test case. There seems to be an inconsistency
+            // in the trees after pattern matcher.
+            // TODO miminize the problem in patmat and fix in scalac.
+            treeCopy.Block(tree, typedAssign(transform(arg.setType(fun.tpe.paramLists.head.head.info)), temp) :: Nil, treeCopy.Apply(tree, fun, Nil))
+          }
         case Block(stats, expr: Apply) if isLabel(expr.symbol) =>
           super.transform(tree) match {
             case Block(stats0, Block(stats1, expr1)) =>
