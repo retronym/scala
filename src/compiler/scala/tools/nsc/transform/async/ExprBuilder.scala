@@ -432,7 +432,7 @@ trait ExprBuilder extends TransformUtils {
             (t match {
               case Block(stats, expr) => stats ::: expr :: Nil
               case t => t :: Nil
-            }).iterator.map(t => showCode(t)).mkString("\n")
+            }).iterator.map(t => global.show(t)).mkString("\n")
           }
           if (i != length - 1) {
             val CaseDef(_, _, body) = state.mkHandlerCaseForState
