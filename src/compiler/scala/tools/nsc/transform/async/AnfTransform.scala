@@ -243,7 +243,7 @@ private[async] trait AnfTransform extends TransformUtils {
             stats += treeCopy.Typed(tree, expr1, tpt)
 
           case ArrayValue(elemtp, elems) =>
-            val elemExprs = elems.map(elem => linearize.transformToStatsExpr(elem, stats))
+            val elemExprs = elems.mapConserve(elem => linearize.transformToStatsExpr(elem, stats))
             stats += treeCopy.ArrayValue(tree, elemtp, elemExprs)
 
           case Applied(fun, targs, argss) if argss.nonEmpty =>
@@ -336,21 +336,27 @@ private[async] trait AnfTransform extends TransformUtils {
 
           case Match(scrut, cases) =>
             val scrutExpr = linearize.transformToStatsExpr(scrut, stats)
-            val caseDefs = cases map {
+            val caseDefs = cases mapConserve {
               case CaseDef(pat, guard, body) =>
                 // extract local variables for all names bound in `pat`, and rewrite `body`
                 // to refer to these.
                 // TODO we can move this into ExprBuilder once we get rid of `AsyncDefinitionUseAnalyzer`.
                 val block = linearize.transformToBlock(body)
-                val (valDefs, mappings) = (pat collect {
+                val newBlockStats = ListBuffer[Tree]()
+                val from = ListBuffer[Symbol]()
+                val to = ListBuffer[Symbol]()
+                pat foreach {
                   case b@Bind(bindName, _) =>
                     val vd = defineVal(name.freshen(bindName.toTermName), gen.mkAttributedStableRef(b.symbol).setPos(b.pos), b.pos)()
                     vd.symbol.updateAttachment(SyntheticBindVal)
-                    (vd, (b.symbol, vd.symbol))
-                }).unzip
-                val (from, to) = mappings.unzip
-                val b@Block(stats1, expr1) = block.substituteSymbols(from, to).asInstanceOf[Block]
-                val newBlock = treeCopy.Block(b, valDefs ++ stats1, expr1)
+                    newBlockStats += vd
+                    from += b.symbol
+                    to += vd.symbol
+                  case _ =>
+                }
+                val b@Block(stats1, expr1) = block.substituteSymbols(from.toList, to.toList).asInstanceOf[Block]
+                newBlockStats ++= stats1
+                val newBlock = treeCopy.Block(b, newBlockStats.toList, expr1)
                 treeCopy.CaseDef(tree, pat, guard, newBlock)
             }
             stats += treeCopy.Match(tree, scrutExpr, caseDefs)
