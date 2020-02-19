@@ -235,4 +235,13 @@ class HashSetTest extends AllocationTest {
     assertEquals(set0, setReference)
   }
 
+  @Test
+  def optimizedBuilderHandlesEmptyHashSetInstance(): Unit = {
+    val s = new scala.collection.immutable.HashSet[Int]
+    //      ^--- constructed with new is important here so we don't get EmptyHashSet
+    val b = scala.collection.immutable.HashSet.newBuilder[Int]
+    b ++= List(1, 2, 3, 4)
+    b ++= s // was scala.MatchError: Set() (of class scala.collection.immutable.HashSet)... at ... addToTrieHashSet(HashSet.scala:1386)
+    assertEquals(List(1, 2, 3, 4), b.result().toList.sorted)
+  }
 }

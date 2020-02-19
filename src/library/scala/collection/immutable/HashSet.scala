@@ -1289,7 +1289,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
     override def ++=(xs: TraversableOnce[A]): HashSetBuilder.this.type = xs match {
       case hs: HashSet[A] =>
-        if (rootNode eq EmptyHashSet)
+        if (rootNode.isEmpty)
           rootNode = hs
         else
           rootNode = addHashSet(rootNode, hs, 0)
@@ -1351,7 +1351,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
               newMutableTrie
             }
           }
-        case empty if empty eq EmptyHashSet => toNode.updated0(elem, improvedHash, level)
+        case empty if empty.isEmpty => toNode.updated0(elem, improvedHash, level)
       }
     }
 
@@ -1377,7 +1377,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
       toNode match {
         case aLeaf: LeafHashSet[A] => addToLeafHashSet(aLeaf, toBeAdded, level)
         case trie: HashTrieSet[A] => addToTrieHashSet(trie, toBeAdded, level)
-        case empty if empty eq EmptyHashSet => toNode
+        case empty if empty.isEmpty => toNode
       }
     }
 
@@ -1438,8 +1438,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
             bArrayIndex += 1
           }
           result
-
-        case empty if empty eq EmptyHashSet => toNode
+        case empty if empty.isEmpty => toNode
       }
     }
     private def addToLeafHashSet(toNode: LeafHashSet[A], toBeAdded: HashSet[A], level: Int): HashSet[A] = {
@@ -1465,7 +1464,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
               result
             }
           }
-        case empty if empty eq EmptyHashSet =>
+        case empty if empty.isEmpty =>
           toNode
       }
     }
