@@ -248,8 +248,10 @@ private[async] trait TransformUtils extends PhasedTransform {
       var containsAwait = false
       override def traverse(tree: Tree): Unit =
         if (tree.hasAttachment[NoAwait.type]) {} // safe to skip
-        else if (tree.hasAttachment[ContainsAwait.type]) containsAwait = true
-        else if (markContainsAwaitTraverser.shouldAttach(t)) super.traverse(tree)
+        else if (!containsAwait) {
+          if (tree.hasAttachment[ContainsAwait.type]) containsAwait = true
+          else if (markContainsAwaitTraverser.shouldAttach(t)) super.traverse(tree)
+        }
     }
     traverser.traverse(t)
     traverser.containsAwait
