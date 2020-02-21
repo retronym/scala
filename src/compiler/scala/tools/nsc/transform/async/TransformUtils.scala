@@ -53,7 +53,7 @@ trait PhasedTransform extends TypingTransformers {
 
   def literalUnit =
     if (isPastErasure) gen.mkAttributedRef(definitions.BoxedUnit_UNIT)
-    else Literal(Constant(())) // a def to avoid sharing trees
+    else Literal(Constant(())).setType(definitions.UnitTpe) // a def to avoid sharing trees
 
   def isLiteralUnit(t: Tree) = t match {
     case Literal(Constant(())) => true
@@ -394,7 +394,7 @@ private[async] trait TransformUtils extends PhasedTransform {
         case LabelDef(name, params, rhs) =>
           val rhs1 = transform(rhs)
           if (rhs1.tpe =:= UnitTpe) {
-            tree.symbol.info = internal.methodType(tree.symbol.info.paramLists.head, UnitTpe)
+            tree.symbol.info = MethodType(tree.symbol.info.paramLists.head, UnitTpe)
             treeCopy.LabelDef(tree, name, params, rhs1)
           } else {
             treeCopy.LabelDef(tree, name, params, rhs1)
