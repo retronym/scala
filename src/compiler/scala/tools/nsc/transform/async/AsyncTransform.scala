@@ -186,7 +186,8 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
 
     val anfTree = futureSystemOps.postAnfTransform(anfTree0)
 
-    // TODO: why redo this?
+    // The ANF transform re-parents some trees, so the previous traversal to mark ancestors of
+    // await is no longer reliable.
     cleanupContainsAwaitAttachments(anfTree)
     markContainsAwait(anfTree)
 
