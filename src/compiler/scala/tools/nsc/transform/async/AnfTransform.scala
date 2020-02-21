@@ -163,6 +163,7 @@ private[async] trait AnfTransform extends TransformUtils {
       }
     }
 
+    @tailrec
     private def transformMatchOrIf[T <: Tree](tree: Tree, nameSource: asyncNames.NameSource[TermName])(core: Symbol => T): Tree = {
       // if type of if/match is Unit don't introduce assignment,
       // but add Unit value to bring it into form expected by async transform
@@ -378,18 +379,16 @@ private[async] trait AnfTransform extends TransformUtils {
 
   final class MatchResultTransformer(caseDefToMatchResult: collection.Map[Symbol, Symbol]) extends TypingTransformer(currentTransformState.unit) {
     override def transform(tree: Tree): Tree = {
-      def typedPos(pos: Position)(t: Tree): Tree = localTyper.typed(atPos(pos)(t))
-
       tree match {
         case Apply(fun, arg :: Nil) if isLabel(fun.symbol) && caseDefToMatchResult.contains(fun.symbol) =>
           val temp = caseDefToMatchResult(fun.symbol)
           if (temp == NoSymbol)
-            typedPos(tree.pos)(Block(transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil)))
+            localTyper.typedPos(tree.pos)(Block(transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil)))
           else
-          // setType needed for LateExpansion.shadowingRefinedType test case. There seems to be an inconsistency
-          // in the trees after pattern matcher.
-          // TODO miminize the problem in patmat and fix in scalac.
-            typedPos(tree.pos)(Block(Assign(Ident(temp), transform(arg.setType(transformType(fun.tpe.paramLists.head.head.info)))) :: Nil, treeCopy.Apply(tree, fun, Nil)))
+            // setType needed for LateExpansion.shadowingRefinedType test case. There seems to be an inconsistency
+            // in the trees after pattern matcher.
+            // TODO miminize the problem in patmat and fix in scalac.
+            localTyper.typedPos(tree.pos)(Block(Assign(Ident(temp), transform(arg.setType(transformType(fun.tpe.paramLists.head.head.info)))) :: Nil, treeCopy.Apply(tree, fun, Nil)))
         case Block(stats, expr: Apply) if isLabel(expr.symbol) =>
           super.transform(tree) match {
             case Block(stats0, Block(stats1, expr1)) =>
