@@ -125,37 +125,6 @@ trait PhasedTransform extends TypingTransformers {
       gen.mkZero(tp)
     }
   }
-
-  final def mkMutableField(tpt: Type, name: TermName, init: Tree): List[Tree] = {
-    if (isPastTyper) {
-      import scala.reflect.internal.Flags._
-      // If we are running after the typer phase (ie being called from a compiler plugin)
-      // we have to create the trio of members manually.
-      val field = ValDef(Modifiers(MUTABLE | PRIVATE | LOCAL), name.localName, TypeTree(tpt), init)
-      val paramss = emptyParamss
-      val getter = DefDef(Modifiers(ACCESSOR | STABLE), name.getterName, Nil, paramss, TypeTree(tpt), Select(This(tpnme.EMPTY), field.name))
-      val setter = DefDef(Modifiers(ACCESSOR), name.setterName, Nil, List(List(ValDef(NoMods, TermName("x"), TypeTree(tpt), EmptyTree))), TypeTree(definitions.UnitTpe), Assign(Select(This(tpnme.EMPTY), field.name), Ident(TermName("x"))))
-      field :: getter :: setter :: Nil
-    } else {
-      val result = ValDef(NoMods, name, TypeTree(tpt), init)
-      result :: Nil
-    }
-  }
-  final def mkField(tpt: Type, name: TermName, init: Tree): List[Tree] = {
-    if (isPastTyper) {
-      import scala.reflect.internal.Flags._
-      // If we are running after the typer phase (ie being called from a compiler plugin)
-      // we have to create the trio of members manually.
-      val field = ValDef(Modifiers(PRIVATE | LOCAL), name.localName, TypeTree(tpt), init)
-      val paramss = emptyParamss
-      val getter = DefDef(Modifiers(ACCESSOR | STABLE), name.getterName, Nil, paramss, TypeTree(tpt), Select(This(tpnme.EMPTY), field.name))
-      field :: getter :: Nil
-    } else {
-      val result = ValDef(NoMods, name, TypeTree(tpt), init)
-      result :: Nil
-    }
-  }
-
 }
 
 
