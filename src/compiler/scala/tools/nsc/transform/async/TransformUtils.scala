@@ -104,27 +104,6 @@ trait PhasedTransform extends TypingTransformers {
 
   private def derivedValueClassUnbox(cls: Symbol) =
     (cls.info.decls.find(sym => sym.isMethod && sym.asTerm.isParamAccessor) getOrElse NoSymbol)
-
-  def mkZero(tp: Type, pos: Position): Tree = {
-    val tpSym = tp.typeSymbol
-    if (tpSym.isClass && tpSym.asClass.isDerivedValueClass) {
-      val argZero = mkZero(derivedValueClassUnbox(tpSym).infoIn(tp).resultType, pos)
-      val baseType = tp.baseType(tpSym) // use base type here to dealias / strip phantom "tagged types" etc.
-
-      // By explicitly attributing the types and symbols here, we subvert privacy.
-      // Otherwise, ticket86PrivateValueClass would fail.
-
-      // Approximately:
-      // q"new ${valueClass}[$..targs](argZero)"
-      val target: Tree = gen.mkAttributedSelect(typecheck(atPos(pos)(New(TypeTree(baseType)))), tpSym.asClass.primaryConstructor)
-
-      val zero = gen.mkMethodCall(target, argZero :: Nil)
-      // restore the original type which we might otherwise have weakened with `baseType` above
-      typecheck(atPos(pos)(gen.mkCast(zero, tp)))
-    } else {
-      gen.mkZero(tp)
-    }
-  }
 }
 
 
@@ -163,36 +142,11 @@ private[async] trait TransformUtils extends PhasedTransform {
       (i, j) => util.Try(byNamess(i)(j)).getOrElse(false)
     }
   }
-  private def argName(fun: Tree): ((Int, Int) => TermName) = {
-    val paramss = fun.tpe.paramss
-    val namess = paramss.map(_.map(_.name.toTermName))
-    (i, j) => util.Try(namess(i)(j)).getOrElse(TermName(s"arg_${i}_${j}"))
-  }
 
   def isLabel(sym: Symbol): Boolean = sym.isLabel
 
   def substituteTrees(t: Tree, from: List[Symbol], to: List[Tree]): Tree =
     (new TreeSubstituter(from, to)).transform(t)
-
-  /** Map a list of arguments to:
-    * - A list of argument Trees
-    * - A list of auxillary results.
-    *
-    * The function unwraps and rewraps the `arg :_*` construct.
-    *
-    * @param args The original argument trees
-    * @param f  A function from argument (with '_*' unwrapped) and argument index to argument.
-    */
-  private def mapArguments(args: List[Tree])(f: (Tree, Int) => (Tree)): (List[Tree]) = {
-    args match {
-      case args :+ Typed(tree, Ident(tpnme.WILDCARD_STAR)) =>
-        val (argExprs :+ lastArgExpr) = (args :+ tree).zipWithIndex.map(f.tupled)
-        val exprs = argExprs :+ atPos(lastArgExpr.pos.makeTransparent)(Typed(lastArgExpr, Ident(tpnme.WILDCARD_STAR)))
-        (exprs)
-      case args                                            =>
-        args.zipWithIndex.map(f.tupled)
-    }
-  }
 
   def statsAndExpr(tree: Tree): (List[Tree], Tree) = tree match {
     case Block(stats, expr) => (stats, expr)

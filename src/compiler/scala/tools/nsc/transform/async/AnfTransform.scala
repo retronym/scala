@@ -347,7 +347,7 @@ private[async] trait AnfTransform extends TransformUtils {
 
     def defineVar(name: TermName, tp: Type, pos: Position): ValDef = {
       val sym = currentOwner.newTermSymbol(name, pos, Flags.MUTABLE | Flags.SYNTHETIC).setInfo(tp)
-      ValDef(sym, mkZero(tp, pos)).setType(NoType).setPos(pos)
+      ValDef(sym, gen.mkZero(tp).setPos(pos)).setType(NoType).setPos(pos)
     }
   }
 

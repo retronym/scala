@@ -201,7 +201,7 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
     for ((state, flds) <- assignsOf) {
       val assigns = flds.map { fld =>
         val fieldSym = fld.symbol
-        Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), mkZero(fieldSym.info, asyncPos))
+        Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), gen.mkZero(fieldSym.info).setPos(asyncPos))
 
       }
       val asyncState = asyncBlock.asyncStates.find(_.state == state).get
