@@ -1,4 +1,4 @@
-import scala.async.internal.AsyncId._
+import scala.tools.nsc.transform.async.user.AsyncId._
 
 object Test extends App {
 

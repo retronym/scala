@@ -4,7 +4,7 @@ package scala.async.run.hygiene {
 
   import org.junit.Test
   import org.junit.Assert._
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
 
   class HygieneSpec {
 

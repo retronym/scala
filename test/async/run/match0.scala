@@ -8,7 +8,7 @@ package scala.async.run.match0 {
   import scala.async.Async.{async, await}
   import org.junit.Test
   import org.junit.Assert._
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
 
 
   class TestMatchClass {
@@ -122,7 +122,7 @@ package scala.async.run.match0 {
     }
 
     @Test def bugCastBoxedUnitToStringMatch(): Unit = {
-      import scala.async.internal.AsyncId.{async, await}
+      import scala.tools.nsc.transform.async.user.AsyncId.{async, await}
       def foo = async {
         val p2 = await(5)
         "foo" match {
@@ -134,7 +134,7 @@ package scala.async.run.match0 {
     }
 
     @Test def bugCastBoxedUnitToStringIf(): Unit = {
-      import scala.async.internal.AsyncId.{async, await}
+      import scala.tools.nsc.transform.async.user.AsyncId.{async, await}
       def foo = async {
         val p2 = await(5)
         if (true) p2.toString else p2.toString

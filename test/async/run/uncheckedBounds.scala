@@ -22,7 +22,7 @@ class UncheckedBoundsSpec {
     eval( s"""
       object Test {
         import _root_.scala.async.run.toughtype._
-        import _root_.scala.async.internal.AsyncId.{async, await}
+        import _root_.scala.tools.nsc.transform.async.user.AsyncId.{async, await}
         async {
           (if (true) await(null: L[A, A]) else await(null: L[B, B]))
         }

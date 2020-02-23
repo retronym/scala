@@ -8,7 +8,7 @@ package scala.async.run.toughtype {
   import scala.async.Async._
   import org.junit.Test
   import org.junit.Assert._
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
 
 
   object ToughTypeObject {
@@ -153,7 +153,7 @@ package scala.async.run.toughtype {
       import scala.concurrent.{Future, ExecutionContext, Await}
       import scala.concurrent.duration._
       import scala.async.Async.{async, await}
-      import scala.async.internal.AsyncId
+      import scala.tools.nsc.transform.async.user.AsyncId
 
       class Foo[A]
 
@@ -319,7 +319,7 @@ package scala.async.run.toughtype {
 
     // https://github.com/scala/async/issues/106
     @Test def valueClassT106(): Unit = {
-      import scala.async.internal.AsyncId._
+      import scala.tools.nsc.transform.async.user.AsyncId._
       async {
         "whatever value" match {
           case _ =>

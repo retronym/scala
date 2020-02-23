@@ -2,7 +2,7 @@ object Test extends scala.tools.partest.JUnitTest(classOf[scala.async.run.noawai
 
 package scala.async.run.noawait {
 
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
   import AsyncId._
   import org.junit.Test
   import org.junit.Assert._

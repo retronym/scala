@@ -4,7 +4,7 @@ package scala.async.neg {
 
   import org.junit.Test
   import org.junit.Assert._
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
 
   class LocalClasses0Spec {
     @Test

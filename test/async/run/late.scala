@@ -19,7 +19,7 @@ import org.junit.{Assert, Ignore, Test}
 
 import scala.annotation.StaticAnnotation
 import scala.annotation.meta.{field, getter}
-import scala.async.internal.AsyncId
+import scala.tools.nsc.transform.async.user.AsyncId
 import scala.reflect.internal.util.ScalaClassLoader.URLClassLoader
 import scala.tools.nsc._
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
