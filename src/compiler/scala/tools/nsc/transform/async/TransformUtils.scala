@@ -52,8 +52,9 @@ trait PhasedTransform extends TypingTransformers {
   def isNothingClass(sym: Symbol) = sym == definitions.NothingClass
 
   def literalUnit =
-    if (isPastErasure) gen.mkAttributedRef(definitions.BoxedUnit_UNIT)
-    else Literal(Constant(())).setType(definitions.UnitTpe) // a def to avoid sharing trees
+    Literal(Constant(())).setType(definitions.UnitTpe) // a def to avoid sharing trees
+  def literalBoxedUnit =
+    gen.mkAttributedRef(definitions.BoxedUnit_UNIT)
 
   def isLiteralUnit(t: Tree) = t match {
     case Literal(Constant(())) => true
