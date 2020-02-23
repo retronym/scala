@@ -75,7 +75,7 @@ package scala.async.run.match0 {
           case None => AsyncId.await(0)
         }
       }
-      assertEquals(2, res)
+      assertEquals(2, result)
     }
 
     @Test def `support await referring to pattern matching vals`(): Unit = {
