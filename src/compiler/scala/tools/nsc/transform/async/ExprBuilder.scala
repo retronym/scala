@@ -49,6 +49,7 @@ trait ExprBuilder extends TransformUtils {
     final def body: Tree = stats match {
       case stat :: Nil => stat
       case init :+ last => Block(init, last)
+      case Nil => literalUnit
     }
   }
 
