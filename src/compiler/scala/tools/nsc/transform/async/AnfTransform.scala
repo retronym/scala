@@ -62,27 +62,32 @@ private[async] trait AnfTransform extends TransformUtils {
           tree
         case _ if !forceTransform && !containsAwait(tree) =>
           tree
-        case Apply(fun, _) if currentTransformState.ops.isAwait(fun) =>
-          // The state machine transform in `AsyncBlockBuilder#add` (currently) requires async boundaries to be
-          // demarcated by this tree shape: `val ${name.await} = await(<arg>)`.
-          val valDef = defineVal(name.await(), superTransformForced(tree), tree.pos)(tree.tpe)
-          val ref = gen.mkAttributedStableRef(valDef.symbol).setType(tree.tpe)
-          currentStats += valDef
-          atPos(tree.pos)(ref)
-
         case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
           val simpleFun = transformForced(fun)
           val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
             transformForced(arg) match {
               case expr1 =>
                 val argName = param.name.toTermName
-                val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
-                currentStats += valDef
-                gen.mkAttributedIdent(valDef.symbol)
+                if (isUnitType(expr1.tpe)) {
+                  currentStats += expr1
+                  literalBoxedUnit
+                } else {
+                  val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
+                  currentStats += valDef
+                  gen.mkAttributedIdent(valDef.symbol)
+                }
             }
           }
-
-          treeCopy.Apply(tree, simpleFun, argExprss)
+          val simpleApply = treeCopy.Apply(tree, simpleFun, argExprss)
+          val isAwait = currentTransformState.ops.isAwait(fun)
+          if (isAwait) {
+            val valDef = defineVal(name.await(), treeCopy.Apply(tree, fun, argExprss), tree.pos)(tree.tpe)
+            val ref = gen.mkAttributedStableRef(valDef.symbol).setType(tree.tpe)
+            currentStats += valDef
+            atPos(tree.pos)(ref)
+          } else {
+            simpleApply
+          }
 
         case Block(stats, expr) =>
           // First, transform the block contents into a separate List[Tree]
@@ -354,7 +359,8 @@ private[async] trait AnfTransform extends TransformUtils {
   private def typedAssign(lhs: Tree, varSym: Symbol) =
     Assign(gen.mkAttributedRef(varSym), lhs).setType(definitions.UnitTpe).setPos(lhs.pos)
 
-  private object tracing {
+  val tracing: Tracing
+  class Tracing {
     private var indent = -1
 
     private def indentString = "  " * indent

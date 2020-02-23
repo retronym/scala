@@ -22,6 +22,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
   import global._
 
   val asyncNames = new AsyncNames[global.type](global)
+  val tracing = new Tracing
 
   val phaseName: String = "async"
   override def enabled = true // TODO: should be off by default, enabled by flag
