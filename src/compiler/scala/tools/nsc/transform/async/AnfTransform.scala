@@ -166,7 +166,7 @@ private[async] trait AnfTransform extends TransformUtils {
 
     private def pushAssignmentIntoExpr(varSym: Symbol, t: Tree): Tree = {
       t match {
-        case _ if varSym == NoSymbol => t
+        case _ if varSym == NoSymbol || t.tpe.typeSymbol == definitions.NothingClass => t
         case MatchEnd(ld) => deriveLabelDef(ld, t => pushAssignmentIntoExpr(varSym, t))
         case b@Block(caseStats, caseExpr) => assignUnitType(treeCopy.Block(b, caseStats, pushAssignmentIntoExpr(varSym, caseExpr)))
         case _ => typedAssign(t, varSym)
@@ -394,7 +394,9 @@ private[async] trait AnfTransform extends TransformUtils {
           val temp = caseDefToMatchResult(fun.symbol)
           if (temp == NoSymbol)
             treeCopy.Block(tree, transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil))
-          else {
+          else if (arg.tpe.typeSymbol == definitions.NothingClass) {
+            transform(arg)
+          } else {
             treeCopy.Block(tree, typedAssign(transform(arg), temp) :: Nil, treeCopy.Apply(tree, fun, Nil))
           }
         case Block(stats, expr: Apply) if isLabel(expr.symbol) =>
