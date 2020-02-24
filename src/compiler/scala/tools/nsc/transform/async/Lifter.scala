@@ -34,13 +34,12 @@ trait Lifter extends ExprBuilder {
       }
 
       def record(defs: List[Tree]): Unit = {
-        // Keep note of local companions so we rename them consistently
-        // when lifting.
+        // Keep note of local companions so we rename them consistently when lifting.
+        val (moduleClasses, classes) = defs.iterator.collect { case cd: ClassDef => cd }.toList.partition(_.symbol.isModuleClass)
         for {
-          cd@ClassDef(_, _, _, _) <- defs
-          // TODO rework this for post-erasure async where the ModuleDef is compiled to a LazyRef
-          md@ModuleDef(_, _, _) <- defs
-          if (cd.name.toTermName == md.name)
+          cd <- classes
+          md <- moduleClasses
+          if (cd.name == md.name)
         } record(cd.symbol, md.symbol)
       }
       def companionOf(sym: Symbol): Symbol = {
@@ -138,23 +137,25 @@ trait Lifter extends ExprBuilder {
             // due to the handling of type parameter skolems in `thisMethodType` in `Namers`
             treeCopy.DefDef(dd, Modifiers(sym.flags), sym.name, tparams, vparamss, tpt, rhs)
           case cd@ClassDef(_, _, tparams, impl)             =>
-            sym.setName(name.freshen(sym.name.toTypeName))
-            companionship.companionOf(cd.symbol) match {
-              case NoSymbol     =>
-              case moduleSymbol =>
-                moduleSymbol.setName(sym.name.toTermName)
-                moduleSymbol.asModule.moduleClass.setName(moduleSymbol.name.toTypeName)
+            val companion = companionship.companionOf(cd.symbol)
+            if (!cd.symbol.isModuleClass) {
+              sym.setName(name.freshen(sym.name.toTypeName))
+              companion match {
+                case NoSymbol =>
+                case moduleClassSymbol =>
+                  moduleClassSymbol.setName(sym.name.toTypeName)
+                  // TODO rename the other lazy artifacts? Foo$lazy
+              }
+              treeCopy.ClassDef(cd, Modifiers(sym.flags), sym.name, tparams, impl)
+            } else {
+              companion match {
+                case NoSymbol    =>
+                  sym.setName(name.freshen(sym.name.toTypeName))
+                  sym.setName(sym.name.toTypeName)
+                case classSymbol => // will be renamed by above.
+              }
+              treeCopy.ClassDef(cd, Modifiers(sym.flags), sym.name, tparams, impl)
             }
-            treeCopy.ClassDef(cd, Modifiers(sym.flags), sym.name, tparams, impl)
-          case md@ModuleDef(_, _, impl)                     =>
-            // TODO rework this for post-erasure async where the ModuleDef is compiled to a LazyRef
-            companionship.companionOf(md.symbol) match {
-              case NoSymbol    =>
-                sym.setName(name.freshen(sym.name.toTermName))
-                sym.asModule.moduleClass.setName(sym.name.toTypeName)
-              case classSymbol => // will be renamed by `case ClassDef` above.
-            }
-            treeCopy.ModuleDef(md, Modifiers(sym.flags), sym.name, impl)
           case td@TypeDef(_, _, tparams, rhs)               =>
             sym.setName(name.freshen(sym.name.toTypeName))
             treeCopy.TypeDef(td, Modifiers(sym.flags), sym.name, tparams, rhs)
