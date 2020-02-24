@@ -35,23 +35,26 @@ class AnnotationDrivenAsync {
   }
 
   @Test
-  def testTemp(): Unit = {
+  def testCaseClassLifting(): Unit = {
     val code =
-      """import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-         import scala.async.Async.{async, await}
+      """import scala.tools.nsc.transform.async.user.AsyncId._
 
          object Test {
-           def test: Future[Int] = async {
-             val x = if ("1".isEmpty) me(1).me(2).me(3).hashCode else { if ("2".isEmpty) "".charAt(0) else await(f('c')) }
-             val y = await(f(if(this.hashCode == 0) "a" else "b")) + await(f("32"))
-             (x, y).hashCode
+           def test = async {
+             {
+              trait Base { def base = 0}
+              await(0)
+              case class Person(name: String) extends Base
+              val fut = async { "bob" }
+              val x = Person(await(fut))
+              x.base
+              assert(Person.getClass.getName == classOf[Person].getName + "$", (Person.getClass.getName, classOf[Person].getName))
+              x.name
+            }
            }
-           def me(a: Int) = this
-
-           def f[T](x: T): Future[T] = Future.successful(x)
          }
         """
-    run(code)
+    assertEquals("bob", run(code))
   }
 
   @Test
