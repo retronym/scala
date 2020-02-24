@@ -57,19 +57,26 @@ private[async] trait AnfTransform extends TransformUtils {
     private var forceTransform = false
 
     override def transform(tree: Tree): Tree = trace(tree) {
+      val treeContainsAwait = containsAwait(tree)
       tree match {
         case _: ClassDef | _: ModuleDef | _: Function | _: DefDef =>
           tree
-        case _ if !forceTransform && !containsAwait(tree) =>
+        case _ if !forceTransform && !treeContainsAwait =>
           tree
         case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
+          val lastAwaitArgIndex: Int = args.lastIndexWhere(containsAwait)
           val simpleFun = transformForced(fun)
+          var i = 0
           val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
-            if (treeInfo.isExprSafeToInline(arg)) arg
-            else {
-              transformForced(arg) match {
-                case expr1 =>
-                  val argName = param.name.toTermName
+            transformForced(arg) match {
+              case expr1 =>
+                val argName = param.name.toTermName
+                // No need to extract the argument into a val if is non-side-effecting or if we are beyond the final
+                // argument containing an `await` calls.
+                val elideVal = treeInfo.isExprSafeToInline(expr1) || lastAwaitArgIndex >= 0 || i > lastAwaitArgIndex || !treeContainsAwait
+                val result = if (elideVal) {
+                  expr1
+                } else {
                   if (isUnitType(expr1.tpe)) {
                     currentStats += expr1
                     literalBoxedUnit
@@ -78,10 +85,13 @@ private[async] trait AnfTransform extends TransformUtils {
                     currentStats += valDef
                     gen.mkAttributedIdent(valDef.symbol)
                   }
-              }
+                }
+                i += 1
+                result
             }
           }
           val simpleApply = treeCopy.Apply(tree, simpleFun, argExprss)
+          simpleApply.attachments.remove[ContainsAwait.type]
           val isAwait = currentTransformState.ops.isAwait(fun)
           if (isAwait) {
             val valDef = defineVal(name.await(), treeCopy.Apply(tree, fun, argExprss), tree.pos)
@@ -247,6 +257,12 @@ private[async] trait AnfTransform extends TransformUtils {
       case If(_, thenp, elsep) => isPatMatGeneratedJump(thenp) && isPatMatGeneratedJump(elsep)
       case _: Apply if isLabel(t.symbol) => true
       case _ => false
+    }
+
+    private def isRefOrApply(t: Tree) = t match {
+      case _: RefTree => true
+      case _: Apply => true
+      case _ => treeInfo.isExprSafeToInline(t)
     }
 
     /**
