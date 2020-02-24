@@ -65,23 +65,26 @@ private[async] trait AnfTransform extends TransformUtils {
         case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
           val simpleFun = transformForced(fun)
           val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
-            transformForced(arg) match {
-              case expr1 =>
-                val argName = param.name.toTermName
-                if (isUnitType(expr1.tpe)) {
-                  currentStats += expr1
-                  literalBoxedUnit
-                } else {
-                  val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)()
-                  currentStats += valDef
-                  gen.mkAttributedIdent(valDef.symbol)
-                }
+            if (treeInfo.isExprSafeToInline(arg)) arg
+            else {
+              transformForced(arg) match {
+                case expr1 =>
+                  val argName = param.name.toTermName
+                  if (isUnitType(expr1.tpe)) {
+                    currentStats += expr1
+                    literalBoxedUnit
+                  } else {
+                    val valDef = defineVal(name.freshen(argName), expr1, expr1.pos)
+                    currentStats += valDef
+                    gen.mkAttributedIdent(valDef.symbol)
+                  }
+              }
             }
           }
           val simpleApply = treeCopy.Apply(tree, simpleFun, argExprss)
           val isAwait = currentTransformState.ops.isAwait(fun)
           if (isAwait) {
-            val valDef = defineVal(name.await(), treeCopy.Apply(tree, fun, argExprss), tree.pos)(tree.tpe)
+            val valDef = defineVal(name.await(), treeCopy.Apply(tree, fun, argExprss), tree.pos)
             val ref = gen.mkAttributedStableRef(valDef.symbol).setType(tree.tpe)
             currentStats += valDef
             atPos(tree.pos)(ref)
@@ -340,19 +343,14 @@ private[async] trait AnfTransform extends TransformUtils {
       } else t
     }
 
-    def defineVal(name: TermName, lhs: Tree, pos: Position)(tp: Type = lhs.tpe): ValDef = {
-      val sym = currentOwner.newTermSymbol(name, pos, Flags.SYNTHETIC).setInfo(tp)
-      val lhsOwned = lhs.changeOwner((currentOwner, sym))
-      val rhs =
-        if (isUnitType(tp)) Block(lhsOwned :: Nil, literalUnit)
-        else lhsOwned
-      ValDef(sym, rhs).setType(NoType).setPos(pos)
-
+    def defineVal(name: global.TermName, rhs: global.Tree, pos: Position): ValDef = {
+      val sym = currentOwner.newTermSymbol(name, pos, Flags.SYNTHETIC).setInfo(rhs.tpe)
+      ValDef(sym, rhs.changeOwner((currentOwner, sym))).setType(NoType)
     }
 
     def defineVar(name: TermName, tp: Type, pos: Position): ValDef = {
       val sym = currentOwner.newTermSymbol(name, pos, Flags.MUTABLE | Flags.SYNTHETIC).setInfo(tp)
-      ValDef(sym, gen.mkZero(tp).setPos(pos)).setType(NoType).setPos(pos)
+      ValDef(sym, gen.mkZero(tp).setPos(pos)).setType(NoType)
     }
   }
 
