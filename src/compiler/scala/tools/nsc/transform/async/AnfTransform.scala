@@ -110,8 +110,10 @@ private[async] trait AnfTransform extends TransformUtils {
           // nested blocks.
           foreachGroupsEndingWith(trees)(
             isGroupEnd = isMatchEnd,
-            onGroup = (ts: Array[Tree]) => eliminateMatchEndLabelParameter(tree.pos, ts).foreach(t => flattenBlock(t)(currentStats += _)),
-            onTail = (ts: List[Tree]) => ts.foreach(t => flattenBlock(t)(currentStats += _))
+            onGroup = (ts: Array[Tree]) =>
+              eliminateMatchEndLabelParameter(tree.pos, ts).foreach(t => flattenBlock(t)(currentStats += _)),
+            onTail = (ts: List[Tree]) =>
+              ts.foreach(t => flattenBlock(t)(currentStats += _))
           )
 
           // However, we let `onTail` add the expr to `currentStats` (that was more efficient than using `ts.dropRight(1).foreach(addToStats)`)
@@ -258,7 +260,8 @@ private[async] trait AnfTransform extends TransformUtils {
     @tailrec
     private def foreachGroupsEndingWith[T <: AnyRef : reflect.ClassTag](ts: List[T])(isGroupEnd: T => Boolean, onGroup: Array[T] => Unit, onTail: List[T] => Unit): Unit = if (!ts.isEmpty) {
       ts.indexWhere(isGroupEnd) match {
-        case -1 => onTail(ts)
+        case -1 =>
+          onTail(ts)
         case i =>
           val group = new Array[T](i + 1)
           ts.copyToArray(group)
@@ -385,15 +388,15 @@ private[async] trait AnfTransform extends TransformUtils {
   final class MatchResultTransformer(caseDefToMatchResult: collection.Map[Symbol, Symbol]) extends TypingTransformer(currentTransformState.unit) {
     override def transform(tree: Tree): Tree = {
       tree match {
+        case _: Function | _: MemberDef =>
+          tree
         case Apply(fun, arg :: Nil) if isLabel(fun.symbol) && caseDefToMatchResult.contains(fun.symbol) =>
           val temp = caseDefToMatchResult(fun.symbol)
           if (temp == NoSymbol)
             treeCopy.Block(tree, transform(arg) :: Nil, treeCopy.Apply(tree, fun, Nil))
-          else
-            // setType needed for LateExpansion.shadowingRefinedType test case. There seems to be an inconsistency
-            // in the trees after pattern matcher.
-            // TODO miminize the problem in patmat and fix in scalac.
-            treeCopy.Block(tree, typedAssign(transform(arg.setType(fun.tpe.paramLists.head.head.info)), temp) :: Nil, treeCopy.Apply(tree, fun, Nil))
+          else {
+            treeCopy.Block(tree, typedAssign(transform(arg), temp) :: Nil, treeCopy.Apply(tree, fun, Nil))
+          }
         case Block(stats, expr: Apply) if isLabel(expr.symbol) =>
           super.transform(tree) match {
             case Block(stats0, Block(stats1, expr1)) =>

@@ -361,7 +361,8 @@ private[async] trait TransformUtils extends PhasedTransform {
     }
   }
 
-  val isMatchEnd: (Tree) => Boolean = t => MatchEnd.unapply(t).isDefined
+  val isMatchEnd: (Tree) => Boolean = t =>
+    MatchEnd.unapply(t).isDefined
   object MatchEnd {
     def unapply(t: Tree): Option[LabelDef] = t match {
       case ValDef(_, _, _, t) => unapply(t)
