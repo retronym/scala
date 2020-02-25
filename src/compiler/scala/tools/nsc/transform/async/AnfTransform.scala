@@ -73,7 +73,7 @@ private[async] trait AnfTransform extends TransformUtils {
                 val argName = param.name.toTermName
                 // No need to extract the argument into a val if is non-side-effecting or if we are beyond the final
                 // argument containing an `await` calls.
-                val elideVal = treeInfo.isExprSafeToInline(expr1) || lastAwaitArgIndex >= 0 || i > lastAwaitArgIndex || !treeContainsAwait
+                val elideVal = treeInfo.isExprSafeToInline(expr1) || lastAwaitArgIndex < 0 || i > lastAwaitArgIndex || !treeContainsAwait
                 val result = if (elideVal) {
                   expr1
                 } else {
