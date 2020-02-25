@@ -149,7 +149,8 @@ private[async] trait AnfTransform extends TransformUtils {
         }
 
         case If(cond, thenp, elsep) =>
-          transformMatchOrIf(tree, name.ifRes) { varSym =>
+          val needsResultVar = (containsAwait(thenp) || containsAwait(elsep))
+          transformMatchOrIf(tree, needsResultVar, name.ifRes) { varSym =>
             val condExpr = transform(cond)
             val thenBlock = transformNewControlFlowBlock(thenp)
             val elseBlock = transformNewControlFlowBlock(elsep)
@@ -157,7 +158,8 @@ private[async] trait AnfTransform extends TransformUtils {
           }
 
         case Match(scrut, cases) =>
-          transformMatchOrIf(tree, name.matchRes) { varSym =>
+          val needResultVar = cases.exists(containsAwait)
+          transformMatchOrIf(tree, needResultVar, name.matchRes) { varSym =>
             val scrutExpr = transform(scrut)
             val casesWithAssign = cases map {
               case cd@CaseDef(pat, guard, body) =>
@@ -184,7 +186,7 @@ private[async] trait AnfTransform extends TransformUtils {
     }
 
     @tailrec
-    private def transformMatchOrIf[T <: Tree](tree: Tree, nameSource: asyncNames.NameSource[TermName])(core: Symbol => T): Tree = {
+    private def transformMatchOrIf[T <: Tree](tree: Tree, needsResultVar: Boolean, nameSource: asyncNames.NameSource[TermName])(core: Symbol => T): Tree = {
       // if type of if/match is Unit don't introduce assignment,
       // but add Unit value to bring it into form expected by async transform
       if (typeEqualsUnit(tree.tpe)) {
@@ -194,7 +196,9 @@ private[async] trait AnfTransform extends TransformUtils {
         currentStats += assignUnitType(core(NoSymbol))
         localTyper.typedPos(tree.pos)(Throw(New(IllegalStateExceptionClass)))
       } else if (isPatMatGeneratedJump(tree)) {
-        transformMatchOrIf(assignUnitType(tree), nameSource)(core)
+        transformMatchOrIf(assignUnitType(tree), needsResultVar, nameSource)(core)
+      } else if (!needsResultVar) {
+        core(NoSymbol)
       } else {
         val varDef = defineVar(nameSource(), tree.tpe, tree.pos)
         currentStats += varDef
