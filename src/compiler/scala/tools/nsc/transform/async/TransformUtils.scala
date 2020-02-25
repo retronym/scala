@@ -205,7 +205,7 @@ private[async] trait TransformUtils extends PhasedTransform {
         case dd: DefDef            => nestedMethod(dd)
         case fun: Function         => function(fun)
         case m@Match(EmptyTree, _) => patMatFunction(m) // Pattern matching anonymous function under -Xoldpatmat of after `restorePatternMatchingFunctions`
-        case q"$fun[..$targs](...$argss)" if argss.nonEmpty =>
+        case treeInfo.Applied(fun, _, argss) if argss.nonEmpty =>
           val isInByName = isByName(fun)
           for ((args, i) <- argss.zipWithIndex) {
             for ((arg, j) <- args.zipWithIndex) {
