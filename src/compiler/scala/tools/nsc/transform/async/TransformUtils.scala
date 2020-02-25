@@ -199,7 +199,7 @@ private[async] trait TransformUtils extends PhasedTransform {
     override def traverse(tree: Tree): Unit = {
       tree match {
         case _ if currentTransformState.ops.isAsync(tree) =>
-          // Under -Ymacro-expand:discard, used in the IDE, nested async blocks will be visible to the outer blocks
+          ???
         case cd: ClassDef          => nestedClass(cd)
         case md: ModuleDef         => nestedModule(md)
         case dd: DefDef            => nestedMethod(dd)
@@ -265,7 +265,10 @@ private[async] trait TransformUtils extends PhasedTransform {
     private def treeCannotContainAwait(t: Tree) = t match {
       case _: CannotHaveAttrs => true
       case _: Ident | _: TypeTree | _: Literal => true
-      case _ => currentTransformState.ops.isAsync(t)
+      case _ =>
+        if (currentTransformState.ops.isAsync(t))
+          ???
+        false
     }
     private def attachContainsAwait(t: Tree): Unit = if (shouldAttach(t)) {
       t.updateAttachment(ContainsAwait)
@@ -281,6 +284,7 @@ private[async] trait TransformUtils extends PhasedTransform {
       stack ::= tree
       try {
         if (currentTransformState.ops.isAsync(tree)) {
+          ???
           ;
         } else {
           if (currentTransformState.ops.isAwait(tree))

@@ -84,7 +84,9 @@ trait AsyncAnalysis extends TransformUtils  {
       val badAwaits = ListBuffer[Tree]()
       object traverser extends Traverser {
         override def traverse(tree: Tree): Unit = {
-          if (!currentTransformState.ops.isAsync(tree))
+          val isAsync = currentTransformState.ops.isAsync(tree)
+          assert(!isAsync)
+          if (!isAsync)
             super.traverse(tree)
           tree match {
             case rt: RefTree if currentTransformState.ops.isAwait(rt) =>
