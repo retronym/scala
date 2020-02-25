@@ -27,9 +27,7 @@ private[async] trait AnfTransform extends TransformUtils {
    *   - execution order is reified in the tree by extracting temporary vals
    */
   final def anfTransform(tree: Tree, owner: Symbol): Block = {
-    // Must prepend the () for issue #31.
-    val block = atPos(tree.pos)(Block(literalUnit :: Nil, tree)).setType(tree.tpe)
-    val tree1 = adjustTypeOfTranslatedPatternMatches(block, owner)
+    val tree1 = adjustTypeOfTranslatedPatternMatches(tree, owner)
 
     val trans = new AnfTransformer()
     trans.atOwner(tree1, owner) { trans.apply(tree1) }
