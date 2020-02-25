@@ -176,7 +176,7 @@ private[async] trait AnfTransform extends TransformUtils {
     private def pushAssignmentIntoExpr(varSym: Symbol, t: Tree): Tree = {
       t match {
         case _ if varSym == NoSymbol || t.tpe.typeSymbol == definitions.NothingClass => t
-        case MatchEnd(ld) => deriveLabelDef(ld, t => pushAssignmentIntoExpr(varSym, t))
+        case MatchEnd(ld) => treeCopy.LabelDef(ld, ld.name, ld.params, pushAssignmentIntoExpr(varSym, ld.rhs))
         case b@Block(caseStats, caseExpr) => assignUnitType(treeCopy.Block(b, caseStats, pushAssignmentIntoExpr(varSym, caseExpr)))
         case _ => typedAssign(t, varSym)
       }

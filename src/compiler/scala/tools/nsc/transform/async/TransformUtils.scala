@@ -303,20 +303,6 @@ private[async] trait TransformUtils extends PhasedTransform {
     t
   }
 
-  def deriveLabelDef(ld: LabelDef, applyToRhs: Tree => Tree): LabelDef = {
-    val rhs2 = applyToRhs(ld.rhs)
-    val ld2 = treeCopy.LabelDef(ld, ld.name, ld.params, rhs2)
-    if (ld eq ld2) ld
-    else {
-      val info2 = ld2.symbol.info match {
-        case MethodType(params, p) => MethodType(params, rhs2.tpe)
-        case t => t
-      }
-      ld2.symbol.info = info2
-      ld2
-    }
-  }
-
   val isMatchEnd: (Tree) => Boolean = t =>
     MatchEnd.unapply(t).isDefined
   object MatchEnd {
