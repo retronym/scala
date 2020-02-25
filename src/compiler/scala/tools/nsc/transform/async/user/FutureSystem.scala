@@ -58,7 +58,6 @@ trait FutureSystem {
       }
     }
 
-    def isAsync(fun: Tree) = isAsyncOrAwait(fun, currentRun.runDefinitions.Async_asyncMethod)
     def isAwait(fun: Tree) = isAsyncOrAwait(fun, currentRun.runDefinitions.Async_awaitMethod)
 
     def literalUnitExpr = if (isPastErasure) gen.mkAttributedRef(definitions.BoxedUnit_UNIT) else Literal(Constant(()))
