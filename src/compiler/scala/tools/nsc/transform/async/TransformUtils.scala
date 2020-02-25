@@ -306,7 +306,7 @@ private[async] trait TransformUtils extends PhasedTransform {
   // First modification to translated patterns:
   //  - Set the type of label jumps to `Unit`
   //  - Propagate this change to trees known to directly enclose them:
-  //    ``If` / `Block`) adjust types of enclosing
+  //    (`If` / `Block`) adjust types of enclosing
   final def adjustTypeOfTranslatedPatternMatches(t: Tree, owner: Symbol): Tree = {
     val trans = new PatmatAdjuster
     trans.transformAtOwner(owner, t)
@@ -317,6 +317,8 @@ private[async] trait TransformUtils extends PhasedTransform {
     
     override def transform(tree: Tree): Tree = {
       tree match {
+        case _: ClassDef | _: ModuleDef | _: Function | _: DefDef =>
+          tree
         case LabelDef(name, params, rhs) =>
           val rhs1 = transform(rhs)
           if (rhs1.tpe =:= UnitTpe) {
