@@ -303,52 +303,6 @@ private[async] trait TransformUtils extends PhasedTransform {
     t
   }
 
-  // First modification to translated patterns:
-  //  - Set the type of label jumps to `Unit`
-  //  - Propagate this change to trees known to directly enclose them:
-  //    (`If` / `Block`) adjust types of enclosing
-  final def adjustTypeOfTranslatedPatternMatches(t: Tree, owner: Symbol): Tree = {
-    val trans = new PatmatAdjuster
-    trans.transformAtOwner(owner, t)
-  }
-
-  private class PatmatAdjuster extends TypingTransformer(currentTransformState.unit) {
-    import definitions.UnitTpe
-    
-    override def transform(tree: Tree): Tree = {
-      tree match {
-        case _: ClassDef | _: ModuleDef | _: Function | _: DefDef =>
-          tree
-        case LabelDef(name, params, rhs) =>
-          val rhs1 = transform(rhs)
-          if (rhs1.tpe =:= UnitTpe) {
-            tree.symbol.info = MethodType(tree.symbol.info.paramLists.head, UnitTpe)
-            treeCopy.LabelDef(tree, name, params, rhs1)
-          } else {
-            treeCopy.LabelDef(tree, name, params, rhs1)
-          }
-        case Block(stats, expr) =>
-          val stats1 = transformTrees(stats)
-          val expr1 = transform(expr)
-          if (expr1.tpe =:= UnitTpe)
-            treeCopy.Block(tree, stats1, expr1).setType(UnitTpe)
-          else
-            treeCopy.Block(tree, stats1, expr1)
-        case If(cond, thenp, elsep) =>
-          val cond1 = transform(cond)
-          val thenp1 = transform(thenp)
-          val elsep1 = transform(elsep)
-          if (thenp1.tpe =:= definitions.UnitTpe && elsep.tpe =:= UnitTpe)
-            treeCopy.If(tree, cond1, thenp1, elsep1).setType(UnitTpe)
-          else
-            treeCopy.If(tree, cond1, thenp1, elsep1)
-        case Apply(fun, args) if isLabel(fun.symbol) =>
-          treeCopy.Apply(tree, transform(fun), transformTrees(args)).setType(UnitTpe)
-        case t => super.transform(t)
-      }
-    }
-  }
-
   def deriveLabelDef(ld: LabelDef, applyToRhs: Tree => Tree): LabelDef = {
     val rhs2 = applyToRhs(ld.rhs)
     val ld2 = treeCopy.LabelDef(ld, ld.name, ld.params, rhs2)
