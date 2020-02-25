@@ -214,10 +214,11 @@ private[async] trait AnfTransform extends TransformUtils {
       val savedStats = currentStats
       this.currentStats = new ListBuffer[Tree]
       try transform(tree) match {
-        case b@Block(stats, expr) => treeCopy.Block(b, currentStats.prependToList(stats), expr).setType(expr.tpe)
+        case b@Block(stats, expr) =>
+          treeCopy.Block(b, currentStats.prependToList(stats), expr)
         case expr => currentStats.toList match {
           case Nil => expr
-          case stats => atPos(tree.pos)(Block(stats, expr).setType(expr.tpe))
+          case stats => treeCopy.Block(expr, stats, expr)
         }
       } finally {
         this.currentStats = savedStats
