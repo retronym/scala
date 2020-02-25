@@ -54,21 +54,22 @@ private[async] trait AnfTransform extends TransformUtils {
     // `qual` before the `args` of a `Apply`). This is the default transform behaviour and the
     // conventional way to write transforms in any case.
     private var currentStats = ListBuffer[Tree]()
-    private var forceTransform = false
 
     override def transform(tree: Tree): Tree = trace(tree) {
       val treeContainsAwait = containsAwait(tree)
       tree match {
         case _: ClassDef | _: ModuleDef | _: Function | _: DefDef =>
           tree
-        case _ if !forceTransform && !treeContainsAwait =>
+        case _: RefTree if tree.symbol.hasPackageFlag =>
+          tree
+        case _ if !treeContainsAwait =>
           tree
         case Apply(fun, args) if !Boolean_ShortCircuits.contains(fun.symbol) =>
           val lastAwaitArgIndex: Int = args.lastIndexWhere(containsAwait)
-          val simpleFun = transformForced(fun)
+          val simpleFun = transform(fun)
           var i = 0
           val argExprss = map2(args, fun.symbol.paramss.head) { (arg: Tree, param: Symbol) =>
-            transformForced(arg) match {
+            transform(arg) match {
               case expr1 =>
                 val argName = param.name.toTermName
                 // No need to extract the argument into a val if is non-side-effecting or if we are beyond the final
@@ -236,25 +237,6 @@ private[async] trait AnfTransform extends TransformUtils {
       }
     }
 
-    private def transformForced(tree: Tree): Tree = {
-      val saved = forceTransform
-      try {
-        forceTransform = true
-        transform(tree)
-      } finally {
-        forceTransform = saved
-      }
-    }
-    private def superTransformForced(tree: Tree): Tree = {
-      val saved = forceTransform
-      try {
-        forceTransform = true
-        super.transform(tree)
-      } finally {
-        forceTransform = saved
-      }
-    }
-
     // If we run the ANF transform post patmat, deal with trees like `(if (cond) jump1(){String} else jump2(){String}){String}`
     // as though it was typed with `Unit`.
     private def isPatMatGeneratedJump(t: Tree): Boolean = t match {
@@ -262,12 +244,6 @@ private[async] trait AnfTransform extends TransformUtils {
       case If(_, thenp, elsep) => isPatMatGeneratedJump(thenp) && isPatMatGeneratedJump(elsep)
       case _: Apply if isLabel(t.symbol) => true
       case _ => false
-    }
-
-    private def isRefOrApply(t: Tree) = t match {
-      case _: RefTree => true
-      case _: Apply => true
-      case _ => treeInfo.isExprSafeToInline(t)
     }
 
     /**
