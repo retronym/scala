@@ -198,8 +198,6 @@ private[async] trait TransformUtils extends PhasedTransform {
 
     override def traverse(tree: Tree): Unit = {
       tree match {
-        case _ if currentTransformState.ops.isAsync(tree) =>
-          ???
         case cd: ClassDef          => nestedClass(cd)
         case md: ModuleDef         => nestedModule(md)
         case dd: DefDef            => nestedMethod(dd)
@@ -265,10 +263,7 @@ private[async] trait TransformUtils extends PhasedTransform {
     private def treeCannotContainAwait(t: Tree) = t match {
       case _: CannotHaveAttrs => true
       case _: Ident | _: TypeTree | _: Literal => true
-      case _ =>
-        if (currentTransformState.ops.isAsync(t))
-          ???
-        false
+      case _ => false
     }
     private def attachContainsAwait(t: Tree): Unit = if (shouldAttach(t)) {
       t.updateAttachment(ContainsAwait)
@@ -283,16 +278,11 @@ private[async] trait TransformUtils extends PhasedTransform {
     override def traverse(tree: Tree): Unit = {
       stack ::= tree
       try {
-        if (currentTransformState.ops.isAsync(tree)) {
-          ???
-          ;
-        } else {
-          if (currentTransformState.ops.isAwait(tree))
-            stack.foreach(attachContainsAwait)
-          else
-            attachNoAwait(tree)
-          super.traverse(tree)
-        }
+        if (currentTransformState.ops.isAwait(tree))
+          stack.foreach(attachContainsAwait)
+        else
+          attachNoAwait(tree)
+        super.traverse(tree)
       } finally stack = stack.tail
     }
   }
