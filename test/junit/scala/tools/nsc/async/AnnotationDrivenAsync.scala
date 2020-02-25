@@ -399,7 +399,6 @@ object CustomFutureFutureSystem extends FutureSystem {
     lazy val Async_async: Symbol = NoSymbol.newTermSymbol(nme.EMPTY)
     lazy val Async_await: Symbol = symbolOf[CustomFuture.type].info.member(TermName("_await"))
 
-    override def isAsync(fun: Tree) = fun.symbol == Async_async
     override def isAwait(fun: Tree) = fun.symbol == Async_await
 
     def tryType(tp: Type): Type = appliedType(Either_class, tp)
