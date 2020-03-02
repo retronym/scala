@@ -16,6 +16,7 @@ package immutable
 
 import scala.annotation.meta.getter
 import scala.annotation.tailrec
+import scala.runtime.ScalaRunTime
 
 /** An object containing the RedBlack tree implementation used by for `TreeMaps` and `TreeSets`.
  *
@@ -484,6 +485,7 @@ private[collection] object RedBlackTree {
         }
         _count |= size //retains colour
       }
+      // ScalaRunTime.releaseFence()
       this
     }
 

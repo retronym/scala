@@ -34,11 +34,40 @@ object TreeSet extends ImmutableSortedSetFactory[TreeSet] {
     type Tree = RB.Tree[A, Any]
     private [this] var tree:Tree = null
     override def +=(elem: A): TreeSetBuilder.this.type = {
-      tree = RB.update(tree, elem, (), overwrite = false)
+      tree = RB.mutableUpdate(tree, elem, (), overwrite = false)
       this
     }
 
-    override def ++=(xs: TraversableOnce[A]): this.type = {
+    private object adder extends Function1[A, Unit] {
+      var accumulator :Tree = null
+      def addTree(aTree:Tree, bTree: Tree): Tree = {
+        val aSize = RB.count(aTree)
+        val bSize = RB.count(bTree)
+        // TODO should consider non overlapping trees
+        // just bulk add the non overlapping parts and
+        // only addAll for the intersecting range
+        //
+        // but for now just add the smaller set to the larger one
+
+        if (aSize > bSize) {
+          accumulator = aTree
+          RB.foreachKey(bTree, this)
+        } else {
+          accumulator = bTree
+          RB.foreachKey(aTree, this)
+        }
+        val result = accumulator
+        // be friendly to GC
+        accumulator = null
+        result
+      }
+
+      override def apply(elem: A): Unit = {
+        accumulator = RB.mutableUpdate(accumulator, elem, (), overwrite = false)
+      }
+    }
+
+    override def ++=(xs: TraversableOnce[A]): TreeSetBuilder.this.type = {
       xs match {
         case ts: TreeSet[A] if ts.ordering == ordering =>
           tree = RB.union(tree, ts.tree)
@@ -52,7 +81,7 @@ object TreeSet extends ImmutableSortedSetFactory[TreeSet] {
       tree = null
     }
 
-    override def result(): TreeSet[A] = new TreeSet(tree)(ordering)
+    override def result(): TreeSet[A] = new TreeSet(RB.afterMutableUpdate(tree))(ordering)
   }
 }
 
