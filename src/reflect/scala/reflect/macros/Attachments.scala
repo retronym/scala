@@ -69,6 +69,11 @@ abstract class Attachments { self =>
     if (newAll.isEmpty) pos.asInstanceOf[Attachments { type Pos = self.Pos }]
     else new NonemptyAttachments[Pos](this.pos, newAll)
   }
+  def removeElement[T](attachment: T): Attachments { type Pos = self.Pos } = {
+    val newAll = all - attachment
+    if (newAll.isEmpty) pos.asInstanceOf[Attachments { type Pos = self.Pos }]
+    else new NonemptyAttachments[Pos](this.pos, newAll)
+  }
 
   def isEmpty: Boolean = true
 }

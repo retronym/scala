@@ -288,8 +288,8 @@ private[async] trait TransformUtils extends PhasedTransform {
     t.foreach {
       case _: CannotHaveAttrs =>
       case t =>
-        t.removeAttachment[ContainsAwait.type](ContainsAwaitTag)
-        t.removeAttachment[NoAwait.type](NoAwaitTag)
+        t.attachments.removeElement(ContainsAwait)
+        t.attachments.removeElement(NoAwait)
     }
     t
   }
