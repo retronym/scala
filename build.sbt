@@ -366,6 +366,10 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.io.NoAbstractFile.seq"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.io.NoAbstractFile.view"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.io.NoAbstractFile.view"),
+
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.macros.Attachments.removeElement"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.macros.Attachments.addElement"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.macros.Attachments.containsElement"),
   )
 }
 
