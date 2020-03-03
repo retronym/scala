@@ -167,7 +167,43 @@ private[async] trait AnfTransform extends TransformUtils {
           }
 
         case LabelDef(name, params, rhs) =>
-          treeCopy.LabelDef(tree, name, params, transformNewControlFlowBlock(rhs))
+          val rhs1 = transformNewControlFlowBlock(rhs)
+          if (name.startsWith("case")) {
+            object caseDefTransformer extends TypingTransformer(currentTransformState.unit) {
+              var caseVars = ListBuffer[Tree]()
+              var matchEndBlock: Tree = null;
+              override def transform(tree: Tree): Tree = tree match {
+                case Block(stats, Apply(fun, _)) if isLabel(fun.symbol) && fun.symbol.name.startsWith("matchEnd") =>
+                  matchEndBlock = tree
+                  literalUnit
+                case Block(stats, expr) =>
+                  val stats1 = stats.mapConserve {
+                    case vd: ValDef if vd.symbol.isSynthetic =>
+                      vd.symbol.setFlag(Flags.MUTABLE)
+                      caseVars += treeCopy.ValDef(vd, vd.mods, vd.name, vd.tpt, gen.mkZero(vd.symbol.info))
+                      typedAssign(vd.rhs, vd.symbol)
+                    case t =>
+                      super.transform(t)
+                  }
+                  treeCopy.Block(tree, stats1, super.transform(expr))
+                case _: LabelDef | _: MemberDef | _: Function =>
+                  tree
+                case _ =>
+                  super.transform(tree)
+              }
+              def apply(tree: Tree): Tree = {
+                caseVars += transform(tree)
+                if (matchEndBlock != null)
+                  treeCopy.Block(tree, caseVars.toList, matchEndBlock)
+                else
+                  tree
+              }
+            }
+            val result = treeCopy.LabelDef(tree, name, params, caseDefTransformer.atOwner(tree, tree.symbol)(caseDefTransformer.apply(rhs1)))
+            result
+          } else {
+            treeCopy.LabelDef(tree, name, params, rhs1)
+          }
 
         case _ =>
           super.transform(tree)
