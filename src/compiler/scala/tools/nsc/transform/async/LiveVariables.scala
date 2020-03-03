@@ -178,7 +178,7 @@ trait LiveVariables extends ExprBuilder {
     }
 
     val finalStates = asyncStates.filter(as => !asyncStates.exists(other => isPred(as.state, other.state)))
-    val finalState = finalStates.head
+    val finalState = finalStates.last
 
     if(settings.debug.value && shouldLogAtThisPhase) {
       for (as <- asyncStates)
