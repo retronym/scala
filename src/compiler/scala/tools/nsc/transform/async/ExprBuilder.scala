@@ -57,7 +57,7 @@ trait ExprBuilder extends TransformUtils {
   final class SimpleAsyncState(var stats: List[Tree], val state: Int, nextState: Int, symLookup: SymLookup)
     extends AsyncState {
 
-    val nextStates: Array[Int] =
+    var nextStates: Array[Int] =
       Array(nextState)
 
     def mkHandlerCaseForState[T]: CaseDef = {
@@ -72,15 +72,7 @@ trait ExprBuilder extends TransformUtils {
     extends AsyncState {
 
     def mkHandlerCaseForState[T]: CaseDef = {
-      object trans extends TypingTransformer(currentTransformState.unit) {
-        override def transform(tree: Tree): Tree = tree match {
-          case Apply(fun, args) if isLabel(fun.symbol) && labelDefStates.contains(fun.symbol) =>
-            localTyper.typed(Block(mkStateTree(labelDefStates(fun.symbol), symLookup) :: Nil, Apply(Ident(symLookup.whileLabel), Nil)))
-          case _ => super.transform(tree)
-        }
-      }
-      val rhs1 = trans.transformAtOwner(symLookup.applyTrParam.owner, adaptToUnitIgnoringNothing(stats))
-      mkHandlerCase(state, rhs1)
+      mkHandlerCase(state, adaptToUnitIgnoringNothing(stats))
     }
 
     override val toString: String =
@@ -105,7 +97,7 @@ trait ExprBuilder extends TransformUtils {
                                   val awaitable: Awaitable, symLookup: SymLookup)
     extends AsyncState {
 
-    val nextStates: Array[Int] =
+    var nextStates: Array[Int] =
       Array(nextState)
 
     override def mkHandlerCaseForState[T]: CaseDef = {
@@ -188,7 +180,7 @@ trait ExprBuilder extends TransformUtils {
 
       def addStat() = stats += stat
       stat match {
-        case Apply(fun, args) if isLabel(fun.symbol) =>
+        case Apply(fun, args) if isLabel(fun.symbol) && fun.symbol != symLookup.whileLabel =>
           // labelDefStates belongs to the current ExprBuilder
           labelDefStates get fun.symbol match {
             case opt@Some(nextState) =>
@@ -278,21 +270,8 @@ trait ExprBuilder extends TransformUtils {
       new AsyncBlockBuilder(nestedStats, nestedExpr, startState, endState, symLookup)
     }
 
-
     def nextState() = stateAssigner.nextState()
-    def directlyAdjacentLabelDefs(t: Tree): List[Tree] = {
-      def isPatternCaseLabelDef(t: Tree) = t match {
-        case LabelDef(name, _, _) => name.toString.startsWith("case")
-        case _ => false
-      }
-      val span = (stats :+ expr).filterNot(isLiteralUnit).span(_ ne t)
-      span match {
-        case (before, _ :: after) =>
-          before.reverse.takeWhile(isPatternCaseLabelDef) ::: after.takeWhile(isPatternCaseLabelDef)
-        case _ =>
-          stats :+ expr
-      }
-    }
+
     case class PatternIndex(caseByMatchEnd: collection.Map[Symbol, PatternIndexEntry], matchEndByCase: Map[Symbol, Symbol]) {
       def isInitialCase(caseSym: Symbol): Boolean = caseByMatchEnd(matchEndByCase(caseSym)).cases.indexOf(caseSym) == 0
       def matchContainsAwait(caseOrMatchEndSym: Symbol): Boolean = {
@@ -329,6 +308,14 @@ trait ExprBuilder extends TransformUtils {
           case _ =>
         }
       }
+      for ((matchEnd, entry) <- caseByMatchEnd) {
+        if (entry.containsAwait) {
+          for (caseDef <- entry.cases) {
+            labelDefStates(caseDef) = stateIdForLabel(caseDef)
+          }
+          labelDefStates(matchEnd) = stateIdForLabel(matchEnd)
+        }
+      }
       val matchEndByCase = caseByMatchEnd.iterator.flatMap {
         case (matchEnd, entry) => entry.cases.map(c => (c, matchEnd))
       }.toMap
@@ -341,7 +328,7 @@ trait ExprBuilder extends TransformUtils {
     private def containsForeignLabelJump(t: Tree): Boolean = {
       val labelDefs = t.collect { case ld: LabelDef => ld.symbol }.toSet
       t.exists {
-        case rt: RefTree => rt.symbol != null && isLabel(rt.symbol) && !(labelDefs contains rt.symbol)
+        case rt: RefTree => rt.symbol != null && isLabel(rt.symbol) && !(labelDefs contains rt.symbol) && !rt.symbol.name.startsWith("case") && rt.symbol != symLookup.whileLabel
         case _ => false
       }
     }
@@ -404,13 +391,33 @@ trait ExprBuilder extends TransformUtils {
         currState = afterMatchState
         stateBuilder = new AsyncStateBuilder(currState, symLookup)
       case ld @ LabelDef(name, params, rhs) =>
+        object trans extends TypingTransformer(currentTransformState.unit) {
+          override def transform(tree: Tree): Tree = tree match {
+            case Apply(fun, args) if isLabel(fun.symbol) && labelDefStates.contains(fun.symbol) =>
+              localTyper.typed(Block(mkStateTree(labelDefStates(fun.symbol), symLookup) :: Nil, Apply(Ident(symLookup.whileLabel), Nil)))
+            case _ => super.transform(tree)
+          }
+        }
+
         if (containsAwait(rhs) || ld.symbol.name.startsWith("matchEnd") && patternIndex.matchContainsAwait(ld.symbol)) {
+          val nextStates = rhs.collect {
+            case Apply(fun, args) if isLabel(fun.symbol) && labelDefStates.contains(fun.symbol) =>
+              stateIdForLabel(fun.symbol)
+          }
+          val rhs1 = trans.transformAtOwner(ld.symbol, rhs)
           val startLabelState = stateIdForLabel(ld.symbol)
           val afterLabelState = afterState.getOrElse(nextState())
           asyncStates += stateBuilder.resultWithLabel(startLabelState, symLookup)
-          labelDefStates(ld.symbol) = startLabelState
-          val builder = nestedBlockBuilder(rhs, startLabelState, afterLabelState)
-          asyncStates ++= builder.asyncStates
+          val builder = nestedBlockBuilder(rhs1, startLabelState, afterLabelState)
+          builder.asyncStates.toList match {
+            case (s1: AsyncStateWithAwait) :: (s2 : SimpleAsyncState) :: Nil =>
+              s1.nextStates = (s1.nextStates ++ nextStates).distinct
+              asyncStates += s1
+              asyncStates += s2
+            case (s1 : SimpleAsyncState) :: Nil =>
+              s1.nextStates = (s1.nextStates ++ nextStates).distinct
+              asyncStates += s1
+          }
           currState = afterLabelState
           stateBuilder = new AsyncStateBuilder(currState, symLookup)
         } else if (patternIndex.matchContainsAwait(ld.symbol)) {
@@ -419,13 +426,12 @@ trait ExprBuilder extends TransformUtils {
             asyncStates += stateBuilder.resultSimple(startLabelState)
             stateBuilder = new AsyncStateBuilder(nextState(), symLookup)
           }
-          labelDefStates(ld.symbol) = startLabelState
-          val matchEnd = patternIndex.matchEndByCase(ld.symbol)
           val nextStates = rhs.collect {
-            case Apply(fun, args) if isLabel(fun.symbol) && (fun.symbol == matchEnd || patternIndex.matchEndByCase.getOrElse(fun.symbol, null) == matchEnd) =>
+            case Apply(fun, args) if isLabel(fun.symbol) && labelDefStates.contains(fun.symbol) =>
               stateIdForLabel(fun.symbol)
           }
-          val opaqueState = new OpaqueAsyncState(rhs :: Nil, startLabelState, nextStates.toArray.distinct, symLookup)
+          val rhs1 = trans.transformAtOwner(ld.symbol, rhs)
+          val opaqueState = new OpaqueAsyncState(rhs1 :: Nil, startLabelState, nextStates.toArray.distinct, symLookup)
           asyncStates += opaqueState
         } else {
           checkForUnsupportedAwait(stat)
