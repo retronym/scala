@@ -171,10 +171,10 @@ private[async] trait AnfTransform extends TransformUtils {
           if (name.startsWith("case")) {
             object caseDefTransformer extends TypingTransformer(currentTransformState.unit) {
               var caseVars = ListBuffer[Tree]()
-              var matchEndBlock: Tree = null;
+              var matchEndBlock: Block = null;
               override def transform(tree: Tree): Tree = tree match {
-                case Block(stats, Apply(fun, _)) if isLabel(fun.symbol) && fun.symbol.name.startsWith("matchEnd") =>
-                  matchEndBlock = tree
+                case blk @ Block(stats, Apply(fun, _)) if isLabel(fun.symbol) && fun.symbol.name.startsWith("matchEnd") =>
+                  matchEndBlock = blk
                   literalUnit
                 case Block(stats, expr) =>
                   val stats1 = stats.mapConserve {
@@ -193,9 +193,10 @@ private[async] trait AnfTransform extends TransformUtils {
               }
               def apply(tree: Tree): Tree = {
                 caseVars += transform(tree)
-                if (matchEndBlock != null)
-                  treeCopy.Block(tree, caseVars.toList, matchEndBlock)
-                else
+                caseVars ++= matchEndBlock.stats
+                if (matchEndBlock != null) {
+                  treeCopy.Block(tree, caseVars.toList, matchEndBlock.expr)
+                } else
                   tree
               }
             }
