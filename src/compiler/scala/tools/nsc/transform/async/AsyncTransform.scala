@@ -191,16 +191,19 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
 
     // live variables analysis
     // the result map indicates in which states a given field should be nulled out
-    val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
+    val nullOut = true
+    if (nullOut) {
+      val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
 
-    for ((state, flds) <- assignsOf) {
-      val assigns = flds.map { fld =>
-        val fieldSym = fld.symbol
-        Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), gen.mkZero(fieldSym.info).setPos(asyncPos))
+      for ((state, flds) <- assignsOf) {
+        val assigns = flds.map { fld =>
+          val fieldSym = fld.symbol
+          Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), gen.mkZero(fieldSym.info).setPos(asyncPos))
 
+        }
+        val asyncState = asyncBlock.asyncStates.find(_.state == state).get
+        asyncState.stats = assigns ++ asyncState.stats
       }
-      val asyncState = asyncBlock.asyncStates.find(_.state == state).get
-      asyncState.stats = assigns ++ asyncState.stats
     }
 
     val liftedSyms = liftedFields.map(_.symbol).toSet

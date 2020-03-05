@@ -23,6 +23,7 @@ final class StateSet {
   private val caseSet = new util.HashSet[Integer]()
   def +=(stateId: Int): Unit = if (stateId > 0) bitSet.set(stateId) else caseSet.add(stateId)
   def contains(stateId: Int): Boolean = if (stateId > 0 && stateId < 1024) bitSet.get(stateId) else caseSet.contains(stateId)
+  def isEmpty = bitSet.isEmpty && caseSet.isEmpty
   def iterator: Iterator[Integer] = {
     bitSet.stream().iterator().asScala ++ caseSet.asScala.iterator
   }
