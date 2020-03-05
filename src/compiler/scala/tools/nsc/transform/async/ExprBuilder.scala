@@ -282,7 +282,7 @@ trait ExprBuilder extends TransformUtils {
 
       for ((_, entry) <- caseByMatchEnd) {
         entry.subsequentCasesOfAwait = entry.containsAwait.flatMap(a => entry.subsequentCases.getOrElse(a, Nil)).toSet
-        (entry.cases -- entry.subsequentCasesOfAwait -- entry.containsAwait).foreach(labelDefStates.remove(_))
+        (entry.cases -- entry.subsequentCasesOfAwait).foreach(labelDefStates.remove(_))
       }
 
       def isTerminalCase(caseOrMatchEndSym: Symbol): Boolean = {
@@ -418,36 +418,25 @@ trait ExprBuilder extends TransformUtils {
         stateBuilder = new AsyncStateBuilder(currState, symLookup)
       case ld @ LabelDef(name, params, rhs) =>
         if (patternIndex.matchContainsAwait(ld.symbol)) {
-          if (containsAwait(rhs)) {
-            val startLabelState = stateIdForLabel(ld.symbol)
-            val matchEndForThisCaseLabel = patternIndex.matchEndByCase(ld.symbol)
-            val afterLabelState = stateIdForLabel(matchEndForThisCaseLabel)
-            currState = startLabelState
-            asyncStates += stateBuilder.resultWithLabel(startLabelState, symLookup)
-            val builder = nestedBlockBuilder(rhs, startLabelState, afterLabelState)
-            asyncStates ++= builder.asyncStates.toList
-            currState = nextState()
+          val needsState = labelDefStates.contains(ld.symbol) || patternIndex.isTerminalCase(ld.symbol)
+          if (needsState) {
+            if (!stateBuilder.isEmpty) {
+              val startLabelState = stateIdForLabel(ld.symbol)
+              currState = startLabelState
+              asyncStates += stateBuilder.resultSimple(startLabelState)
+            }
             stateBuilder = new AsyncStateBuilder(currState, symLookup)
+          }
+          if (containsAwait(rhs)) {
+            stateBuilder += treeCopy.LabelDef(ld, ld.name, ld.params, literalUnit)
+            add(rhs)
           } else if (ld.symbol.name.startsWith("matchEnd")) {
             currState = stateIdForLabel(ld.symbol)
             stateBuilder = new AsyncStateBuilder(currState, symLookup)
-          } else if (labelDefStates.contains(ld.symbol)) {
-            val startLabelState = stateIdForLabel(ld.symbol)
-            currState = startLabelState
-            if (!stateBuilder.isEmpty)
-              asyncStates += stateBuilder.resultSimple(startLabelState)
-            stateBuilder = new AsyncStateBuilder(currState, symLookup)
-            stateBuilder += rhs
           } else if (patternIndex.isTerminalCase(ld.symbol)) {
             checkForUnsupportedAwait(stat)
             stateBuilder += stat
-            val matchEndForThisCaseLabel = patternIndex.matchEndByCase(ld.symbol)
-            val afterLabelState = stateIdForLabel(matchEndForThisCaseLabel)
-            asyncStates += stateBuilder.resultSimple(afterLabelState)
-            stateBuilder = new AsyncStateBuilder(currState, symLookup)
-            stateBuilder += stat
           } else {
-            checkForUnsupportedAwait(stat)
             stateBuilder += stat
           }
         } else {
@@ -563,9 +552,13 @@ trait ExprBuilder extends TransformUtils {
             case s: AsyncStateWithAwait =>
               dotBuilder.append(s"""${stateLabel(state.state)} -> ${stateLabel(s.onCompleteState)} [style=dashed color=red]""")
               dotBuilder.append("\n")
+              dotBuilder.append(s"""${stateLabel(s.onCompleteState)} -> ${stateLabel(s.nextState)}""")
+              dotBuilder.append("\n")
               for (succ <- state.nextStates) {
-                dotBuilder.append(s"""${stateLabel(s.onCompleteState)} -> ${stateLabel(succ)}""")
-                dotBuilder.append("\n")
+                if (succ != s.nextState) {
+                  dotBuilder.append(s"""${stateLabel(s.state)} -> ${stateLabel(succ)}""")
+                  dotBuilder.append("\n")
+                }
               }
             case _ =>
               for (succ <- state.nextStates) {
