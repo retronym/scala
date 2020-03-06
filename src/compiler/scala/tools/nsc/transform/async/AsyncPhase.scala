@@ -86,14 +86,13 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
         case tree: Block if tree.hasAttachment[FutureSystemAttachment] =>
           val saved = currentTransformState
           val futureSystem = tree.getAndRemoveAttachment[FutureSystemAttachment].get.system
-          val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this)
-          currentTransformState = newState
-          try tree.stats match {
+
+          tree.stats match {
             case List(
-                temp@ValDef(_, nme.execContextTemp, _, execContext),
-                cd@ClassDef(mods, tpnme.stateMachine, _, impl@Template(parents, self, stats)),
-                vd@ValDef(_, nme.stateMachine, tpt, _),
-                rest @ _*) if tpt.tpe.typeSymbol == cd.symbol =>
+            temp@ValDef(_, nme.execContextTemp, _, execContext),
+            cd@ClassDef(mods, tpnme.stateMachine, _, impl@Template(parents, self, stats)),
+            vd@ValDef(_, nme.stateMachine, tpt, _),
+            rest@_*) if tpt.tpe.typeSymbol == cd.symbol =>
               val ((dd: DefDef) :: Nil, others) = stats.partition {
                 case dd@DefDef(mods, nme.apply, _, List(tr :: Nil), _, _) => !dd.symbol.isBridge
                 case _ => false
@@ -101,18 +100,23 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
               val asyncBody = (dd.rhs: @unchecked) match {
                 case blk@Block(stats, Literal(Constant(()))) => treeCopy.Block(blk, stats.init, stats.last)
               }
-              val (newRhs, liftables) = asyncTransform(asyncBody, dd.symbol, dd.vparamss.head.head.symbol)
+              val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this, cd.symbol, dd.symbol, dd.symbol.info.params.head)
+              currentTransformState = newState
+              try {
+                val (newRhs, liftables) = asyncTransform(asyncBody, dd.symbol, dd.vparamss.head.head.symbol)
 
-              val newApply = deriveDefDef(dd)(_ => newRhs).setType(null) /* need to retype */
-              val newStats = new ListBuffer[Tree]
-              newStats ++= others
-              newStats += newApply
-              newStats ++= liftables
-              val newTempl = treeCopy.Template(impl, parents, self, newStats.toList)
-              val ucd = treeCopy.ClassDef(cd, mods, tpnme.stateMachine, Nil, newTempl)
-              treeCopy.Block(tree, temp :: localTyper.typedClassDef(ucd) :: vd :: rest.toList, tree.expr)
-          } finally {
-            currentTransformState = saved
+                val newApply = deriveDefDef(dd)(_ => newRhs).setType(null)
+                /* need to retype */
+                val newStats = new ListBuffer[Tree]
+                newStats ++= others
+                newStats += newApply
+                newStats ++= liftables
+                val newTempl = treeCopy.Template(impl, parents, self, newStats.toList)
+                val ucd = treeCopy.ClassDef(cd, mods, tpnme.stateMachine, Nil, newTempl)
+                treeCopy.Block(tree, temp :: localTyper.typedClassDef(ucd) :: vd :: rest.toList, tree.expr)
+              } finally {
+                currentTransformState = saved
+              }
           }
         case tree => tree
       }
