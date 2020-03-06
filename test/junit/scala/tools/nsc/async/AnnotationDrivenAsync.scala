@@ -116,6 +116,21 @@ class AnnotationDrivenAsync {
   }
 
   @Test
+  def testXX(): Unit = {
+    val code =
+      """
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.async.Async.{async, await}
+        |
+        |object Test {
+        |  def test: Future[Int] = async { Array(1, await(f(2)), await(f(3))).sum }
+        |  def f(x: Int): Future[Int] = Future.successful(x)
+        |}
+        |""".stripMargin
+    assertEquals(6, run(code))
+  }
+
+  @Test
   def testCaseClassLifting(): Unit = {
     // Note: this emits a warning under -Ydebug (which we sometimes manually set below in the compiler setup)
     // https://github.com/scala/scala/pull/8750 will fix this.
@@ -306,6 +321,8 @@ class AnnotationDrivenAsync {
       |""".stripMargin
     assertEquals(true, run(code))
   }
+
+
 
   // Handy to debug the compiler
   @Test @Ignore
