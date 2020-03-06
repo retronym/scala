@@ -100,10 +100,10 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
               val asyncBody = (dd.rhs: @unchecked) match {
                 case blk@Block(stats, Literal(Constant(()))) => treeCopy.Block(blk, stats.init, stats.last)
               }
-              val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this, cd.symbol, dd.symbol, dd.symbol.info.params.head)
+              val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this, cd.symbol, dd.symbol, dd.vparamss.head.head.symbol)
               currentTransformState = newState
               try {
-                val (newRhs, liftables) = asyncTransform(asyncBody, dd.symbol, dd.vparamss.head.head.symbol)
+                val (newRhs, liftables) = asyncTransform(asyncBody)
 
                 val newApply = deriveDefDef(dd)(_ => newRhs).setType(null)
                 /* need to retype */

@@ -194,7 +194,8 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
         };
       };
    */
-  def asyncTransform(asyncBody: Tree, applySym: Symbol, trParamSym: Symbol): (Tree, List[Tree]) = {
+  def asyncTransform(asyncBody: Tree): (Tree, List[Tree]) = {
+    val applySym = currentTransformState.applyMethod
     val futureSystem = currentTransformState.futureSystem
     val futureSystemOps = futureSystem.mkOps(global)
 
