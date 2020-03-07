@@ -36,13 +36,14 @@ trait ExprBuilder extends TransformUtils {
 
     def isResumption: Option[Awaitable] = None
 
-    protected def resumptionHandler: Option[Tree] = isResumption.map { awaitable =>
+    final def resumptionHandler: Option[Tree] = isResumption.map { awaitable =>
       val futureSystem = currentTransformState.futureSystem
       val futureSystemOps = futureSystem.mkOps(global)
       def tryyReference = Ident(currentTransformState.symLookup.applyTrParam)
       val tryyGet = futureSystemOps.tryyGet[Any](tryyReference)
 
       val assignTryGet = Assign(Ident(awaitable.resultName), tryyGet)
+
       if (futureSystem.emitTryCatch) {
         If(futureSystemOps.tryyIsFailure(tryyReference),
           Block(toList(futureSystemOps.completeProm[AnyRef](
@@ -78,7 +79,7 @@ trait ExprBuilder extends TransformUtils {
     extends AsyncState {
 
     def mkHandlerCaseForState[T]: CaseDef = {
-      mkHandlerCase(state, treeThenStats(mkStateTree(nextState)))
+      mkHandlerCase(state, adaptToUnitIgnoringNothing((resumptionHandler.toList :+ mkStateTree(nextState)) ::: stats))
     }
 
     override val toString: String =
@@ -112,13 +113,12 @@ trait ExprBuilder extends TransformUtils {
         if (futureSystemOps.continueCompletedFutureOnSameThread) {
           val tempAwaitableSym = symLookup.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.expr.tpe)
           val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable.expr)
-          val tempCompletedSym = symLookup.applyTrParam.owner.newTermSymbol(nme.completed).setInfo(tryAny)
-          val initTempCompleted = ValDef(tempCompletedSym, futureSystemOps.getCompleted[Any](Ident(tempAwaitableSym)))
+          val initTempCompleted = Assign(Ident(symLookup.applyTrParam), futureSystemOps.getCompleted[Any](Ident(tempAwaitableSym)))
           val null_ne = Select(Literal(Constant(null)), TermName("ne"))
           val callOnComplete = futureSystemOps.onComplete[Any, Unit](Ident(tempAwaitableSym), fun, Ident(nme.execContext), definitions.AnyTpe)
           val ifTree =
-            If(Apply(null_ne, Ident(tempCompletedSym) :: Nil),
-              adaptToUnit(ifIsFailureTree[T](Ident(tempCompletedSym)) :: Nil),
+            If(Apply(null_ne, Ident(symLookup.applyTrParam) :: Nil),
+              mkStateTree(nextState),
               Block(toList(callOnComplete), Return(literalUnit)))
           initAwaitableTemp :: initTempCompleted :: ifTree :: Nil
         } else {
@@ -126,35 +126,6 @@ trait ExprBuilder extends TransformUtils {
           toList(callOnComplete) ::: Return(literalUnit) :: Nil
         }
       mkHandlerCase(state, resumptionHandler.toList ++ stats ++ List(mkStateTree(nextState)) ++ tryGetOrCallOnComplete)
-    }
-
-    /* if (tr.isFailure)
-     *   result.complete(tr.asInstanceOf[Try[T]])
-     * else {
-     *   <resultName> = tr.get.asInstanceOf[<resultType>]
-     *   <nextState>
-     *   <mkResumeApply>
-     * }
-     */
-    def ifIsFailureTree[T](tryReference: => Tree) = {
-      val futureSystem = currentTransformState.futureSystem
-      val futureSystemOps = futureSystem.mkOps(global)
-
-      assert(isPastErasure)
-      val tryyGet = futureSystemOps.tryyGet[Any](tryReference)
-
-      val getAndUpdateState = Block(List(Assign(Ident(awaitable.resultName), tryyGet)), mkStateTree(nextState))
-      if (futureSystem.emitTryCatch) {
-        If(futureSystemOps.tryyIsFailure(tryReference),
-          Block(toList(futureSystemOps.completeProm[T](
-            currentTransformState.symLookup.selectResult,
-            tryReference)),
-            Return(literalUnit)),
-          getAndUpdateState
-        )
-      } else {
-        getAndUpdateState
-      }
     }
 
     override val toString: String =
@@ -417,6 +388,10 @@ trait ExprBuilder extends TransformUtils {
         stateBuilder = new AsyncStateBuilder(currState)
       case ld @ LabelDef(name, params, rhs) =>
         if (patternIndex.matchContainsAwait(ld.symbol)) {
+          // We are translating a case of a pattern that contains an await.
+
+          // Only cases that succeed async boundaries and the terminal case need to be represented
+          // as states.
           val needsState = labelDefStates.contains(ld.symbol) || patternIndex.isTerminalCase(ld.symbol)
           if (needsState) {
             if (!stateBuilder.isEmpty) {
@@ -438,6 +413,16 @@ trait ExprBuilder extends TransformUtils {
           } else {
             stateBuilder += stat
           }
+        } else if (containsAwait(rhs)) {
+          val startLabelState = stateIdForLabel(ld.symbol)
+          labelDefStates(ld.symbol) = startLabelState
+          val afterLabelState = afterState.getOrElse(nextState())
+          currState = startLabelState
+          asyncStates += stateBuilder.resultWithLabel(startLabelState)
+          val builder = nestedBlockBuilder(rhs, startLabelState, afterLabelState)
+          asyncStates ++= builder.asyncStates.toList
+          currState = afterLabelState
+          stateBuilder = new AsyncStateBuilder(currState)
         } else {
           checkForUnsupportedAwait(stat)
           stateBuilder += stat
@@ -533,7 +518,7 @@ trait ExprBuilder extends TransformUtils {
             val CaseDef(_, _, body) = state.mkHandlerCaseForState
             toHtmlLabel(stateLabel(state.state), show(compactStateTransform.transform(body)), dotBuilder)
           } else {
-            toHtmlLabel(stateLabel(state.state), state.allStats.map(show(_)).mkString("\n"), dotBuilder)
+            toHtmlLabel(stateLabel(state.state), (state.resumptionHandler.toList ++ state.allStats).map(show(_)).mkString("\n"), dotBuilder)
           }
           dotBuilder.append("> ]\n")
         }
@@ -587,7 +572,8 @@ trait ExprBuilder extends TransformUtils {
         val caseForLastState: CaseDef = {
           val lastState = asyncStates.last
           val lastStateBody = lastState.body
-          val rhs = futureSystemOps.completeWithSuccess(
+
+          val rhs = lastState.resumptionHandler.toList :+ futureSystemOps.completeWithSuccess(
             currentTransformState.symLookup.selectResult, lastStateBody, definitions.AnyTpe)
           mkHandlerCase(lastState.state, Block(rhs, Return(literalUnit)))
         }
@@ -701,8 +687,8 @@ trait ExprBuilder extends TransformUtils {
   private def mkStateTree(nextState: Int): Tree = {
     val symLookup = currentTransformState.symLookup
     val callSetter = Apply(symLookup.memberRef(symLookup.stateSetter), Literal(Constant(nextState)) :: Nil)
-    val debug = false
-    if (debug) {
+    val printStateUpdates = false
+    if (printStateUpdates) {
       Block(
         callSetter :: Nil,
         gen.mkMethodCall(definitions.PredefModule.info.member(TermName("println")), currentTransformState.localTyper.typed(gen.mkApplyIfNeeded(symLookup.memberRef(symLookup.stateGetter)), definitions.ObjectTpe) :: Nil)
