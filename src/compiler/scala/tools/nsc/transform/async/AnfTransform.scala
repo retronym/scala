@@ -166,14 +166,14 @@ private[async] trait AnfTransform extends TransformUtils {
             treeCopy.Match(tree, scrutExpr, casesWithAssign)
           }
 
-        case LabelDef(name, params, rhs) =>
+        case ld @ LabelDef(name, params, rhs) =>
           val rhs1 = transformNewControlFlowBlock(rhs)
-          if (name.startsWith("case")) {
+          if (isCaseLabel(ld.symbol)) {
             object caseDefTransformer extends TypingTransformer(currentTransformState.unit) {
               var caseVars = ListBuffer[Tree]()
               var matchEndBlock: Block = null;
               override def transform(tree: Tree): Tree = tree match {
-                case blk @ Block(stats, Apply(fun, _)) if isLabel(fun.symbol) && fun.symbol.name.startsWith("matchEnd") =>
+                case blk @ Block(stats, Apply(fun, _)) if isMatchEndLabel(fun.symbol) =>
                   matchEndBlock = blk
                   literalUnit
                 case Block(stats, expr) =>

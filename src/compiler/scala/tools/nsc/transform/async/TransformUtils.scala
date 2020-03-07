@@ -140,6 +140,8 @@ private[async] trait TransformUtils extends PhasedTransform {
   }
 
   def isLabel(sym: Symbol): Boolean = sym.isLabel
+  def isCaseLabel(sym: Symbol): Boolean = sym.isLabel && sym.name.startsWith("case")
+  def isMatchEndLabel(sym: Symbol): Boolean = sym.isLabel && sym.name.startsWith("matchEnd")
 
   def substituteTrees(t: Tree, from: List[Symbol], to: List[Tree]): Tree =
     (new TreeSubstituter(from, to)).transform(t)
@@ -299,7 +301,7 @@ private[async] trait TransformUtils extends PhasedTransform {
   object MatchEnd {
     def unapply(t: Tree): Option[LabelDef] = t match {
       case ValDef(_, _, _, t) => unapply(t)
-      case ld: LabelDef if ld.name.toString.startsWith("matchEnd") => Some(ld)
+      case ld: LabelDef if isMatchEndLabel(ld.symbol) => Some(ld)
       case _ => None
     }
   }

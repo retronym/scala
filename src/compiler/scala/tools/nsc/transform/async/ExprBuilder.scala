@@ -286,9 +286,9 @@ trait ExprBuilder extends TransformUtils {
       var currentMatchEnd: Symbol = null
       for (tree <- trees.reverseIterator) {
         tree match {
-          case LabelDef(name, _, _) if name.startsWith("matchEnd") =>
+          case ld @ LabelDef(_, _, _) if isMatchEndLabel(ld.symbol) =>
             currentMatchEnd = tree.symbol
-          case ld @ LabelDef(name, _, _) if name.startsWith("case") =>
+          case ld @ LabelDef(_, _, _) if isCaseLabel(ld.symbol) =>
             if (currentMatchEnd != null) {
               val entry = caseByMatchEnd.getOrElseUpdate(currentMatchEnd, new PatternIndexEntry())
               entry.cases.prepend(tree.symbol)
@@ -325,7 +325,7 @@ trait ExprBuilder extends TransformUtils {
     private def containsForeignLabelJump(t: Tree): Boolean = {
       val labelDefs = t.collect { case ld: LabelDef => ld.symbol }.toSet
       t.exists {
-        case rt: RefTree => rt.symbol != null && isLabel(rt.symbol) && !(labelDefs contains rt.symbol) && !rt.symbol.name.startsWith("case") && rt.symbol != currentTransformState.symLookup.whileLabel
+        case rt: RefTree => rt.symbol != null && isLabel(rt.symbol) && !(labelDefs contains rt.symbol) && !isCaseLabel(rt.symbol) && rt.symbol != currentTransformState.symLookup.whileLabel
         case _ => false
       }
     }
@@ -404,7 +404,7 @@ trait ExprBuilder extends TransformUtils {
           if (containsAwait(rhs)) {
             stateBuilder += treeCopy.LabelDef(ld, ld.name, ld.params, literalUnit)
             add(rhs)
-          } else if (ld.symbol.name.startsWith("matchEnd")) {
+          } else if (isMatchEndLabel(ld.symbol)) {
             currState = stateIdForLabel(ld.symbol)
             stateBuilder = new AsyncStateBuilder(currState)
           } else if (patternIndex.isTerminalCase(ld.symbol)) {
