@@ -139,9 +139,9 @@ private[async] trait TransformUtils extends PhasedTransform {
     }
   }
 
-  def isLabel(sym: Symbol): Boolean = sym.isLabel
-  def isCaseLabel(sym: Symbol): Boolean = sym.isLabel && sym.name.startsWith("case")
-  def isMatchEndLabel(sym: Symbol): Boolean = sym.isLabel && sym.name.startsWith("matchEnd")
+  def isLabel(sym: Symbol): Boolean = sym != null && sym.isLabel
+  def isCaseLabel(sym: Symbol): Boolean = sym != null && sym.isLabel && sym.name.startsWith("case")
+  def isMatchEndLabel(sym: Symbol): Boolean = sym != null && sym.isLabel && sym.name.startsWith("matchEnd")
 
   def substituteTrees(t: Tree, from: List[Symbol], to: List[Tree]): Tree =
     (new TreeSubstituter(from, to)).transform(t)
@@ -149,6 +149,12 @@ private[async] trait TransformUtils extends PhasedTransform {
   def statsAndExpr(tree: Tree): (List[Tree], Tree) = tree match {
     case Block(stats, expr) => (stats, expr)
     case _                  => (List(tree), Literal(Constant(())))
+  }
+  object Thicket
+  def expandThicket(t: Tree): List[Tree] = t match {
+    case Block(stats, expr) if t.attachments.contains[Thicket.type] =>
+      stats :+ expr
+    case _ => t :: Nil
   }
 
   def blockToList(tree: Tree): List[Tree] = tree match {

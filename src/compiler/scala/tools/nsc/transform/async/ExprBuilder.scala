@@ -27,6 +27,52 @@ trait ExprBuilder extends TransformUtils {
   private def stateAssigner  = currentTransformState.stateAssigner
   private def labelDefStates = currentTransformState.labelDefStates
 
+  private def resumeTree(awaitable: Awaitable): List[Tree] = {
+    val futureSystem = currentTransformState.futureSystem
+    val futureSystemOps = futureSystem.mkOps(global)
+    def tryyReference = Ident(currentTransformState.symLookup.applyTrParam)
+    val tryyGet = futureSystemOps.tryyGet[Any](tryyReference)
+
+    val assignTryGet = Assign(Ident(awaitable.resultName), tryyGet)
+
+    val vd = deriveValDef(awaitable.resultValDef)(_ => gen.mkZero(awaitable.resultValDef.symbol.info))
+    vd.symbol.setFlag(Flag.MUTABLE)
+    val assignOrReturn = if (futureSystem.emitTryCatch) {
+      If(futureSystemOps.tryyIsFailure(tryyReference),
+        Block(toList(futureSystemOps.completeProm[AnyRef](
+          currentTransformState.symLookup.selectResult,
+          tryyReference)),
+          Return(literalBoxedUnit).setSymbol(currentTransformState.applyMethod)),
+        assignTryGet
+      )
+    } else {
+      assignTryGet
+    }
+    vd :: assignOrReturn :: Nil
+  }
+
+  private def awaitTree(awaitable: Awaitable, nextState: Int): List[Tree] = {
+    val futureSystem = currentTransformState.futureSystem
+    val futureSystemOps = futureSystem.mkOps(global)
+    val fun = This(tpnme.EMPTY)
+    val symLookup = currentTransformState.symLookup
+    if (futureSystemOps.continueCompletedFutureOnSameThread) {
+      val tempAwaitableSym = symLookup.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.expr.tpe)
+      val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable.expr)
+      val initTempCompleted = Assign(Ident(symLookup.applyTrParam), futureSystemOps.getCompleted[Any](Ident(tempAwaitableSym)))
+      val null_ne = Select(Literal(Constant(null)), TermName("ne"))
+      val callOnComplete = futureSystemOps.onComplete[Any, Unit](Ident(tempAwaitableSym), fun, Ident(nme.execContext), definitions.AnyTpe)
+      val ifTree =
+        If(Apply(null_ne, Ident(symLookup.applyTrParam) :: Nil),
+          Block(mkStateTree(nextState) :: Nil, Apply(Ident(currentTransformState.symLookup.whileLabel), Nil)),
+          Block(mkStateTree(nextState) +: toList(callOnComplete), Return(literalUnit)))
+      initAwaitableTemp :: initTempCompleted :: ifTree :: Nil
+    } else {
+      val callOnComplete = futureSystemOps.onComplete[Any, Unit](awaitable.expr, fun, Ident(nme.execContext), definitions.AnyTpe)
+      (mkStateTree(nextState) :: toList(callOnComplete)) ::: Return(literalUnit) :: Nil
+    }
+  }
+
   trait AsyncState {
     def state: Int
 
@@ -34,39 +80,12 @@ trait ExprBuilder extends TransformUtils {
 
     def mkHandlerCaseForState[T]: CaseDef
 
-    def isResumption: Option[Awaitable] = None
-
-    final def resumptionHandler: Option[Tree] = isResumption.map { awaitable =>
-      val futureSystem = currentTransformState.futureSystem
-      val futureSystemOps = futureSystem.mkOps(global)
-      def tryyReference = Ident(currentTransformState.symLookup.applyTrParam)
-      val tryyGet = futureSystemOps.tryyGet[Any](tryyReference)
-
-      val assignTryGet = Assign(Ident(awaitable.resultName), tryyGet)
-
-      if (futureSystem.emitTryCatch) {
-        If(futureSystemOps.tryyIsFailure(tryyReference),
-          Block(toList(futureSystemOps.completeProm[AnyRef](
-            currentTransformState.symLookup.selectResult,
-            tryyReference)),
-            Return(literalUnit)),
-          assignTryGet
-        )
-      } else {
-        assignTryGet
-      }
-    }
-
     var stats: List[Tree]
 
     def treeThenStats(tree: Tree): List[Tree] =
       adaptToUnitIgnoringNothing(tree :: stats) :: Nil
 
-    final def allStats: List[Tree] = this match {
-      case a: AsyncStateWithAwait => treeThenStats(a.awaitable.resultValDef)
-      case _ => stats
-    }
-
+    final def allStats: List[Tree] = stats
     final def body: Tree = stats match {
       case stat :: Nil => stat
       case init :+ last => Block(init, last)
@@ -75,122 +94,56 @@ trait ExprBuilder extends TransformUtils {
   }
 
   /** A sequence of statements that concludes with a unconditional transition to `nextState` */
-  final class SimpleAsyncState(var stats: List[Tree], val state: Int, nextState: Int, val nextStates: Array[Int], override val isResumption: Option[Awaitable])
+  final class SimpleAsyncState(var stats: List[Tree], val state: Int, val nextStates: Array[Int])
     extends AsyncState {
 
-    def mkHandlerCaseForState[T]: CaseDef = {
-      mkHandlerCase(state, adaptToUnitIgnoringNothing((resumptionHandler.toList :+ mkStateTree(nextState)) ::: stats))
-    }
+    def mkHandlerCaseForState[T]: CaseDef = mkHandlerCase(state, adaptToUnitIgnoringNothing(stats))
 
     override val toString: String =
-      s"AsyncState #$state, next = $nextState"
+      s"AsyncState #$state, next = ${nextStates.toList}"
   }
 
   /** A sequence of statements with a conditional transition to the next state, which will represent
     * a branch of an `if` or a `match`.
     */
-  final class AsyncStateWithoutAwait(var stats: List[Tree], val state: Int, val nextStates: Array[Int], override val isResumption: Option[Awaitable]) extends AsyncState {
+  final class AsyncStateWithoutAwait(var stats: List[Tree], val state: Int, val nextStates: Array[Int]) extends AsyncState {
     override def mkHandlerCaseForState[T]: CaseDef =
-      mkHandlerCase(state, resumptionHandler.toList ++ stats)
+      mkHandlerCase(state, stats)
 
     override val toString: String =
       s"AsyncStateWithoutAwait #$state, nextStates = ${nextStates.toList}"
   }
 
-  /** A sequence of statements that concludes with an `await` call. The `onComplete`
-    * handler will unconditionally transition to `nextState`.
-    */
-  final class AsyncStateWithAwait(var stats: List[Tree], val state: Int, val nextState: Int, val nextStates: Array[Int],
-                                  val awaitable: Awaitable, override val isResumption: Option[Awaitable])
-    extends AsyncState {
-
-    override def mkHandlerCaseForState[T]: CaseDef = {
-      val futureSystem = currentTransformState.futureSystem
-      val futureSystemOps = futureSystem.mkOps(global)
-      val fun = This(tpnme.EMPTY)
-      val symLookup = currentTransformState.symLookup
-      val tryGetOrCallOnComplete: List[Tree] =
-        if (futureSystemOps.continueCompletedFutureOnSameThread) {
-          val tempAwaitableSym = symLookup.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.expr.tpe)
-          val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable.expr)
-          val initTempCompleted = Assign(Ident(symLookup.applyTrParam), futureSystemOps.getCompleted[Any](Ident(tempAwaitableSym)))
-          val null_ne = Select(Literal(Constant(null)), TermName("ne"))
-          val callOnComplete = futureSystemOps.onComplete[Any, Unit](Ident(tempAwaitableSym), fun, Ident(nme.execContext), definitions.AnyTpe)
-          val ifTree =
-            If(Apply(null_ne, Ident(symLookup.applyTrParam) :: Nil),
-              mkStateTree(nextState),
-              Block(toList(callOnComplete), Return(literalUnit)))
-          initAwaitableTemp :: initTempCompleted :: ifTree :: Nil
-        } else {
-          val callOnComplete = futureSystemOps.onComplete[Any, Unit](awaitable.expr, fun, Ident(nme.execContext), definitions.AnyTpe)
-          toList(callOnComplete) ::: Return(literalUnit) :: Nil
-        }
-      mkHandlerCase(state, resumptionHandler.toList ++ stats ++ List(mkStateTree(nextState)) ++ tryGetOrCallOnComplete)
-    }
-
-    override val toString: String =
-      s"AsyncStateWithAwait #$state, next = $nextState"
-  }
-
   /*
    * Builder for a single state of an async expression.
    */
-  private final class AsyncStateBuilder(state: Int, val isResumption: Option[Awaitable] = None) {
+  private final class AsyncStateBuilder(state: Int) {
     /* Statements preceding an await call. */
-    private val stats                      = ListBuffer[Tree]()
-    /** The state of the target of a LabelDef application (while loop jump) */
-    private var nextJumpState: Option[Int] = None
-    private var nextJumpSymbol: Symbol = NoSymbol
-    def effectiveNextState(nextState: Int) =
-      nextJumpState.orElse(if (nextJumpSymbol == NoSymbol) None
-                           else Some(stateIdForLabel(nextJumpSymbol))).getOrElse(nextState)
+    val stats                      = ListBuffer[Tree]()
+
     val caseJumpStates: StateSet = new StateSet
 
     def +=(stat: Tree): this.type = {
+      val trans = new replaceJumpsWithStateTransitions( caseJumpStates)
 
-      // Allow `()` (occurs in do/while)
-      assert(isLiteralUnit(stat) || nextJumpState.isEmpty, s"statement appeared after a label jump: $stat")
-
-      stat match {
-        case Apply(fun, args) if isLabel(fun.symbol) && fun.symbol != currentTransformState.symLookup.whileLabel =>
-          // labelDefStates belongs to the current ExprBuilder
-          labelDefStates get fun.symbol match {
-            case opt@Some(nextState) =>
-              // A backward jump
-              nextJumpState = opt // re-use object
-              nextJumpSymbol = fun.symbol
-            case None =>
-              // We haven't the corresponding LabelDef, this is a forward jump
-              nextJumpSymbol = fun.symbol
-          }
-        case _               =>
-          val trans = new replaceJumpsWithStateTransitions( caseJumpStates)
-          stats += trans.transformAtOwner(currentTransformState.localTyper.context.owner, stat)
-      }
+      stats ++= expandThicket(trans.transformAtOwner(currentTransformState.localTyper.context.owner, stat))
       this
     }
 
-    def resultWithAwait(awaitable: Awaitable,
-                        nextState: Int): AsyncState = {
-      val nextState1 = effectiveNextState(nextState)
-      val allNextStates = nextState1 +: caseJumpStates.iterator.map(_.toInt).toArray.distinct
-      new AsyncStateWithAwait(stats.toList, state, nextState1, allNextStates, awaitable, isResumption)
-    }
-
     def resultSimple(nextState: Int): AsyncState = {
-      val nextState1 = effectiveNextState(nextState)
-      val allNextStates = nextState1 +: caseJumpStates.iterator.map(_.toInt).toArray.distinct
-      new SimpleAsyncState(stats.toList, state, nextState1, allNextStates, isResumption)
+      val statsList = stats.toList
+      statsList.last match {
+        case Apply(fun, args) if isLabel(fun.symbol) =>
+          val allNextStates = caseJumpStates.iterator.map(_.toInt).toArray.distinct
+          new SimpleAsyncState(statsList, state, allNextStates)
+        case _ =>
+          stats += mkStateTree(nextState)
+          val allNextStates = nextState +: caseJumpStates.iterator.map(_.toInt).toArray.distinct
+          new SimpleAsyncState(statsList, state, allNextStates)
+      }
     }
 
     def isEmpty: Boolean = stats.isEmpty
-
-    def resultWithIf(condTree: Tree, thenState: Int, elseState: Int): AsyncState = {
-      assert(caseJumpStates.isEmpty)
-      def mkBranch(state: Int) = mkStateTree(state)
-      this += If(condTree, mkBranch(thenState), mkBranch(elseState))
-      new AsyncStateWithoutAwait(stats.toList, state, Array(thenState, elseState), isResumption)
-    }
 
     /**
      * Build `AsyncState` ending with a match expression.
@@ -211,12 +164,12 @@ trait ExprBuilder extends TransformUtils {
       }
       // 2. insert changed match tree at the end of the current state
       this += Match(scrutTree, newCases)
-      new AsyncStateWithoutAwait(stats.toList, state, caseStates, isResumption)
+      new AsyncStateWithoutAwait(stats.toList, state, caseStates)
     }
 
     def resultWithLabel(startLabelState: Int): AsyncState = {
       this += mkStateTree(startLabelState)
-      new AsyncStateWithoutAwait(stats.toList, state, startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray, isResumption)
+      new AsyncStateWithoutAwait(stats.toList, state, startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray)
     }
 
     override def toString: String = {
@@ -237,7 +190,9 @@ trait ExprBuilder extends TransformUtils {
     val asyncStates = ListBuffer[AsyncState]()
 
     var stateBuilder = new AsyncStateBuilder(startState)
-    var currState    = startState
+    var _currState    = startState
+    def currState    = _currState
+    def currState_=(s: Int)    = _currState = s
 
     def checkForUnsupportedAwait(tree: Tree) = if (containsAwait(tree))
       global.reporter.error(tree.pos, "await must not be used in this position")
@@ -288,14 +243,22 @@ trait ExprBuilder extends TransformUtils {
         tree match {
           case ld @ LabelDef(_, _, _) if isMatchEndLabel(ld.symbol) =>
             currentMatchEnd = tree.symbol
-          case ld @ LabelDef(_, _, _) if isCaseLabel(ld.symbol) =>
+          case ld @ LabelDef(_, _, rhs) if isCaseLabel(ld.symbol) =>
             if (currentMatchEnd != null) {
               val entry = caseByMatchEnd.getOrElseUpdate(currentMatchEnd, new PatternIndexEntry())
               entry.cases.prepend(tree.symbol)
               if (containsAwait(tree)) {
                 entry.containsAwait.add(ld.symbol)
               }
-              tree foreach {
+              val treeToCheck = rhs match {
+                case Block(stats, LabelDef(_, _, caseBody @ Block(stats1, expr1))) =>
+                  if (!stats.forall(containsAwait)) {
+                    caseBody
+                  } else rhs
+                case _ =>
+                  rhs
+              }
+              treeToCheck foreach {
                 case Apply(fun, _) if isLabel(fun.symbol) && caseByMatchEnd.get(currentMatchEnd).exists(_.cases.contains(fun.symbol)) =>
                   entry.subsequentCases.getOrElseUpdate(ld.symbol, mutable.HashSet()) += fun.symbol
                 case _ =>
@@ -341,31 +304,35 @@ trait ExprBuilder extends TransformUtils {
     def add(stat: Tree, afterState: Option[Int] = None): Unit = stat match {
       // the val name = await(..) pattern
       case vd @ ValDef(mods, name, tpt, UnwrapBoxedUnit(Apply(fun, arg :: Nil))) if currentTransformState.ops.isAwait(fun) =>
-        val afterAwaitState = afterState.getOrElse(nextState())
         val awaitable = Awaitable(arg.changeOwner(vd.symbol, vd.symbol.owner), stat.symbol, tpt.tpe, vd)
-        asyncStates += stateBuilder.resultWithAwait(awaitable, afterAwaitState) // complete with await
+        val afterAwaitState = nextState()
         currState = afterAwaitState
-        stateBuilder = new AsyncStateBuilder(currState, isResumption = Some(awaitable))
+        awaitTree(awaitable, afterAwaitState).foreach(stateBuilder += _)
+        asyncStates += stateBuilder.resultSimple(afterAwaitState)
+        stateBuilder = new AsyncStateBuilder(currState)
+        resumeTree(awaitable).foreach(stateBuilder += _)
 
       case If(cond, thenp, elsep) if containsAwait(stat) || containsForeignLabelJump(stat) =>
         checkForUnsupportedAwait(cond)
 
-        val thenStartState = nextState()
-        val elseStartState = nextState()
         val afterIfState = afterState.getOrElse(nextState())
 
-        // the two Int arguments are the start state of the then branch and the else branch, respectively
-        asyncStates += stateBuilder.resultWithIf(cond, thenStartState, elseStartState)
-
-        List((thenp, thenStartState), (elsep, elseStartState)) foreach {
-          case (branchTree, state) =>
-            val builder = nestedBlockBuilder(branchTree, state, afterIfState)
-            asyncStates ++= builder.asyncStates
+        val thenBlockBuilder = nestedBlockBuilder(thenp, currState, afterIfState)
+        val elseBlockBuilder = nestedBlockBuilder(elsep, currState, afterIfState)
+        val inlinedThenState = thenBlockBuilder.asyncStates.find(_.state == currState).get
+        val inlinedElseState = elseBlockBuilder.asyncStates.find(_.state == currState).get
+        stateBuilder += treeCopy.If(stat, cond,
+          Block(inlinedThenState.stats.toList, literalUnit),
+          Block(inlinedElseState.stats.toList, literalUnit)).clearType()
+        List(inlinedElseState, inlinedThenState).foreach(_.nextStates.foreach(state => if (state != afterIfState) stateBuilder.caseJumpStates += state))
+        val nestedAsyncStates = List(thenBlockBuilder, elseBlockBuilder).flatMap(_.asyncStates).filter(_.state != currState)
+        asyncStates ++= nestedAsyncStates
+        val needAfterIfState = nestedAsyncStates.exists(_.nextStates.contains(afterIfState))
+        if (needAfterIfState) {
+          asyncStates += stateBuilder.resultSimple(afterIfState)
+          currState = afterIfState
+          stateBuilder = new AsyncStateBuilder(currState)
         }
-
-        currState = afterIfState
-        stateBuilder = new AsyncStateBuilder(currState)
-
       case Match(scrutinee, cases) if containsAwait(stat) =>
         checkForUnsupportedAwait(scrutinee)
 
@@ -387,6 +354,7 @@ trait ExprBuilder extends TransformUtils {
         currState = afterMatchState
         stateBuilder = new AsyncStateBuilder(currState)
       case ld @ LabelDef(name, params, rhs) =>
+
         if (patternIndex.matchContainsAwait(ld.symbol)) {
           // We are translating a case of a pattern that contains an await.
 
@@ -518,16 +486,13 @@ trait ExprBuilder extends TransformUtils {
             val CaseDef(_, _, body) = state.mkHandlerCaseForState
             toHtmlLabel(stateLabel(state.state), show(compactStateTransform.transform(body)), dotBuilder)
           } else {
-            toHtmlLabel(stateLabel(state.state), (state.resumptionHandler.toList ++ state.allStats).map(show(_)).mkString("\n"), dotBuilder)
+            toHtmlLabel(stateLabel(state.state), (state.allStats).map(show(_)).mkString("\n"), dotBuilder)
           }
           dotBuilder.append("> ]\n")
         }
         for (state <- states) {
           for (succ <- state.nextStates) {
-            val style = state match {
-              case s: AsyncStateWithAwait if s.nextState == succ => "[style=dashed color=red]"
-              case _ => ""
-            }
+            val style = ""
             dotBuilder.append(s"""${stateLabel(state.state)} -> ${stateLabel(succ)} $style""")
             dotBuilder.append("\n")
           }
@@ -573,7 +538,7 @@ trait ExprBuilder extends TransformUtils {
           val lastState = asyncStates.last
           val lastStateBody = lastState.body
 
-          val rhs = lastState.resumptionHandler.toList :+ futureSystemOps.completeWithSuccess(
+          val rhs = futureSystemOps.completeWithSuccess(
             currentTransformState.symLookup.selectResult, lastStateBody, definitions.AnyTpe)
           mkHandlerCase(lastState.state, Block(rhs, Return(literalUnit)))
         }
@@ -634,7 +599,7 @@ trait ExprBuilder extends TransformUtils {
                 branchTrue
             })), EmptyTree)
       }
-      private def compactStates = true
+      private def compactStates = false
 
       private val compactStateTransform = new Transformer {
         val symLookup = currentTransformState.symLookup
@@ -718,7 +683,6 @@ trait ExprBuilder extends TransformUtils {
   }
 
   private class replaceJumpsWithStateTransitions(states: StateSet) extends TypingTransformer(currentTransformState.unit) {
-    object Thicket
     override def transform(tree: Tree): Tree = tree match {
       case Apply(fun, args) if isLabel(fun.symbol) =>
         labelDefStates.get(fun.symbol) match {
