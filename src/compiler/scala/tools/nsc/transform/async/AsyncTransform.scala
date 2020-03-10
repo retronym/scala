@@ -224,7 +224,7 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
 
     // live variables analysis
     // the result map indicates in which states a given field should be nulled out
-    val nullOut = false
+    val nullOut = true
     if (nullOut) {
       val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
 

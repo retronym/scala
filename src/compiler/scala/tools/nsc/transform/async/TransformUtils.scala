@@ -150,12 +150,6 @@ private[async] trait TransformUtils extends PhasedTransform {
     case Block(stats, expr) => (stats, expr)
     case _                  => (List(tree), Literal(Constant(())))
   }
-  object Thicket
-  def expandThicket(t: Tree): List[Tree] = t match {
-    case Block(stats, expr) if t.attachments.contains[Thicket.type] =>
-      stats :+ expr
-    case _ => t :: Nil
-  }
 
   def blockToList(tree: Tree): List[Tree] = tree match {
     case Block(stats, expr) => stats :+ expr
@@ -168,6 +162,43 @@ private[async] trait TransformUtils extends PhasedTransform {
       Block(init, last).setType(last.tpe).setPos(pos)
     case Nil =>
       throw new MatchError(trees)
+  }
+
+  class ThicketTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+    private object Thicket
+    private def expandThicket(t: Tree): List[Tree] = t match {
+      case Block(stats, expr) if t.attachments.contains[Thicket.type] =>
+        stats :+ expr
+      case _ => t :: Nil
+    }
+
+    def apply(tree: Tree): List[Tree] = expandThicket(transform(tree))
+
+    protected def Thicket(stats: List[Tree], expr: Tree): Tree = {
+      Block(stats, expr).updateAttachment(Thicket)
+    }
+
+    override def transform(tree: Tree): Tree = tree match {
+      case Block(stats, expr) =>
+        val stats1 = mutable.ListBuffer[Tree]()
+        transformTrees(stats).foreach {
+          case blk @ Block(stats, expr) if blk.hasAttachment[Thicket.type] =>
+            stats1 ++= stats
+            stats1 += expr
+          case t =>
+            stats1 += t
+        }
+        val expr1 = transform(expr) match {
+          case blk @ Block(stats, expr) if blk.hasAttachment[Thicket.type] =>
+            stats1 ++= stats
+            expr
+          case expr =>
+            expr
+        }
+        treeCopy.Block(tree, stats1.toList, expr1)
+      case _ =>
+        super.transform(tree)
+    }
   }
 
   def emptyConstructor: DefDef = {
