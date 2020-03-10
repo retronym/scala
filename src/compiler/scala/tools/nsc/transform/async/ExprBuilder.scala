@@ -73,14 +73,8 @@ trait ExprBuilder extends TransformUtils {
     }
   }
 
-  trait AsyncState {
-    def state: Int
-
-    def nextStates: Array[Int]
-
-    def mkHandlerCaseForState[T]: CaseDef
-
-    var stats: List[Tree]
+  final class AsyncState(var stats: List[Tree], val state: Int, val nextStates: Array[Int]) {
+    def mkHandlerCaseForState[T]: CaseDef = mkHandlerCase(state, adaptToUnitIgnoringNothing(stats))
 
     def treeThenStats(tree: Tree): List[Tree] =
       adaptToUnitIgnoringNothing(tree :: stats) :: Nil
@@ -91,27 +85,8 @@ trait ExprBuilder extends TransformUtils {
       case init :+ last => Block(init, last)
       case Nil => literalUnit
     }
-  }
-
-  /** A sequence of statements that concludes with a unconditional transition to `nextState` */
-  final class SimpleAsyncState(var stats: List[Tree], val state: Int, val nextStates: Array[Int])
-    extends AsyncState {
-
-    def mkHandlerCaseForState[T]: CaseDef = mkHandlerCase(state, adaptToUnitIgnoringNothing(stats))
-
     override val toString: String =
       s"AsyncState #$state, next = ${nextStates.toList}"
-  }
-
-  /** A sequence of statements with a conditional transition to the next state, which will represent
-    * a branch of an `if` or a `match`.
-    */
-  final class AsyncStateWithoutAwait(var stats: List[Tree], val state: Int, val nextStates: Array[Int]) extends AsyncState {
-    override def mkHandlerCaseForState[T]: CaseDef =
-      mkHandlerCase(state, stats)
-
-    override val toString: String =
-      s"AsyncStateWithoutAwait #$state, nextStates = ${nextStates.toList}"
   }
 
   /*
@@ -133,12 +108,12 @@ trait ExprBuilder extends TransformUtils {
       stats.lastOption match {
         case Some(Apply(fun, args)) if isLabel(fun.symbol) =>
           val allNextStates = caseJumpStates.iterator.map(_.toInt).toArray.distinct
-          new SimpleAsyncState(stats.toList, state, allNextStates)
+          new AsyncState(stats.toList, state, allNextStates)
         case _ =>
           if (nextState != Int.MaxValue)
             stats += mkStateTree(nextState)
           val allNextStates = nextState +: caseJumpStates.iterator.map(_.toInt).toArray.distinct
-          new SimpleAsyncState(stats.toList, state, allNextStates)
+          new AsyncState(stats.toList, state, allNextStates)
       }
     }
 
@@ -163,13 +138,13 @@ trait ExprBuilder extends TransformUtils {
       }
       // 2. insert changed match tree at the end of the current state
       this += Match(scrutTree, newCases)
-      new AsyncStateWithoutAwait(stats.toList, state, caseStates)
+      new AsyncState(stats.toList, state, caseStates)
     }
 
     def resultWithLabel(startLabelState: Int): AsyncState = {
       this += mkStateTree(startLabelState)
       this += Apply(Ident(currentTransformState.symLookup.whileLabel), Nil)
-      new AsyncStateWithoutAwait(stats.toList, state, startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray)
+      new AsyncState(stats.toList, state, (startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray).distinct)
     }
 
     override def toString: String = {

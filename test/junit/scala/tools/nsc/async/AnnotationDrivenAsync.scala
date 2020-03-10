@@ -116,18 +116,55 @@ class AnnotationDrivenAsync {
   }
 
   @Test
-  def testXX(): Unit = {
+  def testWhile1(): Unit = {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
         |import scala.async.Async.{async, await}
         |
         |object Test {
-        |  def test: Future[Int] = async { Array(1, await(f(2)), await(f(3))).sum }
+        |  def p[T](t: T): T = {println(t); t }
+        |  def test: Future[Int] = async {
+        |    var sum = 0
+        |    var i = 0
+        |    while (i < 5) {
+        |      var j = 0
+        |      while (j < 5) {
+        |        sum += await(f(i)) * await(f(j))
+        |        j += 1
+        |      }
+        |      i += 1
+        |    }
+        |    sum
+        |  }
         |  def f(x: Int): Future[Int] = Future.successful(x)
         |}
         |""".stripMargin
-    assertEquals(6, run(code))
+    assertEquals(100, run(code))
+  }
+
+  @Test
+  def testWhile2(): Unit = {
+    val code =
+      """
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.async.Async.{async, await}
+        |
+        |object Test {
+        |  def p[T](t: T): T = {println(t); t }
+        |  def test: Future[Int] = async {
+        |    var sum = 0
+        |    var i = 0
+        |    while (i < 5) {
+        |      sum += await(f(i))
+        |      i += 1
+        |    }
+        |    sum
+        |  }
+        |  def f(x: Int): Future[Int] = Future.successful(x)
+        |}
+        |""".stripMargin
+    assertEquals(10, run(code))
   }
 
   @Test
