@@ -421,7 +421,7 @@ trait ExprBuilder extends TransformUtils {
 
       def filterStates = if (compactStates) {
         val all = blockBuilder.asyncStates.toList
-        val (initial :: rest) = all
+        val ((initial :: Nil), rest) = all.partition(_.state == StateAssigner.Initial)
         val map = all.iterator.map(x => (x.state, x)).toMap
         val seen = mutable.HashSet[Int]()
         def loop(state: AsyncState): Unit = {
@@ -507,7 +507,7 @@ trait ExprBuilder extends TransformUtils {
                 branchTrue
             })), EmptyTree)
       }
-      private def compactStates = false
+      private def compactStates = true
 
       private val compactStateTransform = new Transformer {
         val symLookup = currentTransformState.symLookup
