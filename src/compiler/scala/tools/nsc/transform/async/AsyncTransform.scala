@@ -135,6 +135,7 @@ class AsyncTransformState[U <: Global with Singleton](val symbolTable: U, val fu
   val localTyper: symbolTable.analyzer.Typer = typingTransformer.localTyper.asInstanceOf[symbolTable.analyzer.Typer]
   val stateAssigner  = new StateAssigner
   val labelDefStates = collection.mutable.Map[symbolTable.Symbol, Int]()
+  val labelDefCallsites = collection.mutable.Map[symbolTable.Symbol, collection.mutable.HashSet[Int]]()
   val symLookup = new SymLookup() {
     val global: symbolTable.type = symbolTable
     val stateMachineClass: global.Symbol = AsyncTransformState.this.stateMachineClass.asInstanceOf[symbolTable.Symbol]
@@ -223,7 +224,7 @@ trait AsyncTransform extends AnfTransform with AsyncAnalysis with Lifter with Li
 
     // live variables analysis
     // the result map indicates in which states a given field should be nulled out
-    val nullOut = true
+    val nullOut = false
     if (nullOut) {
       val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
 
