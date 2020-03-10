@@ -28,8 +28,7 @@ trait ExprBuilder extends TransformUtils {
   private def labelDefStates = currentTransformState.labelDefStates
 
   private def resumeTree(awaitable: Awaitable): List[Tree] = {
-    val futureSystem = currentTransformState.futureSystem
-    val futureSystemOps = futureSystem.mkOps(global)
+    val futureSystemOps = currentTransformState.ops
     def tryyReference = Ident(currentTransformState.symLookup.applyTrParam)
     val tryyGet = futureSystemOps.tryyGet[Any](tryyReference)
 
@@ -37,7 +36,7 @@ trait ExprBuilder extends TransformUtils {
 
     val vd = deriveValDef(awaitable.resultValDef)(_ => gen.mkZero(awaitable.resultValDef.symbol.info))
     vd.symbol.setFlag(Flag.MUTABLE)
-    val assignOrReturn = if (futureSystem.emitTryCatch) {
+    val assignOrReturn = if (currentTransformState.futureSystem.emitTryCatch) {
       If(futureSystemOps.tryyIsFailure(tryyReference),
         Block(toList(futureSystemOps.completeProm[AnyRef](
           currentTransformState.symLookup.selectResult,
@@ -52,8 +51,7 @@ trait ExprBuilder extends TransformUtils {
   }
 
   private def awaitTree(awaitable: Awaitable, nextState: Int): List[Tree] = {
-    val futureSystem = currentTransformState.futureSystem
-    val futureSystemOps = futureSystem.mkOps(global)
+    val futureSystemOps = currentTransformState.ops
     val fun = This(tpnme.EMPTY)
     val symLookup = currentTransformState.symLookup
     if (futureSystemOps.continueCompletedFutureOnSameThread) {
@@ -65,11 +63,11 @@ trait ExprBuilder extends TransformUtils {
       val ifTree =
         If(Apply(null_ne, Ident(symLookup.applyTrParam) :: Nil),
           Block(mkStateTree(nextState) :: Nil, Apply(Ident(currentTransformState.symLookup.whileLabel), Nil)),
-          Block(mkStateTree(nextState) +: toList(callOnComplete), Return(literalUnit)))
+          Block(mkStateTree(nextState) +: toList(callOnComplete), Return(literalUnit).setSymbol(currentTransformState.symLookup.applyMethod)))
       initAwaitableTemp :: initTempCompleted :: ifTree :: Nil
     } else {
       val callOnComplete = futureSystemOps.onComplete[Any, Unit](awaitable.expr, fun, Ident(nme.execContext), definitions.AnyTpe)
-      (mkStateTree(nextState) :: toList(callOnComplete)) ::: Return(literalUnit) :: Nil
+      (mkStateTree(nextState) :: toList(callOnComplete)) ::: Return(literalUnit).setSymbol(currentTransformState.symLookup.applyMethod) :: Nil
     }
   }
 
@@ -142,7 +140,7 @@ trait ExprBuilder extends TransformUtils {
         case _ =>
           if (nextState != Int.MaxValue)
             stats += mkStateTree(nextState)
-          val allNextStates = nextState +: caseJumpStates.iterator.map(_.toInt).toArray.distinct
+          val allNextStates = (nextState +: caseJumpStates.iterator.map(_.toInt).toArray).distinct
           new AsyncState(stats.toList, state, allNextStates)
       }
     }
@@ -447,8 +445,7 @@ trait ExprBuilder extends TransformUtils {
       } else blockBuilder.asyncStates.toList
 
       def mkCombinedHandlerCases[T]: List[CaseDef] = {
-        val futureSystem = currentTransformState.futureSystem
-        val futureSystemOps = futureSystem.mkOps(global)
+        val futureSystemOps = currentTransformState.ops
 
         asyncStates match {
           case s :: Nil =>
@@ -479,8 +476,7 @@ trait ExprBuilder extends TransformUtils {
        *       }
        */
       private def resumeFunTree[T]: Tree = {
-        val futureSystem = currentTransformState.futureSystem
-        val futureSystemOps = futureSystem.mkOps(global)
+        val futureSystemOps = currentTransformState.ops
 
         val symLookup = currentTransformState.symLookup
         def stateMemberRef = gen.mkApplyIfNeeded(symLookup.memberRef(symLookup.stateGetter))
