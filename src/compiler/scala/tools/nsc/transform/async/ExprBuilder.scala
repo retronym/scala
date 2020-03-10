@@ -71,7 +71,7 @@ trait ExprBuilder extends TransformUtils {
     }
   }
 
-  final class AsyncState(var stats: List[Tree], val state: Int, val nextStates: Array[Int]) {
+  final class AsyncState(var stats: List[Tree], val state: Int, var nextStates: Array[Int], val isEmpty: Boolean) {
     def statsExceptTransitionTo(nextState: Int): List[Tree] = {
       def isJumpToNext(t: Tree) = t match {
         case as @ Apply(qual: Select, (lit @ Literal(Constant(i: Integer))) :: Nil) if qual.symbol == currentTransformState.symLookup.stateSetter && i.toInt == nextState =>
@@ -103,8 +103,9 @@ trait ExprBuilder extends TransformUtils {
       case init :+ last => Block(init, last)
       case Nil => literalUnit
     }
-    override val toString: String =
-      s"AsyncState #$state, next = ${nextStates.toList}"
+    override def toString: String = mkToString + " (was: " + initToString + ")"
+    private def mkToString = s"AsyncState #$state, next = ${nextStates.toList}"
+    private val initToString = mkToString
   }
 
   /*
@@ -133,15 +134,16 @@ trait ExprBuilder extends TransformUtils {
     }
 
     def resultSimple(nextState: Int): AsyncState = {
+      val isEmpty = stats.isEmpty
       stats.lastOption match {
         case Some(Apply(fun, args)) if isLabel(fun.symbol) =>
           val allNextStates = caseJumpStates.iterator.map(_.toInt).toArray.distinct
-          new AsyncState(stats.toList, state, allNextStates)
+          new AsyncState(stats.toList, state, allNextStates, isEmpty)
         case _ =>
           if (nextState != Int.MaxValue)
             stats += mkStateTree(nextState)
           val allNextStates = (nextState +: caseJumpStates.iterator.map(_.toInt).toArray).distinct
-          new AsyncState(stats.toList, state, allNextStates)
+          new AsyncState(stats.toList, state, allNextStates, isEmpty)
       }
     }
 
@@ -166,13 +168,14 @@ trait ExprBuilder extends TransformUtils {
       }
       // 2. insert changed match tree at the end of the current state
       this += Match(scrutTree, newCases)
-      new AsyncState(stats.toList, state, caseStates)
+      new AsyncState(stats.toList, state, caseStates, false)
     }
 
     def resultWithLabel(startLabelState: Int): AsyncState = {
+      val isEmpty = stats.isEmpty
       this += mkStateTree(startLabelState)
       this += Apply(Ident(currentTransformState.symLookup.whileLabel), Nil)
-      new AsyncState(stats.toList, state, (startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray).distinct)
+      new AsyncState(stats.toList, state, (startLabelState +: caseJumpStates.iterator.map(_.toInt).toArray).distinct, isEmpty)
     }
 
     override def toString: String = {
@@ -189,14 +192,12 @@ trait ExprBuilder extends TransformUtils {
    * @param startState  the start state
    * @param endState    the state to continue with
    */
-  final private class AsyncBlockBuilder(stats: List[Tree], expr: Tree, startState: Int, endState: Int, val outer: Option[AsyncBlockBuilder] = None) {
+  final private class AsyncBlockBuilder(stats: List[Tree], expr: Tree, val startState: Int, val endState: Int, val outer: Option[AsyncBlockBuilder] = None) {
     val asyncStates = ListBuffer[AsyncState]()
     def outerIterator: Iterator[AsyncBlockBuilder] = Iterator.iterate(this)(_.outer.orNull).takeWhile(_ ne null)
 
     var stateBuilder = new AsyncStateBuilder(startState, this)
-    var _currState    = startState
-    def currState    = _currState
-    def currState_=(s: Int)    = _currState = s
+    var currState    = startState
 
     def checkForUnsupportedAwait(tree: Tree) = if (containsAwait(tree))
       global.reporter.error(tree.pos, "await must not be used in this position")
@@ -276,12 +277,10 @@ trait ExprBuilder extends TransformUtils {
 
         if (isCaseLabel(ld.symbol) || isMatchEndLabel(ld.symbol)) {
           def closeState(): Unit = {
-            if (!stateBuilder.isEmpty) {
-              val startLabelState = stateIdForLabel(ld.symbol)
-              labelDefStates(ld.symbol) = startLabelState
-              currState = startLabelState
-              asyncStates += stateBuilder.resultSimple(startLabelState)
-            }
+            val startLabelState = stateIdForLabel(ld.symbol)
+            labelDefStates(ld.symbol) = startLabelState
+            currState = startLabelState
+            asyncStates += stateBuilder.resultSimple(startLabelState)
             stateBuilder = new AsyncStateBuilder(currState, this)
           }
 
@@ -369,6 +368,8 @@ trait ExprBuilder extends TransformUtils {
 
     new AsyncBlock {
       val switchIds = mutable.AnyRefMap[Integer, Integer]()
+      val emptyReplacements = mutable.AnyRefMap[Integer, Integer]()
+      def switchIdOf(state: Integer) = switchIds(emptyReplacements.getOrElse(state, state))
 
       // render with http://graphviz.it/#/new
       def toDot: String = {
@@ -389,7 +390,7 @@ trait ExprBuilder extends TransformUtils {
         val dotBuilder = new StringBuilder()
         dotBuilder.append("digraph {\n")
         def stateLabel(s: Int) = {
-          if (s == 0) "INITIAL" else if (s == Int.MaxValue) "TERMINAL" else (if (compactStates) switchIds.getOrElse[Integer](s, s) else s).toString
+          if (s == 0) "INITIAL" else if (s == Int.MaxValue) "TERMINAL" else (if (compactStates) switchIdOf(s) else s).toString
         }
         val length = states.size
         for ((state, i) <- asyncStates.zipWithIndex) {
@@ -419,16 +420,31 @@ trait ExprBuilder extends TransformUtils {
 
       def filterStates = if (compactStates) {
         val all = blockBuilder.asyncStates.toList
-        val ((initial :: Nil), rest) = all.partition(_.state == StateAssigner.Initial)
+        val ((initial :: Nil), rest) = all.partition(_.state == blockBuilder.startState)
         val map = all.iterator.map(x => (x.state, x)).toMap
         val seen = mutable.HashSet[Int]()
+        def followEmptyState(state: AsyncState): AsyncState = if (state.isEmpty && state.nextStates.size == 1) {
+          val next = state.nextStates(0)
+          if (next == blockBuilder.endState) state
+          else followEmptyState(map(next))
+        } else state
+        all.foreach {state =>
+          val state1 = followEmptyState(state)
+          if (state1 ne state)
+            emptyReplacements(state.state) = state1.state
+        }
+        all.foreach {
+          state => state.nextStates = state.nextStates.map(s => emptyReplacements.getOrElse[Integer](s, s).toInt).distinct
+        }
         def loop(state: AsyncState): Unit = {
-          seen.add(state.state)
-          for (i <- state.nextStates) {
-            if (i != Int.MaxValue && !seen.contains(i)) {
-              map.get(i) match {
-                case Some(i) => loop(i)
-                case None => throw new NoSuchElementException(s"Unable to find state: $i in $map")
+          if (!emptyReplacements.contains(state.state)) {
+            seen.add(state.state)
+            for (i <- state.nextStates) {
+              if (i != Int.MaxValue && !seen.contains(i)) {
+                map.get(i) match {
+                  case Some(i) => loop(i)
+                  case None => throw new NoSuchElementException(s"Unable to find state: $i in $map")
+                }
               }
             }
           }
@@ -509,7 +525,7 @@ trait ExprBuilder extends TransformUtils {
         val symLookup = currentTransformState.symLookup
         override def transform(tree: Tree): Tree = tree match {
           case as @ Apply(qual: Select, (lit @ Literal(Constant(i: Integer))) :: Nil) if qual.symbol == symLookup.stateSetter && compactStates =>
-            val replacement = switchIds(i)
+            val replacement = switchIdOf(i)
             treeCopy.Apply(tree, qual, treeCopy.Literal(lit, Constant(replacement)):: Nil)
           case _: Match | _: CaseDef | _: Block | _: If | _: LabelDef =>
             super.transform(tree)
@@ -520,7 +536,7 @@ trait ExprBuilder extends TransformUtils {
       private def compactStates(m: Match): Tree = if (!compactStates) m else {
         val casesAndReplacementIds: List[(Integer, CaseDef)] = m.cases.map {
           case cd @ CaseDef(lit @ Literal(Constant(i: Integer)), EmptyTree, rhs) =>
-            val replacement = switchIds(i)
+            val replacement = switchIdOf(i)
             val rhs1 = compactStateTransform.transform(rhs)
             (replacement, treeCopy.CaseDef(cd, treeCopy.Literal(lit, Constant(replacement)), EmptyTree, rhs1))
           case cd =>

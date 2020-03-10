@@ -147,7 +147,8 @@ trait LinearSeqOptimized[+A, +Repr <: LinearSeqOptimized[A, Repr]] extends Linea
 
   override /*TraversableLike*/
   def last: A = {
-    if (isEmpty) throw new NoSuchElementException
+    if (isEmpty)
+      throw new NoSuchElementException
     var these = this
     var nx = these.tail
     while (!nx.isEmpty) {
