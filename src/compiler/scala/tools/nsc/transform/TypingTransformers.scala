@@ -29,6 +29,7 @@ trait TypingTransformers {
   abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends Transformer {
     def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
     var localTyper: analyzer.Typer = initLocalTyper
+    currentOwner = localTyper.context.owner
     protected var curTree: Tree = _
 
     override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
