@@ -315,8 +315,13 @@ trait ExprBuilder extends TransformUtils {
       stateBuilder = new AsyncStateBuilder(nextState, this)
     }
 
-    private def checkForUnsupportedAwait(tree: Tree) = if (containsAwait(tree))
-      global.reporter.error(tree.pos, "await must not be used in this position")
+    private def checkForUnsupportedAwait(tree: Tree) = if (containsAwait(tree)) {
+      tree.foreach {
+        case tree: RefTree if isAwait(tree) =>
+          global.reporter.error(tree.pos, "await must not be used in this position")
+        case _ =>
+      }
+    }
 
     /** Copy these states into the current block builder's async stats updating the open state builder's
      *  next states

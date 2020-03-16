@@ -42,7 +42,10 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     val global: self.global.type = self.global
   }
 
-  final class AsyncSymbols(val Async_async: Symbol, val Async_await: Symbol)
+  final class AsyncSymbols(val Async_async: Symbol, val Async_await: Symbol) {
+    // Custom FutureSystems could add their own await method here.
+    val awaits = mutable.HashSet(Async_await)
+  }
   lazy val asyncSymbols: AsyncSymbols = {
     rootMirror.getPackageIfDefined("scala.async") match {
       case NoSymbol if settings.async =>
@@ -107,8 +110,18 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   final class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private lazy val liftableMap = new mutable.AnyRefMap[Symbol, (Symbol, List[Tree])]()
 
-    override def transformUnit(unit: CompilationUnit): Unit =
-      if (units.contains(unit)) super.transformUnit(unit)
+    override def transformUnit(unit: CompilationUnit): Unit = {
+      if (settings.async) {
+        if (units.contains(unit)) super.transformUnit(unit)
+        if (asyncSymbols.awaits.exists(_.isInitialized)) {
+          unit.body.foreach {
+            case tree: RefTree if tree.symbol != null && asyncSymbols.awaits.contains(tree.symbol) =>
+              global.reporter.error(tree.pos, "await must not be used in this position")
+            case _ =>
+          }
+        }
+      }
+    }
 
     // Together, these transforms below target this tree shaps
     // {
@@ -127,7 +140,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
         case cd: ClassDef if liftableMap.contains(cd.symbol) =>
           val (applySym, liftedTrees) = liftableMap.remove(cd.symbol).get
           val liftedSyms = liftedTrees.iterator.map(_.symbol).toSet
-          val cd1 = atOwner(tree.symbol) {
+          val cd1 = atOwner(cd.symbol) {
             deriveClassDef(cd)(impl => {
               deriveTemplate(impl)(liftedTrees ::: _)
             })
@@ -135,8 +148,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           assert(localTyper.context.owner == cd.symbol.owner)
           new UseFields(localTyper, cd.symbol, applySym, liftedSyms).transform(cd1)
 
-        case dd: DefDef if tree.hasAttachment[FutureSystemAttachment] =>
-          val futureSystem = tree.getAndRemoveAttachment[FutureSystemAttachment].get.system
+        case dd: DefDef if dd.hasAttachment[FutureSystemAttachment] =>
+          val futureSystem = dd.getAndRemoveAttachment[FutureSystemAttachment].get.system
           val asyncBody = (dd.rhs: @unchecked) match {
             case blk@Block(stats, Literal(Constant(()))) => treeCopy.Block(blk, stats.init, stats.last).setType(stats.last.tpe)
           }
@@ -154,7 +167,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
               currentTransformState = saved
             }
           }
-        case tree => tree
+        case tree =>
+          tree
       }
 
     private def asyncTransform(asyncBody: Tree): (Tree, List[Tree]) = {
