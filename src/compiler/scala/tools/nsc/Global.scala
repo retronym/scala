@@ -1011,7 +1011,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
        definitions.isDefinitionsInitialized
     && rootMirror.isMirrorInitialized
   )
-  override def isPastTyper = isPast(currentRun.typerPhase)
+  override def isPastTyper = globalPhase != null && isPast(currentRun.typerPhase)
   def isPast(phase: Phase) = (
        (curRun ne null)
     && isGlobalInitialized // defense against init order issues
@@ -1348,6 +1348,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     def runIsAt(ph: Phase)   = globalPhase.id == ph.id
     def runIsAtOptimiz       = runIsAt(jvmPhase)
 
+    firstPhase.iterator.foreach(_.init())
     isDefined = true
 
     // ----------- Units and top-level classes and objects --------

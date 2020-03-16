@@ -386,6 +386,7 @@ class AnnotationDrivenAsync {
         }
       }
       val settings = new Settings(println(_))
+      settings.async.value = true
       settings.outdir.value = out.getAbsolutePath
       settings.embeddedDefaults(getClass.getClassLoader)
 

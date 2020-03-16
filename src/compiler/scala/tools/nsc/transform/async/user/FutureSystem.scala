@@ -106,8 +106,8 @@ object ScalaConcurrentFutureSystem extends FutureSystem {
     import u._
 
     private val global = u.asInstanceOf[Global]
-    lazy val Async_async: Symbol = global.currentRun.runDefinitions.Async_async.asInstanceOf[Symbol]
-    lazy val Async_await: Symbol = global.currentRun.runDefinitions.Async_await.asInstanceOf[Symbol]
+    lazy val Async_async: Symbol = global.async.asyncSymbols.Async_async.asInstanceOf[Symbol]
+    lazy val Async_await: Symbol = global.async.asyncSymbols.Async_await.asInstanceOf[Symbol]
     lazy val Future_class: Symbol = rootMirror.requiredClass[scala.concurrent.Future[_]]
     lazy val Option_class: Symbol = rootMirror.requiredClass[scala.Option[_]]
     lazy val Promise_class: Symbol = rootMirror.requiredClass[scala.concurrent.Promise[_]]
