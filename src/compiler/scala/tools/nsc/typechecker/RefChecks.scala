@@ -1721,7 +1721,7 @@ abstract class RefChecks extends Transform {
     }
 
     private def checkUnexpandedMacro(t: Tree) =
-      if (!t.isDef && t.hasSymbolField && t.symbol.isTermMacro && t.symbol != global.async.asyncSymbols.Async_async) // TODO async
+      if (!t.isDef && t.hasSymbolField && t.symbol.isTermMacro)
         reporter.error(t.pos, "macro has not been expanded")
 
     override def transform(tree: Tree): Tree = {
