@@ -21,17 +21,22 @@ class AsyncTransformState[U <: Global with Singleton](val symbolTable: U, val fu
                                                       val applyTrParam: U#Symbol,
                                                       val asyncType: U#Type) {
   import symbolTable._
-  val ops: futureSystem.Ops[symbolTable.type] = futureSystem.mkOps(symbolTable)
-
   val localTyper: symbolTable.analyzer.Typer = typingTransformer.localTyper.asInstanceOf[symbolTable.analyzer.Typer]
   val stateAssigner  = new StateAssigner
   val labelDefStates = collection.mutable.Map[symbolTable.Symbol, Int]()
+
+  lazy val Async_await: Symbol = futureSystem.Async_await(symbolTable)
 
   lazy val applyTr: Symbol = applyTrParam.asInstanceOf[symbolTable.Symbol]
   lazy val applySym: Symbol = applyTr.owner
   lazy val stateMachineClass: Symbol = applySym.owner
   lazy val stateGetter: Symbol = stateMachineMember(nme.state)
   lazy val stateSetter: Symbol = stateGetter.setterIn(stateGetter.owner)
+  lazy val stateOnComplete: Symbol = stateMachineMember(TermName("onComplete"))
+  lazy val stateCompleteSuccess: Symbol = stateMachineMember(TermName("completeSuccess"))
+  lazy val stateCompleteFailure: Symbol = stateMachineMember(TermName("completeFailure"))
+  lazy val stateGetCompleted: Symbol = stateMachineMember(TermName("getCompleted"))
+  lazy val stateTryGet: Symbol = stateMachineMember(TermName("tryGet"))
   lazy val whileLabel: Symbol = applySym.newLabel(nme.WHILE_PREFIX).setInfo(MethodType(Nil, definitions.UnitTpe))
 
   def stateMachineMember(name: TermName): Symbol =

@@ -41,8 +41,7 @@ private[async] trait TransformUtils extends TypingTransformers {
   lazy val IllegalStateExceptionClass_NEW_String: Symbol = IllegalStateExceptionClass.info.decl(nme.CONSTRUCTOR).suchThat(
     x => x.paramss.head.size == 1 && x.firstParam.info.typeSymbol == definitions.StringClass)
 
-  def isAsync(fun: Tree): Boolean = fun.symbol == currentTransformState.ops.Async_async
-  def isAwait(fun: Tree): Boolean = fun.symbol == currentTransformState.ops.Async_await
+  def isAwait(fun: Tree): Boolean = fun.symbol == currentTransformState.Async_await
 
   def isBooleanShortCircuit(sym: Symbol): Boolean =
     sym.owner == definitions.BooleanClass && (sym == definitions.Boolean_and || sym == definitions.Boolean_or)

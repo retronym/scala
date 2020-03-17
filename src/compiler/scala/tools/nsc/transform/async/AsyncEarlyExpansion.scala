@@ -12,7 +12,7 @@
 
 package scala.tools.nsc.transform.async
 
-import user.{FutureSystem, ScalaConcurrentFutureSystem}
+import user.ScalaConcurrentFutureSystem
 import scala.reflect.internal.Flags
 import scala.tools.nsc.transform.TypingTransformers
 
@@ -24,7 +24,19 @@ import scala.tools.nsc.transform.TypingTransformers
 abstract class AsyncEarlyExpansion extends TypingTransformers {
   import global._
 
-  private lazy val Promise_class = rootMirror.requiredClass[scala.concurrent.Promise[_]]
+  private lazy val TryClass = rootMirror.requiredClass[scala.util.Try[_]]
+  private lazy val FailureClass = rootMirror.requiredClass[scala.util.Failure[_]]
+  private lazy val SuccessClass = rootMirror.requiredClass[scala.util.Success[_]]
+  private lazy val FutureClass = rootMirror.requiredClass[scala.concurrent.Future[_]]
+  private lazy val PromiseClass = rootMirror.requiredClass[scala.concurrent.Promise[_]]
+  private lazy val Future_unit: Symbol = FutureClass.companionModule.info.member(TermName("unit"))
+  private lazy val Future_onComplete: Symbol = FutureClass.info.member(TermName("onComplete"))
+  private lazy val Future_value: Symbol = FutureClass.info.member(TermName("value"))
+  private lazy val Promise_complete: Symbol = PromiseClass.info.member(TermName("complete"))
+  private lazy val NonFatalClass: Symbol = rootMirror.requiredClass[scala.util.control.NonFatal.type]
+  private lazy val Option_isDefined: Symbol = definitions.OptionClass.info.member(TermName("isDefined"))
+  private lazy val Option_get: Symbol = definitions.OptionClass.info.member(TermName("get"))
+
 
   /** Perform async macro expansion during typers to a block that creates the state machine class,
     * along with supporting definitions, but without the ANF/Async expansion.
@@ -63,37 +75,23 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
       }
     */
   def apply(callsiteTyper: analyzer.Typer, asyncBody: Tree, execContext: Tree, resultType: Type) = {
-    val futureSystem: FutureSystem = ScalaConcurrentFutureSystem
-    val futureSystemOps: futureSystem.Ops[global.type] = futureSystem.mkOps(global)
-
-    val tryResult = futureSystemOps.tryType(resultType)
+    val tryResult = appliedType(TryClass, definitions.AnyRefTpe :: Nil)
 
     val execContextTempVal =
       ValDef(NoMods, nme.execContextTemp, TypeTree(execContext.tpe), execContext)
 
     val stateMachine: ClassDef = {
-      val parents = {
-        val customParents = futureSystemOps.stateMachineClassParents
-        // prefer extending a class to reduce the class file size of the state machine.
-        // ... unless a custom future system already extends some class
-        val useClass = customParents.forall(_.typeSymbol.isTrait)
-
-        val fun1Tpe =
-          if (useClass) definitions.abstractFunctionType(tryResult :: Nil, definitions.UnitTpe)
-          else definitions.functionType(tryResult :: Nil, definitions.UnitTpe)
-
-        val funParents = List(fun1Tpe)
-        (customParents ::: funParents).map(TypeTree(_))
-      }
+      val parents =
+        List(TypeTree(definitions.abstractFunctionType(tryResult :: Nil, definitions.UnitTpe)))
 
       val stateVar =
         ValDef(Modifiers(Flags.MUTABLE | Flags.PRIVATE), nme.state, TypeTree(definitions.IntTpe), Literal(Constant(StateAssigner.Initial)))
 
-      def createProm(resultType: Type): Tree =
-        Apply(TypeApply(gen.mkAttributedStableRef(Promise_class.companionModule), TypeTree(resultType) :: Nil), Nil)
+      val createProm: Tree =
+        Apply(TypeApply(gen.mkAttributedStableRef(PromiseClass.companionModule), TypeTree(definitions.AnyRefTpe) :: Nil), Nil)
 
       val resultVal =
-        ValDef(NoMods, nme.result, TypeTree(appliedType(Promise_class, resultType)), createProm(resultType))
+        ValDef(NoMods, nme.result, TypeTree(appliedType(PromiseClass, definitions.AnyRefTpe)), createProm)
 
       val execContextVal =
         ValDef(NoMods, nme.execContext, TypeTree(execContext.tpe), Ident(nme.execContextTemp))
@@ -104,27 +102,80 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
           asyncBody.updateAttachment(SuppressPureExpressionWarning), Literal(Constant(())))
         ).updateAttachment(ChangeOwnerAttachment(callsiteTyper.context.owner))
       }
-      async.addFutureSystemAttachment(callsiteTyper.context.unit, applyFSM, futureSystem)
+
+      val onComplete: DefDef = {
+        val futureName = TermName("future")
+        val vparamss = List(List(ValDef(Modifiers(Flags.PARAM), futureName, TypeTree(appliedType(FutureClass, definitions.AnyRefTpe)), EmptyTree)))
+        val rhs = Apply(gen.mkMethodCall(Ident(futureName), Future_onComplete, List(definitions.UnitTpe), List(This(tpnme.EMPTY))), List(Ident(nme.execContextTemp)))
+        DefDef(Modifiers(Flags.PRIVATE), TermName("onComplete"), Nil, vparamss, TypeTree(definitions.UnitTpe), rhs)
+      }
+
+      val tryGet: DefDef = {
+        val trName = TermName("tr")
+        val vparamss = List(List(ValDef(Modifiers(Flags.PARAM), trName, TypeTree(appliedType(TryClass, definitions.AnyRefTpe)), EmptyTree)))
+        val rhs = If(Select(Ident(trName), TermName("isFailure")),
+          Block(
+            gen.mkMethodCall(Select(This(tpnme.EMPTY), resultVal.name), Promise_complete, List(), List(gen.mkCast(Ident(trName), appliedType(TryClass, definitions.AnyRefTpe)))) :: Nil,
+            This(tpnme.EMPTY) // sentinel value to indicate the dispatch loop should exit.
+          ),
+          Select(Ident(trName), TermName("get"))
+        )
+        DefDef(Modifiers(Flags.PRIVATE), TermName("tryGet"), Nil, vparamss, TypeTree(definitions.AnyRefTpe), rhs)
+      }
+
+      val completeFailure: DefDef = {
+        val trName = TermName("t")
+        val vparamss = List(List(ValDef(Modifiers(Flags.PARAM), trName, TypeTree(definitions.ThrowableTpe), EmptyTree)))
+        // scala-async accidentally started catching NonFatal exceptions in:
+        //  https://github.com/scala/scala-async/commit/e3ff0382ae4e015fc69da8335450718951714982#diff-136ab0b6ecaee5d240cd109e2b17ccb2R411
+        // TODO: fix this regression by flipping this boolean? Need to add test coverage!
+        val useNonFatal = false
+        val complete = gen.mkMethodCall(Select(This(tpnme.EMPTY), resultVal.name), Promise_complete, Nil, List(New(appliedType(FailureClass, definitions.AnyRefTpe), Ident(trName))))
+        val rhs =
+          if (useNonFatal) If(Apply(Ident(NonFatalClass.sourceModule), List(Ident(nme.t))), complete, Throw(Ident(nme.t)))
+          else complete
+        DefDef(Modifiers(Flags.PRIVATE), TermName("completeFailure"), Nil, vparamss, TypeTree(), rhs)
+      }
+
+      val completeSuccess: DefDef = {
+        val valueName = TermName("value")
+        val vparamss = List(List(ValDef(Modifiers(Flags.PARAM), valueName, TypeTree(definitions.AnyRefTpe), EmptyTree)))
+        val complete = gen.mkMethodCall(Select(This(tpnme.EMPTY), resultVal.name), Promise_complete, Nil, List(New(appliedType(SuccessClass, definitions.AnyRefTpe), Ident(valueName))))
+        DefDef(Modifiers(Flags.PRIVATE), TermName("completeSuccess"), Nil, vparamss, TypeTree(), complete)
+      }
+
+      val getCompleted: DefDef = {
+        val futureName = TermName("future")
+        val vparamss = List(List(ValDef(Modifiers(Flags.PARAM), futureName, TypeTree(appliedType(FutureClass, definitions.AnyRefTpe)), EmptyTree)))
+        val opt = ValDef(NoMods, TermName("opt"), TypeTree(), Select(Ident(futureName), Future_value))
+        val rhs = Block(
+          opt :: Nil,
+          If(Select(Ident(opt.name), Option_isDefined), Select(Ident(opt.name), Option_get), Literal(Constant(null)))
+        )
+        DefDef(Modifiers(Flags.PRIVATE), TermName("getCompleted"), Nil, vparamss, TypeTree(), rhs)
+      }
+
+      async.addFutureSystemAttachment(callsiteTyper.context.unit, applyFSM, ScalaConcurrentFutureSystem)
 
       atPos(asyncBody.pos)(ClassDef(NoMods, tpnme.stateMachine, Nil,
                                      gen.mkTemplate(parents, noSelfType, NoMods, List(Nil),
-                                                     List(stateVar, resultVal, execContextVal, applyFSM))))
+                                                     List(stateVar, resultVal, onComplete, tryGet, execContextVal, completeFailure, completeSuccess, getCompleted, applyFSM))))
     }
 
     val newStateMachine = ValDef(NoMods, nme.stateMachine, TypeTree(), Apply(Select(New(Ident(tpnme.stateMachine)), nme.CONSTRUCTOR), Nil))
     def execContextSelect = Select(Ident(nme.stateMachine), nme.execContext)
 
     // Use KeptPromise.onComplete to get the ball rolling.
-    val futureUnit = futureSystemOps.futureUnit(execContextSelect)
+    val futureUnit = gen.mkAttributedSelect(gen.mkAttributedStableRef(FutureClass.companionModule), Future_unit)
 
     // stateMachine.asInstanceOf[Function1[Try[Unit], Unit]
     // This cast is safe because we know that `def apply` does not consult its argument when `state == 0`.
     val castStateMachine = gen.mkCast(Ident(nme.stateMachine),
-      definitions.functionType(futureSystemOps.tryType(definitions.UnitTpe) :: Nil, definitions.UnitTpe))
+      definitions.functionType(appliedType(TryClass, definitions.UnitTpe :: Nil) :: Nil, definitions.UnitTpe))
 
-    val stateMachineToFuture = futureSystemOps.onComplete(futureUnit, castStateMachine, execContextSelect)
+    val stateMachineToFuture = Apply(Apply(TypeApply(Select(futureUnit, Future_onComplete), TypeTree(definitions.UnitTpe) :: Nil), castStateMachine :: Nil), execContextSelect :: Nil)
 
-    val promToFuture = Select(Select(Ident(nme.stateMachine), nme.result), nme.future)
+    val promToFuture = gen.mkCast(Select(Select(Ident(nme.stateMachine), nme.result), nme.future), appliedType(FutureClass, resultType))
 
     Block(List(execContextTempVal, stateMachine, newStateMachine, stateMachineToFuture), promToFuture)
   }

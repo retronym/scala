@@ -17,7 +17,6 @@ import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.transform.async.StateAssigner
 import scala.tools.nsc.transform.async.user.FutureSystem
-import scala.util.Success
 
 class AnnotationDrivenAsync {
   @Test
@@ -33,6 +32,23 @@ class AnnotationDrivenAsync {
         |}
         |""".stripMargin
     assertEquals(3, run(code))
+  }
+
+  @Test
+  def testBasicScalaConcurrentValueClass(): Unit = {
+    val code =
+      """
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.async.Async.{async, await}
+        |import Future.{successful => f}
+        |
+        |class IntWrapper(val value: String) extends AnyVal
+        |object Test {
+        |  def test: Future[String] = async { await(inner).value }
+        |  def inner: Future[IntWrapper] = async { await(f(new IntWrapper("hola"))) }
+        |}
+        |""".stripMargin
+    assertEquals("hola", run(code))
   }
 
   @Test
@@ -392,7 +408,7 @@ class AnnotationDrivenAsync {
 
       // settings.debug.value = true
       // settings.uniqid.value = true
-      // settings.processArgumentString("-Xprint:all -nowarn")
+      // settings.processArgumentString("-Xprint:async -nowarn")
       // settings.log.value = List("async")
 
       // NOTE: edit ANFTransform.traceAsync to `= true` to get additional diagnostic tracing.
@@ -467,7 +483,6 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
                 val wrapped =
                   q"""
                     {
-                      val ${nme.execContextTemp} = ()
                       class stateMachine$$async extends _root_.scala.tools.nsc.async.StateMachineBase {
                        $applyMethod
                       }
@@ -517,80 +532,25 @@ final class autoawait extends StaticAnnotation
 final class customAsync extends StaticAnnotation
 
 abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, AnyRef], Unit] {
-  def execContext$async = ()
   var result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
   var state$async: Int = StateAssigner.Initial
   def apply(tr$async: scala.util.Either[Throwable, AnyRef]): Unit
+
+  // Adapter methods
+  protected def completeFailure(t: Throwable): Unit = result$async._complete(Left(t))
+  protected def completeSuccess(value: AnyRef): Unit = result$async._complete(Right(value))
+  protected def onComplete(f: CustomFuture[AnyRef]): Unit = f._onComplete(this)
+  protected def getCompleted(f: CustomFuture[AnyRef]): Either[Throwable, AnyRef] = f._getCompleted
+  protected def tryGet(tr: Either[Throwable, AnyRef]): AnyRef = tr match {
+    case Right(value) =>
+      value
+    case Left(throwable) =>
+      result$async._complete(tr)
+      this // sentinel value to indicate the dispatch loop should exit.
+  }
 }
 
 object CustomFutureFutureSystem extends FutureSystem {
-  override type Prom[A] = CustomFuture[A]
-  override type Fut[A] = CustomPromise[A]
-  override type ExecContext = Unit
-  override type Tryy[A] = Either[Throwable, A]
-  override def mkOps(u: SymbolTable): Ops[u.type] = new Ops[u.type](u) {
-    import u._
-
-    private val global = u.asInstanceOf[Global]
-    lazy val Future_class: Symbol = rootMirror.requiredClass[CustomFuture[_]]
-    lazy val Promise_class: Symbol = rootMirror.requiredClass[CustomPromise[_]]
-    lazy val Either_class: Symbol = rootMirror.requiredClass[scala.util.Either[_, _]]
-    lazy val Right_class: Symbol = rootMirror.requiredClass[scala.util.Right[_, _]]
-    lazy val Left_class: Symbol = rootMirror.requiredClass[scala.util.Left[_, _]]
-    lazy val Future_onComplete: Symbol = Future_class.info.member(TermName("_onComplete")).ensuring(_.exists)
-    lazy val Future_getCompleted: Symbol = Future_class.info.member(TermName("_getCompleted")).ensuring(_.exists)
-    lazy val Future_unit: Symbol = Future_class.companionModule.info.member(TermName("_unit")).ensuring(_.exists)
-    lazy val Promise_complete: Symbol = Promise_class.info.member(TermName("_complete")).ensuring(_.exists)
-    lazy val Either_isFailure: Symbol = Either_class.info.member(TermName("isLeft")).ensuring(_.exists)
-    lazy val Right_get: Symbol = Right_class.info.member(TermName("value")).ensuring(_.exists)
-
-    lazy val Async_async: Symbol = NoSymbol.newTermSymbol(nme.EMPTY)
-    lazy val Async_await: Symbol = symbolOf[CustomFuture.type].info.member(TermName("_await"))
-
-    def tryType(tp: Type): Type = appliedType(Either_class, tp)
-
-    def future(a: Tree, execContext: Tree): Tree =
-      Apply(Select(gen.mkAttributedStableRef(Future_class.companionModule), TermName("_apply")), List(a))
-
-    def futureUnit(execContext: Tree): Tree =
-      mkAttributedSelectApplyIfNeeded(gen.mkAttributedStableRef(Future_class.companionModule), Future_unit)
-
-    def onComplete[A, B](future: Expr[Fut[A]], fun: Expr[scala.util.Try[A] => B],
-                         execContext: Expr[ExecContext]): Expr[Unit] = {
-      Apply(Select(future, Future_onComplete), fun :: Nil)
-    }
-
-    override def continueCompletedFutureOnSameThread: Boolean = true
-
-    def mkAttributedSelectApplyIfNeeded(qual: Tree, sym: Symbol) = {
-      val sel = gen.mkAttributedSelect(qual, sym)
-      if (isPastErasure) Apply(sel, Nil) else sel
-    }
-
-    override def getCompleted[A](future: Expr[Fut[A]]): Expr[Tryy[A]] = {
-      mkAttributedSelectApplyIfNeeded(future, Future_getCompleted)
-    }
-
-    def completeProm[A](prom: Expr[Prom[A]], value: Expr[scala.util.Try[A]]): Expr[Unit] = {
-      gen.mkMethodCall(prom, Promise_complete, Nil, value :: Nil)
-    }
-
-    def tryyIsFailure[A](tryy: Expr[scala.util.Try[A]]): Expr[Boolean] = {
-      mkAttributedSelectApplyIfNeeded(tryy, Either_isFailure)
-    }
-
-    def tryyGet[A](tryy: Expr[Tryy[A]]): Expr[A] = {
-      mkAttributedSelectApplyIfNeeded(gen.mkCast(tryy, Right_class.tpe_*), Right_get)
-    }
-
-    def tryySuccess[A](a: Expr[A]): Expr[Tryy[A]] = {
-      assert(isPastErasure)
-      New(Right_class, a)
-    }
-
-    def tryyFailure[A](a: Expr[Throwable]): Expr[Tryy[A]] = {
-      assert(isPastErasure)
-      New(Left_class, a)
-    }
-  }
+  def Async_await(global: Global): global.Symbol = global.symbolOf[CustomFuture.type].info.member(global.TermName("_await"))
+  override def continueCompletedFutureOnSameThread: Boolean = false
 }

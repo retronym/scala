@@ -174,7 +174,6 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     private def asyncTransform(asyncBody: Tree): (Tree, List[Tree]) = {
       val transformState = currentTransformState
       import transformState.applySym
-      val futureSystemOps = transformState.ops
 
       val asyncPos = asyncBody.pos
 
@@ -186,7 +185,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
       // Transform to A-normal form:
       //  - no await calls in qualifiers or arguments,
       //  - if/match only used in statement position.
-      val anfTree: Block = futureSystemOps.postAnfTransform(new AnfTransformer(localTyper).apply(asyncBody))
+      val anfTree: Block = transformState.futureSystem.postAnfTransform(global)(new AnfTransformer(localTyper).apply(asyncBody))
 
       // The ANF transform re-parents some trees, so the previous traversal to mark ancestors of
       // await is no longer reliable. Clear previous results and run it again for use in the `buildAsyncBlock`.
@@ -211,10 +210,10 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
       val applyBody = atPos(asyncPos)(asyncBlock.onCompleteHandler)
 
       // Logging
-      if (settings.debug.value && shouldLogAtThisPhase)
+      if ((settings.debug.value && shouldLogAtThisPhase))
         logDiagnostics(anfTree, asyncBlock, asyncBlock.asyncStates.map(_.toString))
       // Offer the future system a change to produce the .dot diagram
-      futureSystemOps.dot(applySym, asyncBody).foreach(f => f(asyncBlock.toDot))
+      transformState.futureSystem.dot(global)(applySym, asyncBody).foreach(f => f(asyncBlock.toDot))
 
       cleanupContainsAwaitAttachments(applyBody)
 
