@@ -25,7 +25,7 @@ class AsyncTransformState[U <: Global with Singleton](val symbolTable: U, val fu
   val stateAssigner  = new StateAssigner
   val labelDefStates = collection.mutable.Map[symbolTable.Symbol, Int]()
 
-  lazy val Async_await: Symbol = futureSystem.Async_await(symbolTable)
+  lazy val Async_await: Symbol = futureSystem.awaitSymbol(symbolTable)
 
   lazy val applyTr: Symbol = applyTrParam.asInstanceOf[symbolTable.Symbol]
   lazy val applySym: Symbol = applyTr.owner

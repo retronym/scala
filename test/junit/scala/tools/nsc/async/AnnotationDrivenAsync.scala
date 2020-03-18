@@ -551,6 +551,6 @@ abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, A
 }
 
 object CustomFutureFutureSystem extends FutureSystem {
-  def Async_await(global: Global): global.Symbol = global.symbolOf[CustomFuture.type].info.member(global.TermName("_await"))
+  def awaitSymbol(global: Global): global.Symbol = global.symbolOf[CustomFuture.type].info.member(global.TermName("_await"))
   override def continueCompletedFutureOnSameThread: Boolean = false
 }
