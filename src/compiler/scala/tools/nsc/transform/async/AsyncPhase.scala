@@ -93,8 +93,6 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     }
   }
 
-  def Async_async = asyncSymbols.Async_async
-  def Async_await = asyncSymbols.Async_await
   override def newPhase(prev: scala.reflect.internal.Phase): StdPhase = {
     new Phase(prev) {
       override def init(): Unit = {
