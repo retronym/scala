@@ -116,7 +116,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
         if (asyncSymbols.awaits.exists(_.isInitialized)) {
           unit.body.foreach {
             case tree: RefTree if tree.symbol != null && asyncSymbols.awaits.contains(tree.symbol) =>
-              global.reporter.error(tree.pos, "await must not be used in this position")
+              val sym = tree.symbol
+              val msg = sym.compileTimeOnlyMessage.getOrElse(s"`${sym.decodedName}` must be enclosed in an `async` block")
+              global.reporter.error(tree.pos, msg)
             case _ =>
           }
         }

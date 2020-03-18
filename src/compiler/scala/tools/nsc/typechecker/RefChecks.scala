@@ -1287,12 +1287,26 @@ abstract class RefChecks extends Transform {
       }
       // See an explanation of compileTimeOnly in its scaladoc at scala.annotation.compileTimeOnly.
       // async/await is expanded after erasure
-      if (sym.isCompileTimeOnly && sym != global.async.asyncSymbols.Async_await && !currentOwner.ownerChain.exists(x => x.isCompileTimeOnly)) {
-        def defaultMsg =
-          sm"""Reference to ${sym.fullLocationString} should not have survived past type checking,
-              |it should have been processed and eliminated during expansion of an enclosing macro."""
-        // The getOrElse part should never happen, it's just here as a backstop.
-        reporter.error(pos, sym.compileTimeOnlyMessage getOrElse defaultMsg)
+      if (sym.isCompileTimeOnly && !currentOwner.ownerChain.exists(x => x.isCompileTimeOnly)) {
+        def issueError(): Unit = {
+          def defaultMsg =
+            sm"""Reference to ${sym.fullLocationString} should not have survived past type checking,
+                |it should have been processed and eliminated during expansion of an enclosing macro."""
+          // The getOrElse part should never happen, it's just here as a backstop.
+          reporter.error(pos, sym.compileTimeOnlyMessage getOrElse defaultMsg)
+        }
+
+        if (!global.async.asyncSymbols.awaits.contains(sym)) {
+          if (settings.async) {
+            val isThirdPartyAwaitHeuristically = (sym.name.string_==("await") && sym.compileTimeOnlyMessage.exists(_.contains("must be enclosed")))
+            if (isThirdPartyAwaitHeuristically) {
+              // Let the async phase detect untranslated awaits.
+              global.async.asyncSymbols.awaits.add(sym)
+            } else {
+              issueError()
+            }
+          } else issueError()
+        }
       }
     }
 

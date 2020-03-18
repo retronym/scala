@@ -12,8 +12,6 @@
 
 package scala.tools.nsc.transform.async.user
 
-import scala.language.higherKinds
-import scala.reflect.internal.{NoPhase, SymbolTable}
 import scala.tools.nsc.Global
 
 /**
