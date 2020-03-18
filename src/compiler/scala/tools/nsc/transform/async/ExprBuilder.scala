@@ -516,7 +516,7 @@ trait ExprBuilder extends TransformUtils {
       val tempVd = ValDef(temp, gen.mkMethodCall(currentTransformState.memberRef(currentTransformState.stateTryGet), tryyReference :: Nil))
       typed(Block(
         tempVd :: Nil,
-        If(Apply(Select(This(tpnme.EMPTY), TermName("eq")), gen.mkAttributedIdent(temp) :: Nil),
+        If(Apply(gen.mkAttributedSelect(gen.mkAttributedThis(currentTransformState.stateMachineClass), definitions.Any_==), gen.mkAttributedIdent(temp) :: Nil),
           Return(literalUnit),
           gen.mkCast(gen.mkAttributedIdent(temp), tempVd.symbol.info)
         )
@@ -539,7 +539,8 @@ trait ExprBuilder extends TransformUtils {
       val tree = if (printStateUpdates) {
         Block(
           callSetter :: Nil,
-          gen.mkMethodCall(definitions.PredefModule.info.member(TermName("println")), currentTransformState.localTyper.typed(gen.mkApplyIfNeeded(transformState.memberRef(transformState.stateGetter)), definitions.ObjectTpe) :: Nil)
+          gen.mkMethodCall(definitions.PredefModule.info.member(TermName("println")),
+            currentTransformState.localTyper.typed(gen.mkApplyIfNeeded(transformState.memberRef(transformState.stateGetter)), definitions.ObjectTpe) :: Nil)
         )
       }
       else callSetter
@@ -580,7 +581,7 @@ trait ExprBuilder extends TransformUtils {
             gen.mkAttributedIdent(transformState.applyTrParam),
             gen.mkMethodCall(transformState.memberRef(transformState.stateGetCompleted), gen.mkAttributedIdent(tempAwaitableSym) :: Nil)
           )
-          val null_ne = Select(Literal(Constant(null)).setType(definitions.NullTpe), TermName("ne"))
+          val null_ne = gen.mkAttributedSelect(Literal(Constant(null)).setType(definitions.NullTpe), definitions.Any_!=)
           val ifTree =
             If(Apply(null_ne, Ident(transformState.applyTrParam) :: Nil),
               Apply(Ident(transformState.whileLabel), Nil),
