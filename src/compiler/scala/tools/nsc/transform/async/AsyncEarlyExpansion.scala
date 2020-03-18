@@ -12,7 +12,6 @@
 
 package scala.tools.nsc.transform.async
 
-import user.ScalaConcurrentFutureSystem
 import scala.reflect.internal.Flags
 import scala.tools.nsc.transform.TypingTransformers
 
@@ -155,7 +154,7 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
         DefDef(Modifiers(Flags.PRIVATE), TermName("getCompleted"), Nil, vparamss, TypeTree(), rhs)
       }
 
-      async.addFutureSystemAttachment(callsiteTyper.context.unit, applyFSM, ScalaConcurrentFutureSystem)
+      async.markForAsyncTransform(callsiteTyper.context.unit, applyFSM, async.asyncSymbols.Async_await, Map.empty)
 
       atPos(asyncBody.pos)(ClassDef(NoMods, tpnme.stateMachine, Nil,
                                      gen.mkTemplate(parents, noSelfType, NoMods, List(Nil),

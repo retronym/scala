@@ -16,7 +16,6 @@ import scala.tools.nsc.plugins.{Plugin, PluginComponent}
 import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.transform.async.StateAssigner
-import scala.tools.nsc.transform.async.user.FutureSystem
 
 class AnnotationDrivenAsync {
   @Test
@@ -479,7 +478,7 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
                 val applyMethod =
                   q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = {$rhs; () }"""
                 applyMethod.updateAttachment(ChangeOwnerAttachment(dd.symbol))
-                global.async.addFutureSystemAttachment(unit, applyMethod, CustomFutureFutureSystem)
+                global.async.markForAsyncTransform(unit, applyMethod, awaitSym, Map.empty)
                 val wrapped =
                   q"""
                     {
@@ -548,9 +547,4 @@ abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, A
       result$async._complete(tr)
       this // sentinel value to indicate the dispatch loop should exit.
   }
-}
-
-object CustomFutureFutureSystem extends FutureSystem {
-  def awaitSymbol(global: Global): global.Symbol = global.symbolOf[CustomFuture.type].info.member(global.TermName("_await"))
-  override def continueCompletedFutureOnSameThread: Boolean = false
 }

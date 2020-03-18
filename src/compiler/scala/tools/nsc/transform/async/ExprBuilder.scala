@@ -564,17 +564,19 @@ trait ExprBuilder extends TransformUtils {
     case class UpdateAndAwait(awaitable: Tree) extends StateTransitionStyle {
       def trees(nextState: Int, stateSet: StateSet): List[Tree] = {
         stateSet += nextState
+        val transformState = currentTransformState
 
         // Suspend execution by calling `onComplete` with the state machine itself as a callback.
         //
-        // If the future is already completed, and the future system allows it, execution will continue
-        // synchronously.
-        val transformState = currentTransformState
+        // If the state machine contains a member `getCompleted`, this first be called to see if
+        // an already-completed result is avaialble. If so, execution will continue on this thread
+        // (_without_ consuming an extra stack frome!)
 
         def callOnComplete(fut: Tree): Tree =
           Apply(Select(This(currentTransformState.stateMachineClass), transformState.stateOnComplete), fut :: Nil)
 
-        if (transformState.futureSystem.continueCompletedFutureOnSameThread) {
+        val runCompletedOnSameThread = transformState.stateGetCompleted != NoSymbol
+        if (runCompletedOnSameThread) {
           val tempAwaitableSym = transformState.applyTrParam.owner.newTermSymbol(nme.awaitable).setInfo(awaitable.tpe)
           val initAwaitableTemp = ValDef(tempAwaitableSym, awaitable)
           val initTempCompleted = Assign(

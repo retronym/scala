@@ -13,7 +13,6 @@
 package scala.tools.nsc.transform.async
 
 import scala.collection.mutable
-import scala.tools.nsc.transform.async.user.FutureSystem
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 import scala.reflect.internal.Flags
 import scala.reflect.io.AbstractFile
@@ -22,20 +21,28 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   self =>
   import global._
 
-  private[async] var currentTransformState: AsyncTransformState[global.type] = _
+  private[async] var currentTransformState: AsyncTransformState = _
   private[async] val asyncNames = new AsyncNames[global.type](global)
   protected[async] val tracing = new Tracing
 
   val phaseName: String = "async"
   override def enabled: Boolean = settings.async
 
-  private final class FutureSystemAttachment(val system: FutureSystem) extends PlainAttachment
+  private final case class AsyncAttachment(awaitSymbol: Symbol, postAnfTransform: Block => Block, stateDiagram: ((Symbol, Tree) => Option[String => Unit])) extends PlainAttachment
 
   // Optimization: avoid the transform altogether if there are no async blocks in a unit.
   private val units = perRunCaches.newSet[CompilationUnit]()
-  final def addFutureSystemAttachment(unit: CompilationUnit, method: Tree, system: FutureSystem): method.type = {
+
+  /**
+   * Mark the given method as requiring an async transform.
+   */
+  // TODO expose this through the macro API so clients don't need to downcat
+  final def markForAsyncTransform(unit: CompilationUnit, method: Tree, awaitMethod: Symbol,
+                                  config: Map[String, AnyRef]): method.type = {
     units += unit
-    method.updateAttachment(new FutureSystemAttachment(system))
+    val postAnfTransform = config.getOrElse("postAnfTransform", (x: Block) => x).asInstanceOf[Block => Block]
+    val stateDiagram = config.getOrElse("stateDiagram", (sym: Symbol, tree: Tree) => None).asInstanceOf[(Symbol, Tree) => Option[String => Unit]]
+    method.updateAttachment(new AsyncAttachment(awaitMethod, postAnfTransform, stateDiagram))
   }
 
   protected object macroExpansion extends AsyncEarlyExpansion {
@@ -130,7 +137,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     //    class $STATE_MACHINE extends ... {
     //      def $APPLY_METHOD(....) = {
     //      ...
-    //      }.updateAttachment(FutureSystemAttachment(...))
+    //      }.updateAttachment(AsyncAttachment(...))
     //    }
     // }
     //
@@ -150,8 +157,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           assert(localTyper.context.owner == cd.symbol.owner)
           new UseFields(localTyper, cd.symbol, applySym, liftedSyms).transform(cd1)
 
-        case dd: DefDef if dd.hasAttachment[FutureSystemAttachment] =>
-          val futureSystem = dd.getAndRemoveAttachment[FutureSystemAttachment].get.system
+        case dd: DefDef if dd.hasAttachment[AsyncAttachment] =>
+          val asyncAttachment = dd.getAndRemoveAttachment[AsyncAttachment].get
           val asyncBody = (dd.rhs: @unchecked) match {
             case blk@Block(stats, Literal(Constant(()))) => treeCopy.Block(blk, stats.init, stats.last).setType(stats.last.tpe)
           }
@@ -160,7 +167,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           atOwner(dd, dd.symbol) {
             val trSym = dd.vparamss.head.head.symbol
             val saved = currentTransformState
-            currentTransformState = new AsyncTransformState[global.type](global, futureSystem, this, trSym, asyncBody.tpe)
+            currentTransformState = new AsyncTransformState(asyncAttachment.awaitSymbol,
+              asyncAttachment.postAnfTransform, asyncAttachment.stateDiagram, this, trSym, asyncBody.tpe)
             try {
               val (newRhs, liftableFields) = asyncTransform(asyncBody)
               liftableMap(dd.symbol.owner) = (dd.symbol, liftableFields)
@@ -187,7 +195,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
       // Transform to A-normal form:
       //  - no await calls in qualifiers or arguments,
       //  - if/match only used in statement position.
-      val anfTree: Block = transformState.futureSystem.postAnfTransform(global)(new AnfTransformer(localTyper).apply(asyncBody))
+      val anfTree: Block = transformState.postAnfTransform(new AnfTransformer(localTyper).apply(asyncBody))
 
       // The ANF transform re-parents some trees, so the previous traversal to mark ancestors of
       // await is no longer reliable. Clear previous results and run it again for use in the `buildAsyncBlock`.
@@ -214,8 +222,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
       // Logging
       if ((settings.debug.value && shouldLogAtThisPhase))
         logDiagnostics(anfTree, asyncBlock, asyncBlock.asyncStates.map(_.toString))
-      // Offer the future system a change to produce the .dot diagram
-      transformState.futureSystem.dot(global)(applySym, asyncBody).foreach(f => f(asyncBlock.toDot))
+      // Offer async frontends a change to produce the .dot diagram
+      transformState.dotDiagram(applySym, asyncBody).foreach(f => f(asyncBlock.toDot))
 
       cleanupContainsAwaitAttachments(applyBody)
 

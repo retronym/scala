@@ -20,10 +20,9 @@ import scala.tools.nsc.transform.TypingTransformers
 /**
  * Utilities used in both `ExprBuilder` and `AnfTransform`.
  */
-private[async] trait TransformUtils extends TypingTransformers {
+private[async] trait TransformUtils extends AsyncTransformStates {
   import global._
 
-  private[async] def currentTransformState: AsyncTransformState[global.type]
   private[async] val asyncNames: AsyncNames[global.type]
   object name extends asyncNames.AsyncName {
     def fresh(name: TermName): TermName = freshenIfNeeded(name)
