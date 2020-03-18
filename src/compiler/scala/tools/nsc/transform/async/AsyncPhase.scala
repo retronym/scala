@@ -39,7 +39,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   // TODO expose this through the macro API so clients don't need to downcat
   final def markForAsyncTransform(unit: CompilationUnit, method: Tree, awaitMethod: Symbol,
                                   config: Map[String, AnyRef]): method.type = {
-    units += unit
+    units += currentUnit
     val postAnfTransform = config.getOrElse("postAnfTransform", (x: Block) => x).asInstanceOf[Block => Block]
     val stateDiagram = config.getOrElse("stateDiagram", (sym: Symbol, tree: Tree) => None).asInstanceOf[(Symbol, Tree) => Option[String => Unit]]
     method.updateAttachment(new AsyncAttachment(awaitMethod, postAnfTransform, stateDiagram))

@@ -23,20 +23,6 @@ import scala.tools.nsc.transform.TypingTransformers
 abstract class AsyncEarlyExpansion extends TypingTransformers {
   import global._
 
-  private lazy val TryClass = rootMirror.requiredClass[scala.util.Try[_]]
-  private lazy val FailureClass = rootMirror.requiredClass[scala.util.Failure[_]]
-  private lazy val SuccessClass = rootMirror.requiredClass[scala.util.Success[_]]
-  private lazy val FutureClass = rootMirror.requiredClass[scala.concurrent.Future[_]]
-  private lazy val PromiseClass = rootMirror.requiredClass[scala.concurrent.Promise[_]]
-  private lazy val Future_unit: Symbol = FutureClass.companionModule.info.member(TermName("unit"))
-  private lazy val Future_onComplete: Symbol = FutureClass.info.member(TermName("onComplete"))
-  private lazy val Future_value: Symbol = FutureClass.info.member(TermName("value"))
-  private lazy val Promise_complete: Symbol = PromiseClass.info.member(TermName("complete"))
-  private lazy val NonFatalClass: Symbol = rootMirror.requiredClass[scala.util.control.NonFatal.type]
-  private lazy val Option_isDefined: Symbol = definitions.OptionClass.info.member(TermName("isDefined"))
-  private lazy val Option_get: Symbol = definitions.OptionClass.info.member(TermName("get"))
-
-
   /** Perform async macro expansion during typers to a block that creates the state machine class,
     * along with supporting definitions, but without the ANF/Async expansion.
     *
@@ -74,6 +60,10 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
       }
     */
   def apply(callsiteTyper: analyzer.Typer, asyncBody: Tree, execContext: Tree, resultType: Type) = {
+    import definitions._
+    val runDefinitions = currentRun.runDefinitions
+    import runDefinitions._
+
     val tryResult = appliedType(TryClass, definitions.AnyRefTpe :: Nil)
 
     val execContextTempVal =
