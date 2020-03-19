@@ -3,6 +3,7 @@ package async
 
 import java.io.File
 import java.nio.file.{Files, Paths}
+import java.util.concurrent.{CompletableFuture, ForkJoinPool}
 
 import org.junit.Assert.assertEquals
 import org.junit.{Assert, Ignore, Test}
@@ -375,6 +376,30 @@ class AnnotationDrivenAsync {
     assertEquals(true, run(code))
   }
 
+  @Test
+  def completableFuture(): Unit = {
+    val code = """
+      |import java.util.concurrent._
+      |import scala.tools.nsc.async.CompletableFutureAwait._
+      |
+      |object Test {
+      |  val pool = java.util.concurrent.Executors.newWorkStealingPool()
+      |  def f1 = CompletableFuture.supplyAsync(() => 1, pool)
+      |  def test = {
+      |    async(pool) {
+      |      var i = 0
+      |      while (i < 100) {
+      |        i += await(f1)
+      |      }
+      |      i
+      |    }
+      |  }
+      |}
+      |
+      |""".stripMargin
+    assertEquals(100, run(code))
+  }
+
 
 
   // Handy to debug the compiler
@@ -437,6 +462,8 @@ class AnnotationDrivenAsync {
           scala.concurrent.Await.result(t, Duration.Inf)
         case cf: CustomFuture[_] =>
           cf._block
+        case cf: CompletableFuture[_] =>
+          cf.get()
         case value => value
       }
     } finally {
@@ -476,14 +503,14 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
               rhs =>
                 val unit = localTyper.context.unit
                 val applyMethod =
-                  q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = {$rhs; () }"""
+                  q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = $rhs"""
                 applyMethod.updateAttachment(ChangeOwnerAttachment(dd.symbol))
-                global.async.markForAsyncTransform(unit, applyMethod, awaitSym, Map.empty)
+                val applyMethodMarked = global.async.markForAsyncTransform(rhs.pos, applyMethod, awaitSym, Map.empty)
                 val wrapped =
                   q"""
                     {
                       class stateMachine$$async extends _root_.scala.tools.nsc.async.StateMachineBase {
-                       $applyMethod
+                       $applyMethodMarked
                       }
                       val stateMachine$$async = new stateMachine$$async
                       _root_.scala.tools.nsc.async.CustomFuture._unit._onComplete(
@@ -533,14 +560,16 @@ final class customAsync extends StaticAnnotation
 abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, AnyRef], Unit] {
   var result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
   var state$async: Int = StateAssigner.Initial
-  def apply(tr$async: scala.util.Either[Throwable, AnyRef]): Unit
+  def apply(tr$async: R[AnyRef]): Unit
 
+  type F[A] = CustomFuture[A]
+  type R[A] = Either[Throwable, A]
   // Adapter methods
   protected def completeFailure(t: Throwable): Unit = result$async._complete(Left(t))
   protected def completeSuccess(value: AnyRef): Unit = result$async._complete(Right(value))
-  protected def onComplete(f: CustomFuture[AnyRef]): Unit = f._onComplete(this)
-  protected def getCompleted(f: CustomFuture[AnyRef]): Either[Throwable, AnyRef] = f._getCompleted
-  protected def tryGet(tr: Either[Throwable, AnyRef]): AnyRef = tr match {
+  protected def onComplete(f: F[AnyRef]): Unit = f._onComplete(this)
+  protected def getCompleted(f: F[AnyRef]): R[AnyRef] = f._getCompleted
+  protected def tryGet(tr: R[AnyRef]): AnyRef = tr match {
     case Right(value) =>
       value
     case Left(throwable) =>

@@ -87,9 +87,7 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
 
       val applyFSM: DefDef = {
         val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), nme.tr, TypeTree(tryResult), EmptyTree)))
-        DefDef(NoMods, nme.apply, Nil, applyVParamss, TypeTree(definitions.UnitTpe), Block(
-          asyncBody.updateAttachment(SuppressPureExpressionWarning), Literal(Constant(())))
-        ).updateAttachment(ChangeOwnerAttachment(callsiteTyper.context.owner))
+        DefDef(NoMods, nme.apply, Nil, applyVParamss, TypeTree(definitions.UnitTpe), asyncBody).updateAttachment(ChangeOwnerAttachment(callsiteTyper.context.owner))
       }
 
       val onComplete: DefDef = {
@@ -144,11 +142,11 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
         DefDef(Modifiers(Flags.PRIVATE), TermName("getCompleted"), Nil, vparamss, TypeTree(), rhs)
       }
 
-      async.markForAsyncTransform(callsiteTyper.context.unit, applyFSM, async.asyncSymbols.Async_await, Map.empty)
+      val applyFSMMarked = async.markForAsyncTransform(asyncBody.pos, applyFSM, async.asyncSymbols.Async_await, Map.empty)
 
       atPos(asyncBody.pos)(ClassDef(NoMods, tpnme.stateMachine, Nil,
                                      gen.mkTemplate(parents, noSelfType, NoMods, List(Nil),
-                                                     List(stateVar, resultVal, onComplete, tryGet, execContextVal, completeFailure, completeSuccess, getCompleted, applyFSM))))
+                                                     List(stateVar, resultVal, onComplete, tryGet, execContextVal, completeFailure, completeSuccess, getCompleted, applyFSMMarked))))
     }
 
     val newStateMachine = ValDef(NoMods, nme.stateMachine, TypeTree(), Apply(Select(New(Ident(tpnme.stateMachine)), nme.CONSTRUCTOR), Nil))

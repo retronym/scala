@@ -15,6 +15,7 @@ package scala.tools.nsc.transform.async
 import scala.collection.mutable
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 import scala.reflect.internal.Flags
+import scala.reflect.internal.util.SourceFile
 import scala.reflect.io.AbstractFile
 
 abstract class AsyncPhase extends Transform with TypingTransformers with AnfTransform with AsyncAnalysis with Lifter with LiveVariables {
@@ -31,18 +32,21 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   private final case class AsyncAttachment(awaitSymbol: Symbol, postAnfTransform: Block => Block, stateDiagram: ((Symbol, Tree) => Option[String => Unit])) extends PlainAttachment
 
   // Optimization: avoid the transform altogether if there are no async blocks in a unit.
-  private val units = perRunCaches.newSet[CompilationUnit]()
+  private val sourceFilesToTransform = perRunCaches.newSet[SourceFile]()
 
   /**
    * Mark the given method as requiring an async transform.
    */
   // TODO expose this through the macro API so clients don't need to downcat
-  final def markForAsyncTransform(unit: CompilationUnit, method: Tree, awaitMethod: Symbol,
-                                  config: Map[String, AnyRef]): method.type = {
-    units += currentUnit
+  final def markForAsyncTransform(pos: Position, method: DefDef, awaitMethod: Symbol,
+                                  config: Map[String, AnyRef]): DefDef = {
+    sourceFilesToTransform += pos.source
     val postAnfTransform = config.getOrElse("postAnfTransform", (x: Block) => x).asInstanceOf[Block => Block]
     val stateDiagram = config.getOrElse("stateDiagram", (sym: Symbol, tree: Tree) => None).asInstanceOf[(Symbol, Tree) => Option[String => Unit]]
     method.updateAttachment(new AsyncAttachment(awaitMethod, postAnfTransform, stateDiagram))
+    deriveDefDef(method) { rhs =>
+      Block(rhs.updateAttachment(SuppressPureExpressionWarning), Literal(Constant(())))
+    }
   }
 
   protected object macroExpansion extends AsyncEarlyExpansion {
@@ -117,7 +121,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
 
     override def transformUnit(unit: CompilationUnit): Unit = {
       if (settings.async) {
-        if (units.contains(unit)) super.transformUnit(unit)
+        if (sourceFilesToTransform.contains(unit.source)) super.transformUnit(unit)
         if (asyncSymbols.awaits.exists(_.isInitialized)) {
           unit.body.foreach {
             case tree: RefTree if tree.symbol != null && asyncSymbols.awaits.contains(tree.symbol) =>
