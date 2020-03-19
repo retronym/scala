@@ -374,6 +374,12 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     getSourceFile(f)
   }
 
+  override lazy val internal: Internal = new SymbolTableInternal {
+    override def markForAsyncTransform(pos: Position, method: DefDef, awaitSymbol: Symbol, config: Map[String, AnyRef]): DefDef = {
+      async.markForAsyncTransform(pos, method, awaitSymbol, config)
+    }
+  }
+
   lazy val loaders = new {
     val global: Global.this.type = Global.this
     val platform: Global.this.platform.type = Global.this.platform

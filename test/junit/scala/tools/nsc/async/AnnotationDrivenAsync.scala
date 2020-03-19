@@ -10,7 +10,6 @@ import org.junit.{Assert, Ignore, Test}
 
 import scala.annotation.StaticAnnotation
 import scala.concurrent.duration.Duration
-import scala.reflect.internal.SymbolTable
 import scala.reflect.internal.util.Position
 import scala.reflect.internal.util.ScalaClassLoader.URLClassLoader
 import scala.tools.nsc.plugins.{Plugin, PluginComponent}
@@ -25,6 +24,21 @@ class AnnotationDrivenAsync {
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
         |import scala.async.Async.{async, await}
+        |
+        |object Test {
+        |  def test: Future[Int] = async { await(f(1)) + await(f(2)) }
+        |  def f(x: Int): Future[Int] = Future.successful(x)
+        |}
+        |""".stripMargin
+    assertEquals(3, run(code))
+  }
+
+  @Test
+  def testBasicScalaConcurrentViaMacroFrontEnd(): Unit = {
+    val code =
+      """
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.tools.nsc.async.AsyncAsMacro.{async, await}
         |
         |object Test {
         |  def test: Future[Int] = async { await(f(1)) + await(f(2)) }
@@ -506,18 +520,13 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
                   q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = $rhs"""
                 applyMethod.updateAttachment(ChangeOwnerAttachment(dd.symbol))
                 val applyMethodMarked = global.async.markForAsyncTransform(rhs.pos, applyMethod, awaitSym, Map.empty)
+                val name = TypeName("stateMachine$$async_" + dd.pos.line)
                 val wrapped =
                   q"""
-                    {
-                      class stateMachine$$async extends _root_.scala.tools.nsc.async.StateMachineBase {
-                       $applyMethodMarked
-                      }
-                      val stateMachine$$async = new stateMachine$$async
-                      _root_.scala.tools.nsc.async.CustomFuture._unit._onComplete(
-                        stateMachine$$async.asInstanceOf[_root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.Unit] => _root_.scala.Unit]
-                      )
-                      stateMachine$$async.result$$async._future
+                    class $name extends _root_.scala.tools.nsc.async.CustomFutureStateMachine {
+                     $applyMethodMarked
                     }
+                    new $name().start()
                    """
 
                 val tree =
@@ -557,9 +566,9 @@ final class autoawait extends StaticAnnotation
 
 final class customAsync extends StaticAnnotation
 
-abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, AnyRef], Unit] {
-  var result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
-  var state$async: Int = StateAssigner.Initial
+abstract class CustomFutureStateMachine extends AsyncStateMachine[CustomFuture[AnyRef], scala.util.Either[Throwable, AnyRef]] with Function1[scala.util.Either[Throwable, AnyRef], Unit] {
+  private var result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
+  protected var state$async: Int = StateAssigner.Initial
   def apply(tr$async: R[AnyRef]): Unit
 
   type F[A] = CustomFuture[A]
@@ -575,5 +584,9 @@ abstract class StateMachineBase extends Function1[scala.util.Either[Throwable, A
     case Left(throwable) =>
       result$async._complete(tr)
       this // sentinel value to indicate the dispatch loop should exit.
+  }
+  def start(): CustomFuture[AnyRef] = {
+    CustomFuture._unit.asInstanceOf[CustomFuture[AnyRef]]._onComplete(this)
+    result$async._future
   }
 }

@@ -37,9 +37,10 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   /**
    * Mark the given method as requiring an async transform.
    */
-  // TODO expose this through the macro API so clients don't need to downcat
   final def markForAsyncTransform(pos: Position, method: DefDef, awaitMethod: Symbol,
                                   config: Map[String, AnyRef]): DefDef = {
+    if (!settings.async)
+      reporter.warning(pos, s"${settings.async.name} must be enabled for async transformation.")
     sourceFilesToTransform += pos.source
     val postAnfTransform = config.getOrElse("postAnfTransform", (x: Block) => x).asInstanceOf[Block => Block]
     val stateDiagram = config.getOrElse("stateDiagram", (sym: Symbol, tree: Tree) => None).asInstanceOf[(Symbol, Tree) => Option[String => Unit]]

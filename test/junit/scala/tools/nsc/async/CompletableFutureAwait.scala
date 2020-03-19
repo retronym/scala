@@ -17,48 +17,42 @@ object CompletableFutureAwait {
   def await[T](completableFuture: CompletableFuture[T]): T = ???
   def impl(c: blackbox.Context)(executor: c.Tree)(body: c.Tree): c.Tree = {
     import c.universe._
+    val awaitSym = typeOf[CompletableFutureAwait.type].decl(TermName("await"))
     def mark(t: DefDef): Tree = {
-      val g = c.universe.asInstanceOf[Global]
-      g.async.markForAsyncTransform(
-        c.macroApplication.pos.asInstanceOf[g.Position],
-        t.asInstanceOf[g.DefDef],
-        typeOf[CompletableFutureAwait.type].decl(TermName("await")).asInstanceOf[g.Symbol],
-        Map.empty
-      ).asInstanceOf[c.Tree]
+      c.internal.markForAsyncTransform(body.pos, t, awaitSym, Map.empty)
     }
     val name = TypeName("stateMachine$$async_" + body.pos.line)
     q"""
-        {
-          final class $name extends _root_.scala.tools.nsc.async.CompletableFutureStateMachine($executor) {
-            ${mark(q"""override def apply(tr$$async: R[_root_.scala.AnyRef]) = ${body}""")}
-          }
-          new $name().start().asInstanceOf[${c.macroApplication.tpe}]
-        }
+      final class $name extends _root_.scala.tools.nsc.async.CompletableFutureStateMachine($executor) {
+        ${mark(q"""override def apply(tr$$async: _root_.scala.util.Try[_root_.scala.AnyRef]) = ${body}""")}
+      }
+      new $name().start().asInstanceOf[${c.macroApplication.tpe}]
     """
-
   }
 }
 
-abstract class CompletableFutureStateMachine(executor: Executor) extends Runnable with BiConsumer[AnyRef, Throwable] {
+abstract class CompletableFutureStateMachine(executor: Executor) extends AsyncStateMachine[CompletableFuture[AnyRef], Try[AnyRef]] with Runnable with BiConsumer[AnyRef, Throwable] {
   Objects.requireNonNull(executor)
 
-  var result$async: CompletableFuture[AnyRef] = new CompletableFuture[AnyRef]();
-  var state$async: Int = StateAssigner.Initial
+  protected var result$async: CompletableFuture[AnyRef] = new CompletableFuture[AnyRef]();
+
+  // Adapters
   def accept(value: AnyRef, throwable: Throwable): Unit = {
     this(if (throwable != null) Failure(throwable) else Success(value))
   }
-  def apply(tr$async: R[AnyRef]): Unit
   def run(): Unit = {
     apply(null)
   }
 
-  type F[A] = CompletableFuture[A]
-  type R[A] = Try[A]
-  // Adapter methods
+  // FSM translated method
+  def apply(tr$async: Try[AnyRef]): Unit
+
+  // Required methods
+  protected var state$async: Int = StateAssigner.Initial
   protected def completeFailure(t: Throwable): Unit = result$async.completeExceptionally(t)
   protected def completeSuccess(value: AnyRef): Unit = result$async.complete(value)
-  protected def onComplete(f: F[AnyRef]): Unit = f.whenCompleteAsync(this)
-  protected def getCompleted(f: F[AnyRef]): R[AnyRef] = {
+  protected def onComplete(f: CompletableFuture[AnyRef]): Unit = f.whenCompleteAsync(this)
+  protected def getCompleted(f: CompletableFuture[AnyRef]): Try[AnyRef] = {
     try {
       val r = f.getNow(this)
       if (r == this) null
@@ -68,7 +62,7 @@ abstract class CompletableFutureStateMachine(executor: Executor) extends Runnabl
         Failure(t)
     }
   }
-  protected def tryGet(tr: R[AnyRef]): AnyRef = tr match {
+  protected def tryGet(tr: Try[AnyRef]): AnyRef = tr match {
     case Success(value) =>
       value.asInstanceOf[AnyRef]
     case Failure(throwable) =>

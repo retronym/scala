@@ -374,6 +374,8 @@ trait Internals { self: Universe =>
      */
     def boundedWildcardType(bounds: TypeBounds): BoundedWildcardType
 
+    def markForAsyncTransform(pos: Position, method: DefDef, awaitSymbol: Symbol, config: Map[String, AnyRef]): DefDef = method
+
     /** Syntactic conveniences for additional internal APIs for trees, symbols and types */
     type Decorators <: DecoratorApi
 
