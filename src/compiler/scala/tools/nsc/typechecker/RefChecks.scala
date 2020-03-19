@@ -1296,12 +1296,12 @@ abstract class RefChecks extends Transform {
           reporter.error(pos, sym.compileTimeOnlyMessage getOrElse defaultMsg)
         }
 
-        if (!global.async.asyncSymbols.awaits.contains(sym)) {
+        if (!global.async.awaits.contains(sym)) {
           if (settings.async) {
             val isThirdPartyAwaitHeuristically = (sym.name.string_==("await") && sym.compileTimeOnlyMessage.exists(_.contains("must be enclosed")))
             if (isThirdPartyAwaitHeuristically) {
               // Let the async phase detect untranslated awaits.
-              global.async.asyncSymbols.awaits.add(sym)
+              global.async.awaits.add(sym)
             } else {
               issueError()
             }

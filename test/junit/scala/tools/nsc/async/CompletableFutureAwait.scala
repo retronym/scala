@@ -9,6 +9,7 @@ import scala.language.experimental.macros
 import scala.annotation.compileTimeOnly
 import scala.reflect.macros.blackbox
 import scala.tools.nsc.transform.async.StateAssigner
+import scala.tools.partest.async.AsyncStateMachine
 import scala.util.{Failure, Success, Try}
 
 object CompletableFutureAwait {
@@ -19,7 +20,7 @@ object CompletableFutureAwait {
     import c.universe._
     val awaitSym = typeOf[CompletableFutureAwait.type].decl(TermName("await"))
     def mark(t: DefDef): Tree = {
-      c.internal.markForAsyncTransform(body.pos, t, awaitSym, Map.empty)
+      c.internal.markForAsyncTransform(c.internal.enclosingOwner, t, awaitSym, Map.empty)
     }
     val name = TypeName("stateMachine$$async_" + body.pos.line)
     q"""

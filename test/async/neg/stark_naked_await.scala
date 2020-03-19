@@ -1,4 +1,4 @@
-import scala.async.Async._
+import scala.tools.partest.async.Async._
 import scala.concurrent.{ExecutionContext, Future}
 
 object Test {

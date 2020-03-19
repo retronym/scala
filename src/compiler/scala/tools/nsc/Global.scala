@@ -375,8 +375,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   }
 
   override lazy val internal: Internal = new SymbolTableInternal {
-    override def markForAsyncTransform(pos: Position, method: DefDef, awaitSymbol: Symbol, config: Map[String, AnyRef]): DefDef = {
-      async.markForAsyncTransform(pos, method, awaitSymbol, config)
+    override def markForAsyncTransform(owner: Symbol, method: DefDef, awaitSymbol: Symbol, config: Map[String, AnyRef]): DefDef = {
+      async.markForAsyncTransform(owner, method, awaitSymbol, config)
     }
   }
 

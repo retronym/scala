@@ -512,7 +512,7 @@ trait ExprBuilder extends TransformUtils {
   private def resumeTree(awaitableResult: ValDef): Tree = {
     def tryyReference = gen.mkAttributedIdent(currentTransformState.applyTrParam)
     deriveValDef(awaitableResult) { _ =>
-      val temp = currentTransformState.applySym.newTermSymbol(TermName("tryGetResult$async")).setInfo(definitions.ObjectTpe)
+      val temp = awaitableResult.symbol.newTermSymbol(TermName("tryGetResult$async")).setInfo(definitions.ObjectTpe)
       val tempVd = ValDef(temp, gen.mkMethodCall(currentTransformState.memberRef(currentTransformState.stateTryGet), tryyReference :: Nil))
       typed(Block(
         tempVd :: Nil,

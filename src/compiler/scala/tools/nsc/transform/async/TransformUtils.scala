@@ -15,7 +15,6 @@ package scala.tools.nsc.transform.async
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.Mode
-import scala.tools.nsc.transform.TypingTransformers
 
 /**
  * Utilities used in both `ExprBuilder` and `AnfTransform`.

@@ -3,7 +3,7 @@ package async
 
 import java.io.File
 import java.nio.file.{Files, Paths}
-import java.util.concurrent.{CompletableFuture, ForkJoinPool}
+import java.util.concurrent.CompletableFuture
 
 import org.junit.Assert.assertEquals
 import org.junit.{Assert, Ignore, Test}
@@ -16,6 +16,7 @@ import scala.tools.nsc.plugins.{Plugin, PluginComponent}
 import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.nsc.transform.async.StateAssigner
+import scala.tools.partest.async.AsyncStateMachine
 
 class AnnotationDrivenAsync {
   @Test
@@ -23,7 +24,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def test: Future[Int] = async { await(f(1)) + await(f(2)) }
@@ -38,7 +39,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.tools.nsc.async.AsyncAsMacro.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def test: Future[Int] = async { await(f(1)) + await(f(2)) }
@@ -49,11 +50,38 @@ class AnnotationDrivenAsync {
   }
 
   @Test
+  def testSyncOptimizationScalaConcurrentViaMacroFrontEnd(): Unit = {
+    val code =
+      """
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.tools.partest.async.Async.{async, await}
+        |
+        |object Test {
+        |  def stackDepth = Thread.currentThread().getStackTrace.length
+        |
+        |  def test: Future[Unit] = async {
+        |    val thread1 = Thread.currentThread
+        |    val stackDepth1 = stackDepth
+        |
+        |    val f = await(Future.successful(1))
+        |    val thread2 = Thread.currentThread
+        |    val stackDepth2 = stackDepth
+        |    assert(thread1 == thread2)
+        |    assert(stackDepth1 == stackDepth2)
+        |  }
+        |
+        |  def f(x: Int): Future[Int] = Future.successful(x)
+        |}
+        |""".stripMargin
+    assertEquals((), run(code))
+  }
+
+  @Test
   def testBasicScalaConcurrentValueClass(): Unit = {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |import Future.{successful => f}
         |
         |class IntWrapper(val value: String) extends AnyVal
@@ -70,7 +98,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |
         |object Test {
@@ -97,7 +125,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |
         |object Test {
@@ -120,7 +148,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def test: Future[(String, Int, Int)] = async { var x = "init"; val y = await(f(1)); class C { x = x + "_updated" }; new C; (x, y, await(f(2))) }
@@ -135,7 +163,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def test: Future[(Int, Int, Int)] = async { var i = 0; var z = 0; lazy val foo = { def ii = i; z = -1; ii }; await(f(1)) + await(f(2)); i += 1; (foo, foo, z) }
@@ -150,7 +178,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def p[T](t: T): T = {println(t); t }
@@ -178,7 +206,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def p[T](t: T): T = {println(t); t }
@@ -203,7 +231,7 @@ class AnnotationDrivenAsync {
     // https://github.com/scala/scala/pull/8750 will fix this.
     val code =
       """import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-         import scala.async.Async.{async, await}
+         import scala.tools.partest.async.Async.{async, await}
          import Future.{successful => f}
          object Test {
            def test = async {
@@ -228,7 +256,7 @@ class AnnotationDrivenAsync {
     val code =
       """
         |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
-        |import scala.async.Async.{async, await}
+        |import scala.tools.partest.async.Async.{async, await}
         |
         |object Test {
         |  def foo[T](a0: Int)(b0: Int*) = s"a0 = $a0, b0 = ${b0.head}"
@@ -266,7 +294,7 @@ class AnnotationDrivenAsync {
   def testMixedAsync(): Unit = {
     val code = """
       |import scala.tools.nsc.async.{autoawait, customAsync}
-      |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global, scala.async.Async._
+      |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global, scala.tools.partest.async.Async._
       |
       |object Test {
       |  @customAsync
@@ -515,11 +543,9 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
           case dd: DefDef if dd.symbol.hasAnnotation(customAsyncSym) =>
             deriveDefDef(dd) {
               rhs =>
-                val unit = localTyper.context.unit
                 val applyMethod =
                   q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = $rhs"""
-                applyMethod.updateAttachment(ChangeOwnerAttachment(dd.symbol))
-                val applyMethodMarked = global.async.markForAsyncTransform(rhs.pos, applyMethod, awaitSym, Map.empty)
+                val applyMethodMarked = global.async.markForAsyncTransform(dd.symbol, applyMethod, awaitSym, Map.empty)
                 val name = TypeName("stateMachine$$async_" + dd.pos.line)
                 val wrapped =
                   q"""
@@ -567,7 +593,7 @@ final class autoawait extends StaticAnnotation
 final class customAsync extends StaticAnnotation
 
 abstract class CustomFutureStateMachine extends AsyncStateMachine[CustomFuture[AnyRef], scala.util.Either[Throwable, AnyRef]] with Function1[scala.util.Either[Throwable, AnyRef], Unit] {
-  private var result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
+  private val result$async: CustomPromise[AnyRef] = new CustomPromise[AnyRef](scala.concurrent.Promise.apply[AnyRef]);
   protected var state$async: Int = StateAssigner.Initial
   def apply(tr$async: R[AnyRef]): Unit
 

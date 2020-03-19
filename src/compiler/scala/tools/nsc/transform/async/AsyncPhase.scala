@@ -37,8 +37,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
   /**
    * Mark the given method as requiring an async transform.
    */
-  final def markForAsyncTransform(pos: Position, method: DefDef, awaitMethod: Symbol,
+  final def markForAsyncTransform(owner: Symbol, method: DefDef, awaitMethod: Symbol,
                                   config: Map[String, AnyRef]): DefDef = {
+    val pos = owner.pos
     if (!settings.async)
       reporter.warning(pos, s"${settings.async.name} must be enabled for async transformation.")
     sourceFilesToTransform += pos.source
@@ -47,71 +48,12 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     method.updateAttachment(new AsyncAttachment(awaitMethod, postAnfTransform, stateDiagram))
     deriveDefDef(method) { rhs =>
       Block(rhs.updateAttachment(SuppressPureExpressionWarning), Literal(Constant(())))
-    }
+    }.updateAttachment(ChangeOwnerAttachment(owner))
   }
 
-  protected object macroExpansion extends AsyncEarlyExpansion {
-    val global: self.global.type = self.global
-  }
+  val awaits = mutable.HashSet[Symbol]()
 
-  final class AsyncSymbols(val Async_async: Symbol, val Async_await: Symbol) {
-    // Custom FutureSystems could add their own await method here.
-    val awaits = mutable.HashSet(Async_await)
-  }
-  lazy val asyncSymbols: AsyncSymbols = {
-    rootMirror.getPackageIfDefined("scala.async") match {
-      case NoSymbol if settings.async =>
-        val completer = new loaders.PackageLoader("async", platform.classPath)
-        val packSym = loaders.enterPackage(definitions.ScalaPackageClass, "async", completer)
-
-
-        val Async_module_completer = new loaders.SymbolLoader {
-          override def sourcefile: Option[AbstractFile] = None
-          override protected def doComplete(root: Symbol): Unit = {
-            root.setInfo(ClassInfoType(Nil, newScope, root.moduleClass))
-          }
-          override protected def description: String = ""
-        }
-        val AsyncModule = packSym.moduleClass.newModule("Async")
-        val moduleClass = AsyncModule.moduleClass
-        moduleClass.setInfo(ClassInfoType(Nil, newScope, moduleClass))
-        AsyncModule.setInfoAndEnter(TypeRef(packSym.thisType, moduleClass, Nil))
-
-        def futureOfT(tparam: Symbol) = appliedType(rootMirror.getClassIfDefined("scala.concurrent.Future").tpeHK, tparam.tpeHK)
-
-        val Async_async = AsyncModule.moduleClass.newMethodSymbol(nme.async, newFlags = Flags.MACRO)
-        val Async_async_T = Async_async.newSyntheticTypeParam("T", 0L).setInfo(TypeBounds.empty)
-        val Async_async_body = Async_async.newSyntheticValueParam(Async_async_T.tpeHK, "body")
-        val Async_async_execContext = Async_async.newSyntheticValueParam(rootMirror.getClassIfDefined("scala.concurrent.ExecutionContext").tpeHK, "executionContext").setFlag(Flags.IMPLICIT)
-        Async_async.setInfoAndEnter(PolyType(Async_async_T :: Nil, MethodType(Async_async_body :: Nil, MethodType(Async_async_execContext :: Nil, futureOfT(Async_async_T)))))
-
-        val Async_await = AsyncModule.moduleClass.newMethodSymbol(nme.await)
-        val Async_await_T = Async_await.newSyntheticTypeParam("T", 0L).setInfo(TypeBounds.empty)
-        val Async_await_future = Async_await.newSyntheticValueParam(futureOfT(Async_await_T), "awaitable")
-        Async_await.setInfoAndEnter(PolyType(Async_await_T :: Nil, MethodType(Async_await_future :: Nil, Async_await_T.tpeHK)))
-        new AsyncSymbols(Async_async, Async_await)
-      case _ =>
-        val AsyncModule = rootMirror.getModuleIfDefined("scala.async.Async")
-        val Async_async = AsyncModule.map(async => definitions.getDeclIfDefined(async, nme.async))
-        val Async_await = AsyncModule.map(async => definitions.getDeclIfDefined(async, nme.await))
-        new AsyncSymbols(Async_async, Async_await)
-    }
-  }
-
-  override def newPhase(prev: scala.reflect.internal.Phase): StdPhase = {
-    new Phase(prev) {
-      override def init(): Unit = {
-        asyncSymbols // force
-      }
-    }
-  }
   import treeInfo.Applied
-  def fastTrackEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree]) =
-    (asyncSymbols.Async_async, {
-      // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
-      case app@Applied(_, _, List(asyncBody :: Nil, execContext :: Nil)) =>
-        c => c.global.async.macroExpansion.apply(c.callsiteTyper, asyncBody, execContext, asyncBody.tpe)
-    })
 
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
 
@@ -123,9 +65,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     override def transformUnit(unit: CompilationUnit): Unit = {
       if (settings.async) {
         if (sourceFilesToTransform.contains(unit.source)) super.transformUnit(unit)
-        if (asyncSymbols.awaits.exists(_.isInitialized)) {
+        if (awaits.exists(_.isInitialized)) {
           unit.body.foreach {
-            case tree: RefTree if tree.symbol != null && asyncSymbols.awaits.contains(tree.symbol) =>
+            case tree: RefTree if tree.symbol != null && awaits.contains(tree.symbol) =>
               val sym = tree.symbol
               val msg = sym.compileTimeOnlyMessage.getOrElse(s"`${sym.decodedName}` must be enclosed in an `async` block")
               global.reporter.error(tree.pos, msg)
