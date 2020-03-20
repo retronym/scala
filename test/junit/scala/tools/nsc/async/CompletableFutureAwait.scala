@@ -14,7 +14,7 @@ import scala.util.{Failure, Success, Try}
 
 object CompletableFutureAwait {
   def async[T](executor: Executor)(body: T): CompletableFuture[T] = macro impl
-  @compileTimeOnly("`await` must be enclosed in `async`")
+  @compileTimeOnly("[async] `await` must be enclosed in `async`")
   def await[T](completableFuture: CompletableFuture[T]): T = ???
   def impl(c: blackbox.Context)(executor: c.Tree)(body: c.Tree): c.Tree = {
     import c.universe._

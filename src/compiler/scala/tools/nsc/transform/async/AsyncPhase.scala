@@ -33,6 +33,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
 
   // Optimization: avoid the transform altogether if there are no async blocks in a unit.
   private val sourceFilesToTransform = perRunCaches.newSet[SourceFile]()
+  private val awaits: mutable.Set[Symbol] = perRunCaches.newSet[Symbol]()
 
   /**
    * Mark the given method as requiring an async transform.
@@ -51,11 +52,21 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
     }.updateAttachment(ChangeOwnerAttachment(owner))
   }
 
-  val awaits = mutable.HashSet[Symbol]()
-
-  import treeInfo.Applied
-
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
+
+  private def compileTimeOnlyPrefix: String = "[async] "
+
+  /** Should refchecks defer reporting `@compileTimeOnly` errors for `sym` and instead let this phase issue the warning
+   *  if they survive the async tranform? */
+  private[scala] def deferCompileTimeOnlyError(sym: Symbol): Boolean = settings.async && {
+    awaits.contains(sym) || {
+      val msg = sym.compileTimeOnlyMessage.getOrElse("")
+      val shouldDefer =
+        msg.startsWith(compileTimeOnlyPrefix) || (sym.name == nme.await) && msg.contains("must be enclosed") && sym.owner.info.member(nme.async) != NoSymbol
+      if (shouldDefer) awaits += sym
+      shouldDefer
+    }
+  }
 
   // TOOD: figure out how to make the root-level async built-in macro sufficiently configurable:
   //       replace the ExecutionContext implicit arg with an AsyncContext implicit that also specifies the type of the Future/Awaitable/Node/...?
@@ -69,7 +80,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           unit.body.foreach {
             case tree: RefTree if tree.symbol != null && awaits.contains(tree.symbol) =>
               val sym = tree.symbol
-              val msg = sym.compileTimeOnlyMessage.getOrElse(s"`${sym.decodedName}` must be enclosed in an `async` block")
+              val msg = sym.compileTimeOnlyMessage.getOrElse(s"`${sym.decodedName}` must be enclosed in an `async` block").stripPrefix(compileTimeOnlyPrefix)
               global.reporter.error(tree.pos, msg)
             case _ =>
           }
