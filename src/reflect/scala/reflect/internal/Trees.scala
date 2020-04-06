@@ -1532,7 +1532,7 @@ trait Trees extends api.Trees {
   }
 
   private class ShallowDuplicator(orig: Tree) extends Transformer {
-    override val treeCopy = newStrictTreeCopier
+    setTreeCopy(newStrictTreeCopier)
     override def transform(tree: Tree) =
       if (tree eq orig) super.transform(tree)
       else tree
@@ -1703,7 +1703,7 @@ trait Trees extends api.Trees {
 
   private lazy val duplicator = new Duplicator(focusPositions = true)
   private class Duplicator(focusPositions: Boolean) extends Transformer {
-    override val treeCopy = newStrictTreeCopier
+    setTreeCopy(newStrictTreeCopier)
     override def transform(t: Tree) = {
       val t1 = super.transform(t)
       if ((t1 ne t) && t1.pos.isRange && focusPositions) t1 setPos t.pos.focus
@@ -1711,7 +1711,7 @@ trait Trees extends api.Trees {
     }
   }
   object duplicateAndResetPos extends Transformer {
-    override val treeCopy = newStrictTreeCopier
+    setTreeCopy(newStrictTreeCopier)
     override def transform(t: Tree) = {
       val t1 = super.transform(t)
       if (t1 ne EmptyTree) t1.setPos(NoPosition)

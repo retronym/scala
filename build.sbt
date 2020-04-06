@@ -365,6 +365,9 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.api.TypeTags.TypeTagImpl"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.api.Universe.TypeTagImpl"),
 
+    ProblemFilters.exclude[FinalMethodProblem]("scala.reflect.api.Trees#Transformer.treeCopy"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.api.Trees#Transformer.setTreeCopy"),
+
     ProblemFilters.exclude[MissingClassProblem]("scala.reflect.macros.Attachments$"),
 
     ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.reflect.io.ZipArchive.getDir"),

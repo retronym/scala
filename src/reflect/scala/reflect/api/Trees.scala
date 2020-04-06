@@ -2538,7 +2538,9 @@ trait Trees { self: Universe =>
    */
   abstract class Transformer {
     /** The underlying tree copier. */
-    val treeCopy: TreeCopier = newLazyTreeCopier
+    private[this] var _treeCopy: TreeCopier = newLazyTreeCopier
+    protected final def setTreeCopy(treeCopy: TreeCopier): Unit = this._treeCopy = treeCopy
+    final def treeCopy: TreeCopier = _treeCopy
 
     /** The current owner symbol. */
     protected[scala] var currentOwner: Symbol = rootMirror.RootClass

@@ -105,8 +105,8 @@ trait Trees extends scala.reflect.internal.Trees { self: Global =>
   }
   implicit val TreeCopierTag: ClassTag[TreeCopier] = ClassTag[TreeCopier](classOf[TreeCopier])
 
-  def newStrictTreeCopier: TreeCopier = new StrictTreeCopier
-  def newLazyTreeCopier: TreeCopier = new LazyTreeCopier
+  lazy val newStrictTreeCopier: TreeCopier = new StrictTreeCopier
+  lazy val newLazyTreeCopier: TreeCopier = new LazyTreeCopier
 
   class StrictTreeCopier extends super.StrictTreeCopier with TreeCopier {
     def DocDef(tree: Tree, comment: DocComment, definition: Tree) =
