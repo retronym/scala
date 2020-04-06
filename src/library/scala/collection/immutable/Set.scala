@@ -81,6 +81,7 @@ object Set extends ImmutableSetFactory[Set] {
   private object EmptySet extends AbstractSet[Any] with Set[Any] with Serializable {
     override def size: Int = 0
     def contains(elem: Any): Boolean = false
+    override def isEmpty: Boolean = true
     def + (elem: Any): Set[Any] = new Set1(elem)
     def - (elem: Any): Set[Any] = this
     def iterator: Iterator[Any] = Iterator.empty
@@ -112,6 +113,7 @@ object Set extends ImmutableSetFactory[Set] {
     override def size: Int = 1
     def contains(elem: A): Boolean =
       elem == elem1
+    override def isEmpty: Boolean = false
     def + (elem: A): Set[A] =
       if (contains(elem)) this
       else new Set2(elem1, elem)
@@ -146,6 +148,7 @@ object Set extends ImmutableSetFactory[Set] {
     override def size: Int = 2
     def contains(elem: A): Boolean =
       elem == elem1 || elem == elem2
+    override def isEmpty: Boolean = false
     def + (elem: A): Set[A] =
       if (contains(elem)) this
       else new Set3(elem1, elem2, elem)
@@ -182,6 +185,7 @@ object Set extends ImmutableSetFactory[Set] {
     override def size: Int = 3
     def contains(elem: A): Boolean =
       elem == elem1 || elem == elem2 || elem == elem3
+    override def isEmpty: Boolean = false
     def + (elem: A): Set[A] =
       if (contains(elem)) this
       else new Set4(elem1, elem2, elem3, elem)
@@ -220,6 +224,7 @@ object Set extends ImmutableSetFactory[Set] {
     override def size: Int = 4
     def contains(elem: A): Boolean =
       elem == elem1 || elem == elem2 || elem == elem3 || elem == elem4
+    override def isEmpty: Boolean = false
     def + (elem: A): Set[A] =
       if (contains(elem)) this
       else new HashSet[A] + elem1 + elem2 + elem3 + elem4 + elem

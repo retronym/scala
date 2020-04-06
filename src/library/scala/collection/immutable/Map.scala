@@ -103,6 +103,7 @@ object Map extends ImmutableMapFactory[Map] {
     override def size: Int = 0
     override def apply(key: Any) = throw new NoSuchElementException("key not found: " + key)
     override def contains(key: Any) = false
+    override def isEmpty: Boolean = true
     def get(key: Any): Option[Nothing] = None
     override def getOrElse [V1](key: Any, default: => V1): V1 = default
     def iterator: Iterator[(Any, Nothing)] = Iterator.empty
@@ -139,6 +140,7 @@ object Map extends ImmutableMapFactory[Map] {
     override def size = 1
     override def apply(key: K) = if (key == key1) value1 else throw new NoSuchElementException("key not found: " + key)
     override def contains(key: K) = key == key1
+    override def isEmpty: Boolean = false
     def get(key: K): Option[V] =
       if (key == key1) Some(value1) else None
     override def getOrElse [V1 >: V](key: K, default: => V1): V1 =
@@ -183,6 +185,7 @@ object Map extends ImmutableMapFactory[Map] {
       else if (key == key2) value2
       else throw new NoSuchElementException("key not found: " + key)
     override def contains(key: K) = (key == key1) || (key == key2)
+    override def isEmpty: Boolean = false
     def get(key: K): Option[V] =
       if (key == key1) Some(value1)
       else if (key == key2) Some(value2)
@@ -241,6 +244,7 @@ object Map extends ImmutableMapFactory[Map] {
       else if (key == key3) value3
       else throw new NoSuchElementException("key not found: " + key)
     override def contains(key: K) = (key == key1) || (key == key2) || (key == key3)
+    override def isEmpty: Boolean = false
     def get(key: K): Option[V] =
       if (key == key1) Some(value1)
       else if (key == key2) Some(value2)
@@ -310,6 +314,7 @@ object Map extends ImmutableMapFactory[Map] {
       else if (key == key4) value4
       else throw new NoSuchElementException("key not found: " + key)
     override def contains(key: K) = (key == key1) || (key == key2) || (key == key3) || (key == key4)
+    override def isEmpty: Boolean = false
     def get(key: K): Option[V] =
       if (key == key1) Some(value1)
       else if (key == key2) Some(value2)
