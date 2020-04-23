@@ -148,17 +148,20 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
         this.staticModule = module
         this.isScala = false
 
-        val fileContents = file.unsafeToByteArray
-        this.in = new AbstractFileReader(fileContents)
-        val magic = in.getInt(in.bp)
-        if (magic != JAVA_MAGIC && file.name.endsWith(".sig")) {
-          currentClass = clazz.javaClassName
-          isScala = true
-          unpickler.unpickle(fileContents, 0, clazz, staticModule, file.name)
-        } else {
-          parseHeader()
-          this.pool = new ConstantPool
-          parseClass()
+        this.in = reader.reset(file)
+        try {
+          val magic = in.getInt(in.bp)
+          if (magic != JAVA_MAGIC && file.name.endsWith(".sig")) {
+            currentClass = clazz.javaClassName
+            isScala = true
+            unpickler.unpickle(reader.rawData, 0, clazz, staticModule, file.name)
+          } else {
+            parseHeader()
+            this.pool = new ConstantPool
+            parseClass()
+          }
+        } finally {
+          this.in = null
         }
       }
     }

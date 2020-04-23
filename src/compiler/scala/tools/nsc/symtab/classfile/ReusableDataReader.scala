@@ -15,8 +15,11 @@ package scala.tools.nsc.symtab.classfile
 import java.io.{DataInputStream, InputStream}
 import java.nio.{BufferUnderflowException, ByteBuffer}
 
+import scala.reflect.io.VirtualFile
+
 final class ReusableDataReader() extends DataReader {
-  private[this] var data = new Array[Byte](32768)
+  private[this] var ourBuffer = new Array[Byte](32768)
+  private[this] var data = ourBuffer
   private[this] var bb: ByteBuffer = ByteBuffer.wrap(data)
   private[this] var size = 0
   private[this] val reader: DataInputStream = {
@@ -37,31 +40,36 @@ final class ReusableDataReader() extends DataReader {
     }
     new DataInputStream(stream)
   }
+  def rawData: Array[Byte] = data
 
   private def nextPositivePowerOfTwo(target: Int): Int = 1 << -Integer.numberOfLeadingZeros(target - 1)
 
   def reset(file: scala.reflect.io.AbstractFile): this.type = {
     this.size = 0
-    file.sizeOption match {
+    if (file.isVirtual) {
+      data = file.unsafeToByteArray
+      size = data.size
+    }
+    else file.sizeOption match {
       case Some(size) =>
-        if (size > data.length) {
-          data = new Array[Byte](nextPositivePowerOfTwo(size))
+        if (size > ourBuffer.length) {
+          ourBuffer = new Array[Byte](nextPositivePowerOfTwo(size))
         } else {
-          java.util.Arrays.fill(data, 0.toByte)
+          java.util.Arrays.fill(ourBuffer, 0.toByte)
         }
         val input = file.input
         try {
           var endOfInput = false
           while (!endOfInput) {
-            val remaining = data.length - this.size
+            val remaining = ourBuffer.length - this.size
             if (remaining == 0) endOfInput = true
             else {
-              val read = input.read(data, this.size, remaining)
+              val read = input.read(ourBuffer, this.size, remaining)
               if (read < 0) endOfInput = true
               else this.size += read
             }
           }
-          bb = ByteBuffer.wrap(data, 0, size)
+          data = ourBuffer
         } finally {
           input.close()
         }
@@ -72,17 +80,18 @@ final class ReusableDataReader() extends DataReader {
           while (!endOfInput) {
             val remaining = data.length - size
             if (remaining == 0) {
-              data = java.util.Arrays.copyOf(data, nextPositivePowerOfTwo(size))
+              data = java.util.Arrays.copyOf(ourBuffer, nextPositivePowerOfTwo(size))
             }
             val read = input.read(data, this.size, data.length - this.size)
             if (read < 0) endOfInput = true
             else this.size += read
           }
-          bb = ByteBuffer.wrap(data, 0, size)
+          data = ourBuffer
         } finally {
           input.close()
         }
     }
+    bb = ByteBuffer.wrap(data, 0, data.size)
     this
   }
 
