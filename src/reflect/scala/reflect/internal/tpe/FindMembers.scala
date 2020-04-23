@@ -115,7 +115,6 @@ trait FindMembers {
               sym.rawflags & phasePlagMask
             else
               sym.flags(phasePlagMask)
-          assert(flags == sym.flags, (flags, sym.flags, phase)) // TODO temporary, remove
           val meetsRequirements = (flags & required) == required
           if (meetsRequirements) {
             val excl: Long = flags & excluded
