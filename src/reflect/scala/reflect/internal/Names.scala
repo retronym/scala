@@ -74,23 +74,43 @@ trait Names extends api.Names {
       i += 1
     i == len
   }
+  private def equals(index: Int, cs: String, offset: Int, len: Int): Boolean = {
+    var i = 0
+    val chrs = _chrs
+    while ((i < len) && (chrs(index + i) == cs(offset + i)))
+      i += 1
+    i == len
+  }
 
   /** Enter characters into chrs array. */
   private def enterChars(cs: Array[Char], offset: Int, len: Int) {
     var i = 0
     while (i < len) {
-      if (nc + i == _chrs.length) {
-        val newchrs = new Array[Char](_chrs.length * 2)
-        java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
-        _chrs = newchrs
-      }
-      _chrs(nc + i) = cs(offset + i)
+      val destIndex = nc + i
+      growIfNeeded(destIndex)
+      _chrs(destIndex) = cs(offset + i)
       i += 1
     }
     if (len == 0) nc += 1
     else nc = nc + len
   }
 
+  /** Enter characters into chrs array. */
+  private def enterChars(s: String, offset: Int, len: Int) {
+    var i = 0
+    growIfNeeded(nc + len - 1)
+    s.copyToArray(_chrs, nc)
+    if (len == 0) nc += 1
+    else nc = nc + len
+  }
+
+  private def growIfNeeded(destIndex: Int) = {
+    if (destIndex == _chrs.length) {
+      val newchrs = new Array[Char](_chrs.length * 2)
+      java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
+      _chrs = newchrs
+    }
+  }
   /** Create a term name from the characters in cs[offset..offset+len-1]. */
   final def newTermName(cs: Array[Char], offset: Int, len: Int): TermName =
     newTermName(cs, offset, len, cachedString = null)
@@ -137,13 +157,38 @@ trait Names extends api.Names {
     }
     if (synchronizeNames) nameLock.synchronized(body) else body
   }
+  private final def newTermNameFromString(s: String, cache: Boolean): TermName = {
+    def body = {
+      val h = s.hashCode & HASH_MASK
+      val len = s.length
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !equals(n.start, s, 0, len)))
+        n = n.next
+
+      if (n ne null) n
+      else {
+        // The logic order here is future-proofing against the possibility
+        // that name.toString will become an eager val, in which case the call
+        // to enterChars cannot follow the construction of the TermName.
+        var startIndex = nc
+        startIndex = nc
+        enterChars(s, 0, len)
+        val next = termHashtable(h)
+        val termName = new TermName(startIndex, len, next, if (cache) s else null)
+        // Add the new termName to the hashtable only after it's been fully constructed
+        termHashtable(h) = termName
+        termName
+      }
+    }
+    if (synchronizeNames) nameLock.synchronized(body) else body
+  }
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
 
   /** Create a term name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
-  def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
+  def newTermName(s: String): TermName = newTermNameFromString(s, cache = false)
 
   /** Create a type name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
@@ -156,10 +201,10 @@ trait Names extends api.Names {
   }
 
   final def newTermNameCached(s: String): TermName =
-    newTermName(s.toCharArray(), 0, s.length(), cachedString = s)
+    newTermNameFromString(s, cache = true)
 
   final def newTypeNameCached(s: String): TypeName =
-    newTypeName(s.toCharArray(), 0, s.length(), cachedString = s)
+    newTermNameFromString(s, cache = true).toTypeName
 
   /** Create a type name from the characters in cs[offset..offset+len-1]. */
   final def newTypeName(cs: Array[Char], offset: Int, len: Int): TypeName =
