@@ -2161,7 +2161,8 @@ object HashMap extends MapFactory[HashMap] {
 /** A Builder for a HashMap.
   * $multipleResults
   */
-private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, V), HashMap[K, V]] {
+private[collection] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, V), HashMap[K, V]] {
+  self =>
   import MapNode._
   import Node._
 
@@ -2177,7 +2178,7 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
   /** The root node of the partially build hashmap */
   private var rootNode: BitmapIndexedMapNode[K, V] = newEmptyRootNode
 
-  private[immutable] def getOrElse[V0 >: V](key: K, value: V0): V0 =
+  private[collection] def getOrElse[V0 >: V](key: K, value: V0): V0 =
     if (rootNode.size == 0) value
     else {
       val originalHash = key.##
@@ -2283,6 +2284,35 @@ private[immutable] final class HashMapBuilder[K, V] extends ReusableBuilder[(K, 
       releaseFence()
       aliased
     }
+
+  def result[V1](f: V => V1): HashMap[K, V1] = {
+    val workList = mutable.Stack[MapNode[K, V]]()
+    workList.push(rootNode)
+    while (!workList.isEmpty) {
+      workList.pop() match {
+        case bm: BitmapIndexedMapNode[K, V] =>
+          val iN = bm.payloadArity
+          val jN = bm.nodeArity
+          val content = bm.content
+          var i = 0
+          while (i < iN) {
+            val value = bm.getValue(i)
+            val newValue = f(value)
+            content(TupleLength * i + 1) = newValue
+            i += 1
+          }
+
+          var j = 0
+          while (j < jN) {
+            workList.push(bm.getNode(j))
+            j += 1
+          }
+        case hc: HashCollisionMapNode[K, V] =>
+          hc.content = hc.content.map(pair => (pair._1, f(pair._2).asInstanceOf[V]))
+      }
+    }
+    result().asInstanceOf[HashMap[K, V1]]
+  }
 
   override def addOne(elem: (K, V)): this.type = {
     ensureUnaliased()
