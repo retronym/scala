@@ -5,6 +5,8 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.junit.Test
 
+import scala.tools.testing.AssertUtil
+
 @RunWith(classOf[JUnit4])
 class VectorTest {
 
@@ -26,5 +28,14 @@ class VectorTest {
     assertEquals(Vector.empty[Int], v takeRight Int.MinValue)
     assertEquals(v, v drop Int.MinValue)
     assertEquals(v, v dropRight Int.MinValue)
+  }
+
+  @Test
+  def emptyIterator() {
+    val it = Nil.toVector.iterator
+    val it2 = Nil.toVector.iterator
+    assertSame(it, it2) // sharing the empty iterator as an optimization
+    assertEquals(false, it.hasNext)
+    AssertUtil.assertThrows[NoSuchElementException](it.next())
   }
 }
