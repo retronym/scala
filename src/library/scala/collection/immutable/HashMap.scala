@@ -1081,29 +1081,37 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
           var bit = 0
           var bitmap = 0
           var size = 0
+          val elems = trie.elems
           while (bit < 32) {
-            if (trie.elems(bit) ne null)
-              trie.elems(bit) = makeImmutable(trie.elems(bit))
-            if (trie.elems(bit) ne null) {
+            val elem = elems(bit)
+            if (elem ne null) {
+              val elem1 = makeImmutable(elem)
+              if (elem1 ne null) {
+                elems(bit) = elem1
+                bitmap |= 1 << bit
+                size += elem1.size
+              }
+            } else {
               bitmap |= 1 << bit
-              size += trie.elems(bit).size
+              size += elem.size
             }
             bit += 1
           }
           Integer.bitCount(bitmap) match {
             case 0 => null
             case 1
-              if isLeaf(trie.elems(Integer.numberOfTrailingZeros(bitmap))) =>
-              trie.elems(Integer.numberOfTrailingZeros(bitmap))
+              if isLeaf(elems(Integer.numberOfTrailingZeros(bitmap))) =>
+              elems(Integer.numberOfTrailingZeros(bitmap))
 
             case bc =>
-              val elems = if (bc == 32) trie.elems else {
+              val elems1 = if (bc == 32) elems else {
                 val elems = new Array[HashMap[A, B]](bc)
                 var oBit = 0
                 bit = 0
                 while (bit < 32) {
-                  if (trie.elems(bit) ne null) {
-                    elems(oBit) = trie.elems(bit)
+                  val elem = elems(bit)
+                  if (elem ne null) {
+                    elems(oBit) = elem
                     oBit += 1
                   }
                   bit += 1
@@ -1112,7 +1120,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
                 elems
               }
               trie.size0 = size
-              trie.elems0 = elems
+              trie.elems0 = elems1
               trie.bitmap0 = bitmap
               trie
           }
