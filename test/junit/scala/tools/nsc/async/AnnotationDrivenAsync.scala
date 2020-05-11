@@ -59,7 +59,6 @@ class AnnotationDrivenAsync {
   }
 
   @Test
-  @Ignore // TODO XASYNC
   def testBoxedUnitNotImplemented(): Unit = {
     val code =
       """

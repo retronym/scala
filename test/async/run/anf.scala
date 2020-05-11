@@ -1,37 +1,16 @@
-object Test extends scala.tools.partest.JUnitTest(classOf[scala.async.run.anf.AnfTransformSpec])
+object Test extends scala.async.run.anf.AnfTransformSpec
 
 package scala.async.run.anf {
 
-  import language.{reflectiveCalls, postfixOps}
-  import scala.concurrent.{Future, ExecutionContext, Await}
+  import language.{postfixOps, reflectiveCalls}
+  import scala.concurrent.{Await, ExecutionContext, Future}
   import scala.concurrent.duration._
   import scala.tools.partest.async.Async.{async, await}
   import scala.reflect.{ClassTag, classTag}
   import org.junit.Test
 
-  object `package` {
+  import scala.tools.partest.AsyncTest
 
-    implicit class FutureOps[T](f: Future[T]) {
-      def block: T = Await.result(f, Duration.Inf)
-    }
-    // scala.tools.partest.TestUtil.intercept is not good enough for us
-    def intercept[T <: Throwable : ClassTag](body: => Any): T = {
-      try {
-        body
-        throw new Exception(s"Exception of type ${classTag[T]} was not thrown")
-      } catch {
-        case t: Throwable =>
-          if (!classTag[T].runtimeClass.isAssignableFrom(t.getClass)) throw t
-          else t.asInstanceOf[T]
-      }
-    }
-    implicit class objectops(obj: Any) {
-      def mustBe(other: Any) = assert(obj == other, obj + " is not " + other)
-
-      def mustEqual(other: Any) = mustBe(other)
-    }
-
-  }
   import Future.{successful => fut}
 
   import ExecutionContext.Implicits.global
@@ -88,50 +67,44 @@ package scala.async.run.anf {
     @volatile var result: Int = 0
   }
 
-  class AnfTransformSpec {
+  class AnfTransformSpec extends AsyncTest[AnfTransformSpec]  {
 
-    @Test
-    def `simple ANF transform`(): Unit = {
+    test("simple ANF transform") {
       val o = new AnfTestClass
       val fut = o.m(10)
       val res = Await.result(fut, 2 seconds)
       res mustBe (12)
     }
 
-    @Test
-    def `simple ANF transform 2`(): Unit = {
+    test("simple ANF transform 2") {
       val o = new AnfTestClass
       val fut = o.m2(10)
       val res = Await.result(fut, 2 seconds)
       res mustBe (25)
     }
 
-    @Test
-    def `simple ANF transform 3`(): Unit = {
+    test("simple ANF transform 3") {
       val o = new AnfTestClass
       val fut = o.m3(10)
       val res = Await.result(fut, 2 seconds)
       res mustBe (14)
     }
 
-    @Test
-    def `ANF transform of assigning the result of an if-else`(): Unit = {
+    test("ANF transform of assigning the result of an if-else") {
       val o = new AnfTestClass
       val fut = o.m4(10)
       val res = Await.result(fut, 2 seconds)
       res mustBe (15)
     }
 
-    @Test
-    def `Unit-typed if-else in tail position`(): Unit = {
+    test("Unit-typed if-else in tail position") {
       val o = new AnfTestClass
       val fut = o.futureUnitIfElse(10)
       Await.result(fut, 2 seconds)
       State.result mustBe (14)
     }
 
-    @Test
-    def `inlining block does not produce duplicate definition`(): Unit = {
+    test("inlining block does not produce duplicate definition") {
       async {
         val f = 12
         val x = await(fut(f))
@@ -146,8 +119,7 @@ package scala.async.run.anf {
       }.block
     }
 
-    @Test
-    def `inlining block in tail position does not produce duplicate definition`(): Unit = {
+    test("inlining block in tail position does not produce duplicate definition") {
       async {
         val f = 12
         val x = await(fut(f))
@@ -159,8 +131,7 @@ package scala.async.run.anf {
       }.block mustBe (42)
     }
 
-    @Test
-    def `match as expression 1`(): Unit = {
+    test("match as expression 1") {
       import ExecutionContext.Implicits.global
       val result = async {
         val x = "" match {
@@ -171,8 +142,7 @@ package scala.async.run.anf {
       result.block mustBe (2)
     }
 
-    @Test
-    def `match as expression 2`(): Unit = {
+    test("match as expression 2") {
       import ExecutionContext.Implicits.global
       val result = async {
         val x = "" match {
@@ -187,8 +157,7 @@ package scala.async.run.anf {
       result.block mustBe (103)
     }
 
-    @Test
-    def nestedAwaitAsBareExpression(): Unit = {
+    test("nestedAwaitAsBareExpression") {
       import ExecutionContext.Implicits.global
       val result = async {
         await(fut(await(fut("")).isEmpty))
@@ -196,8 +165,7 @@ package scala.async.run.anf {
       result.block mustBe (true)
     }
 
-    @Test
-    def nestedAwaitInBlock(): Unit = {
+    test("nestedAwaitInBlock") {
       import ExecutionContext.Implicits.global
       val result = async {
         ()
@@ -206,8 +174,7 @@ package scala.async.run.anf {
       result.block mustBe (true)
     }
 
-    @Test
-    def nestedAwaitInIf(): Unit = {
+    test("nestedAwaitInIf") {
       import ExecutionContext.Implicits.global
       val result = async {
         if ("".isEmpty)
@@ -217,8 +184,7 @@ package scala.async.run.anf {
       result.block mustBe (true)
     }
 
-    @Test
-    def byNameExpressionsArentLifted(): Unit = {
+    test("byNameExpressionsArentLifted") {
       def foo(ignored: => Any, b: Int) = b
       val result = async {
         foo(???, await(fut(1)))
@@ -226,8 +192,7 @@ package scala.async.run.anf {
       result.block mustBe (1)
     }
 
-    @Test
-    def evaluationOrderRespected(): Unit = {
+    test("evaluationOrderRespected") {
       def foo(a: Int, b: Int) = (a, b)
       val result = async {
         var i = 0
@@ -240,8 +205,7 @@ package scala.async.run.anf {
       result.block mustBe ((1, 2))
     }
 
-    @Test
-    def awaitInNonPrimaryParamSection1(): Unit = {
+    test("awaitInNonPrimaryParamSection1") {
       def foo(a0: Int)(b0: Int) = s"a0 = $a0, b0 = $b0"
       val res = async {
         var i = 0
@@ -251,8 +215,7 @@ package scala.async.run.anf {
       res.block mustBe "a0 = 1, b0 = 2"
     }
 
-    @Test
-    def awaitInNonPrimaryParamSection2(): Unit = {
+    test("awaitInNonPrimaryParamSection2") {
       def foo[T](a0: Int)(b0: Int*) = s"a0 = $a0, b0 = ${b0.head}"
       val res = async {
         var i = 0
@@ -262,8 +225,7 @@ package scala.async.run.anf {
       res.block mustBe "a0 = 1, b0 = 2"
     }
 
-    @Test
-    def awaitInNonPrimaryParamSectionWithLazy1(): Unit = {
+    test("awaitInNonPrimaryParamSectionWithLazy1") {
       def foo[T](a: => Int)(b: Int) = b
       val res = async {
         def get = async {0}
@@ -272,8 +234,7 @@ package scala.async.run.anf {
       res.block mustBe 0
     }
 
-    @Test
-    def awaitInNonPrimaryParamSectionWithLazy2(): Unit = {
+    test("awaitInNonPrimaryParamSectionWithLazy2") {
       def foo[T](a: Int)(b: => Int) = a
       val res = async {
         def get = async {0}
@@ -282,8 +243,7 @@ package scala.async.run.anf {
       res.block mustBe 0
     }
 
-    @Test
-    def awaitWithLazy(): Unit = {
+    test("awaitWithLazy") {
       def foo[T](a: Int, b: => Int) = a
       val res = async {
         def get = async {0}
@@ -292,16 +252,14 @@ package scala.async.run.anf {
       res.block mustBe 0
     }
 
-    @Test
-    def awaitOkInReciever(): Unit = {
+    test("awaitOkInReciever") {
       class Foo { def bar(a: Int)(b: Int) = a + b }
       async {
         await(async(new Foo)).bar(1)(2)
       }
     }
 
-    @Test
-    def namedArgumentsRespectEvaluationOrder(): Unit = {
+    test("namedArgumentsRespectEvaluationOrder") {
       def foo(a: Int, b: Int) = (a, b)
       val result = async {
         var i = 0
@@ -314,8 +272,7 @@ package scala.async.run.anf {
       result.block mustBe ((2, 1))
     }
 
-    @Test
-    def namedAndDefaultArgumentsRespectEvaluationOrder(): Unit = {
+    test("namedAndDefaultArgumentsRespectEvaluationOrder") {
       var i = 0
       def next() = {
         i += 1
@@ -331,8 +288,7 @@ package scala.async.run.anf {
       }.block mustBe ((1, 2))
     }
 
-    @Test
-    def repeatedParams1(): Unit = {
+    test("repeatedParams1") {
       var i = 0
       def foo(a: Int, b: Int*) = b.toList
       def id(i: Int) = i
@@ -341,8 +297,7 @@ package scala.async.run.anf {
       }.block mustBe (List(1, 2, 3, 4))
     }
 
-    @Test
-    def repeatedParams2(): Unit = {
+    test("repeatedParams2") {
       var i = 0
       def foo(a: Int, b: Int*) = b.toList
       def id(i: Int) = i
@@ -351,8 +306,7 @@ package scala.async.run.anf {
       }.block mustBe (List(1, 2, 3))
     }
 
-    @Test
-    def awaitInThrow(): Unit = {
+    test("awaitInThrow") {
       intercept[Exception](
         async {
           throw new Exception("msg: " + await(fut(0)))
@@ -360,16 +314,14 @@ package scala.async.run.anf {
       ).getMessage mustBe "msg: 0"
     }
 
-    @Test
-    def awaitInTyped(): Unit = {
+    test("awaitInTyped") {
       async {
         (("msg: " + await(fut(0))): String).toString
       }.block mustBe "msg: 0"
     }
 
 
-    @Test
-    def awaitInAssign(): Unit = {
+    test("awaitInAssign") {
       async {
         var x = 0
         x = await(fut(1))
@@ -377,8 +329,7 @@ package scala.async.run.anf {
       }.block mustBe 1
     }
 
-    @Test
-    def caseBodyMustBeTypedAsUnit(): Unit = {
+    test("caseBodyMustBeTypedAsUnit") {
       val Up = 1
       val Down = 2
       val sign = async {
@@ -410,8 +361,7 @@ package scala.async.run.anf {
 //      applyImplicitView.map(_.toString) mustStartWith List("view(")
 //    }
 
-    @Test
-    def nothingTypedIf(): Unit = {
+    test("nothingTypedIf") {
       val result = util.Try(async {
         if (true) {
           val n = await(fut(1))
@@ -430,8 +380,7 @@ package scala.async.run.anf {
       assert(result.asInstanceOf[util.Failure[_]].exception.getMessage == "case a")
     }
 
-    @Test
-    def awaitInArrayValue(): Unit = {
+    test("awaitInArrayValue") {
       val result = async {
         Array(1, await(fut(2)), await(fut(3))).sum
       }.block
@@ -439,8 +388,7 @@ package scala.async.run.anf {
       result mustBe 6
     }
 
-    @Test
-    def nothingTypedMatch(): Unit = {
+    test("nothingTypedMatch") {
       val result = util.Try(async {
         0 match {
           case _ if "".isEmpty =>
