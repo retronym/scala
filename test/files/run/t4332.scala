@@ -11,8 +11,8 @@ object Test extends DirectTest {
     checkViews()
   }
 
+  val exempt = Set("view", "repr", "sliceWithKnownDelta", "sliceWithKnownBound", "transform", "filterImpl", "fromAnyRefArray")
   def isExempt(sym: Symbol) = {
-    val exempt = Set("view", "repr", "sliceWithKnownDelta", "sliceWithKnownBound", "transform", "filterImpl")
     (exempt contains sym.name.decoded)
   }
 
