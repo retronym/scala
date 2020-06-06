@@ -13,6 +13,10 @@ object Test extends DirectTest {
 
   val exempt = Set("view", "repr", "sliceWithKnownDelta", "sliceWithKnownBound", "transform", "filterImpl", "fromAnyRefArray")
   def isExempt(sym: Symbol) = {
+    println(s"sym                              $sym")
+    println(s"sym.name                         ${sym.name}")
+    println(s"sym.name.decoded                 ${sym.name.decoded}")
+    println(s"exempt                           ${exempt}")
     (exempt contains sym.name.decoded)
   }
 
