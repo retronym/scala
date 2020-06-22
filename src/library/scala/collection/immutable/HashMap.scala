@@ -46,7 +46,7 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
                         with CustomParallelizable[(A, B), ParHashMap[A, B]]
                         with HasForeachEntry[A, B]
 {
-  import HashMap.{nullToEmpty, bufferSize}
+  import HashMap.{bufferSize, concatMerger, nullToEmpty}
 
   override def size: Int = 0
 
@@ -183,9 +183,7 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
       else if (that.isEmpty) this.asInstanceOf[That]
       else that match {
         case thatHash: HashMap[A, B] =>
-          //default Merge prefers to keep than replace
-          //so we merge from thatHash
-          (thatHash.merged(this) (null) ).asInstanceOf[That]
+          this.merge0(thatHash, 0, concatMerger.asInstanceOf[Merger[A, B]]).asInstanceOf[That]
         case that =>
           var result: HashMap[Any, _] = this.asInstanceOf[HashMap[Any, _]]
           that foreach { case kv: (_, _) => result = result + kv }
@@ -209,30 +207,23 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
     else if (that.isEmpty) this.asInstanceOf[That]
     else that match {
       case thatHash: HashMap[A, B] =>
-        val merger: Merger[A, B] = HashMap.liftMerger[A, B](null)
-        // merger prefers to keep than replace
-        // so we invert
-        (this.merge0(thatHash, 0, merger.invert)).asInstanceOf[That]
+        (this.merge0(thatHash, 0, HashMap.concatMerger.invert.asInstanceOf[Merger[A, B]])).asInstanceOf[That]
 
       case that:HasForeachEntry[A, B] =>
         object adder extends Function2[A, B, Unit] {
-          var result: HashMap[A, B] = this.asInstanceOf[HashMap[A, B]]
-          val merger = HashMap.liftMerger[A, B](null)
-
+          var result: HashMap[A, B] = HashMap.this.asInstanceOf[HashMap[A, B]]
           override def apply(key: A, value: B): Unit = {
-            result = result.updated0(key, computeHash(key), 0, value, null, merger)
+            result = result.updated0(key, computeHash(key), 0, value, null, HashMap.concatMerger.invert.asInstanceOf[Merger[A, B]])
           }
         }
         that foreachEntry adder
         adder.result.asInstanceOf[That]
       case that =>
         object adder extends Function1[(A,B), Unit] {
-          var result: HashMap[A, B] = this.asInstanceOf[HashMap[A, B]]
-          val merger = HashMap.liftMerger[A, B](null)
-
+          var result: HashMap[A, B] = HashMap.this.asInstanceOf[HashMap[A, B]]
           override def apply(kv: (A, B)): Unit = {
             val key = kv._1
-            result = result.updated0(key, computeHash(key), 0, kv._2, kv, merger)
+            result = result.updated0(key, computeHash(key), 0, kv._2, kv, HashMap.concatMerger.invert.asInstanceOf[Merger[A, B]])
           }
         }
         that.asInstanceOf[scala.Traversable[(A,B)]] foreach adder
@@ -270,6 +261,22 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
       override def apply(a: (Any, Any), b: (Any, Any)): (Any, Any) = b
       override def retainIdentical: Boolean = true
       override def invert = defaultMerger
+    }
+  }
+
+  private val concatMerger : Merger[Any, Any] = new Merger[Any, Any] {
+    override def apply(a: (Any, Any), b: (Any, Any)): (Any, Any) = {
+      if (a._1.asInstanceOf[AnyRef] eq b._1.asInstanceOf[AnyRef]) b
+      else (a._1, b._2)
+    }
+    override def retainIdentical: Boolean = true
+    override val invert: Merger[Any, Any] = new Merger[Any, Any] {
+      override def apply(a: (Any, Any), b: (Any, Any)): (Any, Any) = {
+        if (b._1.asInstanceOf[AnyRef] eq a._1.asInstanceOf[AnyRef]) a
+        else (b._1, a._2)
+      }
+      override def retainIdentical: Boolean = true
+      override def invert = concatMerger
     }
   }
 
@@ -1049,7 +1056,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
 
     /** The root node of the partially build hashmap */
     private var rootNode: HashMap[A, B] = HashMap.empty
-    private def plusPlusMerger = liftMerger[A, B](null).invert
+    private def plusPlusMerger = concatMerger.asInstanceOf[Merger[A, B]]
     private def isMutable(hs: HashMap[A, B]) = {
       hs.isInstanceOf[HashTrieMap[A, B]] && hs.size == -1
     }
