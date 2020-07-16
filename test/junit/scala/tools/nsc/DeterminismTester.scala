@@ -3,36 +3,46 @@ package scala.tools.nsc
 import java.io.OutputStreamWriter
 import java.nio.charset.Charset
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{FileVisitResult, Files, Path, SimpleFileVisitor}
-
+import java.nio.file.{FileVisitResult, Files, Path, Paths, SimpleFileVisitor}
+import scala.collection.JavaConverters._
 import javax.tools.ToolProvider
 
-import scala.collection.JavaConverters.seqAsJavaListConverter
 import scala.reflect.internal.util.SourceFile
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.FileUtils._
 import scala.tools.nsc.reporters.StoreReporter
 import scala.reflect.internal.util.BatchSourceFile
 
-object DeterminismTester extends DeterminismTester
-
-class DeterminismTester {
+object DeterminismTester extends DeterminismTester {
   def main(args: Array[String]): Unit = {
-    val separator = args.indexOf("--")
     val (scalacOpts, sourceFilesPaths) = args.indexOf("--") match {
       case -1 => (Nil, args.toList)
       case i =>
-        val tuple = args.toList.splitAt(separator)
+        val tuple = args.toList.splitAt(i)
         (tuple._1, tuple._2.drop(1))
     }
-    test(scalacOpts, sourceFilesPaths.map(path => new BatchSourceFile(AbstractFile.getFile(path))) :: Nil)
+    def isJavaOrScala(p: Path) = {
+      val name = p.getFileName.toString
+      name.endsWith(".java") || name.endsWith(".scala")
+    }
+    def expand(path: Path): Seq[Path] = {
+      if (Files.isDirectory(path))
+        Files.walk(path).iterator().asScala.filter(isJavaOrScala).toList
+      else path :: Nil
+    }
+    val sourceFiles = sourceFilesPaths.map(Paths.get(_)).flatMap(expand).map(path => new BatchSourceFile(AbstractFile.getFile(path.toFile)))
+    test(scalacOpts, sourceFiles :: Nil)
   }
+}
+
+class DeterminismTester {
 
   def test(groups: List[List[SourceFile]]): Unit = test(Nil, groups)
   def test(scalacOptions: List[String], groups: List[List[SourceFile]]): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")
 
     def compile(output: Path, files: List[SourceFile]): Unit = {
+      println("compile")
       val g = new Global(new Settings)
       g.settings.usejavacp.value = true
       g.settings.classpath.value = output.toAbsolutePath.toString
@@ -78,7 +88,10 @@ class DeterminismTester {
         super.visitFile(file, attrs)
       }
     }
-    for (permutation <- permutationsWithSubsets(groups.last)) {
+    val permutations: List[List[SourceFile]] = if (groups.last.size > 32) {
+      groups.last.reverse :: groups.last.map(_ :: Nil)
+    } else permutationsWithSubsets(groups.last)
+    for (permutation <- permutations) {
       val recompileOutput = Files.createTempDirectory("recompileOutput")
       copyRecursive(referenceOutput, recompileOutput)
       compile(recompileOutput, permutation)

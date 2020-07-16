@@ -169,7 +169,7 @@ abstract class Pickler extends SubComponent {
     private var ep        = 0
     private lazy val nonClassRoot = findSymbol(root.ownersIterator)(!_.isClass)
     def include(sym: Symbol) = !noPrivates || !sym.isPrivate || (sym.owner.isTrait && sym.isAccessor)
-
+    val debug = root.fullName == "scala.Symbol"
     def close(): Unit = { writeArray(); index = null; entries = null }
 
     private def isRootSym(sym: Symbol) =
@@ -209,6 +209,7 @@ abstract class Pickler extends SubComponent {
     private val reserved = mutable.BitSet()
     final def reserveEntry(sym: Symbol): Boolean = {
       if (include(sym)) {
+        if (debug) println("reserving: " + sym)
         reserved(ep) = true
         putEntry(sym)
         true
@@ -226,6 +227,7 @@ abstract class Pickler extends SubComponent {
         case Some(i) =>
           reserved.remove(i)
         case None =>
+          if (debug) println("putEntry: " + entry)
           if (ep == entries.length) {
             val entries1 = new Array[AnyRef](ep * 2)
             System.arraycopy(entries, 0, entries1, 0, ep)
