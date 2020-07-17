@@ -440,7 +440,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
 
     val inlineInfo = buildInlineInfo(classSym, classBType.internalName)
 
-    Right(ClassInfo(superClass, interfaces, flags, nestedClasses, nestedInfo, inlineInfo))
+    Right(ClassInfo(superClass, interfaces, flags, nestedClasses, nestedInfo, inlineInfo, exitingTyper(classSym.isPrivate)))
   }
   private def isEmptyNestedInfo(innerClassSym: Symbol): Boolean = {
     assert(innerClassSym.isClass, s"Cannot build NestedInfo for non-class symbol $innerClassSym")
@@ -637,7 +637,8 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
         flags = asm.Opcodes.ACC_SUPER | asm.Opcodes.ACC_PUBLIC | asm.Opcodes.ACC_FINAL,
         nestedClasses = nested,
         nestedInfo = Lazy.eagerNone,
-        inlineInfo = EmptyInlineInfo.copy(isEffectivelyFinal = true))) // no method inline infos needed, scala never invokes methods on the mirror class
+        inlineInfo = EmptyInlineInfo.copy(isEffectivelyFinal = true),
+        exitingTyperPrivate = false)) // no method inline infos needed, scala never invokes methods on the mirror class
     }
   }
 
@@ -650,7 +651,8 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
         flags = javaFlags(mainClass),
         nestedClasses = Lazy.eagerNil,
         nestedInfo = Lazy.eagerNone,
-        inlineInfo = EmptyInlineInfo))
+        inlineInfo = EmptyInlineInfo,
+        exitingTyperPrivate = false))
     }
   }
 
