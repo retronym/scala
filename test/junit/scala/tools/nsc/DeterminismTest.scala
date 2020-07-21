@@ -1,8 +1,11 @@
 package scala.tools.nsc
 
-import org.junit.Test
+import java.nio.file.{Files, Path, Paths}
+
+import org.junit.{Ignore, Test}
 
 import scala.reflect.internal.util.{BatchSourceFile, SourceFile}
+import scala.reflect.io.AbstractFile
 
 class DeterminismTest {
   private val tester = new DeterminismTester
@@ -309,5 +312,24 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Ignore
+  @Test def testPackageObject(): Unit = {
+    val root = List(Paths.get("."), Paths.get("../..")).find(x => Files.exists(x.resolve(".git"))).get.toAbsolutePath.normalize()
+    def code = List[SourceFile](
+      source(root.resolve("src/library/scala/package.scala")),
+      source("th.scala", "package scala; class th[T <: Throwable](cause: T = null)")
+    )
+    test(code :: Nil)
+  }
+
+  @Test def testPackageObjectUserLand(): Unit = {
+    def code = List[SourceFile](
+      source("package.scala", "package userland; object `package` { type Throwy = java.lang.Throwable }"),
+      source("th.scala", "package userland; class th[T <: Throwy](cause: T = null)")
+    )
+    test(code :: Nil, permuter = _.reverse :: Nil)
+  }
+
   def source(name: String, code: String): SourceFile = new BatchSourceFile(name, code)
+  def source(path: Path): SourceFile = new BatchSourceFile(AbstractFile.getFile(path.toFile))
 }

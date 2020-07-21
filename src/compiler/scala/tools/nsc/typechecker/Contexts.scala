@@ -1207,6 +1207,8 @@ trait Contexts { self: Analyzer =>
           }
           // we have a winner: record the symbol depth
           symbolDepth = (cx.depth - cx.scope.nestingLevel) + e1.depth
+          if (name.string_==("Throwable") && e1.sym.id == 2216)
+            getClass
 
           if (syms eq null) e1Sym
           else owner.newOverloaded(pre, syms.toList)

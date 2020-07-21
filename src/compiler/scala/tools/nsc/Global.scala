@@ -390,7 +390,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
 // ------------ Phases -------------------------------------------}
 
-  var globalPhase: Phase = NoPhase
+  private[this] var _globalPhase: Phase = NoPhase
+  override final def globalPhase: Phase = _globalPhase
+  final def globalPhase_=(ph: Phase): Unit = _globalPhase = ph
 
   abstract class GlobalPhase(prev: Phase) extends Phase(prev) {
     phaseWithId(id) = this

@@ -31,18 +31,19 @@ object DeterminismTester extends DeterminismTester {
       else path :: Nil
     }
     val sourceFiles = sourceFilesPaths.map(Paths.get(_)).flatMap(expand).map(path => new BatchSourceFile(AbstractFile.getFile(path.toFile)))
-    test(scalacOpts, sourceFiles :: Nil)
+    test(sourceFiles :: Nil, scalacOpts)
   }
 }
 
 class DeterminismTester {
 
-  def test(groups: List[List[SourceFile]]): Unit = test(Nil, groups)
-  def test(scalacOptions: List[String], groups: List[List[SourceFile]]): Unit = {
+  def test(groups: List[List[SourceFile]]): Unit = test(groups, Nil)
+  def test(groups: List[List[SourceFile]], scalacOptions: List[String] = Nil,
+           permuter: List[SourceFile] => List[List[SourceFile]] = defaultPermuter(_)): Unit = {
     val referenceOutput = Files.createTempDirectory("reference")
 
     def compile(output: Path, files: List[SourceFile]): Unit = {
-      // println("compile: " + files)
+       println("====== compile: " + files.map(_.file.absolute).map("\"" + _ + "\"").mkString(",\n"))
       val g = new Global(new Settings)
       g.settings.usejavacp.value = true
       g.settings.classpath.value = output.toAbsolutePath.toString
@@ -88,9 +89,7 @@ class DeterminismTester {
         super.visitFile(file, attrs)
       }
     }
-    val permutations: List[List[SourceFile]] = if (groups.last.size > 32) {
-      groups.last.reverse :: groups.last.map(_ :: Nil)
-    } else permutationsWithSubsets(groups.last)
+    val permutations: List[List[SourceFile]] = permuter(groups.last)
     for (permutation <- permutations) {
       val recompileOutput = Files.createTempDirectory("recompileOutput")
       copyRecursive(referenceOutput, recompileOutput)
@@ -99,7 +98,11 @@ class DeterminismTester {
       deleteRecursive(recompileOutput)
     }
     deleteRecursive(referenceOutput)
-
+  }
+  def defaultPermuter(sources: List[SourceFile]): List[List[SourceFile]] = {
+    if (sources.size > 32) {
+      sources.reverse :: sources.map(_ :: Nil)
+    } else permutationsWithSubsets(sources)
   }
   def permutationsWithSubsets[A](as: List[A]): List[List[A]] =
     as.permutations.toList.flatMap(_.inits.filter(_.nonEmpty)).distinct
