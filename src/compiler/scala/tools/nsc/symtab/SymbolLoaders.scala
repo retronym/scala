@@ -47,9 +47,13 @@ abstract class SymbolLoaders {
   protected def compileLate(srcfile: AbstractFile): Unit
 
   protected def enterIfNew(owner: Symbol, member: Symbol, completer: SymbolLoader): Symbol = {
-    assert(owner.info.decls.lookup(member.name) == NoSymbol, owner.fullName + "." + member.name)
-    owner.info.decls enter member
-    member
+    owner.info.decls.lookup(member.name) match {
+      case NoSymbol =>
+        owner.info.decls enter member
+        member
+      case member =>
+        member
+    }
   }
 
   protected def signalError(root: Symbol, ex: Throwable) {
@@ -280,10 +284,11 @@ abstract class SymbolLoaders {
       val shownPackageName = if (packageName == ClassPath.RootPackage) "<root package>" else packageName
       s"package loader $shownPackageName"
     }
+    override val decls = newScope
 
     protected def doComplete(root: Symbol) {
       assert(root.isPackageClass, root)
-      root.setInfo(new PackageClassInfoType(newScope, root))
+      root.setInfo(new PackageClassInfoType(decls, root))
 
       val classPathEntries = classPath.list(packageName)
 
