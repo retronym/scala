@@ -244,6 +244,7 @@ abstract class SymbolTable extends macros.Universe
   final def phase: Phase = {
     ph
   }
+  def globalPhase: Phase = phase
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
@@ -352,6 +353,7 @@ abstract class SymbolTable extends macros.Universe
 
   def openPackageModule(container: Symbol, dest: Symbol) {
     // unlink existing symbols in the package
+    assert(globalPhase.name != "namer" && globalPhase.name != "<no phase>")
     for (member <- container.info.decls.iterator) {
       if (!member.isPrivate && !member.isConstructor) {
         // todo: handle overlapping definitions in some way: mark as errors

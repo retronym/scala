@@ -195,8 +195,15 @@ trait Definitions extends api.StandardDefinitions {
     lazy val JavaLangPackageClass = JavaLangPackage.moduleClass.asClass
     lazy val ScalaPackage         = getPackage("scala")
     lazy val ScalaPackageClass    = ScalaPackage.moduleClass.asClass
-    lazy val RuntimePackage       = getPackage("scala.runtime")
+    lazy val RuntimePackage       = getOrCreatePackage(ScalaPackageClass, nme.runtime)
     lazy val RuntimePackageClass  = RuntimePackage.moduleClass.asClass
+    lazy val AnnotationPackage    = getOrCreatePackage(ScalaPackageClass, nme.annotation)
+    lazy val AnnotationPackageClass  = AnnotationPackage.moduleClass.asClass
+
+    private def getOrCreatePackage(owner: Symbol, name: TermName): Symbol = {
+      val rawInfo = owner.rawInfo
+      rawInfo.decl(name).orElse(rawInfo.decls.enter(owner.newPackage(name)))
+    }
 
     def javaTypeToValueClass(jtype: Class[_]): Symbol = jtype match {
       case java.lang.Void.TYPE      => UnitClass
@@ -1501,7 +1508,12 @@ trait Definitions extends api.StandardDefinitions {
     def init() {
       if (isInitialized) return
       ObjectClass.initialize
-      ScalaPackageClass.initialize
+      if (!isCompilerUniverse) {
+        ScalaPackageClass.initialize
+      } else {
+        RuntimePackageClass
+        AnnotationPackageClass
+      }
       symbolsNotPresentInBytecode
       NoSymbol
       isInitialized = true
