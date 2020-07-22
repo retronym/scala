@@ -1583,7 +1583,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Set the info and enter this symbol into the owner's scope. */
     def setInfoAndEnter(info: Type): this.type = {
       setInfo(info)
-      owner.info.decls enter this
+      if (!phase.named && owner == ScalaPackageClass) {
+        owner.rawInfo.decls.enter(this)
+      } else {
+        owner.info.decls enter this
+      }
       this
     }
 
@@ -3054,6 +3058,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
   class AliasTypeSymbol protected[Symbols] (initOwner: Symbol, initPos: Position, initName: TypeName)
   extends TypeSymbol(initOwner, initPos, initName) {
+    if (initName.string_==("Throwable"))
+      getClass
     type TypeOfClonedSymbol = TypeSymbol
     override def variance = if (isLocalToThis) Bivariant else info.typeSymbol.variance
     override def isContravariant = variance.isContravariant

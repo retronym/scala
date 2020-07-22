@@ -312,7 +312,6 @@ class DeterminismTest {
     test(List(code))
   }
 
-  @Ignore
   @Test def testPackageObject(): Unit = {
     val root = List(Paths.get("."), Paths.get("../..")).find(x => Files.exists(x.resolve(".git"))).get.toAbsolutePath.normalize()
     def code = List[SourceFile](

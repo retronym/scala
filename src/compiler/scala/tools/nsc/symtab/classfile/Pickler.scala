@@ -54,6 +54,9 @@ abstract class Pickler extends SubComponent {
       syms.foreach { sym =>
         pickle.putDecl(sym)
       }
+      if (sym.name.string_==("th"))
+        println(_entries.toList.iterator.filter(_ != null).map(_.toString.replace('\n', ';')).mkString("\n"))
+
     }
   }
 

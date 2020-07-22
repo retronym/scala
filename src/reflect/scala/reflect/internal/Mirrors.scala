@@ -52,7 +52,10 @@ trait Mirrors extends api.Mirrors {
         else RootClass
 
       val name = toName(path.substring(point + 1, len))
-      val sym = owner.info member name
+      val sym = if (!globalPhase.named && owner.safeOwner == RootClass && owner.name == nme.scala_) {
+        owner.rawInfo.typeSymbolDirect.rawInfo.decls.lookup(name)
+      } else
+        owner.info member name
       val result = if (name.isTermName) sym.suchThat(_ hasFlag MODULE) else sym
       if (result != NoSymbol) result
       else {

@@ -353,7 +353,7 @@ abstract class SymbolTable extends macros.Universe
 
   def openPackageModule(container: Symbol, dest: Symbol) {
     // unlink existing symbols in the package
-    assert(globalPhase.name != "namer")
+    assert(globalPhase.name != "namer" && globalPhase.name != "<no phase>")
     for (member <- container.info.decls.iterator) {
       if (!member.isPrivate && !member.isConstructor) {
         // todo: handle overlapping definitions in some way: mark as errors

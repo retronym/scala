@@ -284,7 +284,26 @@ abstract class SymbolLoaders {
       val shownPackageName = if (packageName == ClassPath.RootPackage) "<root package>" else packageName
       s"package loader $shownPackageName"
     }
-    override val decls = newScope
+    override lazy val decls = {
+
+      val classPathEntries = classPath.list(packageName)
+
+      if (!packageName == "")
+        for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
+      if (!root.isEmptyPackageClass) {
+        for (pkg <- classPathEntries.packages) {
+          val fullName = pkg.name
+
+          val name =
+            if (packageName == ClassPath.RootPackage) fullName
+            else fullName.substring(packageName.length + 1)
+          val packageLoader = new PackageLoader(fullName, classPath)
+          enterPackage(root, name, packageLoader)
+        }
+
+        openPackageModule(root)
+      }
+    }
 
     protected def doComplete(root: Symbol) {
       assert(root.isPackageClass, root)
