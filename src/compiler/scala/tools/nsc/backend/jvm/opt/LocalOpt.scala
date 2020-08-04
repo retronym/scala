@@ -14,7 +14,7 @@ package scala.tools.nsc
 package backend.jvm
 package opt
 
-import scala.annotation.{switch, tailrec}
+import scala.annotation.switch
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.tools.asm.Opcodes._
@@ -752,12 +752,15 @@ object LocalOptImpls {
    * same type or name.
    */
   def removeUnusedLocalVariableNodes(method: MethodNode)(firstLocalIndex: Int = parametersSize(method), renumber: Int => Int = identity): Boolean = {
-    @tailrec def variableIsUsed(start: AbstractInsnNode, end: LabelNode, varIndex: Int): Boolean = {
-      start != end && (start match {
-        case v: VarInsnNode if v.`var` == varIndex => true
-        case i: IincInsnNode if i.`var` == varIndex => true
-        case _ => variableIsUsed(start.getNext, end, varIndex)
-      })
+    val used = new mutable.BitSet(method.localVariables.size())
+    val it = method.instructions.iterator()
+    while (it.hasNext) {
+      val insn = it.next()
+      insn match {
+        case v: VarInsnNode => used += v.`var`
+        case i: IincInsnNode => used += i.`var`
+        case _ =>
+      }
     }
 
     val initialNumVars = method.localVariables.size
@@ -767,7 +770,7 @@ object LocalOptImpls {
       val index = local.index
       // parameters and `this` (the lowest indices, starting at 0) are never removed or renumbered
       if (index >= firstLocalIndex) {
-        if (!variableIsUsed(local.start, local.end, index)) localsIter.remove()
+        if (!used.contains(index)) localsIter.remove()
         else if (renumber(index) != index) local.index = renumber(index)
       }
     }
