@@ -762,7 +762,8 @@ trait Namers extends MethodSynthesis {
     def enterPackage(tree: PackageDef) {
       val sym = createPackageSymbol(tree.pos, tree.pid)
       tree.symbol = sym
-      newNamer(context.make(tree, sym.moduleClass, sym.info.decls)) enterSyms tree.stats
+      val scope = sym.rawInfo.typeSymbolDirect.rawInfo.decls
+      newNamer(context.make(tree, sym.moduleClass, scope)) enterSyms tree.stats
     }
 
     private def enterImport(tree: Import) = {
@@ -2161,7 +2162,7 @@ trait Namers extends MethodSynthesis {
     // scala/bug#7264 Force the info of owners from previous compilation runs.
     //         Doing this generally would trigger cycles; that's what we also
     //         use the lower-level scan through the current Context as a fall back.
-    if (!currentRun.compiles(owner)) owner.initialize
+    if (!owner.isPackageClass && !currentRun.compiles(owner)) owner.initialize
 
     if (original.isModuleClass) original.sourceModule
     else if (!owner.isTerm && owner.hasCompleteInfo)

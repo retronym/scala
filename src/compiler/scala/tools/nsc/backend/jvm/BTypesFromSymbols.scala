@@ -17,6 +17,7 @@ import scala.reflect.internal.Flags.{DEFERRED, SYNTHESIZE_IMPL_IN_SUBCLASS}
 import scala.tools.asm
 import scala.tools.nsc.backend.jvm.BTypes._
 import scala.tools.nsc.backend.jvm.BackendReporting._
+import scala.tools.nsc.symtab.Flags
 
 /**
  * This class mainly contains the method classBTypeFromSymbol, which extracts the necessary
@@ -701,7 +702,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
     // new instances via outerClassInstance.new InnerModuleClass$().
     // TODO: do this early, mark the symbol private.
     val privateFlag =
-      sym.isPrivate || (sym.isPrimaryConstructor && isTopLevelModuleClass(sym.owner))
+      (sym.isPrivate || sym.hasFlag(Flags.notPRIVATE)) || (sym.isPrimaryConstructor && isTopLevelModuleClass(sym.owner))
 
     // Symbols marked in source as `final` have the FINAL flag. (In the past, the flag was also
     // added to modules and module classes, not anymore since 296b706).

@@ -1863,9 +1863,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedModuleDef(mdef: ModuleDef): Tree = {
       // initialize all constructors of the linked class: the type completer (Namer.methodSig)
       // might add default getters to this object. example: "object T; class T(x: Int = 1)"
-      val linkedClass = companionSymbolOf(mdef.symbol, context)
-      if (linkedClass != NoSymbol)
+      val linkedClass = companionSymbolOf(mdef.symbol, context).suchThat { sym =>
+        val isStale = sym.rawInfo.isInstanceOf[loaders.ClassfileLoader]
+        if (isStale) sym.owner.info.decls.unlink(sym)
+        !isStale
+      }
+      if (linkedClass != NoSymbol) {
         linkedClass.info.decl(nme.CONSTRUCTOR).alternatives foreach (_.initialize)
+      }
 
       val clazz = mdef.symbol.moduleClass
       currentRun.profiler.beforeTypedImplDef(clazz)
