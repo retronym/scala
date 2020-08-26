@@ -20,6 +20,7 @@ import scala.annotation.unchecked.{uncheckedVariance => uV}
 import parallel.ParIterable
 import scala.collection.immutable.{::, List, Nil}
 import scala.language.higherKinds
+import scala.runtime.AbstractFunction0
 
 /** A template trait for traversable collections of type `Traversable[A]`.
  *
@@ -451,23 +452,77 @@ trait TraversableLike[+A, +Repr] extends Any
   }
 
   def groupBy[K](f: A => K): immutable.Map[K, Repr] = {
-    object m extends mutable.HashMap[K, Builder[A, Repr]] {
-      override def entriesIterator: Iterator[mutable.DefaultEntry[K, Builder[A, Repr]]] =
-        super.entriesIterator
+    object grouper extends AbstractFunction0[Builder[A, Repr]] with Function1[A, Unit] {
+      var key0, key1, key2, key3: K = null.asInstanceOf[K]
+      var value0, value1, value2, value3 = (null : Builder[A, Repr])
+      var size = 0
+      var hashMap: mutable.HashMap[K, Builder[A, Repr]] = null
+      override def apply(): mutable.Builder[A, Repr] = newBuilder
+      def apply(elem: A): Unit = {
+        val key  = f(elem)
+        val bldr = builderFor(key)
+        bldr += elem
+      }
+      def builderFor(key: K): Builder[A, Repr] =
+        size match {
+          case 0 =>
+            key0 = key
+            value0 = newBuilder
+            size += 1
+            value0
+          case 1 =>
+            if (key0 == key) value0
+            else { key1 = key; value1 = newBuilder; size += 1; value1 }
+          case 2 =>
+            if (key0 == key) value0
+            else if (key1 == key) value1
+            else { key2 = key; value2 = newBuilder; size += 1; value2 }
+          case 3 =>
+            if (key0 == key) value0
+            else if (key1 == key) value1
+            else if (key2 == key) value2
+            else { key3 = key; value3 = newBuilder; size += 1; value3 }
+          case 4 =>
+            if (key0 == key) value0
+            else if (key1 == key) value1
+            else if (key2 == key) value2
+            else if (key3 == key) value3
+            else {
+              hashMap = new mutable.HashMap
+              hashMap += ((key0, value0))
+              hashMap += ((key1, value1))
+              hashMap += ((key2, value2))
+              hashMap += ((key3, value3))
+              val bldr = newBuilder
+              size += 1
+              hashMap(key) = bldr
+              bldr
+            }
+          case _ =>
+            size += 1
+            hashMap.getOrElseUpdate(key, grouper.apply())
+        }
+
+      def result(): immutable.Map[K, Repr] =
+        size match {
+          case 0 => immutable.Map.empty
+          case 1 => new immutable.Map.Map1(key0, value0.result())
+          case 2 => new immutable.Map.Map2(key0, value0.result(), key1, value1.result())
+          case 3 => new immutable.Map.Map3(key0, value0.result(), key1, value1.result(), key2, value2.result())
+          case 4 => new immutable.Map.Map4(key0, value0.result(), key1, value1.result(), key2, value2.result(), key3, value3.result())
+          case _ =>
+            val it = hashMap.entriesIterator0
+            val m1 = immutable.HashMap.newBuilder[K, Repr]
+            while (it.hasNext) {
+              val entry = it.next()
+              m1.+=((entry.key, entry.value.result()))
+            }
+            m1.result()
+        }
+
     }
-    val newBuilderFunction = () => newBuilder
-    for (elem <- this.seq) {
-      val key  = f(elem)
-      val bldr = m.getOrElseUpdate(key, newBuilderFunction())
-      bldr += elem
-    }
-    val it = m.entriesIterator
-    val m1 = if (m.size > 4) immutable.HashMap.newBuilder[K, Repr] else immutable.Map.newBuilder[K, Repr]
-    while (it.hasNext) {
-      val entry = it.next()
-      m1.+=((entry.key, entry.value.result()))
-    }
-    m1.result()
+    this.seq.foreach(grouper)
+    grouper.result()
   }
 
   def forall(p: A => Boolean): Boolean = {
