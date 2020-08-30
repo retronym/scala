@@ -15,7 +15,6 @@ package mutable
 
 import scala.annotation.tailrec
 import scala.collection.immutable.{List, Nil, ::}
-import java.lang.{IllegalArgumentException, IndexOutOfBoundsException}
 import scala.collection.generic.DefaultSerializable
 import scala.runtime.Statics.releaseFence
 
@@ -113,19 +112,29 @@ class ListBuffer[A]
 
   // Overridden for performance
   override final def addAll(xs: IterableOnce[A]): this.type = {
-    val it = xs.iterator
-    if (it.hasNext) {
-      ensureUnaliased()
-      val last1 = new ::[A](it.next(), Nil)
-      if (len == 0) first = last1 else last0.next = last1
-      last0 = last1
-      len += 1
-      while (it.hasNext) {
-        val last1 = new ::[A](it.next(), Nil)
-        last0.next = last1
-        last0 = last1
-        len += 1
-      }
+    xs match {
+      case xs: AnyRef if xs eq this => // avoid mutating under our own iterator
+        if (len > 0) {
+          ensureUnaliased()
+          val copy = ListBuffer.from(this)
+          last0.next = copy.first
+          last0 = copy.last0
+        }
+      case xs =>
+        val it = xs.iterator
+        if (it.hasNext) {
+          ensureUnaliased()
+          val last1 = new ::[A](it.next(), Nil)
+          if (len == 0) first = last1 else last0.next = last1
+          last0 = last1
+          len += 1
+          while (it.hasNext) {
+            val last1 = new ::[A](it.next(), Nil)
+            last0.next = last1
+            last0 = last1
+            len += 1
+          }
+        }
     }
     this
   }
