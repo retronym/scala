@@ -398,6 +398,12 @@ val mimaFilterSettings = Seq {
     // Fix for scala/bug#12059
     ProblemFilters.exclude[MissingClassProblem](s"scala.collection.MapView$$Keys"),
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.MapView$Values"),
+
+    // Fix for scala/bug#12009
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.mutable.MutationTracker$CheckedIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.mutable.MutationTracker$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.mutable.MutationTracker$Checker"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.mutable.MutationTracker"),
   ),
 }
 

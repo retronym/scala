@@ -6,7 +6,7 @@ import org.openjdk.jol.info.GraphLayout
 
 object Sizes {
   def list: Int = 24
-  def listBuffer: Int = 32
+  def listBuffer: Int = 48
 
   def refArray(length:Int): Int = {
     (16 + (length+1) * 4) /8 * 8
