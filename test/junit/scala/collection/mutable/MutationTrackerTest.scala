@@ -20,21 +20,13 @@ import scala.tools.testkit.AssertUtil.assertThrows
 
 class MutationTrackerTest {
   @Test
-  def checker(): Unit = {
-    val tracker = MutationTracker()
-    val checker = tracker.checker
-    checker.checkMutations("") // does not throw
-    tracker.addMutation()
-    assertThrows[ConcurrentModificationException](checker.checkMutations("test"), _ == "test")
-  }
-
-  @Test
   def checkedIterator(): Unit = {
-    val tracker = MutationTracker()
-    val it1 = tracker.checkedIterator(List(1, 2, 3).iterator)
+    var mutationCount = 0
+    def it = new MutationTracker.CheckedIterator(List(1, 2, 3).iterator, () => mutationCount)
+    val it1 = it
     it1.toList // does not throw
-    val it2 = tracker.checkedIterator(List(1, 2, 3).iterator)
-    tracker.addMutation()
+    val it2 = it
+    mutationCount += 1
     assertThrows[ConcurrentModificationException](it2.toList, _ contains "iteration")
   }
 }

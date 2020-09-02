@@ -41,7 +41,7 @@ class ListBuffer[A]
      with ReusableBuilder[A, immutable.List[A]]
      with IterableFactoryDefaults[A, ListBuffer]
      with DefaultSerializable {
-  @transient private[this] val tracker = MutationTracker()
+  @transient private[this] var mutationCount = 0
 
   private var first: List[A] = Nil
   private var last0: ::[A] = null
@@ -50,7 +50,7 @@ class ListBuffer[A]
 
   private type Predecessor[A0] = ::[A0] /*| Null*/
 
-  def iterator: Iterator[A] = tracker.checkedIterator(first.iterator)
+  def iterator: Iterator[A] = new MutationTracker.CheckedIterator(first.iterator, () => mutationCount)
 
   override def iterableFactory: SeqFactory[ListBuffer] = ListBuffer
 
@@ -72,7 +72,7 @@ class ListBuffer[A]
   // we only call this before mutating things, so it's
   // a good place to track mutations for the iterator
   private def ensureUnaliased(): Unit = {
-    tracker.addMutation()
+    mutationCount += 1
     if (aliased) copyElems()
   }
 
@@ -102,7 +102,7 @@ class ListBuffer[A]
   }
 
   def clear(): Unit = {
-    tracker.addMutation()
+    mutationCount += 1
     first = Nil
     len = 0
     last0 = null
@@ -290,7 +290,7 @@ class ListBuffer[A]
   }
 
   def mapInPlace(f: A => A): this.type = {
-    tracker.addMutation()
+    mutationCount += 1
     val buf = new ListBuffer[A]
     for (elem <- this) buf += f(elem)
     first = buf.first
@@ -300,7 +300,7 @@ class ListBuffer[A]
   }
 
   def flatMapInPlace(f: A => IterableOnce[A]): this.type = {
-    tracker.addMutation()
+    mutationCount += 1
     var src = first
     var dst: List[A] = null
     last0 = null

@@ -17,29 +17,13 @@ package mutable
 import java.util.ConcurrentModificationException
 
 /**
- * A utility that tracks mutations; a client is meant to
- * call [[addMutation()]] each time it mutates itself, and
+ * Utilities to that tracks mutations a client is supposed to
  * to have its iterator check that the client hasn't mutated
  * itself since the iterator's creation either by wrapping the
  * iterator using [[checkedIterator]] or by manually using a
  * [[checker]].
  */
-private final class MutationTracker private {
-  private[this] var mutationCount: Int = 0
-
-  def addMutation(): Unit = mutationCount += 1
-
-  def checker: Checker = new Checker
-
-  def checkedIterator[A](it: Iterator[A]): Iterator[A] = new CheckedIterator(it)
-
-  /**
-   * A utility that can be used to check that its creator
-   * has not mutated itself since this checker's creation.
-   */
-  final class Checker private[MutationTracker] {
-    private[this] val expectedCount = mutationCount
-
+private object MutationTracker {
     /**
      * Checks whether or not this checker's creator has mutated
      * itself since this checker's creation, throwing an exception,
@@ -50,7 +34,7 @@ private final class MutationTracker private {
      *                                         has mutated itself
      */
     @throws[ConcurrentModificationException]
-    def checkMutations(message: String): Unit = {
+    def checkMutations(mutationCount: Int, expectedCount: Int, message: String): Unit = {
       if (mutationCount != expectedCount) throw new ConcurrentModificationException(message)
     }
 
@@ -65,21 +49,15 @@ private final class MutationTracker private {
      *                                         been mutated
      */
     @throws[ConcurrentModificationException]
-    @inline def checkMutationsForIteration(): Unit =
-      checkMutations("mutation occurred during iteration")
-  }
+    @inline def checkMutationsForIteration(mutationCount: Int, expectedCount: Int): Unit =
+      checkMutations(mutationCount, expectedCount, "mutation occurred during iteration")
 
-  private final class CheckedIterator[A](underlying: Iterator[A]) extends AbstractIterator[A] {
-    private[this] val checker = new Checker
-
+  final class CheckedIterator[A](underlying: Iterator[A], mutationCount: () => Int) extends AbstractIterator[A] {
+    private[this] val expectedCount = mutationCount()
     def hasNext: Boolean = {
-      checker.checkMutationsForIteration()
+      MutationTracker.checkMutationsForIteration(mutationCount(), expectedCount)
       underlying.hasNext
     }
     def next(): A = underlying.next()
   }
-}
-
-private object MutationTracker {
-  def apply(): MutationTracker = new MutationTracker
 }
