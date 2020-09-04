@@ -592,42 +592,83 @@ object Map extends ImmutableMapFactory[Map] {
   /** Builder for Map.
    */
   private final class MapBuilderImpl[K, V] extends mutable.ReusableBuilder[(K,V), Map[K, V]] {
+    private[this] var k1, k2, k3, k4 = null.asInstanceOf[K]
+    private[this] var v1, v2, v3, v4 = null.asInstanceOf[V]
+    private[this] var size = 0
 
-    private[this] var elems: Map[K, V] = Map.empty[K, V]
     private[this] var switchedToHashMapBuilder: Boolean = false
     private[this] var hashMapBuilder: HashMap.HashMapBuilder[K, V] = _
 
     override def clear(): Unit = {
-      elems =Map.empty[K, V]
       if (hashMapBuilder ne null)
         hashMapBuilder.clear()
+      k1 = null.asInstanceOf[K]
+      k2 = null.asInstanceOf[K]
+      k3 = null.asInstanceOf[K]
+      k4 = null.asInstanceOf[K]
+      v1 = null.asInstanceOf[V]
+      v2 = null.asInstanceOf[V]
+      v3 = null.asInstanceOf[V]
+      v4 = null.asInstanceOf[V]
+      size = 0
       switchedToHashMapBuilder = false
     }
 
-    override def result(): Map[K, V] =
-      if (switchedToHashMapBuilder) hashMapBuilder.result() else elems
+    override def result(): Map[K, V] = size match {
+      case _ if switchedToHashMapBuilder => hashMapBuilder.result()
+      case 0 => Map.empty[K, V]
+      case 1 => new Map1(k1, v1)
+      case 2 => new Map2(k1, v1, k2, v2)
+      case 3 => new Map3(k1, v1, k2, v2, k3, v3)
+      case 4 => new Map4(k1, v1, k2, v2, k3, v3, k4, v4)
+    }
 
     private def convertToHashMapBuilder(): Unit = {
       switchedToHashMapBuilder = true
       if (hashMapBuilder eq null)
         hashMapBuilder = new HashMap.HashMapBuilder[K, V]
 
-      hashMapBuilder ++= elems
+      hashMapBuilder += ((k1, v1))
+      hashMapBuilder += ((k2, v2))
+      hashMapBuilder += ((k3, v3))
+      hashMapBuilder += ((k4, v4))
     }
 
     override def +=(elem: (K, V)): MapBuilderImpl.this.type = {
-      if (switchedToHashMapBuilder) {
-        hashMapBuilder += elem
-      } else if (elems.size < 4) {
-        elems = elems + elem
-      } else {
-        // assert(elems.size == 4)
-        elems.get(elem._1) match {
-          case Some(x) if x == elem._2 => ()
-          case _ =>
-          convertToHashMapBuilder()
+      val (k, v) = elem
+      size match {
+        case _ if switchedToHashMapBuilder =>
           hashMapBuilder += elem
-        }
+        case 0 =>
+          k1 = k; v1 = v; size += 1
+        case 1 =>
+          if (k == k1) v1 = v
+          else {
+            k2 = k; v2 = v; size += 1
+          }
+        case 2 =>
+          if (k == k1) v2 = v
+          else if (k == k2) v2 = v
+          else {
+            k3 = k; v3 = v; size += 1
+          }
+        case 3 =>
+          if (k == k1) v2 = v
+          else if (k == k2) v2 = v
+          else if (k == k3) v3 = v
+          else {
+            k4 = k; v4 = v; size += 1
+          }
+        case 4 =>
+          if (k == k1) v2 = v
+          else if (k == k2) v2 = v
+          else if (k == k3) v3 = v
+          else if (k == k4) v4 = v
+          else {
+            convertToHashMapBuilder()
+            hashMapBuilder += elem
+            size += 1
+          }
       }
       this
     }
