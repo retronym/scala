@@ -328,45 +328,77 @@ object Set extends ImmutableSetFactory[Set] {
    */
   private final class SetBuilderImpl[A] extends mutable.ReusableBuilder[A, Set[A]] {
     import scala.collection.immutable.HashSet.HashSetBuilder
-
-    private[this] var elems: Set[A] = Set.empty[A]
+    private[this] var e1, e2, e3, e4 = null.asInstanceOf[A]
+    private[this] var size = 0
     private[this] var switchedToHashSetBuilder: Boolean = false
     private[this] var hashSetBuilder: HashSetBuilder[A] = _
-
     override def clear(): Unit = {
-      elems = Set.empty[A]
       if (hashSetBuilder ne null)
         hashSetBuilder.clear()
+      e1 = null.asInstanceOf[A]
+      e2 = null.asInstanceOf[A]
+      e3 = null.asInstanceOf[A]
+      e4 = null.asInstanceOf[A]
+      size = 0
       switchedToHashSetBuilder = false
     }
 
-    override def result(): Set[A] =
-      if (switchedToHashSetBuilder) hashSetBuilder.result() else elems
-
-    override def +=(elem: A) = {
-      if (switchedToHashSetBuilder) {
-        hashSetBuilder += elem
-      } else if (elems.size < 4) {
-        elems = elems + elem
-      } else {
-        // assert(elems.size == 4)
-        if (elems.contains(elem)) {
-          () // do nothing
-        } else {
-          convertToHashSetBuilder()
-          hashSetBuilder += elem
-        }
-      }
-
-      this
+    override def result(): Set[A] = size match {
+      case _ if switchedToHashSetBuilder => hashSetBuilder.result()
+      case 0 => Set.empty[A]
+      case 1 => new Set1(e1)
+      case 2 => new Set2(e1, e2)
+      case 3 => new Set3(e1, e2, e3)
+      case 4 => new Set4(e1, e2, e3, e4)
     }
 
     private def convertToHashSetBuilder(): Unit = {
       switchedToHashSetBuilder = true
       if (hashSetBuilder eq null)
-        hashSetBuilder = new HashSetBuilder
+        hashSetBuilder = new HashSetBuilder[A]
 
-      hashSetBuilder ++= elems
+      hashSetBuilder += e1
+      hashSetBuilder += e2
+      hashSetBuilder += e3
+      hashSetBuilder += e4
+    }
+
+    override def +=(elem: A): this.type = {
+      size match {
+        case _ if switchedToHashSetBuilder =>
+          hashSetBuilder += elem
+        case 0 =>
+          e1 = elem; size += 1
+        case 1 =>
+          if (elem == e1) ()
+          else {
+            e2 = elem; size += 1
+          }
+        case 2 =>
+          if (elem == e1) ()
+          else if (elem == e2) ()
+           else {
+             e3 = elem; size += 1
+           }
+        case 3 =>
+          if (elem == e1) ()
+          else if (elem == e2) ()
+          else if (elem == e3) ()
+          else {
+            e4 = elem; size += 1
+          }
+        case 4 =>
+          if (elem == e1) ()
+          else if (elem == e2) ()
+          else if (elem == e3) ()
+          else if (elem == e4) ()
+           else {
+             convertToHashSetBuilder()
+             hashSetBuilder += elem
+             size += 1
+           }
+      }
+      this
     }
 
     override def ++=(xs: TraversableOnce[A]): this.type = {
@@ -382,9 +414,5 @@ object Set extends ImmutableSetFactory[Set] {
       }
       this
     }
-
   }
-
-
 }
-
