@@ -115,7 +115,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           withFields
 
         case dd: DefDef if dd.hasAttachment[AsyncAttachment] =>
-          val asyncAttachment = dd.getAndRemoveAttachment[AsyncAttachment].get
+          val asyncAttachment = dd.attachments.get[AsyncAttachment].get
           val asyncBody = (dd.rhs: @unchecked) match {
             case blk@Block(Apply(qual, body :: Nil) :: Nil, Literal(Constant(()))) => body
           }
@@ -241,5 +241,137 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
       inform("===== DOT =====")
       inform(block.toDot)
     }
+  }
+
+  /**
+   * Utility to post-process a FSM translated class that requires no storage to capture continuations into an
+   * equivalent lambda-backed representation that has less overhead in the generated class files.
+   *
+   * Given an input tree of the form:
+   *
+   * ```
+   * {
+   *   class stateMachine$async extends scala.tools.nsc.async.CustomFutureStateMachine {
+   *     def <init>($outer: C): stateMachine$async = {
+   *       stateMachine$async.super.<init>();
+   *       ()
+   *     };
+   *     def fsm(tr: scala.util.Either): Object = while$(){
+   *       try {
+   *         stateMachine$async.this.state() match {
+   *           case 0 => {
+   *             val awaitable$async: scala.tools.nsc.async.CustomFuture = scala.tools.nsc.async.CustomFuture._successful(Util.id("a"));
+   *             tr = stateMachine$async.this.getCompleted(awaitable$async);
+   *             stateMachine$async.this.state_=(1);
+   *             ...
+   *       };
+   *       while$()
+   *     };
+   *     <synthetic> <paramaccessor> <artifact> private[this] val $outer: C = _;
+   *     <synthetic> <stable> <artifact> def $outer(): C = stateMachine$async.this.$outer
+   *   };
+   *   new stateMachine$async(C.this).start()
+   * }
+   * ```
+   *
+   * Convert to:
+   * ```
+   * {
+   *   val self: tools.nsc.async.GenericCustomFutureStateMachine = new tools.nsc.async.GenericCustomFutureStateMachine();
+   *   self.setFsmAndStart({
+   *     <artifact> def fsm(tr: scala.util.Either): Object = while$(){
+   *       try {
+   *         self.state() match {
+   *           case 0 => {
+   *             val awaitable$async: scala.tools.nsc.async.CustomFuture = scala.tools.nsc.async.CustomFuture._successful(Util.id("a"));
+   *             tr = self.getCompleted(awaitable$async);
+   *             self.state_=(1);
+   *             ...
+   *       };
+   *       while$()
+   *     };
+   *     ((tr$async: scala.util.Either) => fsm(tr$async))
+   *   })
+   * }
+   * ```
+   * @param currentOwner    The method containing the FSM translated code
+   * @param localTyper      The local typer of the calling typing transform focussed on `currentOwner`
+   * @param cd              The anonymous class definition
+   * @param constructorArgs The arguments to the instantation of this class. Must either be empty or a single outer argument.
+   * @param selfValDef      A typed tree of the form `val someName: StateMachine = ... `. `this` references to the elimimated
+   *                        class will be substituted with references to this val.
+   * @param bindLambda      A function that will be given the `self` symbol and the lambda equivalent of the FSM method,
+   *                        which creates the expression that binds the lambda to the FSM's behaviour.
+   * @return                A block with the new form of the FSM expression.
+   */
+  def lambdafy(currentOwner: Symbol, localTyper: global.analyzer.Typer, cd: ClassDef, constructorArgs: List[Tree],
+               selfValDef: Tree, bindLambda: (Symbol, Tree) => Tree) = {
+    val fsmMethod: DefDef = cd.impl.body.collectFirst {
+      case dd: DefDef if dd.hasAttachment[AsyncAttachment] =>
+        dd
+    }.get
+    val pos = fsmMethod.pos
+    val self = selfValDef.symbol
+    val classToEliminate = fsmMethod.symbol.owner
+    fsmMethod.symbol.owner == currentOwner
+    fsmMethod.symbol.updateAttachment(DelambdafyTarget).setFlag(Flag.ARTIFACT)
+    fsmMethod.symbol.modifyInfo {
+      case mt: MethodType => copyMethodType(mt, mt.params, definitions.ObjectTpe)
+    }
+    fsmMethod.updateAttachment(DelambdafyTarget)
+    val funSymbol = currentOwner.newAnonymousFunctionClass().setInfo(typeOf[Object => Object])
+    val funvparam = funSymbol.newValueParameter(nme.tr).setInfo(fsmMethod.symbol.firstParam.info)
+    object deouter extends Transformer {
+      def outerOuter = constructorArgs.head.duplicate
+      def apply(t: Tree) =
+        classToEliminate.primaryConstructor.paramss match {
+          case List(Nil) =>
+            t
+          case List(List(outer)) =>
+            outerField = classToEliminate.info.decl(nme.OUTER_LOCAL)
+            outerAccessor = classToEliminate.info.decls.find(_.isOuterAccessor).get
+            val tree1  = transform(t)
+            val outerOuter = outerAccessor.info.resultType.typeSymbol
+            val tree2 = tree1.substituteSymbols(classToEliminate :: Nil, outerOuter :: Nil)
+            tree2
+        }
+      var outerField: Symbol = NoSymbol
+      var outerAccessor: Symbol = NoSymbol
+      override def transform(tree: Tree): Tree = tree match {
+        case sel: Select if sel.symbol == outerField =>
+          assert(currentOwner.enclClass == classToEliminate)
+          constructorArgs.head.duplicate
+        case Apply(sel: Select, Nil) if sel.symbol == outerAccessor =>
+          assert(currentOwner.enclClass != classToEliminate)
+          sel.qualifier.setType(tree.tpe)
+        case Apply(qual, args) if tree.symbol.isPrimaryConstructor && tree.symbol.owner.hasTransOwner(classToEliminate) =>
+          val args1 = map2Conserve(args, qual.symbol.info.params) {
+            (arg, param) =>
+              if (param.name == nme.OUTER_ARG && param.info.typeSymbol == classToEliminate)
+                outerOuter
+              else arg
+          }
+          treeCopy.Apply(tree, qual, args1)
+        case _ => super.transform(tree)
+      }
+    }
+    deouter.currentOwner = currentOwner
+    object boxReturn extends Transformer {
+      override def transform(tree: Tree): Tree = tree match {
+        case Return(Literal(Constant(()))) if tree.symbol == fsmMethod.symbol =>
+          treeCopy.Return(tree, literalBoxedUnit).setType(definitions.BoxedUnitTpe)
+        case _ =>
+          super.transform(tree)
+      }
+    }
+    boxReturn.currentOwner = currentOwner
+
+    val dd1         = deriveDefDef(fsmMethod)(rhs => Block(rhs :: Nil, literalBoxedUnit)).substituteThis(classToEliminate, Ident(selfValDef.symbol).setType(selfValDef.symbol.tpeHK))
+    val dd2         = deouter(dd1)
+    val dd3        = boxReturn.transform(dd2)
+    val lambdaBlock = Block(dd3.changeOwner(fsmMethod.symbol.owner, currentOwner) :: Nil,
+                            Function(ValDef(funvparam) :: Nil, gen.mkForwarder(gen.mkAttributedRef(fsmMethod.symbol), List(List(funvparam)))))
+    val blk         = Block(selfValDef :: Nil, bindLambda(self, lambdaBlock))
+    localTyper.typedPos(pos)(blk)
   }
 }

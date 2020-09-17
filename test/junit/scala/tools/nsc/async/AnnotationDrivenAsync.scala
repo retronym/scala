@@ -364,6 +364,56 @@ class AnnotationDrivenAsync {
     assertEquals(classOf[Array[String]], result.getClass)
   }
 
+  @Test def lambdafiedCustomAsync(): Unit = {
+    val result = run(
+      """ import scala.tools.nsc.async.{autoawait, customAsync}
+        |
+        | object Util {
+        |    @autoawait def id(a: String) = a
+        |    def reflect = {
+        |      val classes = new java.io.File(Test.getClass.getProtectionDomain.getCodeSource.getLocation.toURI).listFiles.toList.map(_.getName).sorted.mkString(",")
+        |      val methods = List(Test.getClass, classOf[C]).flatMap(_.getDeclaredMethods).filter(_.getName.contains("fsm")).sortBy(_.getName).mkString("\n")
+        |      classes + "\n" + methods
+        |   }
+        | }
+        | class Outer
+        | class C {
+        |   import Util.id
+        |   def foo = 42
+        |   @customAsync def test = {
+        |     id("a")
+        |     id("b")
+        |     foo
+        |     class Inner1 {
+        |        def needOuter = C.this
+        |     }
+        |     assert(new Inner1().needOuter eq this)
+        |     Util.reflect
+        |   }
+        |
+        |  @customAsync def testStatic = {
+        |     id("a")
+        |     id("b")
+        |     id("c")
+        |   }
+        | }
+        | object Test extends C {
+        |   import Util._
+        |   @customAsync def staticInModule = {
+        |     id("a")
+        |     id("b")
+        |     id("c")
+        |   }
+        | }
+        | """.stripMargin)
+    val expected =
+      """|C$Inner1$1.class,C.class,Outer.class,Test$.class,Test.class,Util$.class,Util.class
+         |public static final java.lang.Object C.fsm$1(C,scala.tools.nsc.async.GenericCustomFutureStateMachine,scala.util.Either)
+         |public static final java.lang.Object C.fsm$2(scala.tools.nsc.async.GenericCustomFutureStateMachine,scala.util.Either)
+         |public static final java.lang.Object Test$.fsm$3(scala.tools.nsc.async.GenericCustomFutureStateMachine,scala.util.Either)""".stripMargin.trim
+    assertEquals(expected, result)
+  }
+
   // Handy to debug the compiler or to collect code coverage statistics in IntelliJ.
   @Test
   @Ignore
@@ -402,7 +452,7 @@ class AnnotationDrivenAsync {
 
       // settings.debug.value = true
       // settings.uniqid.value = true
-      // settings.processArgumentString("-Xprint:typer,posterasure,async -nowarn")
+      // settings.processArgumentString("-Xprint:typer,erasure,async,postasync -nowarn")
       // settings.log.value = List("async")
 
       // NOTE: edit ANFTransform.traceAsync to `= true` to get additional diagnostic tracing.
@@ -491,21 +541,21 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
           case dd: DefDef if dd.symbol.hasAnnotation(customAsyncSym) =>
             deriveDefDef(dd) {
               rhs =>
-                val applyMethod =
-                  q"""def apply(tr: _root_.scala.util.Either[_root_.scala.Throwable, _root_.scala.AnyRef]): _root_.scala.Unit = $rhs"""
-                val applyMethodMarked = global.async.markForAsyncTransform(dd.symbol, applyMethod, awaitSym, Map.empty)
+                val fsmMethod =
+                  q"""def fsm(tr: _root_.scala.util.Either[${definitions.ThrowableTpe}, ${definitions.AnyRefTpe}]): ${definitions.UnitTpe} = $rhs"""
+                val fsmMethodMarked = global.async.markForAsyncTransform(dd.symbol, fsmMethod, awaitSym, Map.empty)
                 val name = TypeName("stateMachine$async")
                 val wrapped =
                   q"""
                     class $name extends _root_.scala.tools.nsc.async.CustomFutureStateMachine {
-                     $applyMethodMarked
+                     $fsmMethodMarked
                     }
                     new $name().start()
                    """
 
                 val tree =
                   q"""
-                      val temp = ${wrapped}
+                     val temp = ${wrapped.updateAttachment(FsmBlock)}
                      temp._block
                     """
                 val result = atOwner(dd.symbol) {
@@ -528,10 +578,54 @@ abstract class AnnotationDrivenAsyncPlugin extends Plugin {
 
     override val runsAfter: List[String] = "refchecks" :: "patmat" :: Nil
     override val phaseName: String = "postpatmat"
+  }, new PluginComponent with TypingTransformers {
+    val global: AnnotationDrivenAsyncPlugin.this.global.type = AnnotationDrivenAsyncPlugin.this.global
+    lazy val GenericCustomFutureStateMachine = rootMirror.getClassIfDefined("scala.tools.nsc.async.GenericCustomFutureStateMachine")
+    lazy val SetFsmAndStartSymbol = GenericCustomFutureStateMachine.info.decl(TermName("setFsmAndStart"))
 
+    def newTransformer(unit: CompilationUnit) = new TypingTransformer(unit) { tt =>
+      override def transform(tree: Tree): Tree = tree match {
+        case Block((cd: ClassDef) :: Nil, Apply(Select(Apply(fsmInit, params), _), Nil)) if tree.hasAttachment[FsmBlock.type] =>
+          // { class stateMachine { def fsm(...): Unit = { ... } }
+          // val fsm = new GenericCustomeFutureStateMachine
+          // fsm.SetFsmAndStartSymbol {
+          //   def fsm(...): Object = { .... ; BoxedUnit }
+          //   (tr => fsm(tr)) // LambdaMetaFactory will spin up a lambda class with fsm as the impl method.
+          // }
+          val fields = cd.symbol.info.decls.filter(_.isField).toList
+
+          if (fields.isEmpty || (fields.length == 1 && params.length == 1)) {
+            val self       = currentOwner.newTermSymbol(currentUnit.freshTermName("stateMachine"), tree.pos, newFlags = Flag.ARTIFACT).setInfo(GenericCustomFutureStateMachine.tpeHK)
+            val selfValDef = localTyper.typedPos(tree.pos)(ValDef(self, New(GenericCustomFutureStateMachine)))
+
+            async.lambdafy(tt.currentOwner,
+                           tt.localTyper,
+                           cd,
+                           params,
+                           selfValDef,
+                           (selfSym, lambdaExpr) => localTyper.typedPos(tree.pos)(
+                             gen.mkMethodCall(gen.mkAttributedIdent(selfSym), SetFsmAndStartSymbol, Nil, lambdaExpr :: Nil))
+                           )
+          } else
+            super.transform(tree)
+        case _ =>
+          super.transform(tree)
+      }
+    }
+
+    override def newPhase(prev: Phase): Phase = new StdPhase(prev) {
+      override def apply(unit: CompilationUnit): Unit = {
+        newTransformer(unit).transformUnit(unit)
+      }
+    }
+
+    override val runsAfter: List[String] = "async" :: Nil
+    override val runsBefore: List[String] = "lambdalift" :: Nil
+    override val phaseName: String = "postasync"
   })
-  override val description: String = "postpatmat"
-  override val name: String = "postpatmat"
+  private case object FsmBlock extends PlainAttachment
+  override val description: String = "custom-async"
+  override val name: String = "customasync"
 }
 
 // Calls to methods with this annotation are translated to `Async.await(Future.successful(<call>))`
@@ -545,7 +639,8 @@ abstract class CustomFutureStateMachine extends AsyncStateMachine[CustomFuture[A
   private[this] var state$async: Int = 0
   protected def state: Int = state$async
   protected def state_=(s: Int): Unit = state$async = s
-  def apply(tr$async: R[AnyRef]): Unit
+  def fsm(tr$async: R[AnyRef]): Unit
+  final def apply(tr$async: R[AnyRef]): Unit = fsm(tr$async)
 
   type F[A] = CustomFuture[A]
   type R[A] = Either[Throwable, A]
@@ -565,4 +660,12 @@ abstract class CustomFutureStateMachine extends AsyncStateMachine[CustomFuture[A
     CustomFuture._unit.asInstanceOf[CustomFuture[AnyRef]]._onComplete(this)
     result$async._future
   }
+}
+final class GenericCustomFutureStateMachine extends CustomFutureStateMachine {
+  private[this] var f: Either[Throwable, AnyRef] => Unit = null
+  def setFsmAndStart(f: Either[Throwable, AnyRef] => Unit): CustomFuture[AnyRef] = {
+    this.f = f
+    start()
+  }
+  override def fsm(tr$async: Either[Throwable, AnyRef]): Unit = {f(tr$async); this}
 }
