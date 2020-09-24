@@ -345,7 +345,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           assert(currentOwner.enclClass != classToEliminate)
           super.transform(sel.qualifier).setType(tree.tpe)
         case vd: ValDef if vd.name == nme.THIS =>
-          vd.symbol.setName(currentUnit.freshTermName(vd.name.toString))
+          vd.symbol.setName(currentUnit.freshTermName(vd.name.toString + "$"))
           vd.substituteSymbols(classToEliminate :: Nil, selfValDef.symbol.info.typeSymbol :: Nil)
         case Apply(qual, args) if tree.symbol.isPrimaryConstructor =>
           val args1 = map2Conserve(args, qual.symbol.info.params) {
