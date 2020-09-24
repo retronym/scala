@@ -414,6 +414,58 @@ class AnnotationDrivenAsync {
     assertEquals(expected, result)
   }
 
+  @Test def lambdafiedCustomAsyncLocalCaseClass(): Unit = {
+    val result = run(
+      """ import scala.tools.nsc.async.{autoawait, customAsync}
+        |
+        | object Util {
+        |    @autoawait def id(a: String) = a
+        | }
+        | class Outer
+        | class C {
+        |   import Util.id
+        |   def foo = 42
+        |   @customAsync def test = {
+        |     case class Foo(a: Int) {
+        |       def needOuter = C.this
+        |     }
+        |     object Foo
+        |     id("a")
+        |   }
+        | }
+        | object Test extends C {
+        |
+        | }
+        | """.stripMargin)
+    assertEquals("a", result)
+  }
+
+  @Test def lambdafiedCustomAsyncTailRec(): Unit = {
+    val result = run(
+      """ import scala.tools.nsc.async.{autoawait, customAsync}
+        |
+        | object Util {
+        |    @autoawait def id(a: String) = a
+        |
+        | }
+        | class Outer
+        | class C {
+        |   import Util.id
+        |   def foo = 42
+        |   @customAsync def test = {
+        |     id("a")
+        |     def foo(a: Int) = a
+        |     @annotation.tailrec def plus(z: Int, a: Int): Int = if (a > 0) plus(z + 1, a - 1) else z
+        |     plus(2, 3)
+        |   }
+        | }
+        | object Test extends C {
+        |
+        | }
+        | """.stripMargin)
+    assertEquals(5, result)
+  }
+
   // Handy to debug the compiler or to collect code coverage statistics in IntelliJ.
   @Test
   @Ignore
@@ -452,7 +504,7 @@ class AnnotationDrivenAsync {
 
       // settings.debug.value = true
       // settings.uniqid.value = true
-      // settings.processArgumentString("-Xprint:typer,erasure,async,postasync -nowarn")
+      //settings.processArgumentString("-Xprint:async,postasync,jvm -nowarn")
       // settings.log.value = List("async")
 
       // NOTE: edit ANFTransform.traceAsync to `= true` to get additional diagnostic tracing.
@@ -499,9 +551,9 @@ class AnnotationDrivenAsync {
       }
     } catch {
       case ve: VerifyError =>
-        val asm = out.listFiles().filter(_.getName.contains("stateMachine")).flatMap { file =>
+        val asm = out.listFiles().filter(_.getName.contains("C")).flatMap { file =>
           import scala.sys.process._
-          val javap = List("/usr/local/bin/javap", "-v", file.getAbsolutePath).!!
+          val javap = List("/Users/jz/.jabba/jdk/adopt@1.8.212-04/Contents/Home/bin/javap", "-v", file.getAbsolutePath).!!
           val asmp = AsmUtils.textify(AsmUtils.readClass(file.getAbsolutePath))
           javap :: asmp :: Nil
         }.mkString("\n\n")

@@ -566,6 +566,8 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       // add method-local vars for params
       val DefDef(_, _, _, vparamss, _, rhs) = dd
       assert(vparamss.isEmpty || vparamss.tail.isEmpty, s"Malformed parameter list: $vparamss")
+      if (dd.name.toString.contains("loop"))
+        getClass
       val params = if (vparamss.isEmpty) Nil else vparamss.head
       for (p <- params) { locals.makeLocal(p.symbol) }
       // debug assert((params.map(p => locals(p.symbol).tk)) == asmMethodType(methSymbol).getArgumentTypes.toList, "debug")

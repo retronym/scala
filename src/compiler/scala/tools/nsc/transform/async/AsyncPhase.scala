@@ -343,15 +343,21 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AnfTran
           constructorArgs.head.duplicate
         case Apply(sel: Select, Nil) if sel.symbol == outerAccessor =>
           assert(currentOwner.enclClass != classToEliminate)
-          sel.qualifier.setType(tree.tpe)
-        case Apply(qual, args) if tree.symbol.isPrimaryConstructor && tree.symbol.owner.hasTransOwner(classToEliminate) =>
+          super.transform(sel.qualifier).setType(tree.tpe)
+        case vd: ValDef if vd.name == nme.THIS =>
+          vd.symbol.setName(currentUnit.freshTermName(vd.name.toString))
+          vd.substituteSymbols(classToEliminate :: Nil, selfValDef.symbol.info.typeSymbol :: Nil)
+        case Apply(qual, args) if tree.symbol.isPrimaryConstructor =>
           val args1 = map2Conserve(args, qual.symbol.info.params) {
             (arg, param) =>
-              if (param.name == nme.OUTER_ARG && param.info.typeSymbol == classToEliminate)
-                outerOuter
-              else arg
+              if (param.name == nme.OUTER_ARG && param.info.typeSymbol == classToEliminate) {
+                if (currentOwner.enclClass == classToEliminate)
+                  outerOuter
+                else
+                  arg
+              } else arg
           }
-          treeCopy.Apply(tree, qual, args1)
+          super.transform(treeCopy.Apply(tree, qual, args1))
         case _ => super.transform(tree)
       }
     }
