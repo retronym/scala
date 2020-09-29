@@ -623,7 +623,7 @@ object Map extends ImmutableMapFactory[Map] {
       } else {
         // assert(elems.size == 4)
         elems.get(elem._1) match {
-          case Some(x) if x == elem._2 => ()
+          case Some(x) if x.asInstanceOf[AnyRef] eq elem._2.asInstanceOf[AnyRef] => ()
           case _ =>
           convertToHashMapBuilder()
           hashMapBuilder += elem

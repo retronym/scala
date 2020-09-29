@@ -361,7 +361,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
         if (key == this.key) {
           if (merger eq null) {
             if (this.value.asInstanceOf[AnyRef] eq value.asInstanceOf[AnyRef]) this
-            else new HashMap1(key, hash, value, kv)
+            else new HashMap1(this.key, hash, value, null)
           } else if (
             (key.asInstanceOf[AnyRef] eq this.key.asInstanceOf[AnyRef]) &&
               (value.asInstanceOf[AnyRef] eq this.value.asInstanceOf[AnyRef]) &&
@@ -379,8 +379,9 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
         // 32-bit hash collision (rare, but not impossible)
           new HashMapCollision1(hash, ListMap.empty.updated(this.key, this.value).updated(key, value))
       } else {
+        val nkv = if ((kv ne null) && (kv._1.asInstanceOf[AnyRef] eq this.key.asInstanceOf[AnyRef])) kv else null
         // they have different hashes, but may collide at this level - find a level at which they don't
-        val that = new HashMap1[A, B1](key, hash, value, kv)
+        val that = new HashMap1[A, B1](this.key, hash, value, nkv)
         makeHashTrieMap[A, B1](this.hash, this, hash, that, level, 2)
       }
 

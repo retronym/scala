@@ -209,7 +209,6 @@ class SetMapRulesTest {
 
   // Immutable maps
 
-  @Ignore // TODO
   @Test def testImmutableMap: Unit =
     mapdata.foreach(d => checkImmutableMap(() => immutable.Map(d: _*)))
 
@@ -221,7 +220,6 @@ class SetMapRulesTest {
   @Test def testImmutableTreeMap: Unit =
     mapdata.foreach(d => checkImmutableMap(() => immutable.TreeMap(d: _*)))
 
-  @Ignore // TODO
   @Test def testImmutableHashMap: Unit =
     mapdata.foreach(d => checkImmutableMap(() => immutable.HashMap(d: _*)))
 
