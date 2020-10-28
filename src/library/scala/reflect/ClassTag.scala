@@ -168,7 +168,16 @@ object ClassTag {
     }
   }
 
-  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] = cache.get(runtimeClass1).asInstanceOf[ClassTag[T]]
+  def apply[T](runtimeClass1: jClass[_]): ClassTag[T] = {
+    val cl = runtimeClass1.getClassLoader
+    cache.get(runtimeClass1).asInstanceOf[ClassTag[T]]
+//    if (cl == null || cl == this.getClass.getClassLoader)
+//      cache.get(runtimeClass1).asInstanceOf[ClassTag[T]]
+//    else {
+//      // By pass cache in layered classloader use cases.
+//      cache.computeValue(runtimeClass1).asInstanceOf[ClassTag[T]]
+//    }
+  }
 
   def unapply[T](ctag: ClassTag[T]): Option[Class[_]] = Some(ctag.runtimeClass)
 }
