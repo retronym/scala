@@ -612,8 +612,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
 
       def isModuleTypedExpr = (
-           treeInfo.admitsTypeSelection(tree)
-        && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+        if (pt eq WildcardType) {
+          sym.isModuleNotMethod && treeInfo.admitsTypeSelection(tree)
+        } else {
+          treeInfo.admitsTypeSelection(tree) && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+        }
       )
       def isStableValueRequired = (
            isStableIdPattern
