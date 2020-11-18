@@ -8,6 +8,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
 import scala.tools.testing.AllocationTest
+import scala.util.Random
 
 @RunWith(classOf[JUnit4])
 class TreeMapTest extends AllocationTest {
@@ -97,6 +98,26 @@ class TreeMapTest extends AllocationTest {
     data foreach {
       case (k, v) =>
         assertSame(tree, nonAllocating(tree.updated(k, v)))
+    }
+  }
+  @Test
+  def randomTree() {
+    val r = new Random(0)
+    var m= TreeSet[Int]()
+    for (i <- 1 to 100000) {
+      m += r.nextInt(1000)
+      val (m1,m2) = m.splitAt(r.nextInt(1000))
+      m -= r.nextInt(1000)
+      m.drop(r.nextInt(1000))
+      m.take(r.nextInt(1000))
+      m.slice(r.nextInt(1000), r.nextInt(1000))
+      m.init
+      m.tail
+      m.from(r.nextInt(1000))
+      m.to(r.nextInt(1000))
+      m.until(r.nextInt(1000))
+      m.range(r.nextInt(1000), r.nextInt(1000))
+      //println(s"${m.size} $m")
     }
   }
   @Test def consistentEquals: Unit = {
