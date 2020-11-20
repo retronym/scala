@@ -236,9 +236,9 @@ private[collection] object NewRedBlackTree {
     def checkAdjacentRed(t: Tree[_, _]): Unit = {
       if (isRedTree(t)) {
         if (isRedTree(t.left))
-          throw new IllegalStateException(s"at red tree ${t.key} left is also red ${t.left.key}")
+          throw new IllegalStateException(s"at red tree ${t.key} left is also red ${t.left.key}", t.origin)
         if (isRedTree(t.right))
-          throw new IllegalStateException(s"at red tree ${t.key} right is also red ${t.right.key}")
+          throw new IllegalStateException(s"at RedTree#${t.id} (k=${t.key}) right is also red ${t.right.key}", t.origin)
       }
       if (t ne null) {
         checkAdjacentRed(t.left)
@@ -263,7 +263,7 @@ private[collection] object NewRedBlackTree {
         validateBlackHeight(tree, h)
       } catch {
         case e: IllegalStateException => {
-          throw new IllegalStateException(s"bad tree $tree ", e)
+          throw new IllegalStateException(s"bad tree:\n ${tree.debugToString}", e)
         }
       }
     }
@@ -542,7 +542,8 @@ private[collection] object NewRedBlackTree {
       else if(from > l) doSlice(tree.right, from-l-1, until-l-1)
       else join(doDrop(tree.left, from), tree.key, tree.value, doTake(tree.right, until-l-1))
     }
-
+  private var _nextId = 0
+  private def nextId() = try _nextId finally _nextId += 1
   /*
    * Forcing direct fields access using the @`inline` annotation helps speed up
    * various operations (especially smallest/greatest and update/delete).
@@ -588,6 +589,30 @@ private[collection] object NewRedBlackTree {
                            @(inline @getter @setter)     private var _right: Tree[A, _],
                            @(inline @getter @setter)     private var _count: Int)
   {
+    def debugToString: String = {
+      val b = new StringBuilder
+      def loop(parent: Tree[A, B], tree: Tree[A, B], depth: Int): Unit = {
+        b ++= ("  " * depth)
+        if (tree == null) b ++= "Empty\n"
+        else {
+          b ++= s"${if (tree.isRed) "RedTree" else "BlackTree"}(${tree.key}, ${tree.value})#${tree.id}"
+          if (tree.isRed && (isRedTree(tree.left) || isRedTree(tree.right))) {
+            b ++= " !! Red contains Red"
+          }
+          b ++= "\n"
+          loop(tree, tree.left, depth + 1)
+          loop(tree, tree.right, depth + 1)
+        }
+      }
+      loop(null, this, 0)
+      b.toString
+    }
+
+    val id = nextId()
+    val origin = new Throwable("tree created stack trace")
+    if (id == 1626)
+      getClass // breakpoint
+
     @`inline` private[NewRedBlackTree] def isMutable: Boolean = (_count & colourMask) == 0
     // read only APIs
     @`inline` private[NewRedBlackTree] final def count = {

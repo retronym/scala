@@ -35,6 +35,7 @@ private[immutable] object RedBlackTree {
     extends Serializable {
     private def _count(tree: AnyRef) = if (tree eq null) 0 else tree.asInstanceOf[Tree[A, B]].count
     @(inline @getter) final val count: Int = 1 + _count(left) + _count(right)
+
   }
 
   @SerialVersionUID(6516527240275040268L)
