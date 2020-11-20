@@ -263,7 +263,8 @@ private[collection] object NewRedBlackTree {
         validateBlackHeight(tree, h)
       } catch {
         case e: IllegalStateException => {
-          throw new IllegalStateException(s"bad tree:\n ${tree.debugToString}", e)
+          val rebuildTree = fromOrderedEntries(iterator(tree, None)(null), sizeOf(tree))
+          throw new IllegalStateException(s"bad tree:\n ${tree.debugToString}\n\n:expected: \n${rebuildTree.debugToString}", e)
         }
       }
     }
