@@ -189,7 +189,7 @@ private[collection] object NewRedBlackTree {
   }
   def range[A: Ordering, B](tree: Tree[A, B], from: A, until: A): Tree[A, B] = result(doRange(tree, from, until))
   def from[A: Ordering, B](tree: Tree[A, B], from: A): Tree[A, B] = result(doFrom(tree, from))
-  def to[A: Ordering, B](tree: Tree[A, B], to: A): Tree[A, B] = result(doTo(tree, to))
+  def to[A: Ordering, B](tree: Tree[A, B], to: A): Tree[A, B] = result(tree, doTo(tree, to))
   def until[A: Ordering, B](tree: Tree[A, B], key: A): Tree[A, B] = result(doUntil(tree, key))
 
   def drop[A: Ordering, B](tree: Tree[A, B], n: Int): Tree[A, B] = result(doDrop(tree, n))
@@ -227,12 +227,18 @@ private[collection] object NewRedBlackTree {
     result(_init(tree))
   }
 
+  @inline def result[A, B](inputTree: Tree[A, B], in: Tree[A, B]): Tree[A, B] = {
+    val tree = blacken(in)
+    validate(inputTree, tree)
+    tree
+  }
   @inline def result[A, B](in: Tree[A, B]): Tree[A, B] = {
     val tree = blacken(in)
     validate(tree)
     tree
   }
-  private[this] def validate(tree: Tree[_, _]): Unit = {
+  private[this] def validate(tree: Tree[_, _]): Unit = validate(null, tree)
+  private[this] def validate(inputTree: Tree[_, _], tree: Tree[_, _]): Unit = {
     def checkAdjacentRed(t: Tree[_, _]): Unit = {
       if (isRedTree(t)) {
         if (isRedTree(t.left))
@@ -263,8 +269,8 @@ private[collection] object NewRedBlackTree {
         validateBlackHeight(tree, h)
       } catch {
         case e: IllegalStateException => {
-          val rebuildTree = fromOrderedEntries(iterator(tree, None)(null), sizeOf(tree))
-          throw new IllegalStateException(s"bad tree:\n ${tree.debugToString}\n\n:expected: \n${rebuildTree.debugToString}", e)
+          val rebuiltTree = fromOrderedEntries(iterator(tree, None)(null), sizeOf(tree))
+          throw new IllegalStateException(s"bad tree:\n ${tree.debugToString}\n\n:rebuilt: \n${rebuiltTree.debugToString}.\n\noriginal input tree\b: ${inputTree.debugToString}", e)
         }
       }
     }
