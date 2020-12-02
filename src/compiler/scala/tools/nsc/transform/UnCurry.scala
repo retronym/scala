@@ -229,6 +229,28 @@ abstract class UnCurry extends InfoTransform
         gen.expandFunction(localTyper)(fun, inConstructorFlag)
       } else {
         val mustExpand = mustExpandFunction(fun)
+
+        object GenTyped {
+          def unapply(t: Tree) = t match {
+            case (Typed(expr, _)) => Some(expr)
+            case t => Some(t)
+          }
+        }
+        fun match {
+          case Function(self :: params, treeInfo.Applied(Select(GenTyped(core : Ident), _), _, argss))
+            if core.symbol == self.symbol && argss.flatten.corresponds(params) {
+              case (i : Ident, param) => i.symbol == param.symbol
+              case _ => false
+            } =>
+            reporter.info(fun.pos, "could be a method reference", true)
+          case Function(params, treeInfo.Applied(Select(_ : Ident | _: This, _), _, argss))
+            if argss.flatten.corresponds(params) {
+              case (i : Ident, param) => i.symbol == param.symbol
+              case _ => false
+            } =>
+            reporter.info(fun.pos, "could be a method reference", true)
+          case _ =>
+        }
         // method definition with the same arguments, return type, and body as the original lambda
         val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
 
