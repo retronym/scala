@@ -71,6 +71,11 @@ trait MatchTranslation {
       private lazy val extractor = ExtractorCall(tree)
 
       def pos     = tree.pos
+      def tptPos = tree match {
+        case Typed(expr, tpt) => tpt.pos
+        case Bind(_, Typed(_, tpt)) => tpt.pos
+        case _ => pos
+      }
       def tpe     = binder.info.dealiasWiden  // the type of the variable bound to the pattern
       def pt      = unbound match {
         case Star(tpt)      => this glbWith seqType(tpt.tpe)
@@ -99,7 +104,7 @@ trait MatchTranslation {
 
       private def bindingStep(sub: Symbol, subpattern: Tree) = step(SubstOnlyTreeMaker(sub, binder))(rebindTo(subpattern))
       private def equalityTestStep()                         = step(EqualityTestTreeMaker(binder, tree, pos))()
-      private def typeTestStep(sub: Symbol, subPt: Type)     = step(TypeTestTreeMaker(sub, binder, subPt, glbWith(subPt))(pos))()
+      private def typeTestStep(sub: Symbol, subPt: Type)     = step(TypeTestTreeMaker(sub, binder, subPt, glbWith(subPt))(tptPos, pos))()
       private def alternativesStep(alts: List[Tree])         = step(AlternativesTreeMaker(binder, translatedAlts(alts), alts.head.pos))()
       private def translatedAlts(alts: List[Tree])           = alts map (alt => rebindTo(alt).translate())
       private def noStep()                                   = step()()
@@ -123,7 +128,7 @@ trait MatchTranslation {
             // it tests the type, checks the outer pointer and casts to the expected type
             // TODO: the outer check is mandated by the spec for case classes, but we do it for user-defined unapplies as well [SPEC]
             // (the prefix of the argument passed to the unapply must equal the prefix of the type of the binder)
-            val typeTest = TypeTestTreeMaker(binder, binder, paramType, paramType)(pos, extractorArgTypeTest = true)
+            val typeTest = TypeTestTreeMaker(binder, binder, paramType, paramType)(tptPos, pos, extractorArgTypeTest = true)
             val binderKnownNonNull = typeTest impliesBinderNonNull binder
 
             // check whether typetest implies binder is not null,

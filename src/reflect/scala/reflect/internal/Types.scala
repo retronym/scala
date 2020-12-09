@@ -4056,7 +4056,7 @@ trait Types
     }
 
     def check(tp1: Type, tp2: Type) = (
-      if (tp1.typeSymbol.isClass && tp1.typeSymbol.hasFlag(FINAL))
+      if (tp1.typeSymbol.isClass && tp1.typeSymbol.hasFlag(FINAL | MODULE))
         tp1 <:< tp2 || isNumericValueClass(tp1.typeSymbol) && isNumericValueClass(tp2.typeSymbol)
       else tp1.baseClasses forall (bc =>
         tp2.baseTypeIndex(bc) < 0 || isConsistent(tp1.baseType(bc), tp2.baseType(bc)))

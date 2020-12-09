@@ -51,7 +51,9 @@ trait Logic extends Debugging  {
     type Tree
 
     class Prop
-    final case class Eq(p: Var, q: Const) extends Prop
+    final case class Eq(p: Var, q: Const) extends Prop {
+      var pos: global.Position = NoPosition
+    }
 
     type Const
 
@@ -315,11 +317,12 @@ trait Logic extends Debugging  {
         case And(ops) => ops foreach apply
         case Or(ops) => ops foreach apply
         case Not(a) => apply(a)
-        case Eq(a, b) => applyVar(a); applyConst(b)
+        case eq @ Eq(a, b) => applyEq(eq)
         case s: Sym => applySymbol(s)
         case AtMostOne(ops) => ops.foreach(applySymbol)
         case _ =>
       }
+      def applyEq(eq: Eq): Unit = {applyVar(eq.p); applyConst(eq.q) }
       def applyVar(x: Var): Unit = {}
       def applyConst(x: Const): Unit = {}
       def applySymbol(x: Sym): Unit = {}
@@ -331,6 +334,11 @@ trait Logic extends Debugging  {
         override def applyVar(v: Var) = vars += v
       })(p)
       vars.toSet
+    }
+    def foreachEq(p: Prop)(f: Eq => Unit) = {
+      (new PropTraverser {
+        override def applyEq(eq: Eq) = f(eq)
+      })(p)
     }
 
     def gatherSymbols(p: Prop): Set[Sym] = {
@@ -508,10 +516,10 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
     class Var(val path: Tree, staticTp: Type) extends AbsVar {
       private[this] val id: Int = Var.nextId
 
-      // private[this] var canModify: Option[Array[StackTraceElement]] = None
-      private[this] def ensureCanModify() = {} //if (canModify.nonEmpty) debug.patmat("BUG!"+ this +" modified after having been observed: "+ canModify.get.mkString("\n"))
+      private[this] var canModify: Option[Array[StackTraceElement]] = None
+      private[this] def ensureCanModify(): Unit = () // = if (canModify.nonEmpty) global.abort("BUG!"+ this +" modified after having been observed: "+ canModify.get.mkString("\n"))
 
-      private[this] def observed() = {} //canModify = Some(Thread.currentThread.getStackTrace)
+      private[this] def observed(): Unit = () //{canModify = Some(Thread.currentThread.getStackTrace)}
 
       // don't access until all potential equalities have been registered using registerEquality
       private[this] val symForEqualsTo = new mutable.HashMap[Const, Sym]

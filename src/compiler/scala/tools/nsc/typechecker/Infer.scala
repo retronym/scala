@@ -1170,7 +1170,6 @@ trait Infer extends Checkable {
         IncompatibleScrutineeTypeError(tree0, pattp, pt)
         return ErrorType
       }
-
       checkCheckable(tree0, pattp, pt, inPattern = true, canRemedy)
       if (pattp <:< pt) ()
       else {

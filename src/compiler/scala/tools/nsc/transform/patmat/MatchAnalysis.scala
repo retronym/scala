@@ -365,7 +365,15 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
                 def and(a: Result, b: Result)                         = And(a, b)
                 def withOuterTest(testedBinder: Symbol, expectedTp: Type) = True // TODO OuterEqProp(testedBinder, expectedType)
                 def typeTest(b: Symbol, pt: Type) = { // a type test implies the tested path is non-null (null.isInstanceOf[T] is false for all T)
-                  val p = binderToUniqueTree(b);                        And(uniqueNonNullProp(p), uniqueTypeProp(p, uniqueTp(pt)))
+                  val p = binderToUniqueTree(b);
+                  val testedPath = p
+                  val uniquePt = uniqueTp(pt)
+                  val varr = Var(testedPath)
+                  val checkableUniquePt = checkableType(uniquePt)
+                  val eq = Eq(varr, TypeConst(checkableUniquePt))
+                  eq.pos = ttm.tptPos
+                  val typeProp = uniqueTypeProps getOrElseUpdate((testedPath, uniquePt), eq)
+                  And(uniqueNonNullProp(p), typeProp)
                 }
                 def nonNullTest(testedBinder: Symbol)                 = uniqueNonNullProp(binderToUniqueTree(testedBinder))
                 def equalsTest(pat: Tree, testedBinder: Symbol)       = uniqueEqualityProp(binderToUniqueTree(testedBinder), unique(pat))
@@ -476,6 +484,7 @@ trait MatchAnalysis extends MatchApproximation {
       val propsCasesOk   = approximate(True)  map caseWithoutBodyToProp
       val propsCasesFail = approximate(False) map (t => Not(caseWithoutBodyToProp(t)))
 
+
       try {
         val (eqAxiomsFail, symbolicCasesFail) = removeVarEq(propsCasesFail, modelNull = true)
         val (eqAxiomsOk, symbolicCasesOk) = removeVarEq(propsCasesOk, modelNull = true)
@@ -513,6 +522,22 @@ trait MatchAnalysis extends MatchApproximation {
         }
 
         if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaReach, start)
+
+        propsCasesFail.iterator.foreach(prop => foreachEq(prop) {
+          case eq @ Eq(varr, tc: TypeConst) =>
+            val testedTypeCheckable = tc.wideTp
+            if (!(testedTypeCheckable <:< varr.staticTpCheckable)) {
+              val domainSyms = varr.domainSyms
+              domainSyms match {
+                case Some(syms) =>
+                  if (!syms.exists(sym => sym.const.tp != ConstantNull && isPopulated(sym.const.wideTp, testedTypeCheckable))) {
+                    reporter.warning(eq.pos, "Pattern type is not compatible with any of the sealed children of expected type")
+                  }
+                case None       =>
+              }
+            }
+          case  Eq(_, _) =>
+        })
 
         if (reachable) None else Some(caseIndex)
       } catch {
