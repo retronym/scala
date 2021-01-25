@@ -106,7 +106,7 @@ class CompletionTest {
     checkExact(completer, "asInstanceO", "", includeUniversal = true)("asInstanceOf")
 
     // Output is sorted
-    assertEquals(List("prefix_aaa", "prefix_nnn", "prefix_zzz"), completer.complete( """class C { def prefix_nnn = 0; def prefix_zzz = 0; def prefix_aaa = 0; prefix_""").candidates.filter(!_.isUniversal).map(_.defString))
+    assertEquals(List("prefix_aaa", "prefix_nnn", "prefix_zzz"), completer.complete( """class C { def prefix_nnn = 0; def prefix_zzz = 0; def prefix_aaa = 0; prefix_""").candidates.filter(!_.isUniversal).map(_.name))
 
     // Enable implicits to check completion enrichment
     checkExact(completer, """'c'.toU""")("toUpper")
@@ -212,7 +212,7 @@ class CompletionTest {
          |  .map(_ + 1) /* then we do reverse */
          |  .rev""".stripMargin
     assertTrue(
-      completer.complete(withMultilineCommit).candidates.map(_.defString).contains("reverseMap")
+      completer.complete(withMultilineCommit).candidates.map(_.name).contains("reverseMap")
     )
 
     val withInlineCommit =
@@ -220,7 +220,7 @@ class CompletionTest {
          |  .map(_ + 1) // then we do reverse
          |  .rev""".stripMargin
     assertTrue(
-      completer.complete(withInlineCommit).candidates.map(_.defString).contains("reverseMap")
+      completer.complete(withInlineCommit).candidates.map(_.name).contains("reverseMap")
     )
   }
 
@@ -301,9 +301,9 @@ class CompletionTest {
       """object A { class Type; object Term }"""
     )
     val candidates1 = completer.complete("A.T").candidates
-    assertEquals("Term", candidates1.map(_.defString).mkString(" "))
+    assertEquals("Term", candidates1.map(_.name).mkString(" "))
     val candidates2 = completer.complete("import A.T").candidates
-    assertEquals("Term Type", candidates2.map(_.defString).sorted.mkString(" "))
+    assertEquals("Term Type", candidates2.map(_.name).sorted.mkString(" "))
   }
 
   @Test
@@ -352,7 +352,7 @@ object Test2 {
     val actual =
       completer.complete(before, after).candidates
         .filter(c => includeUniversal || !c.isUniversal)
-        .map(_.defString)
+        .map(_.name)
     assertEquals(expected.sorted.mkString(" "), actual.toSeq.distinct.sorted.mkString(" "))
   }
 }
