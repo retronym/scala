@@ -14,7 +14,6 @@ package scala.tools.nsc.interpreter
 package shell
 
 import java.io.{PrintWriter => JPrintWriter}
-
 import scala.language.implicitConversions
 import scala.collection.mutable.ListBuffer
 import scala.tools.nsc.interpreter.ReplStrings.words
@@ -60,6 +59,7 @@ trait LoopCommands {
 
     // subclasses may provide completions
     def completion: Completion = NoCompletion
+    override def toString(): String = name
   }
   object LoopCommand {
     def nullary(name: String, help: String, f: () => Result): LoopCommand =
@@ -135,15 +135,15 @@ trait LoopCommands {
           case cmd :: Nil if !cursorAtName    => cmd.completion
           case cmd :: Nil if cmd.name == name => NoCompletion
           case cmd :: Nil =>
-            val completion = if (cmd.isInstanceOf[NullaryCmd] || cursor < line.length) cmd.name else cmd.name + " "
+            val completion = ":" + cmd.name
             new Completion {
-              def complete(buffer: String, cursor: Int) =
-                CompletionResult(buffer, cursor = 1, List(CompletionCandidate(completion)))
+              def complete(buffer: String, cursor: Int, filter: Boolean) =
+                CompletionResult(buffer, cursor = 1, List(CompletionCandidate(completion)), "", "")
             }
           case cmd :: rest =>
             new Completion {
-              def complete(buffer: String, cursor: Int) =
-                CompletionResult(buffer, cursor = 1, cmds.map(cmd => CompletionCandidate(cmd.name)))
+              def complete(buffer: String, cursor: Int, filter: Boolean) =
+                CompletionResult(buffer, cursor = 1, cmds.map(cmd => CompletionCandidate(":" + cmd.name)), "", "")
             }
         }
       case _ => NoCompletion
