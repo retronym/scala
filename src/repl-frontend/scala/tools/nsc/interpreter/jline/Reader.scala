@@ -95,6 +95,7 @@ object Reader {
     }
 
     val reader = builder.build()
+    reader.setCompletionMatcher
     locally {
       import LineReader._
       // VIINS, VICMD, EMACS
