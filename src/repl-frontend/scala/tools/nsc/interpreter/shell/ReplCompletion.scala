@@ -21,7 +21,7 @@ import scala.tools.nsc.interpreter.Naming
  */
 class ReplCompletion(intp: Repl, val accumulator: Accumulator = new Accumulator) extends Completion {
 
-  def complete(buffer: String, cursor: Int): CompletionResult = {
+  def complete(buffer: String, cursor: Int, filter: Boolean): CompletionResult = {
     // special case for:
     //
     // scala> 1
@@ -32,13 +32,13 @@ class ReplCompletion(intp: Repl, val accumulator: Accumulator = new Accumulator)
 
     val bufferWithMultiLine = accumulator.toString + bufferWithVar
     val cursor1 = cursor + (bufferWithMultiLine.length - buffer.length)
-    codeCompletion(bufferWithMultiLine, cursor1)
+    codeCompletion(bufferWithMultiLine, cursor1, filter)
   }
 
   // A convenience for testing
   def complete(before: String, after: String = ""): CompletionResult = complete(before + after, before.length)
 
-  private def codeCompletion(buf: String, cursor: Int): CompletionResult = {
+  private def codeCompletion(buf: String, cursor: Int, filter: Boolean): CompletionResult = {
     require(cursor >= 0 && cursor <= buf.length)
 
     // secret handshakes
@@ -59,7 +59,7 @@ class ReplCompletion(intp: Repl, val accumulator: Accumulator = new Accumulator)
             case _ =>
               // under JLine 3, we no longer use the tabCount concept, so tabCount is always 1
               // which always gives us all completions
-              val (c, r) = result.completionCandidates(tabCount = 1)
+              val (c, r) = result.completionCandidates(filter, tabCount = 1)
               CompletionResult(c, r)
           }
         } finally result.cleanup()

@@ -138,7 +138,7 @@ trait PresentationCompilation { self: IMain =>
     val NoCandidates = (-1, Nil)
     type Candidates = (Int, List[CompletionCandidate])
 
-    override def completionCandidates(tabCount: Int): Candidates = {
+    override def completionCandidates(filter: Boolean, tabCount: Int): Candidates = {
       import compiler._
       import CompletionResult.NoResults
 
@@ -185,8 +185,8 @@ trait PresentationCompilation { self: IMain =>
         case NoResults => NoCandidates
         case r =>
           def shouldHide(m: Member): Boolean =
-            tabCount == 0 && (isMemberDeprecated(m) || isMemberUniversal(m))
-          val matching = r.matchingResults().filterNot(shouldHide)
+            filter && tabCount == 0 && (isMemberDeprecated(m) || isMemberUniversal(m))
+          val matching = r.matchingResults(nameMatcher = if (filter) {entered => candidate => candidate.startsWith(entered)} else _ => _ => true).filterNot(shouldHide)
           val tabAfterCommonPrefixCompletion = lastCommonPrefixCompletion.contains(buf.substring(inputRange.start, cursor)) && matching.exists(_.symNameDropLocal == r.name)
           val doubleTab = tabCount > 0 && matching.forall(_.symNameDropLocal == r.name)
           if (tabAfterCommonPrefixCompletion || doubleTab) {
@@ -206,29 +206,21 @@ trait PresentationCompilation { self: IMain =>
               }
             }.traverse(unit.body)
             defStringCandidates(matching, r.name, isNew)
-          } else if (matching.isEmpty) {
-            // Lenient matching based on camel case and on eliding JavaBean "get" / "is" boilerplate
-            val camelMatches: List[Member] = r.matchingResults(CompletionResult.camelMatch(_)).filterNot(shouldHide)
-            val memberCompletions: List[CompletionCandidate] = toCandidates(camelMatches)
-            def allowCompletion = (
-              (memberCompletions.size == 1)
-                || CompletionResult.camelMatch(r.name)(r.name.newName(StringOps.longestCommonPrefix(memberCompletions.map(_.defString))))
-              )
-            if (memberCompletions.isEmpty) NoCandidates
-            else if (allowCompletion) (cursor - r.positionDelta, memberCompletions)
-            else (cursor, CompletionCandidate("") :: memberCompletions)
           } else if (matching.nonEmpty && matching.forall(_.symNameDropLocal == r.name))
             NoCandidates // don't offer completion if the only option has been fully typed already
           else {
+            val candidates = toCandidates(matching)
+            val pos = cursor - r.positionDelta
+            lastCommonPrefixCompletion =
+              if (buf.length >= pos)
+                Some(buf.substring(inputRange.start, pos) + StringOps.longestCommonPrefix(toCandidates(r.matchingResults()).map(_.defString)))
+              else
+                None
+
             // regular completion
-            (cursor - r.positionDelta, toCandidates(matching))
+            (pos, candidates)
           }
       }
-      lastCommonPrefixCompletion =
-        if (found != NoCandidates && buf.length >= found._1)
-          Some(buf.substring(inputRange.start, found._1) + StringOps.longestCommonPrefix(found._2.map(_.defString)))
-        else
-          None
       found
     }
 

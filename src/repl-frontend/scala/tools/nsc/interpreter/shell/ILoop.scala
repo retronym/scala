@@ -228,7 +228,7 @@ class ILoop(config: ShellConfig, inOverride: BufferedReader = null,
         .map(d => CompletionResult(i, d.toDirectory.list.map(x => CompletionCandidate(x.name)).toList))
         .getOrElse(NoCompletions)
     def listedIn(dir: Directory, name: String) = dir.list.filter(_.name.startsWith(name)).map(_.name).toList
-    def complete(buffer: String, cursor: Int): CompletionResult =
+    def complete(buffer: String, cursor: Int, filter: Boolean): CompletionResult =
       buffer.substring(0, cursor) match {
         case emptyWord(s)        => listed(cursor, Directory.Current)
         case directorily(s)      => listed(cursor, Option(Path(s)))
@@ -247,10 +247,10 @@ class ILoop(config: ShellConfig, inOverride: BufferedReader = null,
   // complete settings name
   val settingsCompletion: Completion = new Completion {
     val trailingWord = """(\S+)$""".r.unanchored
-    def complete(buffer: String, cursor: Int): CompletionResult = {
+    def complete(buffer: String, cursor: Int, filter: Boolean): CompletionResult = {
       buffer.substring(0, cursor) match {
         case trailingWord(s) =>
-          val maybes = intp.visibleSettings.filter(_.name.startsWith(s)).map(_.name)
+          val maybes = intp.visibleSettings.filter(x => if (filter) x.name.startsWith(s) else true).map(_.name)
                                .filterNot(cond(_) { case "-"|"-X"|"-Y" => true }).sorted
           if (maybes.isEmpty) NoCompletions
           else CompletionResult(cursor - s.length, maybes.map(CompletionCandidate(_)))
@@ -541,8 +541,8 @@ class ILoop(config: ShellConfig, inOverride: BufferedReader = null,
     MultiCompletion(shellCompletion, rc)
   }
   val shellCompletion = new Completion {
-    override def complete(buffer: String, cursor: Int) =
-      if (buffer.startsWith(":")) colonCompletion(buffer, cursor).complete(buffer, cursor)
+    override def complete(buffer: String, cursor: Int, filter: Boolean) =
+      if (buffer.startsWith(":")) colonCompletion(buffer, cursor).complete(buffer, cursor, filter)
       else NoCompletions
   }
 
