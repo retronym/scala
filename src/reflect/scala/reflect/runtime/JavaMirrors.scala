@@ -703,7 +703,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private class TypeParamCompleter(jtvar: jTypeVariable[_ <: GenericDeclaration]) extends LazyType with FlagAgnosticCompleter {
       override def load(sym: Symbol) = complete(sym)
       override def complete(sym: Symbol) = {
-        sym setInfo TypeBounds.upper(glb(jtvar.getBounds.toList map typeToScala map objToAny))
+        sym setInfo TypeBounds.upper(glb(jtvar.getBounds.toList map typeToScalaDescribed("type var upper bound", jtvar) map objToAny))
         markAllCompleted(sym)
       }
     }
@@ -798,11 +798,11 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
         val parents = try {
           parentsLevel += 1
           val jsuperclazz = jclazz.getGenericSuperclass
-          val ifaces = jclazz.getGenericInterfaces.toList map typeToScala
+          val ifaces = jclazz.getGenericInterfaces.toList map typeToScalaDescribed("geenric interface", jclazz)
           val isAnnotation = JavaAccFlags(jclazz).isAnnotation
           if (isAnnotation) AnnotationClass.tpe :: ClassfileAnnotationClass.tpe :: ifaces
           else if (jclazz.isInterface) ObjectTpe :: ifaces // interfaces have Object as superclass in the classfile (see jvm spec), but getGenericSuperclass seems to return null
-          else (if (jsuperclazz == null) AnyTpe else typeToScala(jsuperclazz)) :: ifaces
+          else (if (jsuperclazz == null) AnyTpe else typeToScalaDescribed("generic superclass", jsuperclazz)(jsuperclazz)) :: ifaces
         } finally {
           parentsLevel -= 1
         }
@@ -1110,12 +1110,12 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
         case jwild: WildcardType =>
           val tparam = owner.newExistential(newTypeName("T$" + tparams.length))
             .setInfo(TypeBounds(
-              lub(jwild.getLowerBounds.toList map typeToScala),
-              glb(jwild.getUpperBounds.toList map typeToScala map objToAny)))
+              lub(jwild.getLowerBounds.toList map typeToScalaDescribed("wildcard lower bound of", jwild)),
+              glb(jwild.getUpperBounds.toList map typeToScalaDescribed("wildcard upper bound of", jwild) map objToAny)))
           tparams += tparam
           typeRef(NoPrefix, tparam, List())
         case _ =>
-          typeToScala(arg)
+          typeToScalaDescribed("type arg", "")(arg)
       }
       (args map targToScala, tparams.toList)
     }
@@ -1123,26 +1123,32 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     /**
      * The Scala type that corresponds to given Java type
      */
-    def typeToScala(jtpe: jType): Type = jtpe match {
-      case jclazz: jClass[_] =>
-        if (jclazz.isArray)
-          arrayType(typeToScala(jclazz.getComponentType))
-        else {
-          val clazz = classToScala(jclazz)
-          rawToExistential(typeRef(clazz.owner.thisType, clazz, List()))
-        }
-      case japplied: ParameterizedType =>
-        // http://stackoverflow.com/questions/5767122/parameterizedtype-getrawtype-returns-j-l-r-type-not-class
-        val sym = classToScala(japplied.getRawType.asInstanceOf[jClass[_]])
-        val pre = if (japplied.getOwnerType ne null) typeToScala(japplied.getOwnerType) else sym.owner.thisType
-        val args0 = japplied.getActualTypeArguments
-        val (args, bounds) = targsToScala(pre.typeSymbol, args0.toList)
-        newExistentialType(bounds, typeRef(pre, sym, args))
-      case jarr: GenericArrayType =>
-        arrayType(typeToScala(jarr.getGenericComponentType))
-      case jtvar: jTypeVariable[_] =>
-        val tparam = typeParamToScala(jtvar)
-        typeRef(NoPrefix, tparam, List())
+    def typeToScala(jtpe: jType): Type = typeToScalaDescribed("", "")(jtpe)
+    def typeToScalaDescribed(desc1: Any, desc2: Any)(jtpe: jType): Type = {
+      try jtpe match {
+        case jclazz: jClass[_] =>
+          if (jclazz.isArray)
+            arrayType(typeToScalaDescribed("array component type of", jclazz)(jclazz.getComponentType))
+          else {
+            val clazz = classToScala(jclazz)
+            rawToExistential(typeRef(clazz.owner.thisType, clazz, List()))
+          }
+        case japplied: ParameterizedType =>
+          // http://stackoverflow.com/questions/5767122/parameterizedtype-getrawtype-returns-j-l-r-type-not-class
+          val sym = classToScala(japplied.getRawType.asInstanceOf[jClass[_]])
+          val pre = if (japplied.getOwnerType ne null) typeToScalaDescribed("generic applied type owner of", japplied)(japplied.getOwnerType) else sym.owner.thisType
+          val args0 = japplied.getActualTypeArguments
+          val (args, bounds) = targsToScala(pre.typeSymbol, args0.toList)
+          newExistentialType(bounds, typeRef(pre, sym, args))
+        case jarr: GenericArrayType =>
+          arrayType(typeToScalaDescribed("generic array component type of", jarr)(jarr.getGenericComponentType))
+        case jtvar: jTypeVariable[_] =>
+          val tparam = typeParamToScala(jtvar)
+          typeRef(NoPrefix, tparam, List())
+      } catch {
+        case te: TypeError =>
+          throw new TypeError(te.pos, s"During typeToScala($desc1, $desc2)($jtpe)").initCause(te)
+      }
     }
 
     /**
@@ -1174,7 +1180,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
     private def jfieldAsScala1(jfield: jField): TermSymbol = {
       val field = sOwner(jfield)
           .newValue(newTermName(jfield.getName), NoPosition, jfield.scalaFlags)
-          .setInfo(typeToScala(jfield.getGenericType))
+          .setInfo(typeToScalaDescribed("field generic type", jfield)(jfield.getGenericType))
 
       fieldCache.enter(jfield, field)
       propagatePackageBoundary(jfield, field)
@@ -1202,7 +1208,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       methodCache enter (jmeth, meth)
       val tparams = jmeth.getTypeParameters.toList map createTypeParameter
       val params = jparamsAsScala(meth, jmeth.getParameters.toList)
-      val resulttpe = typeToScala(jmeth.getGenericReturnType)
+      val resulttpe = typeToScalaDescribed("method generic retun type of", jmeth)(jmeth.getGenericReturnType)
       setMethType(meth, tparams, params, resulttpe)
       propagatePackageBoundary(jmeth.javaFlags, meth)
       copyAnnotations(meth, jmeth)
@@ -1246,7 +1252,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
             if (param.isNamePresent) TermName(param.getName)
             else nme.syntheticParamName(ix + 1)
           meth.owner.newValueParameter(name, meth.pos)
-            .setInfo(objToAny(typeToScala(param.getParameterizedType)))
+            .setInfo(objToAny(typeToScalaDescribed("param parameterized type of", param)(param.getParameterizedType)))
             .setFlag(if (param.isNamePresent) 0 else SYNTHETIC)
       }
     }
