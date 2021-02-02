@@ -1544,11 +1544,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           unlock()
           phase = current
         }
-        } else {
+      } else {
         // In runtime reflection, there is only on phase, so don't mutate Global.phase which would lead to warnings
         // of data races from when using TSAN to assess thread safety.
         try {
           tp.complete(this)
+        } catch {
+          case te: TypeError =>
+            throw new TypeError("while completing " + this.fullNameString).initCause(te)
         } finally {
           unlock()
         }

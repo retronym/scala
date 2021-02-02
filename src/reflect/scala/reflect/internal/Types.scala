@@ -4652,7 +4652,7 @@ trait Types
     def this(msg: String) = this(NoPosition, msg)
 
     final override def fillInStackTrace() =
-      if (settings.debug) super.fillInStackTrace() else this
+      super.fillInStackTrace()
   }
 
   // TODO: RecoverableCyclicReference should be separated from TypeError,
