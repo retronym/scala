@@ -1,2 +1,2 @@
-error: Error while emitting BigEnoughToFail
-Method too large: BigEnoughToFail.tooLong ()V
+newSource1.scala:1: error: Error while emitting BigEnoughToFail
+scala.tools.asm.MethodTooLargeException: Method too large: BigEnoughToFail.tooLong ()V

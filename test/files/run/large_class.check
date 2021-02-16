@@ -1,2 +1,2 @@
-error: Error while emitting BigEnoughToFail
-Class too large: BigEnoughToFail
+newSource1.scala:1: error: Error while emitting BigEnoughToFail
+scala.tools.asm.ClassTooLargeException: Class too large: BigEnoughToFail

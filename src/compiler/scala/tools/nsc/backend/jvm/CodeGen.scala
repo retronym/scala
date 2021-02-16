@@ -15,6 +15,7 @@ package backend.jvm
 
 import scala.collection.mutable.ListBuffer
 import scala.tools.asm.tree.ClassNode
+import scala.tools.nsc.util.stackTraceString
 
 abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
   val bTypes: BTypesFromSymbols[global.type]
@@ -34,24 +35,25 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
     val generatedClasses = ListBuffer.empty[GeneratedClass]
 
     def genClassDef(cd: ClassDef): Unit = try {
-      val sym = cd.symbol
-      val position = sym.pos
-      val fullSymbolName = sym.javaClassName
-      val mainClassNode = genClass(cd, unit)
-      generatedClasses += GeneratedClass(mainClassNode, fullSymbolName, position, isArtifact = false)
-      if (bTypes.isTopLevelModuleClass(sym)) {
-        if (sym.companionClass == NoSymbol) {
-          val mirrorClassNode = genMirrorClass(sym, unit)
-          generatedClasses += GeneratedClass(mirrorClassNode, fullSymbolName, position, isArtifact = true)
+      if (!frontendAccess.directBackendReporting.hasErrors) {
+        val sym            = cd.symbol
+        val position       = sym.pos
+        val fullSymbolName = sym.javaClassName
+        val mainClassNode  = genClass(cd, unit)
+        generatedClasses += GeneratedClass(mainClassNode, fullSymbolName, position, isArtifact = false)
+        if (bTypes.isTopLevelModuleClass(sym)) {
+          if (sym.companionClass == NoSymbol) {
+            val mirrorClassNode = genMirrorClass(sym, unit)
+            generatedClasses += GeneratedClass(mirrorClassNode, fullSymbolName, position, isArtifact = true)
+          }
+          else
+            log(s"No mirror class for module with linked class: ${sym.fullName}")
         }
-        else
-          log(s"No mirror class for module with linked class: ${sym.fullName}")
       }
     } catch {
       case ex: InterruptedException => throw ex
       case ex: Throwable =>
-        if (settings.debug) ex.printStackTrace()
-        globalError(s"Error while emitting ${unit.source}\n${ex.getMessage}")
+        globalError(cd.pos, s"Error while emitting ${unit.source}\n${stackTraceString(ex)}")
     }
 
     def genClassDefs(tree: Tree): Unit = tree match {

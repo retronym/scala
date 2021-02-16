@@ -14,12 +14,12 @@ package scala.tools.nsc
 package backend.jvm
 
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.mutable
-import scala.reflect.internal.util.{NoPosition, Position, StringContextStripMarginOps}
+import scala.reflect.internal.util.{Position, StringContextStripMarginOps}
 import scala.reflect.io.AbstractFile
 import scala.tools.asm.ClassWriter
 import scala.tools.asm.tree.ClassNode
+import scala.tools.nsc
 import scala.tools.nsc.backend.jvm.analysis.BackendUtils
 import scala.tools.nsc.backend.jvm.opt._
 
@@ -74,9 +74,7 @@ abstract class PostProcessor extends PerRunInit {
     } catch {
       case ex: InterruptedException => throw ex
       case ex: Throwable =>
-        // TODO fail fast rather than continuing to write the rest of the class files?
-        if (frontendAccess.compilerSettings.debug) ex.printStackTrace()
-        backendReporting.error(NoPosition, s"Error while emitting $internalName\n${ex.getMessage}")
+        backendReporting.error(clazz.position, s"Error while emitting $internalName\n${nsc.util.stackTraceString(ex)}")
         null
     }
 

@@ -108,6 +108,7 @@ object PostProcessorFrontendAccess {
     def warning(pos: Position, message: String): Unit
     def inform(message: String): Unit
     def log(message: String): Unit
+    def hasErrors: Boolean
   }
 
   final class BufferingBackendReporting extends BackendReporting {
@@ -131,6 +132,10 @@ object PostProcessorFrontendAccess {
 
     def log(message: String): Unit =
       this.synchronized(bufferedReports ::= new ReportLog(message))
+
+    def hasErrors: Boolean = {
+      this.synchronized(bufferedReports.nonEmpty)
+    }
 
     def relayReports(toReporting: BackendReporting): Unit = this.synchronized {
       if (bufferedReports.nonEmpty) {
@@ -262,6 +267,8 @@ object PostProcessorFrontendAccess {
       def log(message: String): Unit = frontendSynch {
         global.log(message)
       }
+
+      def hasErrors: Boolean = global.reporter.hasErrors
     }
     def unsafeStatistics: Statistics with BackendStats = global.statistics
 
