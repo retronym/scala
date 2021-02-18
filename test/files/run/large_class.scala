@@ -1,3 +1,4 @@
+import java.io.{ByteArrayOutputStream, PrintWriter}
 import scala.tools.partest._
 
 // a cold run of partest takes about 15s for this test on my laptop
@@ -19,8 +20,11 @@ object Test extends DirectTest {
       |}""".stripMargin.trim
 
   override def show(): Unit = {
-    Console.withErr(System.out) {
+    val baos = new ByteArrayOutputStream()
+    Console.withErr(baos) {
       compile()
     }
+    val out = baos.toString()
+    println(out.linesIterator.take(2).mkString("\n"))
   }
 }
