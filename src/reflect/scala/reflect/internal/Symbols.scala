@@ -262,7 +262,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final val id = nextId() // identity displayed when -uniqid
     //assert(id != 3390, initName)
 
-    private[this] var _validTo: Period = NoPeriod
+    private[this] var __validTo: Period = NoPeriod
+    private def _validTo: Period = __validTo
+    private def _validTo_=(p: Period): Unit = { __validTo = p }
 
     if (traceSymbolActivity)
       traceSymbols.recordNewSymbol(this)

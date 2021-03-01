@@ -2079,12 +2079,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       // the field that's mixed into a subclass
       if (sym.hasAnnotation(definitions.VolatileAttr) && !((sym hasFlag MUTABLE | LAZY) || (sym hasFlag ACCESSOR) && sym.owner.isTrait))
         VolatileValueError(vdef)
-
+      val rhsAtOwner = changeRhsOwner(vdef, vdef.rhs)
       val rhs1 =
-        if (vdef.rhs.isEmpty) {
+        if (rhsAtOwner.isEmpty) {
           if (sym.isVariable && sym.owner.isTerm && !sym.isLazy && !isPastTyper)
             LocalVarUninitializedError(vdef)
-          vdef.rhs
+          rhsAtOwner
         } else {
           val tpt2 = if (sym.hasDefault) {
             // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
@@ -2102,7 +2102,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               else subst(tpt1.tpe.typeArgs(0))
             else subst(tpt1.tpe)
           } else tpt1.tpe
-          transformedOrTyped(vdef.rhs, EXPRmode | BYVALmode, tpt2)
+          transformedOrTyped(rhsAtOwner, EXPRmode | BYVALmode, tpt2)
         }
       treeCopy.ValDef(vdef, typedMods, sym.name, tpt1, checkDead(context, rhs1)) setType NoType
     }
@@ -2272,6 +2272,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         failStruct(ddef.tpt.pos, "a user-defined value class", where = "Result type")
     }
 
+    private def changeRhsOwner(symTree: Tree, rhs: Tree) = {
+      // introduced for async, but could be universally handy
+      symTree.getAndRemoveAttachment[ChangeOwnerAttachment] match {
+        case None => rhs
+        case Some(ChangeOwnerAttachment(originalOwner)) => rhs.changeOwner(originalOwner, symTree.symbol)
+      }
+    }
+
     def typedDefDef(ddef: DefDef): DefDef = {
       val meth = ddef.symbol.initialize
       currentRun.profiler.beforeTypedImplDef(meth)
@@ -2304,11 +2312,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
-        val rhsAtOwner = // introduced for async, but could be universally handy
-          ddef.getAndRemoveAttachment[ChangeOwnerAttachment] match {
-            case None => ddef.rhs
-            case Some(ChangeOwnerAttachment(originalOwner)) => ddef.rhs.changeOwner(originalOwner, ddef.symbol)
-          }
+        val rhsAtOwner = changeRhsOwner(ddef, ddef.rhs)
         var rhs1 =
           if (ddef.name == nme.CONSTRUCTOR && !ddef.symbol.hasStaticFlag) { // need this to make it possible to generate static ctors
             if (!meth.isPrimaryConstructor &&
@@ -3141,7 +3145,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         vparam.symbol
       }
       val vparamsTyped = vparams mapConserve typedValDef
-      val bodyTyped = typed(fun.body, bodyPt)
+      val bodyAtOwner = fun.body //changeRhsOwner(fun, fun.body)
+      val bodyTyped = typed(bodyAtOwner, bodyPt)
 
       val funSym = FunctionClass(vparams.length)
       val funTp =
