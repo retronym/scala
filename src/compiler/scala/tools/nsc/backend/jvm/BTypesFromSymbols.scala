@@ -131,7 +131,8 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
 
   def bootstrapMethodArg(t: Constant, pos: Position): AnyRef = t match {
     case Constant(mt: Type) => methodBTypeFromMethodType(transformedType(mt), isConstructor = false).toASMType
-    case c @ Constant(sym: Symbol) => staticHandleFromSymbol(sym)
+    case c @ Constant(sym: Symbol) if sym.owner.isStaticOwner => staticHandleFromSymbol(sym)
+    case c @ Constant(sym: Symbol) => handleFromMethodSymbol(sym)
     case c @ Constant(value: String) => value
     case c @ Constant(value) if c.isNonUnitAnyVal => c.value.asInstanceOf[AnyRef]
     case _ => reporter.error(pos, "Unable to convert static argument of ApplyDynamic into a classfile constant: " + t); null
@@ -147,6 +148,15 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
     val ownerInternalName = if (mustUseMirrorClass) rawInternalName stripSuffix nme.MODULE_SUFFIX_STRING else rawInternalName
     val isInterface = sym.owner.linkedClassOfClass.isTraitOrInterface
     new asm.Handle(asm.Opcodes.H_INVOKESTATIC, ownerInternalName, sym.name.encoded, descriptor, isInterface)
+  }
+
+  def handleFromMethodSymbol(sym: Symbol): asm.Handle = {
+    val descriptor = methodBTypeFromMethodType(sym.info, isConstructor = false).descriptor
+    val ownerBType = classBTypeFromSymbol(sym.owner)
+    val rawInternalName = ownerBType.internalName
+    val ownerInternalName = rawInternalName
+    val isInterface = sym.owner.isTraitOrInterface
+    new asm.Handle(asm.Opcodes.H_INVOKEVIRTUAL, ownerInternalName, sym.name.encoded, descriptor, isInterface)
   }
 
   /**
