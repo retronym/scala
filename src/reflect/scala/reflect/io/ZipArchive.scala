@@ -17,14 +17,13 @@ package io
 import java.net.URL
 import java.io.{ByteArrayInputStream, FilterInputStream, IOException, InputStream}
 import java.io.{File => JFile}
+import java.util.concurrent.TimeUnit
 import java.util.zip.{ZipEntry, ZipFile, ZipInputStream}
 import java.util.jar.Manifest
-
 import scala.collection.mutable
 import scala.collection.JavaConverters._
 import scala.annotation.tailrec
 import scala.reflect.internal.JDK9Reflectors
-
 import ZipArchive._
 
 /** An abstraction for zip files and streams.  Everything is written the way
@@ -146,6 +145,19 @@ abstract class ZipArchive(override val file: JFile, release: Option[String]) ext
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArchive(file, release) {
   def this(file: JFile) = this(file, None)
+  private[this] val zipFiles = new java.util.concurrent.ArrayBlockingQueue[ZipFile](Runtime.getRuntime.availableProcessors())
+  private[this] def getZipFile: ZipFile = {
+    val zf = zipFiles.poll(0, TimeUnit.MILLISECONDS)
+    zf match {
+      case null =>
+        openZipFile()
+      case _ =>
+        zf
+    }
+  }
+  private[this] def release(zf: ZipFile): Unit =
+    zipFiles.offer(zf, 0, TimeUnit.MILLISECONDS)
+
   private[this] def openZipFile(): ZipFile = try {
     release match {
       case Some(r) if file.getName.endsWith(".jar") =>
@@ -165,11 +177,11 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
   ) extends Entry(name) {
     override def lastModified: Long = time // could be stale
     override def input: InputStream = {
-      val zipFile  = openZipFile()
+      val zipFile  = getZipFile
       val entry    = zipFile.getEntry(name) // with `-release`, returns the correct version under META-INF/versions
       val delegate = zipFile.getInputStream(entry)
       new FilterInputStream(delegate) {
-        override def close(): Unit = { zipFile.close() }
+        override def close(): Unit = { release(zipFile) }
       }
     }
     override def sizeOption: Option[Int] = Some(size) // could be stale
@@ -242,9 +254,12 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
     case x: FileZipArchive => file.getAbsoluteFile == x.file.getAbsoluteFile
     case _                 => false
   }
-  private[this] var closeables: List[java.io.Closeable] = Nil
+  @volatile private[this] var closeables: List[java.io.Closeable] = Nil
   override def close(): Unit = {
     closeables.foreach(_.close)
+    val zipFilesToClose = new java.util.ArrayList[ZipFile]
+    zipFiles.drainTo(zipFilesToClose)
+    zipFilesToClose.iterator().forEachRemaining(_.close())
   }
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
