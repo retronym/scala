@@ -1,0 +1,498 @@
+[[syntax trees at end of                    patmat]] // newSource1.scala
+package <empty> {
+  object ShowFormatted extends scala.AnyRef {
+    def <init>(): ShowFormatted.type = {
+      ShowFormatted.super.<init>();
+      ()
+    };
+    def show(f: Formatted): String = {
+      <synthetic> var rc49: Boolean = false;
+      <synthetic> <stable> var x7: Qualified = null.asInstanceOf[Qualified];
+      <synthetic> var rc50: Boolean = false;
+      <synthetic> <stable> var x14: TupleForm = null.asInstanceOf[TupleForm];
+      <synthetic> var rc51: Boolean = false;
+      <synthetic> <stable> var x21: FunctionForm = null.asInstanceOf[FunctionForm];
+      <synthetic> var rc52: Boolean = false;
+      <synthetic> <stable> var x31: RefinedForm = null.asInstanceOf[RefinedForm];
+      {
+        case <synthetic> val x1: Formatted = f;
+        case54(){
+          if (x1.isInstanceOf[Infix])
+            {
+              <synthetic> val x2: Infix = (x1.asInstanceOf[Infix]: Infix);
+              {
+                val left: Formatted = x2.infix;
+                matchEnd53(("".+(ShowFormatted.this.show(left)): String))
+              }
+            }
+          else
+            case55()
+        };
+        case55(){
+          if (x1.isInstanceOf[Simple])
+            {
+              <synthetic> val x6: Simple = (x1.asInstanceOf[Simple]: Simple);
+              {
+                val tpe: String = x6.tpe;
+                matchEnd53(("".+(tpe): String))
+              }
+            }
+          else
+            case56()
+        };
+        case56(){
+          if (x1.isInstanceOf[Qualified])
+            {
+              rc49 = true;
+              x7 = (x1.asInstanceOf[Qualified]: Qualified);
+              {
+                <synthetic> val p8: List[String] = x7.path;
+                val tpe: String = x7.tpe;
+                if (scala.`package`.Nil.==(p8))
+                  matchEnd53(("".+(tpe): String))
+                else
+                  case57()
+              }
+            }
+          else
+            case57()
+        };
+        case57(){
+          if (rc49)
+            {
+              val path: List[String] = x7.path;
+              val tpe: String = x7.tpe;
+              matchEnd53(("".+(path.mkString).+(tpe): String))
+            }
+          else
+            case58()
+        };
+        case58(){
+          if (UnitForm.==(x1))
+            matchEnd53(("()": String))
+          else
+            case59()
+        };
+        case59(){
+          if (x1.isInstanceOf[Applied])
+            {
+              <synthetic> val x12: Applied = (x1.asInstanceOf[Applied]: Applied);
+              {
+                val cons: Formatted = x12.cons;
+                matchEnd53(("".+(ShowFormatted.this.show(cons)): String))
+              }
+            }
+          else
+            case60()
+        };
+        case60(){
+          if (x1.isInstanceOf[TupleForm])
+            {
+              rc50 = true;
+              x14 = (x1.asInstanceOf[TupleForm]: TupleForm);
+              {
+                <synthetic> val p15: List[Formatted] = x14.elems;
+                if (scala.`package`.Nil.==(p15))
+                  matchEnd53(("()": String))
+                else
+                  case61()
+              }
+            }
+          else
+            case61()
+        };
+        case61(){
+          if (rc50)
+            {
+              <synthetic> val p18: List[Formatted] = x14.elems;
+              if (p18.isInstanceOf[scala.collection.immutable.::[Formatted]])
+                {
+                  <synthetic> val x19: scala.collection.immutable.::[Formatted] = (p18.asInstanceOf[scala.collection.immutable.::[Formatted]]: scala.collection.immutable.::[Formatted]);
+                  {
+                    val h: Formatted = x19.head;
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case62()
+            }
+          else
+            case62()
+        };
+        case62(){
+          if (x1.isInstanceOf[FunctionForm])
+            {
+              rc51 = true;
+              x21 = (x1.asInstanceOf[FunctionForm]: FunctionForm);
+              {
+                <synthetic> val p22: List[Formatted] = x21.args;
+                val ret: Formatted = x21.ret;
+                if (scala.`package`.Nil.==(p22))
+                  matchEnd53(("".+(ShowFormatted.this.show(ret)): String))
+                else
+                  case63()
+              }
+            }
+          else
+            case63()
+        };
+        case63(){
+          if (rc51)
+            {
+              <synthetic> val p26: List[Formatted] = x21.args;
+              if (p26.isInstanceOf[scala.collection.immutable.::[Formatted]])
+                {
+                  <synthetic> val x29: scala.collection.immutable.::[Formatted] = (p26.asInstanceOf[scala.collection.immutable.::[Formatted]]: scala.collection.immutable.::[Formatted]);
+                  {
+                    val h: Formatted = x29.head;
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case64()
+            }
+          else
+            case64()
+        };
+        case64(){
+          if (x1.isInstanceOf[RefinedForm])
+            {
+              rc52 = true;
+              x31 = (x1.asInstanceOf[RefinedForm]: RefinedForm);
+              {
+                <synthetic> val p32: List[Formatted] = x31.elems;
+                if (scala.`package`.Nil.==(p32))
+                  matchEnd53(("()": String))
+                else
+                  case65()
+              }
+            }
+          else
+            case65()
+        };
+        case65(){
+          if (rc52)
+            {
+              <synthetic> val p36: List[Formatted] = x31.elems;
+              if (p36.isInstanceOf[scala.collection.immutable.::[Formatted]])
+                {
+                  <synthetic> val x38: scala.collection.immutable.::[Formatted] = (p36.asInstanceOf[scala.collection.immutable.::[Formatted]]: scala.collection.immutable.::[Formatted]);
+                  {
+                    val h: Formatted = x38.head;
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case66()
+            }
+          else
+            case66()
+        };
+        case66(){
+          if (x1.isInstanceOf[Diff])
+            {
+              <synthetic> val x40: Diff = (x1.asInstanceOf[Diff]: Diff);
+              {
+                val l: Formatted = x40.left;
+                matchEnd53(("".+(ShowFormatted.this.show(l)): String))
+              }
+            }
+          else
+            case67()
+        };
+        case67(){
+          if (x1.isInstanceOf[Decl])
+            {
+              <synthetic> val x42: Decl = (x1.asInstanceOf[Decl]: Decl);
+              {
+                val sym: Formatted = x42.sym;
+                matchEnd53(("".+(ShowFormatted.this.show(sym)): String))
+              }
+            }
+          else
+            case68()
+        };
+        case68(){
+          if (x1.isInstanceOf[DeclDiff])
+            {
+              <synthetic> val x44: DeclDiff = (x1.asInstanceOf[DeclDiff]: DeclDiff);
+              {
+                val sym: Formatted = x44.sym;
+                matchEnd53(("".+(ShowFormatted.this.show(sym)): String))
+              }
+            }
+          else
+            case69()
+        };
+        case69(){
+          if (x1.isInstanceOf[ByName])
+            {
+              <synthetic> val x47: ByName = (x1.asInstanceOf[ByName]: ByName);
+              {
+                val tpe: Formatted = x47.tpe;
+                matchEnd53(("".+(ShowFormatted.this.show(tpe)): String))
+              }
+            }
+          else
+            case70()
+        };
+        case70(){
+          matchEnd53(throw new MatchError(x1))
+        };
+        matchEnd53(x: String){
+          x
+        }
+      }
+    }
+  }
+}
+
+[[syntax trees at end of                   cleanup]] // newSource1.scala
+package <empty> {
+  object ShowFormatted extends Object {
+    def show(f: Formatted): String = {
+      <synthetic> var rc49: Boolean = false;
+      <synthetic> <stable> var x7: Qualified = (null: Qualified);
+      <synthetic> var rc50: Boolean = false;
+      <synthetic> <stable> var x14: TupleForm = (null: TupleForm);
+      <synthetic> var rc51: Boolean = false;
+      <synthetic> <stable> var x21: FunctionForm = (null: FunctionForm);
+      <synthetic> var rc52: Boolean = false;
+      <synthetic> <stable> var x31: RefinedForm = (null: RefinedForm);
+      {
+        case <synthetic> val x1: Formatted = f;
+        case54(){
+          if (x1.$isInstanceOf[Infix]())
+            {
+              <synthetic> val x2: Infix = (x1.$asInstanceOf[Infix](): Infix);
+              {
+                val left: Formatted = x2.infix();
+                matchEnd53(("".+(ShowFormatted.this.show(left)): String))
+              }
+            }
+          else
+            case55()
+        };
+        case55(){
+          if (x1.$isInstanceOf[Simple]())
+            {
+              <synthetic> val x6: Simple = (x1.$asInstanceOf[Simple](): Simple);
+              {
+                val tpe: String = x6.tpe();
+                matchEnd53(("".+(tpe): String))
+              }
+            }
+          else
+            case56()
+        };
+        case56(){
+          if (x1.$isInstanceOf[Qualified]())
+            {
+              rc49 = true;
+              x7 = (x1.$asInstanceOf[Qualified](): Qualified);
+              {
+                <synthetic> val p8: List = x7.path();
+                val tpe: String = x7.tpe();
+                if (scala.`package`.Nil().==(p8))
+                  matchEnd53(("".+(tpe): String))
+                else
+                  case57()
+              }
+            }
+          else
+            case57()
+        };
+        case57(){
+          if (rc49)
+            {
+              val path: List = x7.path();
+              val tpe: String = x7.tpe();
+              matchEnd53(("".+(path.mkString()).+(tpe): String))
+            }
+          else
+            case58()
+        };
+        case58(){
+          if (UnitForm.==(x1))
+            matchEnd53(("()": String))
+          else
+            case59()
+        };
+        case59(){
+          if (x1.$isInstanceOf[Applied]())
+            {
+              <synthetic> val x12: Applied = (x1.$asInstanceOf[Applied](): Applied);
+              {
+                val cons: Formatted = x12.cons();
+                matchEnd53(("".+(ShowFormatted.this.show(cons)): String))
+              }
+            }
+          else
+            case60()
+        };
+        case60(){
+          if (x1.$isInstanceOf[TupleForm]())
+            {
+              rc50 = true;
+              x14 = (x1.$asInstanceOf[TupleForm](): TupleForm);
+              {
+                <synthetic> val p15: List = x14.elems();
+                if (scala.`package`.Nil().==(p15))
+                  matchEnd53(("()": String))
+                else
+                  case61()
+              }
+            }
+          else
+            case61()
+        };
+        case61(){
+          if (rc50)
+            {
+              <synthetic> val p18: List = x14.elems();
+              if (p18.$isInstanceOf[scala.collection.immutable.::]())
+                {
+                  <synthetic> val x19: scala.collection.immutable.:: = (p18.$asInstanceOf[scala.collection.immutable.::](): scala.collection.immutable.::);
+                  {
+                    val h: Formatted = x19.head().$asInstanceOf[Formatted]();
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case62()
+            }
+          else
+            case62()
+        };
+        case62(){
+          if (x1.$isInstanceOf[FunctionForm]())
+            {
+              rc51 = true;
+              x21 = (x1.$asInstanceOf[FunctionForm](): FunctionForm);
+              {
+                <synthetic> val p22: List = x21.args();
+                val ret: Formatted = x21.ret();
+                if (scala.`package`.Nil().==(p22))
+                  matchEnd53(("".+(ShowFormatted.this.show(ret)): String))
+                else
+                  case63()
+              }
+            }
+          else
+            case63()
+        };
+        case63(){
+          if (rc51)
+            {
+              <synthetic> val p26: List = x21.args();
+              if (p26.$isInstanceOf[scala.collection.immutable.::]())
+                {
+                  <synthetic> val x29: scala.collection.immutable.:: = (p26.$asInstanceOf[scala.collection.immutable.::](): scala.collection.immutable.::);
+                  {
+                    val h: Formatted = x29.head().$asInstanceOf[Formatted]();
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case64()
+            }
+          else
+            case64()
+        };
+        case64(){
+          if (x1.$isInstanceOf[RefinedForm]())
+            {
+              rc52 = true;
+              x31 = (x1.$asInstanceOf[RefinedForm](): RefinedForm);
+              {
+                <synthetic> val p32: List = x31.elems();
+                if (scala.`package`.Nil().==(p32))
+                  matchEnd53(("()": String))
+                else
+                  case65()
+              }
+            }
+          else
+            case65()
+        };
+        case65(){
+          if (rc52)
+            {
+              <synthetic> val p36: List = x31.elems();
+              if (p36.$isInstanceOf[scala.collection.immutable.::]())
+                {
+                  <synthetic> val x38: scala.collection.immutable.:: = (p36.$asInstanceOf[scala.collection.immutable.::](): scala.collection.immutable.::);
+                  {
+                    val h: Formatted = x38.head().$asInstanceOf[Formatted]();
+                    matchEnd53(("".+(ShowFormatted.this.show(h)): String))
+                  }
+                }
+              else
+                case66()
+            }
+          else
+            case66()
+        };
+        case66(){
+          if (x1.$isInstanceOf[Diff]())
+            {
+              <synthetic> val x40: Diff = (x1.$asInstanceOf[Diff](): Diff);
+              {
+                val l: Formatted = x40.left();
+                matchEnd53(("".+(ShowFormatted.this.show(l)): String))
+              }
+            }
+          else
+            case67()
+        };
+        case67(){
+          if (x1.$isInstanceOf[Decl]())
+            {
+              <synthetic> val x42: Decl = (x1.$asInstanceOf[Decl](): Decl);
+              {
+                val sym: Formatted = x42.sym();
+                matchEnd53(("".+(ShowFormatted.this.show(sym)): String))
+              }
+            }
+          else
+            case68()
+        };
+        case68(){
+          if (x1.$isInstanceOf[DeclDiff]())
+            {
+              <synthetic> val x44: DeclDiff = (x1.$asInstanceOf[DeclDiff](): DeclDiff);
+              {
+                val sym: Formatted = x44.sym();
+                matchEnd53(("".+(ShowFormatted.this.show(sym)): String))
+              }
+            }
+          else
+            case69()
+        };
+        case69(){
+          if (x1.$isInstanceOf[ByName]())
+            {
+              <synthetic> val x47: ByName = (x1.$asInstanceOf[ByName](): ByName);
+              {
+                val tpe: Formatted = x47.tpe();
+                matchEnd53(("".+(ShowFormatted.this.show(tpe)): String))
+              }
+            }
+          else
+            case70()
+        };
+        case70(){
+          matchEnd53(throw new MatchError(x1))
+        };
+        matchEnd53(x: String){
+          x
+        }
+      }
+    };
+    def <init>(): ShowFormatted.type = {
+      ShowFormatted.super.<init>();
+      ()
+    }
+  }
+}
+
