@@ -209,7 +209,7 @@ trait MatchTranslation {
 
       debug.patmat("translating "+ cases.mkString("{", "\n", "}"))
 
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatNanos) else null
+      val start = if (settings.areStatisticsEnabled) statistics.startTimer(statistics.patmatNanos) else null
 
       val selectorTp = repeatedToSeq(elimAnonymousClass(selector.tpe.withoutAnnotations))
 
@@ -225,7 +225,7 @@ trait MatchTranslation {
       // pt = Any* occurs when compiling test/files/pos/annotDepMethType.scala
       val combined = combineCases(selector, selectorSym, nonSyntheticCases map translateCase(selectorSym, pt), pt, selectorPos, matchOwner, defaultOverride, getSuppression(selector))
 
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatNanos, start)
+      if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.patmatNanos, start)
       combined
     }
 

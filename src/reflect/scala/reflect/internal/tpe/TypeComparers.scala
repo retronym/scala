@@ -104,7 +104,7 @@ trait TypeComparers {
 
   /** Do `tp1` and `tp2` denote equivalent types? */
   def isSameType(tp1: Type, tp2: Type): Boolean = try {
-    if (StatisticsStatics.areSomeColdStatsEnabled) statistics.incCounter(sametypeCount)
+    if (settings.areStatisticsEnabled) statistics.incCounter(sametypeCount)
     subsametypeRecursions += 1
     //OPT cutdown on Function0 allocation
     //was:

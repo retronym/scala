@@ -337,11 +337,11 @@ abstract class SymbolLoaders {
     protected def description = "class file "+ classfile.toString
 
     protected def doComplete(root: Symbol): Unit = {
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.classReadNanos) else null
+      val start = if (settings.areStatisticsEnabled) statistics.startTimer(statistics.classReadNanos) else null
       classfileParser.parse(classfile, clazz, module)
       if (clazz.associatedFile eq NoAbstractFile) clazz.associatedFile = classfile
       if (module.associatedFile eq NoAbstractFile) module.associatedFile = classfile
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.classReadNanos, start)
+      if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.classReadNanos, start)
     }
     override def sourcefile: Option[AbstractFile] = classfileParser.srcfile
     override def associatedFile(self: Symbol): AbstractFile = classfile

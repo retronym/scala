@@ -479,12 +479,12 @@ trait Solving extends Logic {
     def hasModel(solvable: Solvable): Boolean = findTseitinModelFor(solvable.cnf) != NoTseitinModel
 
     def findTseitinModelFor(clauses: Array[Clause]): TseitinModel = {
-      val start = if (StatisticsStatics.areSomeColdStatsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
+      val start = if (settings.areStatisticsEnabled) statistics.startTimer(statistics.patmatAnaDPLL) else null
 
       debug.patmat(s"DPLL\n${cnfString(clauses)}")
       val satisfiableWithModel = findTseitinModel0((java.util.Arrays.copyOf(clauses, clauses.length), Nil) :: Nil)
 
-      if (StatisticsStatics.areSomeColdStatsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
+      if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
       satisfiableWithModel
     }
 
