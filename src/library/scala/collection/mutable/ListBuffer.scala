@@ -18,7 +18,7 @@ import scala.collection.immutable.{::, List, Nil}
 import java.lang.{IllegalArgumentException, IndexOutOfBoundsException}
 
 import scala.collection.generic.DefaultSerializable
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 /** A `Buffer` implementation backed by a list. It provides constant time
   *  prepend and append. Most other operations are linear.

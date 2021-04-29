@@ -15,7 +15,7 @@ package tpe
 
 import util.{ReusableInstance, StatisticsStatics}
 import Flags._
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 trait FindMembers {
   this: SymbolTable =>

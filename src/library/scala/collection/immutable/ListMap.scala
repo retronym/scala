@@ -17,7 +17,7 @@ package immutable
 import scala.annotation.tailrec
 import scala.collection.mutable.ReusableBuilder
 import scala.collection.generic.DefaultSerializable
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 import scala.util.hashing.MurmurHash3
 
 /**

@@ -18,7 +18,7 @@ import scala.annotation.unchecked.uncheckedVariance
 import scala.annotation.tailrec
 import mutable.{Builder, ListBuffer}
 import scala.collection.generic.DefaultSerializable
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 /** A class for immutable linked lists representing ordered collections
   *  of elements of type `A`.
@@ -616,7 +616,7 @@ sealed abstract class List[+A]
 
 }
 
-// Internal code that mutates `next` _must_ call `Statics.releaseFence()` if either immediately, or
+// Internal code that mutates `next` _must_ call `ScalaRunTime.releaseFence()` if either immediately, or
 // before a newly-allocated, thread-local :: instance is aliased (e.g. in ListBuffer.toList)
 final case class :: [+A](override val head: A, private[scala] var next: List[A @uncheckedVariance]) // sound because `next` is used only locally
   extends List[A] {

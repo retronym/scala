@@ -17,7 +17,7 @@ import scala.reflect.ClassTag
 import scala.collection.{immutable, mutable}
 import scala.annotation.tailrec
 import mutable.ListBuffer
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 /** Profiler driven changes.
  *  TODO - inlining doesn't work from here because of the bug that

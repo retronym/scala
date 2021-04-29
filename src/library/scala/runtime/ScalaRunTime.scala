@@ -292,4 +292,6 @@ object ScalaRunTime {
   def wrapShortArray(xs: Array[Short]): ArraySeq[Short] = if (xs ne null) new ArraySeq.ofShort(xs) else null
   def wrapBooleanArray(xs: Array[Boolean]): ArraySeq[Boolean] = if (xs ne null) new ArraySeq.ofBoolean(xs) else null
   def wrapUnitArray(xs: Array[Unit]): ArraySeq[Unit] = if (xs ne null) new ArraySeq.ofUnit(xs) else null
+  private[scala] val ReleaseFenceHandle = Statics.VM.RELEASE_FENCE
+  @inline private[scala] def releaseFence(): Unit = ReleaseFenceHandle.invokeExact()
 }

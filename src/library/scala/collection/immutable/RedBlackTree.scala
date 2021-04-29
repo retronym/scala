@@ -16,7 +16,7 @@ package immutable
 
 import scala.annotation.meta.{getter, setter}
 import scala.annotation.tailrec
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 /** An object containing the RedBlack tree implementation used by for `TreeMaps` and `TreeSets`.
   *

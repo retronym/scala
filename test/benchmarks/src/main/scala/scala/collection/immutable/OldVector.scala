@@ -19,7 +19,7 @@ package immutable
 import scala.collection.Stepper.EfficientSplit
 import scala.collection.generic.DefaultSerializable
 import scala.collection.mutable.ReusableBuilder
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 
 /** $factoryInfo
   * @define Coll `OldVector`
@@ -129,7 +129,7 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
 
   override def iterableFactory: SeqFactory[OldVector] = OldVector
 
-  // Code paths that mutates `dirty` _must_ call `Statics.releaseFence()` before returning from
+  // Code paths that mutates `dirty` _must_ call `ScalaRunTime.releaseFence()` before returning from
   // the public method.
   private[immutable] var dirty = false
   // While most JDKs would implicit add this fence because of >= 1 final field, the spec only mandates

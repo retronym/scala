@@ -23,7 +23,7 @@ import scala.collection.generic.DefaultSerializable
 import scala.collection.mutable.ReusableBuilder
 import scala.collection.{Iterator, MapFactory, MapFactoryDefaults, Stepper, StepperShape, mutable}
 import scala.runtime.AbstractFunction2
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 import scala.util.hashing.MurmurHash3
 
 /** This class implements immutable maps using a Compressed Hash-Array Mapped Prefix-tree.

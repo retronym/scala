@@ -21,7 +21,7 @@ import scala.collection.Hashing.improve
 import scala.collection.Stepper.EfficientSplit
 import scala.collection.generic.DefaultSerializable
 import scala.collection.mutable.ReusableBuilder
-import scala.runtime.Statics.releaseFence
+import scala.runtime.ScalaRunTime.releaseFence
 import scala.util.hashing.MurmurHash3
 
 /** This class implements immutable sets using a Compressed Hash-Array Mapped Prefix-tree.
