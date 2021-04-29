@@ -4333,20 +4333,18 @@ trait Types
 
   private[this] val initialUniquesCapacity = 4096
   private[this] var uniques: util.WeakHashSet[Type] = _
-  private[this] var uniqueRunId = NoRunId
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
+  final def initUniques(): Unit = {
+    uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+    // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
+    // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
+    // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
+    // I've removed the registration for now. I don't think it's particularly harmful anymore
+    // as a) this is now a weak set, and b) it is discarded completely before the next run.
+  }
   protected def unique[T <: Type](tp: T): T =  {
-    if (uniqueRunId != currentRunId) {
-      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
-      uniqueRunId = currentRunId
-    }
     (uniques findEntryOrUpdate tp).asInstanceOf[T]
   }
 
