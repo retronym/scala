@@ -259,7 +259,13 @@ abstract class SymbolTable extends macros.Universe
   var keepPhaseStack: Boolean = false
 
   /** The current compiler run identifier. */
-  def currentRunId: RunId
+
+  /** The id of the currently active run
+   */
+  def currentRunId: RunId = curRunId
+  private[this] var curRunId = initRunId
+  protected def initRunId: RunId = 0
+  protected def incrementRunId(): Unit = curRunId += 1
 
   /** The run identifier of the given period. */
   final def runId(period: Period): RunId = period >> 8

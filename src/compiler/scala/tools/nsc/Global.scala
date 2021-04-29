@@ -983,7 +983,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // ----------- Runs ---------------------------------------
 
   private var curRun: Run = null
-  private var curRunId = 0
 
   object typeDeconstruct extends {
     val global: Global.this.type = Global.this
@@ -1106,11 +1105,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     ("\n  " + errorMessage + "\n" + info1) :: info2 :: context_s :: Nil mkString "\n\n"
   } catch { case _: Exception | _: TypeError => errorMessage }
 
-
-  /** The id of the currently active run
-   */
-  override def currentRunId = curRunId
-
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */
     if (settings.isDebug && !(settings.verbose || currentRun.size < 5))
@@ -1214,7 +1208,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     private val firstPhase = {
       // Initialization.  definitions.init requires phase != NoPhase
       import scala.reflect.internal.SomePhase
-      curRunId += 1
+      incrementRunId()
       curRun = this
       phase = SomePhase
       phaseWithId(phase.id) = phase
