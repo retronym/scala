@@ -20,6 +20,6 @@ import internal.{SomePhase, NoPhase}
  *  reflect specific traits are initialized */
 private[runtime] trait ReflectSetup extends internal.SymbolTable {
   Array(NoPhase, SomePhase).copyToArray(phaseWithId)
-  override val currentRunId = 1 // fake a run id so that it is different from NoRunId
+  override val initialRunId = 1 // fake a run id so that it is different from NoRunId
   phase = SomePhase // set to a phase different from NoPhase
 }

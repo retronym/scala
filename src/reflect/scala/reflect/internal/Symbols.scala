@@ -1665,7 +1665,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         itr = itr.next
       }
       _validTo = if (itr.pid == NoPhase.id) curPeriod
-      else period(currentRunId, itr.pid)
+      else periodOfCurrentRun(itr.pid)
       infos
     }
 
@@ -1675,7 +1675,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       assert(oldest.prev == null)
       val pid = phaseId(oldest.validFrom)
 
-      _validTo = period(currentRunId, pid)
+      _validTo = periodOfCurrentRun(pid)
       phase   = phaseWithId(pid)
 
       val info1 = adaptToNewRunMap(oldest.info)

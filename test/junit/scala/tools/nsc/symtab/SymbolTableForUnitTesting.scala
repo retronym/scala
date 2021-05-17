@@ -96,7 +96,7 @@ class SymbolTableForUnitTesting extends SymbolTable {
   protected def PerRunReporting = new PerRunReporting
 
   // Members declared in scala.reflect.internal.SymbolTable
-  def currentRunId: Int = 1
+  def initialRunId: RunId = 1
   def log(msg: => AnyRef): Unit = println(msg)
   def mirrorThatLoaded(sym: Symbol): Mirror = rootMirror
   val phases: Seq[Phase] = List(NoPhase, SomePhase)

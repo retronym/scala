@@ -253,7 +253,7 @@ abstract class SymbolTable extends macros.Universe
 
   final def phase_=(p: Phase) {
     ph = p
-    per = period(currentRunId, p.id)
+    per = periodOfCurrentRun(p.id)
   }
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
@@ -271,8 +271,16 @@ abstract class SymbolTable extends macros.Universe
   }
   var keepPhaseStack: Boolean = false
 
+  private[this] var _curRunId: Int = 0
+  private[this] var _curRunIdShifted: Int = 0
   /** The current compiler run identifier. */
-  def currentRunId: RunId
+  final def currentRunId: RunId = _curRunId
+  protected def initialRunId: RunId = 0
+  protected def setRunId(id: RunId): Unit = {
+    _curRunId = id
+    _curRunIdShifted = id << 8
+  }
+
 
   /** The run identifier of the given period. */
   final def runId(period: Period): RunId = period >> 8
@@ -291,6 +299,8 @@ abstract class SymbolTable extends macros.Universe
 
   final def period(rid: RunId, pid: Phase#Id): Period =
     (rid << 8) + pid
+  final def periodOfCurrentRun(pid: Phase#Id): Period =
+    _curRunIdShifted + pid
 
   /** Are we later than given phase in compilation? */
   final def isAtPhaseAfter(p: Phase) =
