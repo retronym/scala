@@ -666,19 +666,20 @@ trait Infer extends Checkable {
      *  and the argument list can be tupled (based on its length.)
      */
     def eligibleForTupleConversion(paramsCount: Int, argsCount: Int, varargsTarget: Boolean): Boolean = {
-      def canSendTuple = argsCount match {
-        case 0 => !varargsTarget        // avoid () to (()) conversion - scala/bug#3224
+      def canSendTuple = (argsCount match {
+        case 0 => !varargsTarget // avoid () to (()) conversion - scala/bug#3224
         case 1 => false                 // can't tuple a single argument
         case n => n <= MaxTupleArity    // <= 22 arguments
-      }
+      })
       def canReceiveTuple = paramsCount match {
         case 1 => true
         case 2 => varargsTarget
         case _ => false
       }
-      canSendTuple && canReceiveTuple
+      !settings.noAdaptedArgs.value && canSendTuple && canReceiveTuple
     }
     def eligibleForTupleConversion(formals: List[Type], argsCount: Int): Boolean = formals match {
+      case _ if settings.noAdaptedArgs.value            => false
       case p :: Nil                                     => eligibleForTupleConversion(1, argsCount, varargsTarget = isScalaRepeatedParamType(p))
       case _ :: p :: Nil if isScalaRepeatedParamType(p) => eligibleForTupleConversion(2, argsCount, varargsTarget = true)
       case _                                            => false
