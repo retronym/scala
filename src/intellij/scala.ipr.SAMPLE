@@ -11,7 +11,7 @@
       <entry name="!?*.clj"/>
     </wildcardResourcePatterns>
   </component>
-  <component name="CopyrightManager" default="Scala">
+  <component default="Scala" name="CopyrightManager">
     <copyright>
       <option name="notice" value="Scala (https://www.scala-lang.org)&#10;&#10;Copyright EPFL and Lightbend, Inc.&#10;&#10;Licensed under Apache License 2.0&#10;(http://www.apache.org/licenses/LICENSE-2.0).&#10;&#10;See the NOTICE file distributed with this work for&#10;additional information regarding copyright ownership." />
       <option name="myName" value="Scala" />
@@ -22,8 +22,8 @@
   </component>
   <component name="InspectionProjectProfileManager">
     <profile version="1.0">
-      <option value="Project Default" name="myName"/>
-      <inspection_tool enabled_by_default="false" level="WARNING" enabled="false" class="EmptyCheck"/>
+      <option name="myName" value="Project Default"/>
+      <inspection_tool class="EmptyCheck" enabled="false" level="WARNING" enabled_by_default="false"/>
     </profile>
     <version value="1.0"/>
   </component>
@@ -31,182 +31,182 @@
     <option name="links">
       <list>
         <IssueNavigationLink>
-          <option value="scala/([\w.-]+)#([0-9]+)" name="issueRegexp"/>
-          <option value="https://github.com/scala/$1/pull/$2" name="linkRegexp"/>
+          <option name="issueRegexp" value="scala/([\w.-]+)#([0-9]+)"/>
+          <option name="linkRegexp" value="https://github.com/scala/$1/pull/$2"/>
         </IssueNavigationLink>
       </list>
     </option>
   </component>
   <component name="Palette2">
     <group name="Swing">
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/hspacer.png" tooltip-text="Horizontal Spacer" class="com.intellij.uiDesigner.HSpacer">
-        <default-constraints fill="1" anchor="0" hsize-policy="6" vsize-policy="1"/>
+      <item class="com.intellij.uiDesigner.HSpacer" tooltip-text="Horizontal Spacer" icon="/com/intellij/uiDesigner/icons/hspacer.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="1" hsize-policy="6" anchor="0" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/vspacer.png" tooltip-text="Vertical Spacer" class="com.intellij.uiDesigner.VSpacer">
-        <default-constraints fill="2" anchor="0" hsize-policy="1" vsize-policy="6"/>
+      <item class="com.intellij.uiDesigner.VSpacer" tooltip-text="Vertical Spacer" icon="/com/intellij/uiDesigner/icons/vspacer.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="1" anchor="0" fill="2"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/panel.png" class="javax.swing.JPanel">
-        <default-constraints fill="3" anchor="0" hsize-policy="3" vsize-policy="3"/>
+      <item class="javax.swing.JPanel" icon="/com/intellij/uiDesigner/icons/panel.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="3" hsize-policy="3" anchor="0" fill="3"/>
       </item>
-      <item can-attach-label="true" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/scrollPane.png" class="javax.swing.JScrollPane">
-        <default-constraints fill="3" anchor="0" hsize-policy="7" vsize-policy="7"/>
+      <item class="javax.swing.JScrollPane" icon="/com/intellij/uiDesigner/icons/scrollPane.png" removable="false" auto-create-binding="false" can-attach-label="true">
+        <default-constraints vsize-policy="7" hsize-policy="7" anchor="0" fill="3"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/button.png" class="javax.swing.JButton">
-        <default-constraints fill="1" anchor="0" hsize-policy="3" vsize-policy="0"/>
+      <item class="javax.swing.JButton" icon="/com/intellij/uiDesigner/icons/button.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="3" anchor="0" fill="1"/>
         <initial-values>
-          <property value="Button" name="text"/>
+          <property name="text" value="Button"/>
         </initial-values>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/radioButton.png" class="javax.swing.JRadioButton">
-        <default-constraints fill="0" anchor="8" hsize-policy="3" vsize-policy="0"/>
+      <item class="javax.swing.JRadioButton" icon="/com/intellij/uiDesigner/icons/radioButton.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="3" anchor="8" fill="0"/>
         <initial-values>
-          <property value="RadioButton" name="text"/>
+          <property name="text" value="RadioButton"/>
         </initial-values>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/checkBox.png" class="javax.swing.JCheckBox">
-        <default-constraints fill="0" anchor="8" hsize-policy="3" vsize-policy="0"/>
+      <item class="javax.swing.JCheckBox" icon="/com/intellij/uiDesigner/icons/checkBox.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="3" anchor="8" fill="0"/>
         <initial-values>
-          <property value="CheckBox" name="text"/>
+          <property name="text" value="CheckBox"/>
         </initial-values>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/label.png" class="javax.swing.JLabel">
-        <default-constraints fill="0" anchor="8" hsize-policy="0" vsize-policy="0"/>
+      <item class="javax.swing.JLabel" icon="/com/intellij/uiDesigner/icons/label.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="0" anchor="8" fill="0"/>
         <initial-values>
-          <property value="Label" name="text"/>
+          <property name="text" value="Label"/>
         </initial-values>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/textField.png" class="javax.swing.JTextField">
-        <default-constraints fill="1" anchor="8" hsize-policy="6" vsize-policy="0">
-          <preferred-size height="-1" width="150"/>
+      <item class="javax.swing.JTextField" icon="/com/intellij/uiDesigner/icons/textField.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="8" fill="1">
+          <preferred-size width="150" height="-1"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/passwordField.png" class="javax.swing.JPasswordField">
-        <default-constraints fill="1" anchor="8" hsize-policy="6" vsize-policy="0">
-          <preferred-size height="-1" width="150"/>
+      <item class="javax.swing.JPasswordField" icon="/com/intellij/uiDesigner/icons/passwordField.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="8" fill="1">
+          <preferred-size width="150" height="-1"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/formattedTextField.png" class="javax.swing.JFormattedTextField">
-        <default-constraints fill="1" anchor="8" hsize-policy="6" vsize-policy="0">
-          <preferred-size height="-1" width="150"/>
+      <item class="javax.swing.JFormattedTextField" icon="/com/intellij/uiDesigner/icons/formattedTextField.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="8" fill="1">
+          <preferred-size width="150" height="-1"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/textArea.png" class="javax.swing.JTextArea">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JTextArea" icon="/com/intellij/uiDesigner/icons/textArea.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/textPane.png" class="javax.swing.JTextPane">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JTextPane" icon="/com/intellij/uiDesigner/icons/textPane.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/editorPane.png" class="javax.swing.JEditorPane">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JEditorPane" icon="/com/intellij/uiDesigner/icons/editorPane.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/comboBox.png" class="javax.swing.JComboBox">
-        <default-constraints fill="1" anchor="8" hsize-policy="2" vsize-policy="0"/>
+      <item class="javax.swing.JComboBox" icon="/com/intellij/uiDesigner/icons/comboBox.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="0" hsize-policy="2" anchor="8" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/table.png" class="javax.swing.JTable">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JTable" icon="/com/intellij/uiDesigner/icons/table.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/list.png" class="javax.swing.JList">
-        <default-constraints fill="3" anchor="0" hsize-policy="2" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JList" icon="/com/intellij/uiDesigner/icons/list.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="2" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/tree.png" class="javax.swing.JTree">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6">
-          <preferred-size height="50" width="150"/>
+      <item class="javax.swing.JTree" icon="/com/intellij/uiDesigner/icons/tree.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3">
+          <preferred-size width="150" height="50"/>
         </default-constraints>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/tabbedPane.png" class="javax.swing.JTabbedPane">
-        <default-constraints fill="3" anchor="0" hsize-policy="3" vsize-policy="3">
-          <preferred-size height="200" width="200"/>
+      <item class="javax.swing.JTabbedPane" icon="/com/intellij/uiDesigner/icons/tabbedPane.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="3" hsize-policy="3" anchor="0" fill="3">
+          <preferred-size width="200" height="200"/>
         </default-constraints>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/splitPane.png" class="javax.swing.JSplitPane">
-        <default-constraints fill="3" anchor="0" hsize-policy="3" vsize-policy="3">
-          <preferred-size height="200" width="200"/>
+      <item class="javax.swing.JSplitPane" icon="/com/intellij/uiDesigner/icons/splitPane.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="3" hsize-policy="3" anchor="0" fill="3">
+          <preferred-size width="200" height="200"/>
         </default-constraints>
       </item>
-      <item can-attach-label="true" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/spinner.png" class="javax.swing.JSpinner">
-        <default-constraints fill="1" anchor="8" hsize-policy="6" vsize-policy="0"/>
+      <item class="javax.swing.JSpinner" icon="/com/intellij/uiDesigner/icons/spinner.png" removable="false" auto-create-binding="true" can-attach-label="true">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="8" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/slider.png" class="javax.swing.JSlider">
-        <default-constraints fill="1" anchor="8" hsize-policy="6" vsize-policy="0"/>
+      <item class="javax.swing.JSlider" icon="/com/intellij/uiDesigner/icons/slider.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="8" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/separator.png" class="javax.swing.JSeparator">
-        <default-constraints fill="3" anchor="0" hsize-policy="6" vsize-policy="6"/>
+      <item class="javax.swing.JSeparator" icon="/com/intellij/uiDesigner/icons/separator.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="6" anchor="0" fill="3"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/progressbar.png" class="javax.swing.JProgressBar">
-        <default-constraints fill="1" anchor="0" hsize-policy="6" vsize-policy="0"/>
+      <item class="javax.swing.JProgressBar" icon="/com/intellij/uiDesigner/icons/progressbar.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="0" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/toolbar.png" class="javax.swing.JToolBar">
-        <default-constraints fill="1" anchor="0" hsize-policy="6" vsize-policy="0">
-          <preferred-size height="20" width="-1"/>
+      <item class="javax.swing.JToolBar" icon="/com/intellij/uiDesigner/icons/toolbar.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="6" anchor="0" fill="1">
+          <preferred-size width="-1" height="20"/>
         </default-constraints>
       </item>
-      <item can-attach-label="false" auto-create-binding="false" removable="false" icon="/com/intellij/uiDesigner/icons/toolbarSeparator.png" class="javax.swing.JToolBar$Separator">
-        <default-constraints fill="1" anchor="0" hsize-policy="0" vsize-policy="0"/>
+      <item class="javax.swing.JToolBar$Separator" icon="/com/intellij/uiDesigner/icons/toolbarSeparator.png" removable="false" auto-create-binding="false" can-attach-label="false">
+        <default-constraints vsize-policy="0" hsize-policy="0" anchor="0" fill="1"/>
       </item>
-      <item can-attach-label="false" auto-create-binding="true" removable="false" icon="/com/intellij/uiDesigner/icons/scrollbar.png" class="javax.swing.JScrollBar">
-        <default-constraints fill="2" anchor="0" hsize-policy="0" vsize-policy="6"/>
+      <item class="javax.swing.JScrollBar" icon="/com/intellij/uiDesigner/icons/scrollbar.png" removable="false" auto-create-binding="true" can-attach-label="false">
+        <default-constraints vsize-policy="6" hsize-policy="0" anchor="0" fill="2"/>
       </item>
     </group>
   </component>
-  <component name="ProjectCodeStyleConfiguration" settingsEditedManually="true">
-    <option name="USE_PER_PROJECT_SETTINGS" value="true"/>
-    <code_scheme name="Project" version="173">
+  <component settingsEditedManually="true" name="ProjectCodeStyleConfiguration">
+    <option value="true" name="USE_PER_PROJECT_SETTINGS"/>
+    <code_scheme version="173" name="Project">
       <ScalaCodeStyleSettings>
-        <option name="ALIGN_IF_ELSE" value="true"/>
-        <option name="ALIGN_IN_COLUMNS_CASE_BRANCH" value="true"/>
+        <option value="true" name="ALIGN_IF_ELSE"/>
+        <option value="true" name="ALIGN_IN_COLUMNS_CASE_BRANCH"/>
       </ScalaCodeStyleSettings>
       <codeStyleSettings language="Scala">
-        <option name="BLANK_LINES_BEFORE_IMPORTS" value="1"/>
-        <option name="BLANK_LINES_AFTER_IMPORTS" value="1"/>
-        <option name="BLANK_LINES_AROUND_METHOD" value="0"/>
-        <option name="BLANK_LINES_AROUND_METHOD_IN_INTERFACE" value="0"/>
-        <option name="ALIGN_MULTILINE_CHAINED_METHODS" value="true"/>
-        <option name="ALIGN_MULTILINE_PARAMETERS_IN_CALLS" value="true"/>
-        <option name="ALIGN_GROUP_FIELD_DECLARATIONS" value="true"/>
+        <option value="1" name="BLANK_LINES_BEFORE_IMPORTS"/>
+        <option value="1" name="BLANK_LINES_AFTER_IMPORTS"/>
+        <option value="0" name="BLANK_LINES_AROUND_METHOD"/>
+        <option value="0" name="BLANK_LINES_AROUND_METHOD_IN_INTERFACE"/>
+        <option value="true" name="ALIGN_MULTILINE_CHAINED_METHODS"/>
+        <option value="true" name="ALIGN_MULTILINE_PARAMETERS_IN_CALLS"/>
+        <option value="true" name="ALIGN_GROUP_FIELD_DECLARATIONS"/>
       </codeStyleSettings>
     </code_scheme>
   </component>
-  <component name="ProjectLevelVcsManager" settingsEditedManually="false">
-    <OptionsSetting id="Add" value="true"/>
-    <OptionsSetting id="Remove" value="true"/>
-    <OptionsSetting id="Checkout" value="true"/>
-    <OptionsSetting id="Update" value="true"/>
-    <OptionsSetting id="Status" value="true"/>
-    <OptionsSetting id="Edit" value="true"/>
-    <ConfirmationsSetting id="Add" value="0"/>
-    <ConfirmationsSetting id="Remove" value="0"/>
+  <component settingsEditedManually="false" name="ProjectLevelVcsManager">
+    <OptionsSetting value="true" id="Add"/>
+    <OptionsSetting value="true" id="Remove"/>
+    <OptionsSetting value="true" id="Checkout"/>
+    <OptionsSetting value="true" id="Update"/>
+    <OptionsSetting value="true" id="Status"/>
+    <OptionsSetting value="true" id="Edit"/>
+    <ConfirmationsSetting value="0" id="Add"/>
+    <ConfirmationsSetting value="0" id="Remove"/>
   </component>
   <component name="ProjectModuleManager">
     <modules>
-      <module filepath="$PROJECT_DIR$/benchmarks.iml" fileurl="file://$PROJECT_DIR$/benchmarks.iml"/>
-      <module filepath="$PROJECT_DIR$/compiler.iml" fileurl="file://$PROJECT_DIR$/compiler.iml"/>
-      <module filepath="$PROJECT_DIR$/interactive.iml" fileurl="file://$PROJECT_DIR$/interactive.iml"/>
-      <module filepath="$PROJECT_DIR$/junit.iml" fileurl="file://$PROJECT_DIR$/junit.iml"/>
-      <module filepath="$PROJECT_DIR$/library.iml" fileurl="file://$PROJECT_DIR$/library.iml"/>
-      <module filepath="$PROJECT_DIR$/manual.iml" fileurl="file://$PROJECT_DIR$/manual.iml"/>
-      <module filepath="$PROJECT_DIR$/partest.iml" fileurl="file://$PROJECT_DIR$/partest.iml"/>
-      <module filepath="$PROJECT_DIR$/partest-javaagent.iml" fileurl="file://$PROJECT_DIR$/partest-javaagent.iml"/>
-      <module filepath="$PROJECT_DIR$/reflect.iml" fileurl="file://$PROJECT_DIR$/reflect.iml"/>
-      <module filepath="$PROJECT_DIR$/repl.iml" fileurl="file://$PROJECT_DIR$/repl.iml"/>
-      <module filepath="$PROJECT_DIR$/repl-frontend.iml" fileurl="file://$PROJECT_DIR$/repl-frontend.iml"/>
-      <module filepath="$PROJECT_DIR$/scala.iml" fileurl="file://$PROJECT_DIR$/scala.iml"/>
-      <module filepath="$PROJECT_DIR$/scala-build.iml" fileurl="file://$PROJECT_DIR$/scala-build.iml"/>
-      <module filepath="$PROJECT_DIR$/scalacheck-test.iml" fileurl="file://$PROJECT_DIR$/scalacheck-test.iml"/>
-      <module filepath="$PROJECT_DIR$/scaladoc.iml" fileurl="file://$PROJECT_DIR$/scaladoc.iml"/>
-      <module filepath="$PROJECT_DIR$/scalap.iml" fileurl="file://$PROJECT_DIR$/scalap.iml"/>
-      <module filepath="$PROJECT_DIR$/tastytest.iml" fileurl="file://$PROJECT_DIR$/tastytest.iml"/>
-      <module filepath="$PROJECT_DIR$/test.iml" fileurl="file://$PROJECT_DIR$/test.iml"/>
-      <module filepath="$PROJECT_DIR$/testkit.iml" fileurl="file://$PROJECT_DIR$/testkit.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/benchmarks.iml" filepath="$PROJECT_DIR$/benchmarks.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/compiler.iml" filepath="$PROJECT_DIR$/compiler.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/interactive.iml" filepath="$PROJECT_DIR$/interactive.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/junit.iml" filepath="$PROJECT_DIR$/junit.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/library.iml" filepath="$PROJECT_DIR$/library.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/manual.iml" filepath="$PROJECT_DIR$/manual.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/partest.iml" filepath="$PROJECT_DIR$/partest.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/partest-javaagent.iml" filepath="$PROJECT_DIR$/partest-javaagent.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/reflect.iml" filepath="$PROJECT_DIR$/reflect.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/repl.iml" filepath="$PROJECT_DIR$/repl.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/repl-frontend.iml" filepath="$PROJECT_DIR$/repl-frontend.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/scala.iml" filepath="$PROJECT_DIR$/scala.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/scala-build.iml" filepath="$PROJECT_DIR$/scala-build.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/scalacheck-test.iml" filepath="$PROJECT_DIR$/scalacheck-test.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/scaladoc.iml" filepath="$PROJECT_DIR$/scaladoc.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/scalap.iml" filepath="$PROJECT_DIR$/scalap.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/tastytest.iml" filepath="$PROJECT_DIR$/tastytest.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/test.iml" filepath="$PROJECT_DIR$/test.iml"/>
+      <module fileurl="file://$PROJECT_DIR$/testkit.iml" filepath="$PROJECT_DIR$/testkit.iml"/>
     </modules>
   </component>
   <component project-jdk-type="JavaSDK" project-jdk-name="1.8" default="true" languageLevel="JDK_1_8" version="2" name="ProjectRootManager">
@@ -224,18 +224,17 @@
   <component name="libraryTable">
     <library name="bench-deps">
       <CLASSES>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/pl/project13/scala/sbt-jmh-extras/0.3.4/sbt-jmh-extras-0.3.4.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-core/1.21/jmh-core-1.21.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-bytecode/1.21/jmh-generator-bytecode-1.21.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-reflection/1.21/jmh-generator-reflection-1.21.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-core/1.31/jmh-core-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-bytecode/1.31/jmh-generator-bytecode-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-reflection/1.31/jmh-generator-reflection-1.31.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jol/jol-core/0.10/jol-core-0.10.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/modules/scala-asm/9.1.0-scala-1/scala-asm-9.1.0-scala-1.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/jline/jline/3.19.0/jline-3.19.0.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/net/java/dev/jna/jna/5.3.1/jna-5.3.1.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-asm/1.21/jmh-generator-asm-1.21.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/net/sf/jopt-simple/jopt-simple/4.6/jopt-simple-4.6.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/commons/commons-math3/3.2/commons-math3-3.2.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/ow2/asm/asm/5.0.3/asm-5.0.3.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-asm/1.31/jmh-generator-asm-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/ow2/asm/asm/9.0/asm-9.0.jar!/"/>
       </CLASSES>
       <JAVADOC/>
       <SOURCES/>
@@ -321,46 +320,44 @@
     <library name="scala-build-deps">
       <CLASSES>
         <root url="jar://$USER_HOME$/.sbt/boot/scala-2.12.14/lib/scala-library.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.3.2/commons-lang3-3.3.2.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/commons/commons-lang3/3.12.0/commons-lang3-3.12.0.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/biz/aQute/bnd/biz.aQute.bnd/2.4.1/biz.aQute.bnd-2.4.1.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/typesafe/sbt-mima-plugin_2.12_1.0/0.9.0/sbt-mima-plugin-0.9.0.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/eclipse/jgit/org.eclipse.jgit/4.6.0.201612231935-r/org.eclipse.jgit-4.6.0.201612231935-r.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/slf4j/slf4j-nop/1.7.23/slf4j-nop-1.7.23.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/eclipse/jgit/org.eclipse.jgit/5.12.0.202106070339-r/org.eclipse.jgit-5.12.0.202106070339-r.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/slf4j/slf4j-nop/1.7.30/slf4j-nop-1.7.30.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/googlecode/java-diff-utils/diffutils/1.3.0/diffutils-1.3.0.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo.scala-sbt.org/scalasbt/sbt-plugin-releases/pl.project13.scala/sbt-jmh/scala_2.12/sbt_1.0/0.3.4/jars/sbt-jmh.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo.scala-sbt.org/scalasbt/sbt-plugin-releases/de.heikoseeberger/sbt-header/scala_2.12/sbt_1.0/5.0.0/jars/sbt-header.jar!/"/>
+        <root url="jar://$USER_HOME$/.ivy2/local/pl.project13.scala/sbt-jmh/scala_2.12/sbt_1.0/0.4.2/jars/sbt-jmh.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo.scala-sbt.org/scalasbt/sbt-plugin-releases/de.heikoseeberger/sbt-header/scala_2.12/sbt_1.0/5.6.0/jars/sbt-header.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo.scala-sbt.org/scalasbt/sbt-plugin-releases/com.lightbend/sbt-whitesource/scala_2.12/sbt_1.0/0.1.18/jars/sbt-whitesource.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/typesafe/mima-core_2.12/0.9.0/mima-core_2.12-0.9.0.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/jcraft/jsch/0.1.53/jsch-0.1.53.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/googlecode/javaewah/JavaEWAH/1.1.6/JavaEWAH-1.1.6.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/httpcomponents/httpclient/4.4/httpclient-4.4.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/slf4j/slf4j-api/1.7.23/slf4j-api-1.7.23.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/pl/project13/scala/sbt-jmh-extras/0.3.4/sbt-jmh-extras-0.3.4.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-core/1.21/jmh-core-1.21.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-bytecode/1.21/jmh-generator-bytecode-1.21.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-reflection/1.21/jmh-generator-reflection-1.21.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-asm/1.21/jmh-generator-asm-1.21.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/googlecode/javaewah/JavaEWAH/1.1.7/JavaEWAH-1.1.7.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/slf4j/slf4j-api/1.7.30/slf4j-api-1.7.30.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-core/1.31/jmh-core-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-bytecode/1.31/jmh-generator-bytecode-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-reflection/1.31/jmh-generator-reflection-1.31.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/openjdk/jmh/jmh-generator-asm/1.31/jmh-generator-asm-1.31.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo.scala-sbt.org/scalasbt/sbt-plugin-releases/com.dwijnand/sbt-compat/scala_2.12/sbt_1.0/1.0.0/jars/sbt-compat.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-api/2.9.9.02/wss-agent-api-2.9.9.02.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-api-client/2.9.9.02/wss-agent-api-client-2.9.9.02.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-report/2.9.9.02/wss-agent-report-2.9.9.02.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/modules/scala-collection-compat_2.12/2.4.3/scala-collection-compat_2.12-2.4.3.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/httpcomponents/httpcore/4.4/httpcore-4.4.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-codec/commons-codec/1.10/commons-codec-1.10.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/net/sf/jopt-simple/jopt-simple/4.6/jopt-simple-4.6.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/commons/commons-math3/3.2/commons-math3-3.2.jar!/"/>
-        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/ow2/asm/asm/5.0.3/asm-5.0.3.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/ow2/asm/asm/9.0/asm-9.0.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-via-api/2.9.9.02/wss-agent-via-api-2.9.9.02.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-lang/commons-lang/2.6/commons-lang-2.6.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/com/google/code/gson/gson/2.8.5/gson-2.8.5.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-hash-calculator/2.9.9.02/wss-agent-hash-calculator-2.9.9.02.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/wss-agent-utils/2.9.9.02/wss-agent-utils-2.9.9.02.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/httpcomponents/httpclient/4.4/httpclient-4.4.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/velocity/velocity/1.7/velocity-1.7.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-io/commons-io/2.4/commons-io-2.4.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-codec/commons-codec/1.10/commons-codec-1.10.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/whitesource/pecoff4j/0.0.2.1/pecoff4j-0.0.2.1.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/net/java/dev/jna/jna-platform/4.1.0/jna-platform-4.1.0.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/mozilla/rhino/1.7.7.2/rhino-1.7.7.2.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/apache/httpcomponents/httpcore/4.4/httpcore-4.4.jar!/"/>
+        <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/commons-collections/commons-collections/3.2.1/commons-collections-3.2.1.jar!/"/>
         <root url="jar://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/net/java/dev/jna/jna/4.1.0/jna-4.1.0.jar!/"/>
         <root url="jar://$USER_HOME$/.sbt/boot/scala-2.12.14/lib/scala-compiler.jar!/"/>
@@ -488,9 +485,9 @@
       <JAVADOC/>
       <SOURCES/>
     </library>
-    <library name="starr" type="Scala">
+    <library type="Scala" name="starr">
       <properties>
-        <option name="languageLevel" value="Scala_2_12"/>
+        <option value="Scala_2_12" name="languageLevel"/>
         <compiler-classpath>
           <root url="file://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-library/2.13.6/scala-library-2.13.6.jar"/>
           <root url="file://$USER_HOME$/Library/Caches/Coursier/v1/https/repo1.maven.org/maven2/org/scala-lang/scala-compiler/2.13.6/scala-compiler-2.13.6.jar"/>
