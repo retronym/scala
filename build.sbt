@@ -667,6 +667,7 @@ lazy val bench = project.in(file("test") / "benchmarks")
     libraryDependencies += "org.openjdk.jol" % "jol-core" % "0.6",
     compileOrder := CompileOrder.JavaThenScala, // to allow inlining from Java ("... is defined in a Java source (mixed compilation), no bytecode is available")
     scalacOptions ++= Seq("-feature", "-opt:l:inline", "-opt-inline-from:scala/**", "-opt-warnings"),
+    Jmh / bspEnabled := false // Skips JMH source generators during IDE import to avoid needing to compile scala-library during the import
   ).settings(inConfig(JmhPlugin.JmhKeys.Jmh)(scalabuild.JitWatchFilePlugin.jitwatchSettings))
 
 // Jigsaw: reflective access between modules (`setAccessible(true)`) requires an `opens` directive.
