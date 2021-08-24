@@ -238,38 +238,33 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
     }
   }
   private class TypeRenderer(rewriteTransformer: RewriteTypingTransformer) extends TypeMap {
-    override def apply(tpe: Type): Type = tpe match {
-      case SingleType(pre, sym) if tpe.prefix.typeSymbol.isOmittablePrefix =>
-        if (pre.typeSymbol.isOmittablePrefix) {
-          val typedTree = rewriteTransformer.silentTyped(Ident(sym.name), Mode.QUALmode)
-          if (typedTree.symbol == sym || sym.tpeHK =:= typedTree.tpe)
-            SingleType(NoPrefix, sym)
-          else {
-            val dummyOwner = NoSymbol.newClassSymbol(TypeName(pre.typeSymbol.fullName))
-            dummyOwner.setInfo(ThisType(dummyOwner))
-            SingleType(TypeRef(NoPrefix, dummyOwner, Nil), sym.cloneSymbol(NoSymbol))
-          }
-        } else {
-          mapOver(tpe)
-        }
+    override def apply(tp: Type): Type = tp match {
+      case SingleType(pre, sym) if tp.prefix.typeSymbol.isOmittablePrefix =>
+        adjust(tp, pre, sym, Mode.QUALmode)((pre1, sym1) => SingleType(pre1, sym1))
       case TypeRef(pre, sym, args) =>
         val args1 = args.mapConserve(this)
-        if (pre.typeSymbol.isOmittablePrefix || global.shorthands.contains(sym.fullName)) {
-          if (sym.name.string_==("List"))
-            getClass
-          val typedTree = rewriteTransformer.silentTyped(Ident(sym.name), Mode.TAPPmode | Mode.FUNmode)
-          if (typedTree.symbol == sym || sym.tpeHK =:= typedTree.tpe)
-            TypeRef(NoPrefix, sym, args1)
-          else {
-            val dummyOwner = NoSymbol.newClassSymbol(TypeName(pre.typeSymbol.fullName))
-            dummyOwner.setInfo(ThisType(dummyOwner))
-            TypeRef(SingleType(NoPrefix, dummyOwner), sym.cloneSymbol(NoSymbol), args1)
-          }
-        } else {
-          mapOver(tpe)
-        }
+        adjust(tp, pre, sym, Mode.TAPPmode | Mode.FUNmode)((pre1, sym1) => TypeRef(pre1, sym1, args1))
       case _ =>
-        mapOver(tpe)
+        mapOver(tp)
+    }
+
+    def adjust(tp: Type, pre: Type, sym: Symbol, mode: Mode)(f: (Type, Symbol) => Type): Type = {
+      if (pre.typeSymbol.isOmittablePrefix || global.shorthands.contains(sym.fullName)) {
+        val typedTree = rewriteTransformer.silentTyped(Ident(sym.name), mode)
+        if (typedTree.symbol == sym || sym.tpeHK =:= typedTree.tpe)
+          f(NoPrefix, sym)
+        else {
+          val dummyOwner = NoSymbol.newClassSymbol(TypeName(pre.typeSymbol.fullName))
+          dummyOwner.setInfo(ThisType(dummyOwner))
+          val pre1 = pre match {
+            case ThisType(_) | SingleType(_, _) => SingleType(NoPrefix, dummyOwner)
+            case _ => TypeRef(NoPrefix, dummyOwner, Nil)
+          }
+          f(pre1, sym.cloneSymbol(NoSymbol))
+        }
+      } else {
+        mapOver(tp)
+      }
     }
   }
 }
