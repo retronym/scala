@@ -7,7 +7,7 @@ import scala.collection.mutable.ArrayBuffer
 import scala.reflect.internal.util.{Position, SourceFile}
 import scala.tools.nsc.Reporting.WarningCategory
 
-abstract class Rewrites extends SubComponent {
+abstract class Rewrites extends SubComponent with TypingTransformers {
   import global._
 
   val phaseName = "rewrites"
@@ -21,7 +21,7 @@ abstract class Rewrites extends SubComponent {
       new RewritePhase(prev)
   }
 
-  class RewritePhase(prev: Phase) extends StdPhase(prev) {
+  private class RewritePhase(prev: Phase) extends StdPhase(prev) {
     override def apply(unit: CompilationUnit): Unit = {
       val patches = ArrayBuffer[Patch]()
 
@@ -35,26 +35,26 @@ abstract class Rewrites extends SubComponent {
       }
 
       val settings = global.settings
-      val rewritesSetting = settings.Yrewrites
-      if (rewritesSetting.contains(rewritesSetting.domain.breakOutArgs)) {
+      val rws = settings.Yrewrites
+      if (rws.contains(rws.domain.breakOutArgs)) {
         val rewriter = new BreakoutTraverser()
         rewriter.traverse(unit.body)
         patches ++= rewriter.patches
       }
-      if (rewritesSetting.contains(rewritesSetting.domain.collectionSeq)) {
-        val rewriter = new CollectionSeqTraverser(treeByRangePos)
-        rewriter.traverse(unit.body)
+      if (rws.contains(rws.domain.collectionSeq)) {
+        val rewriter = new CollectionSeqTransformer(treeByRangePos, unit)
+        rewriter.transform(unit.body)
         patches ++= rewriter.patches
       }
       writePatches(unit.source, patches.toArray)
     }
   }
 
-  case class Patch(span: Position, replacement: String) {
+  private case class Patch(span: Position, replacement: String) {
     def delta: Int = replacement.length - (span.end - span.start)
   }
 
-  def checkNoOverlap(patches: Array[Patch]): Boolean = {
+  private def checkNoOverlap(patches: Array[Patch]): Boolean = {
     var ok = true
     if (patches.nonEmpty)
       patches.reduceLeft { (p1, p2) =>
@@ -67,7 +67,7 @@ abstract class Rewrites extends SubComponent {
     ok
   }
 
-  def applyPatches(source: SourceFile, patches: Array[Patch]): String = {
+  private def applyPatches(source: SourceFile, patches: Array[Patch]): String = {
     val sourceChars = source.content
     val patchedChars = new Array[Char](sourceChars.length + patches.foldLeft(0)(_ + _.delta))
 
@@ -91,7 +91,7 @@ abstract class Rewrites extends SubComponent {
     new String(patchedChars)
   }
 
-  def writePatches(source: SourceFile, patches: Array[Patch]): Unit = if (patches.nonEmpty) {
+  private def writePatches(source: SourceFile, patches: Array[Patch]): Unit = if (patches.nonEmpty) {
     java.util.Arrays.sort(patches, Ordering.by[Patch, Int](_.span.start))
     if (checkNoOverlap(patches)) {
       val bytes = applyPatches(source, patches).getBytes(settings.encoding.value)
@@ -101,12 +101,12 @@ abstract class Rewrites extends SubComponent {
     }
   }
 
-  lazy val breakOutSym = {
+  private lazy val breakOutSym = {
     import definitions._
     getMemberMethod(rootMirror.getPackageObject("scala.collection"), TermName("breakOut"))
   }
 
-  def isInferredArg(tree: Tree) = tree match {
+  private def isInferredArg(tree: Tree) = tree match {
     case tt: TypeTree => tt.original eq null
     case _ =>
       val pos = tree.pos
@@ -117,7 +117,7 @@ abstract class Rewrites extends SubComponent {
   }
 
   // Applied.unapply matches any tree, not just applications
-  object Application {
+  private object Application {
     def unapply(t: Tree): Option[(Tree, List[Tree], List[List[Tree]])] = t match {
       case _: Apply | _: TypeApply =>
         val applied = treeInfo.dissectApplied(t)
@@ -126,7 +126,7 @@ abstract class Rewrites extends SubComponent {
     }
   }
 
-  class BreakoutTraverser extends Traverser {
+  private class BreakoutTraverser extends Traverser {
     val patches = collection.mutable.ArrayBuffer.empty[Patch]
     override def traverse(tree: Tree): Unit = tree match {
       case Application(fun, targs, argss) if fun.symbol == breakOutSym =>
@@ -136,9 +136,11 @@ abstract class Rewrites extends SubComponent {
       case _ => super.traverse(tree)
     }
   }
-  class CollectionSeqTraverser(treeByRangePos: collection.Map[Position, Tree]) extends Traverser {
-    case class Rewrite(name: String, typeAlias: Symbol, termAlias: Symbol, cls: Symbol, module: Symbol)
 
+  /** Rewrites Idents that refer to scala.Seq/IndexedSeq as collection.Seq (or scala.collection.Seq if qualification is needed) */
+  private class CollectionSeqTransformer(treeByRangePos: collection.Map[Position, Tree], unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
+    case class Rewrite(name: String, typeAlias: Symbol, termAlias: Symbol, cls: Symbol, module: Symbol)
+    val ScalaCollectionPackage = rootMirror.getPackage("scala.collection")
     def rewrite(name: String) = Rewrite(name,
       definitions.ScalaPackage.packageObject.info.decl(TypeName(name)),
       definitions.ScalaPackage.packageObject.info.decl(TermName(name)),
@@ -146,27 +148,64 @@ abstract class Rewrites extends SubComponent {
       rootMirror.getRequiredModule("scala.collection." + name))
     val rewrites = List(rewrite("Seq"), rewrite("IndexedSeq"))
     val patches = collection.mutable.ArrayBuffer.empty[Patch]
-    override def traverse(tree: Tree): Unit = {
+    override def transform(tree: Tree): Tree = {
       tree match {
-        case tt: TypeTree if tt.original != null =>
-          val saved = tt.original.tpe
-          tt.original.tpe = tt.tpe
-          try traverse(tt.original)
-          finally tt.original.setType(saved)
         case ref: RefTree =>
           for (rewrite <- rewrites) {
             val sym = ref.symbol
             if (sym == rewrite.cls || sym == rewrite.module || sym == rewrite.termAlias || sym == rewrite.typeAlias) {
               treeByRangePos.get(ref.pos) match {
                 case Some(Ident(name)) if name.string_==(rewrite.name) =>
-                  patches += Patch(ref.pos, "scala.collection." + rewrite.name)
+                  val qual = List("collection", "scala.collection", "_root_.scala.collection").find { qual =>
+                    val ref = newUnitParser(newCompilationUnit(qual)).parseRule(_.expr())
+                    val typed = silentTyped(ref, Mode.QUALmode)
+                    typed.tpe.termSymbol == ScalaCollectionPackage
+                  }.get
+                  val patchCode = qual + "." + rewrite.name
+                  patches += Patch(ref.pos, patchCode)
                 case _ =>
               }
             }
           }
         case _ =>
       }
-      super.traverse(tree)
+      super.transform(tree)
+    }
+  }
+
+  private class RewriteTypingTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+
+    override def transform(tree: Tree): Tree = tree match {
+      case tt: TypeTree if tt.original != null =>
+        val saved = tt.original.tpe
+        tt.original.tpe = tt.tpe
+        try transform(tt.original)
+        finally tt.original.setType(saved)
+      case _ => super.transform(tree)
+    }
+
+    protected def localTyperParamsEntered: analyzer.Typer = {
+      val typer: analyzer.Typer = localTyper
+      typer.context.enclosingContextChain.filter(_.owner.isMethod).foreach { (methodContext: analyzer.Context) =>
+        val saved = typer.context
+        typer.context = methodContext
+        try {
+          val defDef = methodContext.tree.asInstanceOf[DefDef]
+          typer.reenterTypeParams(defDef.tparams)
+          typer.reenterValueParams(defDef.vparamss)
+        } finally typer.context = saved
+      }
+      typer
+    }
+
+    protected def silentTyped(tree: Tree, mode: Mode): Tree = {
+      val typer = localTyperParamsEntered
+      typer.silent[Tree](_.typed(tree, mode)) match {
+        case analyzer.SilentResultValue(tree: Tree) =>
+          tree
+        case _: analyzer.SilentTypeError =>
+          EmptyTree
+      }
     }
   }
 }
