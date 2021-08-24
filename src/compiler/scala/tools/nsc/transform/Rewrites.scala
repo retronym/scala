@@ -37,8 +37,8 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       val settings = global.settings
       val rws = settings.Yrewrites
       if (rws.contains(rws.domain.breakOutArgs)) {
-        val rewriter = new BreakoutTraverser()
-        rewriter.traverse(unit.body)
+        val rewriter = new BreakoutTraverser(unit)
+        rewriter.transform(unit.body)
         patches ++= rewriter.patches
       }
       if (rws.contains(rws.domain.collectionSeq)) {
@@ -101,11 +101,6 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
     }
   }
 
-  private lazy val breakOutSym = {
-    import definitions._
-    getMemberMethod(rootMirror.getPackageObject("scala.collection"), TermName("breakOut"))
-  }
-
   private def isInferredArg(tree: Tree) = tree match {
     case tt: TypeTree => tt.original eq null
     case _ =>
@@ -126,14 +121,86 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
     }
   }
 
-  private class BreakoutTraverser extends Traverser {
+  private class RewriteTypingTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+
+    override def transform(tree: Tree): Tree = tree match {
+      case tt: TypeTree if tt.original != null =>
+        val saved = tt.original.tpe
+        tt.original.tpe = tt.tpe
+        try transform(tt.original)
+        finally tt.original.setType(saved)
+      case Block(stats, expr) =>
+        val stats1 = stats.mapConserve { stat =>
+          stat match {
+            case md: MemberDef =>
+              val sym = md.symbol
+              if (sym != NoSymbol)
+                localTyper.context.scope.enter(stat.symbol)
+            case imp: Import =>
+              localTyper.context = localTyper.context.make(imp)
+            case _ =>
+          }
+          transform(stat)
+        }
+        val expr1 = transform(expr)
+        treeCopy.Block(tree, stats1, expr1)
+      case dd: DefDef =>
+        typer.reenterTypeParams(dd.tparams)
+        typer.reenterValueParams(dd.vparamss)
+        super.transform(dd)
+      case cd: ClassDef =>
+        typer.reenterTypeParams(cd.tparams)
+        // TODO: what about constructor params?
+        super.transform(cd)
+      case _ => super.transform(tree)
+    }
+
+    def silentTyped(tree: Tree, mode: Mode): Tree = {
+      val typer = localTyper
+      val result = typer.silent[Tree](_.typed(tree, mode))
+      result match {
+        case analyzer.SilentResultValue(tree: Tree) =>
+          tree
+        case _: analyzer.SilentTypeError =>
+          EmptyTree
+      }
+    }
+    def chooseQualifierExpr(options: List[String])(f: Tree => Boolean): String = {
+      options.find { qual =>
+        val ref = newUnitParser(newCompilationUnit(qual)).parseRule(_.expr())
+        val typed = silentTyped(ref, Mode.QUALmode)
+        f(typed)
+      }.get
+    }
+  }
+
+  // Rewrites
+
+  private object BreakoutTraverser {
+    lazy val breakOutSym = {
+      import definitions._
+      getMemberMethod(rootMirror.getPackageObject("scala.collection"), TermName("breakOut"))
+    }
+
+  }
+
+  private class BreakoutTraverser(unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
+    import BreakoutTraverser._
     val patches = collection.mutable.ArrayBuffer.empty[Patch]
-    override def traverse(tree: Tree): Unit = tree match {
+    override def transform(tree: Tree): Tree = tree match {
       case Application(fun, targs, argss) if fun.symbol == breakOutSym =>
         val inferredBreakOut = targs.forall(isInferredArg) && mforall(argss)(isInferredArg)
-        if (inferredBreakOut)
-          patches += Patch(Position.offset(tree.pos.source, fun.pos.end), targs.mkString("[", ", ", "]"))
-      case _ => super.traverse(tree)
+        val targsString = {
+          val renderer = new TypeRenderer(this)
+          targs.map(targ => renderer.apply(targ.tpe)).mkString("[", ", ", "]")
+        }
+        if (inferredBreakOut) {
+          patches += Patch(Position.offset(tree.pos.source, fun.pos.end), targsString)
+        }
+        super.transform(fun)
+        tree
+      case _ =>
+        super.transform(tree)
     }
   }
 
@@ -156,11 +223,9 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
             if (sym == rewrite.cls || sym == rewrite.module || sym == rewrite.termAlias || sym == rewrite.typeAlias) {
               treeByRangePos.get(ref.pos) match {
                 case Some(Ident(name)) if name.string_==(rewrite.name) =>
-                  val qual = List("collection", "scala.collection", "_root_.scala.collection").find { qual =>
-                    val ref = newUnitParser(newCompilationUnit(qual)).parseRule(_.expr())
-                    val typed = silentTyped(ref, Mode.QUALmode)
-                    typed.tpe.termSymbol == ScalaCollectionPackage
-                  }.get
+                  val qual: String = chooseQualifierExpr(List("collection", "scala.collection", "_root_.scala.collection")) { tree =>
+                    tree.tpe.termSymbol == ScalaCollectionPackage
+                  }
                   val patchCode = qual + "." + rewrite.name
                   patches += Patch(ref.pos, patchCode)
                 case _ =>
@@ -172,40 +237,39 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       super.transform(tree)
     }
   }
-
-  private class RewriteTypingTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-
-    override def transform(tree: Tree): Tree = tree match {
-      case tt: TypeTree if tt.original != null =>
-        val saved = tt.original.tpe
-        tt.original.tpe = tt.tpe
-        try transform(tt.original)
-        finally tt.original.setType(saved)
-      case _ => super.transform(tree)
-    }
-
-    protected def localTyperParamsEntered: analyzer.Typer = {
-      val typer: analyzer.Typer = localTyper
-      typer.context.enclosingContextChain.filter(_.owner.isMethod).foreach { (methodContext: analyzer.Context) =>
-        val saved = typer.context
-        typer.context = methodContext
-        try {
-          val defDef = methodContext.tree.asInstanceOf[DefDef]
-          typer.reenterTypeParams(defDef.tparams)
-          typer.reenterValueParams(defDef.vparamss)
-        } finally typer.context = saved
-      }
-      typer
-    }
-
-    protected def silentTyped(tree: Tree, mode: Mode): Tree = {
-      val typer = localTyperParamsEntered
-      typer.silent[Tree](_.typed(tree, mode)) match {
-        case analyzer.SilentResultValue(tree: Tree) =>
-          tree
-        case _: analyzer.SilentTypeError =>
-          EmptyTree
-      }
+  private class TypeRenderer(rewriteTransformer: RewriteTypingTransformer) extends TypeMap {
+    override def apply(tpe: Type): Type = tpe match {
+      case SingleType(pre, sym) if tpe.prefix.typeSymbol.isOmittablePrefix =>
+        if (pre.typeSymbol.isOmittablePrefix) {
+          val typedTree = rewriteTransformer.silentTyped(Ident(sym.name), Mode.QUALmode)
+          if (typedTree.symbol == sym || sym.tpeHK =:= typedTree.tpe)
+            SingleType(NoPrefix, sym)
+          else {
+            val dummyOwner = NoSymbol.newClassSymbol(TypeName(pre.typeSymbol.fullName))
+            dummyOwner.setInfo(ThisType(dummyOwner))
+            SingleType(TypeRef(NoPrefix, dummyOwner, Nil), sym.cloneSymbol(NoSymbol))
+          }
+        } else {
+          mapOver(tpe)
+        }
+      case TypeRef(pre, sym, args) =>
+        val args1 = args.mapConserve(this)
+        if (pre.typeSymbol.isOmittablePrefix || global.shorthands.contains(sym.fullName)) {
+          if (sym.name.string_==("List"))
+            getClass
+          val typedTree = rewriteTransformer.silentTyped(Ident(sym.name), Mode.TAPPmode | Mode.FUNmode)
+          if (typedTree.symbol == sym || sym.tpeHK =:= typedTree.tpe)
+            TypeRef(NoPrefix, sym, args1)
+          else {
+            val dummyOwner = NoSymbol.newClassSymbol(TypeName(pre.typeSymbol.fullName))
+            dummyOwner.setInfo(ThisType(dummyOwner))
+            TypeRef(SingleType(NoPrefix, dummyOwner), sym.cloneSymbol(NoSymbol), args1)
+          }
+        } else {
+          mapOver(tpe)
+        }
+      case _ =>
+        mapOver(tpe)
     }
   }
 }
