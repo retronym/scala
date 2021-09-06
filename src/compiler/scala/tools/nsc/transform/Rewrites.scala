@@ -28,10 +28,20 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       val reparseUnit = new CompilationUnit(unit.source)
       reparseUnit.body = newUnitParser(reparseUnit).parse()
       val treeByRangePos = mutable.HashMap[Position, Tree]()
+      var lastTopLevelImport: Import = null
+      var seenTemplate = false
       reparseUnit.body.foreach {
         tree =>
-          if (tree.pos.isRange && !tree.pos.isTransparent)
+          if (tree.pos.isRange && !tree.pos.isTransparent) {
             treeByRangePos(tree.pos) = tree
+            if (!seenTemplate) {
+              tree match {
+                case imp: Import => lastTopLevelImport = imp
+                case _: Template => seenTemplate = true
+                case _ =>
+              }
+            }
+          }
       }
 
       val settings = global.settings
@@ -43,6 +53,11 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       }
       if (rws.contains(rws.domain.collectionSeq)) {
         val rewriter = new CollectionSeqTransformer(treeByRangePos, unit)
+        rewriter.transform(unit.body)
+        patches ++= rewriter.patches
+      }
+      if (rws.contains(rws.domain.varargsToSeq)) {
+        val rewriter = new VarargsToSeq(unit)
         rewriter.transform(unit.body)
         patches ++= rewriter.patches
       }
@@ -217,6 +232,7 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
   private class BreakoutTraverser(unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
     import BreakoutTraverser._
     val patches = collection.mutable.ArrayBuffer.empty[Patch]
+    val topLevelImports = collection.mutable.LinkedHashSet[String]()
     override def transform(tree: Tree): Tree = tree match {
       case Application(fun, targs, argss) if fun.symbol == breakOutSym =>
         val inferredBreakOut = targs.forall(isInferredArg) && mforall(argss)(isInferredArg)
@@ -229,6 +245,20 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
         }
         super.transform(fun)
         tree
+      case _ =>
+        super.transform(tree)
+    }
+  }
+
+  private class VarargsToSeq(unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
+    val patches = collection.mutable.ArrayBuffer.empty[Patch]
+    val CollectionImmutableSeq = rootMirror.requiredClass[scala.collection.immutable.Seq[_]]
+    val CollectionSeq = rootMirror.requiredClass[scala.collection.Seq[_]]
+    override def transform(tree: Tree): Tree = tree match {
+      case Typed(expr, Ident(tpnme.WILDCARD_STAR))
+        if !expr.tpe.typeSymbol.isNonBottomSubClass(CollectionImmutableSeq) && expr.tpe.typeSymbol.isNonBottomSubClass(CollectionSeq) =>
+        patches += Patch(expr.pos.focusEnd, ".toSeq")
+        super.transform(tree)
       case _ =>
         super.transform(tree)
     }
