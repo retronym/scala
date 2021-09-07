@@ -28,21 +28,6 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       val reparseUnit = new CompilationUnit(unit.source)
       reparseUnit.body = newUnitParser(reparseUnit).parse()
       val treeByRangePos = mutable.HashMap[Position, Tree]()
-      var lastTopLevelImport: Import = null
-      var seenTemplate = false
-      reparseUnit.body.foreach {
-        tree =>
-          if (tree.pos.isRange && !tree.pos.isTransparent) {
-            treeByRangePos(tree.pos) = tree
-            if (!seenTemplate) {
-              tree match {
-                case imp: Import => lastTopLevelImport = imp
-                case _: Template => seenTemplate = true
-                case _ =>
-              }
-            }
-          }
-      }
 
       val settings = global.settings
       val rws = settings.Yrewrites
@@ -58,6 +43,11 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
       }
       if (rws.contains(rws.domain.varargsToSeq)) {
         val rewriter = new VarargsToSeq(unit)
+        rewriter.transform(unit.body)
+        patches ++= rewriter.patches
+      }
+      if (rws.contains(rws.domain.importCollectionsCompat)) {
+        val rewriter = new AddImports(unit)
         rewriter.transform(unit.body)
         patches ++= rewriter.patches
       }
@@ -137,8 +127,23 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
   }
 
   private class RewriteTypingTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-
+    var lastTopLevelContext: analyzer.Context = analyzer.NoContext
+    var topLevelImportPos: Position = unit.source.position(0)
     override def transform(tree: Tree): Tree = tree match {
+      case pd: PackageDef =>
+        topLevelImportPos = pd.pid.pos.focusEnd
+        atOwner(tree.symbol) {
+          lastTopLevelContext = localTyper.context
+        }
+        super.transform(tree)
+      case imp: Import =>
+        localTyper.context = localTyper.context.make(imp)
+        val context = localTyper.context
+        if (context.enclClass.owner.hasPackageFlag) {
+          lastTopLevelContext = context
+          topLevelImportPos = tree.pos.focusEnd
+        }
+        super.transform(imp)
       case tt: TypeTree if tt.original != null =>
         val saved = tt.original.tpe
         tt.original.tpe = tt.tpe
@@ -295,6 +300,30 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
         case _ =>
       }
       super.transform(tree)
+    }
+  }
+
+  /** Add `import scala.collection.compat._` at the top-level */
+  private class AddImports(unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
+    val ScalaCollectionCompatPackage = rootMirror.getPackage("scala.collection.compat")
+    override def transform(tree: Tree): Tree = {
+      super.transform(tree)
+    }
+
+    def patches = {
+      val importAlreadyExists = lastTopLevelContext match {
+        case analyzer.NoContext =>
+          false
+        case ctx =>
+          ctx.enclosingContextChain.iterator.map(_.tree).exists {
+            case Import(expr, sels) =>
+              val sym = expr.tpe.termSymbol
+              sym == ScalaCollectionCompatPackage && sels.exists(_.name == nme.WILDCARD)
+            case _ => false
+          }
+      }
+      if (importAlreadyExists) Nil
+      else Patch(topLevelImportPos, "\nimport scala.collection.compat._\n") :: Nil
     }
   }
 }
