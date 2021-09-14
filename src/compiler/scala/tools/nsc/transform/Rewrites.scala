@@ -150,28 +150,48 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
         try transform(tt.original)
         finally tt.original.setType(saved)
       case Block(stats, expr) =>
-        val stats1 = stats.mapConserve { stat =>
-          stat match {
-            case md: MemberDef =>
-              val sym = md.symbol
-              if (sym != NoSymbol)
-                localTyper.context.scope.enter(stat.symbol)
-            case imp: Import =>
-              localTyper.context = localTyper.context.make(imp)
-            case _ =>
-          }
-          transform(stat)
+        val entered = mutable.ListBuffer[Symbol]()
+        val saved = localTyper
+        def enter(sym: Symbol): Unit = {
+          entered += sym
+          localTyper.context.scope.enter(sym)
         }
-        val expr1 = transform(expr)
+        try {
+          val stats1 = stats.mapConserve { stat =>
+            stat match {
+              case md: MemberDef =>
+                val sym = md.symbol
+                if (sym != NoSymbol)
+                  enter(stat.symbol)
+              case imp: Import   =>
+                localTyper.context = localTyper.context.make(imp)
+              case _             =>
+            }
+            transform(stat)
+          }
+          val expr1  = transform(expr)
+        } finally {
+          localTyper = saved
+          entered.foreach(localTyper.context.scope.unlink(_))
+        }
         treeCopy.Block(tree, stats1, expr1)
       case dd: DefDef =>
-        typer.reenterTypeParams(dd.tparams)
-        typer.reenterValueParams(dd.vparamss)
-        super.transform(dd)
+        localTyper.reenterTypeParams(dd.tparams)
+        localTyper.reenterValueParams(dd.vparamss)
+        try super.transform(dd)
+        finally {
+          val scope = localTyper.context.scope
+          dd.tparams.foreach(tree => scope.unlink(tree.symbol))
+          mforeach(dd.vparamss)(tree => scope.unlink(tree.symbol))
+        }
       case cd: ClassDef =>
         typer.reenterTypeParams(cd.tparams)
         // TODO: what about constructor params?
-        super.transform(cd)
+        try super.transform(cd)
+        finally {
+          val scope = localTyper.context.scope
+          cd.tparams.foreach(tree => scope.unlink(tree.symbol))
+        }
       case _ => super.transform(tree)
     }
 
@@ -237,13 +257,12 @@ abstract class Rewrites extends SubComponent with TypingTransformers {
   private class BreakoutTraverser(unit: CompilationUnit) extends RewriteTypingTransformer(unit) {
     import BreakoutTraverser._
     val patches = collection.mutable.ArrayBuffer.empty[Patch]
-    val topLevelImports = collection.mutable.LinkedHashSet[String]()
     override def transform(tree: Tree): Tree = tree match {
       case Application(fun, targs, argss) if fun.symbol == breakOutSym =>
         val inferredBreakOut = targs.forall(isInferredArg) && mforall(argss)(isInferredArg)
         val targsString = {
           val renderer = new TypeRenderer(this)
-          targs.map(targ => renderer.apply(targ.tpe)).mkString("[", ", ", "]")
+          (TypeTree(definitions.AnyTpe) +: targs.tail).map(targ => renderer.apply(targ.tpe)).mkString("[", ", ", "]")
         }
         if (inferredBreakOut) {
           patches += Patch(Position.offset(tree.pos.source, fun.pos.end), targsString)
