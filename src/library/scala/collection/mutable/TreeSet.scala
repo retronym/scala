@@ -97,13 +97,6 @@ sealed class TreeSet[A] private (private val tree: RB.Tree[A, Null])(implicit va
 
   override def maxBefore(key: A): Option[A] = RB.maxKeyBefore(tree, key)
 
-
-  override def min[B >: A](implicit cmp: Ordering[B]): A =
-    if ((cmp == ordering) && nonEmpty) head else super.min(cmp)
-
-  override def max[B >: A](implicit cmp: Ordering[B]): A =
-    if ((cmp == ordering) && nonEmpty) last else super.max(cmp)
-
   override def foreach[U](f: A => U): Unit = RB.foreachKey(tree, f)
 
 
