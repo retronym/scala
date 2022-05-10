@@ -449,6 +449,15 @@ private[concurrent] object Promise {
           e.reportFailure(t)
       } else throw t
     }
+    /** Hook for bytecode instrumentation */
+    private def preApplyFun(): Unit = ()
+    /** Hook for bytecode instrumentation */
+    private def postApplyFun(): Unit = ()
+    private final def applyFun(fun: Any => Any, arg: Any): Any = {
+      preApplyFun()
+      try fun(arg)
+      finally postApplyFun()
+    }
 
     // Gets invoked by the ExecutionContext, when we have a value to transform.
     override final def run(): Unit = {
@@ -464,39 +473,55 @@ private[concurrent] object Promise {
             case Xform_noop          =>
               null
             case Xform_map           =>
-              if (v.isInstanceOf[Success[F]]) Success(fun(v.get)) else v // Faster than `resolve(v map fun)`
+              if (v.isInstanceOf[Success[F]]) Success(applyFun(fun, v.get)) else v // Faster than `resolve(v map fun)`
             case Xform_flatMap       =>
               if (v.isInstanceOf[Success[F]]) {
-                val f = fun(v.get)
+                val f = applyFun(fun, v.get)
                 if (f.isInstanceOf[DefaultPromise[_]]) f.asInstanceOf[DefaultPromise[T]].linkRootOf(this, null) else completeWith(f.asInstanceOf[Future[T]])
                 null
               } else v
             case Xform_transform     =>
-              resolve(fun(v).asInstanceOf[Try[T]])
+              resolve(applyFun(fun, v).asInstanceOf[Try[T]])
             case Xform_transformWith =>
-              val f = fun(v)
+              val f = applyFun(fun, v)
               if (f.isInstanceOf[DefaultPromise[_]]) f.asInstanceOf[DefaultPromise[T]].linkRootOf(this, null) else completeWith(f.asInstanceOf[Future[T]])
               null
             case Xform_foreach       =>
-              v.foreach(fun)
+              v match {
+                case Failure(exception) =>
+                case Success(v)         => applyFun(fun, value)
+              }
               null
             case Xform_onComplete    =>
-              fun(v)
+              applyFun(fun, value)
               null
             case Xform_recover       =>
-              if (v.isInstanceOf[Failure[_]]) resolve(v.recover(fun.asInstanceOf[PartialFunction[Throwable, F]])) else v //recover F=:=T
+              if (v.isInstanceOf[Failure[_]]) {
+                preApplyFun()
+                try resolve(v.asInstanceOf[Failure[_]].recover(fun.asInstanceOf[PartialFunction[Throwable, F]]))
+                finally postApplyFun()
+              } else v //recover F=:=T
             case Xform_recoverWith   =>
               if (v.isInstanceOf[Failure[F]]) {
-                val f = fun.asInstanceOf[PartialFunction[Throwable, Future[T]]].applyOrElse(v.asInstanceOf[Failure[F]].exception, Future.recoverWithFailed)
-                if (f ne Future.recoverWithFailedMarker) {
-                  if (f.isInstanceOf[DefaultPromise[T]]) f.asInstanceOf[DefaultPromise[T]].linkRootOf(this, null) else completeWith(f.asInstanceOf[Future[T]])
-                  null
-                } else v
+                preApplyFun()
+                try {
+                  val f = fun.asInstanceOf[PartialFunction[Throwable, Future[T]]].applyOrElse(v.asInstanceOf[Failure[F]].exception, Future.recoverWithFailed)
+                  if (f ne Future.recoverWithFailedMarker) {
+                    if (f.isInstanceOf[DefaultPromise[T]]) f.asInstanceOf[DefaultPromise[T]].linkRootOf(this, null) else completeWith(f.asInstanceOf[Future[T]])
+                    null
+                  } else v
+                } finally {
+                  postApplyFun()
+                }
               } else v
             case Xform_filter        =>
               if (v.isInstanceOf[Failure[F]] || fun.asInstanceOf[F => Boolean](v.get)) v else Future.filterFailure
             case Xform_collect       =>
-              if (v.isInstanceOf[Success[F]]) Success(fun.asInstanceOf[PartialFunction[F, T]].applyOrElse(v.get, Future.collectFailed)) else v
+              if (v.isInstanceOf[Success[F]]) {
+                preApplyFun()
+                try Success(fun.asInstanceOf[PartialFunction[F, T]].applyOrElse(v.get, Future.collectFailed))
+                finally postApplyFun()
+              } else v
             case _                   =>
               Failure(new IllegalStateException("BUG: encountered transformation promise with illegal type: " + _xform)) // Safe not to `resolve`
           }
