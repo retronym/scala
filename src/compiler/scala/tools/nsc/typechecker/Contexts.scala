@@ -1231,6 +1231,8 @@ trait Contexts { self: Analyzer =>
         else if (mt1 =:= mt2 && name.isTypeName && imp1Symbol.isMonomorphicType && imp2Symbol.isMonomorphicType) {
           log(s"Suppressing ambiguous import: $mt1 =:= $mt2 && $imp1Symbol and $imp2Symbol are equivalent")
           Some(imp1)
+        } else if (imp1Symbol == imp2Symbol && imp1Symbol.owner.isTopLevel) {
+          Some(imp1)
         }
         else {
           log(s"""Import is genuinely ambiguous:
@@ -1393,7 +1395,10 @@ trait Contexts { self: Analyzer =>
         else sym match {
           case NoSymbol if inaccessible ne null => inaccessible
           case NoSymbol                         => LookupNotFound
-          case _                                => LookupSucceeded(qual, sym)
+          case _                                =>
+            if (qual.symbol != null && qual.symbol.isPackage && qual.symbol.moduleClass != sym.owner)
+              qual.setSymbol(sym.owner.sourceModule)
+            LookupSucceeded(qual, sym)
         }
       )
       def finishDefSym(sym: Symbol, pre0: Type): NameLookup = {
