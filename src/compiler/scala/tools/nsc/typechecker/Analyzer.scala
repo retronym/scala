@@ -44,6 +44,19 @@ trait Analyzer extends AnyRef
       override val checkable = false
       override def keepsTypeParams = false
 
+      override def run(): Unit = {
+        val aliases: List[String] = settings.YaliasPackage.value
+        aliases.foreach {
+          alias =>
+            alias.split('=').toList match {
+              case a :: b :: Nil =>
+                processPackageAliases(a, b)
+              case _             =>
+                globalError(s"Cannot parse value for ${settings.YaliasPackage}: $alias")
+            }
+        }
+        super.run()
+      }
       def apply(unit: CompilationUnit) {
         newNamer(rootContext(unit)).enterSym(unit.body)
       }

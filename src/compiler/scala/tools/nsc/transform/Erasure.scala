@@ -746,7 +746,7 @@ abstract class Erasure extends InfoTransform
             } else if (isMethodTypeWithEmptyParams(qual1.tpe)) { // see also adaptToType in TypeAdapter
               assert(qual1.symbol.isStable, qual1.symbol)
               adaptMember(selectFrom(applyMethodWithEmptyParams(qual1)))
-            } else if (!qual1.isInstanceOf[Super] && (!isJvmAccessible(qual1.tpe.typeSymbol, context) || !qual1.tpe.typeSymbol.isSubClass(tree.symbol.owner))) {
+            } else if (!tree.symbol.isTopLevel && !qual1.isInstanceOf[Super] && (!isJvmAccessible(qual1.tpe.typeSymbol, context) || !qual1.tpe.typeSymbol.isSubClass(tree.symbol.owner))) {
               // A selection requires a cast:
               //   - In `(foo: Option[String]).get.trim`, the qualifier has type `Object`. We cast
               //     to the owner of `trim` (`String`), unless the owner is a non-accessible Java
