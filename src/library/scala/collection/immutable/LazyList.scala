@@ -237,7 +237,7 @@ import scala.runtime.Statics
   *  @define evaluatesAllElements This method evaluates all elements of the collection.
   */
 @SerialVersionUID(3L)
-final class LazyList[+A] private(private[this] var lazyState: () => LazyList.State[A])
+final class LazyList[+A] private(private[this] var lazyState: LazyList.DelayedState[A])
   extends AbstractSeq[A]
     with LinearSeq[A]
     with LinearSeqOps[A, LazyList, LazyList[A]]
@@ -970,6 +970,8 @@ object LazyList extends SeqFactory[LazyList] {
   // Eagerly evaluate cached empty instance
   private[this] val _empty = newLL(State.Empty).force
 
+  private trait DelayedState[+A] extends Function0[State[A]]
+
   private sealed trait State[+A] extends Serializable {
     def head: A
     def tail: LazyList[A]
@@ -1370,7 +1372,7 @@ object LazyList extends SeqFactory[LazyList] {
         case a => init += a.asInstanceOf[A]
       }
       val tail = in.readObject().asInstanceOf[LazyList[A]]
-      coll = init ++: tail
+      coll = tail.prependedAll(init)
     }
 
     private[this] def readResolve(): Any = coll
