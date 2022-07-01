@@ -2691,8 +2691,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         else if (isAnonymousClass)               ("anonymous class",      "anonymous class", "AC")
         else if (isRefinementClass)              ("refinement class",     "",                "RC")
         else if (isJavaAnnotation)               ("Java annotation",      "Java annotation", "JANN")
-        else if (isJavaEnum
-            || companion.isJavaEnum)             ("Java enumeration",     "Java enum",       "JENUM")
+//        else if (isJavaEnum
+//            || companion.isJavaEnum)             ("Java enumeration",     "Java enum",       "JENUM")
         else if (isJava && isModule)             ("Java module",          "class",           "JMOD")
         else if (isJava && isModuleClass)        ("Java module class",    "class",           "JMODC")
         else if (isModule)                       ("module",               "object",          "MOD")
