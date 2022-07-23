@@ -52,7 +52,7 @@ trait Namers extends MethodSynthesis {
   }
 
   def processPackageAliases(package1: String, package2: String): Unit = {
-    class Pack(sym: Symbol) {
+    class Pack(val sym: Symbol) {
       val packageClassSym: Symbol = sym.moduleClass
       val declsList = packageClassSym.info.decls.toList
       val (packDecls, nonPackDecls) = declsList.partition(_.hasPackageFlag)
@@ -83,6 +83,7 @@ trait Namers extends MethodSynthesis {
           val dummySelect        = Select(gen.mkAttributedRef(p1.packageClassSym.sourceModule), p2Decl.name)
           val p2DeclClone = newNamer(NoContext.make(EmptyTree, RootClass)).createPackageSymbol(NoPosition, dummySelect)
           p1.enter(p2DeclClone)
+          smoosh(new Pack(p2DeclClone), new Pack(p2Decl))
         }
       }
     }
