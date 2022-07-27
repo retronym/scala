@@ -53,6 +53,49 @@ trait Namers extends MethodSynthesis {
     case _                 => false
   }
 
+  def processPackageAliases(package1: String, package2: String): Unit = {
+    class Pack(val sym: Symbol) {
+      val packageClassSym: Symbol = sym.moduleClass
+      val declsList = packageClassSym.info.decls.toList
+      val (packDecls, nonPackDecls) = declsList.partition(_.hasPackageFlag)
+      val packDeclNames = packDecls.map(_.name).toSet
+      def enter(sym: Symbol): Unit = {
+        val scope = packageClassSym.info.decls
+        if (scope.lookupSymbolEntry(sym) == null) {
+          scope.enter(sym)
+        }
+      }
+    }
+    def smoosh(p1: Pack, p2: Pack): Unit = {
+      p2.nonPackDecls.foreach(p1.enter(_))
+
+      val sharedNames = p1.packDeclNames.intersect(p2.packDeclNames)
+      p1.packDecls.foreach { p1Decl =>
+        p2.packDecls.find(_.name == p1Decl.name) match {
+          case None =>
+          case Some(p2Decl) =>
+            smoosh(new Pack(p1Decl), new Pack(p2Decl))
+        }
+      }
+      p2.packDecls.foreach { p2Decl =>
+        if (sharedNames.contains(p2Decl.name)) {
+          val p1Decl = p1.packDecls.find(_.name == p2Decl.name).get
+          smoosh(new Pack(p1Decl), new Pack(p2Decl))
+        } else {
+          val dummySelect        = Select(gen.mkAttributedRef(p1.packageClassSym.sourceModule), p2Decl.name)
+          val p2DeclClone = newNamer(NoContext.make(EmptyTree, RootClass)).createPackageSymbol(NoPosition, dummySelect)
+          p1.enter(p2DeclClone)
+          smoosh(new Pack(p2DeclClone), new Pack(p2Decl))
+        }
+      }
+    }
+    val package1Sym = rootMirror.getPackageIfDefined(package1)
+    val package2Sym = rootMirror.getPackageIfDefined(package2)
+    // for now require both packages to be defined
+    if (package1Sym != NoSymbol && package2Sym != NoSymbol)
+      smoosh(new Pack(package1Sym), new Pack(package2Sym))
+  }
+
   private class NormalNamer(context: Context) extends Namer(context)
   def newNamer(context: Context): Namer = new NormalNamer(context)
 
@@ -362,7 +405,6 @@ trait Namers extends MethodSynthesis {
         case Select(qual: RefTree, _) => createPackageSymbol(pos, qual).moduleClass
       }
       val existing = pkgOwner.info.decls.lookup(pid.name)
-
       if (existing.hasPackageFlag && pkgOwner == existing.owner)
         existing
       else {
