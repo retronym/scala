@@ -7,13 +7,14 @@ import java.nio.file.Files
 
 class PackageSmoosherTest {
   class Fixture(aliases: List[String]) {
-    val g = new Global(new Settings)
-    g.settings.usejavacp.value = true
-    import g._
     val tmpDir = new TemporaryFolder()
     tmpDir.create()
     def compile(enabled: Boolean)(code: String) = {
+      val g = new Global(new Settings)
+      g.settings.usejavacp.value = true
+      import g._
       // settings.Xprint.value = List("typer")
+      settings.classpath.value = tmpDir.getRoot.getAbsolutePath
       settings.outdir.value = tmpDir.getRoot.getAbsolutePath
       if (enabled)
         settings.YaliasPackage.value = aliases
@@ -159,6 +160,39 @@ class PackageSmoosherTest {
         |}
         |""".stripMargin)
   }
+
+
+  @Test
+  def testPackageObjectImport2(): Unit = withFixture("o.prime=o.platform" :: Nil) { f =>
+    import f._
+
+    compile(enabled = false)(
+      """
+        |package o.platform.x
+        |
+        |package object y {
+        |  val someVal = ""
+        |}
+        |""".stripMargin)
+
+    compile(enabled = false)(
+      """
+        |package o.prime
+        |
+        |class Placeholder
+        |""".stripMargin)
+
+    compile(enabled = true)(
+      """
+        |package com.acme
+        |
+        |import o.prime.x.y.{someVal => _, _}
+        |
+        |class Test {
+        |}
+        |""".stripMargin)
+  }
+
   @Test
   def testNesting(): Unit = withFixture("o.prime=o.platform" :: Nil) { f =>
     import f._
