@@ -49,4 +49,43 @@ class SymbolTableTest {
     import symbolTable._
     assertEquals(NoSymbol, NoSymbol.outerClass)
   }
+
+  @Test def t12702_pending(): Unit = {
+    import symbolTable._
+    import SymbolTableTest.t12702.Test._
+    val t1 = typeOf[IOS.type]
+    val t2 = {
+      val sd = typeOf[SD]
+      sd.memberType(sd.member(TermName("mFI"))).finalResultType
+    }
+    // t1: Test.IOS.type
+    // t2: Test.MFI{type +ST = S}
+
+    // Ends up in `throw GlbFailure` in glb => Null
+    assertTrue(definitions.NullTpe =:= glb(t1 :: t2 :: Nil))
+  }
+}
+
+object SymbolTableTest {
+  object t12702 {
+    object Test {
+      trait MFSS[X <: MFSS[_]]
+
+      trait CS extends MFSS[CS]
+
+      trait MFI { type ST }
+
+      case class MFSD[S](mFI: MFI {type ST = S})
+
+      case object IOS extends MFI { type ST = CS }
+
+      type SD = MFSD[S] forSome {
+        type S <: MFSS[S]
+      }
+
+      def bad(sd: SD) = sd.mFI match {
+        case ios: IOS.type => println(ios)
+      }
+    }
+  }
 }
