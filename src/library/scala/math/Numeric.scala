@@ -44,7 +44,7 @@ object Numeric {
     def toFloat(x: BigInt): Float = x.floatValue
     def toDouble(x: BigInt): Double = x.doubleValue
   }
-  implicit object BigIntIsIntegral extends BigIntIsIntegral with Ordering.BigIntOrdering
+  implicit object BigIntIsIntegral extends CachedNumeric[BigInt] with BigIntIsIntegral with Ordering.BigIntOrdering
 
   trait IntIsIntegral extends Integral[Int] {
     def plus(x: Int, y: Int): Int = x + y
@@ -59,7 +59,7 @@ object Numeric {
     def toFloat(x: Int): Float = x.toFloat
     def toDouble(x: Int): Double = x.toDouble
   }
-  implicit object IntIsIntegral extends IntIsIntegral with Ordering.IntOrdering
+  implicit object IntIsIntegral extends CachedNumeric[Int] with IntIsIntegral with Ordering.IntOrdering
 
   trait ShortIsIntegral extends Integral[Short] {
     def plus(x: Short, y: Short): Short = (x + y).toShort
@@ -74,9 +74,9 @@ object Numeric {
     def toFloat(x: Short): Float = x.toFloat
     def toDouble(x: Short): Double = x.toDouble
   }
-  implicit object ShortIsIntegral extends ShortIsIntegral with Ordering.ShortOrdering
+  implicit object ShortIsIntegral extends CachedNumeric[Short] with ShortIsIntegral with Ordering.ShortOrdering
 
-  trait ByteIsIntegral extends Integral[Byte] {
+  trait ByteIsIntegral extends CachedNumeric[Byte] with Integral[Byte] {
     def plus(x: Byte, y: Byte): Byte = (x + y).toByte
     def minus(x: Byte, y: Byte): Byte = (x - y).toByte
     def times(x: Byte, y: Byte): Byte = (x * y).toByte
@@ -89,7 +89,7 @@ object Numeric {
     def toFloat(x: Byte): Float = x.toFloat
     def toDouble(x: Byte): Double = x.toDouble
   }
-  implicit object ByteIsIntegral extends ByteIsIntegral with Ordering.ByteOrdering
+  implicit object ByteIsIntegral extends CachedNumeric[Byte] with ByteIsIntegral with Ordering.ByteOrdering
 
   trait CharIsIntegral extends Integral[Char] {
     def plus(x: Char, y: Char): Char = (x + y).toChar
@@ -104,7 +104,7 @@ object Numeric {
     def toFloat(x: Char): Float = x.toFloat
     def toDouble(x: Char): Double = x.toDouble
   }
-  implicit object CharIsIntegral extends CharIsIntegral with Ordering.CharOrdering
+  implicit object CharIsIntegral extends CachedNumeric[Char] with CharIsIntegral with Ordering.CharOrdering
 
   trait LongIsIntegral extends Integral[Long] {
     def plus(x: Long, y: Long): Long = x + y
@@ -119,7 +119,7 @@ object Numeric {
     def toFloat(x: Long): Float = x.toFloat
     def toDouble(x: Long): Double = x.toDouble
   }
-  implicit object LongIsIntegral extends LongIsIntegral with Ordering.LongOrdering
+  implicit object LongIsIntegral extends CachedNumeric[Long] with LongIsIntegral with Ordering.LongOrdering
 
   trait FloatIsConflicted extends Numeric[Float] {
     def plus(x: Float, y: Float): Float = x + y
@@ -141,9 +141,8 @@ object Numeric {
     def quot(x: Float, y: Float): Float = (BigDecimal(x) quot BigDecimal(y)).floatValue
     def rem(x: Float, y: Float): Float = (BigDecimal(x) remainder BigDecimal(y)).floatValue
   }
-  implicit object FloatIsFractional extends FloatIsFractional with Ordering.FloatOrdering
-  object FloatAsIfIntegral extends FloatAsIfIntegral with Ordering.FloatOrdering {
-  }
+  implicit object FloatIsFractional extends CachedNumeric[Float] with FloatIsFractional with Ordering.FloatOrdering
+  object FloatAsIfIntegral extends CachedNumeric[Float] with FloatAsIfIntegral with Ordering.FloatOrdering
 
   trait DoubleIsConflicted extends Numeric[Double] {
     def plus(x: Double, y: Double): Double = x + y
@@ -188,11 +187,15 @@ object Numeric {
 
   // For Double and BigDecimal we offer implicit Fractional objects, but also one
   // which acts like an Integral type, which is useful in NumericRange.
-  implicit object BigDecimalIsFractional extends BigDecimalIsFractional with Ordering.BigDecimalOrdering
-  object BigDecimalAsIfIntegral extends BigDecimalAsIfIntegral with Ordering.BigDecimalOrdering
+  implicit object BigDecimalIsFractional extends CachedNumeric[BigDecimal] with BigDecimalIsFractional with Ordering.BigDecimalOrdering
+  object BigDecimalAsIfIntegral extends CachedNumeric[BigDecimal] with BigDecimalAsIfIntegral with Ordering.BigDecimalOrdering
 
-  implicit object DoubleIsFractional extends DoubleIsFractional with Ordering.DoubleOrdering
-  object DoubleAsIfIntegral extends DoubleAsIfIntegral with Ordering.DoubleOrdering
+  implicit object DoubleIsFractional extends CachedNumeric[Double] with DoubleIsFractional with Ordering.DoubleOrdering
+  object DoubleAsIfIntegral extends CachedNumeric[Double] with DoubleAsIfIntegral with Ordering.DoubleOrdering
+  private[scala] abstract class CachedNumeric[T] extends Numeric[T] {
+    override val zero: T = super.zero
+    override val one: T = super.one
+  }
 }
 
 trait Numeric[T] extends Ordering[T] {
