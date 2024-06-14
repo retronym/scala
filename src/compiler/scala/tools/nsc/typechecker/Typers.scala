@@ -3286,17 +3286,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
             (!sym.isModule || shouldAddAsModule) && (inBlock || !context.isInPackageObject(sym, context.owner))
           }
-          for (sym <- scope)
-            // OPT: shouldAdd is usually true. Call it here, rather than in the outer loop
-            for (tree <- context.unit.synthetics.get(sym) if shouldAdd(sym)) {
-              // if the completer set the IS_ERROR flag, retract the stat (currently only used by applyUnapplyMethodCompleter)
-              if (!sym.initialize.hasFlag(IS_ERROR))
-                newStats += typedStat(tree) // might add even more synthetics to the scope
-              context.unit.synthetics -= sym
+          for (sym <- scope) {
+            context.unit.synthetics.get(sym) match {
+              case Some(tree) if shouldAdd(sym) => // OPT: shouldAdd is more expensive than usually the map look and usually true. Call it here, rather than in the outer loop
+                // if the completer set the IS_ERROR flag, retract the stat (currently only used by applyUnapplyMethodCompleter)
+                if (!sym.initialize.hasFlag(IS_ERROR))
+                  newStats += typedStat(tree) // might add even more synthetics to the scope
+                  context.unit.synthetics -= sym
+              case _ =>
             }
-          // the type completer of a synthetic might add more synthetics. example: if the
-          // factory method of a case class (i.e. the constructor) has a default.
-          moreToAdd = scope.elems ne initElems
+            // the type completer of a synthetic might add more synthetics. example: if the
+            // factory method of a case class (i.e. the constructor) has a default.
+            moreToAdd = scope.elems ne initElems
+          }
         }
         if (newStats.isEmpty) stats
         else {
@@ -4139,23 +4141,26 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
         }
 
+        // OPT: hoist lambda out of type map below.
+        lazy val addIdentIfLocal = (arg: Tree) => {
+          arg match {
+            case Ident(_) =>
+              // Check the symbol of an Ident, unless the
+              // Ident's type is already over an existential.
+              // (If the type is already over an existential,
+              // then remap the type, not the core symbol.)
+              if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
+                addIfLocal(arg.symbol, arg.tpe)
+            case _ => ()
+          }
+        }
+
         for (t <- tp) {
           t match {
             case ExistentialType(tparams, _) =>
               boundSyms ++= tparams
             case AnnotatedType(annots, _) =>
-              for (annot <- annots; arg <- annot.args) {
-                arg match {
-                  case Ident(_) =>
-                    // Check the symbol of an Ident, unless the
-                    // Ident's type is already over an existential.
-                    // (If the type is already over an existential,
-                    // then remap the type, not the core symbol.)
-                    if (!arg.tpe.typeSymbol.hasFlag(EXISTENTIAL))
-                      addIfLocal(arg.symbol, arg.tpe)
-                  case _ => ()
-                }
-              }
+              annots.foreach(_.args.foreach(addIdentIfLocal))
             case _ =>
           }
           addIfLocal(t.termSymbol, t)
