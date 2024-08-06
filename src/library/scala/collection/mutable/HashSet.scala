@@ -93,9 +93,6 @@ final class HashSet[A](initialCapacity: Int, loadFactor: Double)
   override def addAll(xs: IterableOnce[A]): this.type = {
     sizeHint(xs, delta = 0)
     xs match {
-      case hs: immutable.HashSet[A] =>
-        hs.foreachWithHash((k, h) => addElem(k, improveHash(h)))
-        this
       case hs: mutable.HashSet[A] =>
         val iter = hs.nodeIterator
         while (iter.hasNext) {
@@ -120,12 +117,6 @@ final class HashSet[A](initialCapacity: Int, loadFactor: Double)
     }
 
     xs match {
-      case hs: immutable.HashSet[A] =>
-        hs.foreachWithHashWhile { (k, h) =>
-          remove(k, improveHash(h))
-          size > 0
-        }
-        this
       case hs: mutable.HashSet[A] =>
         val iter = hs.nodeIterator
         while (iter.hasNext) {

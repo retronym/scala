@@ -98,9 +98,6 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
     sizeHint(xs)
 
     xs match {
-      case hm: immutable.HashMap[K, V] =>
-        hm.foreachWithHash((k, v, h) => put0(k, v, improveHash(h), getOld = false))
-        this
       case hm: mutable.HashMap[K, V] =>
         val iter = hm.nodeIterator
         while (iter.hasNext) {
@@ -188,12 +185,6 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
     }
 
     xs match {
-      case hs: immutable.HashSet[K] =>
-        hs.foreachWithHashWhile { (k, h) =>
-          remove0(k, improveHash(h))
-          size > 0
-        }
-        this
       case hs: mutable.HashSet[K] =>
         val iter = hs.nodeIterator
         while (iter.hasNext) {

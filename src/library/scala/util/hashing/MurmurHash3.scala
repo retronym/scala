@@ -59,7 +59,12 @@ private[hashing] class MurmurHash3 {
     h = mix(h, y)
     finalizeHash(h, 2)
   }
-
+  private[scala] def product2Hash(x: Any, y: Any, seed: Int): Int = {
+    var h = seed
+    h = mix(h, x.##)
+    h = mix(h, y.##)
+    finalizeHash(h, 2)
+  }
   /** Compute the hash of a product */
   final def productHash(x: Product, seed: Int, ignorePrefix: Boolean = false): Int = {
     val arr = x.productArity
@@ -340,6 +345,7 @@ object MurmurHash3 extends MurmurHash3 {
   def arrayHash[@specialized T](a: Array[T]): Int = arrayHash(a, arraySeed)
   def bytesHash(data: Array[Byte]): Int           = bytesHash(data, arraySeed)
   def orderedHash(xs: IterableOnce[Any]): Int     = orderedHash(xs, symmetricSeed)
+  private [scala] def product2Hash(x: Any, y: Any): Int = product2Hash(x, y, productSeed)
   def productHash(x: Product): Int                = productHash(x, productSeed)
   def stringHash(x: String): Int                  = stringHash(x, stringSeed)
   def unorderedHash(xs: IterableOnce[Any]): Int   = unorderedHash(xs, traversableSeed)
