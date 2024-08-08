@@ -15,11 +15,9 @@ package collection
 package immutable
 
 import java.util
-
-import generic._
-import scala.collection.parallel.immutable.ParHashSet
 import scala.annotation.tailrec
-import scala.runtime.AbstractFunction1
+import scala.collection.generic._
+import scala.runtime.{AbstractFunction1, Statics}
 
 /** This class implements immutable sets using a hash trie.
  *
@@ -34,20 +32,16 @@ import scala.runtime.AbstractFunction1
  *  @define coll immutable hash set
  */
 @SerialVersionUID(2L)
-sealed class HashSet[A] extends AbstractSet[A]
-                    with Set[A]
-                    with GenericSetTemplate[A, HashSet]
-                    with SetLike[A, HashSet[A]]
-                    with CustomParallelizable[A, ParHashSet[A]]
-                    with Serializable
+sealed abstract class HashSet[A] extends AbstractSet[A]
+  with StrictOptimizedSetOps[A, HashSet, HashSet[A]]
+  with IterableFactoryDefaults[A, HashSet]
+  with DefaultSerializable
 {
-  import HashSet.{nullToEmpty, bufferSize}
+  import HashSet.{bufferSize, nullToEmpty}
 
-  override def companion: GenericCompanion[HashSet] = HashSet
+  override def iterableFactory: IterableFactory[HashSet] = HashSet
 
   //class HashSet[A] extends Set[A] with SetLike[A, HashSet[A]] {
-
-  override def par = ParHashSet.fromTrie(this)
 
   override def size: Int = 0
 
@@ -83,12 +77,12 @@ sealed class HashSet[A] extends AbstractSet[A]
     true
   }
 
-  override def + (e: A): HashSet[A] = updated0(e, computeHash(e), 0)
+  def incl (e: A): HashSet[A] = updated0(e, computeHash(e), 0)
 
-  override def + (elem1: A, elem2: A, elems: A*): HashSet[A] =
+  def incl (elem1: A, elem2: A, elems: A*): HashSet[A] =
     this + elem1 + elem2 ++ elems
 
-  override def union(that: GenSet[A]): HashSet[A] = that match {
+  override def concat(that: collection.IterableOnce[A]): HashSet[A] = that match {
     case that: HashSet[A] =>
       if (this eq that) this
       else nullToEmpty(union0(that, 0))
@@ -160,7 +154,7 @@ sealed class HashSet[A] extends AbstractSet[A]
     null
   }
 
-  def - (e: A): HashSet[A] =
+  def excl (e: A): HashSet[A] =
     nullToEmpty(removed0(e, computeHash(e), 0))
 
   override def tail: HashSet[A] = this - head
@@ -201,8 +195,6 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   protected def removed0(key: A, hash: Int, level: Int): HashSet[A] = this
 
-  protected def writeReplace(): AnyRef = new HashSet.SerializationProxy(this)
-
   override def toSet[B >: A]: Set[B] = this.asInstanceOf[HashSet[B]]
 }
 
@@ -217,13 +209,16 @@ sealed class HashSet[A] extends AbstractSet[A]
  *  @define mayNotTerminateInf
  *  @define willNotTerminateInf
  */
-object HashSet extends ImmutableSetFactory[HashSet] {
+object HashSet extends IterableFactory[HashSet] {
   override def newBuilder[A]: mutable.Builder[A, HashSet[A]] = new HashSetBuilder[A]
+  def from[A](source: collection.IterableOnce[A]): HashSet[A] =
+    source match {
+      case hs: HashSet[A] => hs
+      case _ if source.knownSize == 0 => empty[A]
+      case _ => (newBuilder[A] ++= source).result()
+    }
 
-  /** $setCanBuildFromInfo */
-  implicit def canBuildFrom[A]: CanBuildFrom[Coll, A, HashSet[A]] =
-    ReusableCBF.asInstanceOf[CanBuildFrom[Coll, A, HashSet[A]]]
-  private[this] val ReusableCBF = setCanBuildFrom[Any]
+  override def empty[A]: HashSet[A] = emptyInstance.asInstanceOf[HashSet[A]]
 
   private object EmptyHashSet extends HashSet[Any] {
     override def head: Any = throw new NoSuchElementException("Empty Set")
@@ -271,7 +266,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
     override def equals(other: Any): Boolean = {
       other match {
-        case that: HashSet1[A] =>
+        case that: HashSet1[_] =>
           (this eq that) || (this.hash == that.hash && this.key == that.key)
         case _ : HashSet[_] => false
         case _ => super.equals(other)
@@ -343,7 +338,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
     override def equals(other: Any): Boolean = {
       other match {
-        case that: HashSetCollision1[A] =>
+        case that: HashSetCollision1[_] =>
           (this eq that) || (this.hash == that.hash && this.ks == that.ks)
         case miss : HashSet[_] => false
         case _ => super.equals(other)
@@ -1002,7 +997,7 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
     override def equals(other: Any): Boolean = {
       other match {
-        case that: HashTrieSet[A] =>
+        case that: HashTrieSet[_] =>
           (this eq that) || (this.bitmap == that.bitmap && this.size == that.size &&
             util.Arrays.equals(this.elems.asInstanceOf[Array[AnyRef]], that.elems.asInstanceOf[Array[AnyRef]]))
         case _ : HashSet[_] => false
@@ -1172,28 +1167,6 @@ object HashSet extends ImmutableSetFactory[HashSet] {
   @inline private[this] def unsignedCompare(i: Int, j: Int) =
     (i < j) ^ (i < 0) ^ (j < 0)
 
-  @SerialVersionUID(2L) private class SerializationProxy[A,B](@transient private var orig: HashSet[A]) extends Serializable {
-    private def writeObject(out: java.io.ObjectOutputStream) {
-      val s = orig.size
-      out.writeInt(s)
-      for (e <- orig) {
-        out.writeObject(e)
-      }
-    }
-
-    private def readObject(in: java.io.ObjectInputStream) {
-      orig = empty
-      val s = in.readInt()
-      for (i <- 0 until s) {
-        val e = in.readObject().asInstanceOf[A]
-        orig = orig + e
-      }
-    }
-
-    private def readResolve(): AnyRef = orig
-  }
-
-
   /** Builder for HashSet.
    */
   private[collection] final class HashSetBuilder[A] extends mutable.ReusableBuilder[A, HashSet[A]] {
@@ -1287,24 +1260,17 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
     override def result(): HashSet[A] = {
       rootNode = nullToEmpty(makeImmutable(rootNode))
-      VM.releaseFence()
+      Statics.releaseFence()
       rootNode
     }
 
-
-    override def +=(elem1: A, elem2: A, elems: A*): HashSetBuilder.this.type = {
-      this += elem1
-      this += elem2
-      this ++= elems
-    }
-
-    override def +=(elem: A): HashSetBuilder.this.type = {
+    override def addOne(elem: A): HashSetBuilder.this.type = {
       val hash = computeHash(elem)
       rootNode = addOne(rootNode, elem, hash, 0)
       this
     }
 
-    override def ++=(xs: TraversableOnce[A]): HashSetBuilder.this.type = xs match {
+    override def addAll(xs: IterableOnce[A]): HashSetBuilder.this.type = xs match {
       case hs: HashSet[A] =>
         if (rootNode.isEmpty) {
           if (!hs.isEmpty)
@@ -1316,9 +1282,9 @@ object HashSet extends ImmutableSetFactory[HashSet] {
       //      //TODO
       case hs: mutable.HashSet[A] =>
         //TODO
-        super.++=(xs)
+        super.addAll(xs)
       case _ =>
-        super.++=(xs)
+        super.addAll(xs)
     }
 
     def makeMutableTrie(aLeaf: LeafHashSet[A], bLeaf: LeafHashSet[A], level: Int): HashTrieSet[A] = {

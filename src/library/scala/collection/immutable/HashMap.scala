@@ -15,11 +15,10 @@ package collection
 package immutable
 
 import java.{util => ju}
-
-import generic._
 import scala.annotation.unchecked.{uncheckedVariance => uV}
-import parallel.immutable.ParHashMap
-import scala.runtime.{AbstractFunction1, AbstractFunction2}
+import scala.collection.generic._
+import scala.collection.mutable
+import scala.runtime.{AbstractFunction1, AbstractFunction2, Statics}
 import scala.util.hashing.MurmurHash3
 
 /** This class implements immutable maps using a hash trie.
@@ -40,14 +39,16 @@ import scala.util.hashing.MurmurHash3
  *  @define willNotTerminateInf
  */
 @SerialVersionUID(2L)
-sealed class HashMap[A, +B] extends AbstractMap[A, B]
-                        with Map[A, B]
-                        with MapLike[A, B, HashMap[A, B]]
-                        with Serializable
-                        with CustomParallelizable[(A, B), ParHashMap[A, B]]
-                        with HasForeachEntry[A, B]
+sealed abstract class HashMap[A, +B] extends  AbstractMap[A, B]
+  with StrictOptimizedMapOps[A, B, HashMap, HashMap[A, B]]
+  with MapFactoryDefaults[A, B, HashMap, Iterable]
+  with DefaultSerializable
 {
   import HashMap.{bufferSize, concatMerger, nullToEmpty}
+
+  override def mapFactory: MapFactory[HashMap] = HashMap
+
+  override def knownSize: Int = size
 
   override def size: Int = 0
 
@@ -56,11 +57,11 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
   def iterator: Iterator[(A,B)] = Iterator.empty
 
   override def foreach[U](f: ((A, B)) => U): Unit = ()
-  private[immutable] def foreachEntry[U](f: (A, B) => U): Unit = ()
+  override def foreachEntry[U](f: (A, B) => U): Unit = ()
   override def hashCode(): Int = {
     if (isEmpty) MurmurHash3.emptyMapHash
     else {
-      val hasher = new Map.HashCodeAccumulator()
+      val hasher = new HashCodeAccumulator()
       foreachEntry(hasher)
       hasher.finalizeHash
     }
@@ -84,7 +85,7 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
   override def + [B1 >: B] (elem1: (A, B1), elem2: (A, B1), elems: (A, B1) *): HashMap[A, B1] =
     this + elem1 + elem2 ++ elems
 
-  def - (key: A): HashMap[A, B] =
+  def removed (key: A): HashMap[A, B] =
     removed0(key, computeHash(key), 0)
 
   override def tail: HashMap[A, B] = this - head._1
@@ -112,7 +113,7 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
 
   private[collection] def computeHash(key: A) = improve(elemHashCode(key))
 
-  import HashMap.{Merger, MergeFunction, liftMerger}
+  import HashMap.{MergeFunction, Merger, liftMerger}
 
   private[collection] def get0(key: A, hash: Int, level: Int): Option[B] = None
   private[collection] def getOrElse0[V1 >: B](key: A, hash: Int, level: Int, f: => V1): V1 = f
@@ -121,8 +122,6 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
     new HashMap.HashMap1(key, hash, value, kv)
 
   protected def removed0(key: A, hash: Int, level: Int): HashMap[A, B] = this
-
-  protected def writeReplace(): AnyRef = new HashMap.SerializationProxy(this)
 
   def split: Seq[HashMap[A, B]] = Seq(this)
 
@@ -143,101 +142,37 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
 
   protected def merge0[B1 >: B](that: HashMap[A, B1], level: Int, merger: Merger[A, B1]): HashMap[A, B1] = that
 
-  override def par = ParHashMap.fromTrie(this)
-
   /* Override to avoid tuple allocation in foreach */
-  private[collection] class HashMapKeys extends ImmutableDefaultKeySet {
+  private[collection] class HashKeySet extends ImmutableKeySet {
     override def foreach[U](f: A => U) = foreachEntry((key, _) => f(key))
-    override lazy val hashCode = super.hashCode()
+    private[this] lazy val cachedHashCode = super.hashCode()
+    override def hashCode(): Int = cachedHashCode
   }
-  override def keySet: immutable.Set[A] = new HashMapKeys
+  override def keySet: immutable.Set[A] = new HashKeySet
 
-  /** The implementation class of the iterable returned by `values`.
+  /** This function transforms all the values of mappings contained
+   * in this map with function `f`.
+   *
+   * @param f A function over keys and values
+   * @return the updated map
    */
-  private[collection] class HashMapValues extends DefaultValuesIterable {
-    override def foreach[U](f: B => U) = foreachEntry((_, value) => f(value))
-  }
-  override def values: scala.collection.Iterable[B] = new HashMapValues
-
-  override final def transform[W, That](f: (A, B) => W)(implicit bf: CanBuildFrom[HashMap[A, B], (A, W), That]): That =
-    if ((bf eq Map.canBuildFrom) || (bf eq HashMap.canBuildFrom)) castToThat(transformImpl(f))
-    else super.transform(f)(bf)
+  override def transform[W](f: (A, B) => W): HashMap[A, W] = transformImpl(f)
 
   /* `transform` specialized to return a HashMap */
   protected def transformImpl[W](f: (A, B) => W): HashMap[A, W] = HashMap.empty
 
-  private def isCompatibleCBF(cbf: CanBuildFrom[_,_,_]): Boolean = {
-    cbf match {
-      case w: WrappedCanBuildFrom[_,_,_] =>
-        isCompatibleCBF(w.wrapped)
-      case _ =>
-        (cbf eq HashMap.canBuildFrom) || (cbf eq Map.canBuildFrom)
-    }
-  }
-
-  override def ++[B1 >: B](xs: GenTraversableOnce[(A, B1)]): Map[A, B1] = ++[(A, B1), Map[A, B1]](xs)(HashMap.canBuildFrom[A, B1])
-
-  override def ++[C >: (A, B), That](that: GenTraversableOnce[C])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
-    if (isCompatibleCBF(bf)) {
-      //here we know that That =:= HashMap[_, _], or compatible with it
-      if (this eq that.asInstanceOf[AnyRef]) castToThat(that)
-      else if (that.isEmpty) castToThat(this)
-      else {
-        val result: HashMap[A, B] = that match {
-          case thatHash: HashMap[A, B] =>
-            this.merge0(thatHash, 0, concatMerger[A, B])
-          case that =>
-            var result: HashMap[A, B] = this
-            that.asInstanceOf[GenTraversableOnce[(A, B)]].foreach(result += _)
-            result
-        }
-        castToThat(result)
-      }
-    } else super.++(that)(bf)
-  }
-
-  override def ++:[C >: (A, B), That](that: TraversableOnce[C])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
-    if (isCompatibleCBF(bf)) addSimple(that)
-    else super.++:(that)
-  }
-
-  override def ++:[C >: (A, B), That](that: scala.Traversable[C])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
-    if (isCompatibleCBF(bf)) addSimple(that)
-    else super.++:(that)
-  }
-  private def addSimple[C >: (A, B), That](that: TraversableOnce[C])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
+  override def concat[B1 >: B](that: IterableOnce[(A, B1)]): HashMap[A, B1] = {
     //here we know that That =:= HashMap[_, _], or compatible with it
     if (this eq that.asInstanceOf[AnyRef]) castToThat(that)
     else if (that.isEmpty) castToThat(this)
     else {
-      val merger = HashMap.concatMerger[A, B].invert
       val result: HashMap[A, B] = that match {
         case thatHash: HashMap[A, B] =>
-          this.merge0(thatHash, 0, merger)
-
-        case that: HasForeachEntry[A, B] =>
-          //avoid the LazyRef as we don't have an @eager object
-          class adder extends AbstractFunction2[A, B, Unit] {
-            var result: HashMap[A, B] = HashMap.this
-            override def apply(key: A, value: B): Unit = {
-              result = result.updated0(key, computeHash(key), 0, value, null, merger)
-            }
-          }
-          val adder = new adder
-          that foreachEntry adder
-          adder.result
+          this.merge0(thatHash, 0, concatMerger[A, B])
         case that =>
-          //avoid the LazyRef as we don't have an @eager object
-          class adder extends AbstractFunction1[(A,B), Unit] {
-            var result: HashMap[A, B] = HashMap.this
-            override def apply(kv: (A, B)): Unit = {
-              val key = kv._1
-              result = result.updated0(key, computeHash(key), 0, kv._2, kv, merger)
-            }
-          }
-          val adder = new adder
-          that.asInstanceOf[GenTraversableOnce[(A,B)]] foreach adder
-          adder.result
+          var result: HashMap[A, B] = this
+          that.asInstanceOf[IterableOnce[(A, B)]].foreach(result += _)
+          result
       }
       castToThat(result)
     }
@@ -245,10 +180,10 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
 
   // These methods exist to encapsulate the `.asInstanceOf[That]` in a slightly safer way -- only suitable values can
   // be cast and the type of the `CanBuildFrom` guides type inference.
-  private[this] def castToThat[C, That](m: HashMap[A, B])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
+  private[this] def castToThat[C, That](m: HashMap[A, B]): That = {
     m.asInstanceOf[That]
   }
-  private[this] def castToThat[C, That](m: GenTraversableOnce[C])(implicit bf: CanBuildFrom[HashMap[A, B], C, That]): That = {
+  private[this] def castToThat[C, That](m: IterableOnce[C]): That = {
     m.asInstanceOf[That]
   }
 }
@@ -260,9 +195,17 @@ sealed class HashMap[A, +B] extends AbstractMap[A, B]
  *  @author  Tiark Rompf
  *  @since   2.3
  */
-object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
+object HashMap extends MapFactory[HashMap] with BitOperations.Int {
 
-  override def newBuilder[A, B]: mutable.Builder[(A, B), HashMap[A, B]] = new HashMapBuilder[A, B]
+  def empty[A, B]: HashMap[A, B] = EmptyHashMap.asInstanceOf[HashMap[A, B]]
+
+  def from[K, V](source: collection.IterableOnce[(K, V)]): HashMap[K, V] =
+    source match {
+      case hs: HashMap[K, V] => hs
+      case _ => (newBuilder[K, V] ++= source).result()
+    }
+
+  def newBuilder[K, V]: mutable.ReusableBuilder[(K, V), HashMap[K, V]] = new HashMapBuilder[K, V]
 
   private[collection] abstract class Merger[A, B] {
     def apply(kv1: (A, B), kv2: (A, B)): (A, B)
@@ -311,12 +254,6 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
       def invert: Merger[A1, B1] = self
     }
   }
-
-  /** $mapCanBuildFromInfo */
-  implicit def canBuildFrom[A, B]: CanBuildFrom[Coll, (A, B), HashMap[A, B]] =
-    ReusableCBF.asInstanceOf[CanBuildFrom[Coll, (A, B), HashMap[A, B]]]
-  private val ReusableCBF = new MapCanBuildFrom[Nothing, Nothing]
-  def empty[A, B]: HashMap[A, B] = EmptyHashMap.asInstanceOf[HashMap[A, B]]
 
   private object EmptyHashMap extends HashMap[Any, Nothing] {
     override def head: (Any, Nothing) = throw new NoSuchElementException("Empty Map")
@@ -398,7 +335,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
 
     override def iterator: Iterator[(A, B)] = Iterator(ensurePair)
     override def foreach[U](f: ((A, B)) => U): Unit = f(ensurePair)
-    override private[immutable] def foreachEntry[U](f: (A, B) => U): Unit = f(key, value)
+    override def foreachEntry[U](f: (A, B) => U): Unit = f(key, value)
     // this method may be called multiple times in a multi-threaded environment, but that's ok
     private[HashMap] def ensurePair: (A, B) = if (kvOrNull ne null) kvOrNull else {
       kvOrNull = (key, value); kvOrNull
@@ -494,7 +431,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
 
     override def iterator: Iterator[(A,B)] = kvs.iterator
     override def foreach[U](f: ((A, B)) => U): Unit = kvs.foreach(f)
-    override private[immutable] def foreachEntry[U](f: (A, B) => U): Unit = kvs.foreachEntry(f)
+    override def foreachEntry[U](f: (A, B) => U): Unit = kvs.foreachEntry(f)
     override def split: Seq[HashMap[A, B]] = {
       val (x, y) = kvs.splitAt(kvs.size / 2)
       def newhm(lm: ListMap[A, B @uV]) = {
@@ -586,12 +523,12 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
       // Note: this code is duplicated in contains0/getOrElse0/get0
       val index = (hash >>> level) & 0x1f
       if (bitmap == - 1) {
-        elems(index).getOrElse0(key, hash, level + 5, f)
+        nullToEmpty(elems(index)).getOrElse0(key, hash, level + 5, f)
       } else {
         val mask = (1 << index)
         if ((bitmap & mask) != 0) {
           val offset = Integer.bitCount(bitmap & (mask - 1))
-          elems(offset).getOrElse0(key, hash, level + 5, f)
+          nullToEmpty(elems(offset)).getOrElse0(key, hash, level + 5, f)
         } else {
           f
         }
@@ -729,7 +666,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
         i += 1
       }
     }
-    override private[immutable] def foreachEntry[U](f: (A, B) => U): Unit = {
+    override def foreachEntry[U](f: (A, B) => U): Unit = {
       var i = 0
       while (i < elems.length) {
         elems(i).foreachEntry(f)
@@ -1029,30 +966,6 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
     result
   }
 
-  @SerialVersionUID(2L)
-  private class SerializationProxy[A,B](@transient private var orig: HashMap[A, B]) extends Serializable {
-    private def writeObject(out: java.io.ObjectOutputStream) {
-      val s = orig.size
-      out.writeInt(s)
-      for ((k,v) <- orig) {
-        out.writeObject(k)
-        out.writeObject(v)
-      }
-    }
-
-    private def readObject(in: java.io.ObjectInputStream) {
-      orig = empty
-      val s = in.readInt()
-      for (i <- 0 until s) {
-        val key = in.readObject().asInstanceOf[A]
-        val value = in.readObject().asInstanceOf[B]
-        orig = orig.updated(key, value)
-      }
-    }
-
-    private def readResolve(): AnyRef = orig
-  }
-
   //TODO share these with HashSet - they are the same
   private def elemHashCode(key: Any) = key.##
 
@@ -1162,23 +1075,21 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
 
     override def result(): HashMap[A, B] = {
       rootNode = nullToEmpty(makeImmutable(rootNode))
-      VM.releaseFence()
+      Statics.releaseFence()
       rootNode
     }
-
-    override def +=(elem1: (A, B), elem2: (A, B), elems: (A, B)*): this.type = {
-      this += elem1
-      this += elem2
-      this ++= elems
+    private[immutable] def getOrElse[B0 >: B](key: A, value: B0): B0 = {
+      val hash = computeHash(key)
+      rootNode.getOrElse0(key, hash, 0, value)
     }
 
-    override def +=(elem: (A, B)): this.type = {
+    override def addOne(elem: (A, B)): this.type = {
       val hash = computeHash(elem._1)
       rootNode = addOne(rootNode, elem, hash, 0)
       this
     }
 
-    override def ++=(xs: TraversableOnce[(A, B)]): this.type = xs match {
+    override def addAll(xs: IterableOnce[(A, B)]): this.type = xs match {
       case hm: HashMap[A, B] =>
         if (rootNode eq EmptyHashMap) {
           if (!hm.isEmpty)
@@ -1189,9 +1100,9 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
         this
       case hm: mutable.HashMap[A, B] =>
         //TODO
-        super.++=(xs)
+        super.addAll(xs)
       case _ =>
-        super.++=(xs)
+        super.addAll(xs)
     }
 
     /** return the bit index of the rawIndex in the bitmap of the trie, or -1 if the bit is not in the bitmap */
@@ -1305,7 +1216,7 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
               result
             }
           }
-        case empty if empty isEmpty =>
+        case empty if empty.isEmpty =>
           toNode
       }
     }
@@ -1375,8 +1286,29 @@ object HashMap extends ImmutableMapFactory[HashMap] with BitOperations.Int {
           }
           result
 
-        case empty if empty isEmpty => toNode
+        case empty if empty.isEmpty => toNode
       }
     }
+  }
+}
+
+private final class HashCodeAccumulator extends scala.runtime.AbstractFunction2[Any, Any, Unit] {
+  import scala.util.hashing.MurmurHash3
+  private var a, b, n = 0
+  private var c = 1
+  def apply(key: Any, value: Any): Unit = {
+    val h = MurmurHash3.product2Hash(key, value)
+    a += h
+    b ^= h
+    if (h != 0) c *= h
+    n += 1
+  }
+
+  def finalizeHash: Int = {
+    var h = MurmurHash3.mapSeed
+    h = MurmurHash3.mix(h, a)
+    h = MurmurHash3.mix(h, b)
+    h = MurmurHash3.mixLast(h, c)
+    MurmurHash3.finalizeHash(h, n)
   }
 }

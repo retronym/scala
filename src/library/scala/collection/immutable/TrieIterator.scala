@@ -14,10 +14,10 @@ package scala
 package collection
 package immutable
 
-import HashMap.{ HashTrieMap, HashMapCollision1, HashMap1 }
-import HashSet.{ HashTrieSet, HashSetCollision1, HashSet1 }
-import scala.annotation.unchecked.{ uncheckedVariance => uV }
 import scala.annotation.tailrec
+import scala.annotation.unchecked.{uncheckedVariance => uV}
+import scala.collection.immutable.HashMap.{HashMap1, HashMapCollision1, HashTrieMap}
+import scala.collection.immutable.HashSet.{HashSet1, HashSetCollision1, HashTrieSet}
 
 /** Abandons any pretense of type safety for speed.  You can't say I
  *  didn't try: see r23934.
