@@ -39,7 +39,7 @@ import scala.util.hashing.MurmurHash3
  *  @define willNotTerminateInf
  */
 @SerialVersionUID(2L)
-sealed abstract class HashMap[A, +B] extends  AbstractMap[A, B]
+sealed class HashMap[A, +B] extends  AbstractMap[A, B]
   with StrictOptimizedMapOps[A, B, HashMap, HashMap[A, B]]
   with MapFactoryDefaults[A, B, HashMap, Iterable]
   with DefaultSerializable
