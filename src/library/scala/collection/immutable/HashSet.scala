@@ -32,7 +32,7 @@ import scala.runtime.{AbstractFunction1, Statics}
  *  @define coll immutable hash set
  */
 @SerialVersionUID(2L)
-sealed abstract class HashSet[A] extends AbstractSet[A]
+sealed class HashSet[A] extends AbstractSet[A]
   with StrictOptimizedSetOps[A, HashSet, HashSet[A]]
   with IterableFactoryDefaults[A, HashSet]
   with DefaultSerializable
