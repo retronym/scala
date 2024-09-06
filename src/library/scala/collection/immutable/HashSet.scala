@@ -41,8 +41,6 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   override def iterableFactory: IterableFactory[HashSet] = HashSet
 
-  //class HashSet[A] extends Set[A] with SetLike[A, HashSet[A]] {
-
   override def size: Int = 0
 
   override def empty = HashSet.empty[A]
@@ -61,6 +59,7 @@ sealed class HashSet[A] extends AbstractSet[A]
       // call the generic implementation
       super.subsetOf(that)
   }
+  protected def subsetOf(that: Set[A]): Boolean = subsetOf(that: collection.Set[A])
 
   /**
    * A specialized implementation of subsetOf for when both this and that are HashSet[A] and we can take advantage
@@ -156,8 +155,9 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   def excl (e: A): HashSet[A] =
     nullToEmpty(removed0(e, computeHash(e), 0))
-
+  override def removedAll(that: IterableOnce[A]): HashSet[A] = super.removedAll(that)
   override def tail: HashSet[A] = this - head
+  override def init: HashSet[A] = this - last
 
   override def filter(p: A => Boolean) = p match {
     case hs: HashSet[A] =>
@@ -196,6 +196,42 @@ sealed class HashSet[A] extends AbstractSet[A]
   protected def removed0(key: A, hash: Int, level: Int): HashSet[A] = this
 
   override def toSet[B >: A]: Set[B] = this.asInstanceOf[HashSet[B]]
+
+  override def take(n: Int): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.take(n)
+  }
+
+  override def takeRight(n: Int): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.takeRight(n)
+  }
+
+  override def takeWhile(p: A => Boolean): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.takeWhile(p)
+  }
+
+  override def drop(n: Int): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.drop(n)
+  }
+
+  override def dropRight(n: Int): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.dropRight(n)
+  }
+
+  override def dropWhile(p: A => Boolean): HashSet[A] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    super.dropWhile(p)
+  }
 }
 
 /** $factoryInfo
@@ -210,7 +246,7 @@ sealed class HashSet[A] extends AbstractSet[A]
  *  @define willNotTerminateInf
  */
 object HashSet extends IterableFactory[HashSet] {
-  override def newBuilder[A]: mutable.Builder[A, HashSet[A]] = new HashSetBuilder[A]
+  override def newBuilder[A]: mutable.ReusableBuilder[A, HashSet[A]] = new HashSetBuilder[A]
   def from[A](source: collection.IterableOnce[A]): HashSet[A] =
     source match {
       case hs: HashSet[A] => hs

@@ -25,8 +25,8 @@ import scala.util.hashing.MurmurHash3
  *
  *  '''Note:''' The builder of this hash map may return specialized representations for small maps.
  *
- *  @tparam A      the type of the keys contained in this hash map.
- *  @tparam B      the type of the values associated with the keys.
+ *  @tparam K      the type of the keys contained in this hash map.
+ *  @tparam V      the type of the values associated with the keys.
  *
  *  @author  Martin Odersky
  *  @author  Tiark Rompf
@@ -39,9 +39,9 @@ import scala.util.hashing.MurmurHash3
  *  @define willNotTerminateInf
  */
 @SerialVersionUID(2L)
-sealed class HashMap[A, +B] extends  AbstractMap[A, B]
-  with StrictOptimizedMapOps[A, B, HashMap, HashMap[A, B]]
-  with MapFactoryDefaults[A, B, HashMap, Iterable]
+sealed class HashMap[K, +V] extends  AbstractMap[K, V]
+  with StrictOptimizedMapOps[K, V, HashMap, HashMap[K, V]]
+  with MapFactoryDefaults[K, V, HashMap, Iterable]
   with DefaultSerializable
 {
   import HashMap.{bufferSize, concatMerger, nullToEmpty}
@@ -52,57 +52,63 @@ sealed class HashMap[A, +B] extends  AbstractMap[A, B]
 
   override def size: Int = 0
 
-  override def empty = HashMap.empty[A, B]
+  override def empty = HashMap.empty[K, V]
 
-  def iterator: Iterator[(A,B)] = Iterator.empty
-
-  override def foreach[U](f: ((A, B)) => U): Unit = ()
-  override def foreachEntry[U](f: (A, B) => U): Unit = ()
-  override def hashCode(): Int = {
-    if (isEmpty) MurmurHash3.emptyMapHash
-    else {
-      val hasher = new HashCodeAccumulator()
-      foreachEntry(hasher)
-      hasher.finalizeHash
-    }
+  def iterator: Iterator[(K,V)] = Iterator.empty
+  protected[immutable] def reverseIterator: Iterator[(K, V)] = {
+    if (isEmpty) Iterator.empty
+    else toVector.reverseIterator
   }
+  override def tail: HashMap[K, V] = this - head._1
 
-  def get(key: A): Option[B] =
+  override def init: HashMap[K, V] = this - last._1
+
+  override def head: (K, V) = iterator.next()
+
+  override def last: (K, V) = reverseIterator.next()
+  override def foreach[U](f: ((K, V)) => U): Unit = ()
+  override def foreachEntry[U](f: (K, V) => U): Unit = ()
+
+  def get(key: K): Option[V] =
     get0(key, computeHash(key), 0)
 
-  override def getOrElse[V1 >: B](key: A, default: => V1): V1 =
+  override def getOrElse[V1 >: V](key: K, default: => V1): V1 =
     getOrElse0(key, computeHash(key), 0, default)
 
-  override final def contains(key: A): Boolean =
+  override final def contains(key: K): Boolean =
     contains0(key, computeHash(key), 0)
 
-  override def updated [B1 >: B] (key: A, value: B1): HashMap[A, B1] =
+  override def updated [B1 >: V](key: K, value: B1): HashMap[K, B1] =
     updated0(key, computeHash(key), 0, value, null, null)
+  // preemptively overridden in anticipation of performance optimizations
+  override def updatedWith[V1 >: V](key: K)(remappingFunction: Option[V] => Option[V1]): HashMap[K, V1] =
+    super.updatedWith[V1](key)(remappingFunction)
 
-  override def + [B1 >: B] (kv: (A, B1)): HashMap[A, B1] =
+  override def + [B1 >: V](kv: (K, B1)): HashMap[K, B1] =
     updated0(kv._1, computeHash(kv._1), 0, kv._2, kv, null)
 
-  override def + [B1 >: B] (elem1: (A, B1), elem2: (A, B1), elems: (A, B1) *): HashMap[A, B1] =
+  override def + [B1 >: V](elem1: (K, B1), elem2: (K, B1), elems: (K, B1) *): HashMap[K, B1] =
     this + elem1 + elem2 ++ elems
 
-  def removed (key: A): HashMap[A, B] =
+  def removed (key: K): HashMap[K, V] =
     removed0(key, computeHash(key), 0)
 
-  override def tail: HashMap[A, B] = this - head._1
+  override def removedAll(keys: IterableOnce[K]): HashMap[K, V] =
+    super.removedAll(keys)
 
-  override def filter(p: ((A, B)) => Boolean) = {
-    val buffer = new Array[HashMap[A, B]](bufferSize(size))
+    override def filter(p: ((K, V)) => Boolean) = {
+    val buffer = new Array[HashMap[K, V]](bufferSize(size))
     nullToEmpty(filter0(p, false, 0, buffer, 0))
   }
 
-  override def filterNot(p: ((A, B)) => Boolean) = {
-    val buffer = new Array[HashMap[A, B]](bufferSize(size))
+  override def filterNot(p: ((K, V)) => Boolean) = {
+    val buffer = new Array[HashMap[K, V]](bufferSize(size))
     nullToEmpty(filter0(p, true, 0, buffer, 0))
   }
 
-  protected def filter0(p: ((A, B)) => Boolean, negate: Boolean, level: Int, buffer: Array[HashMap[A, B @uV]], offset0: Int): HashMap[A, B] = null
+  protected def filter0(p: ((K, V)) => Boolean, negate: Boolean, level: Int, buffer: Array[HashMap[K, V @uV]], offset0: Int): HashMap[K, V] = null
 
-  protected def elemHashCode(key: A) = key.##
+  protected def elemHashCode(key: K) = key.##
 
   protected final def improve(hcode: Int) = {
     var h: Int = hcode + ~(hcode << 9)
@@ -111,19 +117,19 @@ sealed class HashMap[A, +B] extends  AbstractMap[A, B]
     h ^ (h >>> 10)
   }
 
-  private[collection] def computeHash(key: A) = improve(elemHashCode(key))
+  private[collection] def computeHash(key: K) = improve(elemHashCode(key))
 
   import HashMap.{MergeFunction, Merger, liftMerger}
 
-  private[collection] def get0(key: A, hash: Int, level: Int): Option[B] = None
-  private[collection] def getOrElse0[V1 >: B](key: A, hash: Int, level: Int, f: => V1): V1 = f
-  protected def contains0(key: A, hash: Int, level: Int): Boolean = false
-  private[collection] def updated0[B1 >: B](key: A, hash: Int, level: Int, value: B1, kv: (A, B1), merger: Merger[A, B1]): HashMap[A, B1] =
+  private[collection] def get0(key: K, hash: Int, level: Int): Option[V] = None
+  private[collection] def getOrElse0[V1 >: V](key: K, hash: Int, level: Int, f: => V1): V1 = f
+  protected def contains0(key: K, hash: Int, level: Int): Boolean = false
+  private[collection] def updated0[B1 >: V](key: K, hash: Int, level: Int, value: B1, kv: (K, B1), merger: Merger[K, B1]): HashMap[K, B1] =
     new HashMap.HashMap1(key, hash, value, kv)
 
-  protected def removed0(key: A, hash: Int, level: Int): HashMap[A, B] = this
+  protected def removed0(key: K, hash: Int, level: Int): HashMap[K, V] = this
 
-  def split: Seq[HashMap[A, B]] = Seq(this)
+  def split: Seq[HashMap[K, V]] = Seq(this)
 
   /** Creates a new map which is the merge of this and the argument hash map.
    *
@@ -138,17 +144,17 @@ sealed class HashMap[A, +B] extends  AbstractMap[A, B]
    *  @param that     the other hash map
    *  @param mergef   the merge function or null if the first key-value pair is to be picked
    */
-  def merged[B1 >: B](that: HashMap[A, B1])(mergef: MergeFunction[A, B1]): HashMap[A, B1] = merge0(that, 0, liftMerger(mergef))
+  def merged[B1 >: V](that: HashMap[K, B1])(mergef: MergeFunction[K, B1]): HashMap[K, B1] = merge0(that, 0, liftMerger(mergef))
 
-  protected def merge0[B1 >: B](that: HashMap[A, B1], level: Int, merger: Merger[A, B1]): HashMap[A, B1] = that
+  protected def merge0[B1 >: V](that: HashMap[K, B1], level: Int, merger: Merger[K, B1]): HashMap[K, B1] = that
 
   /* Override to avoid tuple allocation in foreach */
   private[collection] class HashKeySet extends ImmutableKeySet {
-    override def foreach[U](f: A => U) = foreachEntry((key, _) => f(key))
+    override def foreach[U](f: K => U) = foreachEntry((key, _) => f(key))
     private[this] lazy val cachedHashCode = super.hashCode()
     override def hashCode(): Int = cachedHashCode
   }
-  override def keySet: immutable.Set[A] = new HashKeySet
+  override def keySet: immutable.Set[K] = new HashKeySet
 
   /** This function transforms all the values of mappings contained
    * in this map with function `f`.
@@ -156,22 +162,22 @@ sealed class HashMap[A, +B] extends  AbstractMap[A, B]
    * @param f A function over keys and values
    * @return the updated map
    */
-  override def transform[W](f: (A, B) => W): HashMap[A, W] = transformImpl(f)
+  override def transform[W](f: (K, V) => W): HashMap[K, W] = transformImpl(f)
 
   /* `transform` specialized to return a HashMap */
-  protected def transformImpl[W](f: (A, B) => W): HashMap[A, W] = HashMap.empty
+  protected def transformImpl[W](f: (K, V) => W): HashMap[K, W] = HashMap.empty
 
-  override def concat[B1 >: B](that: IterableOnce[(A, B1)]): HashMap[A, B1] = {
+  override def concat[B1 >: V](that: IterableOnce[(K, B1)]): HashMap[K, B1] = {
     //here we know that That =:= HashMap[_, _], or compatible with it
     if (this eq that.asInstanceOf[AnyRef]) castToThat(that)
     else if (that.isEmpty) castToThat(this)
     else {
-      val result: HashMap[A, B] = that match {
-        case thatHash: HashMap[A, B] =>
-          this.merge0(thatHash, 0, concatMerger[A, B])
-        case that =>
-          var result: HashMap[A, B] = this
-          that.asInstanceOf[IterableOnce[(A, B)]].foreach(result += _)
+      val result: HashMap[K, V] = that match {
+        case thatHash: HashMap[K, V] =>
+          this.merge0(thatHash, 0, concatMerger[K, V])
+        case that                    =>
+          var result: HashMap[K, V] = this
+          that.asInstanceOf[IterableOnce[(K, V)]].foreach(result += _)
           result
       }
       castToThat(result)
@@ -180,11 +186,86 @@ sealed class HashMap[A, +B] extends  AbstractMap[A, B]
 
   // These methods exist to encapsulate the `.asInstanceOf[That]` in a slightly safer way -- only suitable values can
   // be cast and the type of the `CanBuildFrom` guides type inference.
-  private[this] def castToThat[C, That](m: HashMap[A, B]): That = {
+  private[this] def castToThat[C, That](m: HashMap[K, V]): That = {
     m.asInstanceOf[That]
   }
   private[this] def castToThat[C, That](m: IterableOnce[C]): That = {
     m.asInstanceOf[That]
+  }
+
+
+  override def partition(p: ((K, V)) => Boolean): (HashMap[K, V], HashMap[K, V]) = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `partition` could be optimized to traverse the trie node-by-node, splitting each node into two,
+    // based on the result of applying `p` to its elements and subnodes.
+    super.partition(p)
+  }
+
+  override def take(n: Int): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `take` could be optimized to construct a new trie structure by visiting each node, and including
+    // those nodes in the resulting trie, until `n` total elements have been included.
+    super.take(n)
+  }
+
+  override def takeRight(n: Int): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `take` could be optimized to construct a new trie structure by visiting each node in reverse, and
+    // and including those nodes in the resulting trie, until `n` total elements have been included.
+    super.takeRight(n)
+  }
+
+  override def takeWhile(p: ((K, V)) => Boolean): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `takeWhile` could be optimized to construct a new trie structure by visiting each node, and
+    // including those nodes in the resulting trie, until `p` returns `false`
+    super.takeWhile(p)
+  }
+
+  override def dropWhile(p: ((K, V)) => Boolean): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `dropWhile` could be optimized to construct a new trie structure by visiting each node, and
+    // dropping those nodes in the resulting trie, until `p` returns `true`
+    super.dropWhile(p)
+  }
+
+  override def dropRight(n: Int): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `dropRight` could be optimized to construct a new trie structure by visiting each node, in reverse
+    // order, and dropping all nodes until `n` elements have been dropped
+    super.dropRight(n)
+  }
+
+  override def drop(n: Int): HashMap[K, V] = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `dropRight` could be optimized to construct a new trie structure by visiting each node, and
+    // dropping all nodes until `n` elements have been dropped
+    super.drop(n)
+  }
+
+  override def span(p: ((K, V)) => Boolean): (HashMap[K, V], HashMap[K, V]) = {
+    // This method has been preemptively overridden in order to ensure that an optimizing implementation may be included
+    // in a minor release without breaking binary compatibility.
+    //
+    // In particular, `scan` could be optimized to construct a new trie structure by visiting each node, and
+    // keeping each node and element until `p` returns false, then including the remaining nodes in the second result.
+    // This would avoid having to rebuild most of the trie, and would eliminate the need to perform hashing and equality
+    // checks.
+    super.span(p)
   }
 }
 
@@ -1289,26 +1370,5 @@ object HashMap extends MapFactory[HashMap] with BitOperations.Int {
         case empty if empty.isEmpty => toNode
       }
     }
-  }
-}
-
-private final class HashCodeAccumulator extends scala.runtime.AbstractFunction2[Any, Any, Unit] {
-  import scala.util.hashing.MurmurHash3
-  private var a, b, n = 0
-  private var c = 1
-  def apply(key: Any, value: Any): Unit = {
-    val h = MurmurHash3.product2Hash(key, value)
-    a += h
-    b ^= h
-    if (h != 0) c *= h
-    n += 1
-  }
-
-  def finalizeHash: Int = {
-    var h = MurmurHash3.mapSeed
-    h = MurmurHash3.mix(h, a)
-    h = MurmurHash3.mix(h, b)
-    h = MurmurHash3.mixLast(h, c)
-    MurmurHash3.finalizeHash(h, n)
   }
 }

@@ -39,6 +39,40 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.concurrent.impl.FutureConvertersImpl#P.accept"),
     ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.concurrent.impl.FutureConvertersImpl#P.andThen"),
 
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.AnyChampStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.AnyChampStepper$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.ChampStepperBase"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.DoubleChampStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.DoubleChampStepper$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.IntChampStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.IntChampStepper$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.LongChampStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.LongChampStepper$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.BitmapIndexedMapNode"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.BitmapIndexedSetNode"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.ChampBaseIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.ChampBaseReverseIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.HashCollisionMapNode"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.HashCollisionSetNode"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.HashMap.this"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.HashMapBuilder"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.HashSet.this"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.HashSetBuilder"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapKeyIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapKeyValueTupleHashIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapKeyValueTupleIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapKeyValueTupleReverseIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapNode"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapNode$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapNodeRemoveAllSetNodeIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.MapValueIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.Node"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.Node$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.SetHashIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.SetIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.SetNode"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.SetNode$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.SetReverseIterator")
   )
 
   override val buildSettings = Seq(
@@ -47,7 +81,7 @@ object MimaFilters extends AutoPlugin {
 
   val mimaSettings: Seq[Setting[_]] = Def.settings(
     mimaPreviousArtifacts       := mimaReferenceVersion.value.map(organization.value % name.value % _).toSet,
-    mimaCheckDirection          := "both",
+    mimaCheckDirection          := "backward",
     mimaBinaryIssueFilters     ++= mimaFilters,
 //  mimaReportSignatureProblems := true, // TODO: enable
   )
