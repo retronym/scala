@@ -22,7 +22,7 @@ import scala.collection.immutable.HashSet.{HashSet1, HashSetCollision1, HashTrie
 /** Abandons any pretense of type safety for speed.  You can't say I
  *  didn't try: see r23934.
  */
-private[collection] abstract class TrieIterator[+T](elems: Array[Iterable[T]]) extends AbstractIterator[T] {
+private[collection] abstract class LibraryTrieIterator[+T](elems: Array[Iterable[T]]) extends AbstractIterator[T] {
   outer =>
 
   private[immutable] def getElem(x: AnyRef): T
@@ -69,13 +69,13 @@ private[collection] abstract class TrieIterator[+T](elems: Array[Iterable[T]]) e
     override val initArrayD: Array[Iterable[T @uV]]            = outer.arrayD
     override val initPosD                                      = outer.posD
     override val initSubIter                                   = outer.subIter
-  } with TrieIterator[T](xs) {
+  } with LibraryTrieIterator[T](xs) {
     final override def getElem(x: AnyRef): T = outer.getElem(x)
   }
 
-  def dupIterator: TrieIterator[T] = new DupIterator(elems)
+  def dupIterator: LibraryTrieIterator[T] = new DupIterator(elems)
 
-  private[this] def newIterator(xs: Array[Iterable[T]]) = new TrieIterator(xs) {
+  private[this] def newIterator(xs: Array[Iterable[T]]) = new LibraryTrieIterator(xs) {
     final override def getElem(x: AnyRef): T = outer.getElem(x)
   }
 

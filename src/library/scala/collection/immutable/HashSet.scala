@@ -1132,7 +1132,7 @@ object HashSet extends IterableFactory[HashSet] {
       }
     }
 
-    override def iterator = new TrieIterator[A](elems.asInstanceOf[Array[Iterable[A]]]) {
+    override def iterator = new LibraryTrieIterator[A](elems.asInstanceOf[Array[Iterable[A]]]) {
       final override def getElem(cc: AnyRef): A = cc.asInstanceOf[HashSet1[A]].key
     }
 
