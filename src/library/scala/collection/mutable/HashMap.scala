@@ -32,521 +32,145 @@ import scala.util.hashing.MurmurHash3
   *  @define willNotTerminateInf
   */
 @deprecatedInheritance("HashMap will be made final; use .withDefault for the common use case of computing a default value", "2.13.0")
-class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
+class HashMap[K, V](contents: HashTable.Contents[K, DefaultEntry[K, V]])
   extends AbstractMap[K, V]
     with MapOps[K, V, HashMap, HashMap[K, V]]
     with StrictOptimizedIterableOps[(K, V), Iterable, HashMap[K, V]]
     with StrictOptimizedMapOps[K, V, HashMap, HashMap[K, V]]
     with MapFactoryDefaults[K, V, HashMap, Iterable]
-    with HashTable[K, DefaultEntry[K, V]]
+    with HashTable[K, V, DefaultEntry[K, V]]
     with Serializable {
   initWithContents(contents)
-  type Entry = DefaultEntry[A, B]
+  type Entry = DefaultEntry[K, V]
 
   /* The HashMap class holds the following invariant:
    * - For each i between  0 and table.length, the bucket at table(i) only contains keys whose hash-index is i.
    * - Every bucket is sorted in ascendent hash order
    * - The sum of the lengths of all buckets is equal to contentSize.
    */
-  def this() = this(HashMap.defaultInitialCapacity, HashMap.defaultLoadFactor)
+  def this() = this(null)
 
-  import HashMap.Node
-
-  /** The actual hash table. */
-  private[this] var table = new Array[Node[K, V]](tableSizeFor(initialCapacity))
-
-  /** The next size value at which to resize (capacity * load factor). */
-  private[this] var threshold: Int = newThreshold(table.length)
-
-  private[this] var contentSize = 0
-  // For Scala 2.12 backwards compat
-  private def seedvalue: Int = Integer.bitCount(32 - 1)
-
-  override def size: Int = contentSize
-  @`inline` private[this] def improveHash(originalHash: Int): Int = {
-    HashTable.HashUtils.improve(originalHash, seedvalue)
-  }
-
-  /** Computes the improved hash of this key */
-  @`inline` private[this] def computeHash(o: K): Int = improveHash(o.##)
-
-  @`inline` private[this] def index(hash: Int) = hash & (table.length - 1)
-
-  override def contains(key: K): Boolean = findNode(key) ne null
-
-  @`inline` private[this] def findNode(key: K): Node[K, V] = {
-    val hash = computeHash(key)
-    table(index(hash)) match {
-      case null => null
-      case nd => nd.findNode(key, hash)
-    }
-  }
+  override def size: Int = tableSize
+  override def contains(key: K): Boolean = findEntry(key) != null
 
   override def sizeHint(size: Int): Unit = {
-    val target = tableSizeFor(((size + 1).toDouble / loadFactor).toInt)
-    if(target > table.length) growTable(target)
+    super.sizeHint(size)
   }
 
   override def addAll(xs: IterableOnce[(K, V)]): this.type = {
-    sizeHint(xs)
-
-    xs match {
-      case hm: mutable.HashMap[K, V] =>
-        val iter = hm.nodeIterator
-        while (iter.hasNext) {
-          val next = iter.next()
-          put0(next.key, next.value, next.hash, getOld = false)
-        }
-        this
-      case lhm: mutable.LinkedHashMap[K, V] =>
-        val iter = lhm.entryIterator
-        while (iter.hasNext) {
-          val entry = iter.next()
-          put0(entry.key, entry.value, entry.hash, getOld = false)
-        }
-        this
-      case thatMap: Map[K, V] =>
-        thatMap.foreachEntry { (key: K, value: V) =>
-          put0(key, value, improveHash(key.##), getOld = false)
-        }
-        this
-      case _ =>
-        super.addAll(xs)
-    }
+    super.addAll(xs)
   }
 
-  // Override updateWith for performance, so we can do the update while hashing
-  // the input key only once and performing one lookup into the hash table
   override def updateWith(key: K)(remappingFunction: Option[V] => Option[V]): Option[V] = {
-    if (getClass != classOf[HashMap[_, _]]) {
-      // subclasses of HashMap might customise `get` ...
-      super.updateWith(key)(remappingFunction)
-    } else {
-      val hash = computeHash(key)
-      val indexedHash = index(hash)
-
-      var foundNode: Node[K, V] = null
-      var previousNode: Node[K, V] = null
-      table(indexedHash) match {
-        case null =>
-        case nd =>
-          @tailrec
-          def findNode(prev: Node[K, V], nd: Node[K, V], k: K, h: Int): Unit = {
-            if (h == nd.hash && k == nd.key) {
-              previousNode = prev
-              foundNode = nd
-            }
-            else if ((nd.next eq null) || (nd.hash > h)) ()
-            else findNode(nd, nd.next, k, h)
-          }
-
-          findNode(null, nd, key, hash)
-      }
-
-      val previousValue = foundNode match {
-        case null => None
-        case nd => Some(nd.value)
-      }
-
-      val nextValue = remappingFunction(previousValue)
-
-      (previousValue, nextValue) match {
-        case (None, None) => // do nothing
-
-        case (Some(_), None) =>
-          if (previousNode != null) previousNode.next = foundNode.next
-          else table(indexedHash) = foundNode.next
-          contentSize -= 1
-
-        case (None, Some(value)) =>
-          val newIndexedHash =
-            if (contentSize + 1 >= threshold) {
-              growTable(table.length * 2)
-              index(hash)
-            } else indexedHash
-          put0(key, value, getOld = false, hash, newIndexedHash)
-
-        case (Some(_), Some(newValue)) => foundNode.value = newValue
-      }
-      nextValue
-    }
+    super.updateWith(key)(remappingFunction)
   }
 
   override def subtractAll(xs: IterableOnce[K]): this.type = {
-    if (size == 0) {
-      return this
-    }
-
-    xs match {
-      case lhs: mutable.LinkedHashSet[K] =>
-        val iter = lhs.entryIterator
-        while (iter.hasNext) {
-          val next = iter.next()
-          remove0(next.key, next.hash)
-          if (size == 0) return this
-        }
-        this
-      case _ => super.subtractAll(xs)
-    }
+    super.subtractAll(xs)
   }
 
-  /** Adds a key-value pair to this map
-    *
-    * @param key the key to add
-    * @param value the value to add
-    * @param hash the **improved** hashcode of `key` (see computeHash)
-    * @param getOld if true, then the previous value for `key` will be returned, otherwise, false
-    */
-  private[this] def put0(key: K, value: V, hash: Int, getOld: Boolean): Some[V] = {
-    if(contentSize + 1 >= threshold) growTable(table.length * 2)
-    val idx = index(hash)
-    put0(key, value, getOld, hash, idx)
+  override def iterator: Iterator[(K, V)] = entriesIterator map (e => ((e.key, e.value)))
+
+  override def keysIterator: Iterator[K] = new AbstractIterator[K] {
+    val iter    = entriesIterator
+    def hasNext = iter.hasNext
+    def next()  = iter.next().key
   }
-
-  private[this] def put0(key: K, value: V, getOld: Boolean): Some[V] = {
-    if(contentSize + 1 >= threshold) growTable(table.length * 2)
-    val hash = computeHash(key)
-    val idx = index(hash)
-    put0(key, value, getOld, hash, idx)
+  override def valuesIterator: Iterator[V] = new AbstractIterator[V] {
+    val iter    = entriesIterator
+    def hasNext = iter.hasNext
+    def next()  = iter.next().value
   }
-
-
-  private[this] def put0(key: K, value: V, getOld: Boolean, hash: Int, idx: Int): Some[V] = {
-    table(idx) match {
-      case null =>
-        table(idx) = new Node[K, V](key, hash, value, null)
-      case old =>
-        var prev: Node[K, V] = null
-        var n = old
-        while((n ne null) && n.hash <= hash) {
-          if(n.hash == hash && key == n.key) {
-            val old = n.value
-            n.value = value
-            return if(getOld) Some(old) else null
-          }
-          prev = n
-          n = n.next
-        }
-        if(prev eq null) table(idx) = new Node(key, hash, value, old)
-        else prev.next = new Node(key, hash, value, prev.next)
-    }
-    contentSize += 1
-    null
-  }
-
-  private def remove0(elem: K) : Node[K, V] = remove0(elem, computeHash(elem))
-
-  /** Removes a key from this map if it exists
-    *
-    * @param elem the element to remove
-    * @param hash the **improved** hashcode of `element` (see computeHash)
-    * @return the node that contained element if it was present, otherwise null
-    */
-  private[this] def remove0(elem: K, hash: Int) : Node[K, V] = {
-    val idx = index(hash)
-    table(idx) match {
-      case null => null
-      case nd if nd.hash == hash && nd.key == elem =>
-        // first element matches
-        table(idx) = nd.next
-        contentSize -= 1
-        nd
-      case nd =>
-        // find an element that matches
-        var prev = nd
-        var next = nd.next
-        while((next ne null) && next.hash <= hash) {
-          if(next.hash == hash && next.key == elem) {
-            prev.next = next.next
-            contentSize -= 1
-            return next
-          }
-          prev = next
-          next = next.next
-        }
-        null
-    }
-  }
-
-  private[this] abstract class HashMapIterator[A] extends AbstractIterator[A] {
-    private[this] var i = 0
-    private[this] var node: Node[K, V] = null
-    private[this] val len = table.length
-
-    protected[this] def extract(nd: Node[K, V]): A
-
-    def hasNext: Boolean = {
-      if(node ne null) true
-      else {
-        while(i < len) {
-          val n = table(i)
-          i += 1
-          if(n ne null) { node = n; return true }
-        }
-        false
-      }
-    }
-
-    def next(): A =
-      if(!hasNext) Iterator.empty.next()
-      else {
-        val r = extract(node)
-        node = node.next
-        r
-      }
-  }
-
-  override def iterator: Iterator[(K, V)] =
-    if(size == 0) Iterator.empty
-    else new HashMapIterator[(K, V)] {
-      protected[this] def extract(nd: Node[K, V]) = (nd.key, nd.value)
-    }
-
-  override def keysIterator: Iterator[K] =
-    if(size == 0) Iterator.empty
-    else new HashMapIterator[K] {
-      protected[this] def extract(nd: Node[K, V]) = nd.key
-    }
-
-  override def valuesIterator: Iterator[V] =
-    if(size == 0) Iterator.empty
-    else new HashMapIterator[V] {
-      protected[this] def extract(nd: Node[K, V]) = nd.value
-    }
-
-
-  /** Returns an iterator over the nodes stored in this HashMap */
-  private[collection] def nodeIterator: Iterator[Node[K, V]] =
-    if(size == 0) Iterator.empty
-    else new HashMapIterator[Node[K, V]] {
-      protected[this] def extract(nd: Node[K, V]) = nd
-    }
-
-  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[(K, V), S]): S with EfficientSplit =
-    shape.
-      parUnbox(new convert.impl.AnyTableStepper[(K, V), Node[K, V]](size, table, _.next, node => (node.key, node.value), 0, table.length)).
-      asInstanceOf[S with EfficientSplit]
-
-  override def keyStepper[S <: Stepper[_]](implicit shape: StepperShape[K, S]): S with EfficientSplit = {
-    import convert.impl._
-    val s = shape.shape match {
-      case StepperShape.IntShape    => new IntTableStepper[Node[K, V]]   (size, table, _.next, _.key.asInstanceOf[Int],    0, table.length)
-      case StepperShape.LongShape   => new LongTableStepper[Node[K, V]]  (size, table, _.next, _.key.asInstanceOf[Long],   0, table.length)
-      case StepperShape.DoubleShape => new DoubleTableStepper[Node[K, V]](size, table, _.next, _.key.asInstanceOf[Double], 0, table.length)
-      case _         => shape.parUnbox(new AnyTableStepper[K, Node[K, V]](size, table, _.next, _.key,                      0, table.length))
-    }
-    s.asInstanceOf[S with EfficientSplit]
-  }
-
-  override def valueStepper[S <: Stepper[_]](implicit shape: StepperShape[V, S]): S with EfficientSplit = {
-    import convert.impl._
-    val s = shape.shape match {
-      case StepperShape.IntShape    => new IntTableStepper[Node[K, V]]   (size, table, _.next, _.value.asInstanceOf[Int],    0, table.length)
-      case StepperShape.LongShape   => new LongTableStepper[Node[K, V]]  (size, table, _.next, _.value.asInstanceOf[Long],   0, table.length)
-      case StepperShape.DoubleShape => new DoubleTableStepper[Node[K, V]](size, table, _.next, _.value.asInstanceOf[Double], 0, table.length)
-      case _         => shape.parUnbox(new AnyTableStepper[V, Node[K, V]](size, table, _.next, _.value,                      0, table.length))
-    }
-    s.asInstanceOf[S with EfficientSplit]
-  }
-
-  private[this] def growTable(newlen: Int) = {
-    if (newlen < 0)
-      throw new RuntimeException(s"new HashMap table size $newlen exceeds maximum")
-    var oldlen = table.length
-    threshold = newThreshold(newlen)
-    if(size == 0) table = new Array(newlen)
-    else {
-      table = java.util.Arrays.copyOf(table, newlen)
-      val preLow: Node[K, V] = new Node(null.asInstanceOf[K], 0, null.asInstanceOf[V], null)
-      val preHigh: Node[K, V] = new Node(null.asInstanceOf[K], 0, null.asInstanceOf[V], null)
-      // Split buckets until the new length has been reached. This could be done more
-      // efficiently when growing an already filled table to more than double the size.
-      while(oldlen < newlen) {
-        var i = 0
-        while (i < oldlen) {
-          val old = table(i)
-          if(old ne null) {
-            preLow.next = null
-            preHigh.next = null
-            var lastLow: Node[K, V] = preLow
-            var lastHigh: Node[K, V] = preHigh
-            var n = old
-            while(n ne null) {
-              val next = n.next
-              if((n.hash & oldlen) == 0) { // keep low
-                lastLow.next = n
-                lastLow = n
-              } else { // move to high
-                lastHigh.next = n
-                lastHigh = n
-              }
-              n = next
-            }
-            lastLow.next = null
-            if(old ne preLow.next) table(i) = preLow.next
-            if(preHigh.next ne null) {
-              table(i + oldlen) = preHigh.next
-              lastHigh.next = null
-            }
-          }
-          i += 1
-        }
-        oldlen *= 2
-      }
-    }
-  }
-
-  private[this] def tableSizeFor(capacity: Int) =
-    (Integer.highestOneBit((capacity-1).max(4))*2).min(1 << 30)
-
-  private[this] def newThreshold(size: Int) = (size.toDouble * loadFactor).toInt
 
   override def clear(): Unit = {
-    java.util.Arrays.fill(table.asInstanceOf[Array[AnyRef]], null)
-    contentSize = 0
+    clearTable()
   }
 
-  def get(key: K): Option[V] = findNode(key) match {
-    case null => None
-    case nd => Some(nd.value)
+  def get(key: K): Option[V] = {
+    val e = findEntry(key)
+    if (e eq null) None
+    else Some(e.value)
   }
 
   @throws[NoSuchElementException]
-  override def apply(key: K): V = findNode(key) match {
-    case null => default(key)
-    case nd => nd.value
-  }
-
-  override def getOrElse[V1 >: V](key: K, default: => V1): V1 = {
-    if (getClass != classOf[HashMap[_, _]]) {
-      // subclasses of HashMap might customise `get` ...
-      super.getOrElse(key, default)
-    } else {
-      // .. but in the common case, we can avoid the Option boxing.
-      val nd = findNode(key)
-      if (nd eq null) default else nd.value
-    }
+  override def apply(key: K): V =  {
+    val result = findEntry(key)
+    if (result eq null) default(key)
+    else result.value
   }
 
   override def getOrElseUpdate(key: K, defaultValue: => V): V = {
-    if (getClass != classOf[HashMap[_, _]]) {
-      // subclasses of HashMap might customise `get` ...
-      super.getOrElseUpdate(key, defaultValue)
-    } else {
-      val hash = computeHash(key)
-      val idx = index(hash)
-      val nd = table(idx) match {
-        case null => null
-        case nd => nd.findNode(key, hash)
-      }
-      if(nd != null) nd.value
-      else {
-        val table0 = table
-        val default = defaultValue
-        if(contentSize + 1 >= threshold) growTable(table.length * 2)
-        // Avoid recomputing index if the `defaultValue()` or new element hasn't triggered a table resize.
-        val newIdx = if (table0 eq table) idx else index(hash)
-        put0(key, default, getOld = false, hash, newIdx)
-        default
-      }
+    val hash = elemHashCode(key)
+    val i = index(hash)
+    val firstEntry = findEntry0(key, i)
+    if (firstEntry != null) firstEntry.value
+    else {
+      val table0 = table
+      val default = defaultValue
+      // Avoid recomputing index if the `defaultValue()` hasn't triggered
+      // a table resize.
+      val newEntryIndex = if (table0 eq table) i else index(hash)
+      val e = createNewEntry(key, default)
+      // Repeat search
+      // because evaluation of `default` can bring entry with `key`
+      val secondEntry = findEntry0(key, newEntryIndex)
+      if (secondEntry == null) addEntry0(e, newEntryIndex)
+      else secondEntry.value = default
+      default
     }
   }
 
-  override def put(key: K, value: V): Option[V] = put0(key, value, getOld = true) match {
-    case null => None
-    case sm => sm
+  override def put(key: K, value: V): Option[V] = {
+    val e = findOrAddEntry(key, value)
+    if (e eq null) None
+    else { val v = e.value; e.value = value; Some(v) }
   }
 
-  override def remove(key: K): Option[V] = remove0(key) match {
-    case null => None
-    case nd => Some(nd.value)
+  override def remove(key: K): Option[V] = {
+    val e = removeEntry(key)
+    if (e ne null) Some(e.value)
+    else None
   }
 
-  override def update(key: K, value: V): Unit = put0(key, value, getOld = false)
 
-  def addOne(elem: (K, V)): this.type = { put0(elem._1, elem._2, getOld = false); this }
+  override def update(key: K, value: V): Unit = {
+    val e = findOrAddEntry(key, value)
+    if (e ne null) e.value = value
+  }
 
-  def subtractOne(elem: K): this.type = { remove0(elem); this }
+  def addOne(elem: (K, V)): this.type = {
+    val e = findOrAddEntry(elem._1, elem._2)
+    if (e ne null) e.value = elem._2
+    this
+  }
+
+  def subtractOne(elem: K): this.type = { removeEntry(elem); this }
 
   override def knownSize: Int = size
 
   override def isEmpty: Boolean = size == 0
 
-  override def foreach[U](f: ((K, V)) => U): Unit = {
-    val len = table.length
-    var i = 0
-    while(i < len) {
-      val n = table(i)
-      if(n ne null) n.foreach(f)
-      i += 1
-    }
-  }
+  override def foreach[U](f: ((K, V)) => U): Unit = foreachEntry0(e => f((e.key, e.value)))
 
   override def foreachEntry[U](f: (K, V) => U): Unit = {
-    val len = table.length
-    var i = 0
-    while(i < len) {
-      val n = table(i)
-      if(n ne null) n.foreachEntry(f)
-      i += 1
-    }
+    super.foreachEntry0(entry => f(entry.key, entry.value))
   }
 
-  protected[this] def writeReplace(): AnyRef = new DefaultSerializationProxy(new mutable.HashMap.DeserializationFactory[K, V](table.length, loadFactor), this)
+  protected[this] def writeReplace(): AnyRef = new DefaultSerializationProxy(new mutable.HashMap.DeserializationFactory[K, V](table.length, _loadFactor), this)
 
   override def filterInPlace(p: (K, V) => Boolean): this.type = {
-    if (nonEmpty) {
-      var bucket = 0
-
-      while (bucket < table.length) {
-        var head = table(bucket)
-
-        while ((head ne null) && !p(head.key, head.value)) {
-          head = head.next
-          contentSize -= 1
-        }
-
-        if (head ne null) {
-          var prev = head
-          var next = head.next
-
-          while (next ne null) {
-            if (p(next.key, next.value)) {
-              prev = next
-            } else {
-              prev.next = next.next
-              contentSize -= 1
-            }
-            next = next.next
-          }
-        }
-
-        table(bucket) = head
-        bucket += 1
-      }
-    }
-    this
-  }
-
-  // TODO: rename to `mapValuesInPlace` and override the base version (not binary compatible)
-  private[mutable] def mapValuesInPlaceImpl(f: (K, V) => V): this.type = {
-    val len = table.length
-    var i = 0
-    while (i < len) {
-      var n = table(i)
-      while (n ne null) {
-        n.value = f(n.key, n.value)
-        n = n.next
-      }
-      i += 1
-    }
-    this
+    super.filterInPlace(p)
   }
 
   override def mapFactory: MapFactory[HashMap] = HashMap
 
   @nowarn("""cat=deprecation&origin=scala\.collection\.Iterable\.stringPrefix""")
   override protected[this] def stringPrefix = "HashMap"
+
+  def createNewEntry(key: K, value: V): Entry = {
+    new Entry(key, value)
+  }
+
 }
 
 /**
@@ -560,15 +184,13 @@ object HashMap extends MapFactory[HashMap] {
   def empty[K, V]: HashMap[K, V] = new HashMap[K, V]
 
   def from[K, V](it: collection.IterableOnce[(K, V)]): HashMap[K, V] = {
-    val k = it.knownSize
-    val cap = if(k > 0) ((k + 1).toDouble / defaultLoadFactor).toInt else defaultInitialCapacity
-    new HashMap[K, V](cap, defaultLoadFactor).addAll(it)
+    new HashMap[K, V]().addAll(it)
   }
 
   def newBuilder[K, V]: Builder[(K, V), HashMap[K, V]] = newBuilder(defaultInitialCapacity, defaultLoadFactor)
 
   def newBuilder[K, V](initialCapacity: Int, loadFactor: Double): Builder[(K, V), HashMap[K, V]] =
-    new GrowableBuilder[(K, V), HashMap[K, V]](new HashMap[K, V](initialCapacity, loadFactor)) {
+    new GrowableBuilder[(K, V), HashMap[K, V]](new HashMap[K, V]()) {
       override def sizeHint(size: Int) = elems.sizeHint(size)
     }
 
@@ -580,7 +202,7 @@ object HashMap extends MapFactory[HashMap] {
 
   @SerialVersionUID(3L)
   private final class DeserializationFactory[K, V](val tableLength: Int, val loadFactor: Double) extends Factory[(K, V), HashMap[K, V]] with Serializable {
-    def fromSpecific(it: IterableOnce[(K, V)]): HashMap[K, V] = new HashMap[K, V](tableLength, loadFactor).addAll(it)
+    def fromSpecific(it: IterableOnce[(K, V)]): HashMap[K, V] = new HashMap[K, V]().addAll(it)
     def newBuilder: Builder[(K, V), HashMap[K, V]] = HashMap.newBuilder(tableLength, loadFactor)
   }
 

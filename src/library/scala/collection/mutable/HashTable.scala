@@ -52,7 +52,7 @@ private[collection] trait HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] 
    */
   protected[collection] var tableSize: Int = 0
 
-  final def size: Int = tableSize
+  def size: Int = tableSize
 
   /** The next size value at which to resize (capacity * load factor).
    */
@@ -125,7 +125,7 @@ private[collection] trait HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] 
     out.writeInt(seedvalue)
     out.writeBoolean(isSizeMapDefined)
 
-    foreachEntry(writeEntry)
+    foreachEntry0(writeEntry)
   }
 
   /** Find entry with given key in table, null if not found.
@@ -227,7 +227,7 @@ private[collection] trait HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] 
   }
 
   /** Avoid iterator for a 2x faster traversal. */
-  def foreachEntry[U](f: Entry => U): Unit = {
+  def foreachEntry0[U](f: Entry => U): Unit = {
     val iterTable = table
     var idx       = lastPopulatedIndex
     var es        = iterTable(idx)
@@ -366,6 +366,27 @@ private[collection] trait HashTable[A, B, Entry >: Null <: HashEntry[A, Entry]] 
     val exponent = Integer.numberOfLeadingZeros(ones)
     (improve(hcode, seedvalue) >>> exponent) & ones
   }
+
+  def initWithContents(c: HashTable.Contents[A, Entry]) = {
+    if (c != null) {
+      _loadFactor = c.loadFactor
+      table = c.table
+      tableSize = c.tableSize
+      threshold = c.threshold
+      seedvalue = c.seedvalue
+      sizemap = c.sizemap
+    }
+    if (alwaysInitSizeMap && sizemap == null) sizeMapInitAndRebuild()
+  }
+
+  private[collection] def hashTableContents = new HashTable.Contents(
+    _loadFactor,
+    table,
+    tableSize,
+    threshold,
+    seedvalue,
+    sizemap
+  )
 }
 
 private[collection] object HashTable {
@@ -407,6 +428,16 @@ private[collection] object HashTable {
    * Returns a power of two >= `target`.
    */
   private[collection] def nextPositivePowerOfTwo(target: Int): Int = 1 << -numberOfLeadingZeros(target - 1)
+
+  class Contents[A, Entry >: Null <: HashEntry[A, Entry]](
+    val loadFactor: Int,
+    val table: Array[HashEntry[A, Entry]],
+    val tableSize: Int,
+    val threshold: Int,
+    val seedvalue: Int,
+    val sizemap: Array[Int]
+  )
+
 }
 
 /** Class used internally.

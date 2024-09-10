@@ -130,32 +130,3 @@ object HashSet extends IterableFactory[HashSet] {
     def newBuilder: Builder[A, HashSet[A]] = HashSet.newBuilder(tableLength, loadFactor)
   }
 }
-
-
-object HashSetTest {
-  def main(args: Array[String]): Unit = {
-//    var hs = HashSet[Int]()
-//    hs += 1
-//    hs += 324
-//    hs += 647
-//    hs += 970
-//    val l = hs.toList
-//    println(l)
-//
-//    val hs2 = HashSet.from(List(1, 324, 647, 970))
-//    println(hs2.toString())
-//    println((1 to 1000000 by 123).groupBy(x => ~(x % 32)).mapValues(_.sum).toList)
-//    println(HashSet("the", "quick", "brown", "fox", "jumped", "over", "the", "lazy", "dog"))
-    val hs1 = HashSet[String]()
-    hs1 += "the"
-    hs1 += "quick"
-    hs1 += "brown"
-    hs1 += "fox"
-    hs1 += "jumped"
-    hs1 += "over"
-    hs1 += "the"
-    hs1 += "lazy"
-    hs1 += "dog"
-    println(hs1)
-  }
-}

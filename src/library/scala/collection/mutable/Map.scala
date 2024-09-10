@@ -200,7 +200,6 @@ trait MapOps[K, V, +CC[X, Y] <: MapOps[X, Y, CC, _], +C <: MapOps[K, V, CC, C]]
     */
   def mapValuesInPlace(f: (K, V) => V): this.type = {
     if (!isEmpty) this match {
-      case hm: mutable.HashMap[_, _] => hm.asInstanceOf[mutable.HashMap[K, V]].mapValuesInPlaceImpl(f)
       case tm: concurrent.Map[_, _] => tm.asInstanceOf[concurrent.Map[K, V]].mapValuesInPlaceImpl(f)
       case _ =>
         val array = this.toArray[Any]
