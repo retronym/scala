@@ -38,7 +38,10 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
     with StrictOptimizedIterableOps[(K, V), Iterable, HashMap[K, V]]
     with StrictOptimizedMapOps[K, V, HashMap, HashMap[K, V]]
     with MapFactoryDefaults[K, V, HashMap, Iterable]
+    with HashTable[K, DefaultEntry[K, V]]
     with Serializable {
+  initWithContents(contents)
+  type Entry = DefaultEntry[A, B]
 
   /* The HashMap class holds the following invariant:
    * - For each i between  0 and table.length, the bucket at table(i) only contains keys whose hash-index is i.
@@ -56,22 +59,12 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
   private[this] var threshold: Int = newThreshold(table.length)
 
   private[this] var contentSize = 0
+  // For Scala 2.12 backwards compat
+  private def seedvalue: Int = Integer.bitCount(32 - 1)
 
   override def size: Int = contentSize
-
-  /** Performs the inverse operation of improveHash. In this case, it happens to be identical to improveHash*/
-  @`inline` private[collection] def unimproveHash(improvedHash: Int): Int = improveHash(improvedHash)
-
-  /** Computes the improved hash of an original (`any.##`) hash. */
   @`inline` private[this] def improveHash(originalHash: Int): Int = {
-    // Improve the hash by xoring the high 16 bits into the low 16 bits just in case entropy is skewed towards the
-    // high-value bits. We only use the lowest bits to determine the hash bucket. This is the same improvement
-    // algorithm as in java.util.HashMap.
-    //
-    // This function is also its own inverse. That is, for all ints i, improveHash(improveHash(i)) = i
-    // this allows us to retrieve the original hash when we need it, for instance when appending to an immutable.HashMap
-    // and that is why unimproveHash simply forwards to this method
-    originalHash ^ (originalHash >>> 16)
+    HashTable.HashUtils.improve(originalHash, seedvalue)
   }
 
   /** Computes the improved hash of this key */
@@ -185,14 +178,6 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
     }
 
     xs match {
-      case hs: mutable.HashSet[K] =>
-        val iter = hs.nodeIterator
-        while (iter.hasNext) {
-          val next = iter.next()
-          remove0(next.key, next.hash)
-          if (size == 0) return this
-        }
-        this
       case lhs: mutable.LinkedHashSet[K] =>
         val iter = lhs.entryIterator
         while (iter.hasNext) {
@@ -562,21 +547,6 @@ class HashMap[K, V](initialCapacity: Int, loadFactor: Double)
 
   @nowarn("""cat=deprecation&origin=scala\.collection\.Iterable\.stringPrefix""")
   override protected[this] def stringPrefix = "HashMap"
-
-  override def hashCode: Int = {
-    if (isEmpty) MurmurHash3.emptyMapHash
-    else {
-      val tupleHashIterator = new HashMapIterator[Any] {
-        var hash: Int = 0
-        override def hashCode: Int = hash
-        override protected[this] def extract(nd: Node[K, V]): Any = {
-          hash = MurmurHash3.tuple2Hash(unimproveHash(nd.hash), nd.value.##)
-          this
-        }
-      }
-      MurmurHash3.unorderedHash(tupleHashIterator, MurmurHash3.mapSeed)
-    }
-  }
 }
 
 /**
@@ -606,7 +576,7 @@ object HashMap extends MapFactory[HashMap] {
   final def defaultLoadFactor: Double = 0.75
 
   /** The default initial capacity for the hash table */
-  final def defaultInitialCapacity: Int = 16
+  final def defaultInitialCapacity: Int = 32
 
   @SerialVersionUID(3L)
   private final class DeserializationFactory[K, V](val tableLength: Int, val loadFactor: Double) extends Factory[(K, V), HashMap[K, V]] with Serializable {
