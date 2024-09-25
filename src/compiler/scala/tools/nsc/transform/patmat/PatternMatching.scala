@@ -65,16 +65,7 @@ trait PatternMatching extends Transform
   def newTransformer(unit: CompilationUnit): AstTransformer = new MatchTransformer(unit)
 
   class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    private var inAsync = false
-
     override def transform(tree: Tree): Tree = tree match {
-      case dd: DefDef if async.hasAsyncAttachment(dd) =>
-        val wasInAsync = inAsync
-        try {
-          inAsync = true
-          super.transform(dd)
-        } finally
-          inAsync = wasInAsync
 
       case CaseDef(UnApply(Apply(Select(qual, nme.unapply), Ident(nme.SELECTOR_DUMMY) :: Nil), (bind@Bind(b, Ident(nme.WILDCARD))) :: Nil), guard, body)
         if guard.isEmpty && qual.symbol == definitions.NonFatalModule =>
@@ -113,13 +104,13 @@ trait PatternMatching extends Transform
     }
 
     def translator(selectorPos: Position): MatchTranslator with CodegenCore = {
-      new OptimizingMatchTranslator(localTyper, selectorPos, inAsync)
+      new OptimizingMatchTranslator(localTyper, selectorPos)
     }
 
   }
 
 
-  class OptimizingMatchTranslator(val typer: analyzer.Typer, val selectorPos: Position, val inAsync: Boolean)
+  class OptimizingMatchTranslator(val typer: analyzer.Typer, val selectorPos: Position)
     extends MatchTranslator
       with MatchOptimizer
       with MatchAnalyzer
