@@ -17,6 +17,7 @@ import scala.annotation.nowarn
 import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.mutable.Builder
 import scala.collection.View.{LeftPartitionMapped, RightPartitionMapped}
+import scala.runtime.AbstractFunction0
 
 /** Base trait for generic collections.
   *
@@ -555,21 +556,77 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *
     */
   def groupBy[K](f: A => K): immutable.Map[K, C] = {
-    val m = mutable.Map.empty[K, Builder[A, C]]
-    val it = iterator
-    while (it.hasNext) {
-      val elem = it.next()
-      val key = f(elem)
-      val bldr = m.getOrElseUpdate(key, newSpecificBuilder)
-      bldr += elem
+    object grouper extends AbstractFunction0[Builder[A, C]] with Function1[A, Unit] {
+      var k0, k1, k2, k3: K = null.asInstanceOf[K]
+      var v0, v1, v2, v3    = (null : Builder[A, C])
+      var size              = 0
+      var hashMap: mutable.HashMap[K, Builder[A, C]] = null
+      override def apply(): mutable.Builder[A, C] = {
+        size += 1
+        newSpecificBuilder
+      }
+      def apply(elem: A): Unit = {
+        val key  = f(elem)
+        val bldr = builderFor(key)
+        bldr += elem
+      }
+      def builderFor(key: K): Builder[A, C] =
+        size match {
+          case 0 =>
+            k0 = key
+            v0 = apply()
+            v0
+          case 1 =>
+            if (k0 == key) v0
+            else {k1 = key; v1 = apply(); v1 }
+          case 2 =>
+            if (k0 == key) v0
+            else if (k1 == key) v1
+                 else {k2 = key; v2 = apply(); v2 }
+          case 3 =>
+            if (k0 == key) v0
+            else if (k1 == key) v1
+                 else if (k2 == key) v2
+                      else {k3 = key; v3 = apply(); v3 }
+          case 4 =>
+            if (k0 == key) v0
+            else if (k1 == key) v1
+                 else if (k2 == key) v2
+                      else if (k3 == key) v3
+                           else {
+                             hashMap = new mutable.HashMap
+                             hashMap(k0) = v0
+                             hashMap(k1) = v1
+                             hashMap(k2) = v2
+                             hashMap(k3) = v3
+                             val bldr = apply()
+                             hashMap(key) = bldr
+                             bldr
+                           }
+          case _ =>
+            hashMap.getOrElseUpdate(key, apply())
+        }
+
+      def result(): immutable.Map[K, C] =
+        size match {
+          case 0 => immutable.Map.empty
+          case 1 => new immutable.Map.Map1(k0, v0.result())
+          case 2 => new immutable.Map.Map2(k0, v0.result(), k1, v1.result())
+          case 3 => new immutable.Map.Map3(k0, v0.result(), k1, v1.result(), k2, v2.result())
+          case 4 => new immutable.Map.Map4(k0, v0.result(), k1, v1.result(), k2, v2.result(), k3, v3.result())
+          case _ =>
+            val it = hashMap.entriesIterator
+            val m1 = immutable.HashMap.newBuilder[K, C]
+            while (it.hasNext) {
+              val entry = it.next()
+              m1.+=((entry.key, entry.value.result()))
+            }
+            m1.result()
+        }
+
     }
-    var result = immutable.HashMap.empty[K, C]
-    val mapIt = m.iterator
-    while (mapIt.hasNext) {
-      val (k, v) = mapIt.next()
-      result = result.updated(k, v.result())
-    }
-    result
+    this.foreach(grouper)
+    grouper.result()
   }
 
   /**

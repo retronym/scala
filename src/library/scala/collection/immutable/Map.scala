@@ -618,7 +618,7 @@ object Map extends MapFactory[Map] {
           (walue4.asInstanceOf[AnyRef] eq value4.asInstanceOf[AnyRef])) this.asInstanceOf[Map[K, W]]
       else new Map4(key1, walue1, key2, walue2, key3, walue3, key4, walue4)
     }
-    private[immutable] def buildTo[V1 >: V](builder: HashMapBuilder[K, V1]): builder.type =
+    private[immutable] def buildTo[V1 >: V](builder: HashMap.HashMapBuilder[K, V1]): builder.type =
       builder.addOne(key1, value1).addOne(key2, value2).addOne(key3, value3).addOne(key4, value4)
     override def hashCode(): Int = {
       import scala.util.hashing.MurmurHash3
@@ -661,7 +661,7 @@ abstract class AbstractMap[K, +V] extends scala.collection.AbstractMap[K, V] wit
 private[immutable] final class MapBuilderImpl[K, V] extends ReusableBuilder[(K, V), Map[K, V]] {
   private[this] var elems: Map[K, V] = Map.empty
   private[this] var switchedToHashMapBuilder: Boolean = false
-  private[this] var hashMapBuilder: HashMapBuilder[K, V] = _
+  private[this] var hashMapBuilder: HashMap.HashMapBuilder[K, V] = _
 
   private[immutable] def getOrElse[V0 >: V](key: K, value: V0): V0 =
     if (hashMapBuilder ne null) hashMapBuilder.getOrElse(key, value)
@@ -690,7 +690,7 @@ private[immutable] final class MapBuilderImpl[K, V] extends ReusableBuilder[(K, 
       } else {
         switchedToHashMapBuilder = true
         if (hashMapBuilder == null) {
-          hashMapBuilder = new HashMapBuilder
+          hashMapBuilder = new HashMap.HashMapBuilder
         }
         elems.asInstanceOf[Map4[K, V]].buildTo(hashMapBuilder)
         hashMapBuilder.addOne(key, value)

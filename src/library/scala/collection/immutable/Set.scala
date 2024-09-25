@@ -362,7 +362,7 @@ abstract class AbstractSet[A] extends scala.collection.AbstractSet[A] with Set[A
 private final class SetBuilderImpl[A] extends ReusableBuilder[A, Set[A]] {
   private[this] var elems: Set[A] = Set.empty
   private[this] var switchedToHashSetBuilder: Boolean = false
-  private[this] var hashSetBuilder: HashSetBuilder[A] = _
+  private[this] var hashSetBuilder: HashSet.HashSetBuilder[A] = _
 
   override def clear(): Unit = {
     elems = Set.empty
@@ -387,7 +387,7 @@ private final class SetBuilderImpl[A] extends ReusableBuilder[A, Set[A]] {
       } else {
         switchedToHashSetBuilder = true
         if (hashSetBuilder == null) {
-          hashSetBuilder = new HashSetBuilder
+          hashSetBuilder = new HashSet.HashSetBuilder
         }
         elems.asInstanceOf[Set4[A]].buildTo(hashSetBuilder)
         hashSetBuilder.addOne(elem)

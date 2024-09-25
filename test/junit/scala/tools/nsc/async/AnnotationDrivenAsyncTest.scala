@@ -20,6 +20,35 @@ import scala.tools.nsc.transform.TypingTransformers
 import scala.tools.testkit.async.AsyncStateMachine
 
 class AnnotationDrivenAsyncTest {
+
+  @Test
+  def testSwitchAsyncGuardBug(): Unit = {
+    val code =
+      """
+        |import scala.tools.nsc.async.{autoawait, customAsync}
+        |
+        |
+        |object Test {
+        |  def log[A](a: A) = a
+        |  @autoawait
+        |  def bar = 42
+        |
+        |  @autoawait
+        |  @customAsync
+        |  def test = {
+        |   "abcdef".length match {
+        |      case 1 => log("A")
+        |      case 2 => log("B")
+        |      case 3 if bar.toString == "" => log("c")
+        |      case _ =>
+        |        log(("_", bar))
+        |    }
+        |  }
+        |}
+        |""".stripMargin
+    assertEquals(("_", 42), run(code))
+  }
+
   @Test
   @Ignore // TODO XASYNC
   def testBoxedUnitNotImplemented(): Unit = {
