@@ -22,6 +22,32 @@ import scala.tools.partest.async.AsyncStateMachine
 
 class AnnotationDrivenAsync {
   @Test
+  def testStringSwitchAsyncBug(): Unit = {
+    val code =
+      """
+        |import scala.tools.nsc.async.{autoawait, customAsync}
+        |
+        |
+        |object Test {
+        |  def log[A](a: A) = a
+        |  @autoawait
+        |  def bar = 42
+        |
+        |  @autoawait
+        |  def test = {
+        |   toString match {
+        |      case "a" => log("A")
+        |      case "b" => log("B")
+        |      case "c" if bar.toString == "" => log("c")
+        |      case _ =>
+        |        log(("_", bar))
+        |    }
+        |  }
+        |}
+        |""".stripMargin
+    assertEquals((), run(code))
+  }
+  @Test
   @Ignore // TODO XASYNC
   def testBoxedUnitNotImplemented(): Unit = {
     val code =
