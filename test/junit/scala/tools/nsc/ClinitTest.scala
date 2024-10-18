@@ -13,6 +13,7 @@
 package scala.tools.nsc
 
 import java.io.{File, PrintWriter, StringWriter}
+import java.lang.invoke.{ConstantBootstraps, MethodHandles, VarHandle}
 import scala.annotation.nowarn
 import scala.collection.immutable.{List, Nil, Seq}
 import scala.reflect.internal.Flags.{FINAL, STATIC}
@@ -30,6 +31,7 @@ object ClinitTest {
     settings.debug.value = true
     settings.outdir.value = out.getAbsolutePath
     settings.embeddedDefaults(getClass.getClassLoader)
+    settings.target.value = "11"
     val isInSBT = !settings.classpath.isSetByUser
     if (isInSBT) settings.usejavacp.value = true
 
@@ -44,7 +46,21 @@ object ClinitTest {
     }
     import global._
     val run = new Run()
-    run.compileUnits(newCompilationUnit("class Staticify { def direct: String = null }") :: Nil)
+
+    run.compileUnits(newCompilationUnit(
+      """
+        |class Staticify {
+        |  useDirectVH
+        |
+        |
+        |  def direct: String = null
+        |  def useDirectVH = {
+        |    import java.lang.invoke._
+        |    val vh = ConstantBootstraps.fieldVarHandle(MethodHandles.lookup(), "direct$impl", classOf[VarHandle], classOf[Staticify], classOf[String])
+        |    vh.get(this)
+        |  }
+        |}
+        |""".stripMargin) :: Nil)
     val loader = new URLClassLoader(Seq(new File(settings.outdir.value).toURI.toURL), global.getClass.getClassLoader)
 
     val bytecode = out.listFiles().flatMap { file =>
@@ -55,7 +71,7 @@ object ClinitTest {
     }.mkString("\n\n")
     println(bytecode)
 
-    Class.forName("Staticify", true, loader)
+    Class.forName("Staticify", true, loader).getDeclaredConstructor().newInstance()
   }
 
   private def createTempDir(): File = {
@@ -96,7 +112,7 @@ abstract class DemoPlugin extends Plugin {
           cls.info.decls.enter(implField)
           val implInit = q"null"
           val vhField = cls.newValue(dd.name.append("$vh").toTermName, tree.pos, newFlags = STATIC).setInfo(VarHandleClass.tpeHK)
-          cls.info.decls.enter(vhField)
+          cls.info.decls.enter(vhField)/**/
           val vhInit = q"$MethodHandlesClass.lookup().findVarHandle(classOf[$cls], ${implField.name.dropLocal.encoded}, classOf[${implField.info.resultType.typeSymbol}])"
 
           localTyper.typed(Thicket(Block(dd, localTyper.atOwner(cls).typed(newValDef(implField, implInit)()), localTyper.atOwner(cls).typed(newValDef(vhField, vhInit)()))))

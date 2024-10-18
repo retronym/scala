@@ -13,13 +13,13 @@
 package scala.tools.nsc
 package backend.jvm
 
-import scala.annotation.{ switch, tailrec }
+import scala.annotation.{switch, tailrec}
 import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.Flags
 import scala.tools.asm
-import scala.tools.asm.Opcodes
-import scala.tools.asm.tree.{ InvokeDynamicInsnNode, MethodInsnNode, MethodNode }
-import scala.tools.nsc.backend.jvm.BCodeHelpers.{ InvokeStyle, TestOp }
+import scala.tools.asm.{ConstantDynamic, Handle, Opcodes}
+import scala.tools.asm.tree.{InvokeDynamicInsnNode, MethodInsnNode, MethodNode}
+import scala.tools.nsc.backend.jvm.BCodeHelpers.{InvokeStyle, TestOp}
 import scala.tools.nsc.backend.jvm.BackendReporting._
 import scala.tools.nsc.backend.jvm.GenBCode._
 
@@ -340,7 +340,20 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               genLoadTo(arg, paramType, jumpDest)
               generatedDest = jumpDest
           }
+        case Apply(fun @ Select(qualifier, _), Apply(lookup, Nil) :: Literal(Constant(fieldName: String)) :: Literal(Constant(varHandleClass: Type)) :: (args @ (Literal(Constant(ownerClass: Type)) :: Literal(Constant(fieldTypeClass: Type)) :: Nil)))
+          // TODO refine these checks
+          if fun.symbol.name.string_==("fieldVarHandle") && lookup.symbol.name.string_==("lookup") =>
 
+          val bootstrapDescriptor = staticHandleFromSymbol(fun.symbol)
+          val bootstrapArgs = args.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos) case x => throw new MatchError(x)})
+          mnode.visitLdcInsn(
+            new ConstantDynamic(
+              fieldName,
+              typeToBType(fun.symbol.info.resultType).descriptor,
+              bootstrapDescriptor,
+              bootstrapArgs: _*)
+            )
+          generatedType = classBTypeFromSymbol(tree.tpe.typeSymbol)
         case app: Apply =>
           generatedType = genApply(app, expectedType)
 
