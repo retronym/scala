@@ -631,7 +631,11 @@ trait Definitions extends api.StandardDefinitions {
     lazy val ScalaSignatureAnnotation = requiredClass[scala.reflect.ScalaSignature]
     lazy val ScalaLongSignatureAnnotation = requiredClass[scala.reflect.ScalaLongSignature]
 
+    lazy val ConstantBootstraps = getModuleIfDefined("java.lang.invoke.ConstantBootstraps")
+    lazy val MethodTypeClass = getClassIfDefined("java.lang.invoke.MethodType")
     lazy val MethodHandleClass = getClassIfDefined("java.lang.invoke.MethodHandle")
+    lazy val MethodHandlesModule = getModuleIfDefined("java.lang.invoke.MethodHandles")
+    lazy val MethodHandles_LookupClass = getMemberClass(MethodHandlesModule.moduleClass, TypeName("Lookup"))
     lazy val VarHandleClass = getClassIfDefined("java.lang.invoke.VarHandle")
 
     // Option classes

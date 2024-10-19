@@ -340,31 +340,50 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               genLoadTo(arg, paramType, jumpDest)
               generatedDest = jumpDest
           }
-        case Apply(fun @ Select(qualifier, _), Apply(lookup, Nil) :: Literal(Constant(fieldName: String)) :: Literal(Constant(varHandleClass: Type)) :: (args @ (Literal(Constant(ownerClass: Type)) :: Literal(Constant(fieldTypeClass: Type)) :: Nil)))
-          // TODO refine these checks
-          if fun.symbol.name.string_==("fieldVarHandle") && lookup.symbol.name.string_==("lookup") =>
+        case Apply(fun @ Select(qualifier, _), Apply(lookup, Nil) :: (fieldName @ Literal(Constant(_: String))) :: Literal(Constant(varHandleClass: Type)) :: staticArgs)
+          if currentSettings.target.value.toInt >= 11
+            && fun.symbol.owner == definitions.ConstantBootstraps.moduleClass
+            && lookup.symbol.owner == definitions.MethodHandlesModule.moduleClass
+            && lookup.symbol.name.string_==("lookup")
+            && staticArgs.forall(_.isInstanceOf[Literal]) =>
+          // Treat ConstantBoostraps.* with literal arguments as intrinsics
+          genLoadTo(ApplyDynamic(fun, List(Literal(Constant(fun.symbol)), fieldName) ++ staticArgs).setType(tree.tpe), expectedType, dest)
 
-          val bootstrapDescriptor = staticHandleFromSymbol(fun.symbol)
-          val bootstrapArgs = args.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos) case x => throw new MatchError(x)})
-          mnode.visitLdcInsn(
-            new ConstantDynamic(
-              fieldName,
-              typeToBType(fun.symbol.info.resultType).descriptor,
-              bootstrapDescriptor,
-              bootstrapArgs: _*)
-            )
-          generatedType = classBTypeFromSymbol(tree.tpe.typeSymbol)
         case app: Apply =>
           generatedType = genApply(app, expectedType)
 
-        case ApplyDynamic(qual, Literal(Constant(bootstrapMethodRef: Symbol)) :: staticAndDynamicArgs) =>
-          val numDynamicArgs = qual.symbol.info.params.length
-          val (staticArgs, dynamicArgs) = staticAndDynamicArgs.splitAt(staticAndDynamicArgs.length - numDynamicArgs)
-          val bootstrapDescriptor = staticHandleFromSymbol(bootstrapMethodRef)
-          val bootstrapArgs = staticArgs.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos) case x => throw new MatchError(x)})
-          val descriptor = methodBTypeFromMethodType(qual.symbol.info, isConstructor=false)
-          genLoadArguments(dynamicArgs, qual.symbol.info.params.map(param => typeToBType(param.info)))
-          mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, descriptor.descriptor, bootstrapDescriptor, bootstrapArgs : _*)
+        case ApplyDynamic(qual, Literal(Constant(bootstrapMethodRef: Symbol)) :: args) =>
+          val paramSig = bootstrapMethodRef.info.params.map(_.info.typeSymbol)
+          val x = MethodHandles_LookupClass
+          paramSig.toList match {
+            case MethodHandles_LookupClass :: StringClass :: ClassClass :: _ =>
+              args match {
+                case Literal(Constant(fieldName: String)) :: staticArgs =>
+                  val bootstrapDescriptor = staticHandleFromSymbol(qual.symbol)
+                  val bootstrapArgs = staticArgs.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos) case x => throw new MatchError()})
+                  mnode.visitLdcInsn(
+                    new ConstantDynamic(
+                      fieldName,
+                      typeToBType(qual.symbol.info.resultType).descriptor,
+                      bootstrapDescriptor,
+                      bootstrapArgs: _*)
+                    )
+                  generatedType = classBTypeFromSymbol(tree.tpe.typeSymbol)
+                case _ => throw new MatchError(args)
+              }
+            case MethodHandles_LookupClass :: StringClass :: MethodTypeClass :: _ =>
+              val staticAndDynamicArgs = args
+              val numDynamicArgs = qual.symbol.info.params.length
+              val (staticArgs, dynamicArgs) = staticAndDynamicArgs.splitAt(staticAndDynamicArgs.length - numDynamicArgs)
+              val bootstrapDescriptor = staticHandleFromSymbol(bootstrapMethodRef)
+              val bootstrapArgs = staticArgs.map({case t @ Literal(c: Constant) => bootstrapMethodArg(c, t.pos) case x => throw new MatchError(x)})
+              val descriptor = methodBTypeFromMethodType(qual.symbol.info, isConstructor=false)
+              genLoadArguments(dynamicArgs, qual.symbol.info.params.map(param => typeToBType(param.info)))
+              mnode.visitInvokeDynamicInsn(qual.symbol.name.encoded, descriptor.descriptor, bootstrapDescriptor, bootstrapArgs : _*)
+            case _ =>
+              abort(s"Unexpected bootstrap method signature: ${bootstrapMethodRef.info}")
+          }
+
 
         case ApplyDynamic(qual, args) => abort("No invokedynamic support yet.")
 
