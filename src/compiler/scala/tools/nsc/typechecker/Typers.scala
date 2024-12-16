@@ -571,13 +571,18 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           }
         }
         val qual = typedQualifier { atPos(tree.pos.makeTransparent) {
+          def packageObject =
+            if (!sym.isOverloaded && sym.owner.isModuleClass) sym.owner.sourceModule // historical optimization, perhaps no longer needed
+            else pre.typeSymbol.packageObject
           tree match {
             case Ident(_) =>
-              val packageObject =
-                if (!sym.isOverloaded && sym.owner.isModuleClass) sym.owner.sourceModule // historical optimization, perhaps no longer needed
-                else pre.typeSymbol.packageObject
               Ident(packageObject)
-            case Select(qual, _) => Select(qual, nme.PACKAGEkw)
+            case Select(qual, _) =>
+              if (qual.symbol != sym.owner.owner) {
+                Ident(packageObject)
+              } else {
+                Select(qual, nme.PACKAGEkw)
+              }
             case SelectFromTypeTree(qual, _) => Select(qual, nme.PACKAGEkw)
           }
         }}

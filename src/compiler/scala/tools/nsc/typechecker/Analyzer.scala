@@ -72,7 +72,21 @@ trait Analyzer extends AnyRef
         }
       }
 
-      def apply(unit: CompilationUnit) {
+      override def run(): Unit = {
+        super.run()
+        val aliases: List[String] = settings.YaliasPackage.value
+        aliases.foreach {
+          alias =>
+            alias.split('=').toList match {
+              case a :: b :: Nil =>
+                processPackageAliases(a, b)
+              case _             =>
+                globalError(s"Cannot parse value for ${settings.YaliasPackage}: $alias")
+            }
+        }
+      }
+
+      def apply(unit: CompilationUnit): Unit = {
         openPackageObjectsTraverser(unit.body)
       }
     }
