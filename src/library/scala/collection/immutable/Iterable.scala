@@ -32,6 +32,7 @@ trait Iterable[+A] extends collection.Iterable[A]
 object Iterable extends IterableFactory.Delegate[Iterable](List) {
   override def from[E](it: IterableOnce[E]): Iterable[E] = it match {
     case iterable: Iterable[E] => iterable
+    case it: Iterator[E] => LazyList.from(it)
     case _ => super.from(it)
   }
 }
