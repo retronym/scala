@@ -18,7 +18,8 @@ import java.io.{BufferedOutputStream, ByteArrayOutputStream, IOException, InputS
 import java.io.{File => JFile}
 import java.net.URL
 import java.nio.ByteBuffer
-
+import java.nio.file.attribute.BasicFileAttributes
+import java.nio.file.{Files, NoSuchFileException}
 import scala.collection.AbstractIterable
 
 /**
@@ -46,10 +47,18 @@ object AbstractFile {
    * readable zip or jar archive, returns an abstract directory
    * backed by it. Otherwise, returns `null`.
    */
-  def getDirectory(file: File): AbstractFile =
-    if (file.isDirectory) new PlainFile(file)
-    else if (file.isFile && Path.isExtensionJarOrZip(file.jfile)) ZipArchive.fromFile(file)
+  def getDirectory(file: File): AbstractFile = {
+    val attrs = try {
+       Files.readAttributes(file.jfile.toPath, classOf[BasicFileAttributes])
+    } catch {
+      case _: IOException =>
+        return null
+    }
+
+    if (attrs.isDirectory) new PlainFile(file)
+    else if (attrs.isRegularFile && Path.isExtensionJarOrZip(file.jfile)) ZipArchive.fromFile(file)
     else null
+  }
 
   /**
    * If the specified URL exists and is a regular file or a directory, returns an
