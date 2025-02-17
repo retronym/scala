@@ -36,15 +36,16 @@ sealed trait ZipAndJarFileLookupFactory {
   private val cache = new FileBasedCache[ZipSettings, ClassPath with Closeable]
 
   def create(zipFile: AbstractFile, settings: Settings, closeableRegistry: CloseableRegistry): ClassPath = {
-    val disabled = (settings.YdisableFlatCpCaching.value && !settings.YforceFlatCpCaching.value) || zipFile.file == null
+    val jfile = zipFile.file
+    val disabled = (settings.YdisableFlatCpCaching.value && !settings.YforceFlatCpCaching.value) || jfile == null
     val zipSettings = ZipSettings(settings.releaseValue)
-    cache.checkCacheability(zipFile.toURL :: Nil, checkStamps = true, disableCache = disabled) match {
-      case Left(_) =>
-        val result: ClassPath with Closeable = createForZipFile(zipFile, zipSettings)
-        closeableRegistry.registerCloseable(result)
-        result
-      case Right(paths) =>
-        cache.getOrCreate(zipSettings, paths, () => createForZipFile(zipFile, zipSettings), closeableRegistry, checkStamps = true)
+
+    if (disabled) {
+      val result: ClassPath with Closeable = createForZipFile(zipFile, zipSettings)
+      closeableRegistry.registerCloseable(result)
+      result
+    } else {
+      cache.getOrCreate(zipSettings, Seq(jfile.toPath), () => createForZipFile(zipFile, zipSettings), closeableRegistry, checkStamps = true)
     }
   }
 
