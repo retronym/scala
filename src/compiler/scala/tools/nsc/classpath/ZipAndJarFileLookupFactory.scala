@@ -45,7 +45,7 @@ sealed trait ZipAndJarFileLookupFactory {
       closeableRegistry.registerCloseable(result)
       result
     } else {
-      cache.getOrCreate(zipSettings, Seq(jfile.toPath), () => createForZipFile(zipFile, zipSettings), closeableRegistry, checkStamps = true)
+      cache.getOrCreate(zipSettings, Seq(jfile.toPath -> zipFile.basicFileAttributes), () => createForZipFile(zipFile, zipSettings), closeableRegistry, checkStamps = true)
     }
   }
 
@@ -259,14 +259,18 @@ final class FileBasedCache[K, T] {
     }
   }
 
-  def getOrCreate(k: K, paths: Seq[Path], create: () => T, closeableRegistry: CloseableRegistry, checkStamps: Boolean): T = cache.synchronized {
-    val stamps = if (!checkStamps) Nil else paths.map { path =>
+  def getOrCreate(k: K, paths: Seq[Path], create: () => T,
+                  closeableRegistry: CloseableRegistry, checkStamps: Boolean): T = {
+    val pathsAndAttrs = paths.map(x => (x, Files.readAttributes(x, classOf[BasicFileAttributes])))
+    getOrCreate0(k, pathsAndAttrs, create, closeableRegistry, checkStamps)
+  }
+  def getOrCreate0(k: K, paths: Seq[(Path, BasicFileAttributes)], create: () => T, closeableRegistry: CloseableRegistry, checkStamps: Boolean): T = cache.synchronized {
+    val stamps = if (!checkStamps) Nil else paths.map { case (path, attrs) =>
       try {
-      val attrs = Files.readAttributes(path, classOf[BasicFileAttributes])
-      val lastModified = attrs.lastModifiedTime()
-      // only null on some platforms, but that's okay, we just use the last modified timestamp as our stamp
-      val fileKey = attrs.fileKey()
-      Stamp(lastModified, attrs.size(), if (fileKey == null) NoFileKey else fileKey)
+        val lastModified = attrs.lastModifiedTime()
+        // only null on some platforms, but that's okay, we just use the last modified timestamp as our stamp
+        val fileKey = attrs.fileKey()
+        Stamp(lastModified, attrs.size(), if (fileKey == null) NoFileKey else fileKey)
       } catch {
         case _: java.nio.file.NoSuchFileException =>
           // Dummy stamp for (currently) non-existent file.

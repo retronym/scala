@@ -19,7 +19,7 @@ import java.io.{File => JFile}
 import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.file.attribute.BasicFileAttributes
-import java.nio.file.{Files, NoSuchFileException}
+import java.nio.file.Files
 import scala.collection.AbstractIterable
 
 /**
@@ -56,7 +56,11 @@ object AbstractFile {
     }
 
     if (attrs.isDirectory) new PlainFile(file)
-    else if (attrs.isRegularFile && Path.isExtensionJarOrZip(file.jfile)) ZipArchive.fromFile(file)
+    else if (attrs.isRegularFile && Path.isExtensionJarOrZip(file.jfile)) {
+      val za = ZipArchive.fromFile(file)
+      za.setBasicFileAttributesCached(attrs)
+      za
+    }
     else null
   }
 
@@ -124,6 +128,18 @@ abstract class AbstractFile extends AbstractIterable[AbstractFile] {
 
   /** Returns the underlying File if any and null otherwise. */
   def file: JFile
+  def basicFileAttributes: BasicFileAttributes = {
+    if (basicFileAttributesCached != null)
+      basicFileAttributesCached
+    else file match {
+      case null => null
+      case f => Files.readAttributes(f.toPath, classOf[BasicFileAttributes])
+    }
+  }
+  private var basicFileAttributesCached: BasicFileAttributes = null
+  final def setBasicFileAttributesCached(attrs: BasicFileAttributes): Unit = {
+    basicFileAttributesCached = attrs
+  }
 
   /** An underlying source, if known.  Mostly, a zip/jar file. */
   def underlyingSource: Option[AbstractFile] = None
