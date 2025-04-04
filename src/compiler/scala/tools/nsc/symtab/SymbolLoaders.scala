@@ -53,7 +53,12 @@ abstract class SymbolLoaders {
 
   protected def enterIfNew(owner: Symbol, member: Symbol, completer: SymbolLoader): Symbol = {
     assert(owner.info.decls.lookup(member.name) == NoSymbol, owner.fullName + "." + member.name)
-    owner.info.decls enter member
+    owner.rawInfo match {
+      case loader: PackageObjectLoader =>
+        loader.scope enter member
+      case _ =>
+        owner.info.decls enter member
+    }
     member
   }
 
@@ -286,14 +291,15 @@ abstract class SymbolLoaders {
    * Loads contents of a package
    */
   class PackageLoader(packageName: String, classPath: ClassPath) extends SymbolLoader with FlagAgnosticCompleter {
+    private val decls: Scope = newScope
     protected def description = {
-      val shownPackageName = if (packageName == ClassPath.RootPackage) "<root package>" else packageName
-      s"package loader $shownPackageName"
+      s"package loader ${shownPackageName(packageName)}"
     }
 
     protected def doComplete(root: Symbol) {
       assert(root.isPackageClass, root)
-      root.setInfo(new PackageClassInfoType(newScope, root))
+      val scope = newScope
+      root.setInfo(new PackageObjectLoader(packageName, root, scope)
 
       val classPathEntries = classPath.list(packageName)
 
@@ -314,6 +320,35 @@ abstract class SymbolLoaders {
       }
     }
   }
+  class PackageObjectLoader(packageName: String, root: Symbol, val scope: Scope) extends SymbolLoader with FlagAgnosticCompleter {
+    protected def description = {
+      s"package object loader ${shownPackageName(packageName)}"
+    }
+    protected def doComplete(root: Symbol) {
+      assert(root.isPackageClass, root)
+      val scope = newScope
+      root.setInfo(new PackageObjectLoader(packageName, root, scope)
+
+      val classPathEntries = classPath.list(packageName)
+
+      if (!root.isRoot)
+        for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
+      if (!root.isEmptyPackageClass) {
+        for (pkg <- classPathEntries.packages) {
+          val fullName = pkg.name
+
+          val name =
+            if (packageName == ClassPath.RootPackage) fullName
+            else fullName.substring(packageName.length + 1)
+          val packageLoader = new PackageLoader(fullName, classPath)
+          enterPackage(root, name, packageLoader)
+        }
+
+        openPackageModule(root)
+      }
+    }
+  }
+  private def shownPackageName(packageName: String) = if (packageName == ClassPath.RootPackage) "<root package>" else packageName
   private lazy val classFileDataReader: ReusableInstance[ReusableDataReader] = new ReusableInstance[ReusableDataReader](() => new ReusableDataReader(), enabled = isCompilerUniverse)
   class ClassfileLoader(val classfile: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol) extends SymbolLoader with FlagAssigningCompleter {
     private object classfileParser extends {

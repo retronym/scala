@@ -763,7 +763,11 @@ trait Namers extends MethodSynthesis {
     def enterPackage(tree: PackageDef) {
       val sym = createPackageSymbol(tree.pos, tree.pid)
       tree.symbol = sym
-      newNamer(context.make(tree, sym.moduleClass, sym.info.decls)) enterSyms tree.stats
+      val scope = sym.rawInfo match {
+        case loader: loaders.PackageObjectLoader => loader.scope
+        case _ => sym.info.decls
+      }
+      newNamer(context.make(tree, sym.moduleClass, scope)) enterSyms tree.stats
     }
 
     private def enterImport(tree: Import) = {
