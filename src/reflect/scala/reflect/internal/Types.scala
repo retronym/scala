@@ -1198,7 +1198,7 @@ trait Types
     override def underlying: Type = sym.typeOfThis
     override def isHigherKinded = sym.isRefinementClass && underlying.isHigherKinded
     override def prefixString =
-      if (settings.isDebug) sym.nameString + ".this."
+      if (settings.isDebug) if (sym.hasPackageFlag) sym.nameString + "." else sym.nameString + ".this."
       else if (sym.isAnonOrRefinementClass) "this."
       else if (sym.isOmittablePrefix) ""
       else if (sym.isModuleClass) sym.fullNameString + "."
@@ -2309,7 +2309,14 @@ trait Types
       || !shorthands(sym.fullName)
       || (sym.ownersIterator exists (s => !s.isClass))
     )
-    private def preString  = if (needsPreString) pre.prefixString else ""
+    private def preString  = if (needsPreString) {
+      pre match {
+        case NoPrefix =>
+          ""
+        case _ =>
+          pre.prefixString
+      }
+    } else ""
     private def argsString = if (args.isEmpty) "" else args.mkString("[", ",", "]")
 
     override def nameAndArgsString = typeSymbol.name.toString + argsString
