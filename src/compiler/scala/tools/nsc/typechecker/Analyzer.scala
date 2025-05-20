@@ -89,8 +89,18 @@ trait Analyzer extends AnyRef
 
       def apply(unit: CompilationUnit): Unit = {
         openPackageObjectsTraverser(unit.body)
-        deferredOpen.foreach(openPackageModule(_))
-        deferredOpen.clear()
+      }
+
+      override def run(): Unit = {
+        super.run()
+
+        for (sym <- deferredOpen.toVector) {
+          if (deferredOpen.remove(sym)) {
+            // this can remove entries from `deferredOpen`, hence the copy to a vector
+            // and the check of `remove` return value
+            openPackageModule(sym)
+          }
+        }
       }
     }
   }
