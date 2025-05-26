@@ -290,9 +290,10 @@ trait Definitions extends api.StandardDefinitions {
     }
 
     // top types
-    lazy val AnyClass    = enterNewClass(ScalaPackageClass, tpnme.Any, Nil, ABSTRACT).markAllCompleted()
-    lazy val AnyRefClass = newAlias(ScalaPackageClass, tpnme.AnyRef, ObjectTpe).markAllCompleted()
-    lazy val ObjectClass = getRequiredClass("java.lang.Object")
+    lazy val AnyClass      = enterNewClass(ScalaPackageClass, tpnme.Any, Nil, ABSTRACT).markAllCompleted()
+    lazy val AnyRefClass   = newAlias(ScalaPackageClass, tpnme.AnyRef, ObjectTpe).markAllCompleted()
+    lazy val ObjectClass   = getRequiredClass("java.lang.Object")
+    lazy val ObjectsModule = getRequiredModule("java.util.Objects")
 
     // Cached types for core monomorphic classes
     lazy val AnyRefTpe       = AnyRefClass.tpe
@@ -1285,6 +1286,7 @@ trait Definitions extends api.StandardDefinitions {
     def Object_equals    = getMemberMethod(ObjectClass, nme.equals_)
     def Object_hashCode  = getMemberMethod(ObjectClass, nme.hashCode_)
     def Object_toString  = getMemberMethod(ObjectClass, nme.toString_)
+    def Objects_equals   = getMemberMethod(ObjectsModule, nme.equals_)
 
     // boxed classes
     lazy val ObjectRefClass         = requiredClass[scala.runtime.ObjectRef[_]]

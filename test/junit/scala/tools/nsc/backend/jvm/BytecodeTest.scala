@@ -106,16 +106,11 @@ class BytecodeTest extends BytecodeTesting {
       Label(7), Op(ICONST_2), Op(IRETURN)))
 
     // t3: Array == is translated to reference equality, AnyRef == to null checks and equals
-    assertSameCode(getMethod(c, "t3"), List(
-      // Array ==
-      VarOp(ALOAD, 1), VarOp(ALOAD, 2), Jump(IF_ACMPEQ, Label(23)),
-      // AnyRef ==
-      VarOp(ALOAD, 2), VarOp(ALOAD, 1), VarOp(ASTORE, 3), Op(DUP), Jump(IFNONNULL, Label(14)),
-      Op(POP), VarOp(ALOAD, 3), Jump(IFNULL, Label(19)), Jump(GOTO, Label(23)),
-      Label(14), VarOp(ALOAD, 3), InvokeVirtual("java/lang/Object", "equals", "(Ljava/lang/Object;)Z"), Jump(IFEQ, Label(23)),
-      Label(19), Op(ICONST_1), Jump(GOTO, Label(26)),
-      Label(23), Op(ICONST_0),
-      Label(26), Op(IRETURN)))
+    assertSameCode(getMethod(c, "t3"),  List(
+      VarOp(ALOAD, 1), VarOp(ALOAD, 2), Jump(IF_ACMPEQ, Label(11)),
+      VarOp(ALOAD, 2), VarOp(ALOAD, 1),
+      Invoke(INVOKESTATIC, "java/util/Objects", "equals", "(Ljava/lang/Object;Ljava/lang/Object;)Z", itf = false),
+      Jump(IFEQ, Label(11)), Op(ICONST_1), Jump(GOTO, Label(14)), Label(11), Op(ICONST_0), Label(14), Op(IRETURN)))
 
     val t4t5 = List(
       VarOp(ALOAD, 1), Jump(IFNULL, Label(6)),
