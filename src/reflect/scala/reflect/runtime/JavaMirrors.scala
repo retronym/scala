@@ -24,14 +24,14 @@ import java.lang.reflect.{
   Parameter => jParameter, GenericDeclaration, GenericArrayType,
   ParameterizedType, WildcardType, AnnotatedElement }
 import java.nio.charset.StandardCharsets.UTF_8
-
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.annotation.nowarn
 import scala.collection.immutable.ArraySeq
 import scala.collection.mutable.{ListBuffer, WeakHashMap}
 import scala.language.existentials
 import scala.ref.WeakReference
 import scala.reflect.api.TypeCreator
-import scala.reflect.internal.{ JavaAccFlags, MissingRequirementError }
+import scala.reflect.internal.{JavaAccFlags, MissingRequirementError}
 import scala.runtime.{BoxesRunTime, ClassValueCompat, ScalaRunTime}
 import internal.Flags._
 import internal.pickling.ByteCodecs
@@ -41,30 +41,55 @@ import ReflectionUtils._
 
 private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUniverse with TwoWayCaches { thisUniverse: SymbolTable =>
 
-  private lazy val mirrors = new WeakHashMap[ClassLoader, WeakReference[MirrorImpl]]()
-
-  private def createMirror(owner: Symbol, cl: ClassLoader): Mirror = {
-    val jm = new MirrorImpl(owner, cl)
-    mirrors(cl) = new WeakReference[MirrorImpl](jm)
-    jm.init()
-    jm
+  private val mirrorsLock = new ReentrantReadWriteLock()
+  private lazy val mirrors  = new WeakHashMap[ClassLoader, WeakReference[MirrorImpl]]()
+  // writes are rare, reads are common
+  private def getOrElseUpdateMirror(a: ClassLoader, defaultValue: () => MirrorImpl, init: MirrorImpl => Unit): MirrorImpl = {
+    mirrorsLock.readLock().lock()
+    mirrors.get(a) match {
+      case Some(WeakReference(b)) =>
+        mirrorsLock.readLock().unlock()
+        b
+      case _ =>
+        // release read lock...
+        mirrorsLock.readLock().unlock()
+        // .. and then acquire write lock, mindful that another writer may have beaten us.
+        mirrorsLock.writeLock().lock()
+        try {
+          // so we double-check for a binding
+          mirrors.get(a) match {
+            case Some(WeakReference(b)) => b
+            case _ =>
+              // create the value and enter in the map
+              val value = defaultValue()
+              mirrors.put(a, WeakReference(value))
+              // call the initializer, this is allowed to re-enter getOrElseUpdate
+              init(value)
+              value
+          }
+        } finally {
+          mirrorsLock.writeLock().unlock()
+        }
+    }
   }
+
 
   override type Mirror = MirrorImpl
   implicit val MirrorTag: ClassTag[Mirror] = ClassTag[Mirror](classOf[MirrorImpl])
 
-  override lazy val rootMirror: Mirror = createMirror(NoSymbol, rootClassLoader)
+  override lazy val rootMirror: Mirror = runtimeMirror(rootClassLoader, owner = NoSymbol)
 
   // overridden by ReflectGlobal
   def rootClassLoader: ClassLoader = this.getClass.getClassLoader
 
   trait JavaClassCompleter
 
-  def runtimeMirror(cl: ClassLoader): Mirror = gilSynchronized {
-    mirrors get cl match {
-      case Some(WeakReference(m)) => m
-      case _ => createMirror(rootMirror.RootClass, cl)
-    }
+  def runtimeMirror(cl: ClassLoader): Mirror = {
+    runtimeMirror(cl, rootMirror.RootClass)
+  }
+
+  private def runtimeMirror(cl: ClassLoader, owner: Symbol): Mirror = {
+    getOrElseUpdateMirror(cl, () => new MirrorImpl(owner, cl), _.init())
   }
 
   /** The API of a mirror for a reflective universe */
