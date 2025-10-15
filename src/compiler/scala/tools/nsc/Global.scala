@@ -50,7 +50,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Plugins
     with Trees
     with Printers
-    with DocComments
     with Positions
     with Reporting
     with Parsing { self =>
@@ -199,6 +198,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   } with OverridingPairs
 
   type SymbolPair = overridingPairs.SymbolPair
+
+  object docCommentsComponent extends DocComments {
+    val self: Global.this.type = Global.this
+  }
+  type DocComment = docCommentsComponent.DocComment
 
   // Components for collecting and generating output
 

@@ -43,6 +43,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   import definitions.{ ObjectClass, NothingClass, AnyClass, AnyValClass, AnyRefClass, AnnotationClass }
   import rootMirror.{ RootPackage, EmptyPackage }
   import ModelFactory._
+  import docCommentsComponent._
 
   def templatesCount = docTemplatesCache.count(_._2.isDocTemplate) - droppedPackages.size
 
@@ -1044,7 +1045,7 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
   def typeShouldDocument(bSym: Symbol, inTpl: DocTemplateImpl) =
     (settings.docExpandAllTypes.value && (bSym.sourceFile != null)) ||
     (bSym.isAliasType || bSym.isAbstractType) &&
-    { val rawComment = global.expandedDocComment(bSym, inTpl.sym)
+    { val rawComment = global.docCommentsComponent.expandedDocComment(bSym, inTpl.sym)
       rawComment.contains("@template") || rawComment.contains("@documentable") }
 }
 object ModelFactory {
