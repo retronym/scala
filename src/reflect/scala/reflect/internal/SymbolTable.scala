@@ -47,7 +47,6 @@ abstract class SymbolTable extends macros.Universe
                               with Trees
                               with Printers
                               with Positions
-                              with TypeDebugging
                               with Importers
                               with CapturedVariables
                               with StdAttachments
@@ -62,6 +61,9 @@ abstract class SymbolTable extends macros.Universe
 
   val reificationSupport = new ReificationSupport { val self: SymbolTable.this.type = SymbolTable.this }
   val build = new reificationSupport.ReificationSupportImpl
+
+  val typeDebugging = new TypeDebugging { val self: SymbolTable.this.type = SymbolTable.this }
+  val typeDebug = typeDebugging.typeDebug
 
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats

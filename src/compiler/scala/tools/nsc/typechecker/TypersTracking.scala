@@ -161,7 +161,7 @@ trait TypersTracking {
   // Some trees which are typed with mind-numbing frequency and
   // which add nothing by being printed. Did () type to Unit? Let's
   // gamble on yes.
-  def printingOk(t: Tree) = printTypings && (settings.isDebug || !noPrint(t))
+  def printingOk(t: Tree) = printTypings && (settings.isDebug || !typeDebugging.noPrint(t))
   def noPrintTyping(t: Tree) = (t.tpe ne null) || !printingOk(t)
   def noPrintAdapt(tree1: Tree, tree2: Tree) = !printingOk(tree1) || (
        (tree1.tpe == tree2.tpe)
