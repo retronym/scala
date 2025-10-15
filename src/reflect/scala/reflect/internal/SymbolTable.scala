@@ -20,7 +20,8 @@ import scala.annotation.{elidable, nowarn, tailrec}
 import scala.collection.mutable
 import util._
 import java.util.concurrent.TimeUnit
-
+import java.lang.reflect.{ Member => jMember }
+import java.lang.{ Class => jClass }
 import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 import scala.reflect.io.AbstractFile
@@ -50,7 +51,6 @@ abstract class SymbolTable extends macros.Universe
                               with Importers
                               with CapturedVariables
                               with StdAttachments
-                              with PrivateWithin
                               with pickling.Translations
                               with FreshNames
                               with Internals
@@ -517,6 +517,24 @@ abstract class SymbolTable extends macros.Universe
 
   protected[scala] def currentRunProfilerBeforeCompletion(root: Symbol, associatedFile: AbstractFile): Unit = ()
   protected[scala] def currentRunProfilerAfterCompletion(root: Symbol, associatedFile: AbstractFile): Unit = ()
+
+  def propagatePackageBoundary(c: jClass[_], syms: Symbol*): Unit =
+    propagatePackageBoundary(JavaAccFlags(c), syms: _*)
+  def propagatePackageBoundary(m: jMember, syms: Symbol*): Unit =
+    propagatePackageBoundary(JavaAccFlags(m), syms: _*)
+  def propagatePackageBoundary(jflags: JavaAccFlags, syms: Symbol*): Unit = {
+    if (jflags.hasPackageAccessBoundary)
+      syms foreach setPackageAccessBoundary
+  }
+
+  // protected in java means package protected. #3946
+  // See ticket #1687 for an example of when the enclosing top level class is NoSymbol;
+  // it apparently occurs when processing v45.3 bytecode.
+  def setPackageAccessBoundary(sym: Symbol): Symbol = {
+    val topLevel = sym.enclosingTopLevelClass
+    if (topLevel eq NoSymbol) sym
+    else sym setPrivateWithin topLevel.owner
+  }
 }
 
 trait SymbolTableStats {
