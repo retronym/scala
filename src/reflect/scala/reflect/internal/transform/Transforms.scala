@@ -17,7 +17,9 @@ package transform
 
 import scala.language.existentials
 
-trait Transforms { self: SymbolTable =>
+abstract class Transforms {
+  val self: SymbolTable
+  import self._
 
   /** We need to encode laziness by hand here because the three components refChecks, uncurry and erasure
    *  are overwritten by objects in Global.
@@ -35,9 +37,9 @@ trait Transforms { self: SymbolTable =>
     }
   }
 
-  private[this] val uncurryLazy     = new Lazy(new { val global: Transforms.this.type = self } with UnCurry)
-  private[this] val erasureLazy     = new Lazy(new { val global: Transforms.this.type = self } with Erasure)
-  private[this] val postErasureLazy = new Lazy(new { val global: Transforms.this.type = self } with PostErasure)
+  private[this] val uncurryLazy     = new Lazy(new { val global: self.type = self } with UnCurry)
+  private[this] val erasureLazy     = new Lazy(new { val global: self.type = self } with Erasure)
+  private[this] val postErasureLazy = new Lazy(new { val global: self.type = self } with PostErasure)
 
   def uncurry = uncurryLazy.force
   def erasure = erasureLazy.force
