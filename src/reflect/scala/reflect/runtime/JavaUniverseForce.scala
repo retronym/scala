@@ -47,7 +47,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.rootMirror
     this.traceSymbols
     this.perRunCaches
-    this.compat
     this.treeBuild
     this.FreshNameExtractor
     this.CompoundTypeTreeOriginalAttachment
