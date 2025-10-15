@@ -31,7 +31,6 @@ abstract class SymbolTable extends macros.Universe
                               with Names
                               with Symbols
                               with Types
-                              with Kinds
                               with FlagSets
                               with Scopes
                               with Mirrors
@@ -79,6 +78,9 @@ abstract class SymbolTable extends macros.Universe
                         with TreesStats
                         with SymbolsStats
                         with ScopeStats { self: Statistics => }
+
+  val kinds = new Kinds { val self: SymbolTable.this.type = SymbolTable.this }
+
 
   /** Some statistics (normally disabled) set with -Ystatistics */
   val statistics: Statistics with ReflectStats
