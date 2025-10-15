@@ -96,8 +96,8 @@ trait Types
   import definitions._
   import statistics._
 
-  private val glbLubs = new GlbLubs {
-    val self: Types.this.type = Types.this
+  private lazy val glbLubs = new GlbLubs {
+    lazy val self: Types.this.type = Types.this
     def indent: String = Types.this.indent
     def indent_=(x: String) = Types.this.indent_=(x: String)
   }
