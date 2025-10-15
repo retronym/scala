@@ -42,6 +42,7 @@ import scala.tools.nsc.transform.patmat.PatternMatching
 import scala.tools.nsc.typechecker._
 import scala.tools.nsc.util.ClassPath
 
+
 class Global(var currentSettings: Settings, reporter0: Reporter)
     extends SymbolTable
     with Closeable
