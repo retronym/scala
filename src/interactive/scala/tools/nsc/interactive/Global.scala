@@ -124,6 +124,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   with Picklers {
 
   import definitions._
+  import docCommentsComponent._
 
   if (!settings.Ymacroexpand.isSetByUser)
     settings.Ymacroexpand.value = settings.MacroExpand.Discard
