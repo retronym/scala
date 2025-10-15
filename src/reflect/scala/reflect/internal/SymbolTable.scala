@@ -31,7 +31,6 @@ abstract class SymbolTable extends macros.Universe
                               with Names
                               with Symbols
                               with Types
-                              with Variances
                               with Kinds
                               with ExistentialsAndSkolems
                               with FlagSets
@@ -63,6 +62,10 @@ abstract class SymbolTable extends macros.Universe
 
   val typeDebugging = new TypeDebugging { val self: SymbolTable.this.type = SymbolTable.this }
   val typeDebug = typeDebugging.typeDebug
+
+  val variances = new Variances { val self: SymbolTable.this.type = SymbolTable.this }
+  final def varianceInTypes(tps: List[Type])(tparam: Symbol): Variance = variances.varianceInTypes(tps)(tparam)
+  final def varianceInType(tp: Type, considerUnchecked: Boolean = false)(tparam: Symbol): Variance = variances.varianceInType(tp, considerUnchecked)(tparam)
 
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats
