@@ -26,6 +26,7 @@ import util.ThreeValues._
 import Variance._
 import Depth._
 import TypeConstants._
+import scala.reflect.internal.tpe.GlbLubs
 import scala.util.chaining._
 
 /* A standard type pattern match:
@@ -87,7 +88,6 @@ trait Types
   extends api.Types
   with tpe.TypeComparers
   with tpe.TypeToStrings
-  with tpe.GlbLubs
   with tpe.TypeMaps
   with tpe.TypeConstraints
   with tpe.FindMembers
@@ -95,6 +95,22 @@ trait Types
 
   import definitions._
   import statistics._
+
+  private val glbLubs = new GlbLubs {
+    val self: Types.this.type = Types.this
+    def indent: String = Types.this.indent
+    def indent_=(x: String) = Types.this.indent_=(x: String)
+  }
+  def weakLub(tps: List[Type]): Type = glbLubs.weakLub(tps)
+  def glb(tps: List[Type]): Type = glbLubs.glb(tps)
+  def lub(tps: List[Type]): Type = glbLubs.lub(tps)
+  private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def lubResults = _lubResults
+  private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def glbResults = _glbResults
+  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = glbLubs.lub(ts0, depth)//
+  protected[internal] def glb(ts0: List[Type], depth: Depth): Type = glbLubs.glb(ts0, depth)//
+  def sameWeakLubAsLub(tps: List[Type]) = glbLubs.sameWeakLubAsLub(tps)
 
   private[this] var explainSwitch = false
   @unused private final val emptySymbolSet = Set.empty[Symbol]
