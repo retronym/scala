@@ -15,7 +15,6 @@ package reflect
 package internal
 
 import java.net.URLClassLoader
-
 import scala.annotation.{elidable, nowarn, tailrec}
 import scala.collection.mutable
 import util._
@@ -38,7 +37,6 @@ abstract class SymbolTable extends macros.Universe
                               with Constants
                               with BaseTypeSeqs
                               with InfoTransformers
-                              with transform.Transforms
                               with StdNames
                               with AnnotationInfos
                               with AnnotationCheckers
@@ -84,6 +82,13 @@ abstract class SymbolTable extends macros.Universe
   lazy val internal: Internal = internals.internal
   lazy val treeBuild: TreeGen = internals.treeBuild
   type SymbolTableInternal = internals.SymbolTableInternal
+
+  val transforms = new transform.Transforms {val self: SymbolTable.this.type = SymbolTable.this }
+  def uncurry = transforms.uncurry
+  def erasure = transforms.erasure
+  def postErasure = transforms.postErasure
+  def transformedType(sym: Symbol): Type = transforms.transformedType(sym)
+  def transformedType(tpe: Type): Type = transforms.transformedType(tpe)
 
   @deprecated("compatibility with Scala 2.10 EOL", "2.13.0")
   type Compat = MacroCompatApi
