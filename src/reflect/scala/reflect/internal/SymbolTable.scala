@@ -48,7 +48,6 @@ abstract class SymbolTable extends macros.Universe
                               with Importers
                               with StdAttachments
                               with FreshNames
-                              with Internals
                               with Reporting
 {
 
@@ -80,6 +79,16 @@ abstract class SymbolTable extends macros.Universe
 
   val kinds = new Kinds { val self: SymbolTable.this.type = SymbolTable.this }
 
+  lazy val internals = new Internals { val self: SymbolTable.this.type = SymbolTable.this }
+  type Internal = MacroInternalApi
+  lazy val internal: Internal = internals.internal
+  lazy val treeBuild: TreeGen = internals.treeBuild
+  type SymbolTableInternal = internals.SymbolTableInternal
+
+  @deprecated("compatibility with Scala 2.10 EOL", "2.13.0")
+  type Compat = MacroCompatApi
+  @deprecated("compatibility with Scala 2.10 EOL", "2.13.0")
+  lazy val compat: Compat = new Compat {}
 
   /** Some statistics (normally disabled) set with -Ystatistics */
   val statistics: Statistics with ReflectStats

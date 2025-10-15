@@ -19,8 +19,9 @@ import scala.language.implicitConversions
 import scala.reflect.api.Universe
 import scala.reflect.macros.Attachments
 
-trait Internals extends api.Internals {
-  self: SymbolTable =>
+abstract class Internals {
+  val self: SymbolTable
+  import self.{ treeBuild => _, _}
 
   type Internal = MacroInternalApi
   lazy val internal: Internal = new SymbolTableInternal {}
