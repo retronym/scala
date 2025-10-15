@@ -15,12 +15,12 @@ package reflect
 package internal
 
 import java.net.URLClassLoader
-
 import scala.annotation.{elidable, nowarn, tailrec}
 import scala.collection.mutable
 import util._
 import java.util.concurrent.TimeUnit
-
+import java.lang.reflect.{ Member => jMember }
+import java.lang.{ Class => jClass }
 import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 import scala.reflect.io.AbstractFile
@@ -30,9 +30,6 @@ abstract class SymbolTable extends macros.Universe
                               with Names
                               with Symbols
                               with Types
-                              with Variances
-                              with Kinds
-                              with ExistentialsAndSkolems
                               with FlagSets
                               with Scopes
                               with Mirrors
@@ -40,34 +37,63 @@ abstract class SymbolTable extends macros.Universe
                               with Constants
                               with BaseTypeSeqs
                               with InfoTransformers
-                              with transform.Transforms
                               with StdNames
                               with AnnotationInfos
                               with AnnotationCheckers
                               with Trees
                               with Printers
                               with Positions
-                              with TypeDebugging
                               with Importers
-                              with CapturedVariables
                               with StdAttachments
-                              with StdCreators
-                              with ReificationSupport
-                              with PrivateWithin
-                              with pickling.Translations
                               with FreshNames
-                              with Internals
                               with Reporting
 {
 
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
 
+  val reificationSupport = new ReificationSupport { val self: SymbolTable.this.type = SymbolTable.this }
+  val build = new reificationSupport.ReificationSupportImpl
+
+  val typeDebugging = new TypeDebugging { val self: SymbolTable.this.type = SymbolTable.this }
+  val typeDebug = typeDebugging.typeDebug
+
+  lazy val variances = new Variances { val self: SymbolTable.this.type = SymbolTable.this }
+  final def varianceInTypes(tps: List[Type])(tparam: Symbol): Variance = variances.varianceInTypes(tps)(tparam)
+  final def varianceInType(tp: Type, considerUnchecked: Boolean = false)(tparam: Symbol): Variance = variances.varianceInType(tp, considerUnchecked)(tparam)
+
+  val existentialsAndSkolems = new ExistentialsAndSkolems { val self: SymbolTable.this.type = SymbolTable.this }
+  final def deriveFreshSkolems(tparams: List[Symbol]): List[Symbol] = existentialsAndSkolems.deriveFreshSkolems(tparams)
+  final def isRawParameter(sym: Symbol) = existentialsAndSkolems.isRawParameter(sym)
+  final def existentialTransform[T](rawSyms: List[Symbol], tp: Type, rawOwner: Symbol = NoSymbol)(creator: (List[Symbol], Type) => T): T =
+    existentialsAndSkolems.existentialTransform(rawSyms, tp, rawOwner)(creator)
+  final def packSymbols(hidden: List[Symbol], tp: Type, rawOwner: Symbol = NoSymbol): Type =
+    existentialsAndSkolems.packSymbols(hidden, tp, rawOwner)
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats
                         with SymbolTableStats
                         with TreesStats
                         with SymbolsStats
                         with ScopeStats { self: Statistics => }
+
+  val kinds = new Kinds { val self: SymbolTable.this.type = SymbolTable.this }
+
+  lazy val internals = new Internals { val self: SymbolTable.this.type = SymbolTable.this }
+  type Internal = MacroInternalApi
+  lazy val internal: Internal = internals.internal
+  lazy val treeBuild: TreeGen = internals.treeBuild
+  type SymbolTableInternal = internals.SymbolTableInternal
+
+  val transforms = new transform.Transforms {val self: SymbolTable.this.type = SymbolTable.this }
+  def uncurry = transforms.uncurry
+  def erasure = transforms.erasure
+  def postErasure = transforms.postErasure
+  def transformedType(sym: Symbol): Type = transforms.transformedType(sym)
+  def transformedType(tpe: Type): Type = transforms.transformedType(tpe)
+
+  @deprecated("compatibility with Scala 2.10 EOL", "2.13.0")
+  type Compat = MacroCompatApi
+  @deprecated("compatibility with Scala 2.10 EOL", "2.13.0")
+  lazy val compat: Compat = new Compat {}
 
   /** Some statistics (normally disabled) set with -Ystatistics */
   val statistics: Statistics with ReflectStats
@@ -514,6 +540,24 @@ abstract class SymbolTable extends macros.Universe
 
   protected[scala] def currentRunProfilerBeforeCompletion(root: Symbol, associatedFile: AbstractFile): Unit = ()
   protected[scala] def currentRunProfilerAfterCompletion(root: Symbol, associatedFile: AbstractFile): Unit = ()
+
+  def propagatePackageBoundary(c: jClass[_], syms: Symbol*): Unit =
+    propagatePackageBoundary(JavaAccFlags(c), syms: _*)
+  def propagatePackageBoundary(m: jMember, syms: Symbol*): Unit =
+    propagatePackageBoundary(JavaAccFlags(m), syms: _*)
+  def propagatePackageBoundary(jflags: JavaAccFlags, syms: Symbol*): Unit = {
+    if (jflags.hasPackageAccessBoundary)
+      syms foreach setPackageAccessBoundary
+  }
+
+  // protected in java means package protected. #3946
+  // See ticket #1687 for an example of when the enclosing top level class is NoSymbol;
+  // it apparently occurs when processing v45.3 bytecode.
+  def setPackageAccessBoundary(sym: Symbol): Symbol = {
+    val topLevel = sym.enclosingTopLevelClass
+    if (topLevel eq NoSymbol) sym
+    else sym setPrivateWithin topLevel.owner
+  }
 }
 
 trait SymbolTableStats {
