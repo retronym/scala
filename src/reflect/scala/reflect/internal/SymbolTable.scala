@@ -51,7 +51,6 @@ abstract class SymbolTable extends macros.Universe
                               with Importers
                               with CapturedVariables
                               with StdAttachments
-                              with ReificationSupport
                               with PrivateWithin
                               with pickling.Translations
                               with FreshNames
@@ -60,6 +59,9 @@ abstract class SymbolTable extends macros.Universe
 {
 
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
+
+  val reificationSupport = new ReificationSupport { val self: SymbolTable.this.type = SymbolTable.this }
+  val build = new reificationSupport.ReificationSupportImpl
 
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats
