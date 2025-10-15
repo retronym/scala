@@ -49,7 +49,6 @@ abstract class SymbolTable extends macros.Universe
                               with Printers
                               with Positions
                               with Importers
-                              with CapturedVariables
                               with StdAttachments
                               with pickling.Translations
                               with FreshNames
