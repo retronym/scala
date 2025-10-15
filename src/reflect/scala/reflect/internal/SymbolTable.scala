@@ -32,7 +32,6 @@ abstract class SymbolTable extends macros.Universe
                               with Symbols
                               with Types
                               with Kinds
-                              with ExistentialsAndSkolems
                               with FlagSets
                               with Scopes
                               with Mirrors
@@ -67,6 +66,13 @@ abstract class SymbolTable extends macros.Universe
   final def varianceInTypes(tps: List[Type])(tparam: Symbol): Variance = variances.varianceInTypes(tps)(tparam)
   final def varianceInType(tp: Type, considerUnchecked: Boolean = false)(tparam: Symbol): Variance = variances.varianceInType(tp, considerUnchecked)(tparam)
 
+  val existentialsAndSkolems = new ExistentialsAndSkolems { val self: SymbolTable.this.type = SymbolTable.this }
+  final def deriveFreshSkolems(tparams: List[Symbol]): List[Symbol] = existentialsAndSkolems.deriveFreshSkolems(tparams)
+  final def isRawParameter(sym: Symbol) = existentialsAndSkolems.isRawParameter(sym)
+  final def existentialTransform[T](rawSyms: List[Symbol], tp: Type, rawOwner: Symbol = NoSymbol)(creator: (List[Symbol], Type) => T): T =
+    existentialsAndSkolems.existentialTransform(rawSyms, tp, rawOwner)(creator)
+  final def packSymbols(hidden: List[Symbol], tp: Type, rawOwner: Symbol = NoSymbol): Type =
+    existentialsAndSkolems.packSymbols(hidden, tp, rawOwner)
   trait ReflectStats extends BaseTypeSeqsStats
                         with TypesStats
                         with SymbolTableStats
