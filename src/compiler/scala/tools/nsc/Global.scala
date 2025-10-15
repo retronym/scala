@@ -48,7 +48,6 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Closeable
     with CompilationUnits
     with Plugins
-    with PhaseAssembly
     with Trees
     with Printers
     with DocComments
@@ -751,7 +750,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     computeInternalPhases()             // Global.scala
     computePlatformPhases()             // backend/Platform.scala
     computePluginPhases()               // plugins/Plugins.scala
-    cullPhases(computePhaseAssembly())  // PhaseAssembly.scala
+    val assembly = new PhaseAssembly {
+      override val self: Global.this.type = Global.this
+    }
+    cullPhases(assembly.computePhaseAssembly(phasesSet))  // PhaseAssembly.scala
   }
 
   /* The phase descriptor list. Components that are phase factories. */
