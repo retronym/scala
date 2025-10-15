@@ -1004,7 +1004,7 @@ abstract class RefChecks extends Transform {
 
   // Variance Checking --------------------------------------------------------
 
-    object varianceValidator extends VarianceValidator {
+    object varianceValidator extends variances.VarianceValidator {
       private def tpString(tp: Type) = tp match {
         case ClassInfoType(parents, _, clazz) => "supertype "+intersectionType(parents, clazz.owner)
         case _                                => "type "+tp
