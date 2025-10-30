@@ -22,6 +22,7 @@ import scala.tools.nsc.doc.base.{CommentFactoryBase, LinkTo, MemberLookupBase}
 trait ScaladocAnalyzer extends Analyzer {
   val global : Global // generally, a ScaladocGlobal
   import global._
+  import docCommentsComponent._
 
   override def newTyper(context: Context): ScaladocTyper = new Typer(context) with ScaladocTyper
 
