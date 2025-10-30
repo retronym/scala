@@ -89,7 +89,7 @@ trait Names {
   /** The API of Name instances.
    *  @group API
    */
-  abstract class NameApi {
+  trait NameApi {
     /** Checks whether the name is a term name */
     def isTermName: Boolean
 

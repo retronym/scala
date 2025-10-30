@@ -334,6 +334,7 @@ trait TypeComparers {
    *  will have to figure things out.
    */
   private def typeRelationPreCheck(tp1: Type, tp2: Type): TriState = {
+
     def isTrue = (
          (tp1 eq tp2)
       || isErrorOrWildcard(tp1)
