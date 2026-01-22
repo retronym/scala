@@ -502,7 +502,7 @@ private[internal] trait TypeMaps {
       *  @param   lhs    its symbol is a type parameter of `clazz`
       *  @param   rhs    a type application constructed from `clazz`
       */
-    private def correspondingTypeArgument(lhs: Type, rhs: Type): Type = {
+    protected def correspondingTypeArgument(lhs: Type, rhs: Type): Type = {
       val TypeRef(_, lhsSym, lhsArgs) = lhs: @unchecked
       val TypeRef(_, rhsSym, rhsArgs) = rhs: @unchecked
       require(lhsSym.owner == rhsSym, s"$lhsSym is not a type parameter of $rhsSym")
@@ -551,7 +551,7 @@ private[internal] trait TypeMaps {
     // are not influenced by the prefix through which they are seen. Note that type params of
     // anonymous type functions, which currently can only arise from normalising type aliases, are
     // owned by the type alias of which they are the eta-expansion.
-    private def classParameterAsSeen(classParam: TypeRef): Type = {
+    protected def classParameterAsSeen(classParam: TypeRef): Type = {
       val tparam = classParam.sym
 
       @tailrec
@@ -574,7 +574,7 @@ private[internal] trait TypeMaps {
     }
 
     // Does the candidate symbol match the given prefix and class?
-    private def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = (clazz == candidate) && {
+    protected def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = (clazz == candidate) && {
       val pre1 = pre match {
         case tv: TypeVar =>
           // Needed with existentials in prefixes, e.g. test/files/pos/typevar-in-prefix.scala
@@ -633,7 +633,7 @@ private[internal] trait TypeMaps {
       }
     }
 
-    private def thisTypeAsSeen(tp: ThisType): Type = {
+    protected def thisTypeAsSeen(tp: ThisType): Type = {
       @tailrec
       def loop(pre: Type, clazz: Symbol): Type = {
         val pre1 = pre match {
