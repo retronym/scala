@@ -127,6 +127,13 @@ This doesn't change the design; it sharpens the division of labour:
   taking `(self, tr)` rather than an `apply` override) is the natural shape
   for the bytecode transform too: it transforms an arbitrary method and
   generates the state-machine class separately.
+- **Forking:** Optimus also supports forking — queuing a child computation
+  (`g$queued(...)` returns a Node immediately) separately from awaiting it, so
+  siblings run in parallel under the graph scheduler. This costs the bytecode
+  transform nothing: `await` takes any `F[_]` value, wherever it was created
+  (a local, a parameter, a Node queued many statements earlier), so fork/join
+  shapes transform identically to sequential ones. The prototype's samples
+  already await futures received as parameters, which is the same shape.
 - **Optional further step:** since the direct and lifted bodies differ only in
   call targets (`g(...)` vs. `await(g$queued(...))`) and that retargeting is
   *descriptor-mechanical* once the frontend has recorded which methods are
@@ -134,7 +141,14 @@ This doesn't change the design; it sharpens the division of labour:
   direct one. Then the frontend emits one body + metadata, and lifted variants
   can be derived lazily at runtime — which is exactly the
   "run sync with blocking until profiling says otherwise" mode this user has
-  asked for.
+  asked for. Caveat, because of forking: a purely mechanical per-call-site
+  rewrite to `await(g$queued(...))` produces *sequential* semantics — correct,
+  but it forfeits fork opportunities. Where forking matters, either the
+  frontend keeps emitting the lifted body (placing queue and await points
+  deliberately), or the mechanical derivation is followed by an
+  await-sinking/batching optimization that separates the queue point from the
+  await point when dataflow allows (Optimus has exactly this kind of analysis;
+  at bytecode level it is a code-motion pass over the marker calls).
 - The ABI stays generic in `F[_]`/`R[_]` (`Future`/`Try`, `CustomFuture`/
   `Either`, `Node`/...): the transform only emits calls to the abstract
   `getCompleted`/`onComplete`/`tryGet` methods and never inspects `F`.
@@ -211,8 +225,18 @@ a fine steady state. The case for the transform is everything Loom doesn't
 cover: Scala.js and Scala Native, pre-21 JVMs, pinning-sensitive or
 allocation-sensitive environments, and runtimes (Optimus-style graph
 schedulers) that need their own notion of suspension and scheduling rather
-than thread semantics. The AoT variant additionally needs no runtime classgen
-at all.
+than thread semantics. **Forking is the sharpest example**: Optimus separates
+*queuing* a computation (`g$queued(...)` returns a Node immediately) from
+*awaiting* it, so several child computations can be forked before the first
+suspension — which is what makes auto-parallelism, batching, deduplication,
+and distribution visible to the scheduler as a dataflow graph. Blocking on a
+virtual thread collapses that back to one sequential thread of execution
+unless the user manually spawns threads; the queued/await split keeps the
+graph explicit at zero syntax cost. The transform is agnostic to this by
+construction — `await` accepts any `F[_]` value regardless of where or when it
+was created, so fork/join shapes (queue several, await later, awaitables held
+in locals or passed as arguments) need nothing beyond what sequential code
+needs. The AoT variant additionally needs no runtime classgen at all.
 
 ## 8. Prototype plan (`./async3`, standalone Maven project)
 
