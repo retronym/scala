@@ -11,8 +11,12 @@ public final class InMemoryClassLoader extends ClassLoader {
     private final Map<String, byte[]> classes;
 
     public InMemoryClassLoader(AsyncTransformer.Result result, ClassLoader parent) {
+        this(result.allClasses(), parent);
+    }
+
+    public InMemoryClassLoader(Map<String, byte[]> classes, ClassLoader parent) {
         super(parent);
-        this.classes = result.allClasses();
+        this.classes = Map.copyOf(classes);
     }
 
     @Override

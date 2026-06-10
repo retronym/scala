@@ -55,15 +55,42 @@ shape. Constructor references are rejected (no await in constructors). A lifted 
 the natural installation point for the phase-4 profiling-driven tier flip
 (`MutableCallSite`: start blocking, swap in the transformed version when hot).
 
+## Java agent (the best shape)
+
+```
+java -javaagent:target/async3-0.1-SNAPSHOT.jar -cp ... your.Main
+```
+
+At class load — the moment when adding methods is still legal, unlike retransformation — the
+agent gives every method containing await markers two siblings *in the host class itself*:
+`m$asyncBody(FutureStateMachine, Object)` holding the resumable body, and a `m$async` entry
+point that allocates the shared runtime `DelegatingStateMachine` shell bound to the body via
+an `LDC MethodHandle` constant (no per-method class generation at all). The original method is
+untouched — the blocking tier. This is the `externalFsmMethod` shape of the annotation-driven
+frontend, derived at load time.
+
+Consequences: private access is same-class access (no nestmate machinery); `Async.async` and
+`Async.lift` detect the prepared entries and skip cracking-time transformation entirely; and —
+the headline — **IDE line breakpoints inside lambda bodies and transformed methods bind and
+fire with no shadow naming and no modes**, because the executing bytecode lives in the class
+the source lines belong to. Verified end-to-end by `JdiAgentCheck` against `AgentProbe`
+running under the agent: the hit lands in `lambda$main$...$asyncBody` in the host class, with
+named locals intact. The agent applies to every marked class on the classpath, including code
+you didn't build, and is idempotent with AoT-prepared classes.
+
 ## Debugging in IntelliJ
 
 1. Open `async3/pom.xml` as a (separate) Maven project — don't import it into the Scala
    project model.
 2. Open `async3.demo.Demo` and **Debug `main()`** (it also works via
    `mvn -q compile exec:java -Dexec.mainClass=async3.demo.Demo` on the command line).
-3. For the **lambda API** (Demo scenario 0): make sure `-Dasync3.lambda.debuggable=true` is
-   set (Demo sets it programmatically) and put line breakpoints inside the lambda body.
-4. For the class-based samples: set line breakpoints in
+3. **Best option — add `-javaagent:target/async3-0.1-SNAPSHOT.jar` to the run configuration's
+   VM options** (run `mvn -q -DskipTests package` first): breakpoints inside lambda bodies and
+   marked methods then bind with no properties and no restrictions (see "Java agent" above).
+4. Without the agent, for the **lambda API** (Demo scenario 0): make sure
+   `-Dasync3.lambda.debuggable=true` is set (Demo sets it programmatically) and put line
+   breakpoints inside the lambda body.
+5. For the class-based samples: set line breakpoints in
    [Samples.java](src/main/java/async3/samples/Samples.java) inside `sumTwice`, one per line.
 
 **Why the lambda case needs its own mode.** IntelliJ resolves a line inside a lambda body only
@@ -134,7 +161,10 @@ field/method access in the transformed body keeps working.
 
 The lambda front end works end-to-end: cracking, hidden-nestmate definition (private state of
 the capturing class accessible across suspension points), constructor caching, and the
-shadow-named debuggable mode with JDI-verified breakpoint binding.
+shadow-named debuggable mode with JDI-verified breakpoint binding. `Async.lift(C::m)` lifts
+named methods (static, unbound, bound, cross-class) into their suspending variants. The Java
+agent provides the in-place shape — resumable body as a sibling of the host class — with
+JDI-verified, restriction-free debugging, and is preferred automatically by `async`/`lift`.
 
 ## Current limitations
 

@@ -288,6 +288,55 @@ emit the resumable body as a sibling method *of the capturing class itself*
 (the `externalFsmMethod` shape §4 already uses) — then breakpoint binding,
 nest access, and stepping all work with no shadowing and no mode split.
 
+## 7.6 The Java agent (in-place shape) — implemented
+
+A load-time `ClassFileTransformer` (`async3.agent.AsyncAgent`, `Premain-Class`/
+`Agent-Class` in the jar manifest) resolves the three ugliest compromises at
+once, because **at class load time adding methods is still legal** (the
+limitation driving §7's retransformation discussion is that
+`retransformClasses` may only replace bodies). For every method containing
+await markers, `AsyncTransformer.transformInPlace` adds to the host class:
+
+- `m$asyncBody(FutureStateMachine, Object)` — the resumable body as a private
+  static sibling. The generated instructions are byte-identical to the
+  `apply` of the class-per-method shape: the body only touches the public
+  `FutureStateMachine` ABI through local 0, so it is indifferent to whether
+  local 0 is `this` of a subclass or a parameter.
+- `m$async(args)` — an entry point allocating the shared runtime shell
+  `DelegatingStateMachine(refSlots, primSlots, bodyHandle, debugMetadata)`,
+  where `bodyHandle` is an `LDC MethodHandle` constant referencing the sibling
+  (private access is fine: the constant is resolved from within the host).
+  **No per-method class generation at all**; debug metadata travels per
+  instance instead of as a per-class constant.
+
+The original method is untouched — the blocking tier; the pair exists for
+every marked method on the classpath, including code not built with the
+project; the transform is idempotent under agent re-entry and skips classes
+already carrying AoT-generated entries. `Async.async`/`Async.lift` probe for
+the prepared entry first and skip cracking-time transformation entirely.
+
+Consequences, verified end-to-end (`JdiAgentCheck` attaching to `AgentProbe`
+under `-javaagent`):
+
+- **Debugging is simply correct.** The executing bytecode for a lambda body
+  lives in the class its source lines belong to, so the §7.5 problem
+  dissolves: `locationsOfLine` on the host returns the (dead) original and
+  the (live) `$asyncBody` locations, the IDE plants breakpoints on all of
+  them, and the hit lands in the sibling with named locals intact. No shadow
+  classes, no modes.
+- **Private access is same-class access** — the nestmate machinery
+  (AoT `NestMembers` patching, `defineHiddenClass(NESTMATE)`) becomes
+  unnecessary in this shape, including for inner-class hosts.
+- **The tier-flip skeleton exists**: the direct/lifted pair is materialized at
+  load for free; what remains for the lazy tier is only the dispatch policy
+  (a `MutableCallSite` flip or body retransformation — both legal now that
+  the members exist).
+
+Not covered by the agent: stepping over a real suspension still steps out
+(inherent; a debugger plugin planting the resume breakpoint is the fix), and
+`ClassFileTransformer` never sees hidden classes (irrelevant here — lambda
+bodies live in ordinary capturing classes).
+
 ## 8. Prototype plan (`./async3`, standalone Maven project)
 
 Plain Java + upstream ASM (`asm-tree`/`asm-analysis`/`asm-util`); no scalac
@@ -329,7 +378,13 @@ deliberately not used, to keep iteration friction low.
   (see the README's "Debugging in IntelliJ").
 - **Phase 3.5 — lambda front end.** ✅ see §7.5: cracking + hidden-nestmate
   definition + constructor caching, and the shadow-named debuggable mode with
-  JDI-verified breakpoint binding inside lambda bodies. Includes
+  JDI-verified breakpoint binding inside lambda bodies. Plus
+  `Async.lift(C::m)` — the runtime method-pair via method references.
+- **Phase 3.75 — Java agent.** ✅ see §7.6: load-time in-place shape
+  (`m$asyncBody` sibling + `m$async` entry + shared `DelegatingStateMachine`
+  shell), preferred automatically by `async`/`lift`, JDI-verified debugging
+  with no shadow naming. Retires the shadow/nestmate workarounds wherever the
+  agent is present and stands up the member layout the lazy tier flip needs. Includes
   `Async.lift(C::m)` — runtime derivation of the suspending variant of an
   existing method (the runtime method-pair), covering static/unbound/bound/
   private references.

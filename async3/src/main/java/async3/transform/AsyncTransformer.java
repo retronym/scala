@@ -63,8 +63,12 @@ public final class AsyncTransformer {
     public static final String AWAIT_DESC = "(Ljava/util/concurrent/CompletableFuture;)Ljava/lang/Object;";
 
     static final String FSM = "async3/runtime/FutureStateMachine";
+    static final String FSM_DESC = "L" + FSM + ";";
+    static final String DSM = "async3/runtime/DelegatingStateMachine";
     static final String CF = "java/util/concurrent/CompletableFuture";
     static final String CF_DESC = "L" + CF + ";";
+    /** Descriptor of the externalized resumable body: {@code (stateMachine, tr) -> void}. */
+    static final String BODY_DESC = "(" + FSM_DESC + "Ljava/lang/Object;)V";
 
     public static final class Result {
         /** Binary name of the (patched) host class. */
@@ -118,6 +122,110 @@ public final class AsyncTransformer {
         cn.accept(cw);
         result.hostClass = cw.toByteArray();
         return result;
+    }
+
+    // ------------------------------------------------------------------ in-place ("agent") shape
+
+    /**
+     * The agent shape: for every method containing await markers, adds to the host class itself
+     * <ul>
+     *   <li>a private static sibling {@code m$asyncBody(FutureStateMachine, Object)} holding the
+     *       resumable body — so it executes <em>in the host class</em>: full private access with
+     *       no nest tricks, and IDE line breakpoints bind naturally because the code for those
+     *       source lines lives in the class the IDE expects;</li>
+     *   <li>a {@code m$async} entry point that allocates a {@link async3.runtime.DelegatingStateMachine}
+     *       bound to the body via an LDC MethodHandle constant — no per-method class generation
+     *       at all.</li>
+     * </ul>
+     * The original method is untouched (the blocking tier). Must run at class <em>load</em> time
+     * (e.g. from a ClassFileTransformer): retransformation cannot add methods. Returns null if
+     * there is nothing to do (no markers, or already processed — idempotent under agent re-entry
+     * and compatible with classes already carrying AoT-generated {@code m$async} entries).
+     */
+    public static byte[] transformInPlace(byte[] classBytes) {
+        ClassNode cn = new ClassNode();
+        new ClassReader(classBytes).accept(cn, ClassReader.SKIP_FRAMES);
+        List<MethodNode> added = new ArrayList<>();
+        for (MethodNode mn : new ArrayList<>(cn.methods)) {
+            if (!hasAwait(mn)) continue;
+            String entryDesc = Type.getMethodDescriptor(Type.getObjectType(CF), Type.getArgumentTypes(mn.desc));
+            if (hasMethod(cn, mn.name + "$async", entryDesc)) continue;
+            checkSupported(cn, mn);
+            // Work on a copy: the original method body stays byte-identical as the blocking tier.
+            MethodNode work = copyOf(mn);
+            sinkUninitializedNews(cn, work);
+            Type[] entry = entryTypes(cn, mn);
+            Frame<BasicValue>[] frames = analyze(cn.name, work);
+            String bodyName = uniqueMethodName(cn, added, mn.name + "$asyncBody");
+            StringBuilder debug = new StringBuilder();
+            debug.append("method ").append(cn.name).append('.').append(mn.name).append(mn.desc).append('\n');
+            added.add(applyMethod(work, entry, frames, debug, bodyName,
+                    ACC_PRIVATE | ACC_STATIC | ACC_SYNTHETIC, BODY_DESC));
+            added.add(inPlaceEntryPoint(cn, mn, entry, work.maxLocals + work.maxStack, bodyName, debug.toString()));
+        }
+        if (added.isEmpty()) return null;
+        cn.methods.addAll(added);
+        ClassWriter cw = new SmAwareClassWriter(Set.of());
+        cn.accept(cw);
+        return cw.toByteArray();
+    }
+
+    private static MethodNode inPlaceEntryPoint(ClassNode cn, MethodNode mn, Type[] entry,
+                                                int frameSlots, String bodyName, String debug) {
+        boolean isStatic = (mn.access & ACC_STATIC) != 0;
+        MethodNode ep = new MethodNode(ACC_PUBLIC | ACC_SYNTHETIC | (isStatic ? ACC_STATIC : 0),
+                mn.name + "$async",
+                Type.getMethodDescriptor(Type.getObjectType(CF), Type.getArgumentTypes(mn.desc)), null, null);
+        InsnList il = ep.instructions;
+        int slots = 0;
+        for (Type t : entry) slots += t.getSize();
+        int smLocal = slots;
+        il.add(new TypeInsnNode(NEW, DSM));
+        il.add(new InsnNode(DUP));
+        il.add(pushInt(frameSlots));
+        il.add(pushInt(frameSlots));
+        il.add(new LdcInsnNode(new Handle(H_INVOKESTATIC, cn.name, bodyName, BODY_DESC,
+                (cn.access & ACC_INTERFACE) != 0)));
+        il.add(new LdcInsnNode(debug));
+        il.add(new MethodInsnNode(INVOKESPECIAL, DSM, "<init>",
+                "(IILjava/lang/invoke/MethodHandle;Ljava/lang/String;)V", false));
+        il.add(new VarInsnNode(ASTORE, smLocal));
+        int slot = 0; // entry locals ([this,] params) spill into their original frame slots
+        for (Type t : entry) {
+            il.add(spillFromLocalVia(smLocal, t, slot, slot));
+            slot += t.getSize();
+        }
+        il.add(new VarInsnNode(ALOAD, smLocal));
+        il.add(new MethodInsnNode(INVOKEVIRTUAL, DSM, "start", "()" + CF_DESC, false));
+        il.add(new InsnNode(ARETURN));
+        return ep;
+    }
+
+    private static MethodNode copyOf(MethodNode mn) {
+        MethodNode copy = new MethodNode(mn.access, mn.name, mn.desc, mn.signature,
+                mn.exceptions == null ? null : mn.exceptions.toArray(new String[0]));
+        mn.accept(copy);
+        return copy;
+    }
+
+    private static boolean hasMethod(ClassNode cn, String name, String desc) {
+        for (MethodNode m : cn.methods)
+            if (m.name.equals(name) && m.desc.equals(desc)) return true;
+        return false;
+    }
+
+    /** Overloads of {@code m} would collide on the fixed body descriptor; disambiguate by suffix. */
+    private static String uniqueMethodName(ClassNode cn, List<MethodNode> pending, String base) {
+        String candidate = base;
+        int i = 0;
+        outer:
+        while (true) {
+            for (MethodNode m : cn.methods)
+                if (m.name.equals(candidate)) { candidate = base + "$" + ++i; continue outer; }
+            for (MethodNode m : pending)
+                if (m.name.equals(candidate)) { candidate = base + "$" + ++i; continue outer; }
+            return candidate;
+        }
     }
 
     // ------------------------------------------------------------------ single-method API (lambda cracking)
@@ -314,7 +422,7 @@ public final class AsyncTransformer {
         int frameSlots = mn.maxLocals + mn.maxStack;
 
         sm.methods.add(constructor(entry, frameSlots));
-        sm.methods.add(applyMethod(mn, entry, frames, debug));
+        sm.methods.add(applyMethod(mn, entry, frames, debug, "apply", ACC_PUBLIC, "(Ljava/lang/Object;)V"));
 
         sm.fields.add(new FieldNode(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
                 "$asyncDebug", "Ljava/lang/String;", null, debug.toString()));
@@ -344,8 +452,16 @@ public final class AsyncTransformer {
         return ctor;
     }
 
-    private static MethodNode applyMethod(MethodNode mn, Type[] entry, Frame<BasicValue>[] frames, StringBuilder debug) {
-        MethodNode apply = new MethodNode(ACC_PUBLIC, "apply", "(Ljava/lang/Object;)V", null, null);
+    /**
+     * Builds the resumable body. The instructions are identical whether it is emitted as
+     * {@code apply(Object)} on a state machine subclass (local 0 = {@code this}) or as a static
+     * sibling {@code m$asyncBody(FutureStateMachine, Object)} of the host class (local 0 = the
+     * state machine parameter): the body only ever touches the public FutureStateMachine ABI
+     * through local 0.
+     */
+    private static MethodNode applyMethod(MethodNode mn, Type[] entry, Frame<BasicValue>[] frames,
+                                          StringBuilder debug, String name, int access, String desc) {
+        MethodNode apply = new MethodNode(access, name, desc, null, null);
         Type returnType = Type.getReturnType(mn.desc);
 
         // apply's local layout: 0 = this, 1 = tr, [2, 2+maxLocals) = original locals,
@@ -561,9 +677,14 @@ public final class AsyncTransformer {
 
     /** Spills a value held in local {@code localIdx} of the method being built into frame slot {@code frameIdx}. */
     private static InsnList spillFromLocal(Type t, int localIdx, int frameIdx) {
+        return spillFromLocalVia(0, t, localIdx, frameIdx);
+    }
+
+    /** Variant for code where the state machine reference lives in local {@code smLocal}, not local 0. */
+    private static InsnList spillFromLocalVia(int smLocal, Type t, int localIdx, int frameIdx) {
         InsnList il = new InsnList();
         if (isNullType(t)) return il; // restored as ACONST_NULL
-        il.add(new VarInsnNode(ALOAD, 0));
+        il.add(new VarInsnNode(ALOAD, smLocal));
         if (isRef(t)) {
             il.add(new FieldInsnNode(GETFIELD, FSM, "refs", "[Ljava/lang/Object;"));
             il.add(pushInt(frameIdx));

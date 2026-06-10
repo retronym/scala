@@ -17,10 +17,14 @@ public final class AsyncDebug {
 
     public static String describe(FutureStateMachine sm) {
         String meta;
-        try {
-            meta = (String) sm.getClass().getDeclaredField("$asyncDebug").get(null);
-        } catch (ReflectiveOperationException e) {
-            return sm.getClass().getName() + ": state " + sm.state + " (no debug metadata)";
+        if (sm instanceof DelegatingStateMachine d) {
+            meta = d.debugMetadata; // agent shape: one shell class, metadata carried per instance
+        } else {
+            try {
+                meta = (String) sm.getClass().getDeclaredField("$asyncDebug").get(null);
+            } catch (ReflectiveOperationException e) {
+                return sm.getClass().getName() + ": state " + sm.state + " (no debug metadata)";
+            }
         }
         String[] lines = meta.split("\n");
         String method = lines.length > 0 && lines[0].startsWith("method ")

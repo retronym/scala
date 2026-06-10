@@ -57,6 +57,20 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.2.5</version>
       </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.1</version>
+        <configuration>
+          <archive>
+            <manifestEntries>
+              <Premain-Class>async3.agent.AsyncAgent</Premain-Class>
+              <Agent-Class>async3.agent.AsyncAgent</Agent-Class>
+              <Can-Retransform-Classes>true</Can-Retransform-Classes>
+            </manifestEntries>
+          </archive>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 </project>

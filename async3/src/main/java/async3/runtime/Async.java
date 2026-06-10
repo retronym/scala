@@ -42,6 +42,11 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Modes:
  * <ul>
+ *   <li><b>agent-prepared (preferred when available)</b>: if the class was loaded under
+ *       {@code -javaagent:async3.jar}, the resumable body already exists as a sibling method of
+ *       the capturing class and {@code async}/{@code lift} simply bind its {@code m$async}
+ *       entry — no cracking-time transformation, full private access, and IDE breakpoints in
+ *       the body bind naturally;</li>
  *   <li>default: hidden class + NESTMATE (no class name leaks, full private access to the
  *       capturing class). IDE line breakpoints inside the lambda body will NOT bind: IntelliJ
  *       resolves such lines only against classes named like the enclosing source class;</li>
@@ -136,22 +141,24 @@ public final class Async {
         if (sl.getImplMethodKind() == java.lang.invoke.MethodHandleInfo.REF_newInvokeSpecial)
             throw new UnsupportedOperationException(
                     "constructor references cannot be lifted (await is not supported in constructors)");
-        MethodHandle ctor = constructorFor(null, ref, sl);
-        return new Lifted(ctor, capturedArgs(sl));
+        MethodHandle invoker = invokerFor(null, ref, sl);
+        return new Lifted(invoker, capturedArgs(sl));
     }
 
     /**
-     * Invokes the cached state machine constructor with captured arguments (bound receiver, for
-     * {@code obj::m}) followed by per-call arguments — together they form the target method's
-     * entry locals in order, for every reference shape.
+     * Invokes the cached invoker — either the agent-prepared {@code m$async} entry point, or a
+     * state machine constructor filtered through {@code start()} — with captured arguments
+     * (bound receiver, for {@code obj::m}) followed by per-call arguments. Together they form
+     * the target method's entry locals in order, for every reference shape.
      */
-    private record Lifted(MethodHandle ctor, Object[] captured) {
+    private record Lifted(MethodHandle invoker, Object[] captured) {
+        @SuppressWarnings("unchecked")
         CompletableFuture<Object> invoke(Object... args) {
             Object[] all = new Object[captured.length + args.length];
             System.arraycopy(captured, 0, all, 0, captured.length);
             System.arraycopy(args, 0, all, captured.length, args.length);
             try {
-                return ((FutureStateMachine) ctor.invokeWithArguments(all)).start();
+                return (CompletableFuture<Object>) invoker.invokeWithArguments(all);
             } catch (Throwable t) {
                 throw AsyncRT.sneakyThrow(t);
             }
@@ -167,14 +174,53 @@ public final class Async {
 
     private static <T> CompletableFuture<T> asyncImpl(MethodHandles.Lookup lookup, AsyncBody<T> body) {
         SerializedLambda sl = crack(body);
-        MethodHandle ctor = constructorFor(lookup, body, sl);
-        return cast(new Lifted(ctor, capturedArgs(sl)).invoke());
+        MethodHandle invoker = invokerFor(lookup, body, sl);
+        return cast(new Lifted(invoker, capturedArgs(sl)).invoke());
     }
 
-    private static MethodHandle constructorFor(MethodHandles.Lookup lookup, Serializable ref, SerializedLambda sl) {
+    private static MethodHandle invokerFor(MethodHandles.Lookup lookup, Serializable ref, SerializedLambda sl) {
         String key = (debuggable() ? "shadow:" : "hidden:")
                 + sl.getImplClass() + "." + sl.getImplMethodName() + sl.getImplMethodSignature();
         return CONSTRUCTOR_CACHE.computeIfAbsent(key, k -> compile(lookup, ref.getClass().getClassLoader(), sl));
+    }
+
+    /** {@code FutureStateMachine.start()}, used to adapt constructor handles into invokers. */
+    private static final MethodHandle START;
+    static {
+        try {
+            START = MethodHandles.lookup().findVirtual(FutureStateMachine.class, "start",
+                    MethodType.methodType(CompletableFuture.class));
+        } catch (ReflectiveOperationException e) {
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    private static MethodHandle toInvoker(MethodHandle ctor) {
+        MethodHandle asFsm = ctor.asType(ctor.type().changeReturnType(FutureStateMachine.class));
+        return MethodHandles.filterReturnValue(asFsm, START);
+    }
+
+    /**
+     * If the agent prepared this method at class load time, use its {@code m$async} entry point:
+     * the resumable body then executes in the host class itself (breakpoints bind, private
+     * access is same-class), and no cracking-time transformation happens at all. AoT-transformed
+     * classes carrying the same entries are picked up identically.
+     */
+    private static MethodHandle agentEntry(Class<?> capturingClass, MethodHandles.Lookup callerLookup,
+                                           SerializedLambda sl, ClassLoader loader) {
+        try {
+            MethodType implType = MethodType.fromMethodDescriptorString(sl.getImplMethodSignature(), loader);
+            MethodType entryType = implType.changeReturnType(CompletableFuture.class);
+            MethodHandles.Lookup l = callerLookup != null
+                    ? callerLookup
+                    : MethodHandles.privateLookupIn(capturingClass, MethodHandles.lookup());
+            String name = sl.getImplMethodName() + "$async";
+            return sl.getImplMethodKind() == java.lang.invoke.MethodHandleInfo.REF_invokeStatic
+                    ? l.findStatic(capturingClass, name, entryType)
+                    : l.findVirtual(capturingClass, name, entryType);
+        } catch (ReflectiveOperationException e) {
+            return null; // no agent-prepared entry; fall back to cracking-time transformation
+        }
     }
 
     private static Object[] capturedArgs(SerializedLambda sl) {
@@ -197,6 +243,9 @@ public final class Async {
     private static MethodHandle compile(MethodHandles.Lookup callerLookup, ClassLoader loader, SerializedLambda sl) {
         try {
             Class<?> capturingClass = Class.forName(sl.getImplClass().replace('/', '.'), false, loader);
+
+            MethodHandle viaAgent = agentEntry(capturingClass, callerLookup, sl, loader);
+            if (viaAgent != null) return viaAgent;
 
             byte[] hostBytes;
             try (InputStream in = loader.getResourceAsStream(sl.getImplClass() + ".class")) {
@@ -222,7 +271,7 @@ public final class Async {
 
             if (shadow) {
                 Class<?> smClass = new OneShotLoader(loader).define(sm.name, sm.bytes);
-                return MethodHandles.lookup().unreflectConstructor(smClass.getDeclaredConstructors()[0]);
+                return toInvoker(MethodHandles.lookup().unreflectConstructor(smClass.getDeclaredConstructors()[0]));
             }
 
             MethodHandles.Lookup lookup = callerLookup != null
@@ -231,7 +280,7 @@ public final class Async {
             MethodHandles.Lookup smLookup =
                     lookup.defineHiddenClass(sm.bytes, false, MethodHandles.Lookup.ClassOption.NESTMATE);
             MethodType ctorType = MethodType.fromMethodDescriptorString(sm.constructorDescriptor, loader);
-            return smLookup.findConstructor(smLookup.lookupClass(), ctorType);
+            return toInvoker(smLookup.findConstructor(smLookup.lookupClass(), ctorType));
         } catch (ReflectiveOperationException | java.io.IOException e) {
             throw new IllegalStateException("failed to compile async lambda " + sl.getImplMethodName(), e);
         }
