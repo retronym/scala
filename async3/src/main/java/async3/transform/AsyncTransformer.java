@@ -57,6 +57,7 @@ import static org.objectweb.asm.Opcodes.*;
 public final class AsyncTransformer {
 
     public static final String AWAIT_OWNER = "async3/runtime/AsyncRT";
+    public static final String AWAIT_OWNER_LAMBDA = "async3/runtime/Async";
     public static final String AWAIT_NAME = "await";
     public static final String AWAIT_DESC = "(Ljava/util/concurrent/CompletableFuture;)Ljava/lang/Object;";
 
@@ -118,12 +119,55 @@ public final class AsyncTransformer {
         return result;
     }
 
+    // ------------------------------------------------------------------ single-method API (lambda cracking)
+
+    /** Result of {@link #transformMethod}: one state machine class, host untouched. */
+    public static final class SingleMethod {
+        /** Binary name of the generated class (hidden-class definition appends its own suffix). */
+        public final String name;
+        public final byte[] bytes;
+        /** Descriptor of the generated constructor: {@code ([this,] params...)V}. */
+        public final String constructorDescriptor;
+        public final String debugMetadata;
+
+        SingleMethod(String name, byte[] bytes, String constructorDescriptor, String debugMetadata) {
+            this.name = name;
+            this.bytes = bytes;
+            this.constructorDescriptor = constructorDescriptor;
+            this.debugMetadata = debugMetadata;
+        }
+    }
+
+    /**
+     * Transforms a single method — typically a cracked lambda's {@code lambda$...} impl method —
+     * into a state machine class, without patching the host class. No Nest* attributes are
+     * emitted: the intended consumer is {@code Lookup.defineHiddenClass(bytes, false, NESTMATE)},
+     * which joins the defining lookup's nest dynamically (this is the runtime-deferred analogue
+     * of the AoT path's NestMembers patching).
+     */
+    public static SingleMethod transformMethod(byte[] hostBytes, String methodName, String methodDesc) {
+        ClassNode cn = new ClassNode();
+        new ClassReader(hostBytes).accept(cn, ClassReader.SKIP_FRAMES);
+        MethodNode mn = null;
+        for (MethodNode m : cn.methods)
+            if (m.name.equals(methodName) && m.desc.equals(methodDesc)) { mn = m; break; }
+        if (mn == null)
+            throw new IllegalArgumentException("method not found: " + cn.name + "." + methodName + methodDesc);
+        checkSupported(cn, mn);
+        sinkUninitializedNews(cn, mn);
+        String smName = cn.name + "$async$" + methodName;
+        StringBuilder debug = new StringBuilder();
+        byte[] bytes = generateStateMachine(cn, mn, smName, false, debug);
+        String ctorDesc = Type.getMethodDescriptor(Type.VOID_TYPE, entryTypes(cn, mn));
+        return new SingleMethod(smName.replace('/', '.'), bytes, ctorDesc, debug.toString());
+    }
+
     // ------------------------------------------------------------------ marker detection
 
     private static boolean isAwait(AbstractInsnNode insn) {
         return insn instanceof MethodInsnNode mi
                 && mi.getOpcode() == INVOKESTATIC
-                && mi.owner.equals(AWAIT_OWNER)
+                && (mi.owner.equals(AWAIT_OWNER) || mi.owner.equals(AWAIT_OWNER_LAMBDA))
                 && mi.name.equals(AWAIT_NAME)
                 && mi.desc.equals(AWAIT_DESC);
     }
