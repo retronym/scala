@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -43,10 +44,15 @@ import static org.objectweb.asm.Opcodes.*;
  * parameters; case i restores the locals and operand stack recorded for await site i and jumps
  * to {@code resume_i}.
  *
+ * <p>{@code new Foo(await(f))} — an uninitialized object on the stack at the suspension point,
+ * which cannot be spilled to the heap — is handled by a pre-pass ({@link #sinkUninitializedNews})
+ * that deletes the {@code NEW}(+{@code DUP}) and re-materializes it just below the constructor
+ * arguments at the {@code INVOKESPECIAL <init>} site, the same strategy as Kotlin coroutines.
+ * (Observable difference: the class-initialization side effect of {@code NEW} moves after the
+ * evaluation of the constructor arguments; Kotlin accepts the same.)
+ *
  * <p>Current limitations (deliberate, see ASYNC3-DESIGN.md): static methods only; rejects
- * suspension while a monitor is held; rejects an uninitialized object on the stack at a
- * suspension point ({@code new Foo(await(f))}) — the NEW-sinking fix is future work; spills all
- * assigned locals rather than only live ones.
+ * suspension while a monitor is held; spills all assigned locals rather than only live ones.
  */
 public final class AsyncTransformer {
 
@@ -86,6 +92,7 @@ public final class AsyncTransformer {
         for (MethodNode mn : cn.methods) {
             if (!hasAwait(mn)) continue;
             checkSupported(cn, mn);
+            sinkUninitializedNews(cn, mn);
             String smName = cn.name + "$async$" + mn.name + "$" + index++;
             generatedInternalNames.add(smName);
             StringBuilder debug = new StringBuilder();
@@ -168,6 +175,8 @@ public final class AsyncTransformer {
         sm.name = smName;
         sm.superName = FSM;
         sm.sourceFile = cn.sourceFile;
+
+        debug.append("method ").append(cn.name).append('.').append(mn.name).append(mn.desc).append('\n');
 
         // Generous positional frame layout: slot v of the original method <-> frame index v;
         // operand stack entry j <-> frame index maxLocals + j. Per-state reuse is automatic.
@@ -309,6 +318,14 @@ public final class AsyncTransformer {
                         labelMap.get(tcb.start), labelMap.get(tcb.end), labelMap.get(tcb.handler), tcb.type));
         // appended last: user handlers (cloned above) take precedence
         apply.tryCatchBlocks.add(new TryCatchBlockNode(bodyStart, handler, handler, null));
+
+        // The LocalVariableTable carries over: spilled values are restored into the (shifted)
+        // original slots, and the resume code sits inside the original scope labels, so the
+        // entries stay truthful in resumed regions — a debugger sees ordinary named locals.
+        if (mn.localVariables != null)
+            for (LocalVariableNode lv : mn.localVariables)
+                apply.localVariables.add(new LocalVariableNode(lv.name, lv.desc, lv.signature,
+                        labelMap.get(lv.start), labelMap.get(lv.end), lv.index + OFF));
 
         apply.maxLocals = OFF + mn.maxLocals + 3;
         apply.maxStack = mn.maxStack + 8; // recomputed by COMPUTE_FRAMES
@@ -510,6 +527,86 @@ public final class AsyncTransformer {
         return new LdcInsnNode(v);
     }
 
+    // ------------------------------------------------------------------ NEW-sinking pre-pass
+
+    /**
+     * Rewrites {@code NEW T; [DUP;] ...await...; INVOKESPECIAL T.<init>} so that no uninitialized
+     * reference is on the operand stack at a suspension point: the {@code NEW}(+{@code DUP}) is
+     * deleted from its original position and re-materialized just below the constructor arguments
+     * at the {@code <init>} site (args are briefly parked in fresh scratch locals to make room).
+     * Handles the javac idiom, including nested news, multiple awaits among the arguments, and
+     * conditional argument expressions; anything more exotic (extra stack-shuffled copies,
+     * an uninitialized reference stored in a local) is rejected by {@link #requireInitialized}.
+     */
+    private static void sinkUninitializedNews(ClassNode cn, MethodNode mn) {
+        Frame<BasicValue>[] frames = analyze(cn.name, mn);
+        AbstractInsnNode[] insns = mn.instructions.toArray();
+
+        // uninitialized values in flight at any suspension point, deduped by their NEW insn
+        Set<UninitValue> pending = new LinkedHashSet<>();
+        for (int i = 0; i < insns.length; i++) {
+            if (!isAwait(insns[i]) || frames[i] == null) continue;
+            for (int j = 0; j < frames[i].getStackSize(); j++)
+                if (frames[i].getStack(j) instanceof UninitValue u) pending.add(u);
+        }
+        if (pending.isEmpty()) return;
+
+        String where = cn.name + "." + mn.name + mn.desc;
+        for (UninitValue u : pending) {
+            AbstractInsnNode afterNew = nextSignificant(u.newInsn);
+            boolean dupped = afterNew != null && afterNew.getOpcode() == DUP;
+
+            // locate the <init> consuming u as its receiver (frames/indices are pre-rewrite,
+            // but the <init> nodes themselves stay in place as insertion anchors)
+            MethodInsnNode init = null;
+            Frame<BasicValue> initFrame = null;
+            for (int i = 0; i < insns.length; i++) {
+                if (insns[i] instanceof MethodInsnNode mi && mi.getOpcode() == INVOKESPECIAL
+                        && mi.name.equals("<init>") && frames[i] != null) {
+                    int r = frames[i].getStackSize() - 1 - Type.getArgumentTypes(mi.desc).length;
+                    if (r >= 0 && u.equals(frames[i].getStack(r))) { init = mi; initFrame = frames[i]; break; }
+                }
+            }
+            if (init == null)
+                throw new UnsupportedOperationException("cannot locate <init> for NEW at a suspension point: " + where);
+
+            int nargs = Type.getArgumentTypes(init.desc).length;
+            int receiver = initFrame.getStackSize() - 1 - nargs;
+            int copies = 1;
+            while (receiver - copies >= 0 && u.equals(initFrame.getStack(receiver - copies))) copies++;
+            if (copies > 2 || (copies == 2) != dupped)
+                throw new UnsupportedOperationException("unsupported NEW/DUP shape at a suspension point: " + where);
+
+            Type[] argTypes = new Type[nargs];
+            int[] argSlots = new int[nargs];
+            int slot = mn.maxLocals;
+            for (int a = 0; a < nargs; a++) {
+                argTypes[a] = initFrame.getStack(receiver + 1 + a).getType();
+                argSlots[a] = slot;
+                slot += argTypes[a].getSize();
+            }
+            mn.maxLocals = slot;
+
+            InsnList patch = new InsnList();
+            for (int a = nargs - 1; a >= 0; a--)
+                patch.add(new VarInsnNode(argTypes[a].getOpcode(ISTORE), argSlots[a]));
+            patch.add(new TypeInsnNode(NEW, u.newInsn.desc));
+            if (dupped) patch.add(new InsnNode(DUP));
+            for (int a = 0; a < nargs; a++)
+                patch.add(new VarInsnNode(argTypes[a].getOpcode(ILOAD), argSlots[a]));
+            mn.instructions.insertBefore(init, patch);
+            if (dupped) mn.instructions.remove(afterNew);
+            mn.instructions.remove(u.newInsn);
+        }
+        mn.maxStack += 2;
+    }
+
+    private static AbstractInsnNode nextSignificant(AbstractInsnNode insn) {
+        for (AbstractInsnNode p = insn.getNext(); p != null; p = p.getNext())
+            if (!(p instanceof LabelNode || p instanceof LineNumberNode || p instanceof FrameNode)) return p;
+        return null;
+    }
+
     // ------------------------------------------------------------------ analysis
 
     private static Frame<BasicValue>[] analyze(String owner, MethodNode mn) {
@@ -542,15 +639,26 @@ public final class AsyncTransformer {
         @Override
         public BasicValue newOperation(AbstractInsnNode insn) throws AnalyzerException {
             BasicValue v = super.newOperation(insn);
-            return insn.getOpcode() == NEW ? new UninitValue(v.getType()) : v;
+            return insn.getOpcode() == NEW ? new UninitValue(v.getType(), (TypeInsnNode) insn) : v;
         }
     }
 
-    /** Identity-equality value marking "allocated but &lt;init&gt; not yet called". */
+    /**
+     * Value marking "allocated by {@code newInsn} but &lt;init&gt; not yet called". Equality is
+     * keyed on the NEW instruction (not object identity): the analyzer re-executes blocks while
+     * iterating to a fixpoint, creating fresh instances for the same allocation site, and merge
+     * must recognize them as the same value or the marking is lost.
+     */
     static final class UninitValue extends BasicValue {
-        UninitValue(Type type) { super(type); }
-        @Override public boolean equals(Object o) { return o == this; }
-        @Override public int hashCode() { return System.identityHashCode(this); }
+        final TypeInsnNode newInsn;
+
+        UninitValue(Type type, TypeInsnNode newInsn) {
+            super(type);
+            this.newInsn = newInsn;
+        }
+
+        @Override public boolean equals(Object o) { return o instanceof UninitValue u && u.newInsn == newInsn; }
+        @Override public int hashCode() { return System.identityHashCode(newInsn); }
     }
 
     /**
@@ -574,11 +682,11 @@ public final class AsyncTransformer {
             if (uninit != null) {
                 BasicValue inited = new BasicValue(uninit.getType());
                 for (int i = 0; i < getLocals(); i++)
-                    if (getLocal(i) == uninit) setLocal(i, inited);
+                    if (uninit.equals(getLocal(i))) setLocal(i, inited);
                 int size = getStackSize();
                 BasicValue[] stack = new BasicValue[size];
                 for (int i = size - 1; i >= 0; i--) stack[i] = pop();
-                for (int i = 0; i < size; i++) push(stack[i] == uninit ? inited : stack[i]);
+                for (int i = 0; i < size; i++) push(uninit.equals(stack[i]) ? inited : stack[i]);
             }
         }
     }
@@ -594,23 +702,27 @@ public final class AsyncTransformer {
         if (line >= 0) sb.append(" (line ").append(line).append(")");
         sb.append(":");
         int awaitIdx = mn.instructions.indexOf(awaitInsn);
+        boolean first = true;
         for (int v = 0; v < mn.maxLocals; v++) {
             BasicValue value = f.getLocal(v);
             if (!isSpillable(value) || isNullType(value.getType())) continue;
             String name = localName(mn, v, awaitIdx);
-            sb.append(' ').append(name != null ? name : "local" + v)
-              .append(" -> ").append(slotName(value.getType(), v)).append(';');
+            sb.append(first ? " " : " | ").append(name != null ? name : "local" + v)
+              .append(" -> ").append(slotName(value.getType(), v));
+            first = false;
         }
         for (int j = 0; j < f.getStackSize() - 1; j++) {
             Type t = f.getStack(j).getType();
             if (isNullType(t)) continue;
-            sb.append(" stack").append(j).append(" -> ").append(slotName(t, mn.maxLocals + j)).append(';');
+            sb.append(first ? " " : " | ").append("stack").append(j)
+              .append(" -> ").append(slotName(t, mn.maxLocals + j));
+            first = false;
         }
         sb.append('\n');
     }
 
     private static String slotName(Type t, int idx) {
-        return (isRef(t) ? "refs[" : "prims[") + idx + "]:" + t.getDescriptor();
+        return (isRef(t) ? "refs[" : "prims[") + idx + "] (" + t.getDescriptor() + ")";
     }
 
     private static String localName(MethodNode mn, int slot, int insnIdx) {

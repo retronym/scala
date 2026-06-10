@@ -26,9 +26,16 @@ mvn test
 - `src/test/java` — semantic equivalence matrix (fast path vs. real suspension), rejection
   tests (monitors, uninitialized `new` across a suspension), debug-metadata check.
 
+## Status
+
+Working: suspension with non-empty operand stacks, loops, try/catch (failed futures reach the
+user's handler), two-slot primitives, `new Foo(await(f))` via Kotlin-style NEW-sinking
+(`sinkUninitializedNews`, including nested/conditional/statement shapes), per-state
+`$asyncDebug` frame metadata with source variable names, `AsyncDebug.describe` for rendering
+suspended frames, and the original `LocalVariableTable`/line numbers carried into the
+generated `apply` (restores target the original slots, so a debugger sees named locals).
+
 ## Current limitations
 
-Static methods only; `new Foo(await(f))` is detected and rejected (needs Kotlin-style
-NEW-sinking); spills all assigned locals rather than only live ones; no
-`LocalVariableTable`/line-table surgery for the debugger yet; no lazy/`invokedynamic` tier
-switch yet. See the design doc's phase list.
+Static methods only; spills all assigned locals rather than only live ones; no
+lazy/`invokedynamic` tier switch yet; no JMH numbers yet. See the design doc's phase list.

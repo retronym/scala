@@ -119,12 +119,4 @@ class TransformerSemanticsTest {
                 () -> AsyncTransformer.transform(classBytes(RejectedSamples.Monitor.class)));
         assertTrue(e.getMessage().contains("monitor"), e.getMessage());
     }
-
-    /** The known-hard corner; red until NEW-sinking is implemented, rejected until then. */
-    @Test
-    void rejectsUninitializedNewAtSuspension() {
-        UnsupportedOperationException e = assertThrows(UnsupportedOperationException.class,
-                () -> AsyncTransformer.transform(classBytes(RejectedSamples.UninitNew.class)));
-        assertTrue(e.getMessage().contains("uninitialized"), e.getMessage());
-    }
 }

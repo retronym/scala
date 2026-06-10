@@ -85,7 +85,15 @@ body-level job is to leave a real `await` call instruction in the bytecode.
    uninitialized reference on the stack at the suspension point, which cannot
    be stored in a field or array. Kotlin sinks the `NEW`/`DUP` pair past the
    suspension and re-materializes it before `INVOKESPECIAL <init>`. The one
-   genuinely fiddly piece; prototype it second, not first.
+   genuinely fiddly piece. ✅ implemented in the prototype
+   (`sinkUninitializedNews`): the analyzer marks NEW results
+   uninitialized-until-`<init>` (with verifier-style replacement of all copies
+   upon initialization, keyed by allocation site so loop-fixpoint re-execution
+   doesn't lose the marking); the pre-pass deletes the `NEW`(+`DUP`) and
+   re-materializes it below the constructor args at the `<init>` site. Handles
+   nested news, multiple awaits among arguments, conditional argument
+   expressions, and the statement (`POP`) idiom; exotic stack-shuffled shapes
+   are still rejected rather than miscompiled.
 2. **`await` under `MONITORENTER`**: detect and reject with a clear error
    (trivially detectable at bytecode level; silently broken today).
 3. **Stack map frames**: jumping from the dispatch switch into the middle of
@@ -231,11 +239,16 @@ deliberately not used, to keep iteration friction low.
   sequential awaits; deep operand stack `1 + (2 * await(f)) + g(await(h), 3)`;
   await in a loop; try/catch/finally around and containing awaits; long/double
   locals and operands; exception thrown by the future; `new Foo(await(f))`
-  (red until NEW-sinking lands — the milestone test); `synchronized`
-  rejection.
+  (the milestone test); `synchronized` rejection. ✅ green, including
+  NEW-sinking (simple/nested/two-arg/statement/conditional shapes)
 - **Phase 3 — debuggability.** Emit the state → names metadata; restore into
   original slots + LVT extension; verify with a debugger; write the
-  suspended-frame pretty-printer.
+  suspended-frame pretty-printer. ✅ mostly done: per-state `$asyncDebug`
+  metadata with source names; original `LocalVariableTable` and line numbers
+  carried into the generated `apply` (restores target the original slots, so
+  entries stay truthful); `AsyncDebug.describe` renders e.g.
+  `Samples.sumTwice(...) suspended at state 2 (line 23): fa = ..., x = 5`.
+  Remaining: interactive verification in IntelliJ/jdb.
 - **Phase 4 — lazy variant + numbers.** `defineHiddenClass` +
   `MutableCallSite` flip; JMH: blocking vs. AoT-transformed vs. lazily flipped
   vs. the current compiler phase's output; generic frame vs. typed fields.
@@ -243,6 +256,7 @@ deliberately not used, to keep iteration friction low.
   shaded ASM lives) vs. shipping as a build/agent step; shrink
   `markForAsyncTransform` to "keep the await call + annotate".
 
-**Risk order:** uninitialized-object sinking, stack-map correctness around try
-regions, generic-frame spill cost vs. Kotlin-style typed fields. Phases 1–2
-front-load the first two; phase 4 answers the third with data.
+**Risk order:** uninitialized-object sinking ✅, stack-map correctness around
+try regions ✅ (JVM verifier accepts all generated classes, exercised on every
+test load), generic-frame spill cost vs. Kotlin-style typed fields — phase 4
+answers this with data.
