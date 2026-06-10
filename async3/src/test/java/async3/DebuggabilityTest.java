@@ -26,12 +26,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class DebuggabilityTest {
 
     static AsyncTransformer.Result result;
-    static TestSupport.TransformedLoader loader;
+    static ClassLoader loader;
 
     @BeforeAll
     static void transform() {
         result = AsyncTransformer.transform(classBytes(Samples.class));
-        loader = new TestSupport.TransformedLoader(result);
+        loader = loaderFor(result);
     }
 
     private static String smNameFor(String method) {

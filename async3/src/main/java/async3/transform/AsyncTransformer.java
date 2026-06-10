@@ -95,11 +95,21 @@ public final class AsyncTransformer {
             sinkUninitializedNews(cn, mn);
             String smName = cn.name + "$async$" + mn.name + "$" + index++;
             generatedInternalNames.add(smName);
+            // Join the host's nest so the transformed body keeps access to private members
+            // (fields, methods) of the host, exactly as the original body had. Only possible
+            // when the host is its own nest host: joining a foreign nest would require
+            // patching that class too. (At runtime-deferral time, defineHiddenClass with
+            // NESTMATE achieves the same.)
+            boolean nestmate = cn.nestHostClass == null;
+            if (nestmate) {
+                if (cn.nestMembers == null) cn.nestMembers = new ArrayList<>();
+                cn.nestMembers.add(smName);
+            }
             StringBuilder debug = new StringBuilder();
-            byte[] smBytes = generateStateMachine(cn, mn, smName, debug);
+            byte[] smBytes = generateStateMachine(cn, mn, smName, nestmate, debug);
             result.stateMachines.put(smName.replace('/', '.'), smBytes);
             result.debugMetadata.put(result.hostName + "." + mn.name, debug.toString());
-            entryPoints.add(entryPoint(mn, smName));
+            entryPoints.add(entryPoint(cn, mn, smName));
         }
         cn.methods.addAll(entryPoints);
         ClassWriter cw = new SmAwareClassWriter(generatedInternalNames);
@@ -123,10 +133,24 @@ public final class AsyncTransformer {
         return false;
     }
 
+    /**
+     * The entry locals of the original method: {@code [this,] param...}, with slot numbering
+     * matching the original frame. `this` needs no special treatment anywhere: it is just the
+     * reference in slot 0, captured, spilled and restored like any other local.
+     */
+    private static Type[] entryTypes(ClassNode cn, MethodNode mn) {
+        Type[] args = Type.getArgumentTypes(mn.desc);
+        if ((mn.access & ACC_STATIC) != 0) return args;
+        Type[] all = new Type[args.length + 1];
+        all[0] = Type.getObjectType(cn.name);
+        System.arraycopy(args, 0, all, 1, args.length);
+        return all;
+    }
+
     private static void checkSupported(ClassNode cn, MethodNode mn) {
         String where = cn.name + "." + mn.name + mn.desc;
-        if ((mn.access & ACC_STATIC) == 0)
-            throw new UnsupportedOperationException("only static methods are supported yet: " + where);
+        if (mn.name.equals("<init>") || mn.name.equals("<clinit>"))
+            throw new UnsupportedOperationException("await is not supported in constructors/initializers: " + where);
         if ((mn.access & ACC_SYNCHRONIZED) != 0)
             throw new UnsupportedOperationException("await is illegal in a synchronized method: " + where);
         for (AbstractInsnNode insn : mn.instructions) {
@@ -143,21 +167,22 @@ public final class AsyncTransformer {
 
     // ------------------------------------------------------------------ entry point on host class
 
-    private static MethodNode entryPoint(MethodNode mn, String smName) {
-        Type[] args = Type.getArgumentTypes(mn.desc);
+    private static MethodNode entryPoint(ClassNode cn, MethodNode mn, String smName) {
+        boolean isStatic = (mn.access & ACC_STATIC) != 0;
+        Type[] entry = entryTypes(cn, mn);
         MethodNode ep = new MethodNode(
-                ACC_PUBLIC | ACC_STATIC, mn.name + "$async",
-                Type.getMethodDescriptor(Type.getObjectType(CF), args), null, null);
+                ACC_PUBLIC | (isStatic ? ACC_STATIC : 0), mn.name + "$async",
+                Type.getMethodDescriptor(Type.getObjectType(CF), Type.getArgumentTypes(mn.desc)), null, null);
         InsnList il = ep.instructions;
         il.add(new TypeInsnNode(NEW, smName));
         il.add(new InsnNode(DUP));
-        int slot = 0;
-        for (Type t : args) {
+        int slot = 0; // for instance methods, entry[0] is `this` = local 0 of m$async too
+        for (Type t : entry) {
             il.add(new VarInsnNode(t.getOpcode(ILOAD), slot));
             slot += t.getSize();
         }
         il.add(new MethodInsnNode(INVOKESPECIAL, smName, "<init>",
-                Type.getMethodDescriptor(Type.VOID_TYPE, args), false));
+                Type.getMethodDescriptor(Type.VOID_TYPE, entry), false));
         il.add(new MethodInsnNode(INVOKEVIRTUAL, smName, "start", "()" + CF_DESC, false));
         il.add(new InsnNode(ARETURN));
         return ep;
@@ -165,8 +190,9 @@ public final class AsyncTransformer {
 
     // ------------------------------------------------------------------ state machine class
 
-    private static byte[] generateStateMachine(ClassNode cn, MethodNode mn, String smName, StringBuilder debug) {
-        Type[] args = Type.getArgumentTypes(mn.desc);
+    private static byte[] generateStateMachine(ClassNode cn, MethodNode mn, String smName,
+                                               boolean nestmate, StringBuilder debug) {
+        Type[] entry = entryTypes(cn, mn);
         Frame<BasicValue>[] frames = analyze(cn.name, mn);
 
         ClassNode sm = new ClassNode();
@@ -175,6 +201,7 @@ public final class AsyncTransformer {
         sm.name = smName;
         sm.superName = FSM;
         sm.sourceFile = cn.sourceFile;
+        if (nestmate) sm.nestHostClass = cn.name;
 
         debug.append("method ").append(cn.name).append('.').append(mn.name).append(mn.desc).append('\n');
 
@@ -182,8 +209,8 @@ public final class AsyncTransformer {
         // operand stack entry j <-> frame index maxLocals + j. Per-state reuse is automatic.
         int frameSlots = mn.maxLocals + mn.maxStack;
 
-        sm.methods.add(constructor(args, frameSlots));
-        sm.methods.add(applyMethod(mn, frames, debug));
+        sm.methods.add(constructor(entry, frameSlots));
+        sm.methods.add(applyMethod(mn, entry, frames, debug));
 
         sm.fields.add(new FieldNode(ACC_PUBLIC | ACC_STATIC | ACC_FINAL,
                 "$asyncDebug", "Ljava/lang/String;", null, debug.toString()));
@@ -193,18 +220,18 @@ public final class AsyncTransformer {
         return cw.toByteArray();
     }
 
-    private static MethodNode constructor(Type[] args, int frameSlots) {
+    private static MethodNode constructor(Type[] entry, int frameSlots) {
         MethodNode ctor = new MethodNode(ACC_PUBLIC, "<init>",
-                Type.getMethodDescriptor(Type.VOID_TYPE, args), null, null);
+                Type.getMethodDescriptor(Type.VOID_TYPE, entry), null, null);
         InsnList il = ctor.instructions;
         il.add(new VarInsnNode(ALOAD, 0));
         il.add(pushInt(frameSlots));
         il.add(pushInt(frameSlots));
         il.add(new MethodInsnNode(INVOKESPECIAL, FSM, "<init>", "(II)V", false));
-        // Spill constructor arguments into the frame slots of the original parameter locals;
-        // the dispatch switch's case 0 restores them.
+        // Spill constructor arguments ([this,] params) into the frame slots of the original
+        // entry locals; the dispatch switch's case 0 restores them.
         int ctorLocal = 1, paramSlot = 0;
-        for (Type t : args) {
+        for (Type t : entry) {
             il.add(spillFromLocal(t, ctorLocal, paramSlot));
             ctorLocal += t.getSize();
             paramSlot += t.getSize();
@@ -213,10 +240,9 @@ public final class AsyncTransformer {
         return ctor;
     }
 
-    private static MethodNode applyMethod(MethodNode mn, Frame<BasicValue>[] frames, StringBuilder debug) {
+    private static MethodNode applyMethod(MethodNode mn, Type[] entry, Frame<BasicValue>[] frames, StringBuilder debug) {
         MethodNode apply = new MethodNode(ACC_PUBLIC, "apply", "(Ljava/lang/Object;)V", null, null);
         Type returnType = Type.getReturnType(mn.desc);
-        Type[] args = Type.getArgumentTypes(mn.desc);
 
         // apply's local layout: 0 = this, 1 = tr, [2, 2+maxLocals) = original locals,
         // then a scratch slot for the awaited future and a 2-wide scratch for spills/boxing.
@@ -274,7 +300,7 @@ public final class AsyncTransformer {
 
         il.add(cases[0]);
         int slot = 0;
-        for (Type t : args) {
+        for (Type t : entry) {
             il.add(restoreToLocal(t, slot, OFF + slot));
             slot += t.getSize();
         }

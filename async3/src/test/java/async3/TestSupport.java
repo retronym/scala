@@ -4,9 +4,9 @@ import async3.transform.AsyncTransformer;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -24,35 +24,14 @@ final class TestSupport {
         }
     }
 
-    /** Loads the patched host class plus generated state machines; child-first for those names. */
-    static final class TransformedLoader extends ClassLoader {
-        private final Map<String, byte[]> classes;
-
-        TransformedLoader(AsyncTransformer.Result result) {
-            super(TransformedLoader.class.getClassLoader());
-            this.classes = result.allClasses();
-        }
-
-        @Override
-        protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
-            synchronized (getClassLoadingLock(name)) {
-                Class<?> c = findLoadedClass(name);
-                if (c == null) {
-                    byte[] b = classes.get(name);
-                    // The JVM verifier runs on these defineClass calls — it is the prototype's
-                    // bytecode-correctness check.
-                    c = b != null ? defineClass(name, b, 0, b.length) : super.loadClass(name, false);
-                }
-                if (resolve) resolveClass(c);
-                return c;
-            }
-        }
+    static ClassLoader loaderFor(AsyncTransformer.Result result) {
+        return new async3.transform.InMemoryClassLoader(result, TestSupport.class.getClassLoader());
     }
 
     static Class<?> transformAndLoad(Class<?> source) {
         AsyncTransformer.Result result = AsyncTransformer.transform(classBytes(source));
         try {
-            return Class.forName(result.hostName, true, new TransformedLoader(result));
+            return Class.forName(result.hostName, true, loaderFor(result));
         } catch (ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
@@ -70,15 +49,41 @@ final class TestSupport {
 
     /** Invokes the untouched synchronous method (the blocking tier). */
     static Object invoke(Class<?> host, String name, Object... args) throws Throwable {
+        return invokeOn(host, null, name, args);
+    }
+
+    /** Instance variant of {@link #invokeAsync}. */
+    static Object invokeAsyncOn(Object target, String name, Object... args) throws Throwable {
+        CompletableFuture<?> f = (CompletableFuture<?>) invokeOn(target.getClass(), target, name + "$async", args);
+        try {
+            return f.get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            throw e.getCause();
+        }
+    }
+
+    static Object invokeOn(Class<?> host, Object target, String name, Object... args) throws Throwable {
         Method m = null;
         for (Method cand : host.getDeclaredMethods())
             if (cand.getName().equals(name)) { m = cand; break; }
         if (m == null) throw new NoSuchMethodException(host.getName() + "." + name);
         try {
-            return m.invoke(null, args);
+            return m.invoke(target, args);
         } catch (InvocationTargetException e) {
             throw e.getCause();
         }
+    }
+
+    static Object newInstance(Class<?> host, Object... ctorArgs) throws Throwable {
+        for (Constructor<?> c : host.getDeclaredConstructors())
+            if (c.getParameterCount() == ctorArgs.length) {
+                try {
+                    return c.newInstance(ctorArgs);
+                } catch (InvocationTargetException e) {
+                    throw e.getCause();
+                }
+            }
+        throw new NoSuchMethodException(host.getName() + ".<init>/" + ctorArgs.length);
     }
 
     // ---- future factories: "done" exercises the fast path, "later" the real suspension path

@@ -248,7 +248,11 @@ deliberately not used, to keep iteration friction low.
   carried into the generated `apply` (restores target the original slots, so
   entries stay truthful); `AsyncDebug.describe` renders e.g.
   `Samples.sumTwice(...) suspended at state 2 (line 23): fa = ..., x = 5`.
-  Remaining: interactive verification in IntelliJ/jdb.
+  Verified over JDWP with jdb: a line breakpoint in `Samples.java` defers,
+  resolves into the generated `Samples$async$sumTwice$N.apply` at class load,
+  hits after a resume, and `locals` shows `x = 5` under its source name.
+  `async3.demo.Demo` is a single-threaded debugger walkthrough for IntelliJ
+  (see the README's "Debugging in IntelliJ").
 - **Phase 4 — lazy variant + numbers.** `defineHiddenClass` +
   `MutableCallSite` flip; JMH: blocking vs. AoT-transformed vs. lazily flipped
   vs. the current compiler phase's output; generic frame vs. typed fields.
