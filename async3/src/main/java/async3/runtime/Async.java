@@ -88,38 +88,114 @@ public final class Async {
         return asyncImpl(lookup, body);
     }
 
-    private static final ConcurrentHashMap<String, MethodHandle> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+    // ------------------------------------------------------------------ lift: method references
+
+    // Serializable SAM types so a method reference can be cracked. Arity disambiguates overloads.
+    @FunctionalInterface public interface Fn0<R> extends Serializable { R apply(); }
+    @FunctionalInterface public interface Fn1<A, R> extends Serializable { R apply(A a); }
+    @FunctionalInterface public interface Fn2<A, B, R> extends Serializable { R apply(A a, B b); }
+    @FunctionalInterface public interface Fn3<A, B, C, R> extends Serializable { R apply(A a, B b, C c); }
+
+    @FunctionalInterface public interface Lifted0<R> { CompletableFuture<R> apply(); }
+    @FunctionalInterface public interface Lifted1<A, R> { CompletableFuture<R> apply(A a); }
+    @FunctionalInterface public interface Lifted2<A, B, R> { CompletableFuture<R> apply(A a, B b); }
+    @FunctionalInterface public interface Lifted3<A, B, C, R> { CompletableFuture<R> apply(A a, B b, C c); }
+
+    /**
+     * Lifts the referenced method into its suspending variant: the runtime analogue of the
+     * annotation-driven frontend's direct/{@code $queued} method pair. The target — possibly in
+     * another class — is any method whose bytecode calls the await markers; called directly it
+     * blocks (tier 0), called through the lifted handle it suspends. Works with static,
+     * unbound-instance ({@code C::m} — the receiver becomes the first parameter), and
+     * bound-instance ({@code obj::m} — the receiver is a captured argument) references, and with
+     * lambdas. A target with no awaits lifts to a trivially-completed future. Compiled once per
+     * target method, cached.
+     */
+    public static <R> Lifted0<R> lift(Fn0<R> ref) {
+        Lifted l = liftImpl(ref);
+        return () -> cast(l.invoke());
+    }
+
+    public static <A, R> Lifted1<A, R> lift(Fn1<A, R> ref) {
+        Lifted l = liftImpl(ref);
+        return a -> cast(l.invoke(a));
+    }
+
+    public static <A, B, R> Lifted2<A, B, R> lift(Fn2<A, B, R> ref) {
+        Lifted l = liftImpl(ref);
+        return (a, b) -> cast(l.invoke(a, b));
+    }
+
+    public static <A, B, C, R> Lifted3<A, B, C, R> lift(Fn3<A, B, C, R> ref) {
+        Lifted l = liftImpl(ref);
+        return (a, b, c) -> cast(l.invoke(a, b, c));
+    }
+
+    private static Lifted liftImpl(Serializable ref) {
+        SerializedLambda sl = crack(ref);
+        if (sl.getImplMethodKind() == java.lang.invoke.MethodHandleInfo.REF_newInvokeSpecial)
+            throw new UnsupportedOperationException(
+                    "constructor references cannot be lifted (await is not supported in constructors)");
+        MethodHandle ctor = constructorFor(null, ref, sl);
+        return new Lifted(ctor, capturedArgs(sl));
+    }
+
+    /**
+     * Invokes the cached state machine constructor with captured arguments (bound receiver, for
+     * {@code obj::m}) followed by per-call arguments — together they form the target method's
+     * entry locals in order, for every reference shape.
+     */
+    private record Lifted(MethodHandle ctor, Object[] captured) {
+        CompletableFuture<Object> invoke(Object... args) {
+            Object[] all = new Object[captured.length + args.length];
+            System.arraycopy(captured, 0, all, 0, captured.length);
+            System.arraycopy(args, 0, all, captured.length, args.length);
+            try {
+                return ((FutureStateMachine) ctor.invokeWithArguments(all)).start();
+            } catch (Throwable t) {
+                throw AsyncRT.sneakyThrow(t);
+            }
+        }
+    }
 
     @SuppressWarnings("unchecked")
+    private static <R> CompletableFuture<R> cast(CompletableFuture<Object> f) {
+        return (CompletableFuture<R>) (CompletableFuture<?>) f;
+    }
+
+    private static final ConcurrentHashMap<String, MethodHandle> CONSTRUCTOR_CACHE = new ConcurrentHashMap<>();
+
     private static <T> CompletableFuture<T> asyncImpl(MethodHandles.Lookup lookup, AsyncBody<T> body) {
         SerializedLambda sl = crack(body);
+        MethodHandle ctor = constructorFor(lookup, body, sl);
+        return cast(new Lifted(ctor, capturedArgs(sl)).invoke());
+    }
+
+    private static MethodHandle constructorFor(MethodHandles.Lookup lookup, Serializable ref, SerializedLambda sl) {
         String key = (debuggable() ? "shadow:" : "hidden:")
                 + sl.getImplClass() + "." + sl.getImplMethodName() + sl.getImplMethodSignature();
-        MethodHandle ctor = CONSTRUCTOR_CACHE.computeIfAbsent(key, k -> compile(lookup, body, sl));
+        return CONSTRUCTOR_CACHE.computeIfAbsent(key, k -> compile(lookup, ref.getClass().getClassLoader(), sl));
+    }
+
+    private static Object[] capturedArgs(SerializedLambda sl) {
         Object[] captured = new Object[sl.getCapturedArgCount()];
         for (int i = 0; i < captured.length; i++) captured[i] = sl.getCapturedArg(i);
-        try {
-            FutureStateMachine sm = (FutureStateMachine) ctor.invokeWithArguments(captured);
-            return (CompletableFuture<T>) (CompletableFuture<?>) sm.start();
-        } catch (Throwable t) {
-            throw AsyncRT.sneakyThrow(t);
-        }
+        return captured;
     }
 
-    private static SerializedLambda crack(AsyncBody<?> body) {
+    private static SerializedLambda crack(Serializable lambdaOrRef) {
         try {
-            Method writeReplace = body.getClass().getDeclaredMethod("writeReplace");
+            Method writeReplace = lambdaOrRef.getClass().getDeclaredMethod("writeReplace");
             writeReplace.setAccessible(true);
-            return (SerializedLambda) writeReplace.invoke(body);
+            return (SerializedLambda) writeReplace.invoke(lambdaOrRef);
         } catch (ReflectiveOperationException e) {
             throw new IllegalArgumentException(
-                    "body must be a lambda literal (or method reference), not a class implementing AsyncBody", e);
+                    "expected a lambda literal or method reference, not a class implementing the interface", e);
         }
     }
 
-    private static MethodHandle compile(MethodHandles.Lookup callerLookup, AsyncBody<?> body, SerializedLambda sl) {
+    private static MethodHandle compile(MethodHandles.Lookup callerLookup, ClassLoader loader, SerializedLambda sl) {
         try {
-            ClassLoader loader = body.getClass().getClassLoader();
             Class<?> capturingClass = Class.forName(sl.getImplClass().replace('/', '.'), false, loader);
 
             byte[] hostBytes;

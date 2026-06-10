@@ -255,6 +255,20 @@ a faithful stand-in for the eventual compiler integration, where
 `async { ... }` compiles to `invokedynamic` and the bootstrap receives the
 caller's `Lookup` without any cracking.
 
+**Lifting method references.** `Async.lift(C::m)` extends the same machinery
+from inline bodies to *existing methods, possibly in other classes*: cracking
+a method reference yields the target method itself (not a synthetic
+`lambda$`), and the captured arguments (a bound receiver for `obj::m`)
+concatenated with per-call arguments form the target's entry locals for every
+reference shape — static, unbound instance, bound instance, private (the
+hidden class joins the target's nest). This is the **runtime analogue of the
+annotation-driven frontend's direct/`$queued` method pair**: the author writes
+one method calling the await markers; direct calls block (tier 0), the lifted
+handle suspends — no build-time sibling generation. A lifted handle is also
+the natural installation point for the phase-4 tier flip: today it compiles
+eagerly on first use; the profiling-driven variant binds a `MutableCallSite`
+to the blocking path and swaps in the transformed version when hot.
+
 **Debugger finding (empirical):** IntelliJ resolves a line breakpoint inside a
 lambda body only against classes named exactly like the enclosing source
 class — javac puts lambda bodies *in* that class, so IJ registers an
@@ -315,7 +329,10 @@ deliberately not used, to keep iteration friction low.
   (see the README's "Debugging in IntelliJ").
 - **Phase 3.5 — lambda front end.** ✅ see §7.5: cracking + hidden-nestmate
   definition + constructor caching, and the shadow-named debuggable mode with
-  JDI-verified breakpoint binding inside lambda bodies.
+  JDI-verified breakpoint binding inside lambda bodies. Includes
+  `Async.lift(C::m)` — runtime derivation of the suspending variant of an
+  existing method (the runtime method-pair), covering static/unbound/bound/
+  private references.
 - **Phase 4 — lazy variant + numbers.** `defineHiddenClass` +
   `MutableCallSite` flip; JMH: blocking vs. AoT-transformed vs. lazily flipped
   vs. the current compiler phase's output; generic frame vs. typed fields.

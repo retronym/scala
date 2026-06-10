@@ -63,6 +63,13 @@ public final class Demo {
         });
         System.out.println("   Async.async(() -> await(la) + await(lb)) = " + sum.join());
 
+        // lift: derive the suspending variant of an existing method (here from another class) —
+        // the runtime analogue of the annotation-driven frontend's direct/$queued method pair.
+        Async.Lifted2<CompletableFuture<Integer>, CompletableFuture<String>, String> sumTwice =
+                Async.lift(Samples::sumTwice);
+        System.out.println("   Async.lift(Samples::sumTwice).apply(later(5), later(\"s\")) = "
+                + sumTwice.apply(later(5), later("s")).join());
+
         banner("1. fast path: already-completed futures, runs start-to-finish on this thread");
         Object r1 = call(samplesT, null, "sumTwice$async", done(5), done("s"));
         System.out.println("   sumTwice$async(done(5), done(\"s\")) = " + join(r1));

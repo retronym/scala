@@ -34,6 +34,27 @@ Compiled once per lambda, cached. This is a faithful stand-in for the eventual c
 integration, where `async { ... }` compiles to `invokedynamic` and the bootstrap receives the
 caller's `Lookup` for free.
 
+### Lifting method references
+
+`Async.lift(C::m)` derives the suspending variant of an existing method — possibly from
+another class — at runtime: the runtime analogue of the annotation-driven (Optimus-style)
+frontend's direct/`$queued` method pair, with no build-time sibling generation:
+
+```java
+// Samples.sumTwice is an ordinary method that calls the await markers;
+// called directly it blocks (tier 0), lifted it suspends:
+var sumTwice = Async.lift(Samples::sumTwice);
+CompletableFuture<String> r = sumTwice.apply(fa, fb);
+```
+
+All reference shapes work: static, unbound instance (`C::m` — receiver becomes the first
+parameter), bound instance (`obj::m` — receiver is a captured argument), private targets (the
+hidden state machine joins the target's nest), and plain lambdas with parameters. Captured and
+applied arguments concatenate into the target's entry locals, so one mechanism covers every
+shape. Constructor references are rejected (no await in constructors). A lifted handle is also
+the natural installation point for the phase-4 profiling-driven tier flip
+(`MutableCallSite`: start blocking, swap in the transformed version when hot).
+
 ## Debugging in IntelliJ
 
 1. Open `async3/pom.xml` as a (separate) Maven project — don't import it into the Scala
