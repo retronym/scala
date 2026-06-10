@@ -18,14 +18,16 @@ class LambdaApiTest {
 
     @Test
     void sequentialAwaits() {
+        System.setProperty("async3.lambda.debuggable", "true");
         CompletableFuture<Integer> fa = later(5);
         CompletableFuture<String> fb = later("s");
         CompletableFuture<String> r = Async.async(() -> {
             int x = Async.await(fa);
-            String s = Async.await(fb);
+            String s = Async.await(fb);  // BREAKPOINT DOESN'T FIRE
             return s + ":" + (x * 2);
         });
-        assertEquals("s:10", r.join());
+        System.clearProperty("async3.lambda.debuggable");
+        assertEquals("s:10", r.join());  // BREAKPOINT FIRES
     }
 
     @Test
@@ -107,7 +109,9 @@ class LambdaApiTest {
         System.setProperty("async3.lambda.debuggable", "true");
         try {
             CompletableFuture<Integer> f = later(20);
-            assertEquals(21, Async.<Integer>async(() -> Async.await(f) + 1).join());
+            assertEquals(21, Async.<Integer>async(() ->
+                    Async.await(f) + 1
+            ).join());
         } finally {
             System.clearProperty("async3.lambda.debuggable");
         }

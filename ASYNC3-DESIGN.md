@@ -238,6 +238,42 @@ was created, so fork/join shapes (queue several, await later, awaitables held
 in locals or passed as arguments) need nothing beyond what sequential code
 needs. The AoT variant additionally needs no runtime classgen at all.
 
+## 7.5 Lambda front end (prototype of the runtime-triggered transform)
+
+`Async.async(() -> { ... Async.await(f) ... })` triggers the transform at
+runtime via **lambda cracking**: the body interface extends `Serializable`, so
+the proxy's `writeReplace` yields a `SerializedLambda` naming the synthetic
+`lambda$...` impl method (where javac placed the body's bytecode, in the
+capturing class) plus the captured arguments. The impl method goes through the
+single-method transformer entry point and is defined with
+`Lookup.defineHiddenClass(bytes, false, NESTMATE)` — the hidden class joins
+the capturing class's nest dynamically, so private access works with zero
+host patching (the runtime twin of the AoT path's `NestMembers` patching).
+Captured locals, including a captured `this`, are simply the impl method's
+leading parameters; the constructor handle is cached per impl method. This is
+a faithful stand-in for the eventual compiler integration, where
+`async { ... }` compiles to `invokedynamic` and the bootstrap receives the
+caller's `Lookup` without any cracking.
+
+**Debugger finding (empirical):** IntelliJ resolves a line breakpoint inside a
+lambda body only against classes named exactly like the enclosing source
+class — javac puts lambda bodies *in* that class, so IJ registers an
+exact-name class-prepare filter, with no `$*` wildcard (that is reserved for
+anonymous/local classes). Consequently a state machine named
+`Owner$async$lambda$m$0` never receives the breakpoint; it silently binds into
+the original, now-dead `lambda$` method instead. Workaround implemented
+(`-Dasync3.lambda.debuggable=true`): define the state machine *under the
+capturing class's own name* in a throwaway loader — JDI matches names across
+loaders, so the IDE finds it; verified with a JDI program replaying exactly
+IntelliJ's procedure (`classesByName` → `locationsOfLine` → breakpoint → hit
+after a real resume with named locals intact). The shadow trade-off: the
+host's name resolves to the shadow from inside it, so bodies referencing the
+host class (captured `this`, same-class helpers, nested lambdas) are rejected
+in this mode. The clean resolution belongs to the compiler/agent integration:
+emit the resumable body as a sibling method *of the capturing class itself*
+(the `externalFsmMethod` shape §4 already uses) — then breakpoint binding,
+nest access, and stepping all work with no shadowing and no mode split.
+
 ## 8. Prototype plan (`./async3`, standalone Maven project)
 
 Plain Java + upstream ASM (`asm-tree`/`asm-analysis`/`asm-util`); no scalac
@@ -277,6 +313,9 @@ deliberately not used, to keep iteration friction low.
   hits after a resume, and `locals` shows `x = 5` under its source name.
   `async3.demo.Demo` is a single-threaded debugger walkthrough for IntelliJ
   (see the README's "Debugging in IntelliJ").
+- **Phase 3.5 — lambda front end.** ✅ see §7.5: cracking + hidden-nestmate
+  definition + constructor caching, and the shadow-named debuggable mode with
+  JDI-verified breakpoint binding inside lambda bodies.
 - **Phase 4 — lazy variant + numbers.** `defineHiddenClass` +
   `MutableCallSite` flip; JMH: blocking vs. AoT-transformed vs. lazily flipped
   vs. the current compiler phase's output; generic frame vs. typed fields.

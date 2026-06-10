@@ -2,6 +2,7 @@ package async3.transform;
 
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Handle;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.tree.*;
@@ -146,6 +147,22 @@ public final class AsyncTransformer {
      * of the AoT path's NestMembers patching).
      */
     public static SingleMethod transformMethod(byte[] hostBytes, String methodName, String methodDesc) {
+        return transformMethod(hostBytes, methodName, methodDesc, false);
+    }
+
+    /**
+     * With {@code shadowHostName}, the generated class is named <em>exactly like the host
+     * class</em>, for definition in a separate class loader. Rationale: IntelliJ resolves a line
+     * breakpoint inside a lambda only against classes named as the enclosing source class (the
+     * lambda body normally lives there as a {@code lambda$...} method), with no {@code $*}
+     * wildcard. JDI class-prepare filters and {@code classesByName} match by name string across
+     * loaders, so a same-named shadow class is found and its {@code locationsOfLine} bind the
+     * breakpoint. The price: inside the shadow class the host's name resolves to the shadow
+     * itself, so bodies that reference the host class (captured {@code this}, same-class helper
+     * calls, nested lambdas) are rejected here rather than failing strangely at runtime.
+     */
+    public static SingleMethod transformMethod(byte[] hostBytes, String methodName, String methodDesc,
+                                               boolean shadowHostName) {
         ClassNode cn = new ClassNode();
         new ClassReader(hostBytes).accept(cn, ClassReader.SKIP_FRAMES);
         MethodNode mn = null;
@@ -155,11 +172,54 @@ public final class AsyncTransformer {
             throw new IllegalArgumentException("method not found: " + cn.name + "." + methodName + methodDesc);
         checkSupported(cn, mn);
         sinkUninitializedNews(cn, mn);
-        String smName = cn.name + "$async$" + methodName;
+        if (shadowHostName) checkNoHostReferences(cn, mn);
+        String smName = shadowHostName ? cn.name : cn.name + "$async$" + methodName;
         StringBuilder debug = new StringBuilder();
         byte[] bytes = generateStateMachine(cn, mn, smName, false, debug);
         String ctorDesc = Type.getMethodDescriptor(Type.VOID_TYPE, entryTypes(cn, mn));
         return new SingleMethod(smName.replace('/', '.'), bytes, ctorDesc, debug.toString());
+    }
+
+    private static void checkNoHostReferences(ClassNode cn, MethodNode mn) {
+        String host = cn.name;
+        String hostDesc = "L" + host + ";";
+        String why = ": debuggable shadow mode defines the state machine under the host class's own name"
+                + " (so that IDE line breakpoints in the lambda body bind), which makes references back to"
+                + " the host class unresolvable. Use the default hidden-class mode for this lambda, or move"
+                + " the referenced member out of " + host.replace('/', '.');
+        if ((mn.access & ACC_STATIC) == 0)
+            throw new UnsupportedOperationException("lambda captures `this`" + why);
+        if (mn.desc.contains(hostDesc))
+            throw new UnsupportedOperationException("lambda captures a value typed as the enclosing class" + why);
+        for (AbstractInsnNode insn : mn.instructions) {
+            String offender = null;
+            if (insn instanceof MethodInsnNode mi && (mi.owner.equals(host) || mi.desc.contains(hostDesc)))
+                offender = "call to " + mi.owner.replace('/', '.') + "." + mi.name;
+            else if (insn instanceof FieldInsnNode fi && (fi.owner.equals(host) || fi.desc.contains(hostDesc)))
+                offender = "access to field " + fi.owner.replace('/', '.') + "." + fi.name;
+            else if (insn instanceof TypeInsnNode ti && elementName(Type.getObjectType(ti.desc)).equals(host))
+                offender = "use of type " + ti.desc;
+            else if (insn instanceof LdcInsnNode ldc && ldc.cst instanceof Type t && elementName(t).equals(host))
+                offender = "class literal " + t.getClassName();
+            else if (insn instanceof MultiANewArrayInsnNode ma && ma.desc.contains(hostDesc))
+                offender = "array of " + host.replace('/', '.');
+            else if (insn instanceof InvokeDynamicInsnNode indy) {
+                if (indy.desc.contains(hostDesc)) offender = "invokedynamic " + indy.name;
+                else if (indy.bsmArgs != null)
+                    for (Object arg : indy.bsmArgs) {
+                        if (arg instanceof Handle h && (h.getOwner().equals(host) || h.getDesc().contains(hostDesc)))
+                            offender = "nested lambda or method reference into " + host.replace('/', '.');
+                        else if (arg instanceof Type t && elementName(t).equals(host))
+                            offender = "invokedynamic type argument " + t.getClassName();
+                    }
+            }
+            if (offender != null) throw new UnsupportedOperationException(offender + why);
+        }
+    }
+
+    private static String elementName(Type t) {
+        Type e = t.getSort() == Type.ARRAY ? t.getElementType() : t;
+        return e.getSort() == Type.OBJECT ? e.getInternalName() : "";
     }
 
     // ------------------------------------------------------------------ marker detection

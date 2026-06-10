@@ -1,5 +1,6 @@
 package async3.demo;
 
+import async3.runtime.Async;
 import async3.runtime.AsyncDebug;
 import async3.runtime.FutureStateMachine;
 import async3.samples.InstanceSamples;
@@ -44,6 +45,23 @@ public final class Demo {
 
         ClassLoader loader = new InMemoryClassLoader(samples, Demo.class.getClassLoader());
         Class<?> samplesT = Class.forName(samples.hostName, true, loader);
+
+        // Shadow-debuggable lambda mode: line breakpoints set inside the lambda body below
+        // bind and fire (see README "Debugging in IntelliJ"). Without this property the state
+        // machine is a hidden nestmate class instead: full private access, but IDE line
+        // breakpoints in the body won't bind.
+        System.setProperty("async3.lambda.debuggable", "true");
+        System.setProperty("async3.lambda.dump", dumpDir.toString());
+
+        banner("0. lambda API: Async.async(() -> ...) — transform triggered by lambda cracking");
+        CompletableFuture<Integer> la = later(20);
+        CompletableFuture<Integer> lb = later(22);
+        CompletableFuture<Integer> sum = Async.async(() -> {
+            int x = Async.await(la);
+            int y = Async.await(lb);   // <- breakpoint here hits in the resumed state machine
+            return x + y;
+        });
+        System.out.println("   Async.async(() -> await(la) + await(lb)) = " + sum.join());
 
         banner("1. fast path: already-completed futures, runs start-to-finish on this thread");
         Object r1 = call(samplesT, null, "sumTwice$async", done(5), done("s"));

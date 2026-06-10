@@ -11,19 +11,56 @@ Fully independent of the Scala build:
 mvn test
 ```
 
+## Lambda API
+
+No pre-compiled sample classes or reflection needed — the transform is triggered at runtime by
+*cracking* the (serializable) lambda:
+
+```java
+CompletableFuture<String> r = Async.async(() -> {
+    int x = Async.await(fa);
+    String s = Async.await(fb);
+    return s + ":" + (x * 2);
+});
+```
+
+`Async.async` cracks the lambda via `writeReplace` → `SerializedLambda`, which names the
+synthetic `lambda$...` impl method (where javac put the body's bytecode, in the capturing
+class) and carries the captured arguments. The impl method goes through
+`AsyncTransformer.transformMethod` and the state machine is defined as a **hidden class with
+the NESTMATE option**, so the body keeps access to private members of the capturing class.
+Captured locals (including a captured `this`) are just the impl method's leading parameters.
+Compiled once per lambda, cached. This is a faithful stand-in for the eventual compiler
+integration, where `async { ... }` compiles to `invokedynamic` and the bootstrap receives the
+caller's `Lookup` for free.
+
 ## Debugging in IntelliJ
 
 1. Open `async3/pom.xml` as a (separate) Maven project — don't import it into the Scala
    project model.
 2. Open `async3.demo.Demo` and **Debug `main()`** (it also works via
    `mvn -q compile exec:java -Dexec.mainClass=async3.demo.Demo` on the command line).
-3. Set line breakpoints in [Samples.java](src/main/java/async3/samples/Samples.java) inside
-   `sumTwice`, one per line. The generated state machine
-   (`Samples$async$sumTwice$N`) declares `SourceFile: Samples.java` and keeps the original
-   line numbers, and its name matches IntelliJ's `Samples$*` inner-class pattern, so the
-   breakpoints bind to the transformed code. (Verified over plain JDWP with jdb: the deferred
-   breakpoint resolves at class load, hits after a resume, and `locals` shows `x = 5` under
-   its source name.)
+3. For the **lambda API** (Demo scenario 0): make sure `-Dasync3.lambda.debuggable=true` is
+   set (Demo sets it programmatically) and put line breakpoints inside the lambda body.
+4. For the class-based samples: set line breakpoints in
+   [Samples.java](src/main/java/async3/samples/Samples.java) inside `sumTwice`, one per line.
+
+**Why the lambda case needs its own mode.** IntelliJ resolves a line inside a lambda body only
+against classes named like the *enclosing source class* — javac emits lambda bodies as
+`lambda$...` methods of that very class, so IJ registers an exact-name class-prepare filter
+(no `$*` wildcard as for anonymous classes). A state machine named `Owner$async$lambda$m$0` is
+therefore invisible to the breakpoint, which instead binds into the original — now dead —
+`lambda$` method and never fires. In debuggable mode the state machine is defined **under the
+capturing class's own name** in a throwaway loader; JDI matches class names across loaders, so
+the IDE finds it and the breakpoint binds and fires. Verified with a JDI program
+(`JdiShadowCheck`) that performs exactly IntelliJ's procedure: `classesByName` →
+`locationsOfLine` → breakpoint → hit after a real resume, named locals (`x = 41`) intact.
+The trade-off: inside the shadow class the host's name resolves to the shadow itself, so
+lambdas that reference the host class (captured `this`, same-class helpers, nested lambdas)
+are rejected in this mode with an explanatory error — use the default hidden-nestmate mode for
+those. The clean fix belongs to the compiler/agent integration: emit the resumable body as a
+sibling method *of the capturing class itself* (the `externalFsmMethod` shape), and the whole
+issue disappears.
 
 What to expect:
 
@@ -48,6 +85,8 @@ What to expect:
 
 - `async3.runtime.AsyncRT` — the `await` marker; its default implementation blocks ("tier 0").
   Methods calling it run correctly with no transformation at all.
+- `async3.runtime.Async` — the lambda front end (`Async.async(() -> ... Async.await(f) ...)`)
+  via lambda cracking + `defineHiddenClass(NESTMATE)`, with the shadow-named debuggable mode.
 - `async3.runtime.FutureStateMachine` — state machine base class mirroring the ABI of
   `scala.tools.testkit.async.AsyncStateMachine`, plus the generic two-array frame
   (`Object[] refs` / `long[] prims`) used for captured locals and operand stack.
@@ -71,6 +110,10 @@ generated `apply` (restores target the original slots, so a debugger sees named 
 Instance methods are supported: `this` is just the entry local in slot 0, captured like any
 other value, and the generated state machine joins the host class's **nest** so private
 field/method access in the transformed body keeps working.
+
+The lambda front end works end-to-end: cracking, hidden-nestmate definition (private state of
+the capturing class accessible across suspension points), constructor caching, and the
+shadow-named debuggable mode with JDI-verified breakpoint binding.
 
 ## Current limitations
 

@@ -42,13 +42,23 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Modes:
  * <ul>
- *   <li>default: hidden class + NESTMATE (no class name leaks, full private access);</li>
- *   <li>{@code -Dasync3.lambda.debuggable=true}: defines an ordinary, findable class named
- *       {@code Owner$async$lambda$m$0} in a throwaway loader instead — debugger-friendly
- *       (deferred line breakpoints bind by exact class name), at the cost of private-member
- *       access from the body (no nest to join);</li>
+ *   <li>default: hidden class + NESTMATE (no class name leaks, full private access to the
+ *       capturing class). IDE line breakpoints inside the lambda body will NOT bind: IntelliJ
+ *       resolves such lines only against classes named like the enclosing source class;</li>
+ *   <li>{@code -Dasync3.lambda.debuggable=true}: defines the state machine as an ordinary class
+ *       <em>named exactly like the capturing class</em>, in a throwaway loader (JDI matches
+ *       classes by name across loaders, so the IDE finds it and line breakpoints in the lambda
+ *       body bind and fire). The trade-off: from inside the shadow class, the host's name
+ *       resolves to the shadow itself, so lambdas that reference the host class — captured
+ *       {@code this}, same-class helper calls, nested lambdas — are rejected with an
+ *       explanatory error in this mode;</li>
  *   <li>{@code -Dasync3.lambda.dump=<dir>}: also writes the generated class for javap.</li>
  * </ul>
+ *
+ * <p>An eventual compiler/agent integration sidesteps the trade-off entirely by emitting the
+ * resumable body as a sibling method <em>of the capturing class itself</em> (the
+ * `externalFsmMethod` shape of the annotation-driven frontend) — then breakpoints, nest access,
+ * and stepping all work with no shadowing.
  */
 public final class Async {
     private Async() {}
@@ -83,7 +93,8 @@ public final class Async {
     @SuppressWarnings("unchecked")
     private static <T> CompletableFuture<T> asyncImpl(MethodHandles.Lookup lookup, AsyncBody<T> body) {
         SerializedLambda sl = crack(body);
-        String key = sl.getImplClass() + "." + sl.getImplMethodName() + sl.getImplMethodSignature();
+        String key = (debuggable() ? "shadow:" : "hidden:")
+                + sl.getImplClass() + "." + sl.getImplMethodName() + sl.getImplMethodSignature();
         MethodHandle ctor = CONSTRUCTOR_CACHE.computeIfAbsent(key, k -> compile(lookup, body, sl));
         Object[] captured = new Object[sl.getCapturedArgCount()];
         for (int i = 0; i < captured.length; i++) captured[i] = sl.getCapturedArg(i);
@@ -120,17 +131,20 @@ public final class Async {
                 throw new IllegalStateException(e);
             }
 
+            boolean shadow = debuggable();
             AsyncTransformer.SingleMethod sm = AsyncTransformer.transformMethod(
-                    hostBytes, sl.getImplMethodName(), sl.getImplMethodSignature());
+                    hostBytes, sl.getImplMethodName(), sl.getImplMethodSignature(), shadow);
 
             String dumpDir = System.getProperty("async3.lambda.dump");
             if (dumpDir != null) {
-                Path p = Path.of(dumpDir).resolve(sm.name.replace('.', '/') + ".class");
+                // shadow classes share the host's name; suffix the dump file to avoid clobbering
+                Path p = Path.of(dumpDir).resolve(
+                        sm.name.replace('.', '/') + (shadow ? "$shadow$" + sl.getImplMethodName() : "") + ".class");
                 Files.createDirectories(p.getParent());
                 Files.write(p, sm.bytes);
             }
 
-            if (Boolean.getBoolean("async3.lambda.debuggable")) {
+            if (shadow) {
                 Class<?> smClass = new OneShotLoader(loader).define(sm.name, sm.bytes);
                 return MethodHandles.lookup().unreflectConstructor(smClass.getDeclaredConstructors()[0]);
             }
@@ -145,6 +159,10 @@ public final class Async {
         } catch (ReflectiveOperationException | java.io.IOException e) {
             throw new IllegalStateException("failed to compile async lambda " + sl.getImplMethodName(), e);
         }
+    }
+
+    private static boolean debuggable() {
+        return Boolean.getBoolean("async3.lambda.debuggable");
     }
 
     private static final class OneShotLoader extends ClassLoader {
