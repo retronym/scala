@@ -129,23 +129,6 @@ What to expect:
 - The demo also dumps all transformed classes to `target/transformed-classes/` for
   `javap -c -l -p` inspection.
 
-## Layout
-
-- `async3.runtime.AsyncRT` — the `await` marker; its default implementation blocks ("tier 0").
-  Methods calling it run correctly with no transformation at all.
-- `async3.runtime.Async` — the lambda front end (`Async.async(() -> ... Async.await(f) ...)`)
-  via lambda cracking + `defineHiddenClass(NESTMATE)`, with the shadow-named debuggable mode.
-- `async3.runtime.FutureStateMachine` — state machine base class mirroring the ABI of
-  `scala.tools.testkit.async.AsyncStateMachine`, plus the generic two-array frame
-  (`Object[] refs` / `long[] prims`) used for captured locals and operand stack.
-- `async3.samples.Samples` — source-shape methods (plain synchronous Java calling `await`).
-- `async3.samples.HandWrittenSumTwice` — Phase 0: the expected transform output, by hand.
-- `async3.transform.AsyncTransformer` — Phase 1: the ASM transform. Derives a
-  `<name>$async` entry point + `Owner$async$<name>$i` state machine class per marked method;
-  leaves the original method untouched as the synchronous tier.
-- `src/test/java` — semantic equivalence matrix (fast path vs. real suspension), rejection
-  tests (monitors, uninitialized `new` across a suspension), debug-metadata check.
-
 ## Status
 
 Working: suspension with non-empty operand stacks, loops, try/catch (failed futures reach the
@@ -172,3 +155,63 @@ Awaits in constructors are rejected; methods of inner classes (host not its own 
 lose private-member access from the transformed body; spills all assigned locals rather than
 only live ones; no lazy/`invokedynamic` tier switch yet; no JMH numbers yet (deferred). See
 the design doc's phase list.
+
+## Layout
+
+- `async3.runtime.AsyncRT` — the `await` marker; its default implementation blocks ("tier 0").
+  Methods calling it run correctly with no transformation at all.
+- `async3.runtime.Async` — the lambda front end (`Async.async(() -> ... Async.await(f) ...)`)
+  via lambda cracking + `defineHiddenClass(NESTMATE)`, with the shadow-named debuggable mode.
+- `async3.runtime.FutureStateMachine` — state machine base class mirroring the ABI of
+  `scala.tools.testkit.async.AsyncStateMachine`, plus the generic two-array frame
+  (`Object[] refs` / `long[] prims`) used for captured locals and operand stack.
+- `async3.samples.Samples` — source-shape methods (plain synchronous Java calling `await`).
+- `async3.samples.HandWrittenSumTwice` — Phase 0: the expected transform output, by hand.
+- `async3.transform.AsyncTransformer` — Phase 1: the ASM transform. Derives a
+  `<name>$async` entry point + `Owner$async$<name>$i` state machine class per marked method;
+  leaves the original method untouched as the synchronous tier.
+- `src/test/java` — semantic equivalence matrix (fast path vs. real suspension), rejection
+  tests (monitors, uninitialized `new` across a suspension), debug-metadata check.
+
+## Future work: Akka use cases
+
+Two applications that exploit what this transform does and Loom does not — suspend against a
+*custom scheduler* with a *serializable frame*, rather than parking a thread.
+
+- **Durable workflows (Akka SDK).** An Akka SDK `Workflow` is a hand-written state machine
+  today — named steps, typed transitions, an explicit state class. The transform's spilled
+  frame (`refs[]`/`prims[]` + `state`) *is* a durable snapshot, so a workflow can be written
+  as straight-line `await` code where each suspension persists the frame and survives
+  restart/rebalance (Temporal/DBOS-style durable execution). A parked virtual thread can't be
+  serialized, so Loom doesn't cover this.
+
+  ```java
+  @WorkflowEntry
+  public Done transfer(Transfer t) {
+    await(wallet(t.from()).withdraw(t.amount()));  // frame persisted, actor/workflow suspends
+    await(wallet(t.to()).deposit(t.amount()));     // resumes by TABLESWITCH on `state`
+    return Done.getInstance();
+  }
+  ```
+
+- **`await` inside a typed actor (Akka libraries).** The ask-within-actor dance — a
+  response-wrapper message, a `become`/stash continuation, a second handler — is exactly the
+  continuation this transform generates. With the mailbox+dispatcher as the "scheduler",
+  `await(ask(...))` suspends the *actor*, not a dispatcher thread, buffering messages per a
+  declared policy and resuming in-context with ordering intact. Blocking a virtual thread
+  would block the actor's single logical thread and forfeit interleaving.
+
+  ```java
+  @Suspendable(whileSuspended = Stash.ALL)
+  private Behavior<Command> onPlaceOrder(PlaceOrder cmd) {
+    Inventory.Reply reply =
+        await(ask(inventory, replyTo -> new Inventory.Reserve(cmd.item(), replyTo)));
+    cmd.replyTo().tell(new Result(reply.reserved()));
+    return this;  // unstash + continue
+  }
+  ```
+
+In both, the bytecode transform is identical; an annotation (`@WorkflowEntry`, `@Suspendable`)
+only selects which scheduler the suspension targets — the journal or the mailbox. See
+[../ASYNC3-DESIGN.md](../ASYNC3-DESIGN.md) §4 (generic `F[_]` ABI) and §7 (custom suspension
+semantics).
