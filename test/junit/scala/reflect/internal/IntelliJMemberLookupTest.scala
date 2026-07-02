@@ -105,11 +105,14 @@ class IntelliJMemberLookupTest {
       else if (consumed) "Consumed"
       else "Unguarded"
   }
+  // The three modes that matter: Unguarded shows the disease, Production is the
+  // incumbent, Progress+Consumed is the candidate.  (Progress-only was dropped
+  // from the matrix: it is a component, not a candidate — without consumption it
+  // over-narrows redundant chains, the SCL-7008 shape.)
   val Production       = EngineMode(prodGuard = true,  progress = false, consumed = false)
   val Unguarded        = EngineMode(prodGuard = false, progress = false, consumed = false)
-  val ProgressOnly     = EngineMode(prodGuard = false, progress = true,  consumed = false)
   val ProgressConsumed = EngineMode(prodGuard = false, progress = true,  consumed = true)
-  val allModes = List(Production, Unguarded, ProgressOnly, ProgressConsumed)
+  val allModes = List(Production, Unguarded, ProgressConsumed)
 
   sealed trait Upd
   /** ThisTypeSubstitution(target = fromType, seenFromClass = anchor); anchor=None is
@@ -145,24 +148,6 @@ class IntelliJMemberLookupTest {
      *  class is either consumed (skip) or the first occurrence already failed to
      *  match (identity, fall through) — so dedup is pure perf. */
     def dedupped: IjSubst = new IjSubst(updates.distinct)
-
-    /** CHUNKED strategy (proposed alternative): treat fusion as perf-only — split
-     *  the chain into chunks carrying at most ONE this-substitution each, and apply
-     *  the chunks as SEPARATE WHOLE-TREE PASSES (full sequential composition).
-     *  Chunk = maximal run of updates ending right after a ThisUpd. Note that
-     *  consumed-mode state is per-application, so chunking resets consumption at
-     *  every pass boundary. */
-    def applyChunked(tp: Type)(implicit mode: EngineMode): Type = {
-      val chunks = Vector.newBuilder[Vector[Upd]]
-      var cur = Vector.newBuilder[Upd]
-      for (u <- updates) {
-        cur += u
-        if (u.isInstanceOf[ThisUpd]) { chunks += cur.result(); cur = Vector.newBuilder[Upd] }
-      }
-      val last = cur.result()
-      if (last.nonEmpty) chunks += last
-      chunks.result().foldLeft(tp)((t, chunk) => new IjSubst(chunk).apply(t))
-    }
 
     // recursiveUpdateImpl: try updates from index `from`; a match replaces the leaf
     // and the REMAINDER processes the replacement (with the matched this-class
@@ -628,7 +613,7 @@ class IntelliJMemberLookupTest {
           println(s"  [$m] StackOverflowError — the pump, terminally (as in production)")
       }
     }
-    for (mode <- List(Production, ProgressOnly, ProgressConsumed)) { implicit val m = mode
+    for (mode <- List(Production, ProgressConsumed)) { implicit val m = mode
       val depths = rounds(4)
       println(s"  [$mode] depths=${depths.mkString(",")}")
       assertEquals(s"[$mode] should fixpoint: $depths", 1, depths.distinct.size)
@@ -705,61 +690,6 @@ class IntelliJMemberLookupTest {
     // NOT removed (correctly): same-target chains under DIFFERENT anchors —
     // the seenFromClass changes the walk, so those are distinct functions
     // (genericCake's sfc=TyperG vs sfc=GlobalG pair stays).
-  }
-
-  // 8. CHUNKED strategy (fusion as perf-only): split chains at this-substs, apply
-  //    chunks as separate whole-tree passes.  Two findings pinned:
-  //    (a) on the benign fixtures chunked == fused (fusion IS just a perf opt there);
-  //    (b) chunking is NOT a substitute for a guard: the pump needs only a
-  //        single-this chain plus recirculation, so Unguarded+chunked still
-  //        grows/SOEs.  (And full sequential composition is exactly the SCL-7008
-  //        over-narrowing shape; production passes 7008 only because guard blocks
-  //        TRUNCATE the fused chain — a truncation chunking removes.)
-  @Test def chunkedStrategy(): Unit = {
-    import ijFixtures._
-    println(s"\n=== chunkedStrategy ===")
-
-    // (a) fused == chunked on the benign lookups, all modes
-    for (mode <- allModes) { implicit val m = mode
-      for ((pre, name) <- List(
-        (ThisType(symbolOf[BG]): Type)      -> "foo",
-        (ThisType(symbolOf[BG2]): Type)     -> "foo",
-        (ThisType(symbolOf[CEg[_]]): Type)  -> "en")) {
-        val (sym, _, chain) = ijResolve(pre, name)
-        val fused   = chain(sym.info).resultType
-        val chunked = chain.applyChunked(sym.info).resultType
-        assertEquals(s"[$mode] $pre.$name chunked == fused", fused.toString, chunked.toString)
-      }
-    }
-    println("  (a) chunked == fused on benign lookups, all modes")
-
-    // (b) the pump: single-this chains + recirculation — chunking can't help
-    { import inferencerTypes._
-      implicit val m = Unguarded
-      val root = ThisType(symbolOf[Analyzer])
-      val (gSym, _, _) = ijResolve(root, "global")
-      var pre: Type = singleType(root, gSym)
-      try {
-        val depths = (1 to 3).map { _ =>
-          val (aSym, _, _) = ijResolve(pre, "analyzer")
-          val aPath = singleType(pre, aSym)
-          val (m2, chain) = {
-            val p = new NameProcessor(TermName("global"))
-            p.processType(aPath)
-            val (mm, subst) = p.candidates.head
-            (mm, subst.followUpdateThisType(aPath, mm.owner))
-          }
-          pre = chain.applyChunked(m2.info).resultType // CHUNKED application
-          spineDepth(pre)
-        }
-        println(s"  (b) [Unguarded+chunked] depths=${depths.mkString(",")}")
-        assertTrue(s"chunked must NOT stop the pump: $depths",
-          depths.zip(depths.tail).forall { case (a, b) => a < b })
-      } catch {
-        case _: StackOverflowError =>
-          println("  (b) [Unguarded+chunked] StackOverflowError — pump confirmed, chunking is no guard")
-      }
-    }
   }
 }
 

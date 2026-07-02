@@ -261,17 +261,19 @@ class AsSeenFromTest {
   // Progress post-guard inspects the RETURNED type (a progress/non-circularity
   // postcondition, scalac-inspired: thisTypeAsSeen only ever strips prefixes
   // from pre, so its output can never still be rooted in the this it eliminates).
+  // Falsified candidates removed after evaluation (see git history):
+  //   Arm1Exact (target contains ThisType(leafSym)) and RootOfSpineExact
+  //   (leafSym is the target's spine root) — both MISS the cross-symbol pump,
+  //   where the rewritten leaf's class differs from the target's root symbol.
+  //   Terminal-output, depth caps, and chunked passes fell earlier (see the
+  //   intellij-scala scala-typesystem-tck branch ledger).
   sealed trait GuardMode
   case object NoGuard          extends GuardMode
-  /** arm-1, exact: block if target contains ThisType(leafSym).  O(type-size). */
-  case object Arm1Exact        extends GuardMode
-  /** Faithful IntelliJ hasRecursiveThisType0: block if target contains a
-   *  this-type t with leafSym == t.sym OR leafSym.isSubClass(t.sym)
+  /** Faithful IntelliJ hasRecursiveThisType0 (the incumbent): block if target
+   *  contains a this-type t with leafSym == t.sym OR leafSym.isSubClass(t.sym)
    *  (isSameOrInheritor — note the DIRECTION: rewritten class inherits the
    *  contained this's class, NOT the other way around).  O(type-size). */
   case object ProdGuard        extends GuardMode
-  /** Block if leafSym IS the root of the target's prefix spine (exact).  O(depth). */
-  case object RootOfSpineExact extends GuardMode
   /** POST-guard: block if the RETURNED type's spine root is ThisType(c) with
    *  c.isSubClass(leafSym) — i.e. the rewrite claims to eliminate leafSym.this
    *  but returns a type still rooted in a this-type denoting that same instance
@@ -292,13 +294,8 @@ class AsSeenFromTest {
     tp.exists { case ThisType(s) => p(s); case _ => false }
 
   private def preBlocked(mode: GuardMode, target: Type, leafSym: Symbol): Boolean = mode match {
-    case Arm1Exact        => containsThisWhere(target, _ == leafSym)
-    case ProdGuard        => containsThisWhere(target, s => s == leafSym || leafSym.isSubClass(s))
-    case RootOfSpineExact => spineRoot(target) match {
-      case ThisType(s) => s == leafSym
-      case _           => false
-    }
-    case _ => false
+    case ProdGuard => containsThisWhere(target, s => s == leafSym || leafSym.isSubClass(s))
+    case _         => false
   }
 
   private def postBlocked(mode: GuardMode, result: Type, leafSym: Symbol): Boolean = mode match {
@@ -348,43 +345,6 @@ class AsSeenFromTest {
     }
   }
 
-  /** arm-1 (IntelliJ hasRecursiveThisType0 arm-1): block when the TARGET
-   *  structurally contains the this-type being rewritten.  O(type-size). */
-  private def arm1Block(target: Type, thisSym: Symbol): Boolean = {
-    var found = false
-    new TypeMap {
-      def apply(t: Type): Type = {
-        if (!found) t match {
-          case ThisType(s) if s == thisSym => found = true
-          case _ => mapOver(t)
-        }
-        t
-      }
-    }.apply(target)
-    found
-  }
-
-  /** root-of-spine discriminator (candidate O(depth) alternative to arm-1):
-   *  block only if thisSym IS the root of the target's prefix spine.
-   *  "Spine root" = the innermost this-type on the path (stop at ThisType, not
-   *  at NoType, because scalac's ThisType.prefix delegates to underlying.prefix
-   *  and climbs into enclosing module types — past the path's logical root).
-   *  Hypothesis: equivalent to arm-1 for path-shaped targets. */
-  private def rootOfSpineBlock(target: Type, thisSym: Symbol): Boolean = {
-    @annotation.tailrec
-    def root(t: Type): Type = t match {
-      case _: ThisType => t  // stop here: this IS the path root
-      case _ => t.prefix match {
-        case NoType | NoPrefix => t
-        case p                 => root(p)
-      }
-    }
-    root(target) match {
-      case ThisType(s) => s == thisSym
-      case _           => false
-    }
-  }
-
   /** Count prefix-spine hops from tp upward. */
   private def spineDepth(tp: Type): Int = {
     @annotation.tailrec
@@ -396,96 +356,10 @@ class AsSeenFromTest {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Fixture 1 — the self-embedding growth pump.
-  //
-  // Uses Analyzer.this as the root (analogous to IntelliJ's Infer.this pump):
-  //   target₀ = Analyzer.this.global.analyzer.type
-  //   anchorlessMatch(target₀, Analyzer) = Some(target₀)  [Analyzer ≤: Analyzer]
-  //   Substitute Analyzer.this → target₀  in  memberType = Analyzer.this
-  //   → result  = target₀   (whole target returned; self-embedding)
-  //   → grow: select .global.analyzer from result → target₁  (2× deep)
-  //   → repeat: spineDepth grows +2 per round without a discriminator.
-  //
-  // arm-1:        target₀ contains Analyzer.this → BLOCK → depth stays 0, fixpoint.
-  // root-of-spine: root(target₀) = Analyzer.this = sym → BLOCK → same fixpoint.
-  //
-  // The two discriminators must agree on every round (equivalence conjecture for
-  // path-shaped targets — the key claim to verify before backporting).
-  // ─────────────────────────────────────────────────────────────────────────
-  @Test def fusedSubstPump(): Unit = {
-    import inferencerTypes._
-
-    val analyzerThis = ThisType(symbolOf[Analyzer])
-    val globalSym    = analyzerThis.member(TermName("global"))
-    val globalPath   = singleType(analyzerThis, globalSym) // Analyzer.this.global.type
-    val analyzerSym  = globalPath.member(TermName("analyzer"))
-
-    // The type substituted each round: Analyzer.this (one leaf, depth change unambiguous).
-    val memberType: Type = analyzerThis
-    println(s"\n=== fusedSubstPump ===")
-    println(s"analyzerSym = $analyzerSym  info = ${analyzerSym.info}")
-    println(s"memberType  = $memberType  spineDepth = ${spineDepth(memberType)}")
-
-    // Grow path P by appending .global.analyzer
-    def growPath(p: Type): Type = {
-      val gSym  = p.member(TermName("global"))
-      val gPath = singleType(p, gSym)
-      val aSym  = gPath.member(TermName("analyzer"))
-      singleType(gPath, aSym)
-    }
-
-    // === No discriminator — pump should grow ===
-    println("\n--- no discriminator (pump) ---")
-    var targetND: Type = singleType(globalPath, analyzerSym)
-    val depthsND = (1 to 5).map { round =>
-      val result = applyFused(memberType, List(FThisUpd(targetND, None)))
-      val d = spineDepth(result)
-      println(s"  round $round: target=$targetND  result=$result  depth=$d")
-      targetND = growPath(result)
-      d
-    }
-    for (i <- 0 until depthsND.length - 1)
-      assertTrue(s"pump should grow at round ${i+1}: ${depthsND(i)} vs ${depthsND(i+1)}",
-        depthsND(i) < depthsND(i + 1))
-    println(s"  ✓ growth confirmed: depths = ${depthsND.mkString(", ")}")
-
-    // === arm-1 — should fixpoint ===
-    println("\n--- arm-1 discriminator ---")
-    var targetArm1: Type = singleType(globalPath, analyzerSym)
-    val depthsArm1 = (1 to 5).map { round =>
-      val blocked = arm1Block(targetArm1, symbolOf[Analyzer])
-      val eff     = if (blocked) analyzerThis else targetArm1
-      val result  = applyFused(memberType, List(FThisUpd(eff, None)))
-      val d       = spineDepth(result)
-      println(s"  round $round: blocked=$blocked  target=$targetArm1  result=$result  depth=$d")
-      targetArm1 = growPath(result)
-      d
-    }
-    assertEquals(s"arm-1 should fixpoint; depths=${depthsArm1.mkString(",")}", 1, depthsArm1.distinct.size)
-    println(s"  ✓ arm-1 fixpoint at depth ${depthsArm1.head}")
-
-    // === root-of-spine — should fixpoint ===
-    println("\n--- root-of-spine discriminator ---")
-    var targetROS: Type = singleType(globalPath, analyzerSym)
-    val depthsROS = (1 to 5).map { round =>
-      val blocked = rootOfSpineBlock(targetROS, symbolOf[Analyzer])
-      val eff     = if (blocked) analyzerThis else targetROS
-      val result  = applyFused(memberType, List(FThisUpd(eff, None)))
-      val d       = spineDepth(result)
-      println(s"  round $round: blocked=$blocked  target=$targetROS  result=$result  depth=$d")
-      targetROS = growPath(result)
-      d
-    }
-    assertEquals(s"root-of-spine should fixpoint; depths=${depthsROS.mkString(",")}", 1, depthsROS.distinct.size)
-    println(s"  ✓ root-of-spine fixpoint at depth ${depthsROS.head}")
-
-    // === Both discriminators must agree on every round ===
-    assertEquals("arm-1 ≡ root-of-spine for path-shaped targets", depthsArm1, depthsROS)
-    println(s"  ✓ arm-1 ≡ root-of-spine confirmed for all 5 rounds")
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Fixture 1b — the FUSED PAIR (plan §4 fixture 1, the actual IntelliJ shape).
+  // Fixture 1 — the pump, as the FUSED PAIR (the actual IntelliJ chain shape).
+  // (A single anchorless update pumps just the same — fusion is not required for
+  // self-embedding — the pair is kept because it also exercises the anchored
+  // strip + remainder composition.)
   //
   // One round of the observed pump is a fused chain of two this-substitutions
   // sharing the same recirculated target P (chain-audit showed duplicate targets):
@@ -529,7 +403,7 @@ class AsSeenFromTest {
       assertTrue(s"pair should pump: ${depths.mkString(",")}", depths(i) < depths(i + 1))
 
     // Every guard mode: byte-identical fixpoint — the neutrality invariant.
-    for (mode <- List[GuardMode](Arm1Exact, ProdGuard, RootOfSpineExact, Progress)) {
+    for (mode <- List[GuardMode](ProdGuard, Progress)) {
       var q: Type = P0
       for (r <- 1 to 4) {
         val next = round(q, mode)
@@ -547,13 +421,11 @@ class AsSeenFromTest {
   // Same mechanism, but the this-leaf being rewritten (Infer.this — fresh each
   // round from member declarations in trait Infer) is NOT the symbol at the
   // target's spine root (Analyzer.this).  The anchorless heuristic still fires
-  // (Analyzer inherits Infer => whole target), so the pump runs — but:
-  //   - arm-1 EXACT misses (no Infer.this inside the target),
-  //   - the FAITHFUL PRODUCTION guard also misses: its inheritor arm tests
-  //     leafSym.isSubClass(containedThis.sym) = Infer <:< Analyzer = FALSE —
-  //     the INVERTED direction from what the pump needs,
-  //   - root-of-spine EXACT misses (root is Analyzer.this, not Infer.this),
-  //   - Progress blocks: root(returned) = Analyzer.this, Analyzer <:< Infer.
+  // (Analyzer inherits Infer => whole target), so the pump runs — and the
+  // FAITHFUL PRODUCTION guard misses it: its inheritor arm tests
+  // leafSym.isSubClass(containedThis.sym) = Infer <:< Analyzer = FALSE — the
+  // INVERTED direction from what the pump needs.  Only Progress blocks:
+  // root(returned) = Analyzer.this, Analyzer <:< Infer.
   //
   // In the observed IntelliJ trace the recirculated targets happen to be
   // SPELLED with the same root symbol as the rewritten leaf (Infer.this....),
@@ -586,7 +458,7 @@ class AsSeenFromTest {
       }
     }
 
-    for (mode <- List[GuardMode](NoGuard, Arm1Exact, ProdGuard, RootOfSpineExact)) {
+    for (mode <- List[GuardMode](NoGuard, ProdGuard)) {
       val ds = depthsFor(mode)
       for (i <- 0 until ds.length - 1)
         assertTrue(s"$mode should MISS the cross-symbol pump (grows): ${ds.mkString(",")}", ds(i) < ds(i + 1))
@@ -607,7 +479,8 @@ class AsSeenFromTest {
   //   [update 2/2]  CE.this          -> <outer path>         (sfc=CE)
   // where update 2 MUST process update 1's output to re-anchor the freshly
   // introduced CE.this onto the concrete instance path — the sequential
-  // composition that blanket terminal-output kills (the 1-in-592 counterexample).
+  // composition a rewriting update's remainder must be allowed to perform
+  // (this was terminal-output's 1-in-592 counterexample; see git history).
   //
   // Every guard admits both rewrites here:
   //   update 1 returns CE.this.en.type — root CE.this, and CE does NOT inherit
@@ -636,19 +509,13 @@ class AsSeenFromTest {
     // Expected: Enumeration.this -> CE.this.en.type -> (remainder) -> host.ce.en.type
     val expected = singleType(cePath, cePath.member(TermName("en")))
 
-    for (mode <- List[GuardMode](NoGuard, Arm1Exact, ProdGuard, RootOfSpineExact, Progress)) {
+    for (mode <- List[GuardMode](NoGuard, ProdGuard, Progress)) {
       val r = applyFused(enumLeaf, chain, mode)
       println(s"  $mode: $r")
       assertEquals(s"$mode must admit the sequential re-anchor", expected.toString, r.toString)
       assertTrue(s"$mode result =:= expected", r =:= expected)
     }
     println(s"  ✓ all guards admit the re-anchor: $expected")
-
-    // Blanket terminal-output (the failed suite-wide probe): update 1's output is
-    // NOT processed by the remainder — the fresh CE.this is left dangling.
-    val terminal = applyFused(enumLeaf, List(chain.head), NoGuard)
-    println(s"  blanket-terminal leaves: $terminal")
-    assertEquals("terminal strands the intermediate this", enumPath.toString, terminal.toString)
   }
 }
 object scl7043Types {
