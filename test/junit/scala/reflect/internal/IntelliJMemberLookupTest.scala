@@ -139,6 +139,13 @@ class IntelliJMemberLookupTest {
 
     def apply(tp: Type)(implicit mode: EngineMode): Type = applyFrom(tp, 0, Set.empty)
 
+    /** Dedup by update equality (targets are hash-consed, so ThisUpd/ParamUpd
+     *  case-class equality is cheap).  THEOREM (under fall-through + remainder-only
+     *  + consumed): a repeated identical update is inert — at any lineage point its
+     *  class is either consumed (skip) or the first occurrence already failed to
+     *  match (identity, fall through) — so dedup is pure perf. */
+    def dedupped: IjSubst = new IjSubst(updates.distinct)
+
     /** CHUNKED strategy (proposed alternative): treat fusion as perf-only — split
      *  the chain into chunks carrying at most ONE this-substitution each, and apply
      *  the chunks as SEPARATE WHOLE-TREE PASSES (full sequential composition).
@@ -669,6 +676,35 @@ class IntelliJMemberLookupTest {
     for (mode <- allModes) { implicit val m = mode
       assertParity(inferThis, "global")
     }
+  }
+
+  // 7b. The DEDUP THEOREM: under Progress+Consumed (fall-through + remainder-only
+  //     + first-spine-match-per-class), removing equality-duplicate updates from a
+  //     chain cannot change any lookup's result — duplicates are provably inert.
+  //     This is deliverable (c) closed as a theorem instead of a suite gamble.
+  @Test def dedupTheorem(): Unit = {
+    import ijFixtures._
+    import inferencerTypes._
+    println(s"\n=== dedupTheorem ===")
+    implicit val m: EngineMode = ProgressConsumed
+    val lookups: List[(Type, String)] = List(
+      (ThisType(symbolOf[BG]): Type)     -> "foo",
+      (ThisType(symbolOf[BG2]): Type)    -> "foo",
+      (ThisType(symbolOf[CEg[_]]): Type) -> "en",
+      (ThisType(symbolOf[GlobalG[_]]): Type) -> "typerG",
+      (ThisType(symbolOf[Infer]): Type)  -> "global")
+    for ((pre, name) <- lookups) {
+      val (sym, _, chain) = ijResolve(pre, name)
+      val full   = chain(sym.info).resultType
+      val dedup  = chain.dedupped(sym.info).resultType
+      val removed = chain.updates.length - chain.dedupped.updates.length
+      println(s"  $pre.$name: ${chain.updates.length} updates, $removed removed by dedup")
+      assertEquals(s"$pre.$name dedup must be inert", full.toString, dedup.toString)
+      assertTrue(s"$pre.$name dedup =:=", full =:= dedup)
+    }
+    // NOT removed (correctly): same-target chains under DIFFERENT anchors —
+    // the seenFromClass changes the walk, so those are distinct functions
+    // (genericCake's sfc=TyperG vs sfc=GlobalG pair stays).
   }
 
   // 8. CHUNKED strategy (fusion as perf-only): split chains at this-substs, apply
