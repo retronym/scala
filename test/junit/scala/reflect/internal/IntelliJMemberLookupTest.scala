@@ -10,32 +10,45 @@ import scala.tools.nsc.symtab.SymbolTableForUnitTesting
 /**
  * A replica of IntelliJ-Scala's member lookup WITH substitution, built over scalac
  * Types/Symbols, so its limitations and scalac-parity can be reasoned about in one
- * place with scalac's own `memberType` as the oracle.
+ * place with scalac's own `memberType` as the asserted oracle.
  *
- * The construction layers are modeled structurally (not as hand-written chains), so
- * the duplicate-substitutor chains observed in the real traces EMERGE here:
+ * Structure mirrors the real pipeline component-for-component:
  *
- *   1. MixinNodes.SuperTypesData analog (`signatures`): a template's inherited
- *      signatures carry a substitutor composed RECURSIVELY along the parent chain —
- *      one (ParamUpd?, ThisUpd) pair per inheritance hop.  Composition order puts
- *      the DECLARING side first and each hop AFTER it, so a hop's replacement is
- *      processed by the remainder (outer instantiations see inner output).
- *   2. Projection/parameterized substitutor analog (`contextParamSubst`): type
- *      params of the member's declaring & enclosing classes instantiated from the
- *      lookup prefix via `baseType` — IntelliJ's ScProjectionType/ScParameterizedType
- *      contribution.
- *   3. Resolve-state prepending analog (`processType`): each lookup PREPENDS
- *      ThisUpd(fromType, seenFromClass = declaring class) — `substitutorWithThisType`.
- *   4. `followed` is blind concatenation, and path lookups (`lookupPath`) carry the
- *      previous step's whole chain forward as state — the recirculation channel that
- *      makes chains accumulate and duplicate.
+ *   BaseProcessor.processTypeImpl  -> `processTypeImpl`: the type dispatch —
+ *     - ScThisType: self-type branches (none / self==this / self-conforms ->
+ *       recurse into self with state.withCompoundOrSelfType and substitutor
+ *       REPLACED by ScSubstitutor(ScThisType(clazz), clazz) / reverse-conforms ->
+ *       processElement / else glb).
+ *     - ScProjectionType (paths, here SingleType/prefixed TypeRef): mints
+ *       `ScSubstitutor(proj, declarationAnchor(elem)) followed actualSubst` —
+ *       the BaseProcessor.processTypeImpl:315 site from the traces.  The
+ *       actualSubst analog is the type-member signature's substitutor from the
+ *       prefix's class (MixinNodes hops) plus the prefix designator's type args.
+ *     - TypeParameterType -> upper bound with updateWithProjectionSubst=false.
+ *     - ParameterizedType -> designator args as ParamUpd, then processElement.
+ *     - compound/refinement -> the refinement class's signatures.
+ *   BaseProcessor.processElement   -> `processElement`:
+ *     - newSubst = state.substitutor.followed(s) UNLESS compoundOrThis is set
+ *       (the ugly-workaround flag, mirrored).
+ *     - class      -> processClassDeclarations: execute each MixinNodes signature
+ *       with sig.subst.followed(newSubst).
+ *     - typed def  -> processTypeImpl(newSubst(declaredType), stateWithSubst,
+ *       updateWithProjectionSubst = false): the EAGER substitute-then-recurse that
+ *       is the synchronous recirculation channel (a grown spelling produced by the
+ *       substitution immediately becomes the next dispatch's type).
+ *   RecursionState                 -> visitedProjections/visitedTypeParameter
+ *     recursion breakers (bounds growth WITHIN a pass; growth ACROSS passes —
+ *     fresh processor per reference resolution — is unbounded, as in production).
+ *   TypeDefinitionMembers/MixinNodes -> `signatures`: inherited signatures carry
+ *     substitutors composed recursively along parent hops (declaring side first,
+ *     hop after, so a hop's replacement is processed by the chain remainder).
+ *   ScalaResolveState.substitutorWithThisType -> the reference-level prepend in
+ *     `ijMemberType` (fromType, seenFromClass = declaring class).
  *
- * The engine (`IjSubst.apply`) mirrors ScSubstitutor.recursiveUpdateImpl: the first
- * matching update REPLACES a leaf and the REMAINDER of the chain processes the
- * replacement; non-matching nodes descend with the full remaining chain.  The
- * this-walk mirrors ThisTypeSubstitution: anchored lockstep (target baseType clazz)
- * .prefix climb, narrowing (isMoreNarrow) fallback, and the escape-climb through
- * enclosing this-types.
+ * The engine (`IjSubst.apply`) mirrors ScSubstitutor.recursiveUpdateImpl (first
+ * matching update replaces the leaf, the REMAINDER processes the replacement) and
+ * ThisTypeSubstitution (anchored lockstep baseType/owner climb, isMoreNarrow
+ * narrowing with self-type awareness, escape-climb through enclosing this-types).
  *
  * Switchable semantics (EngineMode):
  *   - prodGuard: hasRecursiveThisType0 pre-scan (exact this containment OR
@@ -54,7 +67,7 @@ class IntelliJMemberLookupTest {
   import symbolTable._
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  Engine
+  //  Engine (ScSubstitutor / ThisTypeSubstitution)
   // ═══════════════════════════════════════════════════════════════════════
 
   case class EngineMode(prodGuard: Boolean, progress: Boolean, consumed: Boolean) {
@@ -216,7 +229,7 @@ class IntelliJMemberLookupTest {
   val EmptySubst = new IjSubst(Vector.empty)
 
   /** Widen to a class: paths to their underlying, abstract types / type params to
-   *  their upper bound (IntelliJ extractClass / isMoreNarrow alias handling). */
+   *  their upper bound (IntelliJ extractClass / TypeParameterType handling). */
   private def classSymOf(t: Type): Symbol = {
     val w = t.widen.dealias
     val s = w.typeSymbol
@@ -226,7 +239,7 @@ class IntelliJMemberLookupTest {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  Layer 1: MixinNodes.SuperTypesData analog
+  //  TypeDefinitionMembers / MixinNodes analog
   // ═══════════════════════════════════════════════════════════════════════
 
   case class Sig(member: Symbol, subst: IjSubst)
@@ -243,9 +256,10 @@ class IntelliJMemberLookupTest {
     new IjSubst(upds.result())
   }
 
-  /** Signatures: own decls with the empty substitutor; inherited decls with the
-   *  declaring-side substitutor FOLLOWED BY each hop up the chain (so a hop's
-   *  replacement is processed by the remainder — outer instantiations after inner). */
+  /** Signatures: own decls (terms AND classes — type members ride the same nodes)
+   *  with the empty substitutor; inherited decls with the declaring-side substitutor
+   *  FOLLOWED BY each hop up the chain (so a hop's replacement is processed by the
+   *  remainder — outer instantiations after inner). */
   private def signatures(c: Symbol): List[Sig] = {
     val own = c.info.decls.toList.filter(m => m.isTerm || m.isClass).map(Sig(_, EmptySubst))
     val inherited = c.info.parents.flatMap { pt =>
@@ -257,74 +271,178 @@ class IntelliJMemberLookupTest {
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  Layer 2: projection/parameterized substitutor analog
+  //  BaseProcessor analog
   // ═══════════════════════════════════════════════════════════════════════
 
-  /** Instantiate type params of the member's declaring class and its ENCLOSING
-   *  classes from the lookup prefix: declaring-class params via
-   *  `fromType baseType E`, enclosing-class params via the prefix chain
-   *  (IntelliJ's ScProjectionType/ScParameterizedType substitutor contribution;
-   *  scalac's classParameterAsSeen does the same climb inside the map). */
-  private def contextParamSubst(fromType: Type, member: Symbol): Vector[Upd] = {
-    val upds = Vector.newBuilder[Upd]
-    var e = member.owner
-    var seat: Type = fromType // where E's params are instantiated from
-    while (e != NoSymbol && e.isClass && !e.isPackageClass) {
-      if (e.typeParams.nonEmpty) {
-        val bt = seat.baseType(e) match {
-          case NoType =>
-            // enclosing rather than inherited: instantiate from the prefix
-            val w = seat.widen
-            if ((w.prefix ne NoType) && (w.prefix ne NoPrefix)) w.prefix.baseType(e) else NoType
-          case t => t
-        }
-        if (bt != NoType && bt.typeArgs.nonEmpty)
-          upds += ParamUpd(e.typeParams.zip(bt.typeArgs).toMap)
-      }
-      e = e.owner
+  /** ScalaResolveState: substitutor + the compoundOrThisType "ugly workaround" flag. */
+  case class IjState(substitutor: IjSubst = EmptySubst, compoundOrThis: Boolean = false) {
+    def withSubstitutor(s: IjSubst): IjState = copy(substitutor = s)
+    def withCompoundOrSelfType: IjState = copy(compoundOrThis = true)
+  }
+
+  /** BaseProcessor.RecursionState: the "ugly recursion breakers". */
+  case class RecState(visitedProjections: Set[Symbol], visitedTypeParams: Set[Symbol]) {
+    def add(sym: Symbol): RecState = copy(visitedProjections = visitedProjections + sym)
+    def addTp(sym: Symbol): RecState = copy(visitedTypeParams = visitedTypeParams + sym)
+  }
+  object RecState { val empty: RecState = RecState(Set.empty, Set.empty) }
+
+  /** The processor: collects (member, substitutor) candidates by name. */
+  class NameProcessor(name: Name)(implicit mode: EngineMode) {
+    var candidates: List[(Symbol, IjSubst)] = Nil
+
+    def execute(member: Symbol, state: IjState): Boolean = {
+      if (member.name == name && !member.isConstructor)
+        candidates ::= (member, state.substitutor)
+      true
     }
-    upds.result()
+
+    def processType(t: Type): Unit = processTypeImpl(t, IjState())(RecState.empty)
+
+    // ── BaseProcessor.processTypeImpl: the type dispatch ────────────────────
+    def processTypeImpl(t: Type, state: IjState, updateWithProjectionSubst: Boolean = true)
+                       (implicit recState: RecState): Boolean = t match {
+
+      // ScThisType(clazz): the self-type branches
+      case ThisType(clazz) =>
+        val selfTp = clazz.typeOfThis
+        val hasSelf = selfTp.typeSymbol ne clazz
+        if (!hasSelf)
+          processElement(clazz, EmptySubst, state)
+        else if (selfTp <:< clazz.tpe_*) {
+          // self conforms: recurse into the SELF TYPE, substitutor REPLACED (not
+          // followed) by ScSubstitutor(ScThisType(clazz), clazz), compound flag set
+          val newState = state.withCompoundOrSelfType
+            .withSubstitutor(new IjSubst(Vector(ThisUpd(ThisType(clazz), Some(clazz)))))
+          processTypeImpl(selfTp, newState)
+        }
+        else if (clazz.tpe_* <:< selfTp)
+          processElement(clazz, EmptySubst, state)
+        else {
+          // glb(self, clazz): approximate with intersection — process both parts
+          val newState = state.withCompoundOrSelfType
+          processTypeImpl(selfTp, newState) && processTypeImpl(clazz.tpe_*, newState)
+        }
+
+      // ScProjectionType over a term path (val/object member): mints
+      // ScSubstitutor(proj, declarationAnchor(elem)) followed actualSubst
+      case st @ SingleType(pre, elem) =>
+        if (recState.visitedProjections.contains(elem)) true
+        else {
+          val actualSubst = prefixSignatureSubst(pre, elem)
+          val s =
+            if (updateWithProjectionSubst)
+              actualSubst.followUpdateThisType(st, declarationAnchor(elem))
+            else actualSubst
+          processElement(elem, s, state)(recState.add(elem))
+        }
+
+      // TypeParameterType: recurse the upper bound, projection substs off
+      case tr @ TypeRef(_, sym, _) if !sym.isClass && (tr.bounds.hi ne tr) =>
+        if (recState.visitedTypeParams.contains(sym)) true
+        else processTypeImpl(tr.bounds.hi, state, updateWithProjectionSubst = false)(recState.addTp(sym))
+
+      // ScProjectionType / ParameterizedType over a class designator
+      case tr @ TypeRef(pre, cls, args) if cls.isClass =>
+        if (recState.visitedProjections.contains(cls)) true
+        else {
+          val designatorArgs =
+            if (args.nonEmpty) new IjSubst(Vector(ParamUpd(cls.typeParams.zip(args).toMap)))
+            else EmptySubst
+          val actualSubst = prefixSignatureSubst(pre, cls).followed(designatorArgs)
+          val s =
+            if (updateWithProjectionSubst && (pre ne NoPrefix) && (pre ne NoType))
+              actualSubst.followUpdateThisType(tr, declarationAnchor(cls))
+            else actualSubst
+          processElement(cls, s, state)(recState.add(cls))
+        }
+
+      // ScCompoundType: refinement class carries decls + parents via signatures
+      case rt: RefinedType =>
+        processElement(rt.typeSymbol, EmptySubst, state)
+
+      case NullaryMethodType(res) => processTypeImpl(res, state, updateWithProjectionSubst)
+
+      case _ => true
+    }
+
+    // ── BaseProcessor.processElement ────────────────────────────────────────
+    private def processElement(e: Symbol, s: IjSubst, state: IjState)
+                              (implicit recState: RecState): Boolean = {
+      // "val newSubst = if (compoundOrThis.nonEmpty) subst else subst.followed(s)"
+      val newSubst = if (state.compoundOrThis) state.substitutor else state.substitutor.followed(s)
+      val stateWithSubst = state.withSubstitutor(newSubst).copy(compoundOrThis = false)
+
+      if (e.isClass) {
+        // processClassDeclarations: execute every MixinNodes signature with
+        // sig.substitutor composed under the accumulated state substitutor
+        signatures(e).forall { sig =>
+          execute(sig.member, stateWithSubst.withSubstitutor(sig.subst.followed(newSubst)))
+        }
+      }
+      else if (e.isTerm && e.isModule)
+        processElement(e.moduleClass, s, state)
+      else if (e.isTerm) {
+        // ScTypedDefinition: EAGERLY substitute the declared type, then recurse —
+        // the synchronous recirculation channel (a spelling grown by newSubst
+        // immediately becomes the next dispatch's input type)
+        val declared = e.info.resultType
+        processTypeImpl(newSubst(declared), stateWithSubst, updateWithProjectionSubst = false)
+      }
+      else true
+    }
+
+    /** ScProjectionType.actualSubst analog: the projected element's signature
+     *  substitutor from the PREFIX's class (MixinNodes hops), plus the prefix
+     *  designator's own type-argument instantiation. */
+    private def prefixSignatureSubst(pre: Type, elem: Symbol): IjSubst = {
+      if ((pre eq NoPrefix) || (pre eq NoType)) return EmptySubst
+      val preCls = classSymOf(pre)
+      if (!preCls.isClass || preCls.isPackageClass) return EmptySubst
+      val sigSubst = signatures(preCls).find(_.member == elem).map(_.subst).getOrElse(EmptySubst)
+      val preArgs = pre.widen.dealias match {
+        case TypeRef(_, pc, as) if as.nonEmpty => new IjSubst(Vector(ParamUpd(pc.typeParams.zip(as).toMap)))
+        case _ => EmptySubst
+      }
+      sigSubst.followed(preArgs)
+    }
+
+    /** ScSubstitutor.declarationAnchor: the member's containing class. */
+    private def declarationAnchor(member: Symbol): Symbol =
+      if (member.owner.isClass) member.owner else NoSymbol
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  //  Layer 3 + 4: resolve-state prepending and path lookup (recirculation)
+  //  Reference-level resolution (ReferenceExpressionResolver analog)
   // ═══════════════════════════════════════════════════════════════════════
 
-  /** BaseProcessor.processTypeImpl + substitutorWithThisType:
-   *  chain = ThisUpd(fromType, sfc=declaring) +: contextParams ++: sigSubst ++: state. */
-  private def processType(fromType: Type, name: Name, state: IjSubst): (Symbol, IjSubst) = {
-    val cls = classSymOf(fromType)
-    val sig = signatures(cls).find(_.member.name == name)
-      .getOrElse(sys.error(s"member $name not found in $cls"))
-    val declaring = sig.member.owner
-    val chain = new IjSubst(contextParamSubst(fromType, sig.member))
-      .followed(sig.subst)
-      .followed(state)
-      .followUpdateThisType(fromType, declaring)
-    (sig.member, chain)
+  /** Resolve `name` against `pre`, then apply the candidate's substitutor with the
+   *  reference-level substitutorWithThisType prepend (fromType = pre, seenFromClass
+   *  = the member's declaring class). */
+  def ijMemberType(pre: Type, name: String)(implicit mode: EngineMode): (Type, IjSubst) = {
+    val p = new NameProcessor(TermName(name))
+    p.processType(pre)
+    val (m, subst) = p.candidates.headOption
+      .getOrElse(sys.error(s"member $name not found on $pre"))
+    val full = subst.followUpdateThisType(pre, m.owner)
+    (full(m.info).resultType, full)
   }
 
-  /** ijMemberType: the model's `pre.memberType(name).resultType`. */
-  def ijMemberType(pre: Type, name: String, state: IjSubst = EmptySubst)(implicit mode: EngineMode): (Type, IjSubst) = {
-    val (m, chain) = processType(pre, TermName(name), state)
-    (chain(m.info).resultType, chain)
-  }
-
-  /** Path lookup with state carry-forward: the previous step's WHOLE chain is the
-   *  next step's state (the recirculation/duplication channel).  Stable members
-   *  extend the path prefix; others contribute their computed type. */
+  /** Qualified-reference chain: each step is a FRESH processor run (as each
+   *  reference resolution is in production); recirculation happens through the
+   *  computed TYPES (paths for stable members, computed spellings otherwise). */
   def lookupPath(root: Type, names: String*)(implicit mode: EngineMode): (Type, IjSubst) = {
     var pre: Type = root
-    var state: IjSubst = EmptySubst
     var lastType: Type = root
+    var lastChain: IjSubst = EmptySubst
     for (name <- names) {
-      val (m, chain) = processType(pre, TermName(name), state)
-      val computed = chain(m.info).resultType
+      val (computed, chain) = ijMemberType(pre, name)
       lastType = computed
-      pre = if (m.isStable) singleType(pre, pre.member(TermName(name))) else computed
-      state = chain
+      lastChain = chain
+      val sym = pre.member(TermName(name))
+      pre = if (sym != NoSymbol && sym.isStable) singleType(pre, sym) else computed
     }
-    (lastType, state)
+    (lastType, lastChain)
   }
 
   /** Oracle. */
@@ -382,13 +500,14 @@ class IntelliJMemberLookupTest {
       println(s"  [$mode] chain : ${chain.render}")
       println(s"  [$mode] ij    : $viaPath   scalac: $oracle")
       assertEquals(s"[$mode]", oracle.toString, viaPath.toString)
+      assertTrue(s"[$mode] =:=", viaPath =:= oracle)
     }
   }
 
   // 4. Generic cake: type params AND self-type this-instances in one lookup.
   //    typerG: analyzerG.TyperG where TyperG is an inner class of TypersG[T]
-  //    (self: AnalyzerG[T]) — applyG's T must come from the ENCLOSING class's
-  //    instantiation through the prefix, its this from the cake.
+  //    (self: AnalyzerG[T]) — applyG's T must arrive through the type-member
+  //    signature hops + the prefix designator's instantiation.
   @Test def genericCake(): Unit = {
     import ijFixtures._
     println(s"\n=== genericCake ===")
@@ -408,42 +527,34 @@ class IntelliJMemberLookupTest {
     }
   }
 
-  // 5. THE PUMP EMERGES from the layered pipeline: repeated .analyzer/.global
-  //    rounds with the accumulated state carried forward reproduce the growth
-  //    channel structurally — Unguarded grows SUPER-linearly (3, 9, 25, 67: the
-  //    carried chain re-embeds the recirculated prefix at every round), while the
-  //    guarded modes hold a fixpoint.  Production's fixpoint chain carries
-  //    duplicate targets (dup=true) — the accidental truncation the real traces
-  //    showed; the probes fixpoint by blocking/consuming instead.
+  // 5. THE PUMP through the dispatch: repeated .analyzer/.global reference
+  //    resolutions, each a FRESH processor run, recirculating the previous
+  //    round's computed spelling as the next round's prefix — production's
+  //    actual growth channel.
   @Test def pipelineRounds(): Unit = {
     import inferencerTypes._
     println(s"\n=== pipelineRounds ===")
     val root = ThisType(symbolOf[Analyzer])
 
-    def rounds(n: Int)(implicit mode: EngineMode): (Seq[Int], IjSubst) = {
+    def rounds(n: Int)(implicit mode: EngineMode): Seq[Int] = {
       var pre: Type = singleType(root, root.member(TermName("global")))
-      var state: IjSubst = EmptySubst
-      val depths = (1 to n).map { _ =>
+      (1 to n).map { _ =>
         val aPath = singleType(pre, pre.member(TermName("analyzer")))
-        val (m1, c1) = processType(pre, TermName("analyzer"), state)
-        val (m2, c2) = processType(aPath, TermName("global"), c1)
-        val computed = c2(m2.info).resultType
-        pre = computed // recirculate the computed spelling as the next round's prefix
-        state = c2
+        val (computed, _) = ijMemberType(aPath, "global")
+        pre = computed // recirculate the computed spelling
         spineDepth(computed)
       }
-      (depths, state)
     }
 
     { implicit val m = Unguarded
-      val (depths, st) = rounds(4)
-      println(s"  [$m] depths=${depths.mkString(",")}  final chain: ${st.updates.length} updates, ${st.thisSubstCount} this-substs, dup=${st.duplicateThisTargets}")
-      assertTrue(s"unguarded pipeline should pump: $depths",
+      val depths = rounds(4)
+      println(s"  [$m] depths=${depths.mkString(",")}")
+      assertTrue(s"unguarded should pump: $depths",
         depths.zip(depths.tail).forall { case (a, b) => a < b })
     }
     for (mode <- List(Production, ProgressOnly, ProgressConsumed)) { implicit val m = mode
-      val (depths, st) = rounds(4)
-      println(s"  [$mode] depths=${depths.mkString(",")}  final chain: ${st.updates.length} updates, ${st.thisSubstCount} this-substs, dup=${st.duplicateThisTargets}")
+      val depths = rounds(4)
+      println(s"  [$mode] depths=${depths.mkString(",")}")
       assertEquals(s"[$mode] should fixpoint: $depths", 1, depths.distinct.size)
     }
   }
@@ -458,7 +569,7 @@ class IntelliJMemberLookupTest {
   }
 
   // 6. Emergent duplication audit: the layered construction reproduces
-  //    duplicate-target chains without any hand-crafting.
+  //    duplicate/overlapping chain elements without any hand-crafting.
   @Test def duplicationEmerges(): Unit = {
     import ijFixtures._
     println(s"\n=== duplicationEmerges ===")
@@ -468,7 +579,7 @@ class IntelliJMemberLookupTest {
     println(s"  result: $t")
     println(s"  chain[${chain.updates.length} updates, ${chain.thisSubstCount} this-substs, dup=${chain.duplicateThisTargets}]:")
     chain.updates.foreach(u => println(s"    $u"))
-    assertTrue("multi-step path lookup should accumulate >= 3 this-substs", chain.thisSubstCount >= 3)
+    assertTrue("multi-step path lookup should accumulate >= 2 this-substs", chain.thisSubstCount >= 2)
 
     // and the result must still be right
     val enPath = singleType(ceThis, ceThis.member(TermName("en")))
@@ -476,6 +587,19 @@ class IntelliJMemberLookupTest {
     val oracle = scalacMemberType(vsType, "toL")
     println(s"  scalac: $oracle")
     assertEquals(oracle.toString, t.toString)
+    assertTrue("=:=", t =:= oracle)
+  }
+
+  // 7. The self-type branch of processTypeImpl: looking a member up on
+  //    ThisType(trait-with-self-type) recurses into the SELF TYPE with the
+  //    substitutor REPLACED by ScSubstitutor(ScThisType(clazz), clazz).
+  @Test def selfTypeDispatch(): Unit = {
+    import inferencerTypes._
+    println(s"\n=== selfTypeDispatch ===")
+    val inferThis = ThisType(symbolOf[Infer])
+    for (mode <- allModes) { implicit val m = mode
+      assertParity(inferThis, "global")
+    }
   }
 }
 
