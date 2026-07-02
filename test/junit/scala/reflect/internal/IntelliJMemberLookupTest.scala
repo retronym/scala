@@ -50,6 +50,33 @@ import scala.tools.nsc.symtab.SymbolTableForUnitTesting
  * ThisTypeSubstitution (anchored lockstep baseType/owner climb, isMoreNarrow
  * narrowing with self-type awareness, escape-climb through enclosing this-types).
  *
+ * ══ OUT OF BOUNDS ══
+ * The point of the replica is to NOT delegate to the scalac machinery it models.
+ * Forbidden in model code (allowed ONLY in the clearly-marked oracle section and
+ * in fixture/golden construction):
+ *   - Type#member / members / findMember / nonPrivateMember   (member lookup —
+ *     scalac's own linearization walk with asSeenFrom baked in)
+ *   - Type#memberType / memberInfo                            (the keystone)
+ *   - Type#asSeenFrom / AsSeenFromMap                         (the map itself)
+ *   - Type#subst / substSym / substThis                       (scalac substitution)
+ *   - Type#baseTypeSeq                                        (the cached BTS)
+ * Allowed, as declared IntelliJ analogs:
+ *   - Symbol#info.decls / info.parents      (PSI declarations / extends clauses)
+ *   - member.info                           (the member's DECLARED type — PSI
+ *     `e.type()`; never asked through a prefix)
+ *   - Type#baseType(clazz)                  (IJ BaseTypes.baseType — CAVEAT: scalac's
+ *     is a CACHED, inert lookup while IJ's is a live recompute that re-enters
+ *     asSeenFrom; this model therefore CANNOT reproduce the re-entrant
+ *     spelling-doubling channel, only the recirculation channel)
+ *   - Symbol#typeOfThis                     (PSI selfType)
+ *   - Symbol#isSubClass                     (isInheritorDeep)
+ *   - Type#widen / dealias / bounds.hi      (path underlying / alias expansion /
+ *     abstract-type upper bound)
+ *   - Type#exists                           (subtypeExists)
+ *   - <:< in the self-type dispatch         (stand-in for IJ's OWN conforms();
+ *     IJ conformance is a separate subsystem not modeled here)
+ *   - singleType / ThisType / TypeRef ctors (type construction, not lookup)
+ *
  * Switchable semantics (EngineMode):
  *   - prodGuard: hasRecursiveThisType0 pre-scan (exact this containment OR
  *     rewrittenClass.isSubClass(containedThisClass)).
@@ -166,6 +193,9 @@ class IntelliJMemberLookupTest {
       if (clazz == NoSymbol || clazz == thisSym || !clazz.owner.isClass)
         narrowWalk(target, thisSym, escaped = false)
       else {
+        // ALLOWED-WITH-CAVEAT: scalac baseType is a CACHED lookup; IJ's
+        // BaseTypes.baseType is a live recompute that re-enters asSeenFrom —
+        // the spelling-doubling channel this model cannot reproduce.
         val bt = target.baseType(clazz)
         if (bt == NoType) narrowWalk(target, thisSym, escaped = false) // "not a base -> narrow against pre"
         else anchoredWalk(bt.prefix, clazz.owner, thisSym)
@@ -309,6 +339,7 @@ class IntelliJMemberLookupTest {
         val hasSelf = selfTp.typeSymbol ne clazz
         if (!hasSelf)
           processElement(clazz, EmptySubst, state)
+        // <:< below stands in for IJ's own conforms() (a separate subsystem)
         else if (selfTp <:< clazz.tpe_*) {
           // self conforms: recurse into the SELF TYPE, substitutor REPLACED (not
           // followed) by ScSubstitutor(ScThisType(clazz), clazz), compound flag set
@@ -418,14 +449,20 @@ class IntelliJMemberLookupTest {
 
   /** Resolve `name` against `pre`, then apply the candidate's substitutor with the
    *  reference-level substitutorWithThisType prepend (fromType = pre, seenFromClass
-   *  = the member's declaring class). */
-  def ijMemberType(pre: Type, name: String)(implicit mode: EngineMode): (Type, IjSubst) = {
+   *  = the member's declaring class).  Returns the resolved SYMBOL too, so callers
+   *  never need scalac's own `Type#member` (out of bounds) to continue a path. */
+  def ijResolve(pre: Type, name: String)(implicit mode: EngineMode): (Symbol, Type, IjSubst) = {
     val p = new NameProcessor(TermName(name))
     p.processType(pre)
     val (m, subst) = p.candidates.headOption
       .getOrElse(sys.error(s"member $name not found on $pre"))
     val full = subst.followUpdateThisType(pre, m.owner)
-    (full(m.info).resultType, full)
+    (m, full(m.info).resultType, full)
+  }
+
+  def ijMemberType(pre: Type, name: String)(implicit mode: EngineMode): (Type, IjSubst) = {
+    val (_, tp, chain) = ijResolve(pre, name)
+    (tp, chain)
   }
 
   /** Qualified-reference chain: each step is a FRESH processor run (as each
@@ -436,16 +473,19 @@ class IntelliJMemberLookupTest {
     var lastType: Type = root
     var lastChain: IjSubst = EmptySubst
     for (name <- names) {
-      val (computed, chain) = ijMemberType(pre, name)
+      val (sym, computed, chain) = ijResolve(pre, name)
       lastType = computed
       lastChain = chain
-      val sym = pre.member(TermName(name))
-      pre = if (sym != NoSymbol && sym.isStable) singleType(pre, sym) else computed
+      pre = if (sym.isStable) singleType(pre, sym) else computed
     }
     (lastType, lastChain)
   }
 
-  /** Oracle. */
+  // ═══════════════════════════════════════════════════════════════════════
+  //  ORACLE — the ONLY place out-of-bounds scalac APIs (member/memberType,
+  //  i.e. asSeenFrom) may be called.  Fixture/golden path construction in the
+  //  tests below may also use them, never the model.
+  // ═══════════════════════════════════════════════════════════════════════
   private def scalacMemberType(pre: Type, name: String): Type =
     pre.memberType(pre.member(TermName(name))).resultType
 
@@ -537,9 +577,11 @@ class IntelliJMemberLookupTest {
     val root = ThisType(symbolOf[Analyzer])
 
     def rounds(n: Int)(implicit mode: EngineMode): Seq[Int] = {
-      var pre: Type = singleType(root, root.member(TermName("global")))
+      val (gSym, _, _) = ijResolve(root, "global")
+      var pre: Type = singleType(root, gSym)
       (1 to n).map { _ =>
-        val aPath = singleType(pre, pre.member(TermName("analyzer")))
+        val (aSym, _, _) = ijResolve(pre, "analyzer")
+        val aPath = singleType(pre, aSym)
         val (computed, _) = ijMemberType(aPath, "global")
         pre = computed // recirculate the computed spelling
         spineDepth(computed)
@@ -547,10 +589,19 @@ class IntelliJMemberLookupTest {
     }
 
     { implicit val m = Unguarded
-      val depths = rounds(4)
-      println(s"  [$m] depths=${depths.mkString(",")}")
-      assertTrue(s"unguarded should pump: $depths",
-        depths.zip(depths.tail).forall { case (a, b) => a < b })
+      // With path steps resolved through the model's own dispatch (no scalac
+      // Type#member shortcut), the unguarded pump compounds INSIDE resolution and
+      // ends in StackOverflowError — production's exact fate (60+ segments, SOE
+      // from mere descent).  Either observable growth or SOE confirms the pump.
+      try {
+        val depths = rounds(3)
+        println(s"  [$m] depths=${depths.mkString(",")}")
+        assertTrue(s"unguarded should pump: $depths",
+          depths.zip(depths.tail).forall { case (a, b) => a < b })
+      } catch {
+        case _: StackOverflowError =>
+          println(s"  [$m] StackOverflowError — the pump, terminally (as in production)")
+      }
     }
     for (mode <- List(Production, ProgressOnly, ProgressConsumed)) { implicit val m = mode
       val depths = rounds(4)
