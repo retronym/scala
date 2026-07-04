@@ -71,7 +71,7 @@ class IjModelTraceTest {
       // also dump each session to disk for perusal (text + collapsible html);
       // the junit fork's working directory is the repo root
       .textOutput(java.nio.file.Paths.get(".tracer-bullet"))
-      .outputFormats("text", "html", "json")
+      .outputFormats("text", "html", "json", "chrome")
       .start()
 
     try {
