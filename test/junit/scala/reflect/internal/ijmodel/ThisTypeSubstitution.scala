@@ -39,6 +39,11 @@ trait ThisTypeSubstitutions { self: IjTypeSystem =>
      *  Some((result, consumes)) = fired. */
     def subst(thisSym: Symbol, consumedClasses: Set[Symbol])
              (implicit mode: EngineMode): Option[(Type, Boolean)] = {
+      // ScThisType wraps ScTemplateDefinition only: a package this-type can never
+      // be a substitution candidate in IntelliJ.  (Also load-bearing for the
+      // out-of-bounds contract: walking package types trips scalac's
+      // ThisType.prefix -> underlying -> owner.thisType.memberType(pkg) machinery.)
+      if (thisSym.isPackageClass) return None
       if (mode.consumed && consumedClasses(thisSym)) return None
       if (mode.prodGuard && hasRecursiveThisType0(target, thisSym)) return None
       val walk = seenFromClass match {
@@ -59,9 +64,13 @@ trait ThisTypeSubstitutions { self: IjTypeSystem =>
     private case class Matched(res: Type, consumes: Boolean) extends WalkResult
     private case object Unmatched extends WalkResult
 
-    /** The anchored lockstep climb. */
+    /** The anchored lockstep climb.  Terminal when the anchor has no containing
+     *  CLASS — production's `clazz.containingClass == null`: PSI packages are not
+     *  classes, so the climb must stop at the outermost class rather than walk
+     *  into scalac's package classes (where baseType/prefix silently delegate to
+     *  memberType — see the trace that caught this). */
     private def doUpdateThisTypeFromClass(target: Type, clazz: Symbol, thisSym: Symbol): WalkResult =
-      if (clazz == NoSymbol || clazz == thisSym || !clazz.owner.isClass)
+      if (clazz == NoSymbol || clazz == thisSym || !clazz.owner.isClass || clazz.owner.isPackageClass)
         doUpdateThisType(target, thisSym, escaped = false)
       else {
         // ALLOWED-WITH-CAVEAT: scalac baseType is a CACHED lookup; IJ's

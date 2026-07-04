@@ -63,6 +63,12 @@ import scala.reflect.internal.SymbolTable
  *   - Symbol#isSubClass                     (isInheritorDeep)
  *   - Type#widen / dealias / bounds.hi      (path underlying / alias expansion /
  *     abstract-type upper bound)
+ *   - Type#prefix on TypeRef/SingleType     (plain accessors) — but NOT on
+ *     ThisType: ThisType.prefix delegates to underlying.prefix, and computing a
+ *     PACKAGE's underlying runs owner.thisType.memberType(pkg).  The model stays
+ *     clear by never treating package this-types as substitution candidates and
+ *     terminating the anchored climb at the outermost class (PSI packages are
+ *     not classes) — a runtime trace caught this leaking (see IjModelTraceTest)
  *   - Type#exists                           (subtypeExists)
  *   - <:< in the self-type dispatch         (stand-in for IJ's OWN conforms();
  *     IJ conformance is a separate subsystem not modeled here)
