@@ -70,6 +70,10 @@ class IjModelTraceTest {
       .maxNodes(3000)
       .maxRenderedLength(120)
       .printOnComplete()
+      // also dump each session to disk for perusal (text + collapsible html);
+      // the junit fork's working directory is the repo root
+      .textOutput(java.nio.file.Paths.get(".tracer-bullet"))
+      .outputFormats("text", "html")
       .start()
 
     try {
