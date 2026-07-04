@@ -832,7 +832,13 @@ lazy val junit = project.in(file("test") / "junit")
   .settings(publish / skip := true)
   .settings(
     Test / fork := true,
-    Test / javaOptions ++= "-Xss1M" +: addOpensForTesting,
+    Test / javaOptions ++= "-Xss1M" +: "-Djdk.attach.allowAttachSelf=true" +: addOpensForTesting,
+    // tracer-bullet self-attach API for scala.reflect.internal.IjModelTraceTest
+    // (research branch; the jar is machine-local, entry skipped when absent)
+    Test / unmanagedJars ++= {
+      val tb = file(sys.props("user.home")) / ".tracer-bullet" / "tracer-bullet-agent.jar"
+      if (tb.exists) Seq(Attributed.blank(tb)) else Seq.empty
+    },
     (Test / forkOptions) := (Test / forkOptions).value.withWorkingDirectory((ThisBuild / baseDirectory).value),
     (Test / testOnly / forkOptions) := (Test / testOnly / forkOptions).value.withWorkingDirectory((ThisBuild / baseDirectory).value),
     Compile / scalacOptions ++= Seq(
