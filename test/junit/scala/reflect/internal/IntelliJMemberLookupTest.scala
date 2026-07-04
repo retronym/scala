@@ -201,7 +201,30 @@ class IntelliJMemberLookupTest {
     }
   }
 
-  // 8. The DEDUP THEOREM: under Progress+Consumed (fall-through + remainder-only
+  // 8. The scala/scala Trees cake: x.symbol where x: global.ValDef, symbol on a
+  //    SUPERCLASS of an inner class, Symbol from a sibling slice via the self
+  //    type. Pins the CONSUMED refinement (suppress only this->this re-spelling;
+  //    this->path re-anchors always fire) — under blanket consumption a
+  //    declaration-side hop's identity answer starved the use-site anchor and
+  //    x.symbol stayed at the unanchored Trees.this.Symbol (the production
+  //    regression this replica cross-ports).
+  @Test def nscTreesCake(): Unit = {
+    import ijFixtures._
+    println(s"\n=== nscTreesCake ===")
+    val hasGThis = ThisType(symbolOf[HasNscGlobal])
+    val xPath = singleType(hasGThis, hasGThis.member(TermName("x")))
+    val oracle = scalacMemberType(xPath, "symbol")
+    println(s"  scalac: $oracle")
+    for (mode <- allModes) { implicit val m = mode
+      val (t, chain) = resolvePath(hasGThis, "x", "symbol")
+      println(s"  [$mode] chain[${chain.thisSubstCount} this-substs]: ${chain.render}")
+      println(s"  [$mode] ij    : $t")
+      assertEquals(s"[$mode]", oracle.toString, t.toString)
+      assertTrue(s"[$mode] =:=", t =:= oracle)
+    }
+  }
+
+  // 9. The DEDUP THEOREM: under Progress+Consumed (fall-through + remainder-only
   //    + first-spine-match-per-class), removing equality-duplicate updates from a
   //    chain cannot change any lookup's result — duplicates are provably inert.
   //    This is deliverable (c) closed as a theorem instead of a suite gamble.
@@ -245,6 +268,25 @@ object ijFixtures {
     def values: ValueSet = new ValueSet
   }
   class CEg[T <: MyEnum](val en: T)
+
+  // 5: the scala/scala Trees cake — a member on a SUPERCLASS (Tree) of an inner
+  // class (ValDef), whose type (Symbol) comes from a SIBLING cake slice via the
+  // self-type, accessed through a val path. The shape that falsified blanket
+  // first-match-wins consumption in the IntelliJ product (commit 64a3f1f197):
+  // a declaration-side hop's identity answer (Trees.this) must not starve the
+  // use-site element that re-anchors Trees.this onto the concrete path.
+  trait NscSymbols { self: NscSymbolTable => class Symbol }
+  trait NscTrees { self: NscSymbolTable =>
+    abstract class Tree { def symbol: Symbol = ??? }
+    class ValOrDefDef extends Tree
+    class ValDef extends ValOrDefDef
+  }
+  abstract class NscSymbolTable extends NscSymbols with NscTrees
+  class NscGlobal extends NscSymbolTable
+  trait HasNscGlobal {
+    val global: NscGlobal
+    val x: global.ValDef = ???
+  }
 
   // 4: generic cake — type params and self-type this-instances in one lookup
   trait TypersG[T] { self: AnalyzerG[T] =>

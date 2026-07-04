@@ -44,7 +44,6 @@ trait ThisTypeSubstitutions { self: IjTypeSystem =>
       // out-of-bounds contract: walking package types trips scalac's
       // ThisType.prefix -> underlying -> owner.thisType.memberType(pkg) machinery.)
       if (thisSym.isPackageClass) return None
-      if (mode.consumed && consumedClasses(thisSym)) return None
       if (mode.prodGuard && hasRecursiveThisType0(target, thisSym)) return None
       val walk = seenFromClass match {
         case Some(clazz) => doUpdateThisTypeFromClass(target, clazz, thisSym)
@@ -55,6 +54,14 @@ trait ThisTypeSubstitutions { self: IjTypeSystem =>
           // (the leaf-exemption inside progressBlocked also covers identity
           // returns: a bare this-type output is never blocked)
           if (mode.progress && progressBlocked(res, thisSym)) None
+          // CONSUMED suppresses only this->THIS re-spelling: after a spine-match
+          // on this class, later elements may not re-NARROW it to another this
+          // (SCL-7008's NM.this -> SN.this -> F.this), but a this->PATH re-anchor
+          // still fires — paths are strictly more concrete, and a declaration-side
+          // hop's identity answer must not starve the use-site element carrying
+          // the real anchor (the scala/scala Trees cake; see nscTreesCake).
+          // Postcondition on the walk result, NOT a pre-gate on the walk.
+          else if (mode.consumed && consumedClasses(thisSym) && res.isInstanceOf[ThisType]) None
           else Some((res, consumes))
         case Unmatched => None
       }
