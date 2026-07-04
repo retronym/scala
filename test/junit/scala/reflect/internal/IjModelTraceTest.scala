@@ -64,7 +64,14 @@ class IjModelTraceTest {
         "scala.reflect.internal.Types$Type#memberType",
         "scala.reflect.internal.Types$Type#asSeenFrom",
         "scala.reflect.internal.tpe.TypeMaps$AsSeenFromMap#*")
-      .exclude("*.toString", "*.render", "*.nameString")
+      .exclude(
+        // rendering, not computation
+        "*.toString", "*.render", "*.nameString",
+        // case-class plumbing: copy/copy$default$N, apply$default$N, method
+        // default-argument getters (processTypeImpl$default$3 etc.)
+        "*.copy", "*.*$default$*", "*.canEqual", "*.equals", "*.hashCode",
+        // trivial guards and module/constant accessors
+        "*.isEmpty", "*.empty", "*.SuperTypesData", "*.RecursionState")
       .maxNodes(3000)
       .maxRenderedLength(120)
       .printOnComplete()
