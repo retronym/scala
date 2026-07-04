@@ -30,6 +30,11 @@ trait ScSubstitutors { self: IjTypeSystem =>
     def followUpdateThisType(fromType: Type, seenFromClass: Symbol): ScSubstitutor =
       new ScSubstitutor(ThisTypeSubstitution(fromType, Option(seenFromClass)) +: substitutions)
 
+    /** Compact, chain-shaped: `ScSubstitutor(this->P sfc=C ; [T:=Int] ; ...)`. */
+    override def toString: String =
+      if (isEmpty) "ScSubstitutor.empty"
+      else substitutions.mkString("ScSubstitutor(", " ; ", ")")
+
     def render: String = substitutions.mkString("  |  ")
     def thisSubstCount: Int = substitutions.count(_.isInstanceOf[ThisTypeSubstitution])
     def duplicateThisTargets: Boolean = {

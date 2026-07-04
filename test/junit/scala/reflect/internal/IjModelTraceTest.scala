@@ -65,8 +65,6 @@ class IjModelTraceTest {
         "scala.reflect.internal.Types$Type#asSeenFrom",
         "scala.reflect.internal.tpe.TypeMaps$AsSeenFromMap#*")
       .exclude("*.toString", "*.render", "*.nameString")
-      // render substitutor chains as their update lists, not @hashcode
-      .render(classOf[ij.ScSubstitutor], (s: ij.ScSubstitutor) => s"[${s.render}]")
       .maxNodes(3000)
       .maxRenderedLength(120)
       .printOnComplete()
