@@ -70,3 +70,4 @@ project/**/metals.sbt
 .history
 
 .claude
+/.tracer-bullet/
