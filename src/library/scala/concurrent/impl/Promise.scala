@@ -245,13 +245,15 @@ private[concurrent] object Promise {
             if (atMost <= Duration.Zero) null
             else {
               val l = new CompletionLatch[T]()
-              onComplete(l)(ExecutionContext.parasitic)
-
-              if (atMost.isFinite)
-                l.tryAcquireSharedNanos(1, atMost.toNanos)
-              else
-                l.acquireSharedInterruptibly(1)
-
+              val t = new Transformation[T, Unit](Xform_onComplete, l, ExecutionContext.parasitic)
+              dispatchOrAddCallbacks(get(), t)
+              try
+                if (atMost.isFinite)
+                  l.tryAcquireSharedNanos(1, atMost.toNanos)
+                else
+                  l.acquireSharedInterruptibly(1)
+              finally
+                if (l.result eq null) unregisterCallback(t)
               l.result
             }
           if (r ne null) r
@@ -335,6 +337,8 @@ private[concurrent] object Promise {
         if (!compareAndSet(state, Noop)) unregisterCallback(t)
       } else if (state.isInstanceOf[ManyCallbacks[_]]) {
         if (!compareAndSet(state, removeCallback(state.asInstanceOf[ManyCallbacks[T]], t))) unregisterCallback(t)
+      } else if (state.isInstanceOf[Link[_]]) {
+        state.asInstanceOf[Link[T]].promise(this).unregisterCallback(t)
       }
     }
 
