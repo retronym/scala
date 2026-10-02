@@ -152,15 +152,7 @@ trait Erasure {
         else if (sym.isDerivedValueClass) eraseDerivedValueClassRef(tref)
         else if (isDottyEnumSingleton(sym)) apply(mergeParents(tp.parents)) // TODO [tasty]: dotty enum singletons are not modules.
         else if (sym.isClass) eraseNormalClassRef(tref)
-        else {
-          // This `else` branch is triggered when we're erasing a type alias or abstract type
-          // (including Scala 3 opaque types). Dealias and erase the underlying type. For polymorphic aliases like
-          // `type F[X] = X`, we must apply the type arguments to get the concrete type before erasure.
-          val dealiased = transparentDealias(sym, pre, sym.owner)
-          val applied = if (args.nonEmpty) appliedType(dealiased, args) else dealiased
-
-          apply(applied)
-        }
+        else apply(transparentDealias(tref)) // alias type or abstract type (including opaque type)
       case PolyType(tparams, restpe) =>
         apply(restpe)
       case ExistentialType(tparams, restpe) =>
@@ -445,7 +437,7 @@ trait Erasure {
         }
 
         def translucentSuperType(tp: Type): Type = tp match {
-          case tp: TypeRef => transparentDealias(tp.sym, tp.pre, tp.sym.owner)
+          case tp: TypeRef => transparentDealias(tp)
           case tp: SingleType => tp.underlying
           case tp: ThisType => tp.sym.typeOfThis
           case tp: ConstantType => tp.value.tpe
@@ -626,14 +618,24 @@ trait Erasure {
   /** For a type alias, get its info as seen from
    *  the current prefix and owner.
    *  Sees through opaque type aliases.
+   *
+   *  For Scala 3 defined type constructors, the type arguments are substituted into
+   *  the alias (or upper bound), as Scala 3 erasure does (scala/bug#13072).
+   *  Scala 2 defined type constructors are erased without substitution for binary compatibility,
+   *  e.g. an abstract `type F[X] <: X` erases `F[String]` to `Object`.
    */
-  def transparentDealias(sym: Symbol, pre: Type, owner: Symbol) = {
-    @inline def visible(tp: Type) = tp.asSeenFrom(pre, owner)
+  def transparentDealias(tref: TypeRef): Type = {
+    val TypeRef(pre, sym, args) = tref
+    @inline def visible(tp: Type) = tp.asSeenFrom(pre, sym.owner)
 
-    if (sym.isScala3Defined && !sym.isClass)
-      sym.attachments.get[DottyOpaqueTypeAlias]
-        .map(alias => visible(alias.tpe))
-        .getOrElse(visible(sym.info))
+    if (sym.isScala3Defined && !sym.isClass) {
+      val info = sym.attachments.get[DottyOpaqueTypeAlias] match {
+        case Some(alias) => alias.tpe
+        case None        => sym.info
+      }
+      val seen = visible(info)
+      if (args.isEmpty) seen else appliedType(seen, args)
+    }
     else
       visible(sym.info)
   }
