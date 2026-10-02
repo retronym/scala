@@ -2,11 +2,11 @@
 package scala.concurrent
 
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.Test
+import org.junit.{Ignore, Test}
 
 import scala.tools.testkit.AssertUtil._
 import scala.util.{Success, Try}
-import duration.Duration.{Inf, Undefined}
+import duration.Duration, Duration.{Inf, Undefined}
 import duration.DurationInt
 import scala.collection.mutable.ListBuffer
 import scala.concurrent.impl.Promise.DefaultPromise
@@ -223,26 +223,57 @@ class FutureTest {
     assertEquals(42, Await.result(p.future, 1.nanosecond))
   }
 
-  @Test def t13197Linked(): Unit = {
-    // Completing `gate` links `inner` to `outer`, moving inner's callbacks to outer
-    def linked(inner: Future[Int]) = {
-      val gate = Promise[Unit]()
-      val outer = gate.future.flatMap(_ => inner)(ExecutionContext.parasitic)
-      (gate, outer)
-    }
+  // Completing `gate` links `inner` to `outer`, moving inner's callbacks to outer
+  private def linked(inner: Future[Int]) = {
+    val gate = Promise[Unit]()
+    val outer = gate.future.flatMap(_ => inner)(ExecutionContext.parasitic)
+    (gate, outer)
+  }
 
-    // Await: linked while waiting, and already linked
+  private def isLinked(p: AnyRef) = p.asInstanceOf[DefaultPromise[_]].get().isInstanceOf[impl.Promise.Link[_]]
+
+  private def spinUntil(cond: => Boolean): Unit = {
+    val deadline = System.nanoTime + 10.seconds.toNanos
+    while (!cond) {
+      if (System.nanoTime - deadline > 0) throw new AssertionError("condition not reached in time")
+      Thread.`yield`()
+    }
+  }
+
+  // Runs `body` on a new thread; the returned function joins it and rethrows any failure
+  private def fork(body: => Unit): () => Unit = {
+    @volatile var failure: Throwable = null
+    val t = new Thread(() => try body catch { case e: Throwable => failure = e })
+    t.start()
+    () => { t.join(); if (failure ne null) throw failure }
+  }
+
+  // Await `f` on the current thread, `during` runs on another thread once the latch is registered
+  // on `registeredOn`, and is responsible for interrupting the waiting thread.
+  private def interruptedAwait(f: Future[Int], registeredOn: AnyRef, baseline: Int, atMost: Duration)(during: Thread => Unit): Unit = {
+    val waiter = Thread.currentThread
+    val join = fork {
+      spinUntil(numTransforms(registeredOn) == baseline + 1)
+      during(waiter)
+    }
+    try assertThrows[InterruptedException](Await.ready(f, atMost))
+    finally {
+      join()
+      Thread.interrupted() // in case `during` failed before the waiter consumed the interrupt
+    }
+  }
+
+  @Test def t13197Linked(): Unit = {
+    // Await: already linked
     locally {
       val inner = Promise[Int]()
       val (gate, outer) = linked(inner.future)
-      val t = new Thread(() => { Thread.sleep(100); gate.success(()) })
-      t.start()
-      assertThrows[TimeoutException](Await.ready(inner.future, 1.second))
-      t.join()
-      assertTrue(inner.asInstanceOf[DefaultPromise[_]].get().isInstanceOf[impl.Promise.Link[_]])
-      assertEquals(0, numTransforms(outer))
-
-      for (_ <- 1 to 100) assertThrows[TimeoutException](Await.ready(inner.future, 1.nanosecond))
+      gate.success(())
+      assertTrue(isLinked(inner))
+      for (_ <- 1 to 100) {
+        assertThrows[TimeoutException](Await.ready(inner.future, 1.nanosecond))
+        assertThrows[TimeoutException](Await.result(inner.future, 1.nanosecond))
+      }
       assertEquals(0, numTransforms(outer))
     }
 
@@ -259,24 +290,185 @@ class FutureTest {
       assertEquals(0, numTransforms(outer))
     }
 
-    // Await and firstCompletedOf with a chain of links: a -> b -> c
+    // firstCompletedOf with a chain of links: a -> b -> c
     locally {
       val a = Promise[Int]()
       val (g1, b) = linked(a.future)
       val (g2, c) = linked(b)
-      val t = new Thread(() => { Thread.sleep(100); g1.success(()); g2.success(()) })
-      t.start()
-      assertThrows[TimeoutException](Await.ready(a.future, 1.second))
-      t.join()
-      assertTrue(b.asInstanceOf[DefaultPromise[_]].get().isInstanceOf[impl.Promise.Link[_]])
-      assertEquals(0, numTransforms(c))
-
+      g1.success(()); g2.success(())
+      assertTrue(isLinked(a))
+      assertTrue(isLinked(b))
       val other = Promise[Int]()
       val first = Future.firstCompletedOf(List(a.future, other.future))(ExecutionContext.parasitic)
       assertEquals(1, numTransforms(c))
       other.success(1)
       assertEquals(1, Await.result(first, Inf))
       assertEquals(0, numTransforms(c))
+    }
+  }
+
+  // The latch is registered on `inner`, then moved to `outer` by linking while the waiter blocks.
+  // The interrupt is only delivered after linking, so the removal must follow the `Link`.
+  @Test def t13197LinkedWhileWaiting(): Unit = for (atMost <- List(Inf, 1.hour)) {
+    val inner = Promise[Int]()
+    val (gate, outer) = linked(inner.future)
+    interruptedAwait(inner.future, registeredOn = inner, baseline = 0, atMost) { waiter =>
+      gate.success(())
+      assertTrue(isLinked(inner))
+      assertEquals(1, numTransforms(outer)) // the latch moved
+      waiter.interrupt()
+    }
+    assertEquals(0, numTransforms(outer))
+  }
+
+  // As above, with a chain a -> b -> c formed while waiting
+  @Test def t13197LinkChainWhileWaiting(): Unit = {
+    val a = Promise[Int]()
+    val (g1, b) = linked(a.future)
+    val (g2, c) = linked(b)
+    interruptedAwait(a.future, registeredOn = a, baseline = 0, Inf) { waiter =>
+      g1.success(())
+      g2.success(())
+      assertTrue(isLinked(a))
+      assertTrue(isLinked(b))
+      assertEquals(1, numTransforms(c))
+      waiter.interrupt()
+    }
+    assertEquals(0, numTransforms(c))
+  }
+
+  // The root of the link is completed before the waiter wakes up: nothing to unregister, and the value is visible
+  @Test def t13197LinkedRootCompletedWhileWaiting(): Unit = {
+    val inner = Promise[Int]()
+    val (gate, outer) = linked(inner.future)
+    val join = fork {
+      spinUntil(numTransforms(inner) == 1)
+      gate.success(())
+      inner.success(42) // completes `outer`, the root
+    }
+    assertEquals(42, Await.result(inner.future, Inf))
+    join()
+    assertEquals(Some(Success(42)), outer.value)
+    assertEquals(Some(Success(42)), inner.future.value)
+  }
+
+  // Only the latch is removed; callbacks registered before and after it (while waiting) survive and run once
+  @Test def t13197OtherCallbacksSurvive(): Unit = {
+    val p = Promise[Int]()
+    val runs = new java.util.concurrent.atomic.AtomicInteger
+    def cb(): Unit = p.future.onComplete(_ => runs.incrementAndGet())(ExecutionContext.parasitic)
+    cb(); cb()
+    interruptedAwait(p.future, registeredOn = p, baseline = 2, Inf) { waiter =>
+      cb(); cb(); cb() // latch is now in the middle of the callback list
+      assertEquals(6, numTransforms(p))
+      waiter.interrupt()
+    }
+    assertEquals(5, numTransforms(p))
+    p.success(1)
+    assertEquals(5, runs.get)
+  }
+
+  // Many threads polling with short timeouts, racing with other threads adding callbacks
+  @Test def t13197ConcurrentPollers(): Unit = {
+    val p = Promise[Int]()
+    val runs = new java.util.concurrent.atomic.AtomicInteger
+    val pollers = 8
+    val adders = 2
+    val callbacksPerAdder = 500
+    val start = new java.util.concurrent.CountDownLatch(1)
+    val joins =
+      List.fill(pollers)(fork {
+        start.await()
+        for (i <- 1 to 1000)
+          assertThrows[TimeoutException](Await.ready(p.future, if (i % 10 == 0) 1.millisecond else 1.nanosecond))
+      }) ++ List.fill(adders)(fork {
+        start.await()
+        for (_ <- 1 to callbacksPerAdder) p.future.onComplete(_ => runs.incrementAndGet())(ExecutionContext.parasitic)
+      })
+    start.countDown()
+    joins.foreach(_())
+    assertEquals(adders * callbacksPerAdder, numTransforms(p))
+    p.success(1)
+    assertEquals(adders * callbacksPerAdder, runs.get)
+  }
+
+  // Concurrent pollers on an already-linked future clean up the root
+  @Test def t13197ConcurrentPollersLinked(): Unit = {
+    val inner = Promise[Int]()
+    val (gate, outer) = linked(inner.future)
+    gate.success(())
+    outer.onComplete(_ => ())(ExecutionContext.parasitic)
+    val joins = List.fill(8)(fork {
+      for (_ <- 1 to 1000) assertThrows[TimeoutException](Await.ready(inner.future, 1.nanosecond))
+    })
+    joins.foreach(_())
+    assertEquals(1, numTransforms(outer))
+  }
+
+  // Pollers racing with completion: each call either times out or sees the value, nothing else
+  @Test def t13197PollersRacingCompletion(): Unit = for (_ <- 1 to 20) {
+    val p = Promise[Int]()
+    val start = new java.util.concurrent.CountDownLatch(1)
+    val joins = List.fill(4)(fork {
+      start.await()
+      var done = false
+      while (!done)
+        try { assertEquals(42, Await.result(p.future, 1.microsecond)); done = true }
+        catch { case _: TimeoutException => }
+    })
+    start.countDown()
+    Thread.`yield`()
+    p.success(42)
+    joins.foreach(_())
+  }
+
+  // Unregistering races with linking, which moves the callback from `inner` to `outer` in two steps:
+  // `linkRootOf` publishes the `Link` before adding the callbacks to the root. An unregister in between
+  // follows the link, misses the callback at the root, and the callback is then added there and leaks.
+  @Ignore("known race between linkRootOf and unregisterCallback")
+  @Test def t13197UnregisterRacingLink(): Unit = {
+    val iterations = 200000
+    val gates = new Array[Promise[Unit]](iterations)
+    val outers = new Array[Future[Int]](iterations)
+    val deregs = new Array[() => Unit](iterations)
+    for (i <- 0 until iterations) {
+      val inner = Promise[Int]().asInstanceOf[DefaultPromise[Int]]
+      val (gate, outer) = linked(inner)
+      gates(i) = gate; outers(i) = outer
+      deregs(i) = inner.onCompleteWithUnregister(_ => ())(ExecutionContext.parasitic)
+    }
+    // two threads step through the iterations in lockstep, one linking and one unregistering
+    val ticket = new java.util.concurrent.atomic.AtomicInteger
+    def lockstep(i: Int): Unit = { ticket.incrementAndGet(); while (ticket.get < 2 * (i + 1)) () }
+    val join = fork(for (i <- 0 until iterations) { lockstep(i); gates(i).success(()) })
+    for (i <- 0 until iterations) { lockstep(i); deregs(i)() }
+    join()
+    val leaks = outers.count(numTransforms(_) != 0)
+    assertEquals("leaked callbacks", 0, leaks)
+  }
+
+  // Unregistering is idempotent, and a no-op once completed (also via a completed link root)
+  @Test def t13197UnregisterIdempotent(): Unit = {
+    locally {
+      val p = Promise[Int]().asInstanceOf[DefaultPromise[Int]]
+      val dereg = p.onCompleteWithUnregister(_ => ())(ExecutionContext.parasitic)
+      p.onComplete(_ => ())(ExecutionContext.parasitic)
+      dereg(); dereg()
+      assertEquals(1, numTransforms(p))
+      p.success(1)
+      dereg()
+      assertEquals(Some(Success(1)), p.value)
+    }
+    locally {
+      val inner = Promise[Int]().asInstanceOf[DefaultPromise[Int]]
+      val (gate, outer) = linked(inner)
+      val dereg = inner.onCompleteWithUnregister(_ => ())(ExecutionContext.parasitic)
+      gate.success(())
+      assertTrue(isLinked(inner))
+      inner.success(1) // completes the root
+      dereg() // finds a completed root, unlinks `inner`
+      assertEquals(Some(Success(1)), inner.value)
+      assertEquals(Some(Success(1)), outer.value)
     }
   }
 
