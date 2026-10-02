@@ -296,6 +296,19 @@ class RefchecksAfterErrorsTest {
     """class C { type T; class D extends T { override def foo = 1 } }
       |""".stripMargin)
 
+  /** neg/reify_metalevel_breach_*: a failed macro expansion leaves `@compileTimeOnly` splice calls behind; refchecks then
+   *  reports "splice must be enclosed within a reify {} block". The PR edited these tests to dodge the cascade. */
+  @Test def noise_failedMacroLeavesCompileTimeOnly(): Unit = noise(
+    """import scala.reflect.runtime.universe._
+      |object Test {
+      |  val code = reify {
+      |    val x = 2
+      |    val inner = reify { reify { x } }
+      |    inner.splice.splice
+      |  }
+      |}
+      |""".stripMargin)
+
   @Test def noise_javaParentErrorTypeArg(): Unit = noise(
     """class C extends java.util.Comparator[Undefined]
       |""".stripMargin)
