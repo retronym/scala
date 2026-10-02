@@ -55,8 +55,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Reporting
     with Parsing { self =>
 
+  /** True while running refchecks after typer reported errors (only under `-Yrefchecks-after-errors`). */
   var typerReportedErrors = false
-  
+
   // the mirror --------------------------------------------------
 
   override def isCompilerUniverse = true
@@ -1548,13 +1549,14 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       reporter.reset()
       warnDeprecatedAndConflictingSettings()
       globalPhase = fromPhase
+      typerReportedErrors = false
 
       val timePhases = settings.areStatisticsEnabled
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
 
       while (globalPhase.hasNext) {
         phase = globalPhase
-        if(!reporter.hasErrors || (typerReportedErrors && globalPhase.name == "refchecks")){
+        if (!reporter.hasErrors || (typerReportedErrors && globalPhase.name == "refchecks")) {
         val phaseTimer = if (timePhases) statistics.newSubTimer(s"  ${phase.name}", totalCompileTime) else null
         val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
 
@@ -1589,11 +1591,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         if (!reporter.hasErrors && settings.Yvalidatepos.containsPhase(globalPhase))
           currentRun.units.foreach(unit => validatePositions(unit.body))
 
-          if(reporter.hasErrors && globalPhase.name == "typer"){
+          if (settings.YrefchecksAfterErrors.value && reporter.hasErrors && globalPhase.name == "typer")
             typerReportedErrors = true
-          }
         }
-      
 
         // move the pointer
         globalPhase = globalPhase.next

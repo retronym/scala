@@ -1210,6 +1210,7 @@ trait Namers extends MethodSynthesis {
       pending.foreach(ErrorUtils.issueTypeError)
 
       val parents = {
+        if (parentTrees.exists(t => t.tpe.isError || t.tpe.dealias.isError)) clazz.updateAttachment(ErroneousParents)
         def checkParent(tpt: Tree): Type = if (tpt.tpe.isError) AnyRefTpe else tpt.tpe
         parentTrees map checkParent
       }

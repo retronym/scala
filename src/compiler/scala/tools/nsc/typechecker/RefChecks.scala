@@ -252,6 +252,9 @@ abstract class RefChecks extends Transform {
      *  5. Check that the nested class do not shadow other nested classes from outer class's parent.
      */
     private def checkAllOverrides(clazz: Symbol, typesOnly: Boolean = false): Unit = {
+      // The typer failed on a parent (of `clazz` or an ancestor), so the set of inherited members is incomplete (`Namers` substitutes AnyRef).
+      // Checks that infer "missing" or "overridden" members from the full set of base members would be bogus, and are skipped.
+      lazy val erroneousParents = global.typerReportedErrors && clazz.baseClasses.exists(bc => bc.hasAttachment[analyzer.ErroneousParents.type] || bc.info.parents.exists(_.isErroneous))
       val self = clazz.thisType
 
       case class MixinOverrideError(member: Symbol, msg: String, actions: List[CodeAction], s3Migration: Boolean)
@@ -589,7 +592,7 @@ abstract class RefChecks extends Transform {
       printMixinOverrideErrors()
 
       // Verifying a concrete class has nothing unimplemented.
-      if (clazz.isConcreteClass && !typesOnly) {
+      if (clazz.isConcreteClass && !typesOnly && !erroneousParents) {
         val abstractErrors = ListBuffer.empty[String]
         def abstractErrorMessage = abstractErrors.mkString("\n")
 
@@ -847,7 +850,7 @@ abstract class RefChecks extends Transform {
       }
 
       // 4. Check that every defined member with an `override` modifier overrides some other member.
-      for (member <- clazz.info.decls)
+      if (!erroneousParents) for (member <- clazz.info.decls)
         if (member.isAnyOverride && !clazz.thisType.baseClasses.exists(hasMatchingSym(_, member))) {
           // for (bc <- clazz.info.baseClasses.tail) Console.println("" + bc + " has " + bc.info.decl(member.name) + ":" + bc.info.decl(member.name).tpe);//DEBUG
 
@@ -1387,6 +1390,7 @@ abstract class RefChecks extends Transform {
            (sym.owner isSubClass DelayedInitClass)
         && !qual.tpe.isInstanceOf[ThisType]
         && sym.accessedOrSelf.isVal
+        && !sym.isErroneous
       )
       if (settings.warnDelayedInit && isLikelyUninitialized)
         refchecksWarning(pos, s"Selecting ${sym} from ${sym.owner}, which extends scala.DelayedInit, is likely to yield an uninitialized value", WarningCategory.LintDelayedinitSelect)

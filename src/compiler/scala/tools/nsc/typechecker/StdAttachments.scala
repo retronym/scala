@@ -18,6 +18,12 @@ trait StdAttachments {
 
   import global._
 
+  /** Attached to a class symbol whose parent type tree failed to type check. `Namers` substitutes `AnyRef` for such a parent,
+   *  so the class info alone no longer reveals that the set of inherited members is incomplete. Checks that rely on
+   *  the complete set of base members (e.g. `RefChecks` abstractness / "overrides nothing") use this to stay quiet.
+   */
+  case object ErroneousParents
+
   /** Carries information necessary to expand the host tree.
    *  At times we need to store this info, because macro expansion can be delayed until its targs are inferred.
    *  After a macro application has been successfully expanded, this attachment is destroyed.
