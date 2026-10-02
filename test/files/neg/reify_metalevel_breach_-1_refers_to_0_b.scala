@@ -8,7 +8,7 @@ object Test extends App {
   val code = reify{
     {
       val inner = reify{reify{x}}
-      reify{inner.splice}
+      inner.splice
     }.splice
   }
 

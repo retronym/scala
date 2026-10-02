@@ -7,7 +7,7 @@ object Test extends App {
   val code = reify{
     val x = 2
     val inner = reify{reify{x}}
-    reify{inner.splice}.splice
+    inner.splice.splice
   };
 
   val toolbox = cm.mkToolBox()

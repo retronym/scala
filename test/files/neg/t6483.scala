@@ -16,7 +16,7 @@ class C3(val a: Int) extends AnyVal with T {
 }
 
 class C4(val a: Int) extends AnyVal with T {
-  override def foo {
+  def foo: Unit = {
     class Inner extends T {
       override def foo = super[T].foo + a // no (direct) error, other than that a nested class is currently illegal.
     }

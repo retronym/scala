@@ -1,0 +1,27 @@
+refchecks-after-errors.scala:7: error: type mismatch;
+ found   : String("")
+ required: Int
+  val x: Int = "" // typer error
+               ^
+refchecks-after-errors.scala:13: error: not found: type Missing
+class A extends Missing with T
+                ^
+refchecks-after-errors.scala:15: error: not found: type Undefined
+class C extends Ordering[Undefined]
+                         ^
+refchecks-after-errors.scala:19: error: not found: value undefinedName
+  def f = undefinedName
+          ^
+refchecks-after-errors.scala:20: error: not found: type Undefined
+  override def g(x: Undefined): Int = 1
+                    ^
+refchecks-after-errors.scala:6: error: class Wanted needs to be abstract.
+Missing implementation for member of trait T:
+  def f: Int = ???
+
+class Wanted extends T {
+      ^
+refchecks-after-errors.scala:9: error: method nope overrides nothing
+  override def nope = 1 // refchecks: overrides nothing
+               ^
+7 errors

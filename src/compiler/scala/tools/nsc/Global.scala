@@ -1554,9 +1554,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       val timePhases = settings.areStatisticsEnabled
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
 
-      while (globalPhase.hasNext) {
+      // Under -Yrefchecks-after-errors, after typer errors we skip ahead to refchecks, run it, and stop.
+      // Otherwise the loop ends as soon as there are errors, leaving `globalPhase` right after the failing phase.
+      var refchecksAfterErrorsDone = false
+      while (globalPhase.hasNext && (!reporter.hasErrors || (typerReportedErrors && !refchecksAfterErrorsDone))) {
         phase = globalPhase
-        if (!reporter.hasErrors || (typerReportedErrors && globalPhase.name == "refchecks")) {
+        if (reporter.hasErrors && globalPhase.name == "refchecks") refchecksAfterErrorsDone = true
+        if (!reporter.hasErrors || globalPhase.name == "refchecks") {
         val phaseTimer = if (timePhases) statistics.newSubTimer(s"  ${phase.name}", totalCompileTime) else null
         val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
 

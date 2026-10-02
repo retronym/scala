@@ -283,6 +283,19 @@ class RefchecksAfterErrorsTest {
     """object O { type P = Missing; class C extends P { override def run(): Unit = () } }
       |""".stripMargin)
 
+  /** neg/t5529: the PR's own .check records "class Dir needs to be abstract. Missing implementation: def getClass()" as expected output. */
+  @Test def noise_classTypeRequired_t5529(): Unit = noise(
+    """object Test {
+      |  sealed abstract class File { val i = 1 }
+      |  sealed class Dir extends File { }
+      |  type File
+      |}
+      |""".stripMargin)
+
+  @Test def noise_classTypeRequired_abstractTypeMember(): Unit = noise(
+    """class C { type T; class D extends T { override def foo = 1 } }
+      |""".stripMargin)
+
   @Test def noise_javaParentErrorTypeArg(): Unit = noise(
     """class C extends java.util.Comparator[Undefined]
       |""".stripMargin)
@@ -418,6 +431,20 @@ class RefchecksAfterErrorsTest {
     val o = runOn(g, r, List("b.scala" -> bounds))
     assertTrue(s"refchecks bounds check must run normally in the clean second run:\n${o.render}", o.errors.nonEmpty)
     assertFalse("flag leaked", g.typerReportedErrors)
+  }
+
+  /** After a run that stopped on typer errors, `globalPhase`/`phase` must be left where the unmodified driver loop leaves
+   *  them (the phase after typer). The PR's restructured loop keeps advancing `globalPhase` to the end of the pipeline, which
+   *  changes what phase later symbol lookups on a reused Global (REPL, presentation compiler, sbt) are performed at: this is
+   *  what changed the `final package test` entries in the PR's edits to test/files/presentation/scope-completion*.check.
+   */
+  @Test def phaseAfterFailedRun_flagOff(): Unit = phaseAfterFailedRun(flag = false)
+  @Test def phaseAfterFailedRun_flagOn(): Unit = phaseAfterFailedRun(flag = true)
+  private def phaseAfterFailedRun(flag: Boolean): Unit = {
+    val (g, r) = newGlobal(defaultArgs ++ (if (flag) List(Flag) else Nil))
+    runOn(g, r, List("a.scala" -> "class A { val x: Int = \"\" }"))
+    // unmodified 2.13.x driver: loop exits right after typer, `globalPhase` is typer.next
+    assertEquals(s"flag=$flag globalPhase=${g.globalPhase.name} phase=${g.phase.name}", if (flag) "patmat" else "superaccessors", g.globalPhase.name) // flag: refchecks ran, loop stops after it
   }
 
   /** The flag must be a no-op when off. */

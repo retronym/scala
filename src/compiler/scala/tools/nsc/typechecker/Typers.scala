@@ -2049,6 +2049,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       enterSyms(context.outer.make(templ, clazz, clazz.info.decls), body1)
       if (!templ.isErrorTyped) // if `parentTypes` has invalidated the template, don't validate it anymore
         validateParentClasses(parents1, selfType, clazz.isTrait)
+      // validateParentClasses may have set an error type on a parent tree (e.g. class type required)
+      if (parents1.exists(t => t.tpe.isErroneous || t.tpe.dealias.isError)) clazz.updateAttachment(ErroneousParents) // see RefChecks.checkAllOverrides
       if (clazz.isCase)
         validateNoCaseAncestor(clazz)
       if (clazz.isTrait && hasSuperArgs(parents1.head))
