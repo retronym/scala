@@ -331,16 +331,34 @@ private[concurrent] object Promise {
         p.dispatchOrAddCallbacks(p.get(), callbacks)
       }
 
-    @tailrec private def unregisterCallback(t: Transformation[_, _]): Unit = {
+    /** Removes `t`, an `onComplete` callback, from this promise or the root it is linked to.
+     *
+     *  The own promise state of an `onComplete` callback is otherwise unused. It is completed with `Unregistered`
+     *  before `t` is removed, so that `linkRootOf` can remove it if it is concurrently moving `t` to the root.
+     */
+    private def unregisterCallback(t: Transformation[_, _]): Unit = {
+      t.tryComplete0(t.get(), Unregistered)
+      detachCallback(t)
+    }
+
+    @tailrec private def detachCallback(t: Transformation[_, _]): Unit = {
       val state = get()
       if (state eq t) {
-        if (!compareAndSet(state, Noop)) unregisterCallback(t)
+        if (!compareAndSet(state, Noop)) detachCallback(t)
       } else if (state.isInstanceOf[ManyCallbacks[_]]) {
-        if (!compareAndSet(state, removeCallback(state.asInstanceOf[ManyCallbacks[T]], t))) unregisterCallback(t)
+        if (!compareAndSet(state, removeCallback(state.asInstanceOf[ManyCallbacks[T]], t))) detachCallback(t)
       } else if (state.isInstanceOf[Link[_]]) {
-        state.asInstanceOf[Link[T]].promise(this).unregisterCallback(t)
+        state.asInstanceOf[Link[T]].promise(this).detachCallback(t)
       }
     }
+
+    // Detaches the callbacks in `cs` that were unregistered, see `unregisterCallback`
+    @tailrec private def detachUnregistered(cs: Callbacks[T]): Unit =
+      if (cs.isInstanceOf[ManyCallbacks[_]]) {
+        val m = cs.asInstanceOf[ManyCallbacks[T]]
+        if (m.first.get() eq Unregistered) detachCallback(m.first)
+        detachUnregistered(m.rest)
+      } else if (cs.asInstanceOf[Transformation[T, _]].get() eq Unregistered) detachCallback(cs.asInstanceOf[Transformation[T, _]])
 
     // IMPORTANT: Noop should never be passed in here, neither as left OR as right
     @tailrec private[this] final def concatCallbacks(left: Callbacks[T], right: Callbacks[T]): Callbacks[T] =
@@ -387,7 +405,12 @@ private[concurrent] object Promise {
           val l = if (link ne null) link else new Link(target)
           val p = l.promise(this)
           if ((this ne p) && compareAndSet(state, l)) {
-            if (state ne Noop) p.dispatchOrAddCallbacks(p.get(), state.asInstanceOf[Callbacks[T]]) // Noop-check is important here
+            if (state ne Noop) { // Noop-check is important here
+              val cs = state.asInstanceOf[Callbacks[T]]
+              p.dispatchOrAddCallbacks(p.get(), cs)
+              // A callback unregistered after the `Link` was installed may have been missed at `p`
+              p.detachUnregistered(cs)
+            }
           } else linkRootOf(p, l)
         } else /* if (state.isInstanceOf[Link[T]]) */
           state.asInstanceOf[Link[T]].promise(this).linkRootOf(target, link)
@@ -438,6 +461,9 @@ private[concurrent] object Promise {
   }
 
   private[this] final val Noop = new Transformation[Nothing, Nothing](Xform_noop, null, ExecutionContext.parasitic)
+
+  // Marks an unregistered `onComplete` callback, see `DefaultPromise.unregisterCallback`
+  private[this] final val Unregistered: Try[Nothing] = Failure(new IllegalStateException("Unregistered callback"))
 
   /**
    * A Transformation[F, T] receives an F (it is a Callback[F]) and applies a transformation function to that F,

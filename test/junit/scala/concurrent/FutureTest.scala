@@ -2,7 +2,7 @@
 package scala.concurrent
 
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{Ignore, Test}
+import org.junit.Test
 
 import scala.tools.testkit.AssertUtil._
 import scala.util.{Success, Try}
@@ -424,8 +424,7 @@ class FutureTest {
 
   // Unregistering races with linking, which moves the callback from `inner` to `outer` in two steps:
   // `linkRootOf` publishes the `Link` before adding the callbacks to the root. An unregister in between
-  // follows the link, misses the callback at the root, and the callback is then added there and leaks.
-  @Ignore("known race between linkRootOf and unregisterCallback")
+  // follows the link and misses the callback at the root; `linkRootOf` must then remove it.
   @Test def t13197UnregisterRacingLink(): Unit = {
     val iterations = 200000
     val gates = new Array[Promise[Unit]](iterations)
