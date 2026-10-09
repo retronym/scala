@@ -19,9 +19,12 @@ import scala.collection.mutable, mutable.ListBuffer
 import scala.annotation.tailrec
 import Variance._
 
-private[internal] trait GlbLubs {
-  self: SymbolTable =>
+private[internal] abstract class GlbLubs {
+  val self: SymbolTable
+  def indent: String
+  def indent_=(i: String): Unit
 
+  import self._
   import definitions._
   import statistics._
 
@@ -288,12 +291,6 @@ private[internal] trait GlbLubs {
       if (isNumericSubType(t1, t2)) t2.dealiasWiden
       else if (isNumericSubType(t2, t1)) t1.dealiasWiden
       else IntTpe)
-
-  private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
-  def lubResults = _lubResults
-
-  private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
-  def glbResults = _glbResults
 
   def lub(ts: List[Type]): Type = ts match {
     case Nil      => NothingTpe

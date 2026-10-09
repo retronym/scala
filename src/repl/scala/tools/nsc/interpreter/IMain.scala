@@ -162,6 +162,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
 
   import global._
   import definitions.{ ObjectClass, termMember, dropNullaryMethod}
+  import kinds._
 
   override def classPathString = global.classPath.asClassPathString
 
@@ -1289,7 +1290,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
           val kind = exitingTyper {
             val sym = tpe.typeSymbol.asClass
             val owner = sym.owner
-            val kind0 = intp.global.inferKind(NoPrefix)(TypeRef(pre, sym, Nil), owner)
+            val kind0 = intp.global.kinds.inferKind(NoPrefix)(TypeRef(pre, sym, Nil), owner)
             kind0 match {
               case TypeConKind(bounds, kargs) if args.size == kargs.size =>
                 TypeConKind(bounds, (args.toList zip kargs.toList) flatMap {
@@ -1306,7 +1307,7 @@ class IMain(val settings: Settings, parentClassLoaderOverride: Option[ClassLoade
           val kind = exitingTyper {
             val sym = tpe.typeSymbol.asClass
             val owner = sym.owner
-            intp.global.inferKind(NoPrefix)(tpe, owner)
+            intp.global.kinds.inferKind(NoPrefix)(tpe, owner)
           }
           kindMsg(tpe, kind, verbose)
         }

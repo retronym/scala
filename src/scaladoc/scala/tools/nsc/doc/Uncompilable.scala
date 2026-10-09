@@ -25,9 +25,10 @@ trait Uncompilable {
   val global: Global
   val settings: Settings
 
-  import global.{ reporter, inform, newTypeName, newTermName, runReporting, Symbol, DocComment, MethodSymbol, NoSymbol }
+  import global.{ reporter, inform, newTypeName, newTermName, runReporting, Symbol, MethodSymbol, NoSymbol }
   import global.definitions.{ AnyRefClass, AnyRefTpe }
   import global.rootMirror.RootClass
+  import global.docCommentsComponent._
 
   private implicit def translateName(name: Global#Name): global.Name =
     if (name.isTypeName) newTypeName("" + name) else newTermName("" + name)

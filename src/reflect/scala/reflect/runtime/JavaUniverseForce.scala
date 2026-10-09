@@ -47,11 +47,8 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.rootMirror
     this.traceSymbols
     this.perRunCaches
-    this.compat
     this.treeBuild
     this.FreshNameExtractor
-    this.FixedMirrorTreeCreator
-    this.FixedMirrorTypeCreator
     this.CompoundTypeTreeOriginalAttachment
     this.SAMFunction
     this.DelambdafyTarget
@@ -92,8 +89,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.DiscardedExpr
     this.BooleanParameterType
     this.ForceMatchDesugar
-    this.noPrint
-    this.typeDebug
     // inaccessible: this.posAssigner
     this.ConsoleWriter
     this.RefTree
@@ -175,11 +170,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.Scope
     this.EmptyScope
     this.Flag
-    this.KindErrors
-    this.Kind
-    this.ProperTypeKind
-    this.TypeConKind
-    this.inferKind
     this.UnmappableTree
     this.ErrorType
     this.WildcardType

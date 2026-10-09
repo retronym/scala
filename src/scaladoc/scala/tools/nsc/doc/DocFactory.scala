@@ -67,7 +67,7 @@ class DocFactory(val reporter: Reporter, val settings: doc.Settings) { processor
           val settings = processor.settings
         } with Uncompilable { }
 
-        compiler.docComments ++= uncompilable.comments
+        compiler.docCommentsComponent.docComments ++= uncompilable.comments
         docdbg("" + uncompilable)
 
         uncompilable.templates

@@ -26,6 +26,7 @@ import util.ThreeValues._
 import Variance._
 import Depth._
 import TypeConstants._
+import scala.reflect.internal.tpe.GlbLubs
 import scala.util.chaining._
 
 /* A standard type pattern match:
@@ -87,8 +88,6 @@ trait Types
   extends api.Types
   with tpe.TypeComparers
   with tpe.TypeToStrings
-  with tpe.CommonOwners
-  with tpe.GlbLubs
   with tpe.TypeMaps
   with tpe.TypeConstraints
   with tpe.FindMembers
@@ -96,6 +95,22 @@ trait Types
 
   import definitions._
   import statistics._
+
+  private lazy val glbLubs = new GlbLubs {
+    lazy val self: Types.this.type = Types.this
+    def indent: String = Types.this.indent
+    def indent_=(x: String) = Types.this.indent_=(x: String)
+  }
+  def weakLub(tps: List[Type]): Type = glbLubs.weakLub(tps)
+  def glb(tps: List[Type]): Type = glbLubs.glb(tps)
+  def lub(tps: List[Type]): Type = glbLubs.lub(tps)
+  private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def lubResults = _lubResults
+  private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def glbResults = _glbResults
+  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = glbLubs.lub(ts0, depth)//
+  protected[internal] def glb(ts0: List[Type], depth: Depth): Type = glbLubs.glb(ts0, depth)//
+  def sameWeakLubAsLub(tps: List[Type]) = glbLubs.sameWeakLubAsLub(tps)
 
   private[this] var explainSwitch = false
   @unused private final val emptySymbolSet = Set.empty[Symbol]
@@ -2896,7 +2911,7 @@ trait Types
 
     //Format (a: A)(b: B)(implicit c: C, d: D): E
     override def safeToString = {
-      s"${paramString(this)}${
+      s"${typeDebugging.paramString(this)}${
         resultType match { case _: MethodType => "" case _ => ": "}
       }$resultType"
     }
@@ -3002,7 +3017,7 @@ trait Types
 
     override def isHigherKinded = !typeParams.isEmpty
 
-    override def safeToString = typeParamsString(this) + resultType
+    override def safeToString = typeDebugging.typeParamsString(this) + resultType
 
     override def cloneInfo(owner: Symbol) = {
       val tparams = cloneSymbolsAtOwner(typeParams, owner)
@@ -3971,7 +3986,7 @@ trait Types
 
   abstract class LazyPolyType(override val typeParams: List[Symbol]) extends LazyType {
     override def safeToString =
-      (if (typeParams.isEmpty) "" else typeParamsString(this)) + super.safeToString
+      (if (typeParams.isEmpty) "" else typeDebugging.typeParamsString(this)) + super.safeToString
   }
 
 // Creators ---------------------------------------------------------------
@@ -4168,7 +4183,7 @@ trait Types
       case tv@TypeVar(_, _)                               => tv.applyArgs(args)
       case AnnotatedType(annots, underlying)              => AnnotatedType(annots, appliedType(underlying, args))
       case ErrorType | WildcardType                       => tycon
-      case _                                              => abort(debugString(tycon))
+      case _                                              => abort(typeDebugging.debugString(tycon))
     }
   }
 
@@ -4824,7 +4839,7 @@ trait Types
             (!symLo.hasVolatileType || symHi.hasVolatileType || tpHi.isWildcard)) // sub-member must not introduce volatility
         else if (symHi.isAbstractType)
           ((tpHi.bounds containsType tpLo) &&
-            kindsConform(symHi :: Nil, tpLo :: Nil, preLo, symLo.owner))
+            kinds.kindsConform(symHi :: Nil, tpLo :: Nil, preLo, symLo.owner))
         else // we know `symHi.isAliasType` (see above)
           tpLo =:= tpHi
       }
@@ -5389,6 +5404,45 @@ trait Types
     case tp :: rest => tp.isTrivial && areTrivialTypes(rest)
     case _ => true
   }
+  /** The most deeply nested owner that contains all the symbols
+   *  of thistype or prefixless typerefs/singletype occurrences in given type.
+   */
+  protected[internal] def commonOwner(t: Type): Symbol = commonOwner(t :: Nil)
+
+  /** The most deeply nested owner that contains all the symbols
+   *  of thistype or prefixless typerefs/singletype occurrences in given list
+   *  of types.
+   */
+  protected[internal] def commonOwner(tps: List[Type]): Symbol =
+    if (tps.isEmpty) NoSymbol
+    else {
+      commonOwnerMap.clear()
+      tps foreach (commonOwnerMap)
+      if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+    }
+
+  protected def commonOwnerMap: CommonOwnerMap = commonOwnerMapObj
+
+  protected class CommonOwnerMap extends TypeCollector[Symbol](null) {
+    def clear(): Unit = { result = null }
+
+    private def register(sym: Symbol): Unit = {
+      // First considered type is the trivial result.
+      if ((result eq null) || (sym eq NoSymbol))
+        result = sym
+      else
+        while ((result ne NoSymbol) && (result ne sym) && !(sym isNestedIn result))
+          result = result.owner
+    }
+    def apply(tp: Type) = tp.normalize match {
+      case ThisType(sym)                => register(sym)
+      case TypeRef(NoPrefix, sym, args) => register(sym.owner) ; args foreach apply
+      case SingleType(NoPrefix, sym)    => register(sym.owner)
+      case _                            => tp.foldOver(this)
+    }
+  }
+
+  private lazy val commonOwnerMapObj = new CommonOwnerMap
 
 // -------------- Classtags --------------------------------------------------------
 

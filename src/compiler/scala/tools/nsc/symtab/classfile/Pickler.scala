@@ -17,9 +17,8 @@ package classfile
 import java.lang.Float.floatToIntBits
 import java.lang.Double.doubleToLongBits
 import java.util.Arrays.fill
-
 import scala.io.Codec
-import scala.reflect.internal.pickling.{PickleBuffer, PickleFormat}
+import scala.reflect.internal.pickling.{PickleBuffer, PickleFormat, Translations}
 import scala.reflect.internal.util.shortClassOfInstance
 import scala.collection.mutable
 import PickleFormat._
@@ -37,6 +36,9 @@ abstract class Pickler extends SubComponent {
   import global._
 
   val phaseName = "pickler"
+
+  private val translations = new Translations { val self: global.type = global }
+  import translations._
 
   def newPhase(prev: Phase): StdPhase = new PicklePhase(prev)
 

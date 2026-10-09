@@ -33,6 +33,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   import global._
   import definitions._
   import statistics._
+  import kinds._
 
   final def forArgMode(fun: Tree, mode: Mode) =
     if (treeInfo.isSelfOrSuperConstrCall(fun)) mode | SCCmode else mode
@@ -52,7 +53,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private val superConstructorCalls: mutable.HashMap[Symbol, collection.Map[Symbol, Symbol]] = perRunCaches.newMap()
 
   // allows override of the behavior of the resetTyper method w.r.t comments
-  def resetDocComments() = clearDocComments()
+  def resetDocComments() = docCommentsComponent.clearDocComments()
 
   def resetTyper(): Unit = {
     //println("resetTyper called")
