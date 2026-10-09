@@ -362,6 +362,10 @@ class DeterminismTest {
           |}
         """.stripMargin),
       source("b.scala", "object O extends J[java.io.FileNotFoundException]; class C extends J[java.io.IOException]")
+    )
+    test(List(code))
+  }
+
   @Test def testJavaConstantExpression(): Unit = {
     // A reference to a Java constant variable is inlined whether the Java class is parsed from source
     // or loaded from a classfile, where it has a `ConstantValue` attribute.
@@ -374,6 +378,10 @@ class DeterminismTest {
           |}
         """.stripMargin),
       source("b.scala", "class C { def f = new Array[Byte](J.NUM_BYTES) }")
+    )
+    test(List(code))
+  }
+
   @Test def testLubParentOrder(): Unit = {
     // The parents of the inferred lub `Zed with Abe`, and hence its erasure, don't depend on whether
     // the traits are entered from source (in declaration order) or from the classpath.
