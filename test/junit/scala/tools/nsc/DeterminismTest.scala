@@ -374,6 +374,18 @@ class DeterminismTest {
           |}
         """.stripMargin),
       source("b.scala", "class C { def f = new Array[Byte](J.NUM_BYTES) }")
+  @Test def testLubParentOrder(): Unit = {
+    // The parents of the inferred lub `Zed with Abe`, and hence its erasure, don't depend on whether
+    // the traits are entered from source (in declaration order) or from the classpath.
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |trait Zed
+          |trait Abe
+          |class S extends Zed with Abe
+          |class T extends Abe with Zed
+        """.stripMargin),
+      source("b.scala", "class U { def f(b: Boolean) = if (b) new S else new T }")
     )
     test(List(code))
   }
