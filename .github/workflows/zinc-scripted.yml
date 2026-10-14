@@ -1,6 +1,8 @@
 name: Zinc scripted tests vs. scala2-sbt-bridge
 
 on:
+  push:
+    branches: ['ci/zinc-scripted-vs-bridge']
   workflow_dispatch:
     inputs:
       zinc_ref:
