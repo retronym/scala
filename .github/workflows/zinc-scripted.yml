@@ -1,0 +1,60 @@
+name: Zinc scripted tests vs. scala2-sbt-bridge
+
+on:
+  workflow_dispatch:
+    inputs:
+      zinc_ref:
+        description: 'sbt/zinc ref (tag, SHA or branch) to test; overrides the pinned SHA. Use "develop" to track the tip.'
+        required: false
+  schedule:
+    - cron: '0 5 * * 1'
+
+defaults:
+  run:
+    shell: bash
+
+permissions:
+  contents: read
+
+env:
+  # Move this forward periodically. The patch in .github/zinc must apply to it.
+  ZINC_PINNED_SHA: b6c94565e5bee6ad01eacd1e350a1c6d252b248e
+
+jobs:
+  zinc_scripted:
+    name: Zinc scripted (label 2.13.y)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scala
+        uses: actions/checkout@v7
+
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: zulu
+          java-version: 17
+          cache: sbt
+
+      - name: Setup SBT
+        uses: sbt/setup-sbt@v1
+
+      - name: Publish Scala locally
+        run: sbt setupPublishCore generateBuildCharacterPropertiesFile publishLocal
+
+      - name: Checkout zinc
+        uses: actions/checkout@v7
+        with:
+          repository: sbt/zinc
+          ref: ${{ inputs.zinc_ref || env.ZINC_PINNED_SHA }}
+          path: zinc
+
+      - name: Patch zinc
+        working-directory: zinc
+        run: git apply ../.github/zinc/zinc-scala-bridge.patch
+
+      - name: Run zinc scripted tests
+        working-directory: zinc
+        run: |
+          SCALA_VERSION=$(grep ^maven.version.number ../buildcharacter.properties | cut -d= -f2)
+          echo "Testing zinc $(git rev-parse HEAD) against Scala $SCALA_VERSION"
+          ZINC_SCRIPTED_DEFAULT_LABEL=2.13.y sbt -Dzinc.scala213ForBridge=$SCALA_VERSION scripted
