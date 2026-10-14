@@ -54,6 +54,16 @@ jobs:
         working-directory: zinc
         run: git apply ../.github/zinc/zinc-scala-bridge.patch
 
+      - name: Skip known failures
+        working-directory: zinc
+        run: |
+          # source-dependencies/compactify, compactify-nested: use -Xmax-classfile-name, which only exists in 2.12.
+          # source-dependencies/module-inheritance-extra-hash: scala2-sbt-bridge doesn't report `object B` as a term
+          #   (bridge side of sbt/zinc#1807, sbt/zinc@0a463347a). Delete from this list once ported.
+          for t in compactify compactify-nested module-inheritance-extra-hash; do
+            rm -r zinc/src/sbt-test/source-dependencies/$t
+          done
+
       - name: Run zinc scripted tests
         working-directory: zinc
         run: |
