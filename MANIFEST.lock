@@ -1,0 +1,15 @@
+# integration/2.13.x, built 2026-10-15T22:37:40Z by build-integration from manifest.toml
+
+base	upstream/2.13.x	cfacd6508a2a8d4ad9907af6a34c55551311d09e
+
+scala#11290	refs/pull/11290/head	ba292b840f21481912fcc89468b40996bf0ce090	clean
+scala#11291	refs/pull/11291/head	97e877e63712cab195236e74f705df6f52ae944a	rerere
+scala#11295	refs/pull/11295/head	46ec35485d2fbee08ead7c0c437b65c933f4a2fc	clean
+rz-scala#136	refs/pull/136/head	d17d90a240b413ee9265a527faee162365ff08e3	clean
+rz-scala#137	refs/pull/137/head	cef2c3d3bf5dfc2ad048f4ee05e4e4cc9252294f	clean
+rz-scala#138	refs/pull/138/head	10ba7ba49620181a953daaa204a129e920ee4348	clean
+
+# excluded
+rz-scala#40..#133	old performance and WIP experiments
+rz-scala#134	same branch as scala#11287
+rz-scala#135	blocked on a zinc release: needs compiler-interface 1.12.2 (AnalysisCallback4), not yet published
