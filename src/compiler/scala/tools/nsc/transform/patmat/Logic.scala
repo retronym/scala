@@ -793,11 +793,16 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
           else {
             val lower = if (c.isValue) c.wideTp else c.tp
             val baseClasses = lower.baseClasses
-            if ((lower eq global.WildcardType) || lower.isErroneous || baseClasses.contains(NothingClass) || baseClasses.contains(NullClass)) types
+            if (lower.isWildcard || lower.isErroneous || baseClasses.contains(NothingClass) || baseClasses.contains(NullClass)) types
             else {
-              val indices = unkeyed.clone()
-              baseClasses.foreach { bc => val is = byClass.get(bc); if (is ne null) indices ++= is }
-              indices.sortInPlace().iterator.map(symArray(_)).toList
+              // the indices of `unkeyed` and of each class are ascending, so only sort if more than one contributes
+              val indices = new mutable.ArrayBuffer[Int]
+              var sources = 0
+              def add(is: mutable.ArrayBuffer[Int]): Unit = if ((is ne null) && is.nonEmpty) { indices ++= is; sources += 1 }
+              add(unkeyed)
+              baseClasses.foreach(bc => add(byClass.get(bc)))
+              if (sources > 1) indices.sortInPlace()
+              indices.iterator.map(symArray(_)).toList
             }
           }
       }
