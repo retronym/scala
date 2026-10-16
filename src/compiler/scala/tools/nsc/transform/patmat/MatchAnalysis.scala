@@ -78,6 +78,12 @@ trait TreeAndTypeAnalysis extends Debugging {
     case _                    => System.identityHashCode(t) // not equivalent to any tree
   }
 
+  /** Whether `equivalentTree(t, u)` may hold for some tree `u` */
+  def mayBeEquivalent(t: Tree): Boolean = t match {
+    case Select(_, _) | Ident(_) | Literal(_) | This(_) | Apply(_, _) | TypeApply(_, _) | TypeTree() => true
+    case _                                                                                          => false
+  }
+
   def equivalentTree(a: Tree, b: Tree): Boolean = (a, b) match {
     case (Select(qual1, _), Select(qual2, _))             => equivalentTree(qual1, qual2) && a.symbol == b.symbol
     case (Ident(_), Ident(_))                             => a.symbol == b.symbol
@@ -218,7 +224,8 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
     }
 
     /** Elements keyed by a tree, with a lookup modulo `equivalentTree` that has the result of a linear search
-     *  in insertion order, indexed by `equivalenceHash`. It is never iterated.
+     *  in insertion order, indexed by `equivalenceHash`. It is never iterated. An element whose tree isn't
+     *  equivalent to any tree (not even to itself) can't be found, so it isn't kept.
      */
     final class EquivalentTrees[A](key: A => Tree) {
       private[this] val buckets = new java.util.HashMap[Integer, mutable.ArrayBuffer[A]]
@@ -227,7 +234,9 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
         if (bucket eq null) None else bucket.find(a => equivalentTree(key(a), t))
       }
       def +=(a: A): this.type = {
-        buckets.computeIfAbsent(equivalenceHash(key(a)), _ => new mutable.ArrayBuffer[A](2)).addOne(a)
+        val t = key(a)
+        if (mayBeEquivalent(t))
+          buckets.computeIfAbsent(equivalenceHash(t), _ => new mutable.ArrayBuffer[A](2)).addOne(a)
         this
       }
     }
