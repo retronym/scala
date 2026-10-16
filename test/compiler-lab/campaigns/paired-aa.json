@@ -1,0 +1,9 @@
+{
+  "name": "paired-aa",
+  "benchmark": "CompileBenchmark",
+  "profile": "none",
+  "rounds": 2,
+  "corpora": {"scalap": "-wi 16 -i 8 -w 2 -r 2"},
+  "paired": {"a": "", "b": ""},
+  "gcLog": true
+}

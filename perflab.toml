@@ -1,0 +1,27 @@
+# retronym/jvm-perf-lab's `perflab` runs compilerLab's benchmarks (test/compiler-lab/README.md)
+[build]
+# perflab passes its JMH arguments as @<file> to perflab's JMH driver, compilerLab's main class
+jmh = "sbt --client 'compilerLab/Jmh/run {args}'"
+server = "sbt"
+
+[benchmark]
+default = "CompileBenchmark"
+corpus = "corpus"
+variants = "variants"
+jvmArgs = "-Xms4G -Xmx4G -Xss2M"
+
+[paths]
+runs = "out/compiler-lab/runs"
+campaigns = "out/compiler-lab/ab"
+
+[index]
+flags = "^-D|^-XX"
+
+[agent]
+# `mise run install` in jvm-perf-lab
+jar = "~/.m2/repository/io/github/retronym/perflab/perflab-agent/0.1.0-SNAPSHOT/perflab-agent-0.1.0-SNAPSHOT.jar"
+
+[async]
+# $ASYNC_PROFILER_LIB, else the usual install locations; retronym/async-profiler's integration branch
+# (`mise run tools:async-profiler` in jvm-perf-lab) adds kperf events and jfrconv --spans
+graphs = ["bench", "reverse", "classify"]
