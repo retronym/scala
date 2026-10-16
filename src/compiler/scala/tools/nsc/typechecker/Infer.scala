@@ -31,6 +31,7 @@ trait Infer extends Checkable {
   import typeDebug.ptBlock
   import typeDebug.str.parentheses
   import typingStack.printTyping
+  import kinds._
 
   /** The formal parameter types corresponding to `formals`.
    *  If `formals` has a repeated last parameter, a list of

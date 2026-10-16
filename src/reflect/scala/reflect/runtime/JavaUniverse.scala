@@ -59,7 +59,7 @@ class JavaUniverse extends InternalSymbolTable with JavaUniverseForce with Refle
 
   def currentFreshNameCreator = globalFreshNameCreator
 
-  override lazy val internal: Internal = new SymbolTableInternal {
+  override lazy val internal: Internal = new internals.SymbolTableInternal {
     override def typeTagToManifest[T: ClassTag](mirror0: Any, tag: Universe # TypeTag[T]): Manifest[T] = {
       // scala/bug#6239: make this conversion more precise
       val mirror = mirror0.asInstanceOf[Mirror]
