@@ -349,6 +349,7 @@ trait Solving extends Logic {
       private val symbolMapping = new SymbolMapping(gatherSymbols(And.create(allProps)))
       private val cnfExtractor = new AlreadyInCNF(symbolMapping)
       private val cnfTransformer = new TransformToCnf(symbolMapping)
+      // only used for membership; clauses are added in the order of the (linked) conjuncts
       private val prefixConjuncts = mutable.HashSet[Prop]()
       private val prefix = ArrayBuffer[Clause]()
 
