@@ -277,15 +277,36 @@ trait Interface extends ast.TreeDSL {
         case _      => Long.MaxValue
       }
 
-      def apply(tree: Tree): Tree = {
-        val occurring = new OccurringFromSymbols
-        occurring.collect(tree)
-        val occurringKeys = occurring.keys
-        if (occurringKeys.isEmpty) tree // `containsSym` would be false
+      // `substitute`'s `containsSym` for all of `from`, with hashed lookups. If it's false, `substitute` would return
+      // `tree`; otherwise, it would substitute, visiting (at least) what `OccurringFromSymbols` visits.
+      private def containsSym(tree: Tree): Boolean = {
+        import global.{Ident, TypeTree, SingleType}
+        val checkType = new TypeCollector[Boolean](initial = false) {
+          override def apply(tp: Type): Unit =
+            if (!result) {
+              tp match {
+                case SingleType(_, sym) if keys.contains(sym) => result = true
+                case _                                        => tp.foldOver(this)
+              }
+            }
+        }
+        tree.exists {
+          case i: Ident     => keys.contains(i.symbol)
+          case tt: TypeTree =>
+            checkType.result = false
+            checkType.collect(tt.tpe)
+          case _            => false
+        }
+      }
+
+      def apply(tree: Tree): Tree =
+        if (!containsSym(tree)) tree
         else {
+          val occurring = new OccurringFromSymbols
+          occurring.collect(tree)
           val restrictedFrom = new ListBuffer[Symbol]
           val restrictedTo = new ListBuffer[Tree]
-          occurringKeys.sortInPlace().foreach { k =>
+          occurring.keys.sortInPlace().foreach { k =>
             val b = bindings(k)
             restrictedFrom += b.from
             restrictedTo += b.to
@@ -293,7 +314,6 @@ trait Interface extends ast.TreeDSL {
           val restrictedTo1 = restrictedTo.toList
           substitute(tree, restrictedFrom.toList, restrictedTo1, restrictedTo1 map typedStableType, toIdents, this)
         }
-      }
 
       def >>(other: Substitution): Substitution =
         if (other == EmptySubstitution) this
