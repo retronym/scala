@@ -822,8 +822,9 @@ lazy val compilerLab = project.in(file("test") / "compiler-lab")
       if (!scala.util.Properties.isJavaAtLeast("17")) sys.error("compilerLab needs Java 17 or later (perflab-jmh)")
       val corpora = sys.env.getOrElse("COMPILER_BENCHMARK", ((ThisBuild / baseDirectory).value / ".." / "compiler-benchmark").getCanonicalPath)
       Seq(
+        "-Xss2M", // for CompileLoop; JMH's forks get it from @Fork too
         s"-Dcompilerlab.corpora=$corpora/corpus",
-        s"-Dcompilerlab.scalaLibrary=${(library / Compile / classDirectory).value}",
+        s"-Dcompilerlab.scalaClasspath=${Seq((library / Compile / classDirectory).value, (reflect / Compile / classDirectory).value, (compiler / Compile / classDirectory).value).mkString(java.io.File.pathSeparator)}",
         s"-Dcompilerlab.deps=${target.value / "deps"}",
       )
     },
