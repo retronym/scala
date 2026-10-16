@@ -45,11 +45,34 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
       val dependencies    = new mutable.LinkedHashMap[Test, mutable.LinkedHashSet[Prop]]
       val tested          = new mutable.LinkedHashSet[Prop]
       // used only for lookups: `simplify(test.prop)`, and an index of `dependencies`: the keys in insertion order,
-      // and for each condition, the (ascending) indices of the keys whose dependencies include it
+      // and for each condition, the (ascending) indices of the keys whose dependencies include it. The index is
+      // only built once `dependencies` has more than `IndexAbove` keys; until then, they're searched linearly.
       val simplified      = new mutable.HashMap[Test, Set[Prop]]
-      val testsInOrder    = new mutable.ArrayBuffer[Test]
-      val testIndex       = new mutable.HashMap[Test, Int]
-      val dependents      = new mutable.HashMap[Prop, mutable.ArrayBuffer[Int]]
+      val IndexAbove      = 32
+      var dependents: DependentsIndex = null
+      final class DependentsIndex {
+        private[this] val testsInOrder = new mutable.ArrayBuffer[Test]
+        private[this] val testIndex    = new mutable.HashMap[Test, Int]
+        private[this] val indices      = new mutable.HashMap[Prop, mutable.ArrayBuffer[Int]]
+        private[this] val noIndices    = mutable.ArrayBuffer.empty[Int]
+
+        def add(test: Test, deps: collection.Set[Prop]): Unit = {
+          // `Test` is a case class, so `test` may be equal to a key of `dependencies`, which keeps its place
+          val index = testIndex.getOrElseUpdate(test, { testsInOrder += test; testsInOrder.length - 1 })
+          deps.foreach { c =>
+            val is = indices.getOrElseUpdate(c, new mutable.ArrayBuffer[Int])
+            if (is.isEmpty || is.last < index) is += index
+            else is.search(index) match {
+              case Searching.InsertionPoint(i) => is.insert(i, index)
+              case _                           =>
+            }
+          }
+        }
+
+        // in the order of `dependencies`, a superset of the tests whose dependencies include all of `conds`
+        def candidates(conds: Set[Prop]): Iterator[Test] =
+          conds.iterator.map(c => indices.getOrElse(c, noIndices)).minBy(_.length).iterator.map(testsInOrder)
+      }
       val reusesMap       = new mutable.LinkedHashMap[Int, Test]
       val reusesTest      = { (test: Test) => reusesMap.get(test.id) }
       val registerReuseBy = { (priorTest: Test, later: Test) =>
@@ -78,28 +101,24 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
             // is there an earlier test that checks our condition and whose dependencies are implied by ours?
             // Either way, `conds subsetOf deps` (a test's dependencies include its conditions), so it suffices to
             // look, in the order of `dependencies`, at the tests whose dependencies include any one of our conditions.
-            val candidates = conds.iterator.map(c => dependents.getOrElse(c, mutable.ArrayBuffer.empty[Int])).minBy(_.length)
-            candidates.iterator.map(testsInOrder).find { priorTest =>
-                val deps = dependencies(priorTest)
+            def reusable(priorTest: Test, deps: collection.Set[Prop]) =
                 ((simplified(priorTest) == conds) || // our conditions are implied by priorTest if it checks the same thing directly
                     (conds subsetOf deps)               // or if it depends on a superset of our conditions
                 ) && (deps subsetOf tested)             // the conditions we've tested when we are here in the match satisfy the prior test, and hence what it tested
-            } foreach { priorTest =>
+            val reusedTest =
+              if (dependents eq null) dependencies.find { case (priorTest, deps) => reusable(priorTest, deps) }.map(_._1)
+              else dependents.candidates(conds).find(priorTest => reusable(priorTest, dependencies(priorTest)))
+            reusedTest foreach { priorTest =>
                 // if so, note the dependency in both tests
                 registerReuseBy(priorTest, test)
             }
 
             val deps = tested.clone()
             dependencies(test) = deps
-            // `Test` is a case class, so `test` may be equal to a key of `dependencies`, which keeps its place
-            val index = testIndex.getOrElseUpdate(test, { testsInOrder += test; testsInOrder.length - 1 })
-            deps.foreach { c =>
-              val indices = dependents.getOrElseUpdate(c, new mutable.ArrayBuffer[Int])
-              if (indices.isEmpty || indices.last < index) indices += index
-              else indices.search(index) match {
-                case Searching.InsertionPoint(i) => indices.insert(i, index)
-                case _                           =>
-              }
+            if (dependents ne null) dependents.add(test, deps)
+            else if (dependencies.size > IndexAbove) {
+              dependents = new DependentsIndex
+              dependencies.foreach { case (t, ds) => dependents.add(t, ds) }
             }
           }
           true
