@@ -81,6 +81,27 @@ trait TypingTransformers {
     }
 
     override def transform(tree: Tree): Tree = tree match {
+      case Template(parents, self, stats) =>
+          atOwner(currentOwner) {
+          val transformedStats = transformTrees(stats)
+
+          if (stats eq transformedStats) super.transform(tree)
+          else {
+            val expanded = new mutable.ListBuffer[Tree]
+
+            def expandStats(): Unit = transformedStats.foreach {
+              case EmptyTree                                                                    =>
+              case blk@Block(stats, expr) if blk.attachments.containsElement(ThicketAttachment) =>
+                stats.foreach { s => if (s != EmptyTree) expanded += s }
+                if (expr != EmptyTree) expanded += expr
+              case t                                                                            =>
+                expanded += t
+            }
+
+            expandStats()
+            treeCopy.Template(tree, super.transformTrees(parents), super.transformValDef(self), expanded.toList)
+          }
+        }
       case Block(stats, expr) =>
         val transformedStats = transformTrees(stats)
         val transformedExpr = transform(expr)
