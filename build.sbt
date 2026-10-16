@@ -801,6 +801,36 @@ lazy val bench = project.in(file("test") / "benchmarks")
     inConfig(Jmh)(skipProjectInIDEs)
   )
 
+// The version of retronym/jvm-perf-lab's perflab-jmh used by compilerLab: a snapshot in ~/.m2 (`mise run install` there).
+def perflabVersion = System.getProperty("perflab.version", "0.1.0-SNAPSHOT")
+
+// Benchmarks and profiles of the quick compiler, run through retronym/jvm-perf-lab (test/compiler-lab/README.md)
+lazy val compilerLab = project.in(file("test") / "compiler-lab")
+  .dependsOn(library, reflect, compiler)
+  .settings(instanceSettings)
+  .settings(disableDocs)
+  .settings(publish / skip := true)
+  .enablePlugins(JmhPlugin)
+  .settings(
+    name := "compiler-lab",
+    autoScalaLibrary := false,
+    resolvers += Resolver.mavenLocal,
+    libraryDependencies += "io.github.retronym.perflab" % "perflab-jmh" % perflabVersion,
+    // JMH with perflab's default profilers and @file arguments
+    Jmh / run / mainClass := Some("io.github.retronym.perflab.jmh.Main"),
+    Jmh / run / javaOptions ++= {
+      if (!scala.util.Properties.isJavaAtLeast("17")) sys.error("compilerLab needs Java 17 or later (perflab-jmh)")
+      val corpora = sys.env.getOrElse("COMPILER_BENCHMARK", ((ThisBuild / baseDirectory).value / ".." / "compiler-benchmark").getCanonicalPath)
+      Seq(
+        "-Xss2M", // for CompileLoop; JMH's forks get it from @Fork too
+        s"-Dcompilerlab.corpora=$corpora/corpus",
+        s"-Dcompilerlab.scalaClasspath=${Seq((library / Compile / classDirectory).value, (reflect / Compile / classDirectory).value, (compiler / Compile / classDirectory).value).mkString(java.io.File.pathSeparator)}",
+        s"-Dcompilerlab.deps=${target.value / "deps"}",
+      )
+    },
+  )
+  .settings(inConfig(Jmh)(skipProjectInIDEs))
+
 
 lazy val testkit = configureAsSubproject(project)
   .dependsOn(compiler)

@@ -1,0 +1,3 @@
+# who calls Type#asSeenFrom, and how much of it is under implicit search
+count asf        at=scala.reflect.internal.Types$Type#asSeenFrom  onStack=implicits:scala.tools.nsc.typechecker.Implicits$ImplicitSearch#bestImplicit
+sites asf-sites  at=scala.reflect.internal.Types$Type#asSeenFrom  depth=2  sample=100  skip=^scala\.reflect\.internal\.(Types\$Type|tpe\.TypeMaps)

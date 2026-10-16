@@ -1,0 +1,13 @@
+{
+  "name": "def-costs-overhead",
+  "benchmark": "CompileBenchmark",
+  "profile": "none",
+  "rounds": 3,
+  "corpora": {"scalap": "-wi 20 -i 15 -w 2 -r 2"},
+  "paired": {
+    "off": "",
+    "listener": "-Yprofile-defs-listener:scala.tools.nsc.compilerlab.SpanCostListener",
+    "table": "-Yprofile-defs:/dev/null"
+  },
+  "gcLog": true
+}
