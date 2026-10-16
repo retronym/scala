@@ -211,13 +211,20 @@ trait Interface extends ast.TreeDSL {
       override def toString = from.map(_.name).zip(to).mkString("Substitution(", ", ", ")")
     }
 
-    class ListSubstitution(val from: List[Symbol], val to: List[Tree]) extends Substitution {
-      private[this] lazy val toTypes: List[Type] = to map typedStableType
+    /** The bindings that `substitute` substitutes with, and the types of the `to` trees, computed on demand */
+    private[TypedSubstitution] sealed trait SubstBindings {
+      def from: List[Symbol]
+      def to: List[Tree]
+      def toTypes: List[Type]
+    }
+
+    class ListSubstitution(val from: List[Symbol], val to: List[Tree]) extends Substitution with SubstBindings {
+      lazy val toTypes: List[Type] = to map typedStableType
       private[this] lazy val toIdents: Boolean = to.forall(_.isInstanceOf[global.Ident])
 
       def size = from.length // at most `IndexAbove`, unless this is the `EmptySubstitution`
 
-      def apply(tree: Tree): Tree = substitute(tree, from, to, toTypes, toIdents, this)
+      def apply(tree: Tree): Tree = substitute(tree, this, toIdents, this)
 
       def >>(other: Substitution): Substitution =
         if (other == EmptySubstitution) this
@@ -242,6 +249,10 @@ trait Interface extends ast.TreeDSL {
     }
 
     private final class Binding(val from: Symbol, val to: Tree)
+
+    private final class RestrictedBindings(val from: List[Symbol], val to: List[Tree]) extends SubstBindings {
+      lazy val toTypes: List[Type] = to map typedStableType
+    }
 
     private object IndexedSubstitution {
       def apply(from: List[Symbol], to: List[Tree]): IndexedSubstitution =
@@ -312,8 +323,7 @@ trait Interface extends ast.TreeDSL {
             restrictedFrom += b.from
             restrictedTo += b.to
           }
-          val restrictedTo1 = restrictedTo.toList
-          substitute(tree, restrictedFrom.toList, restrictedTo1, restrictedTo1 map typedStableType, toIdents, this)
+          substitute(tree, new RestrictedBindings(restrictedFrom.toList, restrictedTo.toList), toIdents, this)
         }
 
       def >>(other: Substitution): Substitution =
@@ -431,11 +441,12 @@ trait Interface extends ast.TreeDSL {
     // We must explicitly type the trees that we replace inside some other tree, since the latter may already have been typed,
     // and will thus not be retyped. This means we might end up with untyped subtrees inside bigger, typed trees.
     // `toIdents` is whether all `to` trees of `subst` (which may have more than `to`) are `Ident`s.
-    private def substitute(tree: Tree, from: List[Symbol], to: List[Tree], toTypes0: => List[Type], toIdents: Boolean, subst: Substitution): Tree = {
+    private def substitute(tree: Tree, bindings: SubstBindings, toIdents: Boolean, subst: Substitution): Tree = {
       import global.{AstTransformer, Ident, NoType, TypeTree, SingleType}
       // according to -Ystatistics 10% of translateMatch's time is spent in this method...
       // since about half of the typedSubst's end up being no-ops, the check below shaves off 5% of the time spent in typedSubst
-      lazy val toTypes = toTypes0
+      val from = bindings.from
+      val to = bindings.to
 
       val checkType = new TypeCollector[Boolean](initial = false) {
         override def apply(tp: Type): Unit =
@@ -480,10 +491,10 @@ trait Interface extends ast.TreeDSL {
           }
           tree1 match {
             case _: DefTree =>
-              tree1.symbol.modifyInfo(_.substituteTypes(from, toTypes))
+              tree1.symbol.modifyInfo(_.substituteTypes(from, bindings.toTypes))
             case _ =>
           }
-          tree1.modifyType(_.substituteTypes(from, toTypes))
+          tree1.modifyType(_.substituteTypes(from, bindings.toTypes))
         }
       }
       if (containsSym) {
