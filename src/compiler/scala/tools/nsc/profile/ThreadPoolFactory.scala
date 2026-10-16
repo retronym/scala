@@ -35,7 +35,7 @@ sealed trait ThreadPoolFactory {
 
 object ThreadPoolFactory {
   def apply(global: Global, phase: Phase): ThreadPoolFactory = global.currentRun.profiler match {
-    case NoOpProfiler => new BasicThreadPoolFactory(phase)
+    case NoOpProfiler | _: CostProfiler => new BasicThreadPoolFactory(phase)
     case r: RealProfiler => new ProfilingThreadPoolFactory(phase, r)
   }
 

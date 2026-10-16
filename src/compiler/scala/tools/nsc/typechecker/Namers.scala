@@ -2106,7 +2106,16 @@ trait Namers extends MethodSynthesis {
 
   // NOTE: only meant for monomorphic definitions,
   // do not use to wrap existing completers (see CompleterWrapper for that)
-  abstract class TypeCompleterBase[T <: Tree](val tree: T) extends LockingTypeCompleter with FlagAgnosticCompleter
+  abstract class TypeCompleterBase[T <: Tree](val tree: T) extends LockingTypeCompleter with FlagAgnosticCompleter {
+    // A frame of its own for the cost per definition: an inferred type typed ahead is charged to `sym`, not to the
+    // definition that needed it
+    override def complete(sym: Symbol): Unit = {
+      val profiler = currentRun.profiler
+      profiler.beforeNamerCompletion(sym, tree)
+      try super.complete(sym)
+      finally profiler.afterNamerCompletion(sym)
+    }
+  }
 
   trait LockingTypeCompleter extends TypeCompleter {
     def completeImpl(sym: Symbol): Unit
