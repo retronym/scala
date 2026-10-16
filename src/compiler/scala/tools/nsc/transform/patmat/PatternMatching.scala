@@ -174,8 +174,9 @@ trait Interface extends ast.TreeDSL {
         else if (from.lengthCompare(IndexAbove) <= 0) new ListSubstitution(from, to)
         else IndexedSubstitution(from, to)
 
-      // Substitutions with more bindings than this are an `IndexedSubstitution`
-      final val IndexAbove = 8
+      // Substitutions with more bindings than this are an `IndexedSubstitution`. Building and updating its maps
+      // costs more than the linear steps of a `ListSubstitution` save until it's this large.
+      final val IndexAbove = 64
     }
 
     // Substitutions are composed with `>>` for each tree maker, and the composition mostly shares the `to` trees
