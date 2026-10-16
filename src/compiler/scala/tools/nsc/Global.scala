@@ -1169,7 +1169,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** The currently compiled unit; set from GlobalPhase */
     var currentUnit: CompilationUnit = NoCompilationUnit
 
-    val profiler: Profiler = Profiler(settings)
+    val profiler: Profiler = Profiler(Global.this)
     keepPhaseStack = settings.log.isSetByUser
 
     val isScala3: Boolean = settings.isScala3: @nowarn

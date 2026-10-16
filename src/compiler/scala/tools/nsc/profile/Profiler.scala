@@ -25,19 +25,27 @@ import javax.management.{Notification, NotificationEmitter, NotificationListener
 import scala.annotation.{nowarn, unused}
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.internal.util.ChromeTrace
+import scala.reflect.internal.NoPhase
 import scala.reflect.io.AbstractFile
 import scala.tools.nsc.{Global, Phase, Settings}
 
 object Profiler {
-  def apply(settings: Settings):Profiler =
-    if (!settings.YprofileEnabled.value) NoOpProfiler
-    else {
+  def apply(settings: Settings): Profiler = apply(settings, null)
+
+  /** The run's profiler: `-Yprofile-enabled` (`RealProfiler`), the cost per definition alone (`CostProfiler`), or
+   *  nothing (`NoOpProfiler`, whose hooks do nothing). */
+  def apply(global: Global): Profiler = apply(global.settings, DefCosts(global))
+
+  private def apply(settings: Settings, costs: DefCosts): Profiler =
+    if (!settings.YprofileEnabled.value) {
+      if (costs == null) NoOpProfiler else new CostProfiler(costs)
+    } else {
       val reporter = settings.YprofileDestination.value match {
         case _ if !settings.YprofileDestination.isSetByUser => NoOpProfileReporter
         case "-" => ConsoleProfileReporter
         case path => new StreamProfileReporter(new PrintWriter(new FileWriter(path, true)))
       }
-      new RealProfiler(reporter, settings)
+      new RealProfiler(reporter, settings, costs)
     }
 
   private[profile] val emptySnap = ProfileSnap(0, "", 0, 0, 0, 0, 0, 0, 0, 0)
@@ -106,6 +114,10 @@ sealed abstract class Profiler {
 
   def beforeCompletion(root: Global#Symbol, associatedFile: AbstractFile): Unit = ()
   def afterCompletion(root: Global#Symbol, associatedFile: AbstractFile): Unit = ()
+
+  /** Completing `sym` from source (a Namer type completer for `tree`, its definition); only for the cost per definition */
+  def beforeNamerCompletion(sym: Global#Symbol, tree: Global#Tree): Unit = ()
+  def afterNamerCompletion(sym: Global#Symbol): Unit = ()
 }
 private [profile] object NoOpProfiler extends Profiler {
 
@@ -117,6 +129,36 @@ private [profile] object NoOpProfiler extends Profiler {
   override def afterUnit(phase: Phase, file: AbstractFile): Unit = ()
   override def finished(): Unit = ()
 }
+
+/** Only the cost per definition (`-Yprofile-defs`, `-Yprofile-defs-listener`), without the rest of `-Yprofile-enabled` */
+private [profile] final class CostProfiler(costs: DefCosts) extends Profiler {
+  override def finished(): Unit = costs.finished()
+
+  override def beforePhase(phase: Phase): ProfileSnap = { costs.enter(CostKind.Phase, phase, phase); Profiler.emptySnap }
+  override def afterPhase(phase: Phase, profileBefore: ProfileSnap): Unit = costs.exit(CostKind.Phase, phase)
+
+  override def beforeUnit(phase: Phase, file: AbstractFile): Unit = costs.enter(CostKind.Unit, file, phase)
+  override def afterUnit(phase: Phase, file: AbstractFile): Unit = costs.exit(CostKind.Unit, file)
+
+  override def beforeTypedImplDef(sym: Global#Symbol): Unit = costs.enter(CostKind.TypedDef, sym, NoPhase)
+  override def afterTypedImplDef(sym: Global#Symbol): Unit = costs.exit(CostKind.TypedDef, sym)
+
+  override def beforeImplicitSearch(pt: Global#Type): Unit = costs.enter(CostKind.Implicit, null, NoPhase)
+  override def afterImplicitSearch(pt: Global#Type): Unit = costs.exit(CostKind.Implicit, null)
+
+  override def beforeMacroExpansion(macroSym: Global#Symbol): Unit = costs.enter(CostKind.Macro, null, NoPhase)
+  override def afterMacroExpansion(macroSym: Global#Symbol): Unit = costs.exit(CostKind.Macro, null)
+
+  override def beforeCompletion(root: Global#Symbol, associatedFile: AbstractFile): Unit = costs.enter(CostKind.Load, root, NoPhase)
+  override def afterCompletion(root: Global#Symbol, associatedFile: AbstractFile): Unit = costs.exit(CostKind.Load, root)
+
+  override def beforeNamerCompletion(sym: Global#Symbol, tree: Global#Tree): Unit = {
+    costs.definedBy(sym, tree)
+    costs.enter(CostKind.Completion, sym, NoPhase)
+  }
+  override def afterNamerCompletion(sym: Global#Symbol): Unit = costs.exit(CostKind.Completion, sym)
+}
+
 private [profile] object RealProfiler {
   import scala.jdk.CollectionConverters._
   val runtimeMx = ManagementFactory.getRuntimeMXBean
@@ -149,7 +191,7 @@ private [profile] object RealProfiler {
   private def readHeapUsage() = RealProfiler.memoryMx.getHeapMemoryUsage.getUsed
 }
 
-private [profile] class RealProfiler(reporter : ProfileReporter, val settings: Settings) extends Profiler with NotificationListener {
+private [profile] class RealProfiler(reporter : ProfileReporter, val settings: Settings, costs: DefCosts = null) extends Profiler with NotificationListener {
   private val mainThread = Thread.currentThread()
   val id = RealProfiler.idGen.incrementAndGet()
   object Category {
@@ -191,6 +233,7 @@ private [profile] class RealProfiler(reporter : ProfileReporter, val settings: S
   reporter.header(this)
 
   override def finished(): Unit = {
+    if (costs != null) costs.finished()
     active foreach {_.finished()}
     //we may miss a GC event if gc is occurring as we call this
     RealProfiler.gcMx foreach {
@@ -250,12 +293,14 @@ private [profile] class RealProfiler(reporter : ProfileReporter, val settings: S
       ExternalToolHook.before()
     }
     active foreach {_.beforePhase(phase)}
+    if (costs != null) costs.enter(CostKind.Phase, phase, phase)
     RealProfiler.snapThread(0)
   }
 
   override def afterPhase(phase: Phase, snapBefore: ProfileSnap): Unit = {
     assert(mainThread eq Thread.currentThread())
     val initialSnap = RealProfiler.snapThread(0)
+    if (costs != null) costs.exit(CostKind.Phase, phase)
     active foreach {_.afterPhase(phase)}
     if (settings.YprofileExternalTool.containsPhase(phase)) {
       println("Profile hook stop")
@@ -273,12 +318,14 @@ private [profile] class RealProfiler(reporter : ProfileReporter, val settings: S
   override def beforeUnit(phase: Phase, file: AbstractFile): Unit = {
     assert(mainThread eq Thread.currentThread())
     if (chromeTrace != null) chromeTrace.traceDurationEventStart(Category.File, file.name)
+    if (costs != null) costs.enter(CostKind.Unit, file, phase)
   }
 
   private var nextAfterUnitSnap: Long = System.nanoTime()
 
   override def afterUnit(phase: Phase, file: AbstractFile): Unit = {
     assert(mainThread eq Thread.currentThread())
+    if (costs != null) costs.exit(CostKind.Unit, file)
     if (chromeTrace != null) {
       val now = System.nanoTime()
       chromeTrace.traceDurationEventEnd(Category.File, file.name)
@@ -298,24 +345,30 @@ private [profile] class RealProfiler(reporter : ProfileReporter, val settings: S
 
   override def beforeTypedImplDef(sym: Global#Symbol): Unit = {
     if (chromeTrace != null) chromeTrace.traceDurationEventStart(Category.TypeCheck, sym.rawname.toString)
+    if (costs != null) costs.enter(CostKind.TypedDef, sym, NoPhase)
   }
   override def afterTypedImplDef(sym: Global#Symbol): Unit = {
+    if (costs != null) costs.exit(CostKind.TypedDef, sym)
     if (chromeTrace != null) chromeTrace.traceDurationEventEnd(Category.TypeCheck, sym.rawname.toString)
   }
 
   override def beforeImplicitSearch(pt: Global#Type): Unit = {
     if (chromeTrace != null) chromeTrace.traceDurationEventStart(Category.Implicit, "?[" + pt.typeSymbol.rawname + "]", colour = "yellow")
+    if (costs != null) costs.enter(CostKind.Implicit, null, NoPhase)
   }
 
   override def afterImplicitSearch(pt: Global#Type): Unit = {
+    if (costs != null) costs.exit(CostKind.Implicit, null)
     if (chromeTrace != null) chromeTrace.traceDurationEventEnd(Category.Implicit, "?[" + pt.typeSymbol.rawname + "]", colour = "yellow")
   }
 
   override def beforeMacroExpansion(macroSym: Global#Symbol): Unit = {
     if (chromeTrace != null) chromeTrace.traceDurationEventStart(Category.Macro, "«" + macroSym.rawname + "»", colour = "olive")
+    if (costs != null) costs.enter(CostKind.Macro, null, NoPhase)
   }
 
   override def afterMacroExpansion(macroSym: Global#Symbol): Unit = {
+    if (costs != null) costs.exit(CostKind.Macro, null)
     if (chromeTrace != null) chromeTrace.traceDurationEventEnd(Category.Macro, "«" + macroSym.rawname + "»", colour = "olive")
   }
 
@@ -325,15 +378,25 @@ private [profile] class RealProfiler(reporter : ProfileReporter, val settings: S
       chromeTrace.traceDurationEventStart(Category.File, associatedFile.name)
       chromeTrace.traceDurationEventStart(Category.Completion, completionName(root, associatedFile))
     }
+    if (costs != null) costs.enter(CostKind.Load, root, NoPhase)
   }
 
   override def afterCompletion(root: Global#Symbol, associatedFile: AbstractFile): Unit = {
+    if (costs != null) costs.exit(CostKind.Load, root)
     if (chromeTrace != null) {
       chromeTrace.traceDurationEventEnd(Category.Completion, completionName(root, associatedFile))
       chromeTrace.traceDurationEventEnd(Category.File, associatedFile.name)
       chromeTrace.traceDurationEventEnd(Category.Completion, "↯", colour = "thread_state_sleeping")
     }
   }
+
+  override def beforeNamerCompletion(sym: Global#Symbol, tree: Global#Tree): Unit =
+    if (costs != null) {
+      costs.definedBy(sym, tree)
+      costs.enter(CostKind.Completion, sym, NoPhase)
+    }
+  override def afterNamerCompletion(sym: Global#Symbol): Unit =
+    if (costs != null) costs.exit(CostKind.Completion, sym)
 
   private def completionName(root: Global#Symbol, @unused associatedFile: AbstractFile): String =
     if (root.hasPackageFlag || root.isTopLevel) root.javaBinaryNameString

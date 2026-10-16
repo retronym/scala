@@ -571,6 +571,8 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
     withPostSetHook( _ => YprofileEnabled.value = true )
   val YprofileRunGcBetweenPhases = PhasesSetting("-Yprofile-run-gc", "Run a GC between phases - this allows heap size to be accurate at the expense of more time. Specify a list of phases, or all", "_").
     withPostSetHook( _ => YprofileEnabled.value = true )
+  val YprofileDefs = StringSetting("-Yprofile-defs", "file", "Write the exclusive time and allocation per definition, unit and phase to a tab-separated file.", "")
+  val YprofileDefsListener = StringSetting("-Yprofile-defs-listener", "class", "Tell a scala.tools.nsc.profile.CostListener about each frame of the cost per definition.", "")
 
   val YpatmatExhaustdepth     = IntSetting("-Ypatmat-exhaust-depth", "off", 20, Some((10, Int.MaxValue)),
     str => Some(if(str.equalsIgnoreCase("off")) Int.MaxValue else str.toInt))
