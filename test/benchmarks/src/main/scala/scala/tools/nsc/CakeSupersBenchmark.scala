@@ -15,9 +15,12 @@ import org.openjdk.jmh.annotations._
  *  cast's type profile shows one class, so the cost appears once several classes share the code (`classes` > 1), as
  *  when Scaladoc, the presentation compiler or macro toolboxes run beside the compiler. `viaClass` makes the same
  *  calls through `this.asInstanceOf[U]`: `checkcast U` (a primary supers check) and `invokevirtual`.
+ *
+ *  `Hot`'s methods are not inlined (`-XX:CompileCommand=dontinline`), as the compiler's hot trait methods are too big
+ *  to be: inlined into a caller whose receiver is known to be a `U`, C2 would fold the casts away.
  */
 @BenchmarkMode(Array(Mode.AverageTime))
-@Fork(value = 1, jvmArgsAppend = Array("-Xms1G", "-Xmx1G"))
+@Fork(value = 1, jvmArgsAppend = Array("-Xms1G", "-Xmx1G", "-XX:CompileCommand=quiet", "-XX:CompileCommand=dontinline,*$Hot::via*"))
 @Threads(1)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
