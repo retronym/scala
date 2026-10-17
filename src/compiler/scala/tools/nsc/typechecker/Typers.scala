@@ -121,6 +121,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
 
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
+    // `global` is an interface call on the Analyzer, which mixes in dozens of traits. The JIT does not inline it into the
+    // typer's large methods, so each call scans the itable. The hot methods below `import cachedGlobal._` to read it from
+    // this field instead. (Importing it here would change the types in Typer's signatures to `Typer.this.cachedGlobal.T`.)
+    private[this] val cachedGlobal: Typers.this.global.type = Typers.this.global
+
     private def unit = context.unit
     import typeDebug.ptTree
     import TyperErrorGen._
@@ -596,6 +601,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def silent[T](op: Typer => T,
                   reportAmbiguousErrors: Boolean = context.ambiguousErrors,
                   newtree: Tree = context.tree): SilentResult[T] = {
+      import cachedGlobal._
       val findMemberStart = if (settings.areStatisticsEnabled) statistics.startCounter(findMemberFailed) else null
       val subtypeStart = if (settings.areStatisticsEnabled) statistics.startCounter(subtypeFailed) else null
       val failedSilentStart = if (settings.areStatisticsEnabled) statistics.startTimer(failedSilentNanos) else null
@@ -3586,6 +3592,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
 
     def doTypedApply(tree: Tree, fun0: Tree, args: List[Tree], mode: Mode, pt: Type): Tree = {
+      import cachedGlobal._
       // TODO_NMT: check the assumption that args nonEmpty
       def duplErrTree = setError(treeCopy.Apply(tree, fun0, args))
       def duplErrorTree(err: AbsTypeError) = { context.issue(err); duplErrTree }
@@ -4709,6 +4716,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     //
 
     def typed1(tree: Tree, mode: Mode, pt: Type): Tree = {
+      import cachedGlobal._
       // Lookup in the given class using the root mirror.
       def lookupInOwner(owner: Symbol, name: Name): Symbol =
         if (mode.inQualMode) rootMirror.missingHook(owner, name) else NoSymbol
@@ -6323,6 +6331,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
 
     def typed(tree: Tree, mode: Mode, pt: Type): Tree = {
+      import cachedGlobal._
       lastTreeToTyper = tree
       val startByType = if (settings.areHotStatisticsEnabled) statistics.pushTimer(byTypeStack, byTypeNanos(tree.getClass)) else null
       if (settings.areHotStatisticsEnabled) statistics.incCounter(visitsByType, tree.getClass)

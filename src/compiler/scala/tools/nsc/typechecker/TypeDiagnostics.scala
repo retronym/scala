@@ -472,12 +472,15 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
   }
 
   object checkDead {
+    // See `Typer.cachedGlobal`
+    private[this] val cachedGlobal: TypeDiagnostics.this.global.type = TypeDiagnostics.this.global
     private def treeOK(tree: Tree) = {
       val isLabelDef = tree match { case _: LabelDef => true; case _ => false}
       tree.tpe != null && tree.tpe.typeSymbol == NothingClass && !isLabelDef
     }
 
     def apply(context: Context, tree: Tree): Tree = {
+      import cachedGlobal._
       if (settings.warnDeadCode.value && context.unit.exists && treeOK(tree) && !context.contextMode.inAny(ContextMode.SuppressDeadArgWarning))
         context.warning(tree.pos, "dead code following this construct", WarningCategory.WFlagDeadCode)
       tree

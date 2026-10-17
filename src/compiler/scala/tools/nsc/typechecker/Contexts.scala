@@ -36,6 +36,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
                     null, 0) {
     enclClass  = this
     enclMethod = this
+    prefix     = NoPrefix
 
     override def enclosingContextChain: List[Context] = Nil
     override def imports: List[ImportInfo] = Nil
@@ -412,7 +413,8 @@ trait Contexts { self: Analyzer with ImportTracking =>
         }
       }
 
-    var prefix: Type = NoPrefix
+    // Assigned by `make` (and NoContext), not here: reading `NoPrefix` in the constructor is an interface call on the Analyzer.
+    var prefix: Type = _
 
     def inSuperInit_=(value: Boolean)         = this(SuperInit) = value
     def inSuperInit                           = this(SuperInit)

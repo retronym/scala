@@ -208,6 +208,9 @@ trait Infer extends Checkable {
 
   /** The context-dependent inferencer part */
   abstract class Inferencer extends InferencerContextErrors with InferCheckable {
+    // See `Typer.cachedGlobal`
+    private[this] val cachedGlobal: Infer.this.global.type = Infer.this.global
+
     def context: Context
     import InferErrorGen._
 
@@ -253,6 +256,7 @@ trait Infer extends Checkable {
      *       since pre may not occur in its type (callers should wrap the result in a TypeTreeWithDeferredRefCheck)
      */
     def checkAccessible(tree: Tree, sym: Symbol, pre: Type, site: Tree, isJava: Boolean): Tree = {
+      import cachedGlobal._
       // When filtering sym down to the accessible alternatives leaves us empty handed.
       def checkAccessibleError(tree: Tree, sym: Symbol, pre: Type, site: Tree): Tree = {
         if (settings.isDebug) {

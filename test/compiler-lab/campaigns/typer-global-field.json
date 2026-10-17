@@ -1,0 +1,12 @@
+{
+  "name": "typer-global-field",
+  "benchmark": "CompileBenchmark",
+  "profile": "xctrace:ipc",
+  "rounds": 3,
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 20 -i 12 -w 3 -r 3",
+    "scala": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p jdkHome=21.0.12+1.1-tem -wi 6 -i 6 -w 40 -r 40"
+  },
+  "trees": {"base": "../typer-global-base", "field": "."},
+  "gcLog": true
+}
