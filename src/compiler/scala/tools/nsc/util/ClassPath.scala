@@ -20,7 +20,7 @@ import java.util.regex.PatternSyntaxException
 import File.pathSeparator
 import scala.tools.nsc.classpath.{ClassPathEntries, PackageEntry, PackageName}
 
-import scala.reflect.internal.jpms.JpmsModuleDescriptor
+import scala.tools.nsc.jpms.JpmsModuleDescriptor
 
 /**
   * A representation of the compiler's class- or sourcepath.

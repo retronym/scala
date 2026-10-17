@@ -1,4 +1,4 @@
-package scala.reflect.internal.jpms;
+package scala.tools.nsc.jpms;
 
 import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;

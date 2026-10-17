@@ -1,4 +1,4 @@
-package scala.reflect.internal.jpms;
+package scala.tools.nsc.jpms;
 
 import javax.lang.model.SourceVersion;
 import javax.tools.StandardJavaFileManager;

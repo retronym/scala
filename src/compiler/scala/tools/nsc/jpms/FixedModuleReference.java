@@ -1,4 +1,4 @@
-package scala.reflect.internal.jpms;
+package scala.tools.nsc.jpms;
 
 import java.io.IOException;
 import java.lang.module.ModuleDescriptor;

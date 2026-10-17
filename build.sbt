@@ -134,12 +134,9 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   // on Scala classes
   compileOrder := CompileOrder.JavaThenScala,
   projectFolder := thisProject.value.id, // overridden in configureAsSubproject
-  Compile / javacOptions ++= Seq("-g", "-source", "1.8", "-target", "1.8", "-Xlint:unchecked"),
-  Compile / javacOptions ++= (
-    if (scala.util.Properties.isJavaAtLeast("20"))
-      Seq("-Xlint:-options")  // allow `-source 1.8` and `-target 1.8`
-    else
-      Seq()),
+  // JDK 17 is the baseline. `--release 17` would be stricter, but javac then reports uses of `sun.misc.Unsafe` without
+  // honouring `@SuppressWarnings("sunapi")`.
+  Compile / javacOptions ++= Seq("-g", "-source", "17", "-target", "17", "-Xlint:unchecked", "-Xlint:-options"),
   Compile / unmanagedJars := Seq.empty,  // no JARs in version control!
   Compile / sourceDirectory := baseDirectory.value,
   Compile / unmanagedSourceDirectories := List(baseDirectory.value),
@@ -499,9 +496,6 @@ lazy val compiler = configureAsSubproject(project)
     description := "Scala Compiler",
     libraryDependencies += asmDep,
     libraryDependencies += diffUtilsDep,
-    // If we're building on Java 11 or later, unlock more functionality implemented in compiler-jdk11,
-    // otherwise, pull in stubs from compiler-pre-jdk11
-    Compile / unmanagedSourceDirectories += (ThisBuild / baseDirectory).value / "src" / (if (scala.util.Properties.isJavaAtLeast("11")) "compiler-jdk11" else "compiler-pre-jdk11"),
     // This is only needed for the POM:
     // TODO: jline dependency is only needed for the REPL shell, which should move to its own jar
     libraryDependencies ++= jlineDeps,

@@ -91,7 +91,7 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
   private def initialUnitBody(unit: CompilationUnit): Tree = {
     // Jump out of cake.
     def toDescriptor(md: Jpms.ModuleDef) = {
-      import scala.reflect.internal.jpms._
+      import scala.tools.nsc.jpms._
       import JpmsModuleDescriptor._
       import scala.jdk.CollectionConverters._
 

@@ -6,18 +6,16 @@ import java.util.jar.Attributes.Name
 import java.util.jar.Manifest
 
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Assume, Before, Test}
+import org.junit.{After, Before, Test}
 
 import scala.reflect.internal.util.SourceFile
 import scala.tools.asm.{ClassWriter, Opcodes}
 import scala.tools.nsc.reporters.StoreReporter
-import scala.util.Properties
 
 class JpmsTest {
   private var fileFactory: FileFactory = _
 
   @Before def before(): Unit = {
-    Assume.assumeTrue("JPMS support requires JDK 11+", Properties.isJavaAtLeast("11"))
     fileFactory = new FileFactory()
   }
   @After def after(): Unit = if (fileFactory != null) fileFactory.close()
