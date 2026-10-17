@@ -122,6 +122,23 @@ Small, independent, one forwarder each. Worth doing alongside cluster 3, mostly 
 
 The splain cluster (5) and the macro-runtime cluster (4) are the clean ones: cold code, a few call sites, reachable through one object field. The helper traits (`EtaExpansion`, `Unapplies`, `NamesDefaults`, `SyntheticMethods`, `TypersTracking`, `ImportTracking`, `TreeDSL`) can follow one at a time. If cluster 1 lands, this is housekeeping: the analyzer has no `invokeinterface` hot path left to shorten and is well below 63. If cluster 1 is rejected, these 11 cold interfaces are exactly the ones that sit in front of `Contexts`, `Typers` and `Analyzer` in the itable, so removing them is the next best thing.
 
+## Compatibility constraints, and the limit without them
+
+What is actually constrained:
+
+- `scala-reflect`'s public API (`scala.reflect.api`, `scala.reflect.macros`, `scala.reflect.runtime.universe`) is under MiMa against 2.13.18. Macro implementations are compiled against it and run in later 2.13 compilers, so this is a real constraint, not a policy one.
+- `scala.reflect.internal.*` is filtered out of MiMa. It is reachable from macros by casting `c.universe` to `Global`, and from compiler plugins, but neither is promised compatibility.
+- `scala-compiler` (`nsc`, the analyzer, erasure) has no binary compatibility promise across 2.13 releases; compiler plugins are published per full Scala version. Source compatibility for plugins is what matters: `global.analyzer.AnalyzerPlugin`, `MacroPlugin`, `addAnalyzerPlugin`, `AnnotationChecker`, `InfoTransformer`, the attachment classes, and `new { val global = g } with Analyzer` (used to replace the analyzer, e.g. by semanticdb).
+
+How existing binaries call into the cake decides what a move breaks. A call whose qualifier has a class type (`global.lub(...)` with `global: Global`, `c.universe.typeOf` with `c.universe: macros.Universe`) is emitted as `invokevirtual` on that class, so a member that moves out of a trait into a forwarder on the class still links. What does not survive is a change to a class's binary name or to the trait that declares a nested API class: macro bytecode refers to `scala/reflect/api/Types$TypeApi`, `Trees$TreeApi` and so on directly.
+
+The limit if compatibility is ignored. Clusters 1 to 4 respect all of the above and bring `Global` to about 45 interfaces, of which 20 are `reflect.api` and about 19 are the `reflect.internal` traits that define the universe. Going further means:
+
+- Collapsing the 20 `reflect.api` traits into `api.Universe`. Their nested `*Api` classes would change binary names, which breaks every compiled macro. Not possible in 2.13; in a new major version it is an option, at the cost of one very large file (the api traits are about 9,800 lines, mostly scaladoc).
+- Merging the universe-defining internal traits (`Names`, `Symbols`, `Types`, `Trees`, ...). Scala 2 has no partial classes, so this means merging files of 2,000 to 5,500 lines each; nothing outside the compiler depends on the trait boundaries, but the cost in readability and blame history is high.
+
+That would take `Global` to roughly 25. The gain over 45 is small: once below 63 the type checks are already hashed, and calls inside `reflect.internal` are already `invokevirtual` on `SymbolTable`, so only the few hundred static `invokeinterface` sites through trait-typed outers would get a shorter itable scan. Those can be fixed more cheaply, case by case, by making the qualifier of those calls class-typed (for example `self.definitions` where `self: SymbolTable`). For the analyzer, compatibility is not the limiting factor at all: cluster 1 is allowed today and removes the itable scans entirely.
+
 ### Not worth it
 
 The 20 `reflect.api` interfaces are public API under MiMa. `TypeComparers`, `TypeMaps`, `TypeConstraints`, `BaseTypeSeqs`, `StdAttachments` and the universe-defining traits either carry the universe's types or are the hottest code, where a field load per call would cost more than the interface does. A deeper class chain does not help either: `Global` is at depth 5 and its subclasses at 6 and 7, so only one primary slot is free.
