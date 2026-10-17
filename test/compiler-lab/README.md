@@ -16,6 +16,7 @@ One op is one full compilation of a corpus with a new `Global`, in a warm JVM, w
 - `scalacOptions`: extra options, space separated, e.g. `-Ystop-after:typer`.
 - `global`: `fresh` (default) or `resident`, one `Global` for every op with a new `Run` each, as a compile server.
 - `variants`: settings compared within one fork, `base=|new=-Yfoo`, alternating by iteration so the variants share the fork's compiled code; reported as paired differences.
+  A variant can also name a build, `base=@build=../base|new=@build=.`: that checkout's build/quick reflect and compiler, loaded in a class loader of its own along with the lab's classes. This pairs builds within a fork too, for changes to the compiler's own code that no flag selects; across separate forks (`perflab trees`), ms/op varies by several percent from fork to fork, which takes many forks per build to see through. The builds share the benchmark's scala-library (and scala-asm), which must be byte-identical to theirs, and they share the JIT's queue, code cache and the profiles of library code; `campaigns/builds-aa.json` checks that two loaders of one build measure the same.
 
 Every run has perflab's default profilers: `gc` (allocation per op) and `JitProfiler` (compilations and deoptimizations while measuring; if `jit.compilations` is large, warm up longer).
 
@@ -37,7 +38,7 @@ perflab run --profile xctrace:ipc -- -p corpus=re2s CompileBenchmark
 perflab ab run test/compiler-lab/campaigns/paired-aa.json && perflab ab report test/compiler-lab/campaigns/paired-aa.json
 ```
 
-Profiles are `none`, `async:<events>` (async-profiler; kperf PMU events with retronym/async-profiler's integration branch), `xctrace:<template>` (Apple Silicon counters for the benchmark thread) and `audit:<spec>` (caller audits with perflab's agent). Campaigns (`campaigns/*.json`) run variants over corpora round by round, or paired within forks, and check that each run measured what it claims. `perflab trees` compares builds in several worktrees. See jvm-perf-lab's README for the analysis commands.
+Profiles are `none`, `async:<events>` (async-profiler; kperf PMU events with retronym/async-profiler's integration branch), `xctrace:<template>` (Apple Silicon counters for the benchmark thread) and `audit:<spec>` (caller audits with perflab's agent). Campaigns (`campaigns/*.json`) run variants over corpora round by round, or paired within forks, and check that each run measured what it claims. `perflab trees` compares builds in several worktrees, each in its own forks; `@build=` variants compare them within forks. See jvm-perf-lab's README for the analysis commands.
 
 ## Cost per definition
 

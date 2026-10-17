@@ -17,6 +17,8 @@ import scala.jdk.CollectionConverters._
 @Warmup(iterations = 20, time = 3)
 @Measurement(iterations = 10, time = 3)
 class CompileBenchmark {
+  import CompileBenchmark.BuildOption
+
   @Param(Array("scalap", "re2s", "scala"))
   var corpus: String = _
 
@@ -32,6 +34,10 @@ class CompileBenchmark {
    *  Each iteration, warmup included, runs the next variant in a Williams order (perflab's `Variants`), so the variants
    *  share the fork's compiled code; `PairedProfiler` and `XctraceProfiler` report per variant. The options add to
    *  `scalacOptions`. JMH splits parameter values at commas: none here.
+   *
+   *  A variant's options may name a build instead of (or as well as) flags: `@build=<checkout>` compiles with that
+   *  checkout's build of reflect and the compiler, in its own class loader (`IsolatedBuild`), e.g.
+   *  `base=@build=../base|new=@build=.`; a relative checkout resolves against this one.
    */
   @Param(Array(""))
   var variants: String = _
@@ -48,9 +54,9 @@ class CompileBenchmark {
   @Param(Array("false"))
   var gcBetweenIterations: Boolean = false
 
-  private var compiler: InMemoryCompiler = _
+  private var compiler: Compiling = _
   private var parsed: Variants = _
-  private var alternatives: Map[String, InMemoryCompiler] = Map.empty
+  private var alternatives: Map[String, Compiling] = Map.empty
   private var iteration = 0
 
   @Setup(Level.Trial)
@@ -69,12 +75,21 @@ class CompileBenchmark {
       case "resident" => true
       case other => sys.error(s"global=$other: expected fresh or resident")
     }
-    compiler = new InMemoryCompiler(src, common, resident)
-    compiler.compile()
-    println(s"\n[compiler-lab] $corpus: ${src.files.size} sources -> ${compiler.outputCount} output files; classpath in memory: ${compiler.classpathSnapshot}")
     parsed = Variants.parse(variants)
+    val own = new InMemoryCompiler(src, common, resident)
+    println(s"\n[compiler-lab] $corpus: ${src.files.size} sources; classpath in memory: ${own.classpathSnapshot}")
+    if (parsed.isEmpty) {
+      compiler = own
+      compiler.compile()
+      println(s"[compiler-lab] ${compiler.outputCount} output files")
+    }
     alternatives = parsed.all.asScala.map { v =>
-      val c = new InMemoryCompiler(src, common ::: v.options.asScala.toList, resident)
+      val (builds, options) = v.options.asScala.toList.partition(_.startsWith(BuildOption))
+      val c = builds.map(_.stripPrefix(BuildOption)) match {
+        case Nil => new InMemoryCompiler(src, common ::: options, resident)
+        case build :: Nil => IsolatedBuild(build).newCompiler(corpus, common ::: options, resident)
+        case _ => sys.error(s"variant ${v.name}: more than one $BuildOption")
+      }
       c.compile()
       println(s"[compiler-lab] variant ${v.name}: ${v.options.asScala.mkString(" ")} -> ${c.outputCount} output files")
       v.name -> c
@@ -101,6 +116,7 @@ class CompileBenchmark {
 }
 
 object CompileBenchmark {
+  private final val BuildOption = "@build="
   private[compilerlab] def split(options: String): List[String] = options.split(" ").toList.filter(_.nonEmpty)
 }
 

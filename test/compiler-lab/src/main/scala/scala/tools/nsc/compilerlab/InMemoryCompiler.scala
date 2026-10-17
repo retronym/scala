@@ -16,7 +16,7 @@ import scala.tools.nsc.reporters.StoreReporter
  *  one compilation to the next. With `resident = true`, compilations share one `Global`, each a new `Run`, as a
  *  compile server or the REPL does.
  */
-final class InMemoryCompiler(val corpus: Corpus, extraOptions: List[String] = Nil, resident: Boolean = false) {
+final class InMemoryCompiler(val corpus: Corpus, extraOptions: List[String] = Nil, resident: Boolean = false) extends Compiling {
   /** The classpath snapshot this compiler reads. */
   val classpathSnapshot: InMemoryClasspath = InMemoryClasspath.forCorpus(corpus)
 
