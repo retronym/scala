@@ -13,7 +13,7 @@
 package scala.tools.nsc.jpms
 
 import java.io.File.pathSeparator
-import java.lang.module.ModuleFinder
+import java.lang.module.{FindException, ModuleFinder}
 import java.net.URL
 import java.nio.file.{Path, Paths}
 
@@ -72,7 +72,18 @@ object ModulePathClassPath {
 
     // Module path elements are modules (JARs or exploded directories) or directories of modules. Earlier ones win.
     val modulePath = settings.modulePath.value.split(pathSeparator).iterator.filter(_.nonEmpty).map(Paths.get(_)).toList
-    val modulePathFinder = ModuleFinder.of(modulePath: _*)
+    // A module path entry that is not a module, such as a jar whose automatic module name can't be derived from
+    // its file name (`foo_2.13-1.0.jar`: "2" is not a Java identifier), is an error, as with javac. It is skipped
+    // rather than failing the whole module path.
+    val validModulePath = modulePath.filter { p =>
+      try { ModuleFinder.of(p).findAll(); true }
+      catch {
+        case ex: FindException =>
+          settings.errorFn(s"module path entry $p: ${ex.getMessage}${Option(ex.getCause).fold("")(c => s" (${c.getMessage})")}")
+          false
+      }
+    }
+    val modulePathFinder = ModuleFinder.of(validModulePath: _*)
     val moduleEntries = modulePathFinder.findAll().asScala.toSeq.sortBy(_.descriptor.name).flatMap { ref =>
       val location = Paths.get(ref.location.get)
       tagged(ref.descriptor.name)(classPathFactory.classesInPath(location.toString))
@@ -84,7 +95,15 @@ object ModulePathClassPath {
     }
     val systemEntries = system.map(new ModuleTaggedClassPath(_, "system modules", SystemModules.moduleOf))
 
-    val aggregate = AggregateClassPath((patchEntries ++ systemEntries ++ moduleEntries ++ rest).toIndexedSeq)
+    // Build tools put the output directory on the class path, so that the compiler sees classes from earlier
+    // (incremental) compilations. Those belong to the module being compiled, not to the unnamed module.
+    val outputDirs = JpmsSettings.outputDirs(settings)
+    def isOutputDir(cp: ClassPath) = cp.asClassPathStrings.exists(p => outputDirs(Paths.get(p).toAbsolutePath.normalize))
+    val restEntries = rest.map { cp =>
+      if (isOutputDir(cp)) new ModuleTaggedClassPath(cp, "class output", _ => ModuleTable.CurrentModule) else cp
+    }
+
+    val aggregate = AggregateClassPath((patchEntries ++ systemEntries ++ moduleEntries ++ restEntries).toIndexedSeq)
     val patchRoots: Seq[(Path, String)] = patches.toSeq.flatMap { case (module, paths) => paths.map(p => (Paths.get(p).toAbsolutePath.normalize, module)) }
     val patchModuleOfSource: java.util.function.Function[Path, String] = { path =>
       patchRoots.collectFirst { case (root, module) if path.startsWith(root) => module }.orNull
@@ -139,6 +158,11 @@ private[nsc] object JpmsSettings {
       case EqualsPattern(module, paths) => (module, paths.split(pathSeparator).toList.filter(_.nonEmpty))
       case arg                          => throw new IllegalArgumentException(s"Unable to parse --patch-module $arg")
     }.groupBy(_._1).view.mapValues(_.flatMap(_._2)).toMap
+
+  /** The compiler's output directories, as absolute paths. */
+  def outputDirs(s: Settings): Set[Path] =
+    (s.outputDirs.getSingleOutput.toList ++ s.outputDirs.outputs.map(_._2))
+      .flatMap(f => Option(f.file)).map(_.toPath.toAbsolutePath.normalize).toSet
 
   def classOutput(s: Settings): ClassOutput = {
     val singleOutput = s.outputDirs.getSingleOutput.get

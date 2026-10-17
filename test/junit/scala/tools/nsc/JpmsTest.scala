@@ -541,6 +541,34 @@ abstract class JpmsTest(classPathImpl: String) {
       "package jdk.internal.misc is declared in module java.base, which does not export it to the unnamed module")
   }
 
+  @Test def incrementalCompilationSeesEarlierClassesInSameModule(): Unit = {
+    Assume.assumeTrue("JpmsClassPath does not list the output directory's classes (PLAN.md, Track 2 step 1)", classPathImpl == "native")
+    // As Zinc does: the second compilation only has the changed source, with the output directory on the class path,
+    // and module-info.java is not recompiled. The classes from the first compilation are part of module p1.
+    val out = fileFactory.tempDir()
+    val impl = fileFactory("p1/internal/Impl.scala", "package p1.internal; object Impl { def x = 42 }")
+    val api = fileFactory("p1/api/Api.scala", "package p1.api; class Api { def x = p1.internal.Impl.x }")
+    val moduleInfo = fileFactory("module-info.java", "module p1 { requires scala.library; exports p1.api; }")
+    assertNoErrors(compile(impl :: api :: moduleInfo :: Nil, out))
+    assertNoErrors(compile(api :: Nil, out, extraArgs = List("-classpath", out.toString)))
+    // ... while sources outside the module still can't see its internals.
+    val client = fileFactory("other/Client.scala", "package other; class Client { p1.internal.Impl.x }")
+    assertSingleError(compile(client :: Nil, fileFactory.tempDir(), List(out), List("--add-modules:p1")), "object Impl in package internal cannot be accessed")
+  }
+
+  @Test def modulePathEntryThatIsNotAModule(): Unit = {
+    Assume.assumeTrue("checked by the native class path", classPathImpl == "native")
+    // No Automatic-Module-Name, and no valid name can be derived from the file name.
+    val jar = createAutomaticModuleJar(fileFactory.tempDir().resolve("foo_2.13-1.0.jar"), automaticModuleName = null)
+    val errors = collection.mutable.ListBuffer[String]()
+    val settings = new Settings(errors += _)
+    settings.processArguments(List("-Yjpms", "--module-path", jar.toString, "-d", fileFactory.tempDir().toString), processAll = true)
+    val global = new Global(settings, new StoreReporter(settings))
+    global.classPath // used to throw FindException
+    assertEquals(1, errors.size)
+    assertTrue(errors.head, errors.head.contains("Unable to derive module descriptor"))
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))
@@ -580,7 +608,7 @@ abstract class JpmsTest(classPathImpl: String) {
   private def createAutomaticModuleJar(jar: Path, automaticModuleName: String, contentsOf: Option[Path] = None): Path = {
     val manifest = new Manifest()
     manifest.getMainAttributes.put(Name.MANIFEST_VERSION, "1.0")
-    manifest.getMainAttributes.put(new Name("Automatic-Module-Name"), automaticModuleName)
+    if (automaticModuleName != null) manifest.getMainAttributes.put(new Name("Automatic-Module-Name"), automaticModuleName)
     val os = new ByteArrayOutputStream()
     manifest.write(os)
     val env = java.util.Collections.singletonMap("create", "true")

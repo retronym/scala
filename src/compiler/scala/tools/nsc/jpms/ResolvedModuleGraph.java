@@ -93,6 +93,11 @@ public final class ResolvedModuleGraph {
             "Use " + exportsOption + " to export it anyway";
     }
 
+    /** The module of the sources being compiled, other than those patched into another module; "" if unnamed. */
+    public String currentModule() {
+        return currentModule;
+    }
+
     /** The module of a source file being compiled: the module it is patched into, or the current module. */
     public String moduleForSourceFile(Path path) {
         if (path != null && patchModuleOfSource != null) {
