@@ -86,16 +86,48 @@ import scala.util.chaining._
 trait Types
   extends api.Types
   with tpe.TypeComparers
-  with tpe.TypeToStrings
-  with tpe.CommonOwners
-  with tpe.GlbLubs
   with tpe.TypeMaps
   with tpe.TypeConstraints
-  with tpe.FindMembers
   with util.Collections { self: SymbolTable =>
 
   import definitions._
   import statistics._
+
+  private[internal] val typeToStrings: tpe.TypeToStrings { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.TypeToStrings
+  private[this] var _toStringRecursions = 0
+  def toStringRecursions = _toStringRecursions
+  def toStringRecursions_=(value: Int) = _toStringRecursions = value
+  private[this] val _toStringSubjects = mutable.HashSet[Type]()
+  def toStringSubjects = _toStringSubjects
+  protected def typeToString(tpe: Type): String = typeToStrings.typeToString(tpe)
+
+  private[internal] val commonOwners: tpe.CommonOwners { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.CommonOwners
+  type CommonOwnerMap = commonOwners.CommonOwnerMap
+  protected[reflect] def commonOwnerMap: CommonOwnerMap = commonOwners.commonOwnerMapObj
+  protected[internal] def commonOwner(t: Type): Symbol = commonOwners.commonOwner(t)
+  protected[internal] def commonOwner(tps: List[Type]): Symbol = commonOwners.commonOwner(tps)
+
+  private[internal] val glbLubs: tpe.GlbLubs { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.GlbLubs
+  private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def lubResults = _lubResults
+  private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
+  def glbResults = _glbResults
+  final def lubList(ts: List[Type], depth: Depth): List[Type] = glbLubs.lubList(ts, depth)
+  final def spanningTypes(ts: List[Type]): List[Type] = glbLubs.spanningTypes(ts)
+  final def sameWeakLubAsLub(tps: List[Type]): Boolean = glbLubs.sameWeakLubAsLub(tps)
+  final def weakLub(tps: List[Type]): Type = glbLubs.weakLub(tps)
+  final def numericLub(ts: List[Type]): Type = glbLubs.numericLub(ts)
+  final def lub(ts: List[Type]): Type = glbLubs.lub(ts)
+  protected[internal] final def lub(ts: List[Type], depth: Depth): Type = glbLubs.lub(ts, depth)
+  final def GlbFailure: Throwable = glbLubs.GlbFailure
+  final def glb(ts: List[Type]): Type = glbLubs.glb(ts)
+  protected[internal] final def glb(ts: List[Type], depth: Depth): Type = glbLubs.glb(ts, depth)
+
+  private[internal] val findMembers: tpe.FindMembers { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.FindMembers
+  private[reflect] type FindMembers = findMembers.FindMembers
+  private[reflect] type FindMember = findMembers.FindMember
+  private[scala] type HasMember = findMembers.HasMember
+  private[reflect] final def findMemberInstance: ReusableInstance[FindMember] = findMembers.findMemberInstance
 
   private[this] var explainSwitch = false
   @unused private final val emptySymbolSet = Set.empty[Symbol]
@@ -5202,8 +5234,8 @@ trait Types
 
   /** The current indentation string for traces */
   private[this] var _indent: String = ""
-  protected def indent = _indent
-  protected def indent_=(value: String) = _indent = value
+  protected[reflect] def indent = _indent
+  protected[reflect] def indent_=(value: String) = _indent = value
 
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
