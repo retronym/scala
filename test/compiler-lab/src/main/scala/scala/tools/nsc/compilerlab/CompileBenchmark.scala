@@ -38,6 +38,8 @@ class CompileBenchmark {
 
   /** The JDK whose API the corpus compiles against, if not the running one (`compilerlab.jdkHome`): e.g. an older JDK
    *  for a corpus that clashes with newer API, as compiler-benchmark's `scala` does with JDK 26's `Comparator.max`.
+   *  A name without `/` is an SDKMAN JDK (`$SDKMAN_DIR/candidates/java/<name>`), which keeps the value usable in the
+   *  file names profilers derive from parameters.
    */
   @Param(Array(""))
   var jdkHome: String = _
@@ -54,7 +56,12 @@ class CompileBenchmark {
   @Setup(Level.Trial)
   def setup(): Unit = {
     Announce.jvm(s"CompileBenchmark($corpus)")
-    if (jdkHome.nonEmpty) System.setProperty("compilerlab.jdkHome", jdkHome)
+    if (jdkHome.nonEmpty) {
+      val home =
+        if (jdkHome.contains('/')) jdkHome
+        else s"${sys.env.getOrElse("SDKMAN_DIR", sys.props("user.home") + "/.sdkman")}/candidates/java/$jdkHome"
+      System.setProperty("compilerlab.jdkHome", home)
+    }
     val common = CompileBenchmark.split(scalacOptions)
     val src = Corpus.load(corpus)
     val resident = global match {
