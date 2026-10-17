@@ -16,11 +16,14 @@ import org.openjdk.jmh.annotations._
  *  when Scaladoc, the presentation compiler or macro toolboxes run beside the compiler. `viaClass` makes the same
  *  calls through `this.asInstanceOf[U]`: `checkcast U` (a primary supers check) and `invokevirtual`.
  *
- *  `Hot`'s methods are not inlined (`-XX:CompileCommand=dontinline`), as the compiler's hot trait methods are too big
- *  to be: inlined into a caller whose receiver is known to be a `U`, C2 would fold the casts away.
+ *  The bodies of `Hot`'s methods are not inlined (`-XX:CompileCommand=dontinline`), as the compiler's hot trait
+ *  methods are too big to be: inlined into a caller whose receiver is known to be a `U`, C2 would fold the casts away.
+ *  Only the bodies: the static `viaTrait$` that the class's forwarder calls must stay inlinable, as it is in the
+ *  compiler, or its `invokespecial` of the body adds a receiver check against `Hot` (C2's `Parse::do_call`) that
+ *  would otherwise fold away.
  */
 @BenchmarkMode(Array(Mode.AverageTime))
-@Fork(value = 1, jvmArgsAppend = Array("-Xms1G", "-Xmx1G", "-XX:CompileCommand=quiet", "-XX:CompileCommand=dontinline,*$Hot::via*"))
+@Fork(value = 1, jvmArgsAppend = Array("-Xms1G", "-Xmx1G", "-XX:CompileCommand=quiet", "-XX:CompileCommand=dontinline,*$Hot::viaTrait", "-XX:CompileCommand=dontinline,*$Hot::viaClass"))
 @Threads(1)
 @Warmup(iterations = 10, time = 1)
 @Measurement(iterations = 10, time = 1)
