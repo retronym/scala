@@ -67,6 +67,32 @@ public final class ResolvedModuleGraph {
         return result;
     }
 
+    /**
+     * Why `pkg` of module `target` is not accessible from module `from`, in the words javac uses, followed by the
+     * options or directive that would make it accessible. The modules are named as in `accessibleModulePackages`.
+     */
+    public String explainInaccessible(String from, String target, String pkg) {
+        String fromName = from.isEmpty() ? "the unnamed module" : "module " + from;
+        String targetName = target.isEmpty() ? "the unnamed module" : "module " + target;
+        String graphTarget = target.isEmpty() ? UNNAMED_MODULE_NAME : target;
+        String graphFrom = from.isEmpty() ? UNNAMED_MODULE_NAME : from;
+        Optional<ResolvedModule> resolvedTarget = configuration.findModule(graphTarget);
+        if (resolvedTarget.isEmpty()) {
+            return "package " + pkg + " is declared in " + targetName + ", which is not in the module graph\n" +
+                (from.isEmpty() ? "Use --add-modules " + target + " to resolve it" : "Add `requires " + target + ";` to the declaration of " + fromName + ", or use --add-modules " + target);
+        }
+        boolean reads = from.isEmpty() || configuration.findModule(graphFrom).map(m -> m.reads().contains(resolvedTarget.get())).orElse(false);
+        if (!reads) {
+            String readsOption = "--add-reads " + from + "=" + (target.isEmpty() ? "ALL-UNNAMED" : target);
+            return "package " + pkg + " is declared in " + targetName + ", but " + fromName + " does not read it\n" +
+                (target.isEmpty() ? "Use " + readsOption : "Add `requires " + target + ";` to the declaration of " + fromName + ", or use " + readsOption);
+        }
+        boolean exportedToSomeone = resolvedTarget.get().reference().descriptor().exports().stream().anyMatch(e -> e.source().equals(pkg));
+        String exportsOption = "--add-exports " + target + "/" + pkg + "=" + (from.isEmpty() ? "ALL-UNNAMED" : from);
+        return "package " + pkg + " is declared in " + targetName + ", which does not export it" + (exportedToSomeone ? " to " + fromName : "") + "\n" +
+            "Use " + exportsOption + " to export it anyway";
+    }
+
     /** The module of a source file being compiled: the module it is patched into, or the current module. */
     public String moduleForSourceFile(Path path) {
         if (path != null && patchModuleOfSource != null) {

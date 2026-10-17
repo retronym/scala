@@ -31,6 +31,9 @@ trait ModuleTable {
    *  exports `pkg` to `from`.
    */
   def isPackageAccessible(from: String, target: String, pkg: String): Boolean
+
+  /** Why `pkg` of `target` is not accessible from `from`, for an error message. */
+  def explainInaccessible(from: String, target: String, pkg: String): String = ""
 }
 
 object ModuleTable {
@@ -67,6 +70,9 @@ final class GraphModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
           else Some(packages.asScala.toSet)
         (target, packagesOrAll)
     }.toMap
+
+  override def explainInaccessible(from: String, target: String, pkg: String): String =
+    graph.explainInaccessible(from, target, pkg)
 
   def isPackageAccessible(from: String, target: String, pkg: String): Boolean =
     from == target || {
