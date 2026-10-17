@@ -1,0 +1,71 @@
+[info] welcome to sbt 1.12.15 (Eclipse Adoptium Java 21.0.12.1)
+[info] loading global plugins from /Users/jzaugg-virtus/.sbt/1.0/plugins
+[info] loading project definition from /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/project
+[info] loading settings for project sbt-project from build.sbt...
+[info] set current project to sbt-project (in build file:/Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/)
+[info] Executing in batch mode. For better performance use sbt's shell
+[success] Total time: 0 s, completed 17 Oct 2026, 10:38:29 pm
+[info] compiling 1 Scala source to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/macros/target/scala-2.13/classes ...
+[global-classes] new=scala.tools.xsbt.ZincCompiler count=1 loader=sbt.internal.classpath.ClassLoaderCache$Key$CachedClassLoader@3a2c64ee thread=pool-12-thread-10 all=[scala.tools.xsbt.ZincCompiler]
+[info] done compiling
+[info] compiling 1 Scala source to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/app2/target/scala-2.13/classes ...
+[info] compiling 1 Scala source to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/app/target/scala-2.13/classes ...
+[global-classes] new=scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal count=2 loader=sbt.internal.classpath.ClassLoaderCache$Key$CachedClassLoader@3a2c64ee thread=pool-12-thread-12 all=[scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal, scala.tools.xsbt.ZincCompiler]
+[info] done compiling
+[info] done compiling
+[success] Total time: 2 s, completed 17 Oct 2026, 10:38:30 pm
+[info] Main Scala API documentation to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/macros/target/scala-2.13/api...
+[info] Main Scala API documentation to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/app2/target/scala-2.13/api...
+[info] Main Scala API documentation to /Users/jzaugg-virtus/code/.worktrees/scala/blissful-thompson-b7e737/scratch/global-classes/sbt-project/app/target/scala-2.13/api...
+[global-classes] new=scala.tools.nsc.doc.DocFactory$compiler$ count=3 loader=sbt.internal.classpath.ClassLoaderCache$Key$CachedClassLoader@3a2c64ee thread=pool-13-thread-13 all=[scala.tools.nsc.doc.DocFactory$compiler$, scala.tools.reflect.ToolBoxFactory$ToolBoxImpl$ToolBoxGlobal, scala.tools.xsbt.ZincCompiler]
+[info] Main Scala API documentation successful.
+[info] Main Scala API documentation successful.
+[info] Main Scala API documentation successful.
+[success] Total time: 0 s, completed 17 Oct 2026, 10:38:31 pm
+[info] Starting scala interpreter...
+Welcome to Scala 2.13.19-20261016-084529-339909a (OpenJDK 64-Bit Server VM, Java 21.0.12.1).
+Type in expressions for evaluation. Or try :help.
+[error] java.lang.NoSuchMethodError: 'java.lang.String[] org.jline.terminal.impl.MouseSupport.keys(org.jline.terminal.Terminal)'
+[error] 	at org.jline.reader.impl.LineReaderImpl.bindArrowKeys(LineReaderImpl.java:6632)
+[error] 	at org.jline.reader.impl.LineReaderImpl.emacs(LineReaderImpl.java:6394)
+[error] 	at org.jline.reader.impl.LineReaderImpl.defaultKeyMaps(LineReaderImpl.java:6294)
+[error] 	at org.jline.reader.impl.LineReaderImpl.<init>(LineReaderImpl.java:354)
+[error] 	at org.jline.reader.LineReaderBuilder.build(LineReaderBuilder.java:218)
+[error] 	at scala.tools.nsc.interpreter.jline.Reader$.apply(Reader.scala:147)
+[error] 	at scala.tools.nsc.interpreter.shell.ILoop.defaultIn$lzycompute(ILoop.scala:68)
+[error] 	at scala.tools.nsc.interpreter.shell.ILoop.defaultIn(ILoop.scala:63)
+[error] 	at scala.tools.nsc.interpreter.shell.ILoop.run(ILoop.scala:975)
+[error] 	at scala.tools.xsbt.ConsoleBridge.run(ConsoleBridge.scala:81)
+[error] 	at sbt.internal.inc.AnalyzingCompiler.console(AnalyzingCompiler.scala:208)
+[error] 	at sbt.Console.console0$1(Console.scala:65)
+[error] 	at sbt.Console.$anonfun$apply$5(Console.scala:75)
+[error] 	at sbt.Run$.executeSuccess(Run.scala:227)
+[error] 	at sbt.Console.$anonfun$apply$4(Console.scala:75)
+[error] 	at sbt.internal.util.Terminal.withRawInput(Terminal.scala:146)
+[error] 	at sbt.internal.util.Terminal.withRawInput$(Terminal.scala:144)
+[error] 	at sbt.internal.util.Terminal$ProxyTerminal$.withRawInput(Terminal.scala:434)
+[error] 	at sbt.Console.$anonfun$apply$3(Console.scala:75)
+[error] 	at sbt.internal.util.Terminal$DefaultTerminal.withRawOutput(Terminal.scala:1084)
+[error] 	at sbt.internal.util.Terminal$ProxyTerminal$.withRawOutput(Terminal.scala:473)
+[error] 	at sbt.Console.apply(Console.scala:72)
+[error] 	at sbt.Console.apply(Console.scala:50)
+[error] 	at sbt.Console.apply(Console.scala:42)
+[error] 	at sbt.Defaults$.$anonfun$consoleTask$1(Defaults.scala:2226)
+[error] 	at sbt.Defaults$.$anonfun$consoleTask$1$adapted(Defaults.scala:2211)
+[error] 	at scala.Function1.$anonfun$compose$1(Function1.scala:49)
+[error] 	at sbt.internal.util.$tilde$greater.$anonfun$$u2219$1(TypeFunctions.scala:63)
+[error] 	at sbt.std.Transform$$anon$4.work(Transform.scala:69)
+[error] 	at sbt.Execute.$anonfun$submit$2(Execute.scala:283)
+[error] 	at sbt.internal.util.ErrorHandling$.wideConvert(ErrorHandling.scala:24)
+[error] 	at sbt.Execute.work(Execute.scala:292)
+[error] 	at sbt.Execute.$anonfun$submit$1(Execute.scala:283)
+[error] 	at sbt.ConcurrentRestrictions$$anon$4.$anonfun$submitValid$1(ConcurrentRestrictions.scala:265)
+[error] 	at sbt.CompletionService$$anon$2.call(CompletionService.scala:65)
+[error] 	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+[error] 	at java.base/java.util.concurrent.Executors$RunnableAdapter.call(Executors.java:572)
+[error] 	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+[error] 	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+[error] 	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+[error] 	at java.base/java.lang.Thread.run(Thread.java:1583)
+[error] (app / Compile / console) java.lang.NoSuchMethodError: 'java.lang.String[] org.jline.terminal.impl.MouseSupport.keys(org.jline.terminal.Terminal)'
+[error] Total time: 0 s, completed 17 Oct 2026, 10:38:31 pm
