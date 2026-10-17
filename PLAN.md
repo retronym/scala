@@ -18,7 +18,7 @@ Both had WIP status and were never opened as PRs.
 - The graph is resolved lazily, after the parser has seen any `module-info.java`.
 - Each top level `ClassSymbol` carries `associatedJpmsModuleName`, set from the class path location (binaries) or from the module graph (sources).
 - `Contexts.isAccessible` additionally requires that the accessed top level class is in the same module, or in a package exported to the accessing module by a module it reads. Automatic modules export everything.
-- Java 9+ API usage is isolated in `src/compiler-jdk11`, which is only added to the compiler's sources when building on JDK 11+. `src/compiler-pre-jdk11` holds stubs.
+- The build requires JDK 17, so the Java 9+ API usage lives directly in `src/compiler` under `scala.tools.nsc.jpms`.
 
 ## DONE
 
@@ -31,54 +31,81 @@ Both had WIP status and were never opened as PRs.
 - Dropped changes that upstream already has (public `PlainNioFile`) or that were unused (`ZipArchive.dirName`/`baseName` visibility, which also tripped MiMa).
 - Regression: MiMa clean, full `junit/test` (3417) and partest pos/neg/jvm (3392) pass on JDK 21.
 - Tests: `JpmsTest` rewritten to be self contained (its own `Global`, ASM-written `module-info.class`), and switched from `java.xml.bind` (removed in JDK 11) to `jdk.incubator.vector`, which is observable but not resolved by default. Covers unresolved module, unexported package, `--add-modules`, `--add-exports`, joint compilation with `module-info.java` with and without the needed `requires`, clients of a named module on the module path, `--patch-module`, `module-info.java` parsing and printing, and `module-info.java` being harmless without `-Yjpms`. `neg/jpms_unsafe` now uses `jdk.internal.misc.Unsafe`, since `sun.misc` is exported by `jdk.unsupported`.
+- JDK 17 is the build baseline (`-source 17 -target 17` for Java sources). The `compiler-jdk11`/`compiler-pre-jdk11` split and the `FileManagerJava9Api` shim are gone. Multi-JDK support in the build is out of scope.
+- `--add-reads` and `--add-exports` now apply to the module being compiled from source, and the unnamed module exports all its packages, so `--add-reads m=ALL-UNNAMED` works. Test: a named module does not read the class path unless told to.
 
-## Gap analysis
+## Two tracks
 
-### Blocking for any merge
+The work splits into two mostly independent tracks.
 
-1. **Build produces a JDK-dependent compiler jar.** Whether `compiler-jdk11` is compiled in depends on the JDK running sbt. 2.13.x CI and releases build on JDK 8, so the published compiler would never contain JPMS support, and a JDK 11 build would contain classes that reference Java 9 APIs. The 2019 branch worked around this with a `-jdk11` version suffix, which is not an option. The Java 9 code needs to be compiled with `--release 11` into a separate output that is always built (CI would need a JDK 11+ toolchain for that step) and merged into the compiler jar, and reached from the main compiler only reflectively or through a small interface so that nothing on JDK 8 links against it. The `compiler-pre-jdk11` stubs are also stale (`RequireDirective` is nested in the real class but top level in the stub) and have not been compiled.
-2. **Macros and plugins on the module path do not load.** `JpmsClassPath.asURLs` and `asClassPathStrings` return `Nil`. The macro class loader (`Plugins.findMacroClassLoader`) is built from `classPath.asURLs`, so macro implementations from libraries on the module path are not found. `-Ylogcp` and anything else that reports the class path also sees nothing.
-3. **No `module-info.class` output.** A jointly compiled `module-info.java` is parsed and used for access checks but dropped. Users still need javac to produce the descriptor, which defeats the purpose for pure Scala modules. The backend should emit it with ASM's `ModuleVisitor`, including the `ModulePackages` attribute and the `MainClass` attribute when there is a main class.
-4. **Resident compilation is unsupported.** The module graph is resolved once per `JpmsClassPath` and `jpmsRegisterModuleInfo` asserts it is called at most once. A second `Run` (sbt's cached compiler, the REPL, the presentation compiler) that contains `module-info.java` will fail the assertion, and a change to `module-info.java` is never picked up. The graph belongs to the `Run`, as the 2018 branch had it.
+- **Track 1, JPMS semantics.** scalac implements the module system as specified, for both joint compilation (a `module-info.java` among the sources) and separate compilation (modules arriving as `module-info.class` on the module path, including modules that scalac itself produced). This is the main deliverable and needs matching changes in Zinc and sbt.
+- **Track 2, javac's classpath as an option.** Reusing javac's `StandardJavaFileManager` for locating classes, which is what the prototype does today, becomes an opt-in implementation. Its main value is as an oracle: it lets us check the scalac implementation against javac's view of the same command line.
 
-### Correctness
+The seam between the tracks is a small interface, called `ModuleTable` below, which answers three questions: which module a top level class belongs to, which modules a given module reads, and whether package `p` of module `m` is exported to module `n`. Track 1 consumes it in the typer and backend. Track 2 is one implementation of it, plus class lookup.
 
-5. `JpmsModuleDescriptor.create` only transfers `requires`, without the `transitive` and `static` modifiers, and `exports`, `opens`, `uses` and `provides` are parsed but unused. For compiling the module itself this is harmless: it reads its direct dependencies either way, and javac also treats `requires static` as mandatory at compile time. It matters as soon as the descriptor is written out (item 3), where every directive and modifier must survive.
-6. `--upgrade-module-path` and `--limit-modules` are declared but not passed to the file manager or the resolver. `--module-source-path` (multi-module compilation) is not supported at all, nor are multiple `module-info.java` files in one run.
-7. The interaction with `-release` is untested on modern JDKs. `CtSymClassAndModulePath` was written against the JDK 9/10 `ct.sym` layout. Upstream has since gained `CtSymClassPath` and `-system`; the JPMS path should reuse those instead of carrying its own copy.
-8. The access check works at top level class granularity. Not yet considered: type aliases and `val` forwarders in an exported package that expose a type from a non-exported one, implicit search returning inaccessible implicits, members inherited through a public supertype, Java static members, and package objects. The relevant `TODO JPMS` comments are in `Contexts.scala`.
-9. `-Yjpms` must precede `--module-path` and friends on the command line, because the check is a post-set hook. It should be validated once all arguments are processed.
-10. `-Yjpms` with a plain class path does nothing, so it gives no protection against JDK internals for code in the unnamed module. That case is probably the most common one in practice and should get access checks too.
-11. The `ClassAndSourceFilesEntry` merge in `AggregateClassPath` has `TODO JPMS` markers and loses the module name in one branch.
-12. Module annotations (`@Deprecated module m {}`) are parsed and dropped. Directives carry no positions, so errors cannot point into `module-info.java`. There is no validation of the declaration itself (exported package exists, `provides` implementation exists and is a subtype, no duplicate directives).
-13. Error messages are the generic "cannot be accessed as a member of". javac reports "package p is declared in module m, which does not export it to module n" and suggests `--add-exports` or `requires`; scalac should do the same.
+## Track 1: JPMS semantics
 
-### Performance
+### Gaps in scalac
 
-14. `JpmsClassPath.classes` calls `fileManager.list` for every location for every package, and `findClassFile` scans every location. The JAR package index opens and walks every JAR eagerly at startup. Upstream's classpath has had significant work on caching (`ZipAndJarFileLookupFactory`, shared `JrtClassPath`) that the JPMS path bypasses.
-15. Every `ClassSymbol` gains a field for the module name, and every `PackageClassSymbol` a cached `fullNameString`. This should be measured, or the module name derived from the class path entry via `associatedFile` instead of stored per symbol.
+1. **No `module-info.class` output.** A jointly compiled `module-info.java` feeds the access checks but is then dropped. For separate compilation the descriptor has to be written out with ASM's `ModuleVisitor`, with every directive and modifier, the `ModulePackages` attribute (computed from the classes emitted), and `MainClass` if applicable. `JpmsModuleDescriptor` currently carries only the `requires` names, without `transitive` and `static`. That doesn't matter for the module's own compilation, which reads its direct dependencies either way and, like javac, treats `requires static` as mandatory at compile time. It does matter once the descriptor is written.
+2. **Module graph lifetime.** The graph is resolved once per `JpmsClassPath`, and `jpmsRegisterModuleInfo` asserts it is called at most once. A second `Run` on the same `Global` (Zinc's cached compiler, the REPL, the presentation compiler) that includes `module-info.java` fails the assertion, and edits to `module-info.java` are never seen. The graph belongs to the `Run`.
+3. **Access check coverage.** The check works at top level class granularity in `Contexts.isAccessible`. Not yet considered:
+   - type aliases and forwarders in an exported package that expose a type from a non-exported one;
+   - implicit search turning up inaccessible implicits;
+   - members inherited through a public supertype;
+   - Java statics and package objects.
+4. **Optimizer.** Inlining code from another module can copy references to packages that are not exported to the caller, or to modules the caller does not read, which fails at run time with `IllegalAccessError`. The inliner's accessibility check (`BackendUtils`/`InlinerHeuristics`) has to consult the `ModuleTable`, and `-opt-inline-from` defaults need a look.
+5. **`scala.library`.** Every Scala module needs `requires scala.library`. The question is whether scalac should report its absence with a hint, or add it implicitly. Implicit addition is a deviation from the spec that javac clients would not see. The 2.13 library is an automatic module, `scala.library`, through its `Automatic-Module-Name`. There are no split packages between library, reflect and compiler, which I checked against the build output.
+6. **Options.** `--upgrade-module-path` and `--limit-modules` are declared but not wired in. `--module-source-path` (multi-module compilation) and multiple `module-info.java` files in one run are unsupported. `-Yjpms` must precede the module options because the check is a post-set hook. `-release` with modules relies on a `ct.sym` reader written for JDK 9/10, while upstream now has `CtSymClassPath` and `-system`.
+7. **`-Yjpms` with only a class path does nothing.** Code in the unnamed module still gets no protection against JDK internals. This is probably the most common case in practice.
+8. **Diagnostics.** The error is the generic "cannot be accessed as a member of". javac says which module declares the package and that it is not exported or not read, and suggests a fix; scalac should match. Module directives carry no positions, module annotations are dropped, and the declaration isn't validated (exported packages exist, `provides` implementations exist and conform, no duplicate directives).
+9. **Run-time concerns outside the compiler.** These need `opens` or exports in user modules, and are probably documentation rather than compiler work:
+   - structural types (`reflectiveSelectable`), which use Java reflection on the receiver's class;
+   - Scala runtime reflection (`scala.reflect.runtime`).
 
-### Design questions
+### Gaps in Zinc and sbt
 
-16. **Keep javac's file manager or not.** Using `StandardJavaFileManager` buys exact javac semantics for option parsing and location handling, but it ties scalac to the `java.compiler` module (absent from minimal jlinked runtimes), duplicates the classpath implementation, and is the source of items 2 and 14. The alternative is to keep scalac's existing `ClassPath` implementations, tag each entry with its module (from `ModuleFinder` over the module path, `jrt:/modules/<name>` for the system image, `--patch-module` for overlays), and use `java.lang.module.Configuration` only for resolution and the exports table. I would lean towards the second option.
-17. **Build tool story.** sbt/Zinc, Mill, Maven and Gradle all need to pass the module path and options through, and Zinc needs to track `module-info.java` as a source whose change invalidates everything. This should be scoped before the compiler side is finalised so the command line interface matches what tools can produce.
-18. **Scope for Scala 2.13.** Whether this lands as an experimental `-Y` option on 2.13.x, and how it relates to Scala 3, which has no JPMS support either.
+From a survey of the current Zinc (main) and sbt checkouts:
 
-## Plan
+- **Zinc has no module path.** `CompileOptions` and `ClasspathOptions` carry only a class path, and `CompilerArguments` emits `-classpath` and, when `autoBoot` is set, a `-bootclasspath` holding scala-library. Under JPMS that puts the library in the unnamed module, where `requires scala.library` cannot see it. Module options can only be smuggled in through `scalacOptions`/`javacOptions`.
+- **Smuggled module-path jars are invisible to invalidation.** Any change to the options forces a full recompile, which is safe. But the module path jars are left out of the classpath hash, and `Locate`'s flat lookup returns nothing for them, so a changed dependency on the module path is either missed or causes spurious invalidation.
+- **Mixed compilation and `module-info.java`.** In `Mixed` order Zinc passes all sources to scalac, including `module-info.java`, and then the Java sources to javac, with the Scala output on javac's `-classpath`. With a named module, javac would then see the Scala classes in the unnamed module, which the named module cannot read. It needs `--patch-module <module>=<scala output>` instead. Only one of the two compilers should emit `module-info.class`.
+- **`module-info.java` edits are not tracked.** No class depends on `module-info.java`, so editing `requires` or `exports` recompiles only that file, although it changes accessibility for the whole module. A dependency's `module-info.class` is likewise only noticed indirectly. This needs whole-module invalidation.
+- **`module-info.class` is not recorded as a product.** Zinc's `JavaAnalyze` deliberately skips it, and the bridge records only classes derived from symbols. The class file manager never deletes or restores it, so it goes stale when `module-info.java` is removed.
+- **javac output analysis uses a flat `URLClassLoader`.** Classes that need module options to load fall back to class-file-only analysis, which loses API and inheritance dependencies.
+- **sbt has no module-path keys.** Nothing splits `dependencyClasspath` into class path and module path, and forked `run` and `test` launch with `-classpath` only.
 
-Each step should leave the branch compiling with green tests.
+So Zinc needs: module-path inputs in `CompileOptions`/`ClasspathOptions` and `CompilerArguments`; module path in hashing and lookup; `--patch-module` for javac in mixed builds; `module-info.java` as a module-wide invalidation trigger; `module-info.class` as a product; and module-aware analysis of javac output. sbt needs keys for the module path and module options, a policy for splitting the dependency classpath, `autoBoot` off for modular builds, and module-aware forked run and test.
 
-1. TODO: Move the Java 9+ code into its own sbt project compiled with `--release 11`, merged into the compiler jar and loaded reflectively; delete `compiler-pre-jdk11`. Verify the compiler still builds and runs on JDK 8 with `-Yjpms` reporting a clear error. (Gap 1)
-2. TODO: Decide gap 16. Prototype tagging the existing classpath entries with modules and resolving with `Configuration`, and compare on a real project such as a module-path build of a library with many dependencies. Either way, implement `asURLs`/`asClassPathStrings` and add a test with a macro from a module path library. (Gaps 2, 14, 16)
-3. TODO: Move module graph state from `JpmsClassPath` to `Run`, so each run sees its own `module-info.java`. Test with two runs on one `Global`. (Gap 4)
-4. TODO: Emit `module-info.class` from `Jpms.ModuleDef` in the backend. Complete `JpmsModuleDescriptor` with all directives and modifiers. Test by loading the output with `ModuleFinder` and by running javac clients against it. (Gaps 3, 5)
-5. TODO: Wire `--upgrade-module-path`, `--limit-modules`; validate options after argument processing; reuse upstream `CtSymClassPath`/`-system` for `-release`. (Gaps 6, 7, 9)
-6. TODO: JPMS-specific error messages with positions in `module-info.java`; validate the module declaration. (Gaps 12, 13)
-7. TODO: Work through the access-check cases in gap 8 with neg tests for each.
+### Plan
 
-Future work:
+Each step leaves the branch green.
 
-- Access checks for the unnamed module on a plain class path (gap 10).
+1. TODO: Introduce `ModuleTable` and route `Contexts`, `Namers` and `SymbolLoaders` through it instead of the `jpms*` methods on `ClassPath`. Move graph state onto `Run` (gap 2), with a two-run test.
+2. TODO: Native implementation of `ModuleTable` over scalac's existing classpath. Each `ClassPath` entry is tagged with its module: from `ModuleFinder.of(path)` for module path entries, `jrt:/modules/<name>` for the system image, overlays for `--patch-module`, unnamed for the class path. `java.lang.module.Configuration` handles resolution only. This keeps scalac's classpath caching and fixes the empty `asURLs`, which today breaks macros from the module path. It becomes the default under `-Yjpms`.
+3. TODO: Emit `module-info.class` and complete `JpmsModuleDescriptor` (gap 1). Then test separate compilation end to end: scalac module A, then scalac module B against A's output, then javac clients of A, then scalac clients of a javac-built module, and run each on `java --module-path`.
+4. TODO: Access check coverage with a neg test per case (gap 3), and the inliner (gap 4).
+5. TODO: Options and `-release` (gap 6), diagnostics (gap 8), and the `scala.library` question (gap 5).
+6. TODO: Zinc prototype on a branch of the local checkout: the module-path inputs, `--patch-module` for javac, `module-info.java` invalidation and the product. Use it to settle the command line interface before it hardens in scalac. Then the sbt keys, with a scripted test of a two-module mixed Scala/Java build that runs on the module path.
+
+## Track 2: javac's classpath, opt-in
+
+The current `JpmsClassPath` is this track. Using javac's file manager gives javac's exact interpretation of the module options and locations. Its costs are why it should not be the default:
+
+- it ties scalac to the `java.compiler` module, which is missing from minimal runtimes;
+- it duplicates and bypasses scalac's classpath caching, listing every location per package and indexing every JAR eagerly at startup;
+- `asURLs` and `asClassPathStrings` are empty.
+
+### Plan
+
+1. TODO: Once Track 1 step 2 lands, keep `JpmsClassPath` behind `-Yjpms-classpath:javac`, implementing the same `ModuleTable`. Implement `asURLs` so that macros work in this mode too.
+2. TODO: Oracle mode, `-Yjpms-classpath:check`. It runs the native implementation and consults the javac one in parallel, comparing package listings, the module assigned to each class looked up, and every accessibility answer, and reporting discrepancies as internal warnings. This is cheap to add once both implement `ModuleTable`.
+3. TODO: A junit sweep that runs the oracle over the whole JDK image plus a module path of representative jars (automatic, explicit, multi-release, patched), and fails on any discrepancy.
+4. TODO: Measure both implementations on a large module path. If the javac implementation turns out competitive, revisit which one is the default.
+
+## Future work
+
+- Access checks for the unnamed module on a plain class path (Track 1 gap 7).
 - `--module-source-path` and multi-module compilation.
-- Zinc / sbt integration (gap 17).
 - REPL and Scaladoc with a module path.
+- Scala 3 has no JPMS support either. The design of `ModuleTable` and of the Zinc interface should not be specific to scalac 2.
