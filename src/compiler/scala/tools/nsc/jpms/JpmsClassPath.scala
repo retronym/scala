@@ -195,7 +195,7 @@ object JpmsClassPath {
     add("--class-path", classPath)
     val releaseOptional = java.util.Optional.ofNullable(s.releaseValue.orNull)
     val classOutput = JpmsSettings.classOutput(s)
-    val impl = new JpmsClasspathSupport(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
+    val impl = new JpmsClasspathSupport(releaseOptional, classOutput, javaOptions, JpmsSettings.addModules(s).asJava, s.addExports.value.asJava, s.addReads.value.asJava)
     // TODO JPMS refactor this classpath so that settings are re-read on subsequent runs. Maybe currentClasspath should just be recreated on each new Run?
     if (s.Ylogcp.value) {
       println(s"JPMS classpath ($releaseOptional, $classOutput, $javaOptions, ${s.addModules.value}, ${s.addExports.value}, ${s.addReads.value}) ")
