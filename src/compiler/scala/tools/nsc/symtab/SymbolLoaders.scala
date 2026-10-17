@@ -331,6 +331,16 @@ abstract class SymbolLoaders {
   class ClassfileLoader(val classfile: AbstractFile, jpmsModuleName: String, clazz: ClassSymbol, module: ModuleSymbol) extends SymbolLoader with FlagAssigningCompleter {
     def this(classfile: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol) =
       this(classfile, "", clazz, module)
+
+    // The JPMS module is known from the class path entry. Record it now rather than on completion, as access
+    // checks can see these symbols before they are completed.
+    if (settings.Yjpms.value && jpmsModuleName.nonEmpty) {
+      clazz.associatedJpmsModuleName = jpmsModuleName
+      module.moduleClass match {
+        case mc: ClassSymbol => mc.associatedJpmsModuleName = jpmsModuleName
+        case _               =>
+      }
+    }
     private object classfileParser extends {
       val symbolTable: SymbolLoaders.this.symbolTable.type = SymbolLoaders.this.symbolTable
     } with ClassfileParser(classFileDataReader) {
@@ -357,7 +367,6 @@ abstract class SymbolLoaders {
     protected def doComplete(root: Symbol): Unit = {
       val start = if (settings.areStatisticsEnabled) statistics.startTimer(statistics.classReadNanos) else null
       classfileParser.parse(classfile, clazz, module)
-      setAssociatedModuleName(clazz, jpmsModuleName) // use `clazz` instead of `root` to simplify logic
 
       if (clazz.associatedFile eq NoAbstractFile) clazz.associatedFile = classfile
       if (module.associatedFile eq NoAbstractFile) module.associatedFile = classfile

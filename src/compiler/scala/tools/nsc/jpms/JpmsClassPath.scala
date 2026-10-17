@@ -147,7 +147,7 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
     // TODO: simplify indexing logic, but make sure to list each class only once (paths has duplicated entries if you only consider the input to fileManager.list below)
     for (location <- paths.map(_._3).distinct) {
       val moduleName =
-        if (!location.isModuleOrientedLocation) fileManager.inferModuleName(location)
+        if (!location.isModuleOrientedLocation) Option(fileManager.inferModuleName(location)).getOrElse("") // null for the class path
         else ""
       for (jfo <- fileManager.list(location, inPackage, java.util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
         val path = fileManager.asPath(jfo)

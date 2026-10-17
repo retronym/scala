@@ -309,13 +309,18 @@ abstract class JpmsTest(classPathImpl: String) {
       "class Hidden in package internal cannot be accessed")
 
     // Finally, run `b` on the module path.
+    assertEquals("hello from a\ngreetings from a", runOnModulePath(List(aOut, bOut), "b/b.main.Main"))
+  }
+
+  /** Runs `main` (`module/class`) in a new JVM with `modules` and the scala library on the module path. */
+  private def runOnModulePath(modules: List[Path], main: String): String = {
     val javaExe = Paths.get(sys.props("java.home"), "bin", "java").toString
-    val runtimeModulePath = List(scalaLibraryModule, aOut, bOut).mkString(File.pathSeparator)
-    val process = new ProcessBuilder(javaExe, "--module-path", runtimeModulePath, "--patch-module", s"scala.library=$libraryClasses", "-m", "b/b.main.Main")
+    val modulePath = (scalaLibraryModule :: modules).mkString(File.pathSeparator)
+    val process = new ProcessBuilder(javaExe, "--module-path", modulePath, "--patch-module", s"scala.library=$libraryClasses", "-m", main)
       .redirectErrorStream(true).start()
-    val output = new String(process.getInputStream.readAllBytes()).trim
+    val output = new String(process.getInputStream.readAllBytes()).trim.replace("\r\n", "\n")
     assertEquals(output, 0, process.waitFor())
-    assertEquals("hello from a\ngreetings from a", output.replace("\r\n", "\n"))
+    output
   }
 
   /** `ModuleDescriptor.toString`, with the set-valued components sorted. */
@@ -349,6 +354,93 @@ abstract class JpmsTest(classPathImpl: String) {
     assertSingleError(errors("module p1 { requires scala.library; requires scala.library; }"), "Dependence upon scala.library already declared")
     assertSingleError(errors("module p1 { requires scala.library; exports p1; exports p1; }"), "Exported package p1 already declared")
     assertSingleError(errors("module p1 { requires scala.library; uses p1.Missing; }"), "type p1.Missing not found in module declaration")
+  }
+
+  // Module `a` exports `a.api` but not `a.impl`. Some of `a.api` leaks types from `a.impl`, in ways Scala allows.
+  private lazy val moduleA: Path = {
+    val out = fileFactory.tempDir()
+    val sources = List(
+      fileFactory("a/impl/Hidden.scala",
+        """package a.impl
+          |class Hidden { def m = 1 }
+          |class HiddenBase { def inherited = 2; val field = 3 }
+          |object HiddenBase { implicit val ord: Ordering[a.api.Pub] = Ordering.by(_ => 0) }
+          |object HiddenImplicits { implicit val hiddenInt: Int = 42 }
+          |""".stripMargin),
+      fileFactory("a/impl/package.scala", "package a; package object impl { def hiddenPkgObj = 1 }"),
+      fileFactory("a/api/Api.scala",
+        """package a.api
+          |class Pub extends a.impl.HiddenBase
+          |object Api {
+          |  type Alias = a.impl.Hidden
+          |  type PubAlias = Pub
+          |  def hidden: a.impl.Hidden = new a.impl.Hidden
+          |  @inline final def inlined: Int = new a.impl.Hidden().m
+          |  @inline final def inlinedPublic: Int = new Pub().inherited
+          |}
+          |""".stripMargin),
+      fileFactory("a/api/package.scala", "package a; package object api { def fromPkgObj = 1 }"),
+      fileFactory("a/module-info.java", "module a { requires transitive scala.library; exports a.api; }"))
+    assertNoErrors(compile(sources, out))
+    // A Java class in the unexported package, compiled by javac into the same exploded module.
+    val jHidden = fileFactory("a/impl/JHidden.java", "package a.impl; public class JHidden { public static int S = 1; public static int s() { return 1; } }")
+    assertEquals("", javac(jHidden :: Nil, out, List("--patch-module", s"a=$out", "--module-path", List(scalaLibraryModule, out).mkString(File.pathSeparator), "--patch-module", s"scala.library=$libraryClasses")))
+    out
+  }
+
+  private def compileClientOfA(code: String, extraArgs: List[String] = Nil, out: Path = fileFactory.tempDir()): List[String] = {
+    val moduleInfo = fileFactory("b/module-info.java", "module b { requires a; }")
+    compile(fileFactory("b/B.scala", s"package b\n$code") :: moduleInfo :: Nil, out, List(moduleA), extraArgs)
+  }
+
+  @Test def inheritedPublicMemberThroughExportedClass(): Unit = {
+    // JLS 6.6.1: access to a member goes through the qualifying type, here the exported a.api.Pub.
+    val out = fileFactory.tempDir()
+    assertNoErrors(compileClientOfA("object B { def main(args: Array[String]): Unit = println(new a.api.Pub().inherited + new a.api.Pub().field) }", out = out))
+    // The member references in b use the exported a.api.Pub as their class, so they also link at run time.
+    assertEquals("5", runOnModulePath(List(moduleA, out), "b/b.B"))
+  }
+
+  @Test def memberOfInaccessibleQualifyingType(): Unit = {
+    assertNoErrors(compileClientOfA("class B { a.api.Api.hidden }"))
+    assertSingleError(compileClientOfA("class B { a.api.Api.hidden.m }"), "method m in class Hidden cannot be accessed")
+  }
+
+  @Test def typeAliasToUnexportedClass(): Unit = {
+    assertSingleError(compileClientOfA("class B { new a.api.Api.Alias }"), "type Alias in object Api cannot be accessed")
+    assertSingleError(compileClientOfA("class B { val x: a.api.Api.Alias = null }"), "type Alias in object Api cannot be accessed")
+    assertNoErrors(compileClientOfA("class B { new a.api.Api.PubAlias }"))
+  }
+
+  @Test def packageObjectMembers(): Unit = {
+    assertNoErrors(compileClientOfA("class B { a.api.fromPkgObj }"))
+    assertSingleError(compileClientOfA("class B { a.impl.hiddenPkgObj }"), "package object impl in package impl cannot be accessed")
+  }
+
+  @Test def implicitsFromUnexportedPackage(): Unit = {
+    // HiddenBase's companion is in the implicit scope of Ordering[Pub], but is not accessible from b.
+    assertSingleError(compileClientOfA("class B { implicitly[Ordering[a.api.Pub]] }"), "could not find implicit value for parameter e: Ordering[a.api.Pub]")
+    compileClientOfA("import a.impl.HiddenImplicits._\nclass B { implicitly[Int] }") match {
+      case List(importError, implicitError) =>
+        assertTrue(importError, importError.contains("object HiddenImplicits in package impl cannot be accessed"))
+        assertTrue(implicitError, implicitError.contains("could not find implicit value for parameter e: Int"))
+      case errors => throw new AssertionError(errors.mkString("\n"))
+    }
+  }
+
+  @Test def javaStaticsInUnexportedPackage(): Unit = {
+    assertSingleError(compileClientOfA("class B { a.impl.JHidden.s() }"), "class JHidden in package impl cannot be accessed")
+    assertSingleError(compileClientOfA("class B { a.impl.JHidden.S }"), "class JHidden in package impl cannot be accessed")
+  }
+
+  @Test def inlinerRespectsModuleBoundaries(): Unit = {
+    val out = fileFactory.tempDir()
+    assertNoErrors(compileClientOfA("class B { def x = a.api.Api.inlined; def y = a.api.Api.inlinedPublic }", List("-opt:inline:**"), out))
+    val bytes = new String(Files.readAllBytes(out.resolve("b/B.class")), "ISO-8859-1")
+    // Inlining `inlined` would copy `new a.impl.Hidden` into module b, which fails at run time with IllegalAccessError.
+    assertTrue("a/impl/Hidden referenced from b.B", !bytes.contains("a/impl/Hidden"))
+    // `inlinedPublic` only refers to the exported a.api.Pub, so it is inlined.
+    assertTrue("a/api/Pub not referenced from b.B", bytes.contains("a/api/Pub"))
   }
 
   @Test def clientsOfNamedModule(): Unit = {

@@ -53,8 +53,9 @@ trait ModuleResolver {
 
 /** A module table backed by a resolved module graph. */
 final class GraphModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
+  private[this] val sourceModules = mutable.HashMap[AbstractFile, String]()
   def moduleOfSource(file: AbstractFile): String =
-    graph.moduleForSourceFile(Option(file.file).map(_.toPath.toAbsolutePath.normalize).orNull)
+    sourceModules.getOrElseUpdate(file, graph.moduleForSourceFile(Option(file.file).map(_.toPath.toAbsolutePath.normalize).orNull))
 
   // From a given module's perspective, the packages it can access in each module it reads. `None` means all packages.
   private[this] val accessiblePackages = mutable.HashMap[String, Map[String, Option[immutable.Set[String]]]]()
