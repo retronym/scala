@@ -89,23 +89,13 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
   }
 
   private def initialUnitBody(unit: CompilationUnit): Tree = {
-    // Jump out of cake.
-    def toDescriptor(md: Jpms.ModuleDef) = {
-      import scala.tools.nsc.jpms._
-      import JpmsModuleDescriptor._
-      import scala.jdk.CollectionConverters._
-
-      val requires = md.directives.collect { case req: Jpms.RequiresDirective => new RequireDirective(req.moduleName, req.transitive, req.isStatic) }
-      new JpmsModuleDescriptor(md.name.toString, requires.asJava)
-    }
-
     if (unit.isJava) {
       val body = newJavaUnitParser(unit).parse()
 
       if (unit.source.file.name == "module-info.java") {
         body match {
           case PackageDef(_, stats) =>
-            stats.collectFirst { case md: Jpms.ModuleDef => md }.foreach(md => currentRun.registerJpmsModuleInfo(toDescriptor(md), md.pos))
+            stats.collectFirst { case md: Jpms.ModuleDef => md }.foreach(currentRun.registerJpmsModuleInfo(_, stats.collect { case imp: Import => imp }, unit))
           case _ =>
         }
       }

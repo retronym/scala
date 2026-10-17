@@ -35,7 +35,7 @@ import scala.tools.nsc.util.{ClassPath, ClassRepresentation}
  *  resolved by `java.lang.module.Configuration` for each run.
  */
 final class ModulePathClassPath private (underlying: AggregateClassPath, resolver: ModuleGraphResolver) extends ClassPath with ModuleResolver {
-  def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable =
+  def resolve(sourceModule: Option[java.lang.module.ModuleDescriptor]): ModuleTable =
     new GraphModuleTable(resolver.resolve(sourceModule.orNull))
 
   def entries: Seq[ClassPath] = underlying.aggregates

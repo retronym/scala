@@ -1234,22 +1234,28 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     def moduleName(): String = dottedName()
     def packageName(): String = dottedName()
     def typeName(): String = dottedName()
-    def jpmsModuleDirective(): Tree = {
-      // TODO JPMS position directives
+    def jpmsModuleDirective(): Tree = atPos(in.currentPos) {
       val javaKeywords = nme.javaRestrictedIdentifiers
       ident() match {
         case javaKeywords.REQUIRES =>
-          if (in.token == STATIC) {
-            in.nextToken()
-            Jpms.RequiresDirective(this.moduleName(), transitive = false, isStatic = true)
-          } else if (in.token == IDENTIFIER && in.name == javaKeywords.TRANSITIVE) {
-            // TODO JPMS `requires transitive;` (a module named `transitive`) should be allowed, see the
-            //      Java Language Specification description of "restricted keywords".
-            in.nextToken()
-            Jpms.RequiresDirective(this.moduleName(), transitive = true, isStatic = false)
-          } else if (in.token == IDENTIFIER) {
-            Jpms.RequiresDirective(this.moduleName(), transitive = false, isStatic = false)
-          } else {
+          // RequiresModifier ::= transitive | static, in any order. `requires transitive;` requires a module
+          // named `transitive`, as `transitive` is a restricted keyword (JLS 3.9).
+          var transitive, isStatic = false
+          var name: String = null // set if `transitive` turns out to be (the start of) the module name
+          var moreModifiers = true
+          while (moreModifiers && name == null) {
+            if (in.token == STATIC && !isStatic) { isStatic = true; in.nextToken() }
+            else if (in.token == IDENTIFIER && in.name == javaKeywords.TRANSITIVE && !transitive) {
+              in.nextToken()
+              if (in.token == SEMI) name = javaKeywords.TRANSITIVE.toString
+              else if (in.token == DOT) { in.nextToken(); name = javaKeywords.TRANSITIVE.toString + "." + moduleName() }
+              else transitive = true
+            }
+            else moreModifiers = false
+          }
+          if (name != null) Jpms.RequiresDirective(name, transitive, isStatic)
+          else if (in.token == IDENTIFIER) Jpms.RequiresDirective(moduleName(), transitive, isStatic)
+          else {
             syntaxError("expected `transitive`, `static` or module name", skipIt = true)
             errorTypeTree
           }

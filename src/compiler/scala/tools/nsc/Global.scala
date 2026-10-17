@@ -159,6 +159,12 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   def classPath: ClassPath = platform.classPath
 
+  /** A module declared in a `module-info.java`, with that file's imports, which `uses` and `provides` may rely on. */
+  final case class JpmsSourceModule(moduleDef: Jpms.ModuleDef, imports: List[Import], unit: CompilationUnit)
+
+  /** Module descriptors for `module-info.java` and the `module-info.class` written for it. */
+  lazy val jpmsModuleInfos: jpms.ModuleInfos[this.type] = new jpms.ModuleInfos[this.type](this)
+
   // sub-components --------------------------------------------------
 
   /** Tree generation, usually based on existing symbols. */
@@ -1228,18 +1234,21 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     // --------------- JPMS -------------------------------------
 
-    private[this] var jpmsSourceModule: Option[(jpms.JpmsModuleDescriptor, Position)] = None
+    private[this] var _jpmsSourceModule: Option[JpmsSourceModule] = None
     private[this] var jpmsModuleTableResolved = false
 
+    /** The module declared by a `module-info.java` among the sources. */
+    private[nsc] def jpmsSourceModule: Option[JpmsSourceModule] = _jpmsSourceModule
+
     /** Called by the parser for the module declared in a `module-info.java` among the sources. */
-    private[nsc] def registerJpmsModuleInfo(descriptor: jpms.JpmsModuleDescriptor, pos: Position): Unit =
-      jpmsSourceModule match {
-        case Some((_, firstPos)) =>
-          globalError(pos, s"module-info.java declares a second module in this compilation run, the first was declared at ${firstPos.source.path}")
+    private[nsc] def registerJpmsModuleInfo(md: Jpms.ModuleDef, imports: List[Import], unit: CompilationUnit): Unit =
+      _jpmsSourceModule match {
+        case Some(first) =>
+          globalError(md.pos, s"module-info.java declares a second module in this compilation run, the first was declared in ${first.unit.source.path}")
         case None =>
           if (jpmsModuleTableResolved)
-            devWarning(s"module-info.java parsed after the module graph was resolved, its declaration is ignored: ${pos.source.path}")
-          jpmsSourceModule = Some((descriptor, pos))
+            devWarning(s"module-info.java parsed after the module graph was resolved, its declaration is ignored: ${unit.source.path}")
+          _jpmsSourceModule = Some(JpmsSourceModule(md, imports, unit))
       }
 
     /** The module graph for this run. Resolved on first use, which must come after the parser has seen any
@@ -1248,8 +1257,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     lazy val jpmsModuleTable: jpms.ModuleTable = {
       jpmsModuleTableResolved = true
       classPath match {
-        case resolver: jpms.ModuleResolver if settings.Yjpms.value => resolver.resolve(jpmsSourceModule.map(_._1))
-        case _                                                    => jpms.ModuleTable.Unrestricted
+        case resolver: jpms.ModuleResolver if settings.Yjpms.value =>
+          resolver.resolve(_jpmsSourceModule.flatMap(m => jpmsModuleInfos.resolutionDescriptor(m.moduleDef)))
+        case _ =>
+          jpms.ModuleTable.Unrestricted
       }
     }
 

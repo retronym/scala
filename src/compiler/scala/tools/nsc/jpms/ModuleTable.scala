@@ -48,7 +48,7 @@ object ModuleTable {
  */
 trait ModuleResolver {
   /** @param sourceModule the module declared by a `module-info.java` compiled in this run, if any */
-  def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable
+  def resolve(sourceModule: Option[java.lang.module.ModuleDescriptor]): ModuleTable
 }
 
 /** A module table backed by a resolved module graph. */

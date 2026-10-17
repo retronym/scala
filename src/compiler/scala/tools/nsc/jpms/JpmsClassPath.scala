@@ -1,3 +1,15 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc. dba Akka
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.tools.nsc.jpms
 
 import java.net.URL
@@ -20,7 +32,7 @@ import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.util.ClassPath
 
 final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]], private val impl: JpmsClasspathSupport) extends ClassPath with ModuleResolver {
-  def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable =
+  def resolve(sourceModule: Option[java.lang.module.ModuleDescriptor]): ModuleTable =
     new GraphModuleTable(impl.resolveModuleGraph(sourceModule.orNull))
 
   override def asURLs: Seq[URL] = Nil // TODO
