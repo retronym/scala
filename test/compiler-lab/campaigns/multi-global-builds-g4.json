@@ -1,0 +1,16 @@
+{
+  "name": "multi-global-builds-g4",
+  "benchmark": "CompileBenchmark",
+  "profile": "none",
+  "rounds": 2,
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p globalClasses=4 -wi 18 -i 18 -w 3 -r 3"
+  },
+  "paired": {
+    "base": "@build=../lab",
+    "abstract": "@build=../mg-abstract",
+    "abstract+cake": "@build=../mg-combo"
+  },
+  "gcLog": true,
+  "jvmArgs": "-Xms4G -Xmx4G -Xss2M -XX:ReservedCodeCacheSize=1g -XX:-UseCodeCacheFlushing"
+}

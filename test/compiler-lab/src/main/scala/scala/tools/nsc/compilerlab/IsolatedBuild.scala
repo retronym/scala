@@ -30,8 +30,17 @@ final class IsolatedBuild(val root: Path) {
     sys.error(s"$root: no build/quick/classes/$d; build it first")
   checkSameLibrary(classes.resolve("library"))
 
+  /** The lab's classes as compiled against this build, when it has them: they are binary-coupled to the compiler
+   *  (`SyntheticGlobals` subclasses `Analyzer`, which a build may have changed from a trait to a class); else the
+   *  benchmark's copy.
+   */
+  private val lab = {
+    val own = root.resolve("test/compiler-lab/target/classes")
+    if (Files.isDirectory(own.resolve("scala/tools/nsc/compilerlab"))) own else labClasses
+  }
+
   private val loader = new URLClassLoader(s"build:$root",
-    Array(classes.resolve("reflect"), classes.resolve("compiler"), labClasses).map(_.toUri.toURL), Shared)
+    Array(classes.resolve("reflect"), classes.resolve("compiler"), lab).map(_.toUri.toURL), Shared)
 
   for (c <- List("scala.tools.nsc.Global", "scala.reflect.internal.SymbolTable")) {
     val from = location(loader.loadClass(c))

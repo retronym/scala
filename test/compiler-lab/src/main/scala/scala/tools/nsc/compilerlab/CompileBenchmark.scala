@@ -137,7 +137,7 @@ class CompileBenchmark {
   def nextGlobal(): Unit =
     if (globalClasses > 0) {
       val i = globalRandom.nextInt(globalClasses)
-      (compiler :: alternatives.values.toList).foreach(configureGlobal(_, i))
+      (Option(compiler).toList ::: alternatives.values.toList).foreach(configureGlobal(_, i))
       println(s"[compiler-lab] global class $i")
     }
 
