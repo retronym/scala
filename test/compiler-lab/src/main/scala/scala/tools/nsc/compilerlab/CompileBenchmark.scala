@@ -97,6 +97,7 @@ class CompileBenchmark {
     globalRandom = new java.util.SplittableRandom(globalSeed)
     parsed = Variants.parse(variants)
     val own = new InMemoryCompiler(src, common, resident)
+    if (parsed.isEmpty) polluteAll(own)
     configureGlobal(own, 0)
     println(s"\n[compiler-lab] $corpus: ${src.files.size} sources; classpath in memory: ${own.classpathSnapshot}")
     if (parsed.isEmpty) {
@@ -111,6 +112,7 @@ class CompileBenchmark {
         case build :: Nil => IsolatedBuild(build).newCompiler(corpus, common ::: options, resident)
         case _ => sys.error(s"variant ${v.name}: more than one $BuildOption")
       }
+      polluteAll(c)
       configureGlobal(c, 0)
       c.compile()
       println(s"[compiler-lab] variant ${v.name}: ${v.options.asScala.mkString(" ")} -> ${c.outputCount} output files")
@@ -129,6 +131,13 @@ class CompileBenchmark {
       compiler = alternatives(v.name)
       IterationLog.begin(v.name, ip.getType == IterationType.MEASUREMENT)
     }
+
+  /** Compiles once with each of the `globalClasses`, so that every build's type profiles have seen all of them before
+   *  warmup: the per-iteration choice is shared by the variants, and a build whose iterations happened to draw only
+   *  some of the classes would be measured less polluted than the others.
+   */
+  private def polluteAll(c: Compiling): Unit =
+    for (i <- 0 until globalClasses) { configureGlobal(c, i); c.compile() }
 
   private def configureGlobal(c: Compiling, i: Int): Unit =
     if (globalClasses > 0) c.useSyntheticGlobal(i, distinctAnalyzers)
