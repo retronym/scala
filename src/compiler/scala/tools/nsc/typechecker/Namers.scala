@@ -369,6 +369,7 @@ trait Namers extends MethodSynthesis {
         devWarning(s"Source file mismatch in $clazz: ${sourceFile} vs. $contextFile")
 
       clazz.associatedFile = contextFile
+      if (settings.Yjpms.value && clazz.isTopLevel) clazz.associatedJpmsModuleName = classPath.jpmsModuleNameForSource(contextFile)
       sourceFile = clazz.sourceFile
       if (sourceFile != null) {
         assert(currentRun.canRedefine(clazz) || sourceFile == currentRun.symSource(clazz), sourceFile)
@@ -460,6 +461,7 @@ trait Namers extends MethodSynthesis {
       if (m.isTopLevel && !m.hasPackageFlag) {
         // TODO: I've seen crashes where m.moduleClass == NoSymbol
         m.moduleClass.associatedFile = contextFile
+        if (settings.Yjpms.value) m.moduleClass.asClass.associatedJpmsModuleName = classPath.jpmsModuleNameForSource(contextFile)
         currentRun.symSource(m) = m.moduleClass.sourceFile
         registerTopLevelSym(m)
       }

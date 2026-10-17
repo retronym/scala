@@ -1,0 +1,4 @@
+jpms_unsafe.scala:8: error: class Unsafe in package misc cannot be accessed as a member of package jdk.internal.misc from class C
+  jdk.internal.misc.Unsafe.getUnsafe
+                    ^
+1 error

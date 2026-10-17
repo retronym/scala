@@ -515,6 +515,9 @@ lazy val compiler = configureAsSubproject(project)
     description := "Scala Compiler",
     libraryDependencies += asmDep,
     libraryDependencies += diffUtilsDep,
+    // If we're building on Java 11 or later, unlock more functionality implemented in compiler-jdk11,
+    // otherwise, pull in stubs from compiler-pre-jdk11
+    Compile / unmanagedSourceDirectories += (ThisBuild / baseDirectory).value / "src" / (if (scala.util.Properties.isJavaAtLeast("11")) "compiler-jdk11" else "compiler-pre-jdk11"),
     // This is only needed for the POM:
     // TODO: jline dependency is only needed for the REPL shell, which should move to its own jar
     libraryDependencies ++= jlineDeps,
@@ -588,6 +591,7 @@ lazy val compiler = configureAsSubproject(project)
     pomDependencyExclusions += (("org.scala-lang.modules", "scala-asm"))
   )
   .dependsOn(library, reflect)
+
 
 lazy val interactive = configureAsSubproject(project)
   .settings(disableDocs)

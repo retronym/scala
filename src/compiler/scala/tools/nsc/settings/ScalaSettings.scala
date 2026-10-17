@@ -60,6 +60,18 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val classpath     = PathSetting   ("-classpath", "Specify where to find user class files.", defaultClasspath) withAbbreviation "-cp" withAbbreviation "--class-path"
   val outdir        = OutputSetting (".").withPostSetHook(s => try outputDirs.setSingleOutput(s.value) catch { case FatalError(msg) => errorFn(msg) }).tap(_.postSetHook())
 
+  val Yjpms             = BooleanSetting("-Yjpms", "Enable experimental (and incomplete) support for JPMS.").internalOnly()
+  def ensureJPMS(sett: Setting): Unit =
+    if (!Yjpms.value) errorFn(s"To use ${sett.name}, you must first pass -Yjpms. Support for JPMS is experimental and incomplete.")
+
+  val modulePath        = PathSetting("-modulepath", "JPMS module path", "").withAbbreviation("--module-path").withPostSetHook(ensureJPMS).internalOnly()
+  val patchModule       = MultiStringSetting("-patchmodule", "<module>=<path>", "Patches to modules").withAbbreviation("--patch-module").withPostSetHook(ensureJPMS).internalOnly()
+  val upgradeModulePath = PathSetting("-upgrademodulepath", "Overrides for upgradable modules", "").withAbbreviation("--upgrade-module-path").withPostSetHook(ensureJPMS).internalOnly()
+  val limitModules      = MultiStringSetting("-limitmodules", "<module>(,<module>)*", "Limit observable modules").withAbbreviation("--limit-modules").withPostSetHook(ensureJPMS).internalOnly()
+  val addModules        = MultiStringSetting("-addmodules", "<module>(,<module>)*", "Root modules to resolve in addition to the initial modules, or all modules on the module path if <module> is ALL-MODULE-PATH.").withAbbreviation("--add-modules").withPostSetHook(ensureJPMS).internalOnly()
+  val addExports        = MultiStringSetting("-addexports", "<module>/<package>=<other-module>(,<other-module>)*", "Specify a package to be considered as exported from its defining module").withAbbreviation("--add-exports").withPostSetHook(ensureJPMS).internalOnly()
+  val addReads          = MultiStringSetting("-addreads", "<module>=<other-module>(,<other-module>)*", "Specify additional modules to be considered as required by a given module.\n<other-module> may be ALL-UNNAMED to require the unnamed module.").withAbbreviation("--add-reads").withPostSetHook(ensureJPMS).internalOnly()
+
   val nospecialization = BooleanSetting("-no-specialization", "Ignore @specialize annotations.") withAbbreviation "--no-specialization"
 
   // Would be nice to build this dynamically from scala.languageFeature.
