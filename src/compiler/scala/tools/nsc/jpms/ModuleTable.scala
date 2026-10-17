@@ -37,6 +37,12 @@ trait ModuleTable {
 }
 
 object ModuleTable {
+  /** The module name of classes in the compiler's output directory: the module being compiled, whichever that
+   *  turns out to be for the run. As javac does, classes compiled earlier (for instance by a previous incremental
+   *  compilation) belong to the same module as the sources compiled now. Not a valid module name.
+   */
+  final val CurrentModule = "<current>"
+
   /** No module system: everything is in the unnamed module and every package is accessible. */
   object Unrestricted extends ModuleTable {
     def moduleOfSource(file: AbstractFile): String = ""
@@ -72,16 +78,21 @@ final class GraphModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
     }.toMap
 
   override def explainInaccessible(from: String, target: String, pkg: String): String =
-    graph.explainInaccessible(from, target, pkg)
+    graph.explainInaccessible(from, resolveTarget(target), pkg)
 
-  def isPackageAccessible(from: String, target: String, pkg: String): Boolean =
-    from == target || {
+  private def resolveTarget(target: String): String =
+    if (target == ModuleTable.CurrentModule) graph.currentModule else target
+
+  def isPackageAccessible(from: String, target: String, pkg: String): Boolean = {
+    val target0 = resolveTarget(target)
+    from == target0 || {
       // Classes on the class path have the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
-      val target1 = if (target.isEmpty) ModuleGraphResolver.UNNAMED_MODULE_NAME else target
+      val target1 = if (target0.isEmpty) ModuleGraphResolver.UNNAMED_MODULE_NAME else target0
       accessiblePackages.getOrElseUpdate(from, computeAccessibility(from)).get(target1) match {
         case Some(None)      => true
         case Some(Some(set)) => set(pkg)
         case None            => false
       }
     }
+  }
 }
