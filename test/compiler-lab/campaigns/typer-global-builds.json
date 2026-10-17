@@ -5,12 +5,13 @@
   "rounds": 2,
   "corpora": {
     "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 18 -i 18 -w 3 -r 3",
-    "scala": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p jdkHome=21.0.12+1.1-tem -wi 6 -i 12 -w 30 -r 30"
+    "scala": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p jdkHome=21.0.12+1.1-tem -wi 6 -i 6 -w 30 -r 30"
   },
   "paired": {
     "base": "@build=../typer-global-base",
     "abstract": "@build=../analyzer-abstract-class-lab",
     "field": "@build=../compassionate-maxwell-8820d8"
   },
-  "gcLog": true
+  "gcLog": true,
+  "jvmArgs": "-Xms4G -Xmx4G -Xss2M -XX:ReservedCodeCacheSize=1g -XX:-UseCodeCacheFlushing"
 }

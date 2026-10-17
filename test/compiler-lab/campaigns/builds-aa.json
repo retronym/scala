@@ -3,7 +3,13 @@
   "benchmark": "CompileBenchmark",
   "profile": "xctrace:ipc",
   "rounds": 2,
-  "corpora": {"re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 12 -i 12 -w 3 -r 3"},
-  "paired": {"a": "@build=../typer-global-base", "b": "@build=../typer-global-base"},
-  "gcLog": true
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 12 -i 12 -w 3 -r 3"
+  },
+  "paired": {
+    "a": "@build=../typer-global-base",
+    "b": "@build=../typer-global-base"
+  },
+  "gcLog": true,
+  "jvmArgs": "-Xms4G -Xmx4G -Xss2M -XX:ReservedCodeCacheSize=1g -XX:-UseCodeCacheFlushing"
 }
