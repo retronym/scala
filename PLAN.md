@@ -43,6 +43,15 @@ The work splits into two mostly independent tracks.
 
 The seam between the tracks is `scala.tools.nsc.jpms.ModuleTable`, the module structure seen by one run. It answers which module a source file being compiled belongs to, and whether module `n` can access package `p` of module `m` (that is, `n` reads `m` and `m` exports `p` to `n`). The module of a class loaded from the class or module path is a property of its class path entry. A class path that knows about modules implements `ModuleResolver`, which builds a fresh `ModuleTable` for each `Run`, taking the run's `module-info.java` into account. Track 1 consumes the table in the typer and backend. Track 2 is one implementation of the resolver, plus class lookup.
 
+## Java 8 baseline
+
+The branch builds with JDK 17 as its baseline, while 2.13.x has to keep running on Java 8. Merging needs one of two approaches. Either way, the compiler must reach the JPMS implementations only through the `ModuleResolver`/`ModuleTable` seam, by reflection or `ServiceLoader`, and never link against them directly. The verifier can load a class just to check an assignment, so a reference that is never executed on Java 8 can still fail there. The seam itself also has to stop mentioning `java.lang.module.ModuleDescriptor` (`ModuleResolver.resolve`).
+
+- Reflection: compile for Java 8 and call the module APIs through method handles, as `JDK9Reflectors` does today for `JrtClassPath` and multi-release JARs. No build or packaging changes, but a large API surface (`ModuleFinder`, `Configuration`, `ModuleDescriptor` and its builder, `ResolvedModule`, the `ct.sym` reader) loses static checking.
+- Multi-release `scala-compiler.jar`: compile the implementations for Java 17 into `META-INF/versions/17`, over Java 8 stubs that report that `-Yjpms` needs Java 17. The code stays statically checked, but the build gains a second target and a packaging step. Multi-release JARs only take effect when loaded from a JAR, not from the `build/quick` directories the build's tests use, and some repackaging tools (shading, OSGi bundling) handle them poorly. A variant is a separate JAR found with `ServiceLoader`.
+
+I lean towards the multi-release JAR. This is a build decision for the team, and stays parked until the semantics settle.
+
 ## Track 1: JPMS semantics
 
 ### Gaps in scalac
