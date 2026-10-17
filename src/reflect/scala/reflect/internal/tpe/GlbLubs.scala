@@ -19,7 +19,7 @@ import scala.collection.mutable, mutable.ListBuffer
 import scala.annotation.tailrec
 import Variance._
 
-private[internal] abstract class GlbLubs {
+abstract class GlbLubs {
   val self: SymbolTable
   import self._
 
