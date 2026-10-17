@@ -1,0 +1,5 @@
+# how many owners typing transformers enter, and how many contexts they make for them
+count  entered     at=scala.tools.nsc.transform.TypingTransformers$TypingTransformer#atOwner
+count  made        at=scala.tools.nsc.typechecker.Contexts$Context#make  onStack=lazy:scala.tools.nsc.transform.TypingTransformers$TypingTransformer#materialize
+sites  made-by     at=scala.tools.nsc.transform.TypingTransformers$TypingTransformer#materialize  depth=1  sample=10
+sites  entered-by  at=scala.tools.nsc.transform.TypingTransformers$TypingTransformer#atOwner  depth=1  sample=100  qualify=class
