@@ -873,6 +873,48 @@ trait Contexts { self: Analyzer with ImportTracking =>
     }
 
     /** Is `sym` accessible as a member of `pre` in current context? */
+    /** Can code in this context access `sym`, selected from `pre`, given the JPMS module graph? (JLS 6.6.1 and
+     *  JVMS 5.4.4, with modules.) A module can access the packages of its own module, and those that a module it
+     *  reads exports to it.
+     *
+     *  - A class or object is accessible if the package of its top level class is.
+     *  - A type alias is accessible if it is, and if the class it stands for is: any use of the alias in bytecode
+     *    refers to that class.
+     *  - A method or field is accessible through its qualifying type, `pre`, rather than through the class that
+     *    declares it, so public members that an exported class inherits from an unexported one are accessible.
+     *    Members of packages (that is, of package objects) belong to the package object's class.
+     *
+     *  The accessing module is that of the compilation unit, as code at the top level of a file has a package
+     *  as its enclosing class.
+     */
+    private def isJpmsAccessible(sym: Symbol, pre: Type): Boolean = {
+      val table = currentRun.jpmsModuleTable
+      lazy val fromModule =
+        if (unit ne NoCompilationUnit) table.moduleOfSource(unit.source.file)
+        else enclClass.owner.enclosingTopLevelClass match {
+          case cls: ClassSymbol => cls.associatedJpmsModuleName
+          case _                => ""
+        }
+      def classAccessible(cls: Symbol): Boolean = cls.enclosingTopLevelClass match {
+        case top: ClassSymbol if !top.hasPackageFlag =>
+          table.isPackageAccessible(fromModule, top.associatedJpmsModuleName, top.enclosingPackageClass.fullNameString)
+        case _ => true
+      }
+      if (sym.hasPackageFlag) true
+      else if (sym.isClass || sym.isModule) classAccessible(sym)
+      else if (sym.isAliasType) classAccessible(sym) && {
+        val target = sym.tpe_*.dealias.typeSymbol
+        !target.isClass || classAccessible(target)
+      }
+      else if (sym.isTerm) {
+        val qualifier = pre.widen.typeSymbol
+        if (qualifier.hasPackageFlag) classAccessible(sym)
+        else if (qualifier.isClass) classAccessible(qualifier)
+        else true
+      }
+      else true
+    }
+
     def isAccessible(sym: Symbol, pre: Type, superAccess: Boolean = false): Boolean = {
       lastAccessCheckDetails = ""
       // Console.println("isAccessible(%s, %s, %s)".format(sym, pre, superAccess))
@@ -933,16 +975,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
       (pre == NoPrefix) || {
         val ab = sym.accessBoundary(sym.owner)
 
-        // TODO JPMS when should we restrict access to a type alias with an underlying symbol that is inaccessible?
-        // TODO JPMS restrict access to `package p1.p2` unless we can access it _or_ one of its subpackages.
-        // TODO JPMS better error reporting for accessibility errors due to JPMS
-        val jpmsCanAccess =
-          !settings.Yjpms.value || (sym.hasPackageFlag || !(sym.isClass || sym.isModule || sym.isMethod) || {
-            val accessedTop = sym.enclosingTopLevelClass.asClass
-            val accessedModule = accessedTop.associatedJpmsModuleName
-            val fromModule = enclClass.owner.asClass.associatedJpmsModuleName
-            currentRun.jpmsModuleTable.isPackageAccessible(fromModule, accessedModule, accessedTop.enclosingPackageClass.fullNameString)
-          })
+        val jpmsCanAccess = !settings.Yjpms.value || isJpmsAccessible(sym, pre)
 
         jpmsCanAccess && (
            (ab.isTerm || ab == rootMirror.RootClass)
