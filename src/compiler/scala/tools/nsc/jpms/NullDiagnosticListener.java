@@ -1,4 +1,4 @@
-package scala.reflect.internal.jpms;
+package scala.tools.nsc.jpms;
 
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticListener;

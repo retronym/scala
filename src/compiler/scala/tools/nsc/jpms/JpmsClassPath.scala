@@ -12,9 +12,7 @@ import javax.tools._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, mutable}
-import scala.reflect.internal.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
-import scala.reflect.internal.jpms.FileManagerJava9Api._
-import scala.reflect.internal.jpms.{JpmsClasspathSupport, JpmsModuleDescriptor, ResolvedModuleGraph}
+import scala.tools.nsc.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
 import scala.reflect.io.PlainNioFile
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
@@ -118,14 +116,14 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
   private def indexLocations(): Unit = {
     for {
       moduleLocation <- moduleLocations
-      location1 <- listLocationsForModules(fileManager, moduleLocation).asScala
+      location1 <- fileManager.listLocationsForModules(moduleLocation).asScala
       location <- location1.asScala
-      path <- getLocationAsPaths(fileManager, location).asScala
+      path <- fileManager.getLocationAsPaths(location).asScala
     } {
       indexLocation(path, moduleLocation, location)
     }
     val cpLocation = StandardLocation.CLASS_PATH
-    for (path <- getLocationAsPaths(fileManager, cpLocation).asScala)
+    for (path <- fileManager.getLocationAsPaths(cpLocation).asScala)
       indexLocation(path, cpLocation, cpLocation)
   }
 
@@ -174,10 +172,10 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
     // TODO: simplify indexing logic, but make sure to list each class only once (paths has duplicated entries if you only consider the input to fileManager.list below)
     for ((standardLocation, location) <- paths.map { case (_, sl, l) => (sl, l)}.distinct) {
       val moduleName =
-        if (!isModuleOrientedLocation(location)) inferModuleName(fileManager, location)
+        if (!location.isModuleOrientedLocation) fileManager.inferModuleName(location)
         else ""
       for (jfo <- fileManager.list(location, inPackage, java.util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
-        val path = asPath(fileManager, jfo)
+        val path = fileManager.asPath(jfo)
         result += JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, standardLocation)
       }
     }
@@ -197,7 +195,7 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
       while (it.hasNext) {
         val jfo = it.next()
         if (jfo.isNameCompatible(classSimpleName, Kind.CLASS))
-          return Some(new PlainNioFile(asPath(fileManager, jfo)))
+          return Some(new PlainNioFile(fileManager.asPath(jfo)))
       }
     }
     None

@@ -1,5 +1,4 @@
 //> using options -Yjpms --module-path .
-//> using jvm 11+
 
 class C {
   class D
