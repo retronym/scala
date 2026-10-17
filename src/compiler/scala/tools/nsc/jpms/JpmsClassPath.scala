@@ -53,7 +53,9 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
   }
 
   override private[nsc] def jpmsIsPackageAccessibleFrom(fromModuleName: String, otherModuleName: String, otherPackageName: String): Boolean = {
-    accessiblePackages.getOrElseUpdate(fromModuleName, computeAccessibility(fromModuleName)).get(otherModuleName) match {
+    // Classes on the class path are tagged with the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
+    val otherModuleName1 = if (otherModuleName.isEmpty) JpmsClasspathSupport.UNNAMED_MODULE_NAME else otherModuleName
+    accessiblePackages.getOrElseUpdate(fromModuleName, computeAccessibility(fromModuleName)).get(otherModuleName1) match {
       case Some(None)      => true // this was an automatic module
       case Some(Some(set)) => set(otherPackageName)
       case None            => false
