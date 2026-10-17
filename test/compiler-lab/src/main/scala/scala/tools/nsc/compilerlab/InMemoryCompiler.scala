@@ -39,7 +39,12 @@ final class InMemoryCompiler(val corpus: Corpus, extraOptions: List[String] = Ni
     }
   }
 
-  private lazy val residentGlobal: Global = newGlobal(output)
+  /** The `Global` that every compilation shares, with `resident = true`; after `compile()`, its `currentRun` holds the
+   *  compilation's units. */
+  lazy val residentGlobal: Global = {
+    require(resident, "residentGlobal needs resident = true")
+    newGlobal(output)
+  }
 
   /** One full compilation of the corpus. */
   def compile(): Unit = {

@@ -1,0 +1,19 @@
+{
+  "name": "lazy-typing-context-tt-noop",
+  "benchmark": "TypingTransformerBenchmark",
+  "profile": "xctrace:ipc",
+  "rounds": 3,
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p typedEvery=0 -wi 10 -i 10 -w 2 -r 2 -prof gc",
+    "scala": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p jdkHome=21.0.12+1.1-tem -p typedEvery=0 -wi 10 -i 10 -w 2 -r 2 -prof gc"
+  },
+  "paired": {
+    "eager": "-Yeager-typing-transformer-contexts",
+    "lazy": ""
+  },
+  "gcLog": true,
+  "loadgate": {
+    "maxCores": 1.5,
+    "quietSecs": 30
+  }
+}

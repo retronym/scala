@@ -25,6 +25,14 @@ Every run has perflab's default profilers: `gc` (allocation per op) and `JitProf
 sbt "compilerLab/Jmh/runMain scala.tools.nsc.compilerlab.CompileLoop scalap 20"
 ```
 
+## TypingTransformerBenchmark
+
+The fixed cost of a typing transformer, apart from what a phase does with the trees. Setup compiles a corpus up to `stopAfter` (default `typer`) with a resident `Global`; one op runs a `TypingTransformer` that changes nothing over every unit, at the next phase. With `typedEvery` = N it also types a unit literal at every N-th method; 0 types nothing. The transformers are made once and reused, so with `typedEvery=0` an op allocates only what entering owners and the tree traversal do. `variants` works as in `CompileBenchmark`, each variant with its own `Global`.
+
+```bash
+perflab run -- -p corpus=re2s -p typedEvery=0 -p 'variants=eager=-Yeager-typing-transformer-contexts|lazy=' TypingTransformerBenchmark
+```
+
 ## Running with perflab
 
 `perflab.toml` at the root of the checkout tells `perflab` to run `compilerLab/Jmh/run` through the sbt server, with its arguments in a file, so profiler options containing `;` never reach sbt's command parser. Output goes to `out/compiler-lab`.
