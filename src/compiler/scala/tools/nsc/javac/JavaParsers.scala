@@ -58,7 +58,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     /** this is the general parse method
      */
     def parse(): Tree = {
-      val t = compilationUnit()
+      val t = if (unit.source.file.name == "module-info.java") modularCompilationUnit() else compilationUnit()
       accept(EOF)
       t
     }
@@ -224,7 +224,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         nme.ERROR
       }
 
-    def repsep[T <: Tree](p: () => T, sep: Int): List[T] = {
+    def repsep[T](p: () => T, sep: Int): List[T] = {
       val buf = ListBuffer[T](p())
       while (in.token == sep) {
         in.nextToken()
@@ -1172,6 +1172,126 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       if (compact) EmptyTree
       else atPos(pos) {
         makePackaging(pkg, buf.toList)
+      }
+    }
+
+    /** ModularCompilationUnit ::= {ImportDeclaration} ModuleDeclaration
+     *  ModuleDeclaration ::= {Annotation} [open] module Identifier {. Identifier} { {ModuleDirective} }
+     *
+     *  See https://docs.oracle.com/javase/specs/jls/se21/html/jls-7.html#jls-7.7
+     */
+    def modularCompilationUnit(): Tree = {
+      val pos = in.currentPos
+      val buf = ListBuffer.empty[Tree]
+      while (in.token == IMPORT)
+        buf ++= importDecl()
+      if (in.token == AT) annotations() // TODO JPMS retain module annotations (e.g. @Deprecated)
+      thisPackageName = tpnme.EMPTY
+      val pkg = Ident(nme.EMPTY_PACKAGE_NAME)
+      var isOpen = false
+      var ident1 = ident()
+      if (ident1 == nme.javaRestrictedIdentifiers.OPEN) {
+        isOpen = true
+        ident1 = ident()
+      }
+      if (ident1 == nme.javaRestrictedIdentifiers.MODULE) {
+        val moduleDef = jpmsModule(isOpen)
+        accept(EOF)
+        atPos(pos)(makePackaging(pkg, buf.toList :+ moduleDef))
+      } else {
+        syntaxError("expected `module`", skipIt = true)
+        atPos(pos)(makePackaging(pkg, buf.toList))
+      }
+    }
+
+    def dottedName(): String = {
+      val buf = new java.lang.StringBuilder
+      @tailrec def collectIdents(): Unit = {
+        buf.append(ident())
+        if (in.token == DOT) {
+          buf.append(".")
+          in.nextToken()
+          collectIdents()
+        }
+      }
+      collectIdents()
+      buf.toString
+    }
+
+    def jpmsModule(open: Boolean): Tree = {
+      val moduleName = this.moduleName()
+      accept(LBRACE)
+      val directives = ListBuffer[Tree]()
+      while (in.token != EOF && in.token != RBRACE) {
+        while (in.token == SEMI) in.nextToken()
+        if (in.token != RBRACE)
+          directives += jpmsModuleDirective()
+      }
+      accept(RBRACE)
+      Jpms.ModuleDef(open, TermName(moduleName), directives.toList)
+    }
+    def moduleName(): String = dottedName()
+    def packageName(): String = dottedName()
+    def typeName(): String = dottedName()
+    def jpmsModuleDirective(): Tree = {
+      // TODO JPMS position directives
+      val javaKeywords = nme.javaRestrictedIdentifiers
+      ident() match {
+        case javaKeywords.REQUIRES =>
+          if (in.token == STATIC) {
+            in.nextToken()
+            Jpms.RequiresDirective(this.moduleName(), transitive = false, isStatic = true)
+          } else if (in.token == IDENTIFIER && in.name == javaKeywords.TRANSITIVE) {
+            // TODO JPMS `requires transitive;` (a module named `transitive`) should be allowed, see the
+            //      Java Language Specification description of "restricted keywords".
+            in.nextToken()
+            Jpms.RequiresDirective(this.moduleName(), transitive = true, isStatic = false)
+          } else if (in.token == IDENTIFIER) {
+            Jpms.RequiresDirective(this.moduleName(), transitive = false, isStatic = false)
+          } else {
+            syntaxError("expected `transitive`, `static` or module name", skipIt = true)
+            errorTypeTree
+          }
+        case javaKeywords.EXPORTS =>
+          val packageName = this.packageName()
+          if (in.token == IDENTIFIER) {
+            ident() match {
+              case javaKeywords.TO =>
+                Jpms.ExportsDirective(packageName, repsep(() => moduleName(), COMMA))
+              case _ =>
+                syntaxError("expected `to` or `;`", skipIt = true)
+                errorTypeTree
+            }
+          } else {
+            Jpms.ExportsDirective(packageName, Nil)
+          }
+        case javaKeywords.OPENS =>
+          val packageName = this.packageName()
+          if (in.token == IDENTIFIER) {
+            ident() match {
+              case javaKeywords.TO =>
+                Jpms.OpensDirective(packageName, repsep(() => moduleName(), COMMA))
+              case _ =>
+                syntaxError("expected `to` or `;`", skipIt = true)
+                errorTypeTree
+            }
+          } else {
+            Jpms.OpensDirective(packageName, Nil)
+          }
+        case javaKeywords.USES =>
+          Jpms.UsesDirective(typeName())
+        case javaKeywords.PROVIDES =>
+          val provided = typeName()
+          ident() match {
+            case javaKeywords.WITH =>
+              Jpms.ProvidesDirective(provided, repsep(() => typeName(), COMMA))
+            case _ =>
+              syntaxError("expected `with`", skipIt = true)
+              errorTypeTree
+          }
+        case _ =>
+          syntaxError("illegal directive", skipIt = true)
+          errorTypeTree
       }
     }
   }

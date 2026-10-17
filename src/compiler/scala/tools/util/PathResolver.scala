@@ -293,16 +293,21 @@ final class PathResolver(settings: Settings, closeableRegistry: CloseableRegistr
   import PathResolver.MkLines
 
   def result: ClassPath = {
-    val cp = computeResult()
-    if (settings.Ylogcp.value) {
-      Console.print(f"Classpath built from ${settings.toConciseString} %n")
-      Console.print(s"Defaults: ${PathResolver.Defaults}")
-      Console.print(s"Calculated: $Calculated")
+    if (settings.modulePath.isSetByUser) {
+      // TODO JPMS integrate with AggregateClassPath?
+      scala.tools.nsc.jpms.JpmsClassPath(settings, Calculated.javaUserClassPath + File.pathSeparator + Calculated.userClassPath)
+    } else {
+      val cp = computeResult()
+      if (settings.Ylogcp.value) {
+        Console.print(f"Classpath built from ${settings.toConciseString} %n")
+        Console.print(s"Defaults: ${PathResolver.Defaults}")
+        Console.print(s"Calculated: $Calculated")
 
-      val xs = Calculated.basis.drop(2).flatten.distinct
-      Console.print(xs.mkLines(s"After java boot/extdirs classpath has ${xs.size} entries:", indented = true))
+        val xs = Calculated.basis.drop(2).flatten.distinct
+        Console.print(xs.mkLines(s"After java boot/extdirs classpath has ${xs.size} entries:", indented = true))
+      }
+      cp
     }
-    cp
   }
 
   def resultAsURLs: Seq[URL] = result.asURLs

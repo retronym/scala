@@ -933,7 +933,20 @@ trait Contexts { self: Analyzer with ImportTracking =>
       (pre == NoPrefix) || {
         val ab = sym.accessBoundary(sym.owner)
 
-        (  (ab.isTerm || ab == rootMirror.RootClass)
+        // TODO JPMS when should we restrict access to a type alias with an underlying symbol that is inaccessible?
+        // TODO JPMS restrict access to `package p1.p2` unless we can access it _or_ one of its subpackages.
+        // TODO JPMS better error reporting for accessibility errors due to JPMS
+        val jpmsCanAccess =
+          !settings.Yjpms.value || (sym.hasPackageFlag || !(sym.isClass || sym.isModule || sym.isMethod) || {
+            val accessedTop = sym.enclosingTopLevelClass.asClass
+            val accessedModule = accessedTop.associatedJpmsModuleName
+            val fromModule = enclClass.owner.asClass.associatedJpmsModuleName
+            accessedModule == fromModule ||
+            classPath.jpmsIsPackageAccessibleFrom(fromModule, accessedModule, accessedTop.enclosingPackageClass.fullNameString)
+          })
+
+        jpmsCanAccess && (
+           (ab.isTerm || ab == rootMirror.RootClass)
         || (accessWithin(ab) || accessWithinLinked(ab)) &&
              (  !sym.isLocalToThis
              || sym.isProtected && isSubThisType(pre, sym.owner)

@@ -52,7 +52,7 @@ abstract class SymbolLoaders {
   def warning(pos: Position, msg: String, category: WarningCategory, site: String): Unit
 
   protected def enterIfNew(owner: Symbol, member: Symbol, @unused completer: SymbolLoader): Symbol = {
-    assert(owner.info.decls.lookup(member.name) == NoSymbol, owner.fullName + "." + member.name)
+    assert(owner.info.decls.lookup(member.name) == NoSymbol, s"Found ${owner.fullName}.${member.name} as ${owner.info.decls.lookup(member.name)}")
     owner.info.decls enter member
     member
   }
@@ -185,19 +185,20 @@ abstract class SymbolLoaders {
 
   /** Initialize toplevel class and module symbols in `owner` from class path representation `classRep`
    */
-  def initializeFromClassPath(owner: Symbol, classRep: ClassRepresentation): Unit = {
-    ((classRep.binary, classRep.source) : @unchecked) match {
-      case (Some(bin), Some(src))
-      if platform.needCompile(bin, src) && !binaryOnly(owner, nameOf(classRep)) =>
-        if (settings.verbose.value) inform("[symloader] picked up newer source file for " + src.path)
-        enterToplevelsFromSource(owner, nameOf(classRep), src)
-      case (None, Some(src)) =>
-        if (settings.verbose.value) inform("[symloader] no class, picked up source file for " + src.path)
-        enterToplevelsFromSource(owner, nameOf(classRep), src)
-      case (Some(bin), _) =>
-        enterClassAndModule(owner, nameOf(classRep), new ClassfileLoader(bin, _, _))
+  def initializeFromClassPath(owner: Symbol, classRep: ClassRepresentation): Unit =
+    if (classRep.name != "module-info") {
+      ((classRep.binary, classRep.source) : @unchecked) match {
+        case (Some(bin), Some(src))
+        if platform.needCompile(bin, src) && !binaryOnly(owner, nameOf(classRep)) =>
+          if (settings.verbose.value) inform("[symloader] picked up newer source file for " + src.path)
+          enterToplevelsFromSource(owner, nameOf(classRep), src)
+        case (None, Some(src)) =>
+          if (settings.verbose.value) inform("[symloader] no class, picked up source file for " + src.path)
+          enterToplevelsFromSource(owner, nameOf(classRep), src)
+        case (Some(bin), _) =>
+          enterClassAndModule(owner, nameOf(classRep), new ClassfileLoader(bin, classRep.jpmsModuleName, _, _))
+      }
     }
-  }
   private def nameOf(classRep: ClassRepresentation): TermName = {
     val name = classRep.name
     val nameLength = name.length
@@ -295,10 +296,12 @@ abstract class SymbolLoaders {
       assert(root.isPackageClass, root)
       root.setInfo(new PackageClassInfoType(newScope, root))
 
+      // Build up classpath on demand
       val classPathEntries = classPath.list(packageName)
 
       if (!root.isRoot)
         for (entry <- classPathEntries.classesAndSources) initializeFromClassPath(root, entry)
+
       if (!root.isEmptyPackageClass) {
         for (pkg <- classPathEntries.packages) {
           val fullName = pkg.name
@@ -315,7 +318,16 @@ abstract class SymbolLoaders {
     }
   }
   private lazy val classFileDataReader: ReusableInstance[ReusableDataReader] = ReusableInstance[ReusableDataReader](new ReusableDataReader(), initialSize = 1, enabled = isCompilerUniverse)
-  class ClassfileLoader(val classfile: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol) extends SymbolLoader with FlagAssigningCompleter {
+
+  private def setAssociatedModuleName(sym: Symbol, name: => String): Unit =
+    if (settings.Yjpms.value && sym.isClass) { // make sure to call with the class and not the module symbol (a term)
+      sym.asClass.associatedJpmsModuleName = name
+      sym.linkedClassOfClass.andAlso(_.asClass.associatedJpmsModuleName = name)
+    }
+
+  class ClassfileLoader(val classfile: AbstractFile, jpmsModuleName: String, clazz: ClassSymbol, module: ModuleSymbol) extends SymbolLoader with FlagAssigningCompleter {
+    def this(classfile: AbstractFile, clazz: ClassSymbol, module: ModuleSymbol) =
+      this(classfile, "", clazz, module)
     private object classfileParser extends {
       val symbolTable: SymbolLoaders.this.symbolTable.type = SymbolLoaders.this.symbolTable
     } with ClassfileParser(classFileDataReader) {
@@ -338,9 +350,12 @@ abstract class SymbolLoaders {
 
     protected def description = "class file "+ classfile.toString
 
+    // `root` is either `clazz` or `module`
     protected def doComplete(root: Symbol): Unit = {
       val start = if (settings.areStatisticsEnabled) statistics.startTimer(statistics.classReadNanos) else null
       classfileParser.parse(classfile, clazz, module)
+      setAssociatedModuleName(clazz, jpmsModuleName) // use `clazz` instead of `root` to simplify logic
+
       if (clazz.associatedFile eq NoAbstractFile) clazz.associatedFile = classfile
       if (module.associatedFile eq NoAbstractFile) module.associatedFile = classfile
       if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.classReadNanos, start)
@@ -354,7 +369,10 @@ abstract class SymbolLoaders {
     override def fromSource = true
     override def sourcefile = Some(srcfile)
     override def associatedFile(self: Symbol): AbstractFile = srcfile
-    protected def doComplete(root: Symbol): Unit = compileLate(srcfile)
+    protected def doComplete(root: Symbol): Unit = {
+      setAssociatedModuleName(root, platform.classPath.jpmsModuleNameForSource(srcfile))
+      compileLate(srcfile)
+    }
   }
 
   object moduleClassLoader extends SymbolLoader with FlagAssigningCompleter {

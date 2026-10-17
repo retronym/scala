@@ -20,6 +20,8 @@ import java.util.regex.PatternSyntaxException
 import File.pathSeparator
 import scala.tools.nsc.classpath.{ClassPathEntries, PackageEntry, PackageName}
 
+import scala.reflect.internal.jpms.JpmsModuleDescriptor
+
 /**
   * A representation of the compiler's class- or sourcepath.
   */
@@ -32,6 +34,14 @@ trait ClassPath {
   final def classes(inPackage: String): Seq[ClassFileEntry] = classes(PackageName(inPackage))
   final def sources(inPackage: String): Seq[SourceFileEntry] = sources(PackageName(inPackage))
   final def list(inPackage: String): ClassPathEntries = list(PackageName(inPackage))
+  /**
+    * Called by the parser on encountering a module-info.java file with a module declaration.
+    */
+  private[nsc] def jpmsRegisterModuleInfo(moduleDescriptor: JpmsModuleDescriptor): Unit = {}
+
+  private[nsc] def jpmsModuleNameForSource(srcFile: AbstractFile): String = ""
+
+  private[nsc] def jpmsIsPackageAccessibleFrom(fromModuleName: String, otherModuleName: String, otherPackageName: String): Boolean = true
 
   /*
    * These methods are mostly used in the ClassPath implementation to implement the `list` and
@@ -204,6 +214,7 @@ trait ClassRepresentation {
   def name: String
   def binary: Option[AbstractFile]
   def source: Option[AbstractFile]
+  def jpmsModuleName: String = ""
 }
 
 @deprecated("shim for sbt's compiler interface", since = "2.12.0")
