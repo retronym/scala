@@ -12,6 +12,7 @@ import javax.tools._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, mutable}
+import scala.reflect.io.{AbstractFile => ReflectAbstractFile}
 import scala.tools.nsc.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
 import scala.reflect.io.PlainNioFile
 import scala.tools.nsc.Settings
@@ -20,47 +21,9 @@ import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.util.ClassPath
 
-final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]], private val impl: JpmsClasspathSupport) extends ClassPath {
-  private var _sourceModuleDescriptor: JpmsModuleDescriptor = null
-  private var _sourceModuleDescriptorSeen = false // for debugging (see NOTE on moduleGraph below)
-
-  // NOTE: do not touch until `jpmsRegisterModuleInfo` has been called from the parser
-  private lazy val moduleGraph: ResolvedModuleGraph = {
-    _sourceModuleDescriptorSeen = true
-    impl.resolveModuleGraph(_sourceModuleDescriptor)
-  }
-
-  override private[nsc] def jpmsRegisterModuleInfo(moduleDescriptor: JpmsModuleDescriptor): Unit = {
-    assert(!_sourceModuleDescriptorSeen)
-    _sourceModuleDescriptor = moduleDescriptor
-  }
-
-  override private[nsc] def jpmsModuleNameForSource(srcFile: AbstractFile): String = {
-    moduleGraph.moduleForSourceFile(Option(srcFile.file).map(_.toPath).orNull)
-  }
-
-  // from a given module's perspective, cache which packages it can see in other modules
-  private[this] val accessiblePackages: mutable.Map[String, Map[String, Option[immutable.Set[String]]]] = mutable.Map.empty
-  private def computeAccessibility(fromModuleName: String): Map[String, Option[immutable.Set[String]]] = {
-    val accessible: java.util.Map[String, java.util.Set[String]] = moduleGraph.accessibleModulePackages(fromModuleName)
-    accessible.asScala.map {
-      case (targetModule: String, targetPackages: java.util.Set[String]) =>
-        val targetPackagesOrWildcard =
-          if (targetPackages eq ResolvedModuleGraph.AUTOMATIC_MODULE_EXPORT_ALL) None // this was an automatic module
-          else Some(targetPackages.asScala.toSet)
-        (targetModule, targetPackagesOrWildcard)
-    }.toMap
-  }
-
-  override private[nsc] def jpmsIsPackageAccessibleFrom(fromModuleName: String, otherModuleName: String, otherPackageName: String): Boolean = {
-    // Classes on the class path are tagged with the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
-    val otherModuleName1 = if (otherModuleName.isEmpty) JpmsClasspathSupport.UNNAMED_MODULE_NAME else otherModuleName
-    accessiblePackages.getOrElseUpdate(fromModuleName, computeAccessibility(fromModuleName)).get(otherModuleName1) match {
-      case Some(None)      => true // this was an automatic module
-      case Some(Some(set)) => set(otherPackageName)
-      case None            => false
-    }
-  }
+final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]], private val impl: JpmsClasspathSupport) extends ClassPath with ModuleResolver {
+  def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable =
+    new JpmsModuleTable(impl.resolveModuleGraph(sourceModule.orNull))
 
   override def asURLs: Seq[URL] = Nil // TODO
   override def asClassPathStrings: Seq[String] = Nil // TODO
@@ -258,4 +221,32 @@ private[nsc] case class JpmsClassFileEntryImpl(file: AbstractFile, override val 
 
   override def binary: Option[AbstractFile] = Some(file)
   override def source: Option[AbstractFile] = None
+}
+
+/** A module graph resolved by `JpmsClasspathSupport`. */
+private[jpms] final class JpmsModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
+  def moduleOfSource(file: ReflectAbstractFile): String =
+    graph.moduleForSourceFile(Option(file.file).map(_.toPath).orNull)
+
+  // From a given module's perspective, the packages it can access in each module it reads. `None` means all packages.
+  private[this] val accessiblePackages = mutable.HashMap[String, Map[String, Option[immutable.Set[String]]]]()
+  private def computeAccessibility(from: String): Map[String, Option[immutable.Set[String]]] =
+    graph.accessibleModulePackages(from).asScala.iterator.map {
+      case (target, packages) =>
+        val packagesOrAll =
+          if (packages eq ResolvedModuleGraph.AUTOMATIC_MODULE_EXPORT_ALL) None
+          else Some(packages.asScala.toSet)
+        (target, packagesOrAll)
+    }.toMap
+
+  def isPackageAccessible(from: String, target: String, pkg: String): Boolean =
+    from == target || {
+      // Classes on the class path have the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
+      val target1 = if (target.isEmpty) JpmsClasspathSupport.UNNAMED_MODULE_NAME else target
+      accessiblePackages.getOrElseUpdate(from, computeAccessibility(from)).get(target1) match {
+        case Some(None)      => true
+        case Some(Some(set)) => set(pkg)
+        case None            => false
+      }
+    }
 }

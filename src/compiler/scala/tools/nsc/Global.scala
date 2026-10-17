@@ -1226,6 +1226,33 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** A map from compiled top-level symbols to their picklers */
     val symData = new mutable.HashMap[Symbol, PickleBuffer]
 
+    // --------------- JPMS -------------------------------------
+
+    private[this] var jpmsSourceModule: Option[(jpms.JpmsModuleDescriptor, Position)] = None
+    private[this] var jpmsModuleTableResolved = false
+
+    /** Called by the parser for the module declared in a `module-info.java` among the sources. */
+    private[nsc] def registerJpmsModuleInfo(descriptor: jpms.JpmsModuleDescriptor, pos: Position): Unit =
+      jpmsSourceModule match {
+        case Some((_, firstPos)) =>
+          globalError(pos, s"module-info.java declares a second module in this compilation run, the first was declared at ${firstPos.source.path}")
+        case None =>
+          if (jpmsModuleTableResolved)
+            devWarning(s"module-info.java parsed after the module graph was resolved, its declaration is ignored: ${pos.source.path}")
+          jpmsSourceModule = Some((descriptor, pos))
+      }
+
+    /** The module graph for this run. Resolved on first use, which must come after the parser has seen any
+     *  `module-info.java` among the sources.
+     */
+    lazy val jpmsModuleTable: jpms.ModuleTable = {
+      jpmsModuleTableResolved = true
+      classPath match {
+        case resolver: jpms.ModuleResolver if settings.Yjpms.value => resolver.resolve(jpmsSourceModule.map(_._1))
+        case _                                                    => jpms.ModuleTable.Unrestricted
+      }
+    }
+
     private var phasec: Int  = 0   // phases completed
     private var unitc: Int   = 0   // units completed this phase
 

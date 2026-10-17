@@ -41,14 +41,14 @@ The work splits into two mostly independent tracks.
 - **Track 1, JPMS semantics.** scalac implements the module system as specified, for both joint compilation (a `module-info.java` among the sources) and separate compilation (modules arriving as `module-info.class` on the module path, including modules that scalac itself produced). This is the main deliverable and needs matching changes in Zinc and sbt.
 - **Track 2, javac's classpath as an option.** Reusing javac's `StandardJavaFileManager` for locating classes, which is what the prototype does today, becomes an opt-in implementation. Its main value is as an oracle: it lets us check the scalac implementation against javac's view of the same command line.
 
-The seam between the tracks is a small interface, called `ModuleTable` below, which answers three questions: which module a top level class belongs to, which modules a given module reads, and whether package `p` of module `m` is exported to module `n`. Track 1 consumes it in the typer and backend. Track 2 is one implementation of it, plus class lookup.
+The seam between the tracks is `scala.tools.nsc.jpms.ModuleTable`, the module structure seen by one run. It answers which module a source file being compiled belongs to, and whether module `n` can access package `p` of module `m` (that is, `n` reads `m` and `m` exports `p` to `n`). The module of a class loaded from the class or module path is a property of its class path entry. A class path that knows about modules implements `ModuleResolver`, which builds a fresh `ModuleTable` for each `Run`, taking the run's `module-info.java` into account. Track 1 consumes the table in the typer and backend. Track 2 is one implementation of the resolver, plus class lookup.
 
 ## Track 1: JPMS semantics
 
 ### Gaps in scalac
 
 1. **No `module-info.class` output.** A jointly compiled `module-info.java` feeds the access checks but is then dropped. For separate compilation the descriptor has to be written out with ASM's `ModuleVisitor`, with every directive and modifier, the `ModulePackages` attribute (computed from the classes emitted), and `MainClass` if applicable. `JpmsModuleDescriptor` currently carries only the `requires` names, without `transitive` and `static`. That doesn't matter for the module's own compilation, which reads its direct dependencies either way and, like javac, treats `requires static` as mandatory at compile time. It does matter once the descriptor is written.
-2. **Module graph lifetime.** The graph is resolved once per `JpmsClassPath`, and `jpmsRegisterModuleInfo` asserts it is called at most once. A second `Run` on the same `Global` (Zinc's cached compiler, the REPL, the presentation compiler) that includes `module-info.java` fails the assertion, and edits to `module-info.java` are never seen. The graph belongs to the `Run`.
+2. **Module graph lifetime (fixed in step 1).** The graph is now resolved per `Run` (`Run.jpmsModuleTable`), so Zinc's cached compiler, the REPL and the presentation compiler see edits to `module-info.java`. A second `module-info.java` in one run is reported as an error. Multiple modules per run waits for `--module-source-path` (gap 6).
 3. **Access check coverage.** The check works at top level class granularity in `Contexts.isAccessible`. Not yet considered:
    - type aliases and forwarders in an exported package that expose a type from a non-exported one;
    - implicit search turning up inaccessible implicits;
@@ -81,7 +81,7 @@ So Zinc needs: module-path inputs in `CompileOptions`/`ClasspathOptions` and `Co
 
 Each step leaves the branch green.
 
-1. TODO: Introduce `ModuleTable` and route `Contexts`, `Namers` and `SymbolLoaders` through it instead of the `jpms*` methods on `ClassPath`. Move graph state onto `Run` (gap 2), with a two-run test.
+1. DONE: Introduced `ModuleTable`/`ModuleResolver` and routed the parser, `Namers`, `SymbolLoaders` and `Contexts` through `Run.jpmsModuleTable`, removing the `jpms*` methods from `ClassPath`. The accessibility cache moved from the class path to the per-run table. Tests: one `Global` across four runs that add, change and remove `module-info.java`; two `module-info.java` files in one run.
 2. TODO: Native implementation of `ModuleTable` over scalac's existing classpath. Each `ClassPath` entry is tagged with its module: from `ModuleFinder.of(path)` for module path entries, `jrt:/modules/<name>` for the system image, overlays for `--patch-module`, unnamed for the class path. `java.lang.module.Configuration` handles resolution only. This keeps scalac's classpath caching and fixes the empty `asURLs`, which today breaks macros from the module path. It becomes the default under `-Yjpms`.
 3. TODO: Emit `module-info.class` and complete `JpmsModuleDescriptor` (gap 1). Then test separate compilation end to end: scalac module A, then scalac module B against A's output, then javac clients of A, then scalac clients of a javac-built module, and run each on `java --module-path`.
 4. TODO: Access check coverage with a neg test per case (gap 3), and the inliner (gap 4).
@@ -98,8 +98,8 @@ The current `JpmsClassPath` is this track. Using javac's file manager gives java
 
 ### Plan
 
-1. TODO: Once Track 1 step 2 lands, keep `JpmsClassPath` behind `-Yjpms-classpath:javac`, implementing the same `ModuleTable`. Implement `asURLs` so that macros work in this mode too.
-2. TODO: Oracle mode, `-Yjpms-classpath:check`. It runs the native implementation and consults the javac one in parallel, comparing package listings, the module assigned to each class looked up, and every accessibility answer, and reporting discrepancies as internal warnings. This is cheap to add once both implement `ModuleTable`.
+1. TODO: Once Track 1 step 2 lands, keep `JpmsClassPath` behind `-Yjpms-classpath:javac`, as one `ModuleResolver`. Implement `asURLs` so that macros work in this mode too.
+2. TODO: Oracle mode, `-Yjpms-classpath:check`. It runs the native implementation and consults the javac one in parallel, comparing package listings, the module assigned to each class looked up, and every accessibility answer, and reporting discrepancies as internal warnings. This is cheap to add once both implement `ModuleResolver`.
 3. TODO: A junit sweep that runs the oracle over the whole JDK image plus a module path of representative jars (automatic, explicit, multi-release, patched), and fails on any discrepancy.
 4. TODO: Measure both implementations on a large module path. If the javac implementation turns out competitive, revisit which one is the default.
 

@@ -31,17 +31,24 @@ class JpmsTest {
     createAutomaticModuleJar(dir.resolve("scala-library.jar"), "scala.library")
   }
 
-  private def compile(sources: List[SourceFile], outputDir: Path, modulePath: List[Path] = Nil, extraArgs: List[String] = Nil): List[String] = {
+  private def newGlobal(outputDir: Path, modulePath: List[Path] = Nil, extraArgs: List[String] = Nil): Global = {
     val settings = new Settings(msg => throw new IllegalArgumentException(msg))
     val fullModulePath = (scalaLibraryModule :: modulePath).mkString(File.pathSeparator)
     val args = List("-Yjpms", "-d", outputDir.toString, "--module-path", fullModulePath, s"--patch-module:scala.library=$libraryClasses") ++ extraArgs
     val (ok, residual) = settings.processArguments(args, processAll = true)
     assertTrue(args.toString, ok && residual.isEmpty)
-    val reporter = new StoreReporter(settings)
-    val global = new Global(settings, reporter)
+    new Global(settings, new StoreReporter(settings))
+  }
+
+  private def compileWith(global: Global, sources: List[SourceFile]): List[String] = {
+    val reporter = global.reporter.asInstanceOf[StoreReporter]
+    reporter.reset()
     new global.Run().compileSources(sources)
     reporter.infos.toList.filter(_.severity == reporter.ERROR).map(_.msg)
   }
+
+  private def compile(sources: List[SourceFile], outputDir: Path, modulePath: List[Path] = Nil, extraArgs: List[String] = Nil): List[String] =
+    compileWith(newGlobal(outputDir, modulePath, extraArgs), sources)
 
   private def assertNoErrors(errors: List[String]): Unit = assertEquals("", errors.mkString("\n"))
   private def assertSingleError(errors: List[String], expected: String): Unit = errors match {
@@ -165,6 +172,25 @@ class JpmsTest {
     val errors = compile(user :: moduleInfo :: Nil, fileFactory.tempDir(), extraArgs = List("-classpath", libOut.toString))
     assertSingleError(errors, "class L in package lib cannot be accessed")
     assertNoErrors(compile(user :: moduleInfo :: Nil, fileFactory.tempDir(), extraArgs = List("-classpath", libOut.toString, "--add-reads:p1=ALL-UNNAMED")))
+  }
+
+  @Test def moduleGraphIsPerRun(): Unit = {
+    val global = newGlobal(fileFactory.tempDir())
+    val code = fileFactory(usesIncubator)
+    def moduleInfo(requires: String*) =
+      fileFactory("module-info.java", requires.map(r => s"requires $r;").mkString("module p1 { ", " ", " }"))
+
+    assertSingleError(compileWith(global, code :: moduleInfo("scala.library") :: Nil), "class IntVector in package vector cannot be accessed")
+    assertNoErrors(compileWith(global, code :: moduleInfo("scala.library", "jdk.incubator.vector") :: Nil))
+    // Without a module-info.java, the sources are back in the unnamed module, which does not resolve incubator modules by default.
+    assertSingleError(compileWith(global, code :: Nil), "class IntVector in package vector cannot be accessed")
+    assertNoErrors(compileWith(global, code :: moduleInfo("scala.library", "jdk.incubator.vector") :: Nil))
+  }
+
+  @Test def secondModuleInfoInRunIsAnError(): Unit = {
+    val m1 = fileFactory("m1/module-info.java", "module m1 { }")
+    val m2 = fileFactory("m2/module-info.java", "module m2 { }")
+    assertSingleError(compile(m1 :: m2 :: Nil, fileFactory.tempDir()), "module-info.java declares a second module in this compilation run")
   }
 
   @Test def clientsOfNamedModule(): Unit = {
