@@ -465,6 +465,43 @@ abstract class JpmsTest(classPathImpl: String) {
     assertSingleError(reporter.infos.toList.map(_.msg), "--add-modules requires -Yjpms")
   }
 
+  @Test def accessDiagnostics(): Unit = {
+    def errorFor(code: String, extraArgs: List[String] = Nil, moduleInfo: Option[String] = None, classPath: Option[Path] = None): String = {
+      val sources = fileFactory("p1/C.scala", s"package p1; class C { $code }") :: moduleInfo.map(fileFactory("module-info.java", _)).toList
+      compile(sources, fileFactory.tempDir(), extraArgs = extraArgs ++ classPath.toList.flatMap(cp => List("-classpath", cp.toString))) match {
+        case msg :: Nil => msg.linesIterator.drop(1).mkString("\n")
+        case msgs       => throw new AssertionError(msgs.mkString("\n"))
+      }
+    }
+    // Qualified export (java.base exports jdk.internal.misc to some JDK modules only)
+    assertEquals(
+      """package jdk.internal.misc is declared in module java.base, which does not export it to the unnamed module
+        |Use --add-exports java.base/jdk.internal.misc=ALL-UNNAMED to export it anyway""".stripMargin,
+      errorFor("jdk.internal.misc.Unsafe.getUnsafe"))
+    // Not exported at all
+    compileClientOfA("class B { new a.impl.Hidden }") match {
+      case msg :: Nil => assertEquals(
+        """package a.impl is declared in module a, which does not export it
+          |Use --add-exports a/a.impl=b to export it anyway""".stripMargin,
+        msg.linesIterator.drop(1).mkString("\n"))
+      case msgs => throw new AssertionError(msgs.mkString("\n"))
+    }
+    assertEquals(
+      """package jdk.incubator.vector is declared in module jdk.incubator.vector, which is not in the module graph
+        |Use --add-modules jdk.incubator.vector to resolve it""".stripMargin,
+      errorFor("jdk.incubator.vector.IntVector.SPECIES_64"))
+    assertEquals(
+      """package java.sql is declared in module java.sql, but module p1 does not read it
+        |Add `requires java.sql;` to the declaration of module p1, or use --add-reads p1=java.sql""".stripMargin,
+      errorFor("java.sql.Types.ARRAY", extraArgs = List("--add-modules", "java.sql"), moduleInfo = Some("module p1 { requires scala.library; }")))
+    val libOut = fileFactory.tempDir()
+    assertNoErrors(compile(fileFactory("lib/L.scala", "package lib; class L") :: Nil, libOut))
+    assertEquals(
+      """package lib is declared in the unnamed module, but module p1 does not read it
+        |Use --add-reads p1=ALL-UNNAMED""".stripMargin,
+      errorFor("new lib.L", moduleInfo = Some("module p1 { requires scala.library; }"), classPath = Some(libOut)))
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))

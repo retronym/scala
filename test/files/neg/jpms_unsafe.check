@@ -1,4 +1,6 @@
 jpms_unsafe.scala:7: error: class Unsafe in package misc cannot be accessed as a member of package jdk.internal.misc from class C
+package jdk.internal.misc is declared in module java.base, which does not export it to the unnamed module
+Use --add-exports java.base/jdk.internal.misc=ALL-UNNAMED to export it anyway
   jdk.internal.misc.Unsafe.getUnsafe
                     ^
 1 error
