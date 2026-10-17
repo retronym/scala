@@ -1456,6 +1456,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         runReporting.deprecationWarning(NoPosition, s.name + " is deprecated: " + s.deprecationMessage.get, "", "", "")
       }
       settings.conflictWarning.foreach(runReporting.warning(NoPosition, _, WarningCategory.Other, site = ""))
+      if (!settings.Yjpms.value)
+        for (s <- settings.jpmsOptions if s.isSetByUser)
+          globalError(s"${s.name} requires -Yjpms. Support for JPMS is experimental and incomplete.")
     }
 
     /* An iterator returning all the units being compiled in this run */

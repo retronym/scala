@@ -443,6 +443,28 @@ abstract class JpmsTest(classPathImpl: String) {
     assertTrue("a/api/Pub not referenced from b.B", bytes.contains("a/api/Pub"))
   }
 
+  @Test def moduleOptionSyntax(): Unit = {
+    val settings = new Settings(msg => throw new IllegalArgumentException(msg))
+    val (ok, residual) = settings.processArguments(List(
+      "--add-exports", "m/p=a,b", "--add-exports:m/q=c,d", "--add-exports=m/r=e",
+      "--add-modules", "x,y", "--add-modules=z", "-p", "/mp", "--patch-module", "m=/one:/two", "Source.scala"), processAll = true)
+    assertTrue(ok)
+    assertEquals(List("Source.scala"), residual)
+    assertEquals(List("m/p=a,b", "m/q=c,d", "m/r=e"), settings.addExports.value)
+    assertEquals(List("x", "y", "z"), jpms.JpmsSettings.addModules(settings))
+    assertEquals("/mp", settings.modulePath.value)
+    assertEquals(Map("m" -> List("/one", "/two")), jpms.JpmsSettings.patches(settings))
+  }
+
+  @Test def moduleOptionsRequireYjpms(): Unit = {
+    val settings = new Settings(msg => throw new IllegalArgumentException(msg))
+    settings.processArguments(List("--add-modules", "java.sql", "-d", fileFactory.tempDir().toString, "-usejavacp"), processAll = true)
+    val reporter = new StoreReporter(settings)
+    val global = new Global(settings, reporter)
+    new global.Run().compileSources(fileFactory("class C") :: Nil)
+    assertSingleError(reporter.infos.toList.map(_.msg), "--add-modules requires -Yjpms")
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))

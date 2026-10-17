@@ -89,7 +89,7 @@ object ModulePathClassPath {
       patchRoots.collectFirst { case (root, module) if path.startsWith(root) => module }.orNull
     }
     val resolver = new ModuleGraphResolver(ModuleFinder.ofSystem(), modulePathFinder, JpmsSettings.classOutput(settings),
-      settings.addModules.value.asJava, settings.addExports.value.asJava, settings.addReads.value.asJava, patchModuleOfSource)
+      JpmsSettings.addModules(settings).asJava, settings.addExports.value.asJava, settings.addReads.value.asJava, patchModuleOfSource)
     new ModulePathClassPath(aggregate, resolver)
   }
 
@@ -132,8 +132,11 @@ private[nsc] final case class JpmsClassFileEntry(file: AbstractFile, override va
 }
 
 /** Interpretation of the JPMS settings shared by both class path implementations. */
-private[jpms] object JpmsSettings {
+private[nsc] object JpmsSettings {
   private val EqualsPattern = """(.*)=(.*)""".r
+
+  /** `--add-modules` options, each a comma separated list. */
+  def addModules(s: Settings): List[String] = s.addModules.value.flatMap(_.split(',')).map(_.trim).filter(_.nonEmpty)
 
   /** `--patch-module` options: module name to the paths patched into it, in order. */
   def patches(s: Settings): Map[String, List[String]] =
