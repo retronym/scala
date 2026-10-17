@@ -107,13 +107,11 @@ trait Types
   protected[internal] def commonOwner(t: Type): Symbol = commonOwners.commonOwner(t)
   protected[internal] def commonOwner(tps: List[Type]): Symbol = commonOwners.commonOwner(tps)
 
-  private[internal] val glbLubs: tpe.GlbLubs { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.GlbLubs
+  val glbLubs: tpe.GlbLubs { val self: Types.this.type } = new { val self: Types.this.type = Types.this } with tpe.GlbLubs
   private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
   def lubResults = _lubResults
   private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
   def glbResults = _glbResults
-  final def sameWeakLubAsLub(tps: List[Type]): Boolean = glbLubs.sameWeakLubAsLub(tps)
-  final def weakLub(tps: List[Type]): Type = glbLubs.weakLub(tps)
   final def lub(ts: List[Type]): Type = glbLubs.lub(ts)
   protected[internal] final def lub(ts: List[Type], depth: Depth): Type = glbLubs.lub(ts, depth)
   final def glb(ts: List[Type]): Type = glbLubs.glb(ts)
