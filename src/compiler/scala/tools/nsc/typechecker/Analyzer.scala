@@ -19,8 +19,7 @@ import scala.reflect.internal.util.JavaClearable
 
 /** Defines the sub-components for the namer, packageobjects, and typer phases.
  */
-trait Analyzer extends AnyRef
-            with Contexts
+abstract class Analyzer extends Contexts
             with Namers
             with Typers
             with Infer
