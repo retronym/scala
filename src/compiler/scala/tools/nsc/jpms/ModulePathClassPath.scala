@@ -18,7 +18,6 @@ import java.net.URL
 import java.nio.file.{Path, Paths}
 
 import scala.jdk.CollectionConverters._
-import scala.reflect.io.PlainNioFile
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath._
 import scala.tools.nsc.io.AbstractFile
@@ -58,8 +57,15 @@ object ModulePathClassPath {
   def apply(settings: Settings, containers: Seq[ClassPath], classPathFactory: ClassPathFactory): ModulePathClassPath = {
     def tagged(module: String)(cps: Seq[ClassPath]): Seq[ClassPath] = cps.map(new ModuleTaggedClassPath(_, s"module $module", _ => module))
 
-    if (settings.systemPathValue.isDefined)
-      settings.errorFn("-system is not yet supported with -Yjpms")
+    // The system modules, for resolution. The classes come from the JrtClassPath or CtSymClassPath in `containers`.
+    val currentRelease = Runtime.version.feature
+    val systemFinder = settings.releaseValue.map(_.toInt).filter(_ < currentRelease) match {
+      case Some(release) if release < 9 =>
+        settings.errorFn(s"-release $release cannot be used with -Yjpms: Java SE $release has no module system")
+        ModuleFinder.ofSystem()
+      case Some(release) => SystemModules.ofRelease(release)
+      case None          => settings.systemPathValue.map(SystemModules.ofJdk).getOrElse(ModuleFinder.ofSystem())
+    }
 
     val patches = JpmsSettings.patches(settings)
     val patchEntries = patches.toSeq.flatMap { case (module, paths) => paths.flatMap(p => tagged(module)(classPathFactory.classesInPath(p))) }
@@ -76,27 +82,16 @@ object ModulePathClassPath {
       case _: JrtClassPath | _: FilteringJrtClassPath | _: CtSymClassPath => true
       case _                                                              => false
     }
-    val systemEntries = system.map {
-      case cp: CtSymClassPath =>
-        settings.errorFn("-release is not yet supported with -Yjpms")
-        cp
-      case cp => new ModuleTaggedClassPath(cp, "system modules", jrtModuleOf)
-    }
+    val systemEntries = system.map(new ModuleTaggedClassPath(_, "system modules", SystemModules.moduleOf))
 
     val aggregate = AggregateClassPath((patchEntries ++ systemEntries ++ moduleEntries ++ rest).toIndexedSeq)
     val patchRoots: Seq[(Path, String)] = patches.toSeq.flatMap { case (module, paths) => paths.map(p => (Paths.get(p).toAbsolutePath.normalize, module)) }
     val patchModuleOfSource: java.util.function.Function[Path, String] = { path =>
       patchRoots.collectFirst { case (root, module) if path.startsWith(root) => module }.orNull
     }
-    val resolver = new ModuleGraphResolver(ModuleFinder.ofSystem(), modulePathFinder, JpmsSettings.classOutput(settings),
+    val resolver = new ModuleGraphResolver(systemFinder, modulePathFinder, JpmsSettings.classOutput(settings),
       JpmsSettings.addModules(settings).asJava, settings.addExports.value.asJava, settings.addReads.value.asJava, patchModuleOfSource)
     new ModulePathClassPath(aggregate, resolver)
-  }
-
-  /** The module of a class in the system image, from its path `/modules/<module>/...` in the `jrt:` file system. */
-  private def jrtModuleOf(file: AbstractFile): String = file match {
-    case f: PlainNioFile if f.nioPath.getNameCount > 2 && f.nioPath.getName(0).toString == "modules" => f.nioPath.getName(1).toString
-    case _                                                                                       => ""
   }
 }
 

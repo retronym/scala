@@ -517,6 +517,30 @@ abstract class JpmsTest(classPathImpl: String) {
     assertSingleError(reporter.infos.toList.map(_.msg), "The Scala library is on the class path, in the unnamed module")
   }
 
+  @Test def releaseUsesThatReleasesModules(): Unit = {
+    Assume.assumeTrue("the javac class path's ct.sym support predates JDK 12's layout", classPathImpl == "native")
+    // jdk.scripting.nashorn is in Java SE 11, and is a default root module there. It was removed in 15.
+    val nashorn = fileFactory("p1/C.scala", "package p1; class C { def f = jdk.nashorn.api.scripting.ScriptUtils.parse(\"1\", \"\", false) }")
+    assertNoErrors(compile(nashorn :: Nil, fileFactory.tempDir(), extraArgs = List("--release", "11")))
+    // ct.sym only describes the API, so internal packages are not even observable, as with javac --release
+    assertSingleError(compile(fileFactory("class D { jdk.internal.misc.Unsafe.getUnsafe }") :: Nil, fileFactory.tempDir(), extraArgs = List("--release", "11")),
+      "object internal is not a member of package jdk")
+    // java.sql is not required by java.base; in Java SE 11 it is still a default root module for the unnamed module
+    assertNoErrors(compile(fileFactory("class E { def c: java.sql.Connection = null }") :: Nil, fileFactory.tempDir(), extraArgs = List("--release", "11")))
+    val settingsErrors = collection.mutable.ListBuffer[String]()
+    val settings = new Settings(settingsErrors += _)
+    settings.processArguments(List("-Yjpms", "--release", "8", "-d", fileFactory.tempDir().toString), processAll = true)
+    new Global(settings, new StoreReporter(settings)).classPath
+    assertEquals(List("-release 8 cannot be used with -Yjpms: Java SE 8 has no module system"), settingsErrors.toList)
+  }
+
+  @Test def systemOption(): Unit = {
+    Assume.assumeTrue("-system needs the native class path", classPathImpl == "native")
+    val code = fileFactory("class C { def c: java.sql.Connection = null; jdk.internal.misc.Unsafe.getUnsafe }")
+    assertSingleError(compile(code :: Nil, fileFactory.tempDir(), extraArgs = List("-system", sys.props("java.home"))),
+      "package jdk.internal.misc is declared in module java.base, which does not export it to the unnamed module")
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))
