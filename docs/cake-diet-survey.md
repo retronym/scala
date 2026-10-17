@@ -145,4 +145,6 @@ The 20 `reflect.api` interfaces are public API under MiMa. `TypeComparers`, `Typ
 
 ## Build and test
 
-Pending.
+Cluster 1 is prototyped on branch `analyzer-class` (one commit on 2.13.x, three files). It compiles; the only fixes beyond the two-line change were an unqualified attachment type in `Erasure` and `erasure.NoContext` in `Mixin`. In the built classes all 4108 calls from the typechecker to `Analyzer` are `invokevirtual` (1493 of them in `Typers$Typer`), and `Erasure` implements 6 interfaces instead of 38. Partest and a benchmark are still to do.
+
+`cake-diet-rebased` (the branch rebased onto current 2.13.x) has not been built yet.
