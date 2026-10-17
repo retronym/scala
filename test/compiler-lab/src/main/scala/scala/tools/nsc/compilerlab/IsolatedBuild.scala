@@ -9,6 +9,8 @@ import scala.jdk.CollectionConverters._
 trait Compiling {
   def compile(): Unit
   def outputCount: Int
+  /** Compile with `SyntheticGlobals(i)` from now on. */
+  def useSyntheticGlobal(i: Int, distinctAnalyzers: Boolean): Unit
 }
 
 /** Another checkout's build of scala-reflect and the compiler, loaded in its own class loader, so that a fork can
@@ -45,9 +47,12 @@ final class IsolatedBuild(val root: Path) {
     val target = cls.getConstructors.head.newInstance(loaded, options, Boolean.box(resident))
     val compileMethod = cls.getMethod("compile")
     val outputCountMethod = cls.getMethod("outputCount")
+    val useSyntheticGlobalMethod = cls.getMethod("useSyntheticGlobal", Integer.TYPE, java.lang.Boolean.TYPE)
     new Compiling {
       def compile(): Unit = compileMethod.invoke(target)
       def outputCount: Int = outputCountMethod.invoke(target).asInstanceOf[Int]
+      def useSyntheticGlobal(i: Int, distinctAnalyzers: Boolean): Unit =
+        useSyntheticGlobalMethod.invoke(target, Int.box(i), Boolean.box(distinctAnalyzers))
       override def toString = s"$cls in $loader"
     }
   }

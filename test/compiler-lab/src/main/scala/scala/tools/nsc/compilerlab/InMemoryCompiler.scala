@@ -20,6 +20,14 @@ final class InMemoryCompiler(val corpus: Corpus, extraOptions: List[String] = Ni
   /** The classpath snapshot this compiler reads. */
   val classpathSnapshot: InMemoryClasspath = InMemoryClasspath.forCorpus(corpus)
 
+  /** With `>= 0`, compile with that one of the `SyntheticGlobals` instead of a plain `Global` subclass. */
+  var syntheticGlobal: Int = -1
+  var distinctAnalyzers: Boolean = true
+  def useSyntheticGlobal(i: Int, distinctAnalyzers: Boolean): Unit = {
+    syntheticGlobal = i
+    this.distinctAnalyzers = distinctAnalyzers
+  }
+
   /** The output of the latest compilation. */
   var output: VirtualDirectory = newOutput()
 
@@ -32,7 +40,8 @@ final class InMemoryCompiler(val corpus: Corpus, extraOptions: List[String] = Ni
     if (!ok || residual.nonEmpty) throw new IllegalArgumentException(s"bad options: ${args.mkString(" ")}")
     settings.outputDirs.setSingleOutput(out)
     val cp = classpathSnapshot.classPath(corpus.sourcePath)
-    new Global(settings, new StoreReporter(settings)) {
+    if (syntheticGlobal >= 0) SyntheticGlobals(syntheticGlobal, distinctAnalyzers, settings, new StoreReporter(settings), cp)
+    else new Global(settings, new StoreReporter(settings)) {
       override lazy val platform: ThisPlatform = new GlobalPlatform {
         currentClassPath = Some(cp)
       }

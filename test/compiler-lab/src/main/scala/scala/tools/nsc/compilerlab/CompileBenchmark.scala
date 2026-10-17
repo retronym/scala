@@ -54,6 +54,23 @@ class CompileBenchmark {
   @Param(Array("false"))
   var gcBetweenIterations: Boolean = false
 
+  /** How many distinct `Global` subclasses (`SyntheticGlobals`) to compile with, from 1 to 8; 0 for the usual single
+   *  one. Each iteration, warmup included, uses one of them, picked by a PRNG seeded with `globalSeed`, so the
+   *  compiler's call sites see several receiver classes, as when Scaladoc, the presentation compiler or macro
+   *  toolboxes (`c.eval`) run in the same JVM.
+   */
+  @Param(Array("0"))
+  var globalClasses: Int = 0
+
+  /** With `globalClasses`: whether each subclass also has its own `Analyzer` class (as `interactive.Global` does). */
+  @Param(Array("true"))
+  var distinctAnalyzers: Boolean = true
+
+  @Param(Array("1"))
+  var globalSeed: Long = 1
+
+  private var globalRandom: java.util.SplittableRandom = _
+
   private var compiler: Compiling = _
   private var parsed: Variants = _
   private var alternatives: Map[String, Compiling] = Map.empty
@@ -75,8 +92,12 @@ class CompileBenchmark {
       case "resident" => true
       case other => sys.error(s"global=$other: expected fresh or resident")
     }
+    require(globalClasses >= 0 && globalClasses <= SyntheticGlobals.Count, s"globalClasses=$globalClasses: expected 0 to ${SyntheticGlobals.Count}")
+    require(globalClasses == 0 || !resident, "globalClasses needs global=fresh")
+    globalRandom = new java.util.SplittableRandom(globalSeed)
     parsed = Variants.parse(variants)
     val own = new InMemoryCompiler(src, common, resident)
+    configureGlobal(own, 0)
     println(s"\n[compiler-lab] $corpus: ${src.files.size} sources; classpath in memory: ${own.classpathSnapshot}")
     if (parsed.isEmpty) {
       compiler = own
@@ -90,6 +111,7 @@ class CompileBenchmark {
         case build :: Nil => IsolatedBuild(build).newCompiler(corpus, common ::: options, resident)
         case _ => sys.error(s"variant ${v.name}: more than one $BuildOption")
       }
+      configureGlobal(c, 0)
       c.compile()
       println(s"[compiler-lab] variant ${v.name}: ${v.options.asScala.mkString(" ")} -> ${c.outputCount} output files")
       v.name -> c
@@ -108,6 +130,17 @@ class CompileBenchmark {
       IterationLog.begin(v.name, ip.getType == IterationType.MEASUREMENT)
     }
 
+  private def configureGlobal(c: Compiling, i: Int): Unit =
+    if (globalClasses > 0) c.useSyntheticGlobal(i, distinctAnalyzers)
+
+  @Setup(Level.Iteration)
+  def nextGlobal(): Unit =
+    if (globalClasses > 0) {
+      val i = globalRandom.nextInt(globalClasses)
+      (compiler :: alternatives.values.toList).foreach(configureGlobal(_, i))
+      println(s"[compiler-lab] global class $i")
+    }
+
   @TearDown(Level.Iteration)
   def endVariant(): Unit = if (!parsed.isEmpty) IterationLog.end()
 
@@ -123,7 +156,8 @@ object CompileBenchmark {
 /** Compiles a corpus repeatedly outside JMH, printing each run's time and the live heap after it (after a full GC),
  *  e.g. to attach a profiler or Instruments.
  *
- *  `CompileLoop [corpus] [runs] [scalac options...]`; `-Dcompilerlab.resident` shares one `Global` across runs.
+ *  `CompileLoop [corpus] [runs] [scalac options...]`; `-Dcompilerlab.resident` shares one `Global` across runs;
+ *  `-Dcompilerlab.globalClasses=N` compiles each run with one of N `SyntheticGlobals`, picked by a PRNG (seed 1).
  */
 object CompileLoop {
   def main(args: Array[String]): Unit = {
@@ -131,14 +165,18 @@ object CompileLoop {
     val n = args.lift(1).fold(20)(_.toInt)
     val compiler = new InMemoryCompiler(Corpus.load(corpus), args.drop(2).toList, resident = sys.props.contains("compilerlab.resident"))
     println(s"classpath in memory: ${compiler.classpathSnapshot}")
+    val globalClasses = sys.props.get("compilerlab.globalClasses").fold(0)(_.toInt)
+    val random = new java.util.SplittableRandom(1)
     val memory = java.lang.management.ManagementFactory.getMemoryMXBean
     for (i <- 1 to n) {
+      if (globalClasses > 0) compiler.syntheticGlobal = random.nextInt(globalClasses)
       val t0 = System.nanoTime
       compiler.compile()
       val ms = (System.nanoTime - t0) / 1e6
       System.gc()
       val live = memory.getHeapMemoryUsage.getUsed / 1e6
-      println(f"$corpus run $i%3d: $ms%8.1f ms, live heap $live%7.0f MB")
+      val cls = if (globalClasses > 0) s", global class ${compiler.syntheticGlobal}" else ""
+      println(f"$corpus run $i%3d: $ms%8.1f ms, live heap $live%7.0f MB$cls")
     }
     println(s"${compiler.outputCount} output files")
   }
