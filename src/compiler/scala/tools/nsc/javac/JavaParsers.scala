@@ -1219,6 +1219,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
     }
 
     def jpmsModule(open: Boolean): Tree = {
+      val nameOffset = in.currentPos
       val moduleName = this.moduleName()
       accept(LBRACE)
       val directives = ListBuffer[Tree]()
@@ -1228,7 +1229,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           directives += jpmsModuleDirective()
       }
       accept(RBRACE)
-      Jpms.ModuleDef(open, TermName(moduleName), directives.toList)
+      atPos(nameOffset)(Jpms.ModuleDef(open, TermName(moduleName), directives.toList))
     }
     def moduleName(): String = dottedName()
     def packageName(): String = dottedName()

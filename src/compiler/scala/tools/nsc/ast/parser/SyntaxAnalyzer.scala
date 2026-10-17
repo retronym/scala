@@ -105,7 +105,7 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
       if (unit.source.file.name == "module-info.java") {
         body match {
           case PackageDef(_, stats) =>
-            stats.collectFirst { case md: Jpms.ModuleDef => md }.foreach(md => classPath.jpmsRegisterModuleInfo(toDescriptor(md)))
+            stats.collectFirst { case md: Jpms.ModuleDef => md }.foreach(md => currentRun.registerJpmsModuleInfo(toDescriptor(md), md.pos))
           case _ =>
         }
       }

@@ -941,8 +941,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
             val accessedTop = sym.enclosingTopLevelClass.asClass
             val accessedModule = accessedTop.associatedJpmsModuleName
             val fromModule = enclClass.owner.asClass.associatedJpmsModuleName
-            accessedModule == fromModule ||
-            classPath.jpmsIsPackageAccessibleFrom(fromModule, accessedModule, accessedTop.enclosingPackageClass.fullNameString)
+            currentRun.jpmsModuleTable.isPackageAccessible(fromModule, accessedModule, accessedTop.enclosingPackageClass.fullNameString)
           })
 
         jpmsCanAccess && (

@@ -48,6 +48,9 @@ abstract class SymbolLoaders {
    */
   protected def compileLate(srcfile: AbstractFile): Unit
 
+  /** The JPMS module of a source file on the source path, as seen by the current run. */
+  protected def jpmsModuleOfSource(srcfile: AbstractFile): String = ""
+
   // forwards to runReporting.warning, but we don't have global in scope here
   def warning(pos: Position, msg: String, category: WarningCategory, site: String): Unit
 
@@ -370,7 +373,7 @@ abstract class SymbolLoaders {
     override def sourcefile = Some(srcfile)
     override def associatedFile(self: Symbol): AbstractFile = srcfile
     protected def doComplete(root: Symbol): Unit = {
-      setAssociatedModuleName(root, platform.classPath.jpmsModuleNameForSource(srcfile))
+      setAssociatedModuleName(root, jpmsModuleOfSource(srcfile))
       compileLate(srcfile)
     }
   }
