@@ -57,6 +57,16 @@ object InMemoryClasspath {
     sys.props.getOrElse("compilerlab.scalaClasspath", sys.error("-Dcompilerlab.scalaClasspath not set"))
       .split(java.io.File.pathSeparator).toList.map(Path.of(_))
 
+  /** The `/modules` directory of the JDK whose API the corpora compile against: `compilerlab.jdkHome`, or the running
+   *  JDK. Another JDK's image is read through its own `jrt-fs.jar`, so a corpus can be compiled against an older API
+   *  (as `-release` would) while the compiler runs on a newer JVM.
+   */
+  private[compilerlab] lazy val jdkImage: Path = sys.props.get("compilerlab.jdkHome") match {
+    case Some(home) =>
+      FileSystems.newFileSystem(URI.create("jrt:/"), java.util.Map.of("java.home", home)).getPath("/modules")
+    case None => FileSystems.getFileSystem(URI.create("jrt:/")).getPath("/modules")
+  }
+
   def load(jdkModules: List[String], dirs: List[Path], jars: List[Path]): InMemoryClasspath = {
     var files = 0
     var bytes = 0L
@@ -77,10 +87,10 @@ object InMemoryClasspath {
       } finally walk.close()
     }
 
-    val jdkRoot = new VirtualDirectory(s"memory-jdk-${Runtime.version.feature}", None)
+    val jdkRoot = new VirtualDirectory(s"memory-jdk", None)
     if (jdkModules.nonEmpty) {
-      val jrt = FileSystems.getFileSystem(URI.create("jrt:/"))
-      for (m <- jdkModules) readTree(jdkRoot, jrt.getPath("/modules", m))
+      val modules = jdkImage
+      for (m <- jdkModules) readTree(jdkRoot, modules.resolve(m))
     }
     val dirRoots = dirs.map { d =>
       val root = new VirtualDirectory(s"memory-${d.getFileName}", None)

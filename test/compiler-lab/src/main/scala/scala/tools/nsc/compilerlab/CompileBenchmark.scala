@@ -36,6 +36,12 @@ class CompileBenchmark {
   @Param(Array(""))
   var variants: String = _
 
+  /** The JDK whose API the corpus compiles against, if not the running one (`compilerlab.jdkHome`): e.g. an older JDK
+   *  for a corpus that clashes with newer API, as compiler-benchmark's `scala` does with JDK 26's `Comparator.max`.
+   */
+  @Param(Array(""))
+  var jdkHome: String = _
+
   /** With `variants`: a full collection before each iteration (outside the measured region). */
   @Param(Array("false"))
   var gcBetweenIterations: Boolean = false
@@ -48,6 +54,7 @@ class CompileBenchmark {
   @Setup(Level.Trial)
   def setup(): Unit = {
     Announce.jvm(s"CompileBenchmark($corpus)")
+    if (jdkHome.nonEmpty) System.setProperty("compilerlab.jdkHome", jdkHome)
     val common = CompileBenchmark.split(scalacOptions)
     val src = Corpus.load(corpus)
     val resident = global match {

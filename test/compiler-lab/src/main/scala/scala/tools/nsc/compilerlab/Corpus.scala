@@ -71,11 +71,11 @@ object Corpus {
 
   private def isSource(path: String) = path.endsWith(".scala") || path.endsWith(".java")
 
-  /** `compilerlab.jdkModules`, comma separated, or all the running JDK's modules, as scalac's `JrtClassPath` sees. */
+  /** `compilerlab.jdkModules`, comma separated, or all the modules of that JDK (`InMemoryClasspath.jdkImage`), as scalac's `JrtClassPath` sees them. */
   private def jdkModules: List[String] = sys.props.get("compilerlab.jdkModules") match {
     case Some(ms) => ms.split(",").toList.map(_.trim).filter(_.nonEmpty)
     case None =>
-      val modules = java.nio.file.FileSystems.getFileSystem(new URI("jrt:/")).getPath("/modules")
+      val modules = InMemoryClasspath.jdkImage
       val list = Files.list(modules)
       try list.iterator.asScala.map(_.getFileName.toString).toList.sorted finally list.close()
   }
