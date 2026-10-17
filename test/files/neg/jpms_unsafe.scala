@@ -1,4 +1,4 @@
-//> using options -Yjpms --module-path .
+//> using options -Yjpms
 
 class C {
   class D

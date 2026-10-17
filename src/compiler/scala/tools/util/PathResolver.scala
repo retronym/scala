@@ -293,9 +293,13 @@ final class PathResolver(settings: Settings, closeableRegistry: CloseableRegistr
   import PathResolver.MkLines
 
   def result: ClassPath = {
-    if (settings.modulePath.isSetByUser) {
-      // TODO JPMS integrate with AggregateClassPath?
-      scala.tools.nsc.jpms.JpmsClassPath(settings, Calculated.javaUserClassPath + File.pathSeparator + Calculated.userClassPath)
+    if (settings.Yjpms.value) {
+      val cp = settings.YjpmsClassPath.value match {
+        case "javac" => scala.tools.nsc.jpms.JpmsClassPath(settings, Calculated.javaUserClassPath + File.pathSeparator + Calculated.userClassPath)
+        case _       => scala.tools.nsc.jpms.ModulePathClassPath(settings, containers, classPathFactory)
+      }
+      if (settings.Ylogcp.value) Console.println(s"JPMS class path: $cp")
+      cp
     } else {
       val cp = computeResult()
       if (settings.Ylogcp.value) {

@@ -61,6 +61,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val outdir        = OutputSetting (".").withPostSetHook(s => try outputDirs.setSingleOutput(s.value) catch { case FatalError(msg) => errorFn(msg) }).tap(_.postSetHook())
 
   val Yjpms             = BooleanSetting("-Yjpms", "Enable experimental (and incomplete) support for JPMS.").internalOnly()
+  val YjpmsClassPath    = ChoiceSetting("-Yjpms-classpath", "impl", "Class path implementation under -Yjpms: scalac's own, or one backed by javac's file manager.", List("native", "javac"), "native").withPostSetHook(ensureJPMS).internalOnly()
   def ensureJPMS(sett: Setting): Unit =
     if (!Yjpms.value) errorFn(s"To use ${sett.name}, you must first pass -Yjpms. Support for JPMS is experimental and incomplete.")
 

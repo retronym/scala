@@ -6,13 +6,18 @@ import java.util.jar.Attributes.Name
 import java.util.jar.Manifest
 
 import org.junit.Assert.{assertEquals, assertTrue}
-import org.junit.{After, Before, Test}
+import org.junit.{After, Assume, Before, Test}
 
+import scala.jdk.CollectionConverters._
 import scala.reflect.internal.util.SourceFile
 import scala.tools.asm.{ClassWriter, Opcodes}
 import scala.tools.nsc.reporters.StoreReporter
 
-class JpmsTest {
+/** Runs the JPMS tests against both class path implementations. */
+class JpmsNativeClassPathTest extends JpmsTest("native")
+class JpmsJavacClassPathTest extends JpmsTest("javac")
+
+abstract class JpmsTest(classPathImpl: String) {
   private var fileFactory: FileFactory = _
 
   @Before def before(): Unit = {
@@ -34,7 +39,7 @@ class JpmsTest {
   private def newGlobal(outputDir: Path, modulePath: List[Path] = Nil, extraArgs: List[String] = Nil): Global = {
     val settings = new Settings(msg => throw new IllegalArgumentException(msg))
     val fullModulePath = (scalaLibraryModule :: modulePath).mkString(File.pathSeparator)
-    val args = List("-Yjpms", "-d", outputDir.toString, "--module-path", fullModulePath, s"--patch-module:scala.library=$libraryClasses") ++ extraArgs
+    val args = List("-Yjpms", s"-Yjpms-classpath:$classPathImpl", "-d", outputDir.toString, "--module-path", fullModulePath, s"--patch-module:scala.library=$libraryClasses") ++ extraArgs
     val (ok, residual) = settings.processArguments(args, processAll = true)
     assertTrue(args.toString, ok && residual.isEmpty)
     new Global(settings, new StoreReporter(settings))
@@ -193,6 +198,43 @@ class JpmsTest {
     assertSingleError(compile(m1 :: m2 :: Nil, fileFactory.tempDir()), "module-info.java declares a second module in this compilation run")
   }
 
+  @Test def unnamedModuleReadsDefaultRootModules(): Unit = {
+    // java.sql is not required by java.base, but is a default root module for code in the unnamed module (JEP 261)
+    assertNoErrors(compile(fileFactory("class C { def c: java.sql.Connection = null }") :: Nil, fileFactory.tempDir()))
+  }
+
+  @Test def checksJdkInternalsWithoutModulePath(): Unit = {
+    Assume.assumeTrue("the javac class path is only used with --module-path", classPathImpl == "native")
+    val settings = new Settings(msg => throw new IllegalArgumentException(msg))
+    settings.processArguments(List("-Yjpms", "-usejavacp", "-d", fileFactory.tempDir().toString), processAll = true)
+    val reporter = new StoreReporter(settings)
+    val global = new Global(settings, reporter)
+    new global.Run().compileSources(fileFactory("class C { jdk.internal.misc.Unsafe.getUnsafe; java.util.List.of() }") :: Nil)
+    assertSingleError(reporter.infos.toList.filter(_.severity == reporter.ERROR).map(_.msg), "class Unsafe in package misc cannot be accessed")
+  }
+
+  @Test def macroFromModulePath(): Unit = {
+    Assume.assumeTrue("JpmsClassPath.asURLs is not implemented (PLAN.md, Track 2 step 1)", classPathImpl == "native")
+    val macroOut = fileFactory.tempDir()
+    val macroLib = fileFactory("mac/M.scala",
+      """package mac
+        |import scala.language.experimental.macros
+        |import scala.reflect.macros.blackbox.Context
+        |object M {
+        |  def m: Int = macro impl
+        |  def impl(c: Context): c.Expr[Int] = c.universe.reify(42)
+        |}
+        |""".stripMargin)
+    // From the unnamed module, modules on the module path are only resolved if named in --add-modules (JEP 261).
+    assertNoErrors(compile(macroLib :: Nil, macroOut, extraArgs = List("-usejavacp", "--add-modules:scala.library")))
+    val macroJar = createAutomaticModuleJar(fileFactory.tempDir().resolve("mac.jar"), "mac", contentsOf = Some(macroOut))
+    // The macro class loader is built from the class path URLs, which must include the module path.
+    val urls = newGlobal(fileFactory.tempDir(), List(macroJar)).classPath.asURLs
+    assertTrue(urls.toString, urls.contains(macroJar.toUri.toURL))
+    val client = fileFactory("client/Client.scala", "package client; class Client { def x = mac.M.m }")
+    assertNoErrors(compile(client :: Nil, fileFactory.tempDir(), List(macroJar), List("-usejavacp", "--add-modules:scala.library,mac")))
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))
@@ -229,7 +271,7 @@ class JpmsTest {
     Files.write(dir.resolve("module-info.class"), cw.toByteArray)
   }
 
-  private def createAutomaticModuleJar(jar: Path, automaticModuleName: String): Path = {
+  private def createAutomaticModuleJar(jar: Path, automaticModuleName: String, contentsOf: Option[Path] = None): Path = {
     val manifest = new Manifest()
     manifest.getMainAttributes.put(Name.MANIFEST_VERSION, "1.0")
     manifest.getMainAttributes.put(new Name("Automatic-Module-Name"), automaticModuleName)
@@ -241,6 +283,11 @@ class JpmsTest {
       val target = zipfs.getPath("/META-INF/MANIFEST.MF")
       Files.createDirectories(target.getParent)
       Files.write(target, os.toByteArray)
+      for (dir <- contentsOf; file <- Files.walk(dir).iterator.asScala if Files.isRegularFile(file)) {
+        val entry = zipfs.getPath("/" + dir.relativize(file).toString)
+        Files.createDirectories(entry.getParent)
+        Files.copy(file, entry)
+      }
     } finally zipfs.close()
     jar
   }
