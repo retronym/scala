@@ -6,6 +6,7 @@ Benchmarks and profiles of the working tree's compiler (quick), for answering wh
 
 - A [scala/compiler-benchmark](https://github.com/scala/compiler-benchmark) checkout for the corpora: beside this one, or named by `COMPILER_BENCHMARK` when sbt starts.
 - jvm-perf-lab: `mise run install` there puts perflab-jmh and the audit agent in `~/.m2`, and `mise run cli` installs `perflab`.
+- Build quick as releases are, with the optimizer: a `local.sbt` (gitignored) in the checkout with `ThisBuild / Compile / scalacOptions ++= Seq("-opt:l:inline", "-opt-inline-from:scala/**")`, as `ScriptCommands`' `enableOptimizer`. Without it quick keeps closures that releases inline away, e.g. a lambda per call of `Transformer.transformTrees`, and measures a compiler nobody ships.
 - sbt on Java 17 or later (perflab-jmh's baseline); the benchmark forks use the same JVM. Start a server in this checkout (`sbt --client`), which `perflab` drives.
 
 ## CompileBenchmark

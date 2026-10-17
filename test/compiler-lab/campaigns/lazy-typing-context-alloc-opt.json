@@ -1,0 +1,19 @@
+{
+  "name": "lazy-typing-context-alloc-opt",
+  "benchmark": "CompileBenchmark",
+  "profile": "xctrace:ipc",
+  "rounds": 4,
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 16 -i 16 -w 3 -r 3 -prof gc",
+    "scala": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -p jdkHome=21.0.12+1.1-tem -wi 6 -i 6 -w 10 -r 40 -prof gc"
+  },
+  "paired": {
+    "eager": "-Yeager-typing-transformer-contexts",
+    "lazy": ""
+  },
+  "gcLog": true,
+  "loadgate": {
+    "maxCores": 1.5,
+    "quietSecs": 30
+  }
+}
