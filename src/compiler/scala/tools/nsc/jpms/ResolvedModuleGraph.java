@@ -51,7 +51,8 @@ public class ResolvedModuleGraph {
         for (ResolvedModule readModule: readModules) {
 
             ModuleDescriptor descriptor = readModule.reference().descriptor();
-            if (descriptor.isAutomatic()) {
+            // The unnamed module exports all of its packages (JLS 7.7.5), as does an automatic module.
+            if (descriptor.isAutomatic() || readModule.name().equals(UNNAMED_MODULE_NAME)) {
                 result.put(readModule.name(), AUTOMATIC_MODULE_EXPORT_ALL);
             } else {
                 HashSet<String> packages = new HashSet<>();

@@ -152,6 +152,21 @@ class JpmsTest {
     assertNoErrors(reporter.infos.toList.map(_.msg))
   }
 
+  @Test def namedModuleDoesNotReadClassPath(): Unit = {
+    val libOut = fileFactory.tempDir()
+    assertNoErrors(compile(fileFactory("lib/L.scala", "package lib; class L") :: Nil, libOut))
+    val user = fileFactory("p1/U.scala", "package p1; class U { new lib.L }")
+
+    // From the unnamed module, the class path is readable.
+    assertNoErrors(compile(user :: Nil, fileFactory.tempDir(), extraArgs = List("-classpath", libOut.toString)))
+
+    // A named module only reads the class path given --add-reads <module>=ALL-UNNAMED.
+    val moduleInfo = fileFactory("module-info.java", "module p1 { requires scala.library; }")
+    val errors = compile(user :: moduleInfo :: Nil, fileFactory.tempDir(), extraArgs = List("-classpath", libOut.toString))
+    assertSingleError(errors, "class L in package lib cannot be accessed")
+    assertNoErrors(compile(user :: moduleInfo :: Nil, fileFactory.tempDir(), extraArgs = List("-classpath", libOut.toString, "--add-reads:p1=ALL-UNNAMED")))
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))

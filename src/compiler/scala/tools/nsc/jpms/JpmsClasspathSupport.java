@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 public class JpmsClasspathSupport {
 
     // has to be a valid module name, so we can't use the pseudo-name "ALL-UNNAMED"
-    static final String UNNAMED_MODULE_NAME = "___UNNAMED";
+    public static final String UNNAMED_MODULE_NAME = "___UNNAMED";
     // ... which we do need when parsing command line options.
     private static final String ALL_UNNAMED = "ALL-UNNAMED";
 
@@ -95,7 +95,7 @@ public class JpmsClasspathSupport {
         } else {
             roots.add(currentModule);
         }
-        Configuration configuration = Configuration.empty().resolve(finder, afterFinder, roots);
+        Configuration configuration = Configuration.empty().resolve(new ExportRequireAddingModuleFinder(finder, adder), afterFinder, roots);
         return new ResolvedModuleGraph(currentModule, configuration, fileManager);
     }
 
