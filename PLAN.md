@@ -86,17 +86,25 @@ The fix, when it is needed, is for the class path to drop a package's entries th
 
 ### Gaps in Zinc and sbt
 
-From a survey of the current Zinc (main) and sbt checkouts:
+Tested with sbt 1.12.15 and Zinc 1.12, using the integration build `integration/scala-mixed` on the `topic/scala-jpms` branch of retronym/sbt-jpms. It has three projects: mixed Scala/Java `alpha` with whitebox munit tests, Scala `beta` run as a module, and pure Scala `gamma`. All module options go through `scalacOptions`, `javacOptions` and `javaOptions`. Its README has the details. An earlier reading of Zinc `main` (Zinc 2) predicted more problems than the experiment showed.
 
-- **Zinc has no module path.** `CompileOptions` and `ClasspathOptions` carry only a class path, and `CompilerArguments` emits `-classpath` and, when `autoBoot` is set, a `-bootclasspath` holding scala-library. Under JPMS that puts the library in the unnamed module, where `requires scala.library` cannot see it. Module options can only be smuggled in through `scalacOptions`/`javacOptions`.
-- **Smuggled module-path jars are invisible to invalidation.** Any change to the options forces a full recompile, which is safe. But the module path jars are left out of the classpath hash, and `Locate`'s flat lookup returns nothing for them, so a changed dependency on the module path is either missed or causes spurious invalidation.
-- **Mixed compilation and `module-info.java`.** In `Mixed` order Zinc passes all sources to scalac, including `module-info.java`, and then the Java sources to javac, with the Scala output on javac's `-classpath`. With a named module, javac would then see the Scala classes in the unnamed module, which the named module cannot read. It needs `--patch-module <module>=<scala output>` instead. Only one of the two compilers should emit `module-info.class`.
-- **`module-info.java` edits are not tracked.** No class depends on `module-info.java`, so editing `requires` or `exports` recompiles only that file, although it changes accessibility for the whole module. A dependency's `module-info.class` is likewise only noticed indirectly. This needs whole-module invalidation.
-- **`module-info.class` is not recorded as a product.** Zinc's `JavaAnalyze` deliberately skips it, and the bridge records only classes derived from symbols. The class file manager never deletes or restores it, so it goes stale when `module-info.java` is removed.
-- **javac output analysis uses a flat `URLClassLoader`.** Classes that need module options to load fall back to class-file-only analysis, which loses API and inheritance dependencies.
-- **sbt has no module-path keys.** Nothing splits `dependencyClasspath` into class path and module path, and forked `run` and `test` launch with `-classpath` only.
+These work with sbt and Zinc as they are:
+- joint compilation of `module-info.java` in `Mixed` order, including Java code that uses Scala classes of the same module. javac counts the output directory as part of the module it is compiling, so it needs no `--patch-module`. javac's `module-info.class` overwrites scalac's.
+- separate compilation against upstream projects, as class directories or jars;
+- incremental compilation of Scala sources without `module-info.java`, and Zinc's API-based invalidation across projects;
+- whitebox tests in a forked `test` run, patched into the module.
 
-So Zinc needs: module-path inputs in `CompileOptions`/`ClasspathOptions` and `CompilerArguments`; module path in hashing and lookup; `--patch-module` for javac in mixed builds; `module-info.java` as a module-wide invalidation trigger; `module-info.class` as a product; and module-aware analysis of javac output. sbt needs keys for the module path and module options, a policy for splitting the dependency classpath, `autoBoot` off for modular builds, and module-aware forked run and test.
+Because the module path is kept a subset of the class path, which Zinc still receives as `-classpath`, Zinc's class path hashing and lookup keep working. A module path input in Zinc is not needed.
+
+These need changes:
+- **Zinc: module declaration changes are not propagated.** Editing `exports` or `requires` recompiles only `module-info.java`. Dependents in the same project and downstream are not invalidated, so they compile against the old declaration and fail at run time (`IllegalAccessError`). Changes to a `module-info.java`, or to an upstream `module-info.class`, need to invalidate the whole module and its dependents. A plugin can work around this by putting a hash of the module declarations into the compiler options, which forces a full recompile. That is tested in the integration build.
+- **Zinc: `module-info.class` is not a product.** It goes stale when `module-info.java` is removed. A plugin can work around this by deleting it.
+- **sbt: forked `run` can't launch a module.** `ForkRun` always appends `-classpath <cp> <mainClass>`. With `--module` in `javaOptions` those become program arguments. A plugin can provide its own `run` on `Fork.java`, so a change in sbt is welcome but not required.
+- **Module path policy.** Scala jars without `Automatic-Module-Name` (`munit_2.13-1.0.0.jar`) can't be automatic modules. The build tool has to keep them on the class path and add `--add-reads <module>=ALL-UNNAMED`. That belongs in a plugin.
+
+Found and fixed in scalac through the integration build:
+- classes in the output directory now belong to the module being compiled (`ModuleTable.CurrentModule`). Before, an incremental compile that recompiled only some sources of a named module rejected their references to the module's other classes, because Zinc puts the output directory on `-classpath`, which is the unnamed module;
+- a module path entry that cannot be a module is reported as an error and skipped, instead of crashing with `FindException`.
 
 ### Plan
 
@@ -107,7 +115,7 @@ Each step leaves the branch green.
 3. DONE: `module-info.class` is emitted from GenBCode by `ModuleInfos`. `JpmsModuleDescriptor` is gone. The parser's `Jpms.ModuleDef` becomes a `java.lang.module.ModuleDescriptor` directly, through the strict builder, which also rejects invalid names and duplicate directives. A `module-info.class` already in the output directory makes the sources members of that module, for incremental compilation, and a `module-info.java` among the sources takes precedence over it. The parser now accepts `requires static transitive` in either order, and `requires transitive;` naming a module. `separateCompilationEndToEnd` covers: scalac module `a` (its descriptor read back with `ModuleFinder`), scalac module `b` against `a`, javac module `c` against `a` (javac rejects `a`'s unexported package), scalac against javac-built module `d`, and finally `java --module-path … -m b/b.main.Main`, including a `ServiceLoader` lookup of `a`'s provider.
 4. DONE: Access checks and the inliner, as described under gaps 3 and 4. `JpmsTest` has a test per case against a module `a` that exports `a.api` but not `a.impl`: a public member inherited through an exported class (also run on the module path), a member of an inaccessible qualifying type, type aliases, package object members, implicits, Java statics, and the inliner (not inlining a method that refers to `a.impl`, inlining one that only refers to `a.api`).
 5. DONE: Option syntax and `-release`/`-system` (gap 6), diagnostics (gap 8), and the `scala.library` policy (gap 5). Tests: option syntax, options without `-Yjpms`, exact diagnostics for each kind of denial, a case class in a module that doesn't require the library (and with the library on the class path), `--release 11` (Nashorn is observable, `java.sql` is a default root, internal packages are not observable, `--release 8` is rejected), and `-system`.
-6. TODO: Zinc prototype on a branch of the local checkout: the module-path inputs, `--patch-module` for javac, `module-info.java` invalidation and the product. Use it to settle the command line interface before it hardens in scalac. Then the sbt keys, with a scripted test of a two-module mixed Scala/Java build that runs on the module path.
+6. TODO: Zinc changes for module declaration invalidation and for `module-info.class` as a product. Update the sbt-jpms plugin: support scalac, choose the module path with `ModuleFinder`, apply the Zinc workarounds until Zinc is fixed, provide a module-aware `run`, move to sbt 1.12, and turn `integration/scala-mixed` into a scripted test. The integration build already exists (see above).
 
 ## Track 2: javac's classpath, opt-in
 
@@ -119,7 +127,7 @@ The current `JpmsClassPath` is this track. Using javac's file manager gives java
 
 ### Plan
 
-1. TODO: `JpmsClassPath` is now behind `-Yjpms-classpath:javac` and shares `ModuleGraphResolver`. Still to do: implement `asURLs`, so that macros work in this mode too, and stop it listing the same class twice when a `--patch-module` path overlaps the class path. That currently crashes with "Found scala.Function2$mcIII$sp as class Function2$mcIII$sp" (the `-usejavacp` macro test, run with this implementation).
+1. TODO: `JpmsClassPath` is now behind `-Yjpms-classpath:javac` and shares `ModuleGraphResolver`. Still to do: implement `asURLs`, so that macros work in this mode too; list the classes of an output directory given on `-classpath` and tag them `ModuleTable.CurrentModule` (`incrementalCompilationSeesEarlierClassesInSameModule` is skipped for it); and stop it listing the same class twice when a `--patch-module` path overlaps the class path. That currently crashes with "Found scala.Function2$mcIII$sp as class Function2$mcIII$sp" (the `-usejavacp` macro test, run with this implementation).
 2. TODO: Oracle mode, `-Yjpms-classpath:check`. It runs the native implementation and consults the javac one in parallel, comparing package listings, the module assigned to each class looked up, and every accessibility answer, and reporting discrepancies as internal warnings. This is cheap to add once both implement `ModuleResolver`.
 3. TODO: A junit sweep that runs the oracle over the whole JDK image plus a module path of representative jars (automatic, explicit, multi-release, patched), and fails on any discrepancy.
 4. TODO: Measure both implementations on a large module path. If the javac implementation turns out competitive, revisit which one is the default.
