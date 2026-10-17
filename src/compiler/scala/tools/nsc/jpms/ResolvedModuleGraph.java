@@ -1,46 +1,47 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc. dba Akka
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
 package scala.tools.nsc.jpms;
 
-import javax.tools.JavaFileManager;
-import javax.tools.JavaFileObject;
-import javax.tools.StandardJavaFileManager;
-import javax.tools.StandardLocation;
-import java.io.IOException;
 import java.lang.module.Configuration;
 import java.lang.module.ModuleDescriptor;
 import java.lang.module.ResolvedModule;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Function;
 
-import static scala.tools.nsc.jpms.JpmsClasspathSupport.UNNAMED_MODULE_NAME;
+import static scala.tools.nsc.jpms.ModuleGraphResolver.UNNAMED_MODULE_NAME;
 
-public class ResolvedModuleGraph {
-    private String currentModule;
+/** A resolved module graph, and the module of the sources being compiled. */
+public final class ResolvedModuleGraph {
+    /** Marks a module that exports all of its packages: an automatic module, or the unnamed module. */
+    public static final Set<String> EXPORT_ALL = Collections.unmodifiableSet(new HashSet<>());
+
+    private final String currentModule;
     private final Configuration configuration;
-    private StandardJavaFileManager fileManager;
-    private Map<String, Set<JavaFileManager.Location>> modulePatchLocations = new HashMap<>();
-    public static final Set<String> AUTOMATIC_MODULE_EXPORT_ALL = new HashSet<>();
+    private final Function<Path, String> patchModuleOfSource;
 
-    public ResolvedModuleGraph(String currentModule, Configuration configuration, StandardJavaFileManager fileManager) throws IOException {
+    ResolvedModuleGraph(String currentModule, Configuration configuration, Function<Path, String> patchModuleOfSource) {
         this.currentModule = currentModule;
         this.configuration = configuration;
-        this.fileManager = fileManager;
-
-        if (fileManager.hasLocation(StandardLocation.PATCH_MODULE_PATH)) {
-            Iterable<Set<JavaFileManager.Location>> sets = fileManager.listLocationsForModules(StandardLocation.PATCH_MODULE_PATH);
-            for (Set<JavaFileManager.Location> set: sets) {
-                for (JavaFileManager.Location location: set) {
-                    String moduleName = fileManager.inferModuleName(location);
-                    Set<JavaFileManager.Location> locations = modulePatchLocations.computeIfAbsent(moduleName, (key) -> new HashSet<>());
-                    locations.add(location);
-                }
-            }
-        }
+        this.patchModuleOfSource = patchModuleOfSource;
     }
 
+    /** For each module read by `siteModuleName`, the packages it exports to `siteModuleName`, or `EXPORT_ALL`. */
     public Map<String, Set<String>> accessibleModulePackages(String siteModuleName) {
         Set<ResolvedModule> readModules;
         String finalSiteModuleName = siteModuleName;
         if (siteModuleName.equals("")) {
+            // The unnamed module reads every module in the graph.
             readModules = configuration.modules();
             finalSiteModuleName = UNNAMED_MODULE_NAME;
         } else {
@@ -48,16 +49,15 @@ public class ResolvedModuleGraph {
         }
 
         HashMap<String, Set<String>> result = new HashMap<>();
-        for (ResolvedModule readModule: readModules) {
-
+        for (ResolvedModule readModule : readModules) {
             ModuleDescriptor descriptor = readModule.reference().descriptor();
             // The unnamed module exports all of its packages (JLS 7.7.5), as does an automatic module.
             if (descriptor.isAutomatic() || readModule.name().equals(UNNAMED_MODULE_NAME)) {
-                result.put(readModule.name(), AUTOMATIC_MODULE_EXPORT_ALL);
+                result.put(readModule.name(), EXPORT_ALL);
             } else {
                 HashSet<String> packages = new HashSet<>();
                 result.put(readModule.name(), packages);
-                for (ModuleDescriptor.Exports exports: descriptor.exports()) {
+                for (ModuleDescriptor.Exports exports : descriptor.exports()) {
                     if (!exports.isQualified() || exports.targets().contains(finalSiteModuleName)) {
                         packages.add(exports.source());
                     }
@@ -67,21 +67,12 @@ public class ResolvedModuleGraph {
         return result;
     }
 
-    public String moduleForSourceFile(Path path) throws IOException {
-        String result = currentModule;
-        if (path == null) return result;
-
-        if (fileManager.hasLocation(StandardLocation.PATCH_MODULE_PATH)) {
-            JavaFileObject sourceFile = fileManager.getJavaFileObjects(path).iterator().next();
-            Iterable<Set<JavaFileManager.Location>> sets = fileManager.listLocationsForModules(StandardLocation.PATCH_MODULE_PATH);
-            for (Set<JavaFileManager.Location> set: sets) {
-                for (JavaFileManager.Location location: set) {
-                    if (fileManager.contains(location, sourceFile)) {
-                        return fileManager.inferModuleName(location);
-                    }
-                }
-            }
+    /** The module of a source file being compiled: the module it is patched into, or the current module. */
+    public String moduleForSourceFile(Path path) {
+        if (path != null && patchModuleOfSource != null) {
+            String patched = patchModuleOfSource.apply(path);
+            if (patched != null) return patched;
         }
-        return result;
+        return currentModule;
     }
 }

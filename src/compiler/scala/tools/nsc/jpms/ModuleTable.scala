@@ -12,6 +12,8 @@
 
 package scala.tools.nsc.jpms
 
+import scala.collection.{immutable, mutable}
+import scala.jdk.CollectionConverters._
 import scala.reflect.io.AbstractFile
 
 /** The JPMS module structure seen by a single compilation run.
@@ -47,4 +49,32 @@ object ModuleTable {
 trait ModuleResolver {
   /** @param sourceModule the module declared by a `module-info.java` compiled in this run, if any */
   def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable
+}
+
+/** A module table backed by a resolved module graph. */
+final class GraphModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
+  def moduleOfSource(file: AbstractFile): String =
+    graph.moduleForSourceFile(Option(file.file).map(_.toPath.toAbsolutePath.normalize).orNull)
+
+  // From a given module's perspective, the packages it can access in each module it reads. `None` means all packages.
+  private[this] val accessiblePackages = mutable.HashMap[String, Map[String, Option[immutable.Set[String]]]]()
+  private def computeAccessibility(from: String): Map[String, Option[immutable.Set[String]]] =
+    graph.accessibleModulePackages(from).asScala.iterator.map {
+      case (target, packages) =>
+        val packagesOrAll =
+          if (packages eq ResolvedModuleGraph.EXPORT_ALL) None
+          else Some(packages.asScala.toSet)
+        (target, packagesOrAll)
+    }.toMap
+
+  def isPackageAccessible(from: String, target: String, pkg: String): Boolean =
+    from == target || {
+      // Classes on the class path have the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
+      val target1 = if (target.isEmpty) ModuleGraphResolver.UNNAMED_MODULE_NAME else target
+      accessiblePackages.getOrElseUpdate(from, computeAccessibility(from)).get(target1) match {
+        case Some(None)      => true
+        case Some(Some(set)) => set(pkg)
+        case None            => false
+      }
+    }
 }

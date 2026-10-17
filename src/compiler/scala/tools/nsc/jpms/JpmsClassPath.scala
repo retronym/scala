@@ -12,8 +12,6 @@ import javax.tools._
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{immutable, mutable}
-import scala.reflect.io.{AbstractFile => ReflectAbstractFile}
-import scala.tools.nsc.jpms.ClassOutput.{OutputPathClassOutput, SupplierClassOutput}
 import scala.reflect.io.PlainNioFile
 import scala.tools.nsc.Settings
 import scala.tools.nsc.classpath.PackageNameUtils.separatePkgAndClassNames
@@ -23,7 +21,7 @@ import scala.tools.nsc.util.ClassPath
 
 final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]], private val impl: JpmsClasspathSupport) extends ClassPath with ModuleResolver {
   def resolve(sourceModule: Option[JpmsModuleDescriptor]): ModuleTable =
-    new JpmsModuleTable(impl.resolveModuleGraph(sourceModule.orNull))
+    new GraphModuleTable(impl.resolveModuleGraph(sourceModule.orNull))
 
   override def asURLs: Seq[URL] = Nil // TODO
   override def asClassPathStrings: Seq[String] = Nil // TODO
@@ -100,7 +98,7 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
     val seen = mutable.Set[String]()
     val result = immutable.ArraySeq.untagged.newBuilder[PackageEntry]
     for {
-      (path, standardLocation, location) <- paths
+      (path, _, location) <- paths
     } {
       // We use NIO path API to list classpath/modulepath elements, rather than FileManager.list which
       // only returns files, not sub-directories. The only way to find sub-directories with FileManager.list
@@ -135,13 +133,13 @@ final class JpmsClassPath(@annotation.unused patches: Map[String, List[String]],
     val inPackage = inPackage0.dottedString
     val result = immutable.ArraySeq.untagged.newBuilder[ClassFileEntry]
     // TODO: simplify indexing logic, but make sure to list each class only once (paths has duplicated entries if you only consider the input to fileManager.list below)
-    for ((standardLocation, location) <- paths.map { case (_, sl, l) => (sl, l)}.distinct) {
+    for (location <- paths.map(_._3).distinct) {
       val moduleName =
         if (!location.isModuleOrientedLocation) fileManager.inferModuleName(location)
         else ""
       for (jfo <- fileManager.list(location, inPackage, java.util.EnumSet.of(JavaFileObject.Kind.CLASS), false).asScala) {
         val path = fileManager.asPath(jfo)
-        result += JpmsClassFileEntryImpl(new PlainNioFile(path), moduleName, standardLocation)
+        result += JpmsClassFileEntry(new PlainNioFile(path), moduleName)
       }
     }
     result.result()
@@ -179,31 +177,12 @@ object JpmsClassPath {
     if (s.modulePath.isSetByUser) {
       add("--module-path", s.modulePath.value)
     }
-    var allPatches: Map[String, List[String]] = Map.empty
-    if (s.patchModule.isSetByUser) {
-      def parse(s: String) = s match {
-        case EqualsPattern(module, patch) => (module, patch)
-        case _ => throw new IllegalArgumentException(s"Unable to parse argument $s")
-      }
-
-      allPatches = s.patchModule.value.map(parse).groupBy(_._1).view.mapValues(_.map(_._2)).toMap
-      for ((module, patches) <- allPatches) {
-        add("--patch-module", s"$module=${patches.mkString(",")}")
-      }
-    }
+    val allPatches = JpmsSettings.patches(s)
+    for ((module, patches) <- allPatches)
+      add("--patch-module", s"$module=${patches.mkString(java.io.File.pathSeparator)}")
     add("--class-path", classPath)
     val releaseOptional = java.util.Optional.ofNullable(s.releaseValue.orNull)
-    val singleOutput = s.outputDirs.getSingleOutput.get
-    val classOutput = if (singleOutput.file != null)
-      new OutputPathClassOutput(singleOutput.file.toPath)
-    else {
-      val supplier = () => {
-        val file = singleOutput.lookupName("module-info.class", directory = false)
-        if (file == null) null
-        else file.toByteArray
-      }
-      new SupplierClassOutput(() => supplier())
-    }
+    val classOutput = JpmsSettings.classOutput(s)
     val impl = new JpmsClasspathSupport(releaseOptional, classOutput, javaOptions, s.addModules.value.asJava, s.addExports.value.asJava, s.addReads.value.asJava)
     // TODO JPMS refactor this classpath so that settings are re-read on subsequent runs. Maybe currentClasspath should just be recreated on each new Run?
     if (s.Ylogcp.value) {
@@ -212,41 +191,4 @@ object JpmsClassPath {
     new JpmsClassPath(allPatches, impl)
   }
 
-  private val EqualsPattern = """(.*)=(.*)""".r
-}
-
-private[nsc] case class JpmsClassFileEntryImpl(file: AbstractFile, override val jpmsModuleName: String, location: StandardLocation) extends ClassFileEntry {
-  override final def fileName: String = file.name
-  override lazy val name = FileUtils.stripClassExtension(file.name) // class name
-
-  override def binary: Option[AbstractFile] = Some(file)
-  override def source: Option[AbstractFile] = None
-}
-
-/** A module graph resolved by `JpmsClasspathSupport`. */
-private[jpms] final class JpmsModuleTable(graph: ResolvedModuleGraph) extends ModuleTable {
-  def moduleOfSource(file: ReflectAbstractFile): String =
-    graph.moduleForSourceFile(Option(file.file).map(_.toPath).orNull)
-
-  // From a given module's perspective, the packages it can access in each module it reads. `None` means all packages.
-  private[this] val accessiblePackages = mutable.HashMap[String, Map[String, Option[immutable.Set[String]]]]()
-  private def computeAccessibility(from: String): Map[String, Option[immutable.Set[String]]] =
-    graph.accessibleModulePackages(from).asScala.iterator.map {
-      case (target, packages) =>
-        val packagesOrAll =
-          if (packages eq ResolvedModuleGraph.AUTOMATIC_MODULE_EXPORT_ALL) None
-          else Some(packages.asScala.toSet)
-        (target, packagesOrAll)
-    }.toMap
-
-  def isPackageAccessible(from: String, target: String, pkg: String): Boolean =
-    from == target || {
-      // Classes on the class path have the empty module name, the graph calls the unnamed module UNNAMED_MODULE_NAME
-      val target1 = if (target.isEmpty) JpmsClasspathSupport.UNNAMED_MODULE_NAME else target
-      accessiblePackages.getOrElseUpdate(from, computeAccessibility(from)).get(target1) match {
-        case Some(None)      => true
-        case Some(Some(set)) => set(pkg)
-        case None            => false
-      }
-    }
 }

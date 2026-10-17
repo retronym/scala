@@ -1,6 +1,5 @@
 package scala.tools.nsc.jpms;
 
-import javax.tools.JavaFileObject;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.StandardLocation;
 import java.io.IOException;
@@ -16,7 +15,8 @@ public abstract class ClassOutput {
     public void configure(StandardJavaFileManager fileManager) {
     }
 
-    public abstract ModuleFinder moduleFinder(StandardJavaFileManager fileManager) throws IOException;
+    /** A finder for the `module-info.class` in the class output, or null if there is none. */
+    public abstract ModuleFinder moduleFinder() throws IOException;
 
     public static class OutputPathClassOutput extends ClassOutput {
         private Path path;
@@ -35,10 +35,8 @@ public abstract class ClassOutput {
         }
 
         @Override
-        public ModuleFinder moduleFinder(StandardJavaFileManager fileManager) throws IOException {
-            // Consider a module-info.class from the class output directory if there is not module-info.java among the compiled sources.
-            JavaFileObject module = fileManager.getJavaFileForInput(StandardLocation.CLASS_OUTPUT, "module-info", JavaFileObject.Kind.CLASS);
-            if (module != null) {
+        public ModuleFinder moduleFinder() throws IOException {
+            if (Files.isRegularFile(path.resolve("module-info.class"))) {
                 ModuleFinder classOutputModuleFinder = ModuleFinder.of(path);
                 Set<ModuleReference> classOutputModules = classOutputModuleFinder.findAll();
                 if (classOutputModules.size() != 1) {
@@ -57,7 +55,7 @@ public abstract class ClassOutput {
         }
 
         @Override
-        public ModuleFinder moduleFinder(StandardJavaFileManager fileManager) throws IOException {
+        public ModuleFinder moduleFinder() throws IOException {
             byte[] contents = supplier.get();
             if (contents == null) return null;
             // Annoyingly, I can't find a way to load a module-info.class file with `ModuleFinder.of`
