@@ -424,9 +424,7 @@ trait Trees extends api.Trees {
       override def transform(transformer: Transformer): Tree = this
       override def traverse(traverser: Traverser): Unit = ()
     }
-    case class RequiresDirective(moduleName: String, transitive: Boolean, isStatic: Boolean) extends Directive {
-      require(!(transitive && isStatic), "A requires directive cannot be both transitive and static")
-    }
+    case class RequiresDirective(moduleName: String, transitive: Boolean, isStatic: Boolean) extends Directive
     case class ExportsDirective(packageName: String, to: List[String]) extends Directive
     case class OpensDirective(packageName: String, to: List[String]) extends Directive
     case class UsesDirective(typeName: String) extends Directive

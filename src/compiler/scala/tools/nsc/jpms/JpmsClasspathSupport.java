@@ -56,7 +56,7 @@ public class JpmsClasspathSupport {
                 addModules, addExports, addReads, this::patchModuleOfSource);
     }
 
-    public ResolvedModuleGraph resolveModuleGraph(JpmsModuleDescriptor sourceModule) throws IOException {
+    public ResolvedModuleGraph resolveModuleGraph(java.lang.module.ModuleDescriptor sourceModule) throws IOException {
         return resolver.resolve(sourceModule);
     }
 

@@ -64,8 +64,8 @@ public final class ModuleGraphResolver {
         this.patchModuleOfSource = patchModuleOfSource;
     }
 
-    public ResolvedModuleGraph resolve(JpmsModuleDescriptor sourceModule) throws IOException {
-        ModuleDescriptor sourceModuleDescriptor = sourceModule == null ? null : sourceModule.create();
+    /** @param sourceModuleDescriptor the module declared by a module-info.java among the sources, or null */
+    public ResolvedModuleGraph resolve(ModuleDescriptor sourceModuleDescriptor) throws IOException {
         List<ModuleDescriptor> fromSource = new ArrayList<>();
         if (sourceModuleDescriptor != null) fromSource.add(sourceModuleDescriptor);
         fromSource.add(ModuleDescriptor.newModule(UNNAMED_MODULE_NAME).requires("java.base").build());
