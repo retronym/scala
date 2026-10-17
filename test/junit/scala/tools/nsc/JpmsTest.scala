@@ -502,6 +502,21 @@ abstract class JpmsTest(classPathImpl: String) {
       errorFor("new lib.L", moduleInfo = Some("module p1 { requires scala.library; }"), classPath = Some(libOut)))
   }
 
+  @Test def namedModuleMustReadScalaLibrary(): Unit = {
+    // A case class has Product as a parent, which nothing in the source refers to.
+    val code = fileFactory("p1/C.scala", "package p1; case class C(x: Int)")
+    assertSingleError(compile(code :: fileFactory("module-info.java", "module p1 { }") :: Nil, fileFactory.tempDir()),
+      "module p1 does not read the Scala library, which its Scala sources depend on\nAdd `requires scala.library;` to the declaration of module p1")
+    assertNoErrors(compile(code :: fileFactory("module-info.java", "module p1 { requires scala.library; }") :: Nil, fileFactory.tempDir()))
+    // With the library on the class path, a named module cannot read it.
+    val settings = new Settings(msg => throw new IllegalArgumentException(msg))
+    settings.processArguments(List("-Yjpms", s"-Yjpms-classpath:$classPathImpl", "-usejavacp", "-d", fileFactory.tempDir().toString), processAll = true)
+    val reporter = new StoreReporter(settings)
+    val global = new Global(settings, reporter)
+    new global.Run().compileSources(code :: fileFactory("module-info.java", "module p1 { }") :: Nil)
+    assertSingleError(reporter.infos.toList.map(_.msg), "The Scala library is on the class path, in the unnamed module")
+  }
+
   @Test def clientsOfNamedModule(): Unit = {
     val p1Out = fileFactory.tempDir()
     assertNoErrors(compile(fileFactory(usesIncubator) :: Nil, p1Out, extraArgs = List("--add-modules:jdk.incubator.vector")))

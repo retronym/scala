@@ -896,7 +896,8 @@ trait Contexts { self: Analyzer with ImportTracking =>
           case _                => ""
         }
       def classAccessible(cls: Symbol): Boolean = cls.enclosingTopLevelClass match {
-        case top: ClassSymbol if !top.hasPackageFlag =>
+        // `Any`, `Nothing` and the like have no class file, and belong to no module
+        case top: ClassSymbol if !top.hasPackageFlag && !definitions.syntheticCoreClasses.contains(top) =>
           val (target, pkg) = (top.associatedJpmsModuleName, top.enclosingPackageClass.fullNameString)
           table.isPackageAccessible(fromModule, target, pkg) || {
             lastAccessCheckDetails = "\n" + table.explainInaccessible(fromModule, target, pkg)

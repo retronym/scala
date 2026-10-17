@@ -1251,6 +1251,26 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
           _jpmsSourceModule = Some(JpmsSourceModule(md, imports, unit))
       }
 
+    /** Under `-Yjpms`, every named module with Scala sources in this run must read the Scala library.
+     *
+     *  Explicit references to the library would be reported one by one, but scalac also adds references of its
+     *  own (`Product` as a parent of case classes, `scala.runtime` helpers), which are not access checked and would
+     *  only fail at run time. scalac does not add the `requires` itself: the declaration in `module-info.class`
+     *  must be the one in `module-info.java`, as seen by javac and the JVM.
+     */
+    private[nsc] def checkJpmsModulesReadScalaLibrary(): Unit = if (settings.Yjpms.value) {
+      val table = jpmsModuleTable
+      val scalaModules = units.filterNot(_.isJava).map(u => table.moduleOfSource(u.source.file)).filter(_.nonEmpty).toSet
+      val library = definitions.PredefModule.moduleClass.asClass.associatedJpmsModuleName
+      for (module <- scalaModules.toList.sorted if !table.isPackageAccessible(module, library, "scala")) {
+        val pos = jpmsSourceModule.filter(_.moduleDef.name.toString == module).map(_.moduleDef.pos).getOrElse(NoPosition)
+        val fix =
+          if (library.isEmpty) "The Scala library is on the class path, in the unnamed module. Put it on the module path, where it is the automatic module scala.library, and add `requires scala.library;`."
+          else s"Add `requires $library;` to the declaration of module $module, or `requires transitive $library;` if the module's API exposes Scala types."
+        reporter.error(pos, s"module $module does not read the Scala library, which its Scala sources depend on\n$fix")
+      }
+    }
+
     /** The module graph for this run. Resolved on first use, which must come after the parser has seen any
      *  `module-info.java` among the sources.
      */
