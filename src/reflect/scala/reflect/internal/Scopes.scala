@@ -112,6 +112,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     private final val MIN_HASH = 8
 
+    /** the maximum scope size for which `foreach` avoids `toList` */
+    private final val MaxForeachDepth = 64
+
     /** Returns a new scope with the same content as this one. */
     def cloneScope: Scope = newScopeWith(this.toList: _*)
 
@@ -452,7 +455,27 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       *  So, be careful not to use this when you do need to mutate this Scope. */
     def reverseIterator: Iterator[Symbol] = new ScopeIterator(this)
 
-    override def foreach[U](p: Symbol => U): Unit = toList foreach p
+    /** Applies `p` to all symbols in the order they were entered in this scope.
+     *
+     *  Avoids materializing `toList` (and populating `elemsCache`) for small scopes by
+     *  recursing down the entry chain and applying `p` on the way back up. Symbols are
+     *  captured during the descent, so mutation of this scope by `p` is not observed,
+     *  as with `toList.foreach`. Larger scopes fall back to `toList`.
+     */
+    override def foreach[U](p: Symbol => U): Unit = {
+      val cache = elemsCache
+      if (cache ne null) cache.foreach(p)
+      else if (!foreachRecursive(elems, p, 0)) toList.foreach(p)
+    }
+
+    /** @return false, without having applied `p` to any symbol, if the chain is deeper than `MaxForeachDepth` */
+    private def foreachRecursive[U](e: ScopeEntry, p: Symbol => U, depth: Int): Boolean =
+      if ((e eq null) || e.owner != this) true
+      else if (depth == MaxForeachDepth) false
+      else {
+        val sym = e.sym
+        foreachRecursive(e.next, p, depth + 1) && { p(sym); true }
+      }
 
     override def filterNot(p: Symbol => Boolean): Scope = {
       val result = toList
