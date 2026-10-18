@@ -562,6 +562,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   def optWarningNoInlineMissingBytecode            = optWarnings.contains(optWarningsChoices.noInlineMissingBytecode)
   def optWarningNoInlineMissingScalaInlineInfoAttr = optWarnings.contains(optWarningsChoices.noInlineMissingScalaInlineInfoAttr)
 
+  val YownerClosures = BooleanSetting("-Yowner-closures", "Enter owners in tree transformers by atOwner closures rather than pushOwner / popOwner (for comparison).").internalOnly()
   val YeagerTypingTransformerContexts = BooleanSetting("-Yeager-typing-transformer-contexts", "Make the contexts of typing transformers eagerly, at each owner (for comparison).").internalOnly()
   val YprofileEnabled = BooleanSetting("-Yprofile-enabled", "Enable profiling.")
   val YprofileDestination = StringSetting("-Yprofile-destination", "file", "Profiling output - specify a file or `-` for console.", "").
