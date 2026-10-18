@@ -86,6 +86,9 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   private lazy val _glbResults = mkThreadLocalStorage(new mutable.HashMap[(Depth, List[Type]), Type])
   override def glbResults = _glbResults.get
 
+  private lazy val _elimSubResults = mkThreadLocalStorage(new mutable.HashMap[(Depth, List[Type]), List[Type]])
+  override private[reflect] def elimSubResults = _elimSubResults.get
+
   private lazy val _indent = mkThreadLocalStorage("")
   override def indent = _indent.get
   override def indent_=(value: String) = _indent.set(value)
