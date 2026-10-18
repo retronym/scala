@@ -51,6 +51,13 @@ class ScopeBenchmark {
   @Benchmark def buildToListForeach(bh: Blackhole): Unit =
     build().toList.foreach(bh.consume(_))
 
+  /** Build a scope and iterate it twice. */
+  @Benchmark def buildForeachTwice(bh: Blackhole): Unit = {
+    val scope = build()
+    scope.foreach(bh.consume(_))
+    scope.foreach(bh.consume(_))
+  }
+
   /** Just build the scope, to subtract from the above. */
   @Benchmark def buildOnly(bh: Blackhole): Unit =
     bh.consume(build())

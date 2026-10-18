@@ -67,7 +67,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   private[Scopes] class ScopeIterator(owner: Scope) extends AbstractIterator[Symbol] {
     private[this] var elem: ScopeEntry = owner.elems
 
-    def hasNext: Boolean = (elem ne null) && (elem.owner == this.owner)
+    def hasNext: Boolean = (elem ne null) && (elem.owner eq this.owner)
     def next(): Symbol =
       if (hasNext) {
         val res = elem
@@ -112,7 +112,8 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     private final val MIN_HASH = 8
 
-    /** the maximum scope size for which `foreach` avoids `toList` */
+    /** the maximum scope size for which `foreach` avoids `toList`. Each level costs
+     *  40 bytes of stack in C2-compiled code, 144 bytes interpreted. */
     private final val MaxForeachDepth = 64
 
     /** Returns a new scope with the same content as this one. */
@@ -426,7 +427,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         var symbols: List[Symbol] = Nil
         var count = 0
         var e = elems
-        while ((e ne null) && e.owner == this) {
+        while ((e ne null) && (e.owner eq this)) {
           count += 1
           symbols ::= e.sym
           e = e.next
@@ -457,20 +458,28 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** Applies `p` to all symbols in the order they were entered in this scope.
      *
-     *  Avoids materializing `toList` (and populating `elemsCache`) for small scopes by
+     *  Unless `elemsCache` is already populated, this avoids materializing `toList` by
      *  recursing down the entry chain and applying `p` on the way back up. Symbols are
      *  captured during the descent, so mutation of this scope by `p` is not observed,
-     *  as with `toList.foreach`. Larger scopes fall back to `toList`.
+     *  as with `toList.foreach`. Scopes known to be larger than `MaxForeachDepth`, or
+     *  found to be during the descent, fall back to `toList`.
+     *
+     *  This does not populate `elemsCache`. In a compilation of the standard library, that
+     *  reduced the symbols copied into `toList` lists by ~4%; populating the cache on a
+     *  repeated traversal saved less.
      */
     override def foreach[U](p: Symbol => U): Unit = {
       val cache = elemsCache
       if (cache ne null) cache.foreach(p)
-      else if (!foreachRecursive(elems, p, 0)) toList.foreach(p)
+      else if (cachedSize > MaxForeachDepth || !foreachRecursive(elems, p, 0)) toList.foreach(p)
     }
 
     /** @return false, without having applied `p` to any symbol, if the chain is deeper than `MaxForeachDepth` */
     private def foreachRecursive[U](e: ScopeEntry, p: Symbol => U, depth: Int): Boolean =
-      if ((e eq null) || e.owner != this) true
+      if ((e eq null) || (e.owner ne this)) {
+        cachedSize = depth
+        true
+      }
       else if (depth == MaxForeachDepth) false
       else {
         val sym = e.sym
