@@ -340,8 +340,16 @@ trait Trees extends api.Trees {
     override def transform(transformer: Transformer): Tree =
       transformer.treeCopy.PackageDef(
         this, transformer.transform(pid).asInstanceOf[RefTree],
-        transformer.atOwner(mclass(this.symbol)) {
-          transformer.transformStats(stats, transformer.currentOwner)
+        transformer match {
+          case t: InternalTransformer if t.pushPopOwners =>
+            val prev = t.pushOwner(mclass(this.symbol))
+            val stats1 = t.transformStats(stats, t.currentOwner)
+            t.popOwner(prev)
+            stats1
+          case _ =>
+            transformer.atOwner(mclass(this.symbol)) {
+              transformer.transformStats(stats, transformer.currentOwner)
+            }
         }
       )
     override def traverse(traverser: Traverser): Unit = {
@@ -357,11 +365,17 @@ trait Trees extends api.Trees {
 
   case class ClassDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], impl: Template)
        extends ImplDef with ClassDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
-          transformer.transformTypeDefs(tparams), transformer.transformTemplate(impl))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(this.symbol)
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(this.symbol)(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.ClassDef(this, transformer.transformModifiers(mods), name,
+        transformer.transformTypeDefs(tparams), transformer.transformTemplate(impl))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -392,11 +406,17 @@ trait Trees extends api.Trees {
 
   case class ModuleDef(mods: Modifiers, name: TermName, impl: Template)
         extends ImplDef with ModuleDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(mclass(this.symbol)) {
-        transformer.treeCopy.ModuleDef(this, transformer.transformModifiers(mods),
-          name, transformer.transformTemplate(impl))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(mclass(this.symbol))
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(mclass(this.symbol))(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.ModuleDef(this, transformer.transformModifiers(mods),
+        name, transformer.transformTemplate(impl))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(mclass(symbol)) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -429,11 +449,17 @@ trait Trees extends api.Trees {
   }
 
   case class ValDef(mods: Modifiers, name: TermName, tpt: Tree, rhs: Tree) extends ValOrDefDef with ValDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
-          name, transformer.transform(tpt), transformer.transform(rhs))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(this.symbol)
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(this.symbol)(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.ValDef(this, transformer.transformModifiers(mods),
+        name, transformer.transform(tpt), transformer.transform(rhs))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -448,12 +474,18 @@ trait Trees extends api.Trees {
 
   case class DefDef(mods: Modifiers, name: TermName, tparams: List[TypeDef],
                     vparamss: List[List[ValDef]], tpt: Tree, rhs: Tree) extends ValOrDefDef with DefDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
-          transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
-          transformer.transform(tpt), transformer.transform(rhs))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(this.symbol)
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(this.symbol)(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.DefDef(this, transformer.transformModifiers(mods), name,
+        transformer.transformTypeDefs(tparams), transformer.transformValDefss(vparamss),
+        transformer.transform(tpt), transformer.transform(rhs))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -474,11 +506,17 @@ trait Trees extends api.Trees {
 
   case class TypeDef(mods: Modifiers, name: TypeName, tparams: List[TypeDef], rhs: Tree)
        extends MemberDef with TypeDefApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.TypeDef(this, transformer.transformModifiers(mods), name,
-          transformer.transformTypeDefs(tparams), transformer.transform(rhs))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(this.symbol)
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(this.symbol)(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.TypeDef(this, transformer.transformModifiers(mods), name,
+        transformer.transformTypeDefs(tparams), transformer.transform(rhs))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(symbol) {
       traverser.traverseModifiers(mods)
       traverser.traverseName(name)
@@ -668,10 +706,16 @@ trait Trees extends api.Trees {
 
   case class Function(vparams: List[ValDef], body: Tree)
        extends SymTree with TermTree with FunctionApi {
-    override def transform(transformer: Transformer): Tree =
-      transformer.atOwner(this.symbol) {
-        transformer.treeCopy.Function(this, transformer.transformValDefs(vparams), transformer.transform(body))
-      }
+    override def transform(transformer: Transformer): Tree = transformer match {
+      case t: InternalTransformer if t.pushPopOwners =>
+        val prev = t.pushOwner(this.symbol)
+        val result = transformChildren(t)
+        t.popOwner(prev)
+        result
+      case _ => transformer.atOwner(this.symbol)(transformChildren(transformer))
+    }
+    private def transformChildren(transformer: Transformer): Tree =
+      transformer.treeCopy.Function(this, transformer.transformValDefs(vparams), transformer.transform(body))
     override def traverse(traverser: Traverser): Unit = traverser.atOwner(this.symbol) {
       traverser.traverseParams(vparams) ; traverser.traverse(body)
     }
@@ -1510,8 +1554,55 @@ trait Trees extends api.Trees {
 
   @deprecated("use `noSelfType` instead", "2.11.0") lazy val emptyValDef = noSelfType
 
+  /** Do trees enter owners by `atOwner` closures in every transformer, as before `pushOwner` existed? For comparing
+   *  the two (`-Yowner-closures`). */
+  protected[scala] def ownerClosures: Boolean = false
+
   class InternalTransformer extends Transformer {
     override def transform(tree: Tree): Tree = tree.transform(this)
+
+    /** Transforms a tree with a given owner symbol: `pushOwner`, `trans`, `popOwner`.
+     *
+     *  Trees that enter an owner call `pushOwner` and `popOwner` themselves rather than pass their children to this
+     *  method as a closure, which costs nothing only if the JIT inlines every override of this method into the tree's
+     *  `transform` and then eliminates the closure. For a transformer that overrides this method they call it instead
+     *  (`pushPopOwners`), so that the override sees every owner, as before.
+     */
+    override def atOwner[A](owner: Symbol)(trans: => A): A = {
+      val prev = pushOwner(owner)
+      val result = trans
+      popOwner(prev)
+      result
+    }
+
+    /** Enters `owner`; the previous owner, to pass to `popOwner` on leaving it. Overrides call `super.pushOwner`. */
+    def pushOwner(owner: Symbol): Symbol = {
+      val prev = currentOwner
+      currentOwner = owner
+      prev
+    }
+
+    /** Leaves the owner entered by the `pushOwner` that returned `prev`. Overrides call `super.popOwner`. */
+    def popOwner(prev: Symbol): Unit =
+      currentOwner = prev
+
+    /** Do trees enter owners with `pushOwner` / `popOwner` rather than by `atOwner`? Yes, unless this transformer
+     *  overrides `atOwner` in a class that does not also override `pushOwner` (so the two may not be in step): then
+     *  trees call that override, as they did before `pushOwner` existed.
+     */
+    final val pushPopOwners: Boolean = !ownerClosures && TransformerOwners.pushPop(getClass)
+
+    override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
+      stats mapConserve (stat =>
+        if (exprOwner != currentOwner && stat.isTerm) {
+          if (pushPopOwners) {
+            val prev = pushOwner(exprOwner)
+            val result = transform(stat)
+            popOwner(prev)
+            result
+          } else atOwner(exprOwner)(transform(stat))
+        }
+        else transform(stat)) filter (EmptyTree != _)
   }
   class InternalTraverser extends Traverser {
     override def traverse(tree: Tree): Unit = tree.traverse(this)
@@ -2168,4 +2259,21 @@ trait TreesStats {
   val treeNodeCount = newView("#created tree nodes")(symbolTable.nodeCount)
   val retainedCount  = newCounter("#retained tree nodes")
   val retainedByType = newByClass("#retained tree nodes by type")(newCounter(""))
+}
+
+/** Which transformer classes may have trees enter owners by `pushOwner` / `popOwner` (`InternalTransformer.pushPopOwners`).
+ *  Once per class, not per `SymbolTable`: a compile server or a benchmark makes a `Global` per run. */
+private[internal] object TransformerOwners {
+  private[this] val cache = new ClassValue[java.lang.Boolean] {
+    // The nearest class that declares `atOwner` must also declare `pushOwner`: either it overrides neither, or it
+    // keeps the two in step, as `InternalTransformer` and `TypingTransformer` do.
+    protected def computeValue(c: Class[_]): java.lang.Boolean = {
+      var k: Class[_] = c
+      while (k != null && !declares(k, "atOwner")) k = k.getSuperclass
+      java.lang.Boolean.valueOf(k == null || declares(k, "pushOwner"))
+    }
+  }
+  private def declares(c: Class[_], name: String): Boolean = c.getDeclaredMethods.exists(_.getName == name)
+
+  def pushPop(c: Class[_]): Boolean = cache.get(c).booleanValue
 }

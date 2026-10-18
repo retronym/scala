@@ -72,7 +72,18 @@ trait TypingTransformers {
 
     override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
 
+    /** Transforms with `owner` entered for `tree`: `pushOwner(tree, owner)`, `trans`, `popOwner`. */
     def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+      val prev = pushOwner(tree, owner)
+      val result = trans
+      popOwner(prev)
+      result
+    }
+
+    override final def pushOwner(owner: Symbol): Symbol = pushOwner(curTree, owner)
+
+    /** Enters `owner` for `tree`: pushes a frame, whose context is made when `localTyper` is next read. */
+    def pushOwner(tree: Tree, owner: Symbol): Symbol = {
       val i = frames
       if (i == frameTrees.length) {
         frameTrees = java.util.Arrays.copyOf(frameTrees, i * 2)
@@ -83,9 +94,13 @@ trait TypingTransformers {
       frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
       frames = i + 1
       if (eager) materialize()
-      // Not in a finally, as the eager code was not: an exception handler here keeps the JIT from scalar-replacing some
-      // of the closures passed as `trans`.
-      val result = super.atOwner(owner)(trans)
+      super.pushOwner(owner)
+    }
+
+    /** Leaves the innermost frame, restoring the context it was made from if it was made. */
+    override def popOwner(prev: Symbol): Unit = {
+      super.popOwner(prev)
+      val i = frames - 1
       if (materialized > i) {
         _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
         parentContexts(i) = null
@@ -94,7 +109,6 @@ trait TypingTransformers {
       frameTrees(i) = null
       frameOwners(i) = null
       frames = i
-      result
     }
 
     override def transform(tree: Tree): Tree = {
@@ -102,14 +116,30 @@ trait TypingTransformers {
       tree match {
         case Template(_, _, _) =>
           // enter template into context chain
-          atOwner(currentOwner) { tree.transform(this) }
+          transformChildrenAtOwner(currentOwner, tree)
         case PackageDef(_, _) =>
-          atOwner(tree.symbol) { tree.transform(this) }
+          transformChildrenAtOwner(tree.symbol, tree)
         case _ =>
           tree.transform(this)
       }
     }
-    def transformAtOwner(owner: Symbol, tree: Tree): Tree = atOwner(tree, owner) { transform(tree) }
+
+    /** `tree.transform(this)` with `owner` entered for `tree`; by `atOwner` for a subclass that overrides it. */
+    private def transformChildrenAtOwner(owner: Symbol, tree: Tree): Tree =
+      if (pushPopOwners) {
+        val prev = pushOwner(tree, owner)
+        val result = tree.transform(this)
+        popOwner(prev)
+        result
+      } else atOwner(tree, owner)(tree.transform(this))
+
+    def transformAtOwner(owner: Symbol, tree: Tree): Tree =
+      if (pushPopOwners) {
+        val prev = pushOwner(tree, owner)
+        val result = transform(tree)
+        popOwner(prev)
+        result
+      } else atOwner(tree, owner)(transform(tree))
   }
 
   private object ThicketAttachment
