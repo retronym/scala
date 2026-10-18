@@ -45,4 +45,18 @@ class ScopeTest {
     assertFalse(nested.containsName(bar.name))
     assertTrue(outer.containsName(bar.name))
   }
+
+  @Test
+  def testForeach(): Unit = {
+    def sym(termName: String): Symbol = NoSymbol.newValue(TermName(termName))
+    for (size <- List(0, 1, 63, 64, 65, 200)) {
+      val syms = List.tabulate(size)(i => sym(i.toString))
+      val scope = newScopeWith(syms: _*)
+      val buf = List.newBuilder[Symbol]
+      // mutation during iteration is not observed
+      scope.foreach { s => buf += s; scope.enter(sym("x")); scope.unlink(s) }
+      assertEquals(syms, buf.result())
+      assertEquals(size, scope.toList.count(_.name.toString == "x"))
+    }
+  }
 }
