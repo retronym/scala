@@ -49,17 +49,26 @@ The toy is small enough that C2 inlines everything, and every closure is scalar-
 
 In the toy the time per pass is the same for all variants within noise: allocating 20,000 small objects is cheap next to the traversal. In the compiler the cost is in the garbage across a whole compile, as the allocation figures above show.
 
-## Proposal: `pushOwner` / `popOwner`
+## `pushOwner` / `popOwner`
 
-`scala.reflect.api.Trees#Transformer` gains `pushOwner(owner)` and `popOwner()`, and its `atOwner` becomes `pushOwner`, the block, `popOwner`. The trees that enter owners (`PackageDef`, `ClassDef`, `ModuleDef`, `ValDef`, `DefDef`, `TypeDef`, `Function`) call `pushOwner` and `popOwner` around their children instead of passing a closure to `atOwner`, as does `TypingTransformer.transform` for a `Template`. `TypingTransformer` overrides the pair to push and pop its frames.
+`InternalTransformer`, the base of every transformer in the compiler, gains `pushOwner(owner)`, which enters `owner` and returns the previous owner, and `popOwner(prev)`, which leaves it; its `atOwner` becomes `pushOwner`, the block, `popOwner`. The trees that enter owners (`PackageDef`, `ClassDef`, `ModuleDef`, `ValDef`, `DefDef`, `TypeDef`, `Function`) call the pair around their children instead of passing a closure to `atOwner`, as do `transformStats` for an expression owner and `TypingTransformer.transform` for a `Template`. `TypingTransformer` overrides the pair to push and pop its frames. The protocol is in `scala.reflect.internal` rather than on `scala.reflect.api.Trees#Transformer`, which would need new public API in scala-reflect and so fail MiMa's forward check; trees test for an `InternalTransformer` and use `atOwner` for any other transformer.
 
-Transformers that override `atOwner` must still see every owner through their override: `SuperAccessors` tracks `validCurrentOwner` and a map of typers per owner there, and compiler plugins may do the like. So trees use push / pop only for transformers whose nearest declaration of `atOwner` is in a class that keeps `atOwner` and the pair in step (the base `Transformer`, `TypingTransformer`); for others they call `atOwner` with a closure, as now. The check is reflective, once per transformer class (a `ClassValue`), and stored in a final field read by the trees. The toy's `legacy` variant, an `atOwner` override in the style of `SuperAccessors`, keeps working this way, at the cost of its closure; `SuperAccessors` itself can move its bookkeeping to `pushOwner` / `popOwner`.
+Transformers that override `atOwner` must still see every owner through their override: `SuperAccessors` tracks `validCurrentOwner` and a map of typers per owner there, and compiler plugins may do the like. So trees use push / pop only for transformers whose nearest declaration of `atOwner` is in a class that also declares `pushOwner`, keeping the two in step (`InternalTransformer`, `TypingTransformer`); for others they call `atOwner` with a closure, as before. The check is reflective, once per transformer class (a `ClassValue`), and kept in a final field that the trees read. The toy's `legacy` variant, an `atOwner` override in the style of `SuperAccessors`, works this way, at the cost of its closure; `SuperAccessors` itself could move its bookkeeping to the pair.
 
-As with the eager code, an exception thrown while transforming leaves the owner state as it was at the throw. A finally around each push / pop pair would be free of the closure problem, but there was none before and the phases do not recover from such exceptions.
+As with the eager code, an exception thrown while transforming leaves the owner state as it was at the throw. A finally around each pair would no longer cost a closure, but there was none before and the phases do not recover from such exceptions.
+
+With the protocol, `TypingTransformerBenchmark` on re2s, optimized quick:
+
+| | time per pass | allocation per pass, nothing typed | allocation per pass, a literal typed every 16 methods |
+|---|---|---|---|
+| eager | 0.216 ms | 209 KB | 211 KB |
+| lazy | 0.177 ms | 2 B | 8.6 KB |
+
+The no-op pass with lazy contexts allocates nothing, and the eager figure is now the contexts alone.
 
 ## Future work
 
-- Prototype the protocol in scala-reflect and the compiler, and measure it with `TypingTransformerBenchmark` and whole compiles, on an optimized quick. Check binary compatibility: `Transformer` is public API of scala-reflect.
-- Repeat the whole-compile comparison of eager and lazy contexts on an optimized quick.
+- Repeat the whole-compile comparison of eager and lazy contexts on an optimized quick, with the protocol.
 - Move `SuperAccessors`' `atOwner` override to `pushOwner` / `popOwner`.
 - `Traverser.atOwner` has the same shape and the same exposure.
+- Where scala-reflect may add API, the protocol could move to the public `Transformer`, for macros and other users of the API.

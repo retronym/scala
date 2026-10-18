@@ -58,6 +58,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // the mirror --------------------------------------------------
 
   override def isCompilerUniverse = true
+  override protected[scala] def ownerClosures: Boolean = settings.YownerClosures.value
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
