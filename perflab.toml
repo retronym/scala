@@ -22,6 +22,8 @@ flags = "^-D|^-XX"
 jar = "~/.m2/repository/io/github/retronym/perflab/perflab-agent/0.1.0-SNAPSHOT/perflab-agent-0.1.0-SNAPSHOT.jar"
 
 [async]
-# $ASYNC_PROFILER_LIB, else the usual install locations; retronym/async-profiler's integration branch
-# (`mise run tools:async-profiler` in jvm-perf-lab) adds kperf events and jfrconv --spans
+# retronym/async-profiler's integration branch, built by `mise run tools:async-profiler` in jvm-perf-lab: kperf events,
+# jfrconv --spans and its flame graph UI. Without these, $ASYNC_PROFILER_LIB, else the usual install locations.
+lib = "~/code/retronym/jvm-perf-lab/tools/build/async-profiler/build/lib/libasyncProfiler.dylib"
+jfrconv = "~/code/retronym/jvm-perf-lab/tools/build/async-profiler/build/bin/jfrconv"
 graphs = ["bench", "reverse", "classify"]

@@ -1,0 +1,21 @@
+{
+  "name": "owner-protocol-profile-opt",
+  "benchmark": "CompileBenchmark",
+  "profile": "async:cpu,alloc",
+  "rounds": 1,
+  "corpora": {
+    "re2s": "-jvm /Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java -wi 16 -i 16 -w 3 -r 3"
+  },
+  "variants": {
+    "base": "",
+    "lazypp": ""
+  },
+  "variantJmhArgs": {
+    "base": "-p 'scalacOptions=-Yeager-typing-transformer-contexts -Yowner-closures'"
+  },
+  "gcLog": true,
+  "loadgate": {
+    "maxCores": 1.5,
+    "quietSecs": 30
+  }
+}
