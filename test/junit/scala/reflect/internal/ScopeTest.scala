@@ -59,4 +59,36 @@ class ScopeTest {
       assertEquals(size, scope.toList.count(_.name.toString == "x"))
     }
   }
+
+  @Test
+  def testForeachCached(): Unit = {
+    def sym(termName: String): Symbol = NoSymbol.newValue(TermName(termName))
+    for (size <- List(0, 1, 64, 65, 200)) {
+      val syms = List.tabulate(size)(i => sym(i.toString))
+      val scope = newScopeWith(syms: _*)
+      val cached = scope.toList
+      val buf = List.newBuilder[Symbol]
+      scope.foreach { s => buf += s; scope.enter(sym("x")) }
+      assertEquals(syms, buf.result())
+      if (size > 0) assertNotSame(cached, scope.toList)
+    }
+  }
+
+  @Test
+  def testForeachNested(): Unit = {
+    def sym(termName: String): Symbol = NoSymbol.newValue(TermName(termName))
+    for (outerSize <- List(0, 1, 64, 65); innerSize <- List(0, 1, 64, 65)) {
+      val outerSyms = List.tabulate(outerSize)(i => sym("o" + i))
+      val innerSyms = List.tabulate(innerSize)(i => sym("i" + i))
+      val outer = newScopeWith(outerSyms: _*)
+      val nested = newNestedScope(outer)
+      innerSyms.foreach(nested.enter(_))
+      val buf = List.newBuilder[Symbol]
+      nested.foreach(buf += _)
+      assertEquals(nested.toList, buf.result())
+      val outerBuf = List.newBuilder[Symbol]
+      outer.foreach(outerBuf += _)
+      assertEquals(outerSyms, outerBuf.result())
+    }
+  }
 }
