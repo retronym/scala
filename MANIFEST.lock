@@ -1,0 +1,19 @@
+# integration/perf, built 2026-10-18T07:25:02Z by build-integration from manifest.toml
+
+base	upstream/2.13.x	e690fca106af993d6091cc21827d29d674c2c54a
+
+scala#11295	refs/pull/11295/head	46ec35485d2fbee08ead7c0c437b65c933f4a2fc	clean
+scala#11306	refs/pull/11306/head	70c7077a38e3cd6384badb88119a6ff42d58ef4c	clean
+scala#11307	refs/pull/11307/head	39b1d4f0f89efe9aac340185616e02265e2cd89e	clean
+rz-scala#148	refs/pull/148/head	be26fa182c50d6c67587985bf1a4408fdbc218ab	clean
+rz-scala#155	refs/pull/155/head	7965ba6cda270ccc3c9c172e35ee547b75a4d8ec	clean
+rz-scala#156	refs/pull/156/head	338e10142b076e2f4d5fdb24f341a5b9cf4fa8e4	clean
+rz-scala#157	refs/pull/157/head	e6093cc26a8bd5f537dd5d9fcb5cf18cd4c9a61c	clean
+rz-scala#158	refs/pull/158/head	f2bf05e8de9d67973345899a3af099042cb48317	clean
+rz-scala#159	refs/pull/159/head	9954508a3a9b2a7b75c0cc16bdd0f495148282b3	clean
+rz-scala#160	refs/pull/160/head	819f089fcfffff58afe5e5dd750e8d377f0569e6	clean
+
+# excluded
+rz-scala#150	alternative to scala#11306 (conflicts in Erasure.scala)
+rz-scala#151	cake diet: large structural change, not yet a candidate
+scala#11291	determinism, not performance
