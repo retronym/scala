@@ -83,17 +83,18 @@ trait TypingTransformers {
       frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
       frames = i + 1
       if (eager) materialize()
-      try super.atOwner(owner)(trans)
-      finally {
-        if (materialized > i) {
-          _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
-          parentContexts(i) = null
-          materialized = i
-        }
-        frameTrees(i) = null
-        frameOwners(i) = null
-        frames = i
+      // Not in a finally, as the eager code was not: an exception handler here keeps the JIT from scalar-replacing some
+      // of the closures passed as `trans`.
+      val result = super.atOwner(owner)(trans)
+      if (materialized > i) {
+        _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
+        parentContexts(i) = null
+        materialized = i
       }
+      frameTrees(i) = null
+      frameOwners(i) = null
+      frames = i
+      result
     }
 
     override def transform(tree: Tree): Tree = {
