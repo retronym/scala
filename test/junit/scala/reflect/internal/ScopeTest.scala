@@ -91,4 +91,25 @@ class ScopeTest {
       assertEquals(outerSyms, outerBuf.result())
     }
   }
+
+  @Test
+  def testForeachRepeated(): Unit = {
+    def sym(termName: String): Symbol = NoSymbol.newValue(TermName(termName))
+    def collect(scope: Scope): List[Symbol] = { val buf = List.newBuilder[Symbol]; scope.foreach(buf += _); buf.result() }
+    for (size <- List(0, 1, 64, 65, 200)) {
+      val syms = List.tabulate(size)(i => sym(i.toString))
+      val scope = newScopeWith(syms: _*)
+      assertEquals(syms, collect(scope))
+      assertEquals(syms, collect(scope))
+      scope.toList
+      assertEquals(syms, collect(scope)) // uses elemsCache
+      val extra = sym("extra")
+      scope.enter(extra)
+      assertEquals(size + 1, scope.size)
+      assertEquals(syms :+ extra, collect(scope)) // size known
+      scope.unlink(extra)
+      assertEquals(syms, collect(scope))
+      assertEquals(syms, scope.toList)
+    }
+  }
 }
