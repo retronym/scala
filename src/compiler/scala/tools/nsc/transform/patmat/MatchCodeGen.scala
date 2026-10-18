@@ -116,7 +116,9 @@ trait MatchCodeGen extends Interface {
           val nextCase = newCaseSym
           _currCase = nextCase
 
-          LabelDef(currCase, Nil, mkCase(new OptimizedCasegen(matchEnd, nextCase)))
+          val caseBody = mkCase(new OptimizedCasegen(matchEnd, nextCase))
+          // The backend emits a line number for the label, which should be the line of the case, not of the selector.
+          LabelDef(currCase, Nil, caseBody).setPos(caseBody.pos.focus)
         }
         // must compute catchAll after caseLabels (side-effects nextCase)
         // catchAll.isEmpty iff no synthetic default case needed (the (last) user-defined case is a default)

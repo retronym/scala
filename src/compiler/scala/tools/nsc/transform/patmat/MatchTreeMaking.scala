@@ -599,7 +599,8 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
     case class GuardTreeMaker(guardTree: Tree) extends TreeMaker with NoNewBinders {
       val pos = guardTree.pos
 
-      def chainBefore(next: Tree)(casegen: Casegen): Tree = casegen.flatMapGuard(substitution(guardTree), next)
+      def chainBefore(next: Tree)(casegen: Casegen): Tree =
+        atPos(pos)(casegen.flatMapGuard(substitution(guardTree), next))
       override def toString = "G("+ guardTree +")"
     }
 
@@ -730,14 +731,18 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
       }
 
     // TODO: do this during tree construction, but that will require tracking the current owner in treemakers
-    // TODO: assign more fine-grained positions
     // fixes symbol nesting, assigns positions
+    //
+    // A tree without a position gets the (focused) position of its nearest positioned ancestor, or `pos` if
+    // there is none. Code generated for a case (e.g. reads of the scrutinee binder) thereby stays on the line
+    // of that case, rather than jumping back to the selector when stepping through the match in a debugger.
     protected def fixerUpper(origOwner: Symbol, pos: Position) = new InternalTraverser {
       currentOwner = origOwner
+      private[this] var enclosingPos = pos
 
       override def traverse(t: Tree): Unit = {
         if (t != EmptyTree && t.pos == NoPosition) {
-          t.setPos(pos)
+          t.setPos(enclosingPos)
         }
         t match {
           case Function(_, _) if t.symbol == NoSymbol =>
@@ -755,7 +760,10 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
           //   debug.patmat("untouched "+ ((t, t.getClass, t.symbol.ownerChain, currentOwner.ownerChain)))
           case _ =>
         }
+        val saved = enclosingPos
+        if (t.pos ne enclosingPos) enclosingPos = t.pos.focus
         t.traverse(this)
+        enclosingPos = saved
       }
 
       // override def apply
