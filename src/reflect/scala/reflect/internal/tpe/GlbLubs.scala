@@ -241,13 +241,37 @@ private[internal] trait GlbLubs {
     else maxTypes(ts)((t1, t2) => t2 <:< t1)
 
   /** Eliminate from list of types all elements which are a subtype
-   *  of some other element of the list. */
-  @tailrec private def elimSub(ts: List[Type], depth: Depth): List[Type] =
+   *  of some other element of the list.
+   *
+   *  Many-way lubs repeat the same elimination many times: `mergePrefixAndArgs` lubs the same
+   *  type arguments for every frontier of `lubList`, and nested lubs revisit the same frontiers.
+   *  The results are cached until the end of the enclosing top-level `lub` or `glb`, except for
+   *  lists with wildcards or non-ground type variables, whose subtype checks have side effects.
+   */
+  private def elimSub(ts: List[Type], depth: Depth): List[Type] =
+    if (ts.lengthCompare(1) <= 0) ts
+    else {
+      val head = ts.head
+      if (ts.tail.forall(_ eq head)) head :: Nil
+      else {
+        val key = (depth, ts)
+        elimSubResults.get(key) match {
+          case Some(res) => res
+          case None =>
+            val res = elimSub0(ts, depth)
+            if (!ts.exists(isWildCardOrNonGroundTypeVarCollector.collect(_).isDefined))
+              elimSubResults(key) = res
+            res
+        }
+      }
+    }
+
+  @tailrec private def elimSub0(ts: List[Type], depth: Depth): List[Type] =
     if (ts.lengthCompare(1) <= 0) ts else {
       val ts1 = maxTypes(ts)(isSubType(_, _, depth.decr))
       if (ts1.lengthCompare(1) <= 0) ts1 else {
         val ts2 = ts1.mapConserve(t => elimAnonymousClass(t.dealiasWiden))
-        if (ts1 eq ts2) ts1 else elimSub(ts2, depth)
+        if (ts1 eq ts2) ts1 else elimSub0(ts2, depth)
       }
     }
 
@@ -295,6 +319,9 @@ private[internal] trait GlbLubs {
   private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
   def glbResults = _glbResults
 
+  private[this] val _elimSubResults = new mutable.HashMap[(Depth, List[Type]), List[Type]]
+  private[reflect] def elimSubResults = _elimSubResults
+
   def lub(ts: List[Type]): Type = ts match {
     case Nil      => NothingTpe
     case t :: Nil => t
@@ -318,6 +345,7 @@ private[internal] trait GlbLubs {
       finally {
         lubResults.clear()
         glbResults.clear()
+        elimSubResults.clear()
         if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       }
   }
@@ -522,6 +550,7 @@ private[internal] trait GlbLubs {
       } finally {
         lubResults.clear()
         glbResults.clear()
+        elimSubResults.clear()
         if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       }
   }
