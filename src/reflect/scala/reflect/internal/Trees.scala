@@ -1590,7 +1590,7 @@ trait Trees extends api.Trees {
      *  overrides `atOwner` in a class that does not also override `pushOwner` (so the two may not be in step): then
      *  trees call that override, as they did before `pushOwner` existed.
      */
-    final val pushPopOwners: Boolean = !ownerClosures && InternalTransformer.pushPop(getClass)
+    final val pushPopOwners: Boolean = !ownerClosures && TransformerOwners.pushPop(getClass)
 
     override def transformStats(stats: List[Tree], exprOwner: Symbol): List[Tree] =
       stats mapConserve (stat =>
@@ -1604,21 +1604,6 @@ trait Trees extends api.Trees {
         }
         else transform(stat)) filter (EmptyTree != _)
   }
-  object InternalTransformer {
-    private[this] val cache = new ClassValue[java.lang.Boolean] {
-      // The nearest class that declares `atOwner` must also declare `pushOwner`: either it overrides neither, or it
-      // keeps the two in step, as `InternalTransformer` and `TypingTransformer` do.
-      protected def computeValue(c: Class[_]): java.lang.Boolean = {
-        var k: Class[_] = c
-        while (k != null && !declares(k, "atOwner")) k = k.getSuperclass
-        java.lang.Boolean.valueOf(k == null || declares(k, "pushOwner"))
-      }
-    }
-    private def declares(c: Class[_], name: String): Boolean = c.getDeclaredMethods.exists(_.getName == name)
-
-    def pushPop(c: Class[_]): Boolean = cache.get(c).booleanValue
-  }
-
   class InternalTraverser extends Traverser {
     override def traverse(tree: Tree): Unit = tree.traverse(this)
     override def apply[T <: Tree](tree: T): tree.type = super.apply(tree)
@@ -2274,4 +2259,21 @@ trait TreesStats {
   val treeNodeCount = newView("#created tree nodes")(symbolTable.nodeCount)
   val retainedCount  = newCounter("#retained tree nodes")
   val retainedByType = newByClass("#retained tree nodes by type")(newCounter(""))
+}
+
+/** Which transformer classes may have trees enter owners by `pushOwner` / `popOwner` (`InternalTransformer.pushPopOwners`).
+ *  Once per class, not per `SymbolTable`: a compile server or a benchmark makes a `Global` per run. */
+private[internal] object TransformerOwners {
+  private[this] val cache = new ClassValue[java.lang.Boolean] {
+    // The nearest class that declares `atOwner` must also declare `pushOwner`: either it overrides neither, or it
+    // keeps the two in step, as `InternalTransformer` and `TypingTransformer` do.
+    protected def computeValue(c: Class[_]): java.lang.Boolean = {
+      var k: Class[_] = c
+      while (k != null && !declares(k, "atOwner")) k = k.getSuperclass
+      java.lang.Boolean.valueOf(k == null || declares(k, "pushOwner"))
+    }
+  }
+  private def declares(c: Class[_], name: String): Boolean = c.getDeclaredMethods.exists(_.getName == name)
+
+  def pushPop(c: Class[_]): Boolean = cache.get(c).booleanValue
 }
