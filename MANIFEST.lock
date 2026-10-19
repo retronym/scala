@@ -1,0 +1,8 @@
+# integration/2.13.x-determinism, built 2026-10-19T04:13:53Z by build-integration from manifest.toml
+
+base	upstream/2.13.x	e690fca106af993d6091cc21827d29d674c2c54a
+
+scala#11290	refs/pull/11290/head	ba292b840f21481912fcc89468b40996bf0ce090	clean
+scala#11291	refs/pull/11291/head	97e877e63712cab195236e74f705df6f52ae944a	rerere
+scala#11319	refs/pull/11319/head	21ec56202fd77ec85271203c8eb007b4c6739fc7	clean
+rz-scala#165	refs/pull/165/head	bc5d02008782b88aea33002159bb679815a257f2	rerere
