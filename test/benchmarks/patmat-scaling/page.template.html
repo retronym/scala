@@ -1,0 +1,441 @@
+<title>Patmat Scaling: Scala 2 vs 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a lab notebook page. Exponent table first, then a grid of log-log small multiples, then method. */
+:root {
+  --bg: #fbfbfa;
+  --panel: #ffffff;
+  --fg: #16181d;
+  --fg-2: #4b4f58;
+  --fg-3: #7c818c;
+  --rule: #e3e4e7;
+  --grid: #eceef1;
+  --s2: #2a78d6;
+  --s3: #eb6834;
+  --s4: #1baf7a;
+  --worse: #b42318;
+  --better: #1a7f4b;
+  --font-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-data: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15171b; --panel: #1b1e23; --fg: #eef0f3; --fg-2: #b9bec8; --fg-3: #858b96;
+    --rule: #2c3038; --grid: #252930; --s2: #3987e5; --s3: #d95926; --s4: #199e70; --worse: #f2877d; --better: #5fcf95;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15171b; --panel: #1b1e23; --fg: #eef0f3; --fg-2: #b9bec8; --fg-3: #858b96;
+  --rule: #2c3038; --grid: #252930; --s2: #3987e5; --s3: #d95926; --s4: #199e70; --worse: #f2877d; --better: #5fcf95;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 28px 56px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 28px; }
+h1 { font-size: 26px; font-weight: 600; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); margin: 0 0 10px; }
+p { margin: 0; max-width: 72ch; color: var(--fg-2); }
+code, .mono { font-family: var(--font-data); font-size: 0.92em; }
+header { display: grid; gap: 8px; }
+.legend { display: grid; gap: 6px; font-size: 13px; color: var(--fg-2); margin-top: 6px; }
+.variant { display: grid; grid-template-columns: 200px 1fr; gap: 4px 16px; align-items: baseline; }
+.variant .key { display: inline-flex; align-items: center; gap: 8px; color: var(--fg); font-weight: 500; }
+.variant .what { min-width: 0; overflow-wrap: anywhere; }
+.variant svg { flex: none; align-self: center; }
+th a, td a, .summary a, .method a { color: inherit; text-decoration-color: var(--fg-3); text-underline-offset: 2px; }
+th a:hover, td a:hover, .summary a:hover, .method a:hover { color: var(--fg); }
+.legend a { color: inherit; text-decoration-color: var(--fg-3); text-underline-offset: 2px; }
+.legend a:hover { color: var(--fg); }
+.legend a:focus-visible { outline: 2px solid var(--s2); outline-offset: 2px; }
+.sha { font-family: var(--font-data); font-size: 12px; color: var(--fg-3); }
+@media (max-width: 560px) { .variant { grid-template-columns: 1fr; } }
+.tablebox { overflow-x: auto; background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; }
+table { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; }
+th, td { padding: 8px 12px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th { font-size: 12px; font-weight: 500; color: var(--fg-2); }
+th:first-child, td:first-child { text-align: left; }
+td { font-family: var(--font-data); font-size: 13px; }
+td .sub { color: var(--fg-3); font-size: 12px; margin-left: 6px; }
+tr:last-child td { border-bottom: 0; }
+#ftable tbody tr:not(.grp) td { border-bottom-color: transparent; }
+#ftable tbody tr.grp td { border-bottom-color: var(--rule); }
+td.hot { color: var(--worse); font-weight: 500; }
+td.ok { color: var(--better); }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(340px, 100%), 1fr)); gap: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 12px 6px; min-width: 0; overflow: hidden; display: grid; gap: 2px; }
+.panel h3 { margin: 0; font-size: 14px; font-weight: 600; }
+.panel .src { display: block; font-family: var(--font-data); font-size: 11.5px; color: var(--fg-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.panel svg { width: 100%; height: auto; display: block; }
+.axis text { fill: var(--fg-3); font-family: var(--font-data); font-size: 10px; }
+.axis line { stroke: var(--grid); }
+.panel .pending { font-size: 13px; color: var(--fg-3); padding-block: 72px; text-align: center; max-width: none; }
+.panel .note.capnote { color: var(--fg-3); }
+.panel .note { font-size: 12px; color: var(--worse); margin: 0 0 4px; }
+.tip { position: fixed; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--rule); border-radius: 4px; padding: 6px 9px; font-size: 12px; font-family: var(--font-data); box-shadow: 0 4px 14px rgb(0 0 0 / 0.12); z-index: 10; }
+.summary { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 16px 20px; }
+.summary ul { margin: 0; padding-left: 20px; display: grid; gap: 8px; max-width: 88ch; }
+.summary li { color: var(--fg); }
+.summary li b { font-weight: 600; }
+.summary .num { font-family: var(--font-data); font-size: 0.92em; font-variant-numeric: tabular-nums; }
+.evo-ctl { position: sticky; top: calc(env(safe-area-inset-top, 0px) + var(--fb-h, 52px)); z-index: 4; background: var(--bg); display: grid; grid-template-columns: auto 1fr; gap: 8px 12px; align-items: center; margin-bottom: 12px; padding-block: 6px; }
+.evo-ctl.stuck { grid-template-columns: auto minmax(120px, 16rem) minmax(0, 1fr); border-bottom: 1px solid var(--rule); padding-block: 6px 8px; }
+.evo-ctl.stuck .evo-label { grid-column: auto; min-height: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
+.evo-ctl input[type=range] { width: 100%; accent-color: var(--s2); }
+.evo-label { grid-column: 1 / -1; font-size: 14px; min-height: 2.6em; }
+.evo-label .stepno { font-family: var(--font-data); color: var(--fg-3); margin-right: 8px; }
+#evo-table td.sel, #evo-table th.sel { background: color-mix(in srgb, var(--s2) 12%, transparent); }
+#evo-table tbody tr { cursor: pointer; }
+.method { display: grid; gap: 10px; }
+.progress .asof { font-size: 12px; color: var(--fg-3); margin: -4px 0 10px; }
+.progress table { margin-top: 6px; width: auto; }
+.progress td, .progress th { padding: 4px 10px; }
+.tag { display: inline-block; font: 600 11px var(--font-ui); letter-spacing: 0.04em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--rule); margin-right: 6px; color: var(--fg-2); }
+.tag.done { color: var(--better); border-color: currentColor; }
+.tag.wip { color: var(--s3); border-color: currentColor; }
+.filterbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-block: 10px; background: var(--bg); border-bottom: 1px solid var(--rule); }
+.filterlabel { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--fg-2); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: inline-flex; align-items: center; gap: 8px; font: 500 13px var(--font-ui); color: var(--fg-3); background: var(--panel); border: 1px solid var(--rule); border-radius: 999px; padding: 5px 12px 5px 10px; cursor: pointer; }
+.chip svg { opacity: 0.35; }
+.chip[aria-pressed="true"] { color: var(--fg); border-color: var(--fg-3); }
+.chip[aria-pressed="true"] svg { opacity: 1; }
+.chip:hover { border-color: var(--fg-2); }
+.chip:focus-visible { outline: 2px solid var(--s2); outline-offset: 2px; }
+.chip-all { color: var(--fg-2); padding-left: 12px; }
+.chip .short { display: none; }
+.method ul { margin: 0; padding-left: 20px; color: var(--fg-2); max-width: 80ch; display: grid; gap: 4px; }
+details summary { cursor: pointer; color: var(--fg-2); font-size: 13px; }
+details summary:focus-visible { outline: 2px solid var(--s2); outline-offset: 2px; }
+@media (max-width: 640px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .filterbar, .chips { justify-content: center; }
+  .filterbar .filterlabel, .chip-all { display: none; }
+  .chips { flex-wrap: nowrap; gap: 6px; }
+  .chip { gap: 5px; padding: 4px 9px 4px 7px; font-size: 12.5px; white-space: nowrap; }
+  .chip svg { width: 16px; }
+  .chip .long { display: none; }
+  .chip .short { display: inline; }
+  .evo-ctl.stuck { grid-template-columns: auto minmax(0, 1fr); justify-items: stretch; }
+  .evo-ctl.stuck .evo-label { grid-column: 1 / -1; text-align: center; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Pattern match analysis: time vs number of cases</h1>
+    <p>Time in the pattern-matching phase for one generated match of N cases, Scala 2.13 and Scala 3, before and after the fixes. Log-log axes, so a straight line of slope k means time grows as N<sup>k</sup>.</p>
+    <div class="legend" id="legend" role="list" aria-label="Compilers measured"></div>
+  </header>
+
+  <div class="filterbar" role="group" aria-label="Compilers shown on this page">
+    <span class="filterlabel">Show</span>
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <section class="summary" aria-labelledby="summary-h">
+    <h2 id="summary-h">Summary</h2>
+    <ul id="summary"></ul>
+  </section>
+
+
+  <section>
+    <h2>Fitted exponent k (time ∝ N<sup>k</sup>)</h2>
+    <div class="tablebox"><table id="ktable"></table></div>
+    <p style="margin-top:8px;font-size:13px">Least-squares fit of log time on log N over points of at least 5 ms; in brackets, the slope over the last three sizes measured. Last column: phase time at the largest N that every compiler reached.</p>
+  </section>
+
+  <section aria-labelledby="evo-h">
+    <h2 id="evo-h">Evolution across #142</h2>
+    <p style="font-size:13px;margin-bottom:10px">Scrub through the 12 commits of #142. Step 0 is 2.13.x. The faint grey dashed line is 2.13.x and the faint grey solid line is the last commit; the bold line is the selected step. Faint orange lines are Scala 3 base (dashed) and #23 (solid), shown when their chips are on.</p>
+    <div class="evo-ctl">
+      <button type="button" class="chip" id="evo-play" aria-label="Play through the commits">Play</button>
+      <input type="range" id="evo-step" min="0" max="12" step="1" value="12" aria-describedby="evo-label">
+      <div class="evo-label" id="evo-label"></div>
+    </div>
+    <div class="grid" id="evo-grid"></div>
+    <div class="tablebox" style="margin-top:12px"><table id="evo-table"></table></div>
+  </section>
+
+  <section>
+    <h2>Phase time by shape</h2>
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <section>
+    <h2>Constant factors: phase time at fixed N</h2>
+    <div class="tablebox"><table id="ftable"></table></div>
+    <p style="margin-top:8px;font-size:13px">Exponents alone hide the constant factor. Real matches are mostly small (N=16), generated ones large (N=256). In brackets, the ratio to Scala 2.13 base at the same N.</p>
+  </section>
+
+
+  <section class="method">
+    <h2>Method</h2>
+    <ul id="method"></ul>
+    <details>
+      <summary>All data points</summary>
+      <div class="tablebox" style="margin-top:8px"><table id="raw"></table></div>
+    </details>
+  </section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const DATA = /*DATA*/;
+const META = /*META*/;
+const SERIES = [
+  { id: "scala2-base",  label: "Scala 2.13 base", short: "2.13", color: "--s2", dash: "5 4", url: "https://github.com/scala/scala/commit/3ab962e19048eddeb4958207d4098c5a7adcd5b7" },
+  { id: "scala2-stack", label: "Scala 2.13 #142", short: "#142", color: "--s2", dash: "", url: "https://github.com/retronym/scala/pull/142" },
+  { id: "scala3-base",  label: "Scala 3 base", short: "Scala 3", color: "--s3", dash: "5 4", url: "https://github.com/retronym/scala3/commit/672837f83ee71101e9996effcf070ad3b0b05991" },
+  { id: "scala3-patch", label: "Scala 3 #23", short: "#23", color: "--s3", dash: "", url: "https://github.com/retronym/scala3/pull/23" },
+];
+const SHAPES = META.shapes;
+const NS = "http://www.w3.org/2000/svg";
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (parent) parent.appendChild(e); return e; };
+const fmtMs = ms => ms >= 1000 ? (ms / 1000).toFixed(ms >= 10000 ? 1 : 2) + " s" : ms >= 10 ? ms.toFixed(0) + " ms" : ms.toFixed(1) + " ms";
+const linked = s => `<a href="${s.url}">${s.label}</a>`;
+const swatch = (s) => { const svg = el("svg", { width: 28, height: 10, viewBox: "0 0 28 10" }); el("line", { x1: 1, y1: 5, x2: 27, y2: 5, stroke: `var(${s.color})`, "stroke-width": 2, "stroke-dasharray": s.dash }, svg); el("circle", { cx: 14, cy: 5, r: 3.5, fill: s.dash ? "var(--panel)" : `var(${s.color})`, stroke: `var(${s.color})`, "stroke-width": 1.5 }, svg); return svg; };
+
+// legend: one row per variant, with what was built
+const legend = document.getElementById("legend");
+for (const s of SERIES) {
+  const v = META.variants[s.id];
+  const row = document.createElement("div"); row.className = "variant";
+  const key = document.createElement("span"); key.className = "key"; key.appendChild(swatch(s)); const ka = document.createElement("a"); ka.href = s.url; ka.textContent = s.label; key.append(ka);
+  const what = document.createElement("span"); what.className = "what"; what.innerHTML = v;
+  row.append(key, what); legend.appendChild(row);
+}
+
+
+// ---------------------------------------------------------------- evolution scrubber
+const EVO = META.evo;
+const evoStep = document.getElementById("evo-step");
+const evoLabel = document.getElementById("evo-label");
+let evoTimer = null;
+// chart points: leave out sizes where Scala 2 gave up the analysis (formula budget)
+const ok = r => r ? r.points.filter(p => !(r.capped || []).includes(p[0])) : [];
+const EVO_REFS = [{ id: "scala3-base", label: "Scala 3 base", dash: "5 4" }, { id: "scala3-patch", label: "Scala 3 #23", dash: "none" }];
+function evoPoints(sh, i) { const st = EVO.steps[i]; const r = (DATA[sh] || {})[st.id]; return r ? r : null; }
+function evoChart(sh, i) { const r = evoPoints(sh, i); return r && ok(r).length ? Object.assign({}, r, { points: ok(r) }) : null; }
+function renderEvo() {
+  const i = +evoStep.value, st = EVO.steps[i];
+  evoLabel.innerHTML = `<span class="stepno">${i === 0 ? "base" : i + "/12"}</span>${st.label}`;
+  const grid = document.getElementById("evo-grid"); grid.innerHTML = "";
+  for (const sh of SHAPES.filter(s => EVO.shapes.includes(s.id))) {
+    const panel = document.createElement("div"); panel.className = "panel";
+    panel.innerHTML = `<h3>${sh.label}</h3><code class="src" title="${sh.code}">${sh.code}</code>`;
+    const refs = EVO_REFS.filter(f => visible.has(f.id) && (DATA[sh.id] || {})[f.id]).map(f => Object.assign({ r: { points: ok(DATA[sh.id][f.id]) } }, f));
+    const all = EVO.steps.flatMap((_, j) => { const r = evoChart(sh.id, j); return r ? r.points : []; }).concat(refs.flatMap(f => f.r.points));
+    if (all.length < 2) { const p = document.createElement("p"); p.className = "pending"; p.textContent = "Waiting for data."; panel.appendChild(p); grid.appendChild(panel); continue; }
+    const xs = all.map(p => p[0]), ys = all.map(p => Math.max(p[1], 0.1));
+    const x0 = Math.log2(Math.min(...xs)), x1 = Math.log2(Math.max(...xs));
+    const yLo = Math.floor(Math.log10(Math.min(...ys))), yHi = Math.ceil(Math.log10(Math.max(...ys)));
+    const X = n => M.l + (Math.log2(n) - x0) / (x1 - x0) * (W - M.l - M.r);
+    const Y = ms => H - M.b - (Math.log10(Math.max(ms, 0.1)) - yLo) / (yHi - yLo) * (H - M.t - M.b);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${sh.label} at step ${i}` });
+    const ax = el("g", { class: "axis" }, svg);
+    for (let e = yLo; e <= yHi; e++) { const y = Y(10 ** e); el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y }, ax); const t = el("text", { x: M.l - 6, y: y + 3.5, "text-anchor": "end" }, ax); t.textContent = fmtMs(10 ** e).replace(".0 ", " "); }
+    for (let n = 2 ** x0; n <= 2 ** x1; n *= 2) { const x = X(n); el("line", { x1: x, x2: x, y1: M.t, y2: H - M.b }, ax); const t = el("text", { x, y: H - M.b + 14, "text-anchor": "middle" }, ax); t.textContent = n; }
+    const line = (r, attrs) => { if (!r) return; el("polyline", Object.assign({ points: r.points.map(p => `${X(p[0])},${Y(p[1])}`).join(" "), fill: "none", "stroke-linejoin": "round" }, attrs), svg); };
+    for (const f of refs) line(f.r, { stroke: "var(--s3)", "stroke-width": 1.5, "stroke-dasharray": f.dash, opacity: 0.55 });
+    line(evoChart(sh.id, 0), { stroke: "var(--fg-3)", "stroke-width": 1.5, "stroke-dasharray": "5 4", opacity: 0.6 });
+    line(evoChart(sh.id, 12), { stroke: "var(--fg-3)", "stroke-width": 1.5, opacity: 0.6 });
+    const r = evoChart(sh.id, i);
+    if (r) {
+      line(r, { stroke: "var(--s2)", "stroke-width": 2.5 });
+      for (const p of r.points) {
+        el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 3.5, fill: "var(--s2)", stroke: "var(--s2)", "stroke-width": 1.5 }, svg);
+        const hit = el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 9, fill: "transparent" }, svg);
+        hit.addEventListener("mousemove", ev => { tip.hidden = false; tip.innerHTML = `step ${i}<br>N=${p[0]}: <b>${fmtMs(p[1])}</b>`; tip.style.left = Math.min(ev.clientX + 12, innerWidth - 220) + "px"; tip.style.top = (ev.clientY + 12) + "px"; });
+        hit.addEventListener("mouseleave", () => { tip.hidden = true; });
+      }
+      if (r.k_tail != null) { const last = r.points[r.points.length - 1]; if (last) { const t = el("text", { x: X(last[0]) + 6, y: Y(last[1]) + 3.5, fill: "var(--fg-2)", "font-family": "var(--font-data)", "font-size": 10 }, svg); t.textContent = "k=" + r.k_tail.toFixed(1); } }
+    } else { const t = el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", fill: "var(--fg-3)", "font-size": 12 }, svg); t.textContent = "not measured yet"; }
+    panel.appendChild(svg); grid.appendChild(panel);
+  }
+  // table: phase time at N=1024 per step and shape
+  const tb = document.getElementById("evo-table");
+  const shapes = SHAPES.filter(s => EVO.shapes.includes(s.id));
+  let html = "<thead><tr><th>Step</th>" + shapes.map(s => `<th>${s.label}</th>`).join("") + "</tr></thead><tbody>";
+  EVO.steps.forEach((st, j) => {
+    html += `<tr data-step="${j}"><td class="${j === i ? "sel" : ""}" style="white-space:normal;max-width:340px">${j === 0 ? "base" : j}. ${st.label}</td>`;
+    for (const sh of shapes) {
+      const r = evoPoints(sh.id, j); const p = r && r.points.find(p => p[0] === 1024);
+      html += `<td class="${j === i ? "sel" : ""}">${p ? fmtMs(p[1]) : "–"}${r && r.k_tail != null ? `<span class="sub">k=${r.k_tail.toFixed(1)}</span>` : ""}</td>`;
+    }
+    html += "</tr>";
+  });
+  for (const f of EVO_REFS) {
+    if (!visible.has(f.id)) continue;
+    html += `<tr class="ref"><td style="color:var(--s3)">${f.label} (reference)</td>`;
+    for (const sh of shapes) { const r = (DATA[sh.id] || {})[f.id]; const p = r && r.points.find(p => p[0] === 1024); html += `<td>${p ? fmtMs(p[1]) : "–"}${r && r.k_tail != null ? `<span class="sub">k=${r.k_tail.toFixed(1)}</span>` : ""}</td>`; }
+    html += "</tr>";
+  }
+  tb.innerHTML = html + "</tbody>";
+  for (const tr of tb.querySelectorAll("tbody tr[data-step]")) tr.addEventListener("click", () => { evoStep.value = tr.dataset.step; renderEvo(); });
+}
+evoStep.addEventListener("input", renderEvo);
+document.getElementById("evo-play").addEventListener("click", ev => {
+  if (evoTimer) { clearInterval(evoTimer); evoTimer = null; ev.target.textContent = "Play"; return; }
+  evoStep.value = 0; renderEvo(); ev.target.textContent = "Pause";
+  evoTimer = setInterval(() => { if (+evoStep.value >= 12) { clearInterval(evoTimer); evoTimer = null; ev.target.textContent = "Play"; return; } evoStep.value = +evoStep.value + 1; renderEvo(); }, 900);
+});
+
+// summary
+document.getElementById("summary").innerHTML = META.summary.map(m => `<li>${m}</li>`).join("");
+
+// method
+document.getElementById("method").innerHTML = META.method.map(m => `<li>${m}</li>`).join("");
+
+// everything below depends on which variants are selected
+const tip = document.getElementById("tip");
+const W = 360, H = 250, M = { l: 52, r: 44, t: 14, b: 30 };
+const STORE = "patmat-scaling-visible";
+let visible = new Set(SERIES.map(s => s.id));
+try { const v = JSON.parse(localStorage.getItem(STORE)); if (Array.isArray(v)) visible = new Set(v.filter(id => SERIES.some(s => s.id === id))); } catch (e) {}
+
+function render() {
+const VIS = SERIES.filter(s => visible.has(s.id));
+// exponent table
+const kt = document.getElementById("ktable"); kt.innerHTML = "";
+kt.innerHTML = "<thead><tr><th>Shape</th>" + VIS.map(s => `<th>${linked(s)}</th>`).join("") + "<th>At common max N</th></tr></thead>";
+const tb = document.createElement("tbody");
+for (const sh of SHAPES) {
+  const tr = document.createElement("tr");
+  const d = DATA[sh.id] || {};
+  let html = `<td>${sh.label}</td>`;
+  for (const s of VIS) {
+    const r = d[s.id];
+    if (!r || r.k == null) { html += "<td>–</td>"; continue; }
+    const cls = r.k >= 2.5 ? "hot" : r.k <= 1.5 ? "ok" : "";
+    html += `<td class="${cls}">${r.k.toFixed(2)}<span class="sub">[${r.k_tail == null ? "–" : r.k_tail.toFixed(2)}]</span></td>`;
+  }
+  // common max N reached by all series
+  const maxNs = VIS.map(s => d[s.id] ? Math.max(...d[s.id].points.map(p => p[0])) : 0);
+  const common = Math.min(...maxNs);
+  const at = VIS.map(s => { const p = d[s.id] && d[s.id].points.find(p => p[0] === common); return p ? fmtMs(p[1]) : "–"; });
+  html += `<td>N=${common}: <span class="mono">${at.join(" / ")}</span></td>`;
+  tr.innerHTML = html; tb.appendChild(tr);
+}
+kt.appendChild(tb);
+
+// fixed-N table
+const FIXED = [16, 64, 256];
+const ft = document.getElementById("ftable"); ft.innerHTML = "";
+ft.innerHTML = "<thead><tr><th>Shape</th><th>N</th>" + VIS.map(s => `<th>${linked(s)}</th>`).join("") + "</tr></thead>";
+const fb = document.createElement("tbody");
+for (const sh of SHAPES) {
+  const d = DATA[sh.id] || {};
+  FIXED.forEach((n, i) => {
+    const at = id => { const r = d[id]; const p = r && r.points.find(p => p[0] === n); return p ? p[1] : null; };
+    const base = at("scala2-base");
+    let html = `<td>${i === 0 ? sh.label : ""}</td><td>${n}</td>`;
+    for (const s of VIS) {
+      const v = at(s.id);
+      if (v == null) { html += "<td>–</td>"; continue; }
+      const ratio = base ? v / base : null;
+      const cls = ratio == null || s.id === "scala2-base" ? "" : ratio > 1.25 ? "hot" : ratio < 0.8 ? "ok" : "";
+      html += `<td class="${cls}">${fmtMs(v)}${ratio != null && s.id !== "scala2-base" ? `<span class="sub">[${ratio >= 10 ? ratio.toFixed(0) : ratio.toFixed(2)}×]</span>` : ""}</td>`;
+    }
+    const tr = document.createElement("tr"); if (i === FIXED.length - 1) tr.className = "grp"; tr.innerHTML = html; fb.appendChild(tr);
+  });
+}
+ft.appendChild(fb);
+
+// panels
+const grid = document.getElementById("grid"); grid.innerHTML = "";
+for (const sh of SHAPES) {
+  const d = DATA[sh.id] || {};
+  const panel = document.createElement("div"); panel.className = "panel";
+  panel.innerHTML = `<h3>${sh.label}</h3><code class="src" title="${sh.code}">${sh.code}</code>`;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": `${sh.label}: phase time against N, log-log` });
+  const all = VIS.flatMap(s => ok(d[s.id]));
+  if (all.length < 2) {
+    const p = document.createElement("p"); p.className = "pending"; p.textContent = VIS.length ? "No data for the selected compilers." : "Select a compiler above.";
+    panel.appendChild(p); grid.appendChild(panel); continue;
+  }
+  const xs = all.map(p => p[0]), ys = all.map(p => Math.max(p[1], 0.1));
+  const x0 = Math.log2(Math.min(...xs)), x1 = Math.log2(Math.max(...xs));
+  const yLo = Math.floor(Math.log10(Math.min(...ys))), yHi = Math.ceil(Math.log10(Math.max(...ys)));
+  const X = n => M.l + (Math.log2(n) - x0) / (x1 - x0) * (W - M.l - M.r);
+  const Y = ms => H - M.b - (Math.log10(Math.max(ms, 0.1)) - yLo) / (yHi - yLo) * (H - M.t - M.b);
+  const ax = el("g", { class: "axis" }, svg);
+  for (let e = yLo; e <= yHi; e++) {
+    const y = Y(10 ** e);
+    el("line", { x1: M.l, x2: W - M.r, y1: y, y2: y }, ax);
+    const t = el("text", { x: M.l - 6, y: y + 3.5, "text-anchor": "end" }, ax); t.textContent = fmtMs(10 ** e).replace(".0 ", " ");
+  }
+  for (let n = 2 ** x0; n <= 2 ** x1; n *= 2) {
+    const x = X(n);
+    el("line", { x1: x, x2: x, y1: M.t, y2: H - M.b }, ax);
+    const t = el("text", { x, y: H - M.b + 14, "text-anchor": "middle" }, ax); t.textContent = n;
+  }
+  const xl = el("text", { x: W - M.r, y: H - 3, "text-anchor": "end" }, ax); xl.textContent = "N (cases)";
+  for (const s of VIS) {
+    const r = d[s.id]; const pts = ok(r); if (!pts.length) continue;
+    el("polyline", { points: pts.map(p => `${X(p[0])},${Y(p[1])}`).join(" "), fill: "none", stroke: `var(${s.color})`, "stroke-width": 2, "stroke-dasharray": s.dash, "stroke-linejoin": "round" }, svg);
+    for (const p of pts) {
+      el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 3.5, fill: s.dash ? "var(--panel)" : `var(${s.color})`, stroke: `var(${s.color})`, "stroke-width": 1.5 }, svg);
+      const hit = el("circle", { cx: X(p[0]), cy: Y(p[1]), r: 9, fill: "transparent" }, svg);
+      hit.addEventListener("mousemove", ev => { tip.hidden = false; tip.innerHTML = `${s.label}<br>N=${p[0]}: <b>${fmtMs(p[1])}</b> in phase<br><span style="color:var(--fg-3)">whole compile ${fmtMs(p[2])}</span>`; tip.style.left = Math.min(ev.clientX + 12, innerWidth - 220) + "px"; tip.style.top = (ev.clientY + 12) + "px"; });
+      hit.addEventListener("mouseleave", () => { tip.hidden = true; });
+    }
+    // direct label at the last point: the exponent
+    const last = pts[pts.length - 1];
+    if (r.k != null) {
+      const t = el("text", { x: X(last[0]) + 6, y: Y(last[1]) + 3.5, "text-anchor": "start", fill: "var(--fg-2)", "font-family": "var(--font-data)", "font-size": 10 }, svg);
+      t.textContent = "k=" + r.k.toFixed(1);
+    }
+  }
+  panel.appendChild(svg);
+  if (VIS.some(s => d[s.id] && d[s.id].capped && d[s.id].capped.length)) {
+    const note = document.createElement("p"); note.className = "note capnote";
+    note.textContent = "Sizes where Scala 2 gave up the analysis (\u201cCannot check match\u201d, formula budget) are left out.";
+    panel.appendChild(note);
+  }
+  const tos = VIS.filter(s => d[s.id] && d[s.id].timeouts && d[s.id].timeouts.length).map(s => `${s.label}: N=${d[s.id].timeouts.join(", ")} timed out (over ${META.hardSecs} s)`);
+  if (tos.length) { const note = document.createElement("p"); note.className = "note"; note.textContent = tos.join("; "); panel.appendChild(note); }
+  grid.appendChild(panel);
+}
+
+// raw table
+const raw = document.getElementById("raw");
+raw.innerHTML = ""; raw.innerHTML = "<thead><tr><th>Shape</th><th>Compiler</th><th>N</th><th>Phase</th><th>Whole compile</th></tr></thead>";
+const rb = document.createElement("tbody");
+for (const sh of SHAPES) for (const s of VIS) { const r = (DATA[sh.id] || {})[s.id]; if (!r) continue; for (const p of r.points) { const tr = document.createElement("tr"); tr.innerHTML = `<td>${sh.label}</td><td style="text-align:left">${linked(s)}</td><td>${p[0]}</td><td>${fmtMs(p[1])}</td><td>${fmtMs(p[2])}</td>`; rb.appendChild(tr); } }
+raw.appendChild(rb);
+}
+
+// filter chips
+const chips = document.getElementById("chips");
+for (const s of SERIES) {
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "chip"; b.id = "chip-" + s.id;
+  b.appendChild(swatch(s)); b.insertAdjacentHTML("beforeend", `<span class="long">${s.label}</span><span class="short">${s.short}</span>`); b.title = s.label; b.setAttribute("aria-label", s.label);
+  const sync = () => b.setAttribute("aria-pressed", visible.has(s.id) ? "true" : "false");
+  sync();
+  b.addEventListener("click", () => {
+    if (visible.has(s.id)) visible.delete(s.id); else visible.add(s.id);
+    sync();
+    try { localStorage.setItem(STORE, JSON.stringify([...visible])); } catch (e) {}
+    render(); renderEvo();
+  });
+  chips.appendChild(b);
+}
+const all = document.createElement("button");
+all.type = "button"; all.className = "chip chip-all"; all.id = "chip-all"; all.textContent = "Show all";
+all.addEventListener("click", () => { visible = new Set(SERIES.map(s => s.id)); chips.querySelectorAll(".chip[id^=chip-scala]").forEach(b => b.setAttribute("aria-pressed", "true")); try { localStorage.setItem(STORE, JSON.stringify([...visible])); } catch (e) {} render(); renderEvo(); });
+chips.appendChild(all);
+render();
+
+// fold the scrubber into the sticky header while the evolution section is on screen
+const filterbar = document.querySelector(".filterbar"), evoCtl = document.querySelector(".evo-ctl");
+function syncSticky() {
+  const fb = filterbar.getBoundingClientRect().height;
+  document.documentElement.style.setProperty("--fb-h", fb + "px");
+  const top = evoCtl.getBoundingClientRect().top, sec = evoCtl.parentElement.getBoundingClientRect();
+  evoCtl.classList.toggle("stuck", top <= fb + 1 && sec.bottom > top + evoCtl.offsetHeight + 1 && sec.top < top);
+}
+addEventListener("scroll", syncSticky, { passive: true }); addEventListener("resize", syncSticky); syncSticky();
+renderEvo();
+</script>
