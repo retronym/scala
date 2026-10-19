@@ -144,7 +144,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
       // A Java `permits` clause may name subclasses in other compilation units
       if (isJava && isSealed)
-        attachments.get[PermittedSubclassSymbols].foreach(_.symbols.foreach(_.initialize))
+        attachments.get[PermittedSubclassSymbols].foreach(_.symbols.foreach(_.rawInfo.forceDirectSuperclasses()))
 
       if(!isPastTyper)
         updateAttachment(KnownDirectSubclassesCalled)
