@@ -67,5 +67,6 @@ private[reflect] trait SynchronizedOps extends internal.SymbolTable
     override def lookupEntry(name: Name) = syncLockSynchronized { super.lookupEntry(name) }
     override def lookupNextEntry(entry: ScopeEntry) = syncLockSynchronized { super.lookupNextEntry(entry) }
     override def toList: List[Symbol] = syncLockSynchronized { super.toList }
+    override def foreach[U](p: Symbol => U): Unit = toList.foreach(p)
   }
 }
