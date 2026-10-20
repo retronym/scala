@@ -136,6 +136,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def knownDirectSubclasses = {
       // See `getFlag` to learn more about the `isThreadsafe` call in the body of this method.
       if (!isCompilerUniverse && !isThreadsafe(purpose = AllOps)) initialize
+      // loading registers the children, which must happen before they are observed
+      loadFromClassfile()
 
       enclosingPackage.info.decls.foreach { sym =>
         if(sourceFile == sym.sourceFile) {
@@ -147,6 +149,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         updateAttachment(KnownDirectSubclassesCalled)
 
       children
+    }
+
+    /** The children of a class from a classfile or pickle are known once it is loaded. */
+    private[reflect] final def loadFromClassfile(): Unit = rawInfo match {
+      case loader: SymLoader if !loader.fromSource => initialize
+      case _ =>
     }
 
     def selfType = {
@@ -3504,9 +3512,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
        NoSymbol)
 
     private[this] var childSet: Set[Symbol] = Set()
-    override def children = attachments.get[PermittedSubclassSymbols] match {
-      case Some(permitted) => permittedChildren(permitted)
-      case _               => childSet
+    override def children = {
+      loadFromClassfile()
+      attachments.get[PermittedSubclassSymbols] match {
+        case Some(permitted) => permittedChildren(permitted)
+        case _               => childSet
+      }
     }
     override def addChild(sym: Symbol): Unit = {
       if (knownDirectSubclassesCalled && !childSet.contains(sym))
