@@ -77,9 +77,9 @@ trait CommentFactory extends base.CommentFactoryBase {
     //other comment cases
     // parse function will make the comment
     else {
-      val rawComment = global.expandedDocComment(sym, inTpl.sym).trim
+      val rawComment = global.docCommentsComponent.expandedDocComment(sym, inTpl.sym).trim
       if (rawComment != "") {
-        val c = parse(rawComment, global.rawDocComment(sym), global.docCommentPos(sym), linkTarget)
+        val c = parse(rawComment, global.docCommentsComponent.rawDocComment(sym), global.docCommentsComponent.docCommentPos(sym), linkTarget)
         Some(c)
       }
       else None

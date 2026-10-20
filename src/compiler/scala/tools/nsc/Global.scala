@@ -42,15 +42,14 @@ import scala.tools.nsc.transform.patmat.PatternMatching
 import scala.tools.nsc.typechecker._
 import scala.tools.nsc.util.ClassPath
 
+
 class Global(var currentSettings: Settings, reporter0: Reporter)
     extends SymbolTable
     with Closeable
     with CompilationUnits
     with Plugins
-    with PhaseAssembly
     with Trees
     with Printers
-    with DocComments
     with Positions
     with Reporting
     with Parsing { self =>
@@ -199,6 +198,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   } with OverridingPairs
 
   type SymbolPair = overridingPairs.SymbolPair
+
+  object docCommentsComponent extends DocComments {
+    val self: Global.this.type = Global.this
+  }
+  type DocComment = docCommentsComponent.DocComment
 
   // Components for collecting and generating output
 
@@ -750,7 +754,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     computeInternalPhases()             // Global.scala
     computePlatformPhases()             // backend/Platform.scala
     computePluginPhases()               // plugins/Plugins.scala
-    cullPhases(computePhaseAssembly())  // PhaseAssembly.scala
+    val assembly = new PhaseAssembly {
+      override val self: Global.this.type = Global.this
+    }
+    cullPhases(assembly.computePhaseAssembly(phasesSet))  // PhaseAssembly.scala
   }
 
   /* The phase descriptor list. Components that are phase factories. */

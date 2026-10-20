@@ -2850,9 +2850,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             case rt => " <: " + rt
           }
         tp match {
-          case _ if isType               => typeParamsString(tp) + typeRest
+          case _ if isType               => typeDebugging.typeParamsString(tp) + typeRest
           case _ if isModule             => "" //  avoid "object X of type X.type"
-          case PolyType(tparams, res)    => typeParamsString(tp) + loop(res, followsParens = true)
+          case PolyType(tparams, res)    => typeDebugging.typeParamsString(tp) + loop(res, followsParens = true)
           case NullaryMethodType(res)    => loop(res, followsParens = false)
           case MethodType(params, res)   => valueParamsString(tp) + loop(res, followsParens = true)
           case _ if isStructuralThisType => postnominalColon + owner.name
@@ -3939,6 +3939,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   final def markAllCompleted(sym1: Symbol, sym2: Symbol): Unit = {
     markAllCompleted(sym1)
     markAllCompleted(sym2)
+  }
+
+  // -------------- Captured Variables  --------------------------------------------------------
+
+  /** Mark a variable as captured; i.e. force boxing in a *Ref type.
+   */
+  def captureVariable(vble: Symbol): Unit = vble setFlag CAPTURED
+
+  /** Mark given identifier as a reference to a captured variable itself
+   *  suppressing dereferencing with the `elem` field.
+   */
+  def referenceCapturedVariable(vble: Symbol): Tree = ReferenceToBoxed(Ident(vble))
+
+  /** Convert type of a captured variable to *Ref type.
+   */
+  def capturedVariableType(vble: Symbol): Type =
+    capturedVariableType(vble, NoType, erasedTypes = false)
+
+  /** Convert type of a captured variable to *Ref type.
+   */
+  def capturedVariableType(vble: Symbol, tpe: Type = NoType, erasedTypes: Boolean = false): Type = {
+    val tpe1 = if (tpe == NoType) vble.tpe else tpe
+    val symClass = tpe1.typeSymbol
+    def refType(valueRef: Map[Symbol, Symbol], objectRefClass: Symbol) =
+      if (isPrimitiveValueClass(symClass) && symClass != UnitClass) valueRef(symClass).tpe
+      else if (erasedTypes) objectRefClass.tpe
+           else appliedType(objectRefClass, tpe1 :: Nil)
+    if (vble.hasAnnotation(VolatileAttr)) refType(volatileRefClass, VolatileObjectRefClass)
+    else refType(refClass, ObjectRefClass)
   }
 }
 

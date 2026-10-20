@@ -55,6 +55,7 @@ import Cbuf.StringBuilderOps
 trait ScannersCommon {
   val global : Global
   import global._
+  import docCommentsComponent._
 
   /** Offset into source character array */
   type Offset = Int

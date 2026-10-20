@@ -82,7 +82,7 @@ trait AnnotationCheckers {
     @deprecatedOverriding(
       "Create an AnalyzerPlugin and use pluginsTypedReturn. Note: the 'tree' argument here is\n"+
       "the 'expr' of a Return tree; 'pluginsTypedReturn' takes the Return tree itself as argument", "2.10.1")
-    def adaptTypeOfReturn(tree: Tree, pt: Type, default: => Type): Type = default
+    def adaptTypeOfReturn(tree: Tree, pt: Type, default1: => Type): Type = default1
   }
 
   // Syncnote: Annotation checkers inaccessible to reflection, so no sync in var necessary.

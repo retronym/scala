@@ -30,6 +30,9 @@ abstract class UnPickler {
   val symbolTable: SymbolTable
   import symbolTable._
 
+  private val translations = new Translations { val self: symbolTable.type = symbolTable }
+  import translations._
+
   /** Unpickle symbol table information descending from a class and/or module root
    *  from an array of bytes.
    *  @param bytes      bytearray from which we unpickle
