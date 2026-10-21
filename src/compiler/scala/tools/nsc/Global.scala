@@ -697,6 +697,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   /** Add the internal compiler phases to the phases set.
    *  This implementation creates a description map at the same time.
+   *  The order of this list has no effect: phase order is computed from
+   *  `runsAfter` and `runsRightAfter` by phase assembly. It is kept in run order
+   *  for the reader.
    */
   protected def computeInternalPhases(): Unit =
     // Note: this fits -Xshow-phases into 80 column width, which is
@@ -707,23 +710,23 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       analyzer.packageObjects -> "load package objects",
       analyzer.typerFactory   -> "the meat and potatoes: type the trees",
       superAccessors          -> "add super accessors in traits and nested classes",
-      patmat                  -> "translate match expressions",
-      extensionMethods        -> "add extension methods for inline classes",
+      extensionMethods        -> "add extension methods for value classes",
       pickler                 -> "serialize symbol tables",
       refChecks               -> "reference/override checking, translate nested objects",
-      uncurry                 -> "uncurry, translate function values to anonymous classes",
+      patmat                  -> "translate match expressions",
+      uncurry                 -> "uncurry, translate by-name and vararg parameters",
       fields                  -> "synthesize accessors and fields, add bitmaps for lazy vals",
       tailCalls               -> "replace tail calls by jumps",
       specializeTypes         -> "@specialized-driven class and method specialization",
       explicitOuter           -> "this refs to outer pointers",
-      erasure                 -> "erase types, add interfaces for traits",
-      postErasure             -> "clean up erased inline classes",
+      erasure                 -> "erase types, add bridge methods",
+      postErasure             -> "clean up erased value classes",
       async                   -> "transform async/await into a state machine",
       lambdaLift              -> "move nested functions to top level",
       constructors            -> "move field definitions into constructors",
       mixer                   -> "mixin composition",
-      delambdafy              -> "remove lambdas",
       cleanup                 -> "platform-specific cleanups, generate reflective calls",
+      delambdafy              -> "translate lambdas to invokedynamic",
       terminal                -> "the last phase during a compilation run"
     )
     .foreach((addToPhasesSet _).tupled)
