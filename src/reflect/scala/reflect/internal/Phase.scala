@@ -58,8 +58,9 @@ abstract class Phase(val prev: Phase) extends Ordered[Phase] {
   //   - modules have module accessors
   final val assignsFields: Boolean = ((prev ne null) && (prev ne NoPhase)) && (prev.name == "fields"     || prev.assignsFields)
 
-  /** This is used only in unsafeTypeParams, and at this writing is
-   *  overridden to false in parser, namer, typer, and erasure. (And NoPhase.)
+  /** This is used only in `unsafeTypeParamPhase`, and at this writing is
+   *  overridden to false in parser, namer, typer, and erasure (and in NoPhase
+   *  and the compiler's initial phase).
    */
   def keepsTypeParams = true
   def run(): Unit

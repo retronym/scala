@@ -1082,7 +1082,7 @@ object SeqOps {
     /** Makes a jump table for KMP search.
      *
      *  @param  Wopt The target sequence
-     *  @param  wlen Just in case we're only IndexedSeq and not IndexedSeqOptimized
+     *  @param  wlen The length of the target sequence
      *  @return KMP jump table for target sequence
      */
     def kmpJumpTable(Wopt: IndexedSeqView[B], wlen: Int) = {
