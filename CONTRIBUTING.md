@@ -37,6 +37,8 @@ For bigger changes, we do recommend announcing your intentions on contributors.s
 
 The kind of code we can accept depends on the life cycle for the release you're targeting. The current maintenance release (2.13.x) cannot break source/binary compatibility of the standard library, which means public APIs cannot change. It also means we are reluctant to change, e.g., type inference or implicit search, as this can have unforeseen consequences for source compatibility.
 
+Binary compatibility of `scala-library` and `scala-reflect` is checked in both directions against the previous release (`mimaReferenceVersion` in `project/MimaFilters.scala`). Forwards compatibility means that code compiled against the new release must also run on the previous release's library, so adding a public class or method also counts as a break. `testAll` runs the check, and you can run it directly with `library/mimaReportBinaryIssues` and `reflect/mimaReportBinaryIssues`. Intentional changes to non-public API are recorded as filters in `project/MimaFilters.scala`. Entries marked `KEEP` stay; the others are dropped when the reference version moves forward.
+
 #### Bug Fix (compiler or standard library)
 
 At the end of the PR description, which is autofilled with the commit message if there is only one commit, add the phrase, "Fixes scala/bug#NNNN", where `https://github.com/scala/bug/issues/NNNN` tracks the bug you're fixing. Github will turn your bug number into a link.
