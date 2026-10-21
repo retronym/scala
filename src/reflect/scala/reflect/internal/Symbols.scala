@@ -3539,14 +3539,23 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         Set.empty
       }
       else {
-        permitted.children = permitted.symbols.filter { sym =>
+        var complete = true
+        val children = permitted.symbols.filter { sym =>
           permitted.completing = sym
           // a stub is a stale entry for a class that no longer exists, it has no parents to check
           try !sym.isInstanceOf[StubSymbol] && sym.parentSymbols.contains(this)
-          catch { case _: CyclicReference if knownDirectSubclassesCalled => observedBeforeRegistered(sym); false }
+          catch { case _: CyclicReference =>
+            // `sym` is being completed, so its parents are not known yet. For a macro, that is the error reported
+            // for a Scala subclass that is not registered yet. Otherwise assume `sym` is a child, as javac checked
+            // when emitting the attribute, and don't cache: Checkable in turn doesn't inspect a child that is being
+            // compiled, like it doesn't inspect the children of a sealed class that is being compiled.
+            complete = false
+            if (knownDirectSubclassesCalled) { observedBeforeRegistered(sym); false } else true
+          }
           finally permitted.completing = null
         }.toSet
-        permitted.children
+        if (complete) permitted.children = children
+        children
       }
 
     def anonOrRefinementString = {

@@ -240,10 +240,13 @@ trait Checkable {
         && !sym2.isSubClass(sym1)
       )
       // Are all children of these symbols pairwise irreconcilable?
+      // A child that is being compiled may not be complete yet (its parents can even depend on the type of the match
+      // being checked), so it is not inspected, like the children of a sealed class that is being compiled.
+      def isKnown(c: Symbol) = isRecheck || !currentRun.compiles(c)
       def allChildrenAreIrreconcilable(sym1: Symbol, sym2: Symbol) = {
         val sc1 = if (isSealedOrFinal(sym1)) sym1.sealedChildren else Set(sym1)
         val sc2 = if (isSealedOrFinal(sym2)) sym2.sealedChildren else Set(sym2)
-        sc1.forall(c1 => sc2.forall(c2 => areIrreconcilableAsParents(c1, c2)))
+        sc1.forall(c1 => isKnown(c1) && sc2.forall(c2 => isKnown(c2) && areIrreconcilableAsParents(c1, c2)))
       }
       areUnrelatedClasses(sym1, sym2) && (
          isEffectivelyFinal(sym1) // initialization important
