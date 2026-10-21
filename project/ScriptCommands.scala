@@ -10,7 +10,8 @@ import sbt.complete.Parsers._
 import BuildSettings.autoImport._
 import VersionUtil._
 
-/** Custom commands for use by the Jenkins scripts. This keeps the surface area and call syntax small. */
+/** Custom commands for use by the CI scripts and workflows (scripts/jobs/validate, scripts/bootstrap_fun,
+  * .github/workflows) and for local development. This keeps the surface area and call syntax small. */
 object ScriptCommands {
   def env(key: String) = Option(System.getenv(key)).getOrElse("")
 
@@ -23,7 +24,7 @@ object ScriptCommands {
     restarr, restarrFull,
   )
 
-  /** Set up the environment for `validate/publish-core`.
+  /** Like `setupPublishCore`, but without enabling the optimizer. Used by `restarrFull`.
    * The optional argument is the Artifactory snapshot repository URL. */
   def setupPublishCoreNonOpt = setup("setupPublishCoreNonOpt") { args =>
     Seq(
@@ -33,8 +34,8 @@ object ScriptCommands {
     }) ++ noDocs
   }
 
-  /** Set up the environment for `validate/publish-core`.
-    * The optional argument is the Artifactory snapshot repository URL. */
+  /** Set up the environment for publishing a non-bootstrapped build with a SHA-based version, as done by
+    * `scripts/jobs/validate/publish-core` (Jenkins) and the GitHub Actions workflows. The optional argument is the Artifactory snapshot repository URL. */
   def setupPublishCore = setup("setupPublishCore") { args =>
     Seq(
       Global / baseVersionSuffix := "SHA-SNAPSHOT",
@@ -43,11 +44,12 @@ object ScriptCommands {
     }) ++ noDocs ++ enableOptimizer
   }
 
-  /** Set up the environment for `validate/test`.
-    * The optional argument is the Artifactory snapshot repository URL. */
+  /** Set up the environment for testing against a build published by `setupPublishCore`, as done by
+    * `scripts/jobs/validate/test` (Jenkins) and the GitHub Actions workflows.
+    * The optional argument is a repository URL from which to resolve that build. */
   def setupValidateTest = setup("setupValidateTest") { args =>
     Seq(
-      // include sha to prevent multiple builds running on the same jenkins worker from overriding each other
+      // include sha to prevent multiple builds running on the same CI worker from overriding each other
       // sbtTest/scripted uses publishLocal
       Global / baseVersionSuffix := "SHA-TEST-SNAPSHOT",
       LocalProject("test") / IntegrationTest / testOptions ++= Seq(Tests.Argument("--show-log"), Tests.Argument("--show-diff"))
@@ -56,7 +58,7 @@ object ScriptCommands {
     }) ++ enableOptimizer
   }
 
-  /** Set up the environment for building STARR in `validate/bootstrap`. The arguments are:
+  /** Set up the environment for building STARR in `scripts/bootstrap_fun`. The arguments are:
     * - Repository URL for publishing
     * - Version number to publish */
   def setupBootstrapStarr = setup("setupBootstrapStarr") { case Seq(fileOrUrl, ver) =>
@@ -67,7 +69,7 @@ object ScriptCommands {
     ) ++ publishTarget(url) ++ noDocs ++ enableOptimizer
   }
 
-  /** Set up the environment for building locker in `validate/bootstrap`. The arguments are:
+  /** Set up the environment for building locker in `scripts/bootstrap_fun`. The arguments are:
     * - Repository file or URL for publishing locker and resolving STARR
     * - Version number to publish */
   def setupBootstrapLocker = setup("setupBootstrapLocker") { case Seq(fileOrUrl, ver) =>
@@ -79,10 +81,10 @@ object ScriptCommands {
     ) ++ publishTarget(url) ++ noDocs ++ enableOptimizer
   }
 
-  /** Set up the environment for building quick in `validate/bootstrap`. The arguments are:
+  /** Set up the environment for building quick in `scripts/bootstrap_fun`. The arguments are:
     * - Repository URL for publishing
     * - Version number to publish
-    * - Optional: Repository for resolving (same as repository for publishing if not specified)
+    * - Repository file or URL for resolving locker
     * Note that the artifacts produced here are consumed by scala-dist, so the docs have to be built.
     */
   def setupBootstrapQuick = setup("setupBootstrapQuick") { case Seq(targetFileOrUrl, ver, resolverFileOrUrl) =>
@@ -96,8 +98,8 @@ object ScriptCommands {
     ) ++ publishTarget(targetUrl) ++ enableOptimizer
   }
 
-  /** Set up the environment for publishing in `validate/bootstrap`. The arguments are:
-    * - Temporary bootstrap repository URL for resolving modules
+  /** Set up the environment for publishing a release in `scripts/bootstrap_fun`. The arguments are:
+    * - Temporary bootstrap repository file or URL for resolving locker
     * - Version number to publish
     * All artifacts are published to Sonatype. */
   def setupBootstrapPublish = setup("setupBootstrapPublish") { case Seq(fileOrUrl, ver) =>
