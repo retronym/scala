@@ -26,7 +26,7 @@ import scala.util.chaining._
 /*
  *  Traits encapsulating functionality to convert Scala AST Trees into ASM ClassNodes.
  *
- *  @author  Miguel Garcia, https://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/
+ *  @author  Miguel Garcia
  *
  */
 abstract class BCodeHelpers extends BCodeIdiomatic {

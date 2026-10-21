@@ -22,7 +22,7 @@ import GenBCode._
 import BackendReporting._
 
 /*
- *  @author  Miguel Garcia, https://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/
+ *  @author  Miguel Garcia
  */
 abstract class BCodeSkelBuilder extends BCodeHelpers {
   import global._

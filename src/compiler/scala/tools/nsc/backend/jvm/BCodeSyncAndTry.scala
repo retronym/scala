@@ -20,7 +20,7 @@ import scala.tools.asm
 
 /*
  *
- *  @author  Miguel Garcia, https://lampwww.epfl.ch/~magarcia/ScalaCompilerCornerReloaded/
+ *  @author  Miguel Garcia
  *
  */
 abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
