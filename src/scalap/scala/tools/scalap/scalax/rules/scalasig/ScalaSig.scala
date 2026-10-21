@@ -286,7 +286,6 @@ case class AnnotInfo(refs: Seq[Int]) // attarg_Ref {constant_Ref attarg_Ref}
    *                  | 49 TREE len_Nat 12 TEMPLATEtree type_Ref sym_Ref numparents_Nat {tree_Ref} tree_Ref {tree_Ref}
    *                  | 49 TREE len_Nat 13 BLOCKtree type_Ref tree_Ref {tree_Ref}
    *                  | 49 TREE len_Nat 14 CASEtree type_Ref tree_Ref tree_Ref tree_Ref
-   *                  | 49 TREE len_Nat 15 SEQUENCEtree type_Ref {tree_Ref}
    *                  | 49 TREE len_Nat 16 ALTERNATIVEtree type_Ref {tree_Ref}
    *                  | 49 TREE len_Nat 17 STARtree type_Ref {tree_Ref}
    *                  | 49 TREE len_Nat 18 BINDtree type_Ref sym_Ref name_Ref tree_Ref
