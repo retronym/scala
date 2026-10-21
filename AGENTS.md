@@ -175,7 +175,7 @@ bench/Jmh/runMain scala.collection.mutable.OpenHashMapRunner
 
 ### Common Pitfalls to Avoid
 
-- ❌ Adding public APIs to standard library (use scala-library-next)
+- ❌ Adding public APIs to the standard library (propose them for Scala 3 first; see "Standard library additions" in CONTRIBUTING.md)
 - ❌ Breaking binary compatibility without careful review
 - ❌ Changing type inference without team discussion
 - ❌ Not running partest for compiler changes
