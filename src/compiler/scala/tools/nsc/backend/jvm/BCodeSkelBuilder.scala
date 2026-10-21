@@ -301,7 +301,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     var isMethSymStaticCtor        = false
     var returnType: BType          = null
     var methSymbol: Symbol         = null
-    // in GenASM this is local to genCode(), ie should get false whenever a new method is emitted (including fabricated ones eg addStaticInit())
+    // in the old GenASM backend this was local to genCode(), ie should get false whenever a new method is emitted (including fabricated ones eg addStaticInit())
     var isModuleInitialized        = false
     // used by genLoadTry() and genSynchronized()
     var earlyReturnVar: Symbol     = null

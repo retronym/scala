@@ -593,7 +593,7 @@ abstract class BCodeIdiomatic {
 
     // can-multi-thread
     final def checkCast(tk: RefBType): Unit = {
-      // TODO ICode also requires: but that's too much, right? assert(!isBoxedType(tk),     "checkcast on boxed type: " + tk)
+      // TODO the old ICode backend also required this, but that's too much, right? assert(!isBoxedType(tk),     "checkcast on boxed type: " + tk)
       jmethod.visitTypeInsn(Opcodes.CHECKCAST, tk.classOrArrayType)
     }
 
