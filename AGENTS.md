@@ -1,6 +1,8 @@
 # AI Agents Guide for Scala 2 Compiler
 
-This document provides guidance for AI agents working with the Scala 2.13.x compiler codebase.
+This document provides guidance for AI agents working with the Scala 2.13.x compiler codebase. [CONTRIBUTING.md](CONTRIBUTING.md) and [README.md](README.md) are the primary contributor docs; where this file disagrees with them, they win.
+
+Contributions made with LLM-based tools must follow the [LLM policy](LLM_POLICY.md). Contributors must sign the [Scala CLA](https://cla.scala-lang.org/scala/scala) before a PR can be merged.
 
 ## Overview
 
@@ -10,7 +12,7 @@ This repository contains the Scala 2 standard library, compiler, and language sp
 - **Language:** Scala 2.13.x (maintenance mode, 2.12.x under minimal maintenance)
 - **Build Tool:** sbt
 - **Test Frameworks:** JUnit, ScalaCheck, Partest
-- **CI:** GitHub Actions, Jenkins on scala-ci.typesafe.com
+- **CI:** GitHub Actions (`.github/workflows`: PR validation, merge testing, publishing) and Jenkins on scala-ci.typesafe.com (PR validation via Scabot, community build); see the "Scala CI" section of README.md
 - **Issue Tracking:** [scala/bug](https://github.com/scala/bug)
 
 ## Repository Structure
@@ -162,7 +164,7 @@ bench/Jmh/runMain scala.collection.mutable.OpenHashMapRunner
    - Explain if testing is infeasible
 
 3. **Compatibility Checks:**
-   - Run MiMa to verify binary compatibility (`library/mimaReportBinaryIssues` in sbt)
+   - Run MiMa to verify binary compatibility (`library/mimaReportBinaryIssues` and `reflect/mimaReportBinaryIssues` in sbt)
    - Consider impact on type inference
    - Test with community build if available
 
