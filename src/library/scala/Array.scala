@@ -188,7 +188,7 @@ object Array {
     val len = xs.length
     xs match {
       case wa: immutable.ArraySeq[_] if wa.unsafeArray.getClass.getComponentType == classTag[T].runtimeClass =>
-        // We get here in test/files/run/sd760a.scala, `Array[T](t)` for
+        // We get here in test/files/run/array-cleanup-optimation-specialized.scala, `Array[T](t)` for
         // a specialized type parameter `T`. While we still pay for two
         // copies of the array it is better than before when we also boxed
         // each element when populating the result.

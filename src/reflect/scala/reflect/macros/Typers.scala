@@ -39,7 +39,6 @@ trait Typers {
    *  Is necessary since the shape of the typechecked tree alone is not enough to guess how it should be typechecked.
    *  Can be TERMmode (typecheck as a term), TYPEmode (typecheck as a type) or PATTERNmode (typecheck as a pattern).
    */
-  // I'd very much like to make use of https://github.com/dsl-paradise/dsl-paradise here!
   type TypecheckMode
 
   /** Indicates that an argument to `c.typecheck` should be typechecked as a term.

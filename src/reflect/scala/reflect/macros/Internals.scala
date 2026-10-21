@@ -51,7 +51,6 @@ trait Internals {
      */
     // TODO: explore a more concise notation that Denys and I discussed today
     // when transformer is PartialFunction[Tree, Tree]] and TransformApi is passed magically
-    // also cf. https://github.com/dsl-paradise/dsl-paradise
     def transform(tree: Tree)(transformer: (Tree, TransformApi) => Tree): Tree
 
     /** Functions that are available during [[typingTransform]].
