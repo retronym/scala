@@ -1,9 +1,7 @@
 /*
- * The new, sbt-based build definition for Scala.
- *
- * What you see below is very much work-in-progress. The following features are implemented:
+ * The sbt build definition for Scala. It covers:
  *   - Compiling all classes for the compiler and library ("compile" in the respective subprojects)
- *   - Running JUnit ("junit/test"), ScalaCheck ("scalacheck/test"), and partest ("test/IntegrationTest/test") tests
+ *   - Running JUnit ("junit/test"), ScalaCheck ("scalacheck/test"), and partest ("partest") tests
  *   - Creating build/quick with all compiled classes and launcher scripts ("dist/mkQuick")
  *   - Creating build/pack with all JARs and launcher scripts ("dist/mkPack")
  *   - Building all scaladoc sets ("doc")
@@ -169,7 +167,7 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
     // optimizer warnings at INFO since `-Werror` may be turned on.
     // optimizer runs in CI and release builds, though not in local development.
     "-Wconf:cat=optimizer:is",
-    // we use @nowarn for methods that are deprecated in JDK > 8, but CI/release is under JDK 8
+    // we use @nowarn for methods that are deprecated in JDK > 8, but release builds and PR validation use JDK 8
     "-Wconf:cat=unused-nowarn:s",
     "-Wconf:cat=deprecation&msg=in class Thread :s",
     "-Wunnamed-boolean-literal-strict",
@@ -781,7 +779,8 @@ lazy val bench = project.in(file("test") / "benchmarks")
   .settings(inConfig(JmhPlugin.JmhKeys.Jmh)(scalabuild.JitWatchFilePlugin.jitwatchSettings))
   .settings(
     // Skips JMH source generators during IDE import to avoid needing to compile scala-library during the import
-    // should not be needed once sbt-jmh 0.4.3 is out (https://github.com/sbt/sbt-jmh/pull/207)
+    // sbt-jmh 0.4.4 and later disable BSP in the Jmh config (https://github.com/sbt/sbt-jmh/pull/207), so this
+    // may no longer be needed with the current sbt-jmh
     inConfig(Jmh)(skipProjectInIDEs)
   )
 
