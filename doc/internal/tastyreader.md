@@ -12,7 +12,7 @@ TASTy is an intermediate representation of a Scala program after type checking a
 
 - `-Ytasty-reader` enables the support for reading Scala 3's TASTy files.
 
-- `-Ydebug-tasty` enables rich output when traversing tasty files, important for tracing the history of events when diagnosing errors.
+- `-Vdebug-tasty` (alias `-Ydebug-tasty`) enables rich output when traversing tasty files, important for tracing the history of events when diagnosing errors.
 
 - `-Ytasty-no-annotations` ignores all annotations on tasty symbols, may be useful for ignoring complex annotations that are unsupported, but will prevent safety checks for pattern matching.
 
@@ -52,7 +52,7 @@ A typical workflow for experimenting with the TASTy reader is to:
    - `dotc -d $out $src3`
 5) create a Scala 2 source file, `$src2`, that uses some symbols from `$src3`, e.g. `$issue/TestFancyColours.scala`
 6) compile the Scala 2 source file, adding any symbols from `$src3` to the classpath:
-   - `scalac -Ydebug-tasty -d $out -classpath $out $src2`
+   - `scalac -Vdebug-tasty -d $out -classpath $out $src2`
 
 Here are some example source files from the above scenario:
 ```scala
@@ -93,9 +93,9 @@ The [Script Runner](#script-runner) section describes some commands that support
 
 Below is an example of using the [Script Runner](#script-runner) to simplify iterative development of the scenario above:
 
-1) First, compile the Scala 3 code with `tasty/test:runMain scala.tools.tastytest.Scripted dotc $out $issue/FancyColours.scala`.
-2) Next, compile the test code from Scala 2 with `tasty/test:runMain scala.tools.tastytest.Scripted scalac $out $issue/TestFancyColours.scala -Ydebug-tasty`, which will also put the contents of `$out` on the classpath.
-3) To aid with debugging, inspect the TASTy structure for `Colour` with `tasty/test:runMain scala.tools.tastytest.Scripted dotcd $out/Colour.tasty -print-tasty`
+1) First, compile the Scala 3 code with `tasty/Test/runMain scala.tools.tastytest.Scripted dotc $out $issue/FancyColours.scala`.
+2) Next, compile the test code from Scala 2 with `tasty/Test/runMain scala.tools.tastytest.Scripted scalac $out $issue/TestFancyColours.scala -Vdebug-tasty`, which will also put the contents of `$out` on the classpath.
+3) To aid with debugging, inspect the TASTy structure for `Colour` with `tasty/Test/runMain scala.tools.tastytest.Scripted dotcd $out/Colour.tasty -print-tasty`
 
 In the above, relative paths will be calculated from the working directory of `tasty/test`.
 
@@ -140,17 +140,23 @@ reader. Test sources are placed in the `test/tasty` directory of this repository
 - `neg-isolated`: assert that code depending on symbols not on the classpath fails correctly.
 - `pos`: The same as `run` except with no runtime checking, useful for validating types while waiting for bytecode to align.
 - `pos-false-noannotations`: the same as `pos` but asserting code falsely compiles without warnings or errors when annotations are ignored.
+- `pos-doctool`: the same as `pos` except the Scala 2 sources are processed by Scaladoc instead of the compiler.
+- `neg-move-macros`: the same as `neg` but the Scala 3 and Scala 2 sources are compiled against binary incompatible versions of a common Scala 2 prelude.
+- `neg-full-circle`: assert that a Scala 3 application fails to compile against a Scala 2 library that itself depends on a Scala 3 library.
+- `run-pipelined`: the same as `run`, except the Scala 2 sources are compiled against TASTy files only (no class files), as in pipelined builds.
+- `neg-pipelined`: the same as `neg`, with the TASTy-only classpath of `run-pipelined`.
 
 ### Script Runner
 
 A key tool for working with the tasty reader on individual test cases is `scala.tools.tastytest.Scripted`. It provides several sub commands which share a common implementation with the core of `tastytest`, meaning that the behaviour is identical.
 Each sub command is executed with the Dotty standard library and tooling on the classpath, with the version determined by
-`TastySupport.dottyCompiler` in the build definition. All relative paths will use the working directory `tasty/test`:
+`TastySupport.scala3Compiler` in the build definition. All relative paths will use the working directory `tasty/test`:
 
-In the sbt shell the `scripted` runner can be executed by `tasty/test:runMain scala.tools.tastytest.Scripted`, and provides several sub-commands:
+In the sbt shell the `scripted` runner can be executed by `tasty/Test/runMain scala.tools.tastytest.Scripted`, and provides several sub-commands:
 - `dotc <out: Directory> <src: File>`: compile a Scala 3 source file, which may depend on classes already compiled in `out`.
 - `dotcd <tasty: File> <args: String*>`: decompile a tasty file, pass `-print-tasty` to see the structure of the ASTs.
-- `scalac <out: Directory> <src: File> <args: String*>`: compile a Scala 2 source file, which may depend on classes already compiled in `out`, including those compiled by Scala 3. `args` can be used to pass additional scalac flags, such as `-Ydebug-tasty`
+- `printTasty <tasty: File>`: print the structure of a tasty file using the Scala 3 `TastyPrinter`.
+- `scalac <out: Directory> <src: File> [--extra-cp <cp: File>] <args: String*>`: compile a Scala 2 source file, which may depend on classes already compiled in `out`, including those compiled by Scala 3. `args` can be used to pass additional scalac flags, such as `-Vdebug-tasty`.
 - `runDotty <classpath: Paths> <classname: String>`: execute the static main method of the given class, and providing no arguments.
 - `javac <out: Directory> <src: File>`: compile a Java source file matching, which may depend on classes already compiled in `out`.
 
@@ -188,7 +194,7 @@ A `neg-isolated` suite tests the effect of missing transitive dependencies on th
   1) A root source `$src` is declared, e.g. `"neg-isolated"`
   2) Compile sources in `$src/src-3-A/**/` with the Dotty compiler.
   3) Compile sources in `$src/src-3-B/**/` with the Dotty compiler. Classes compiled in `(2)` are now on the classpath.
-  3) Identical to `neg` step `(3)`
-  4) Compile scala sources in `$src/src-2/**/` with the Scala 2 compiler. Test validation behaviour matches `neg` step `(4)`, except for the following caveats:
+  4) Identical to `neg` step `(3)`
+  5) Compile scala sources in `$src/src-2/**/` with the Scala 2 compiler. Test validation behaviour matches `neg` step `(4)`, except for the following caveats:
      - Only classes compiled in `(3)` will be on the classpath. Classes compiled in `(2)` are deliberately hidden.
-     - References to symbols compiled in `(3)` that reference symbols in compiled in `(2)` should trigger missing symbol errors due to the missing transitive dependency.
+     - References to symbols compiled in `(3)` that reference symbols compiled in `(2)` should trigger missing symbol errors due to the missing transitive dependency.
