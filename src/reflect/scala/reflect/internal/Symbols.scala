@@ -152,7 +152,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     /** The children of a class from a classfile or pickle are known once it is loaded. */
-    private[reflect] final def loadFromClassfile(): Unit = rawInfo match {
+    private[reflect] def loadFromClassfile(): Unit = rawInfo match {
       case loader: SymLoader if !loader.fromSource => initialize
       case _ =>
     }
@@ -3541,7 +3541,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else {
         permitted.children = permitted.symbols.filter { sym =>
           permitted.completing = sym
-          try sym.parentSymbols.contains(this)
+          // a stub is a stale entry for a class that no longer exists, it has no parents to check
+          try !sym.isInstanceOf[StubSymbol] && sym.parentSymbols.contains(this)
           catch { case _: CyclicReference if knownDirectSubclassesCalled => observedBeforeRegistered(sym); false }
           finally permitted.completing = null
         }.toSet
@@ -3676,6 +3677,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def info            = fail(NoType)
     override def rawInfo         = fail(NoType)
     override def companionSymbol = fail(NoSymbol)
+    // the children of a missing class are unknown, asking for them is not an error
+    override private[reflect] def loadFromClassfile(): Unit = ()
   }
   class StubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String) extends ClassSymbol(owner0, owner0.pos, name0) with StubSymbol
   class StubTermSymbol(owner0: Symbol, name0: TermName, val missingMessage: String) extends TermSymbol(owner0, owner0.pos, name0) with StubSymbol
