@@ -21,6 +21,7 @@ Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in
 - `338e10142b` Avoid allocation in Symbol.filter when all alternatives match
 - `8bcd79b374` Test Symbol.filter on overloaded symbols
 - `72a97d88c6` Integration: restore the Depth import that #11314 uses and #11313 removes (needed for the two to compile together)
+- `29cb1123ce` Integration: instantiate AbstractAnalyzer in NotAMemberErrorTest, as #11306 requires (junit test compile)
 
 ## Excluded
 
