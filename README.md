@@ -245,6 +245,13 @@ Our CI setup is always evolving.  See
 for more details on how things currently work and how we expect they
 might change.
 
+## PR validation
+
+Two systems validate PRs:
+
+  - The "PR validation" GitHub Actions workflow ([validate.yml](.github/workflows/validate.yml)) tests the head commit of the PR on JDK 8. It builds the compiler and library with STARR and publishes them locally, rebuilds with the result, runs the test suite (`testAll1` and `testAll2`) and compiles the benchmarks. It doesn't publish anything.
+  - The Jenkins job `scala-2.13.x-validate-main` on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/), triggered by the [Scabot](https://github.com/scala/scabot) bot, runs [scripts/jobs/validate/publish-core](scripts/jobs/validate/publish-core) and then [scripts/jobs/validate/test](scripts/jobs/validate/test). The first publishes a build of the commit to the temporary repository https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots; the second runs `testAll` using that build as STARR.
+
 If you see a spurious failure on Jenkins, you can post `/rebuild` as a PR comment.
 The [scabot README](https://github.com/scala/scabot) lists all available commands.
 
@@ -252,16 +259,13 @@ If you'd like to test your patch before having everything polished for review,
 feel free to submit a draft PR. In case your draft branch contains
 a large number of commits (that you didn't clean up / squash yet for review),
 consider adding `[ci: last-only]` to the PR title. That way only the last commit
-will be tested, saving some energy and CI-resources. Note that inactive draft PRs
+will be tested on Jenkins, saving some energy and CI-resources. Note that inactive draft PRs
 will be closed eventually, which does not mean the change is being rejected.
 
-CI performs a compiler bootstrap. The first task, `validatePublishCore`, publishes
-a build of your commit to the temporary repository
-https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots.
-Note that this build is not yet bootstrapped, its bytecode is built using the
-current STARR. The version number is `2.13.2-bin-abcd123-SNAPSHOT` where `abcd123`
-is the commit hash. For binary incompatible builds, the version number is
-`2.14.0-pre-abcd123-SNAPSHOT`.
+The build in scala-pr-validation-snapshots is not bootstrapped: its bytecode is
+built using the current STARR. Its version number is `2.13.19-bin-abcd123-SNAPSHOT`,
+where `abcd123` is the commit hash. For a base version with patch number 0, such as
+`2.14.0`, the version number is `2.14.0-pre-abcd123-SNAPSHOT`.
 
 You can use Scala builds in the validation repository locally by adding a resolver
 and specifying the corresponding `scalaVersion`:
@@ -269,9 +273,15 @@ and specifying the corresponding `scalaVersion`:
 ```
 $ sbt
 > set resolvers += "pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots/"
-> set scalaVersion := "2.13.17-bin-abcd123-SNAPSHOT"
+> set scalaVersion := "2.13.19-bin-abcd123-SNAPSHOT"
 > console
 ```
+
+## After merge
+
+On every push to a release branch, the "Scala Merge CI" workflow ([ci.yml](.github/workflows/ci.yml)) runs a bootstrap and the test suite on JDK 8, 11, 17, 21, 25 and 27 on Linux, and on JDK 8 and 25 on Windows.
+
+The "Publish" workflow ([publish.yml](.github/workflows/publish.yml)) bootstraps the merged commit using the steps in [scripts/bootstrap_fun](scripts/bootstrap_fun), publishes the result to scala-integration (see below), starts the scala-dist build, and publishes the language spec. Releases are published by the same workflow, started manually with the version number.
 
 ## "Nightly" builds
 
@@ -287,8 +297,9 @@ published for every merged PR.
 
 ## Scala CI internals
 
-The Scala CI runs as a Jenkins instance on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/),
-configured by a chef cookbook at [scala/scala-jenkins-infra](https://github.com/scala/scala-jenkins-infra).
+Besides the GitHub Actions workflows in [.github/workflows](.github/workflows), the Scala CI includes
+a Jenkins instance on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/), which runs PR validation
+and the community build. It is configured by a chef cookbook at [scala/scala-jenkins-infra](https://github.com/scala/scala-jenkins-infra).
 
 The build bot that watches PRs, triggers testing builds and applies the "reviewed" label
 after an LGTM comment is in the [scala/scabot](https://github.com/scala/scabot) repo.
@@ -303,9 +314,9 @@ test suites.
 
 To request a community build run on your PR, just ask in a comment on
 the PR and a Scala team member (probably @SethTisue) will take care of
-it. ([details](https://github.com/scala/community-builds/wiki#can-i-run-it-against-a-pull-request-in-scalascala))
+it. ([details](https://github.com/scala/community-build/wiki#can-i-run-it-against-a-pull-request-in-scalascala))
 
 Community builds run on the Scala Jenkins instance.  The jobs are
 named `..-integrate-community-build`. See the
-[scala/community-builds](https://github.com/scala/community-builds)
+[scala/community-build](https://github.com/scala/community-build)
 repo.
