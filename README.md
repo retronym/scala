@@ -3,7 +3,17 @@
 This is the home of the [Scala 2](https://www.scala-lang.org)
 standard library, compiler, and language spec.
 
-For Scala 3, visit [scala/scala3](https://github.com/scala/scala3).
+For Scala 3, visit [scala/scala3](https://github.com/scala/scala3). Bugs in Scala 3 are reported there, not in scala/bug.
+
+Scala 3 is the recommended version for new projects. New language features and standard library additions go to Scala 3 first. Scala 2.13 is still maintained, with regular releases, and 2.12 gets minimal maintenance; see [Scala 2 maintenance](https://www.scala-lang.org/development/#scala-2-maintenance) for what that covers.
+
+If you are moving a codebase from Scala 2 to Scala 3, these are the starting points:
+
+- The [Scala 3 migration guide](https://docs.scala-lang.org/scala3/guides/migration/compatibility-intro.html).
+- `-Xsource:3`, which warns about code whose meaning changes in Scala 3, and `-Xsource-features`, which adopts selected Scala 3 behaviours for cross-building. See [Scala 2 with -Xsource:3](https://docs.scala-lang.org/scala3/guides/migration/tooling-scala2-xsource3.html).
+- `-Ytasty-reader`, which lets Scala 2.13 use libraries compiled with Scala 3, within the limits described in [classpath compatibility](https://docs.scala-lang.org/scala3/guides/migration/compatibility-classpath.html). Its description in `scalac -Y` names the newest Scala 3 version it can read.
+
+For the JDK versions each Scala release supports, see [JDK compatibility](https://docs.scala-lang.org/overviews/jdk-compatibility/overview.html).
 
 # How to contribute
 
