@@ -1105,7 +1105,8 @@ trait Definitions extends api.StandardDefinitions {
 
     // scala/bug#8128 Still using the type argument of the base type at Seq/Option if this is an old-style (2.10 compatible)
     //         extractor to limit exposure to regressions like the reported problem with existentials.
-    //         TODO fix the existential problem in the general case, see test/pending/pos/t8128.scala
+    //         TODO fix the existential problem in the general case, i.e. for name-based extractors such as
+    //         `def unapply(m: Any): Optiony[_]`, where `Optiony` has `isEmpty` and `get` but is not an `Option`.
     private def typeArgOfBaseTypeOr(tp: Type, baseClass: Symbol)(or: => Type): Type = (tp baseType baseClass).typeArgs match {
       case x :: Nil => repackExistential(x)
       case _        => or

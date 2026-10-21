@@ -37,7 +37,7 @@ object ChromeTrace {
 }
 
 /** Allows writing a subset of of https://docs.google.com/document/d/1CvAClvFfyA5R-PhYUmn5OOQtYMH4h6I0nSsKchNAySU/preview#
-  * for use in Chrome's about://tracing or the tooling in https://www.google.com.au/search?q=catapult+tracing&oq=catapult+tracing+&aqs=chrome..69i57.3974j0j4&sourceid=chrome&ie=UTF-8 */
+  * for use in Chrome's about://tracing or the Catapult trace viewer, https://github.com/catapult-project/catapult/tree/main/tracing */
 final class ChromeTrace(f: Path) extends Closeable {
   import ChromeTrace.EventType
   private val traceWriter = FileUtils.newAsyncBufferedWriter(f)
