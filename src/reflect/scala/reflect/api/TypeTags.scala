@@ -145,10 +145,9 @@ import scala.annotation.nowarn
  * classes) and Scala (for types).</li>
  *</ul>
  *
- * In Scala 2.10, [[scala.reflect.ClassManifest]]s are deprecated, and it is planned
- * to deprecate [[scala.reflect.Manifest]] in favor of `TypeTag`s and `ClassTag`s in
- * an upcoming point release. Thus, it is advisable to migrate any `Manifest`-based
- * APIs to use `Tag`s.
+ * [[scala.reflect.ClassManifest]]s are deprecated since Scala 2.10, and `TypeTag`s and
+ * `ClassTag`s are the intended replacement for [[scala.reflect.Manifest]]. Thus, it is
+ * advisable to migrate any `Manifest`-based APIs to use `Tag`s.
  *
  * For more information about `TypeTag`s, see the
  * [[https://docs.scala-lang.org/overviews/reflection/typetags-manifests.html Reflection Guide: TypeTags]]

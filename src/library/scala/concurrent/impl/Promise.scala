@@ -25,7 +25,8 @@ import java.io.{IOException, NotSerializableException, ObjectInputStream, Object
 /**
   * Latch used to implement waiting on a `DefaultPromise`'s result.
   *
-  * Inspired by: http://gee.cs.oswego.edu/cgi-bin/viewcvs.cgi/jsr166/src/main/java/util/concurrent/locks/AbstractQueuedSynchronizer.java
+  * Inspired by `java.util.concurrent.locks.AbstractQueuedSynchronizer`:
+  * https://github.com/openjdk/jdk/blob/master/src/java.base/share/classes/java/util/concurrent/locks/AbstractQueuedSynchronizer.java
   * Written by Doug Lea with assistance from members of JCP JSR-166
   * Expert Group and released to the public domain, as explained at
   * https://creativecommons.org/publicdomain/zero/1.0/
@@ -100,7 +101,7 @@ private[concurrent] object Promise {
       } else value
     }
 
-  // Left non-final to enable addition of extra fields by Java/Scala converters in scala-java8-compat.
+  // Left non-final so that `FutureConvertersImpl.P` can extend it with extra fields.
   class DefaultPromise[T] private[this] (initial: AnyRef) extends AtomicReference[AnyRef](initial) with scala.concurrent.Promise[T] with scala.concurrent.Future[T] with (Try[T] => Unit) {
     /**
      * Constructs a new, completed, Promise.

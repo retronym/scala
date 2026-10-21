@@ -953,7 +953,7 @@ trait Trees { self: Universe =>
 
   /** Case clause in a pattern match.
    *  (except for occurrences in switch statements).
-   *  Eliminated by compiler phases patmat (in the new pattern matcher of 2.10) or explicitouter (in the old pre-2.10 pattern matcher)
+   *  Eliminated by compiler phase patmat
    *  @group Trees
    *  @template
    */
@@ -998,7 +998,7 @@ trait Trees { self: Universe =>
 
   /** Alternatives of patterns.
    *
-   * Eliminated by compiler phases Eliminated by compiler phases patmat (in the new pattern matcher of 2.10) or explicitouter (in the old pre-2.10 pattern matcher),
+   * Eliminated by compiler phase patmat,
    * except for
    *  occurrences in encoded Switch stmt (i.e. remaining Match(CaseDef(...)))
    *  @group Trees
@@ -1032,7 +1032,7 @@ trait Trees { self: Universe =>
 
   /** Repetition of pattern.
    *
-   *  Eliminated by compiler phases patmat (in the new pattern matcher of 2.10) or explicitouter (in the old pre-2.10 pattern matcher).
+   *  Eliminated by compiler phase patmat.
    *  @group Trees
    *  @template
    */
@@ -1064,7 +1064,7 @@ trait Trees { self: Universe =>
 
   /** Bind a variable to a rhs pattern.
    *
-   * Eliminated by compiler phases patmat (in the new pattern matcher of 2.10) or explicitouter (in the old pre-2.10 pattern matcher).
+   * Eliminated by compiler phase patmat.
    *
    *  @param name
    *  @param body
@@ -1130,7 +1130,7 @@ trait Trees { self: Universe =>
    *          Ident(TermName("x")))))
    *  }}}
    *
-   * Introduced by typer. Eliminated by compiler phases patmat (in the new pattern matcher of 2.10) or explicitouter (in the old pre-2.10 pattern matcher).
+   * Introduced by typer. Eliminated by compiler phase patmat.
    *  @group Trees
    *  @template
    */
@@ -1323,10 +1323,10 @@ trait Trees { self: Universe =>
     def elsep: Tree
   }
 
-  /** - Pattern matching expression  (before compiler phase explicitouter before 2.10 / patmat from 2.10)
-   *  - Switch statements            (after compiler phase explicitouter before 2.10 / patmat from 2.10)
+  /** - Pattern matching expression  (before compiler phase patmat)
+   *  - Switch statements            (after compiler phase patmat)
    *
-   *  After compiler phase explicitouter before 2.10 / patmat from 2.10, cases will satisfy the following constraints:
+   *  After compiler phase patmat, cases will satisfy the following constraints:
    *
    *  - all guards are `EmptyTree`,
    *  - all patterns will be either `Literal(Constant(x:Int))`

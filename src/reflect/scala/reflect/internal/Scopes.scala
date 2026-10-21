@@ -297,7 +297,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         // FIXME - how is one supposed to create an overloaded symbol without
         // knowing the correct owner? Using the symbol owner is not correct;
         // say for instance this is List's scope and the symbols are its three
-        // mkString members. Those symbols are owned by TraversableLike, which
+        // mkString members. Those symbols are owned by IterableOnceOps, which
         // is no more meaningful an owner than NoSymbol given that we're in
         // List. Maybe it makes no difference who owns the overloaded symbol, in
         // which case let's establish that and have a canonical creation method.

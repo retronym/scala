@@ -69,6 +69,8 @@ import scala.util.chaining._
     // For instance def m: T is represented as NullaryMethodType(T)
   case PolyType(tparams, result) =>
     // [tparams]result where result is a (Nullary)MethodType or ClassInfoType
+  case ErasedValueType(valueClazz, underlying) =>
+    // only used during erasure of derived value classes.
 
   // The remaining types are not used after phase `typer`.
   case OverloadedType(pre, tparams, alts) =>
@@ -79,8 +81,6 @@ import scala.util.chaining._
     // a type variable
     // Replace occurrences of type parameters with type vars, where
     // inst is the instantiation and constr is a list of bounds.
-  case ErasedValueType(clazz, underlying)
-    // only used during erasure of derived value classes.
 */
 
 trait Types
@@ -1557,7 +1557,8 @@ trait Types
     private[internal] def scalaNotation(typeString: Type => String): String =
       (if (emptyLowerBound) "" else " >: " + typeString(lo)) +
       (if (emptyUpperBound) "" else " <: " + typeString(hi))
-    /** Bounds notation used in https://adriaanm.github.com/files/higher.pdf.
+    /** Bounds notation used in "Generics of a Higher Kind" (Moors, Piessens and Odersky, OOPSLA 2008),
+      * https://adriaanm.github.io/files/higher.pdf.
       * For example *(scala.collection.generic.Sorted[K,This]).
       */
     private[internal] def starNotation(typeString: Type => String): String =
@@ -1753,14 +1754,10 @@ trait Types
           } finally {
             if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
           }
-          // [Martin] suppressing memoization solves the problem with "same type after erasure" errors
-          // when compiling with
-          // scalac scala.collection.IterableViewLike.scala scala.collection.IterableLike.scala
-          // I have not yet figured out precisely why this is the case.
-          // My current assumption is that taking memos forces baseTypeSeqs to be computed
-          // at stale types (i.e. the underlying typeSymbol has already another type).
-          // I do not yet see precisely why this would cause a problem, but it looks
-          // fishy in any case.
+          // Memoization is suppressed for compound types other than refinements: it once
+          // caused spurious "same type after erasure" errors when compiling the (pre-2.13)
+          // collections library. The suspected cause is that taking memos forces baseTypeSeqs
+          // to be computed at stale types (when the typeSymbol already has another type).
         }
       }
     }

@@ -97,9 +97,9 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
      *  `initialize` to be called and a gil to be taken on every potentially auto-initializable operation. Unpleasant yes, but still robust.
      *
      *  What makes me hopeful is that:
-     *    1) By default (e.g. if some new completion mechanism gets introduced for a special flavor of symbols and we forget to call markCompleted)
+     *    1) By default (e.g. if some new completion mechanism gets introduced for a special flavor of symbols and we forget to call `markAllCompleted` or `markFlagsCompleted`)
      *       isThreadsafe is always in false negative state, which is unpleasant but safe.
-     *    2) Calls to `markCompleted` which are the only potential source of erroneous behavior are few and are relatively easy to place:
+     *    2) Calls to `markAllCompleted` and `markFlagsCompleted`, which are the only potential source of erroneous behavior are few and are relatively easy to place:
      *       just put them just before your completer's `complete` returns, and you should be fine.
      *
      *  upd. Actually, there's another problem of not keeping initialization mask up-to-date. If we're not careful enough,

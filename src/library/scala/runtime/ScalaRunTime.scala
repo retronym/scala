@@ -248,9 +248,6 @@ object ScalaRunTime {
     }
 
     // The recursively applied attempt to prettify Array printing.
-    // Note that iterator is used if possible and foreach is used as a
-    // last resort, because the parallel collections "foreach" in a
-    // random order even on sequences.
     def inner(arg: Any): String = arg match {
       case null                         => "null"
       case ""                           => "\"\""
