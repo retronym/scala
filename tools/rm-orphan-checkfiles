@@ -1,18 +1,14 @@
-#!/bin/sh
+#!/usr/bin/env bash
 #
-# Scans for and removes .check and .flags files under test/
+# Scans for and removes .check files under test/files
 # which don't have an accompanying test.
+# A test is a directory or a .scala, .res or .xml file
+# (see scala.tools.partest.TestKinds).
 
 shopt -s nullglob
 
 echo "Scanning for orphan check files..."
-for f in $(ls -1d test/files/{jvm,neg,pos,run}/*.check); do
-  base=${f%%.check}
-  [[ -d $base ]] || [[ -f $base.scala ]] || git rm -f $f
-done
-
-echo "Scanning for orphan flags files..."
-for f in $(ls -1d test/files/{jvm,neg,pos,run}/*.flags); do
-  base=${f%%.flags}
-  [[ -d $base ]] || [[ -f $base.scala ]] || git rm -f $f
+for f in test/files/{pos,neg,run,jvm,res,scalap,specialized,instrumented,presentation}/*.check; do
+  base=${f%.check}
+  [[ -d $base ]] || [[ -f $base.scala ]] || [[ -f $base.res ]] || [[ -f $base.xml ]] || git rm -f "$f"
 done

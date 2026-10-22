@@ -1,4 +1,6 @@
-all repositories in these organizations:
+# Code of Conduct
+
+All repositories in these organizations:
 
 * [scala](https://github.com/scala)
 * [scalacenter](https://github.com/scalacenter)

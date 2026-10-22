@@ -447,8 +447,8 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
           // however we can do better than `typedAnnotation` by desugaring the aforementioned expression to
           // something like `new jann() { override def annotatedType() = ...; override def foo = bar }`
           // and then using the results of that typecheck to produce a Java-compatible classfile entry
-          // in that case we're going to have correctly typed Array.apply calls, however that's 2.12 territory
-          // and for 2.11 exposing an untyped call to ArrayModule should suffice
+          // in that case we're going to have correctly typed Array.apply calls. For now, exposing an
+          // untyped call to ArrayModule suffices.
           Apply(Ident(ArrayModule), args.toList)
         case NestedAnnotArg(jarg: Annotation) =>
           annotationToTree(jarg)
@@ -463,9 +463,8 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
       else reverseEngineerArgs(ann.assocs)
     }
 
-    // TODO: at the moment, constructor selection is unattributed, because AnnotationInfos lack necessary information
-    // later on, in 2.12, for every annotation we could save an entire tree instead of just bits and pieces
-    // but for 2.11 the current situation will have to do
+    // TODO: at the moment, constructor selection is unattributed, because AnnotationInfos lack necessary information.
+    // Saving an entire tree for every annotation, instead of just bits and pieces, would fix that.
     val ctorSelection = Select(New(TypeTree(ann.atp)), nme.CONSTRUCTOR)
     Apply(ctorSelection, reverseEngineerArgs()) setType ann.atp
   }

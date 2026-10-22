@@ -441,7 +441,7 @@ abstract class UnPickler {
         case LITERALnull    => Constant(null)
         case LITERALclass   => Constant(readTypeRef())
         case LITERALenum    => Constant(readSymbolRef())
-        case LITERALsymbol  => Constant(null) // TODO: needed until we have a STARR that does not emit it.
+        case LITERALsymbol  => Constant(null) // only emitted by some 2.13.0 pre-releases; accepted so their pickles still load
         case _              => noSuchConstantTag(tag, len)
       }
     }

@@ -11,7 +11,7 @@ We're happy to guide you through the process once you've submitted your PR.
 
 Regardless of the nature of your Pull Request, we have to ask you to digitally sign the [Scala CLA](https://cla.scala-lang.org/scala/scala), to protect the OSS nature of the code base.
 
-You don't need to submit separate PRs for 2.12.x and 2.13.x. Any change accepted on 2.12.x will, in time, be merged onto 2.13.x too.
+You usually don't need to submit separate PRs for 2.12.x and 2.13.x. Any change accepted on 2.12.x will, in time, be merged onto 2.13.x too. If your change is difficult to merge forward, you may be asked to also submit a PR targeting 2.13.x.
 
 ### Standard library additions
 
@@ -36,6 +36,8 @@ For bigger documentation changes, you may want to poll contributors.scala-lang.o
 For bigger changes, we do recommend announcing your intentions on contributors.scala-lang.org first, to avoid duplicated effort, or spending a lot of time reworking something we are not able to change at this time in the release cycle, for example.
 
 The kind of code we can accept depends on the life cycle for the release you're targeting. The current maintenance release (2.13.x) cannot break source/binary compatibility of the standard library, which means public APIs cannot change. It also means we are reluctant to change, e.g., type inference or implicit search, as this can have unforeseen consequences for source compatibility.
+
+Binary compatibility of `scala-library` and `scala-reflect` is checked in both directions against the previous release (`mimaReferenceVersion` in `project/MimaFilters.scala`). Forwards compatibility means that code compiled against the new release must also run on the previous release's library, so adding a public class or method also counts as a break. `testAll` runs the check, and you can run it directly with `library/mimaReportBinaryIssues` and `reflect/mimaReportBinaryIssues`. Intentional changes to non-public API are recorded as filters in `project/MimaFilters.scala`. Entries marked `KEEP` stay; the others are dropped when the reference version moves forward.
 
 #### Bug Fix (compiler or standard library)
 
@@ -216,7 +218,7 @@ and therefore:
 * if you're working on the compiler, you must write a partest, or a `BytecodeTesting` JUnit test which invokes the compiler programmatically; however
 * if you're working on the library, a JUnit and/or ScalaCheck is better.
 
-If you're working on Partest itself, note that some of its source files are part of Scala's sbt build, and are compiled when sbt is launched, not via its `compile` command.
+If you're working on Partest itself, its sources are in `src/partest` and are built by the `partest` sbt project, like the rest of the code base.
 
 #### exploring with REPL
 
@@ -296,13 +298,13 @@ branch.
 Here is standard advice on good commit messages:
 https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
 
-### Pass Scabot
+### Pass CI
 
-Our pull request bot, Scabot, automatically builds all of the PR's commits individually on Jenkins. Every commit is expected to pass CI, so we can `git bisect` later.
+PRs are validated by a GitHub Actions workflow, which tests the head commit, and by a Jenkins job, which our pull request bot, Scabot, starts for the PR's commits. The ["Scala CI" section of the README](README.md#scala-ci) describes both. Every commit is expected to pass CI, so we can `git bisect` later.
 
-Click on the little x next to a commit sha to go to the overview of the PR validation job. To diagnose a failure, consult the console output of the job that failed.
+Click on the status icon next to a commit sha to go to the overview of its checks. To diagnose a failure, consult the log of the job that failed.
 
-See the [scala-jenkins-infra repo](https://github.com/scala/scala-jenkins-infra) and [Scabot repo](https://github.com/scala/scabot) for full details on PR validation.  One tip you should know is that commenting `/rebuild` on a PR asks validation to be run again on the same commits. This is only necessary when a spurious failure occurred.
+See the [scala-jenkins-infra repo](https://github.com/scala/scala-jenkins-infra) and [Scabot repo](https://github.com/scala/scabot) for details on the Jenkins side. One tip you should know is that commenting `/rebuild` on a PR asks Jenkins validation to be run again on the same commits. This is only necessary when a spurious failure occurred.
 
 ### Pass code review
 

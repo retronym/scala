@@ -626,7 +626,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
       * the map contains no mapping for key, and if `f(key, value) == Some(x)` the
       * map contains `(key, x)`.
       *
-      * @tparam S  The type of the values in the resulting `LongMap`.
+      * @tparam S  The type of the values in the resulting `Ordering`.
       * @param f   The transforming function.
       * @return    The modified map.
       */

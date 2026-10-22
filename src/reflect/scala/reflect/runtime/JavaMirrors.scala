@@ -881,6 +881,9 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
    *    public String getCanonicalName()
    *    public boolean isSynthetic()
    *
+   *  Since JDK 9, `getSimpleName` reads the InnerClasses attribute and no longer throws for
+   *  such classes (JDK-8057919).
+   *
    *  TODO - find all such calls and wrap them.
    *  TODO - create mechanism to avoid the recurrence of unwrapped calls.
    */
@@ -889,7 +892,6 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       // nested classes in Scala. This is fine per se, however the implementation may throw an
       // InternalError. We therefore re-implement it here.
       // TODO: this method should be renamed to `isLocalOrAnonymousClass`.
-      // due to bin compat that's only possible in 2.12, we cannot introduce a new alias in 2.11.
       def isLocalClass0: Boolean = jclazz.getEnclosingClass != null && !jclazz.isMemberClass
     }
 

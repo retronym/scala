@@ -45,9 +45,8 @@ object PickleFormat {
  *                  | 18 REFINEDtpe len_Nat classsym_Ref {tpe_Ref}
  *                  | 19 CLASSINFOtpe len_Nat classsym_Ref {tpe_Ref}
  *                  | 20 METHODtpe len_Nat tpe_Ref {sym_Ref}
- *                  | 21 POLYTtpe len_Nat tpe_Ref {sym_Ref}
+ *                  | 21 POLYtpe len_Nat tpe_Ref {sym_Ref}
  *                  | 22 IMPLICITMETHODtpe len_Nat tpe_Ref {sym_Ref} /* no longer needed */
- *                  | 52 SUPERtpe len_Nat tpe_Ref tpe_Ref
  *                  | 24 LITERALunit len_Nat
  *                  | 25 LITERALboolean len_Nat value_Long
  *                  | 26 LITERALbyte len_Nat value_Long
@@ -61,12 +60,13 @@ object PickleFormat {
  *                  | 34 LITERALnull len_Nat
  *                  | 35 LITERALclass len_Nat tpe_Ref
  *                  | 36 LITERALenum len_Nat sym_Ref
- *                  | 37 LITERALsymbol len_Nat name_Ref
+ *                  | 37 LITERALsymbol len_Nat name_Ref /* no longer needed */
  *                  | 40 SYMANNOT len_Nat sym_Ref AnnotInfoBody
  *                  | 41 CHILDREN len_Nat sym_Ref {sym_Ref}
  *                  | 42 ANNOTATEDtpe len_Nat [sym_Ref /* no longer needed */] tpe_Ref {annotinfo_Ref}
  *                  | 43 ANNOTINFO len_Nat AnnotInfoBody
  *                  | 44 ANNOTARGARRAY len_Nat {constAnnotArg_Ref}
+ *                  | 46 SUPERtpe len_Nat tpe_Ref tpe_Ref
  *                  | 47 DEBRUIJNINDEXtpe len_Nat level_Nat index_Nat /* no longer needed */
  *                  | 48 EXISTENTIALtpe len_Nat type_Ref {symbol_Ref}
  *                  | 49 TREE len_Nat 1 EMPTYtree
@@ -82,7 +82,6 @@ object PickleFormat {
  *                  | 49 TREE len_Nat 12 TEMPLATEtree type_Ref sym_Ref numparents_Nat {tree_Ref} tree_Ref {tree_Ref}
  *                  | 49 TREE len_Nat 13 BLOCKtree type_Ref tree_Ref {tree_Ref}
  *                  | 49 TREE len_Nat 14 CASEtree type_Ref tree_Ref tree_Ref tree_Ref
- *                  | 49 TREE len_Nat 15 SEQUENCEtree type_Ref {tree_Ref}
  *                  | 49 TREE len_Nat 16 ALTERNATIVEtree type_Ref {tree_Ref}
  *                  | 49 TREE len_Nat 17 STARtree type_Ref {tree_Ref}
  *                  | 49 TREE len_Nat 18 BINDtree type_Ref sym_Ref name_Ref tree_Ref
@@ -164,7 +163,7 @@ object PickleFormat {
   final val LITERALnull = 34
   final val LITERALclass = 35
   final val LITERALenum = 36
-  final val LITERALsymbol = 37 // TODO: Never pickled, to be dropped once we have a STARR that does not emit it.
+  final val LITERALsymbol = 37 // No longer pickled; only some 2.13.0 pre-releases emitted it. UnPickler still accepts it.
   final val SYMANNOT = 40
   final val CHILDREN = 41
   final val ANNOTATEDtpe = 42

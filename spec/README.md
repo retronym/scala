@@ -31,11 +31,11 @@ and open http://0.0.0.0:4000/ to view the spec. Jekyll will rebuild as you edit 
 ### Macro replacements:
 
 - While  MathJAX just  support LaTeX style  command definition,  it is recommended  to not use  this as  it will likely cause issues with preparing the document for PDF or ebook distribution.
-- `\SS` (which I could not find defined within the latex source) seems to be closest to `\mathscr{S}`
-- `\TYPE` is equivalent to `\boldsymbol{type}'
+- `\SS` is not defined in the LaTeX source; `\mathscr{S}` seems the closest match.
+- `\TYPE` is equivalent to `\boldsymbol{type}`
 - As MathJAX has  no support for slanted font (latex  command \sl), so in all instances  this should be replaced with \mathit{}
 - The macro \U{ABCD} used for unicode character references can be replaced with \\uABCD.
-- The macro \URange{ABCD}{DCBA} used for unicode character ranges can be replaced with \\uABCD-\\uDBCA.
+- The macro \URange{ABCD}{DCBA} used for unicode character ranges can be replaced with \\uABCD-\\uDCBA.
 - The macro \commadots can be replaced with ` , … , `.
 - There is no adequate replacement for `\textsc{...}`  (small caps) in pandoc markdown. While unicode contains a number of  small capital  letters, it  is notably  missing Q and  X as  these glyphs  are intended  for phonetic spelling, therefore these  cannot be reliably used. For now,  the best option is to use  underscore emphasis and capitalise the text manually, `_LIKE THIS_`.
 

@@ -79,9 +79,9 @@ trait Builder[-A, +To] extends Growable[A] { self =>
     *  wrong, i.e. a different number of elements is added.
     *
     *  @param size  the hint how many elements will be added.
-    *  @param boundingColl  the bounding collection. If it is
-    *                       an IndexedSeqLike, then sizes larger
-    *                       than collection's size are reduced.
+    *  @param boundingColl  the bounding collection. If its size
+    *                       is known (see `knownSize`), then sizes
+    *                       larger than the collection's size are reduced.
     */
   // should probably be `boundingColl: IterableOnce[_]`, but binary compatibility
   final def sizeHintBounded(size: Int, boundingColl: scala.collection.Iterable[_]): Unit = {

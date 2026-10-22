@@ -3,7 +3,6 @@
 #  - optionally build a fresh "starr", publish to BOOTSTRAP_REPO_DIR
 #  - build minimal core (aka "locker") of Scala, publish to BOOTSTRAP_REPO_DIR
 #  - build Scala (aka "quick") using locker, publish to scala-integration (or sonatype for releases)
-#  - run tests
 
 
 # Specifying the Scala version:

@@ -18,7 +18,7 @@ import scala.annotation.meta.{getter, setter}
 import scala.annotation.tailrec
 import scala.runtime.Statics.releaseFence
 
-/** An object containing the RedBlack tree implementation used by for `TreeMaps` and `TreeSets`.
+/** An object containing the RedBlack tree implementation used for `TreeMaps` and `TreeSets`.
  *
  *  Implementation note: since efficiency is important for data structures this implementation
  *  uses `null` to represent empty trees. This also means pattern matching cannot
@@ -1046,7 +1046,7 @@ private[collection] object RedBlackTree {
 
   // Based on Stefan Kahrs' Haskell version of Okasaki's Red&Black Trees
   // Constructing Red-Black Trees, Ralf Hinze: [[https://www.cs.ox.ac.uk/ralf.hinze/publications/WAAAPL99b.ps.gz]]
-  // Red-Black Trees in a Functional Setting, Chris Okasaki: [[https://wiki.rice.edu/confluence/download/attachments/2761212/Okasaki-Red-Black.pdf]] */
+  // Red-Black Trees in a Functional Setting, Chris Okasaki, Journal of Functional Programming 9(4), 1999
 
   private[this] def del[A, B](tree: Tree[A, B], k: A)(implicit ordering: Ordering[A]): Tree[A, B] = if (tree eq null) null else {
     val cmp = ordering.compare(k, tree.key)

@@ -3,7 +3,17 @@
 This is the home of the [Scala 2](https://www.scala-lang.org)
 standard library, compiler, and language spec.
 
-For Scala 3, visit [scala/scala3](https://github.com/scala/scala3).
+For Scala 3, visit [scala/scala3](https://github.com/scala/scala3). Bugs in Scala 3 are reported there, not in scala/bug.
+
+Scala 3 is the recommended version for new projects. New language features and standard library additions go to Scala 3 first. Scala 2.13 is still maintained, with regular releases, and 2.12 gets minimal maintenance; see [Scala 2 maintenance](https://www.scala-lang.org/development/#scala-2-maintenance) for what that covers.
+
+If you are moving a codebase from Scala 2 to Scala 3, these are the starting points:
+
+- The [Scala 3 migration guide](https://docs.scala-lang.org/scala3/guides/migration/compatibility-intro.html).
+- `-Xsource:3`, which warns about code whose meaning changes in Scala 3, and `-Xsource-features`, which adopts selected Scala 3 behaviours for cross-building. See [Scala 2 with -Xsource:3](https://docs.scala-lang.org/scala3/guides/migration/tooling-scala2-xsource3.html).
+- `-Ytasty-reader`, which lets Scala 2.13 use libraries compiled with Scala 3, within the limits described in [classpath compatibility](https://docs.scala-lang.org/scala3/guides/migration/compatibility-classpath.html). Its description in `scalac -Y` names the newest Scala 3 version it can read.
+
+For the JDK versions each Scala release supports, see [JDK compatibility](https://docs.scala-lang.org/overviews/jdk-compatibility/overview.html).
 
 # How to contribute
 
@@ -87,6 +97,7 @@ but also:
 
 ```
 scala/
++--src/
    +---/library-aux          Scala Auxiliary Library, for bootstrapping and documentation purposes
    +---/interactive          Scala Interactive Compiler, for clients such as an IDE (aka Presentation Compiler)
    +---/manual               Scala's runner scripts "man" (manual) pages
@@ -94,11 +105,17 @@ scala/
    +---/partest-javaagent    Partest's helper java agent
    +---/repl                 Scala REPL core
    +---/repl-frontend        Scala REPL frontend
+   +---/sbt-bridge           The compiler bridge used by sbt/zinc
    +---/scaladoc             Scala's documentation tool
    +---/scalap               Scala's class file decompiler
+   +---/tastytest            Test framework for the TASTy reader
    +---/testkit              Scala's unit-testing kit
-+--admin/                    Scripts for the CI jobs and releasing
-+--doc/                      Additional licenses and copyrights
++--test/
+   +---/benchmarks           JMH benchmarks (sbt project `bench`)
+   +---/tasty                TASTy reader tests, run by `tasty/test`
++--.github/workflows/        GitHub Actions workflows (PR validation, merge testing, publishing)
++--admin/                    Credential and signing-key setup for publishing
++--doc/                      Additional licenses and copyrights, internal design notes
 +--scripts/                  Scripts for the CI jobs and releasing
 +--tools/                    Scripts useful for local development
 +--build/                    Build products
@@ -116,8 +133,8 @@ You need the following tools:
     baseline version.
   - sbt
 
-MacOS and Linux work. Windows may work if you use Cygwin. Community help with keeping
-the build working on Windows and documenting any needed setup is appreciated.
+MacOS and Linux work. The merge CI also runs the test suite on Windows. Community help
+with keeping the build working on Windows and documenting any needed setup is appreciated.
 
 ## Tools we use
 
@@ -172,6 +189,7 @@ Once you've started an `sbt` session you can run one of the core commands:
   - `enableOptimizer` reloads the build with the Scala optimizer enabled. Our releases are built this way. Enable this when working on compiler performance improvements. When the optimizer is enabled the build will be slower and incremental builds can be incorrect.
   - `setupPublishCore` runs `enableOptimizer` and configures a version number based on the current Git SHA. Often used as part of bootstrapping: `sbt setupPublishCore publishLocal && sbt -Dstarr.version=<VERSION> testAll`
   - `dist/mkBin` generates runner scripts (`scala`, `scalac`, etc) in `build/quick/bin`
+  - `dist/mkQuick` runs `dist/mkBin` and also writes the partest classpath to `build/quick/partest.properties`
   - `dist/mkPack` creates a build in the Scala distribution format in `build/pack`
   - `junit/test` runs the JUnit tests; `junit/testOnly *Foo` runs a subset
   - `scalacheck/test` runs scalacheck tests, use `testOnly` to run a subset
@@ -181,10 +199,10 @@ Once you've started an `sbt` session you can run one of the core commands:
     - Optionally `set baseVersionSuffix := "bin-abcd123-SNAPSHOT"`
       where `abcd123` is the git hash of the revision being published. You can also
       use something custom like `"bin-mypatch"`. This changes the version number from
-      `2.13.2-SNAPSHOT` to something more stable (`2.13.2-bin-abcd123-SNAPSHOT`).
+      `2.13.19-SNAPSHOT` to something more stable (`2.13.19-bin-abcd123-SNAPSHOT`).
     - Note that the `-bin` string marks the version binary compatible. Using it in
       sbt will cause the `scalaBinaryVersion` to be `2.13`. If the version is not
-      binary compatible, we recommend using `-pre`, e.g., `2.14.0-pre-abcd123-SNAPSHOT`.
+      binary compatible, we recommend using `-pre`, e.g., `2.13.19-pre-abcd123-SNAPSHOT`.
     - Optionally `set ThisBuild / Compile / packageDoc / publishArtifact := false`
       to skip generating / publishing API docs (speeds up the process).
 
@@ -208,7 +226,7 @@ In IntelliJ IDEA, use "File - Open...", select the project folder and use
     `build/quick/bin` (generated by running `sbt dist/mkBin`) runs the classfiles
     built via the IDE.
 
-In VSCode / Metals, open the project directory and import the project as ususal.
+In VSCode / Metals, open the project directory and import the project as usual.
 
 
 # Coding guidelines
@@ -237,6 +255,13 @@ Our CI setup is always evolving.  See
 for more details on how things currently work and how we expect they
 might change.
 
+## PR validation
+
+Two systems validate PRs:
+
+  - The "PR validation" GitHub Actions workflow ([validate.yml](.github/workflows/validate.yml)) tests the head commit of the PR on JDK 8. It builds the compiler and library with STARR and publishes them locally, rebuilds with the result, runs the test suite (`testAll1` and `testAll2`) and compiles the benchmarks. It doesn't publish anything.
+  - The Jenkins job `scala-2.13.x-validate-main` on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/), triggered by the [Scabot](https://github.com/scala/scabot) bot, runs [scripts/jobs/validate/publish-core](scripts/jobs/validate/publish-core) and then [scripts/jobs/validate/test](scripts/jobs/validate/test). The first publishes a build of the commit to the temporary repository https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots; the second runs `testAll` using that build as STARR.
+
 If you see a spurious failure on Jenkins, you can post `/rebuild` as a PR comment.
 The [scabot README](https://github.com/scala/scabot) lists all available commands.
 
@@ -244,16 +269,13 @@ If you'd like to test your patch before having everything polished for review,
 feel free to submit a draft PR. In case your draft branch contains
 a large number of commits (that you didn't clean up / squash yet for review),
 consider adding `[ci: last-only]` to the PR title. That way only the last commit
-will be tested, saving some energy and CI-resources. Note that inactive draft PRs
+will be tested on Jenkins, saving some energy and CI-resources. Note that inactive draft PRs
 will be closed eventually, which does not mean the change is being rejected.
 
-CI performs a compiler bootstrap. The first task, `validatePublishCore`, publishes
-a build of your commit to the temporary repository
-https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots.
-Note that this build is not yet bootstrapped, its bytecode is built using the
-current STARR. The version number is `2.13.2-bin-abcd123-SNAPSHOT` where `abcd123`
-is the commit hash. For binary incompatible builds, the version number is
-`2.14.0-pre-abcd123-SNAPSHOT`.
+The build in scala-pr-validation-snapshots is not bootstrapped: its bytecode is
+built using the current STARR. Its version number is `2.13.19-bin-abcd123-SNAPSHOT`,
+where `abcd123` is the commit hash. For a base version with patch number 0, such as
+`2.14.0`, the version number is `2.14.0-pre-abcd123-SNAPSHOT`.
 
 You can use Scala builds in the validation repository locally by adding a resolver
 and specifying the corresponding `scalaVersion`:
@@ -261,9 +283,15 @@ and specifying the corresponding `scalaVersion`:
 ```
 $ sbt
 > set resolvers += "pr" at "https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots/"
-> set scalaVersion := "2.13.17-bin-abcd123-SNAPSHOT"
+> set scalaVersion := "2.13.19-bin-abcd123-SNAPSHOT"
 > console
 ```
+
+## After merge
+
+On every push to a release branch, the "Scala Merge CI" workflow ([ci.yml](.github/workflows/ci.yml)) runs a bootstrap and the test suite on JDK 8, 11, 17, 21, 25 and 27 on Linux, and on JDK 8 and 25 on Windows.
+
+The "Publish" workflow ([publish.yml](.github/workflows/publish.yml)) bootstraps the merged commit using the steps in [scripts/bootstrap_fun](scripts/bootstrap_fun), publishes the result to scala-integration (see below), starts the scala-dist build, and publishes the language spec. Releases are published by the same workflow, started manually with the version number.
 
 ## "Nightly" builds
 
@@ -279,8 +307,9 @@ published for every merged PR.
 
 ## Scala CI internals
 
-The Scala CI runs as a Jenkins instance on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/),
-configured by a chef cookbook at [scala/scala-jenkins-infra](https://github.com/scala/scala-jenkins-infra).
+Besides the GitHub Actions workflows in [.github/workflows](.github/workflows), the Scala CI includes
+a Jenkins instance on [scala-ci.typesafe.com](https://scala-ci.typesafe.com/), which runs PR validation
+and the community build. It is configured by a chef cookbook at [scala/scala-jenkins-infra](https://github.com/scala/scala-jenkins-infra).
 
 The build bot that watches PRs, triggers testing builds and applies the "reviewed" label
 after an LGTM comment is in the [scala/scabot](https://github.com/scala/scabot) repo.
@@ -295,9 +324,9 @@ test suites.
 
 To request a community build run on your PR, just ask in a comment on
 the PR and a Scala team member (probably @SethTisue) will take care of
-it. ([details](https://github.com/scala/community-builds/wiki#can-i-run-it-against-a-pull-request-in-scalascala))
+it. ([details](https://github.com/scala/community-build/wiki#can-i-run-it-against-a-pull-request-in-scalascala))
 
 Community builds run on the Scala Jenkins instance.  The jobs are
 named `..-integrate-community-build`. See the
-[scala/community-builds](https://github.com/scala/community-builds)
+[scala/community-build](https://github.com/scala/community-build)
 repo.
