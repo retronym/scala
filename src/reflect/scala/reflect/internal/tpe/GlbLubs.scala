@@ -19,8 +19,8 @@ import scala.collection.mutable, mutable.ListBuffer
 import scala.annotation.tailrec
 import Variance._
 
-private[internal] trait GlbLubs {
-  self: SymbolTable =>
+final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
+  import self._
 
   import definitions._
   import statistics._
@@ -275,7 +275,7 @@ private[internal] trait GlbLubs {
     else if (tps forall isNumericValueType)
       numericLub(tps)
     else if (tps.exists(!_.annotations.isEmpty))
-      annotationsLub(lub(tps map (_.withoutAnnotations)), tps)
+      annotationCheckerSupport.annotationsLub(lub(tps map (_.withoutAnnotations)), tps)
     else
       lub(tps)
   )
@@ -288,12 +288,6 @@ private[internal] trait GlbLubs {
       if (isNumericSubType(t1, t2)) t2.dealiasWiden
       else if (isNumericSubType(t2, t1)) t1.dealiasWiden
       else IntTpe)
-
-  private[this] val _lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
-  def lubResults = _lubResults
-
-  private[this] val _glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
-  def glbResults = _glbResults
 
   def lub(ts: List[Type]): Type = ts match {
     case Nil      => NothingTpe
@@ -336,7 +330,7 @@ private[internal] trait GlbLubs {
       case ts @ TypeBounds(_, _) :: rest =>
         TypeBounds(glb(ts map (_.lowerBound), depth), lub(ts map (_.upperBound), depth))
       case ts @ AnnotatedType(annots, tpe) :: rest =>
-        annotationsLub(lub0(ts map (_.withoutAnnotations)), ts)
+        annotationCheckerSupport.annotationsLub(lub0(ts map (_.withoutAnnotations)), ts)
       case ts =>
         lubResults get ((depth, ts)) match {
           case Some(lubType) =>
@@ -352,7 +346,7 @@ private[internal] trait GlbLubs {
       val (ts, tparams)            = stripExistentialsAndTypeVars(ts0)
       val lubBaseTypes: List[Type] = lubList(ts, depth)
       val lubParents               = spanningTypes(lubBaseTypes)
-      val lubOwner                 = commonOwner(ts)
+      val lubOwner                 = commonOwners.commonOwner(ts)
       val lubBase                  = intersectionType(lubParents, lubOwner)
       val lubType =
         if (phase.erasedTypes || depth.isZero ) lubBase
@@ -511,7 +505,7 @@ private[internal] trait GlbLubs {
     def glb1(ts0: List[Type]): Type = {
       try {
         val (ts, tparams) = stripExistentialsAndTypeVars(ts0)
-        val glbOwner = commonOwner(ts)
+        val glbOwner = commonOwners.commonOwner(ts)
         val ts1 = {
           val res = ListBuffer.empty[Type]
           def loop(ty: Type): Unit = ty match {
