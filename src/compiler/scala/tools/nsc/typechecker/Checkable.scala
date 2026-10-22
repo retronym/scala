@@ -139,6 +139,8 @@ trait Checkable {
 
   private class CheckabilityChecker(val X: Type, val P: Type, isRecheck: Boolean = false) {
     import Checkability._
+    /** Whether the result may change once the classes compiled in this run are complete, see `isKnown`. */
+    var deferred = false
     import erasure.GenericArray
     def Xsym = X.typeSymbol
     def Psym = P.typeSymbol
@@ -249,10 +251,11 @@ trait Checkable {
          isEffectivelyFinal(sym1) // initialization important
       || isEffectivelyFinal(sym2)
       || !sym1.isTrait && !sym2.isTrait
-      || (isSealedOrFinal(sym1) || isSealedOrFinal(sym2)) && allChildrenAreIrreconcilable(sym1, sym2) && (isRecheck || !currentRun.compiles(sym1) && !currentRun.compiles(sym2))
+      || (isSealedOrFinal(sym1) || isSealedOrFinal(sym2)) && allChildrenAreIrreconcilable(sym1, sym2) && isKnown(sym1) && isKnown(sym2)
       )
     }
     private def isSealedOrFinal(sym: Symbol) = sym.isSealed || sym.isFinal
+    private def isKnown(sym: Symbol) = isRecheck || !currentRun.compiles(sym) || { deferred = true; false }
     // initialization important
     private def isEffectivelyFinal(sym: Symbol): Boolean = sym.initialize.isEffectivelyFinalOrNotOverridden
 
@@ -331,50 +334,42 @@ trait Checkable {
           case RefinedType(parents, _) =>
             parents.foreach(checkCheckable(tree, _, X, inPattern, canRemedy))
           case _ =>
-            val checker = new CheckabilityChecker(X, P)
-            if (checker.result == RuntimeCheckable)
-              log(checker.summaryString)
-
             def neverMatchesWarning(result: CheckabilityChecker) = {
               val addendum = if (result.neverSubClass) "" else " (but still might match its erasure)"
               context.warning(tree.pos, s"fruitless type test: a value of type $X cannot also be a $PString$addendum", WarningCategory.Other)
             }
-            if (checker.neverMatches)
-              neverMatchesWarning(checker)
-            else if (checker.isUncheckable) {
-              def uncheckableMessage = checker.uncheckableType match {
-                case NoType                                   => "something"
-                case tp @ RefinedType(_, _)                   => "refinement " + tp
-                case TypeRef(_, sym, _) if sym.isAbstractType => "abstract type " + sym.name
-                case tp                                       => "non-variable type argument " + tp
-              }
-              val msg = {
-                val where = if (inPattern) "pattern " else ""
-                if (checker.uncheckableCard == 2)
-                  s"the type test for $where$PString cannot be checked at runtime because it has type parameters eliminated by erasure"
-                else {
-                  val thing =
-                    if (checker.uncheckableType =:= P) s"abstract type $where$PString"
-                    else s"$uncheckableMessage in type $where$PString"
-                  s"$thing is unchecked since it is eliminated by erasure"
+            def warn(checker: CheckabilityChecker): Unit =
+              if (checker.neverMatches)
+                neverMatchesWarning(checker)
+              else if (checker.isUncheckable) {
+                def uncheckableMessage = checker.uncheckableType match {
+                  case NoType                                   => "something"
+                  case tp @ RefinedType(_, _)                   => "refinement " + tp
+                  case TypeRef(_, sym, _) if sym.isAbstractType => "abstract type " + sym.name
+                  case tp                                       => "non-variable type argument " + tp
                 }
+                val msg = {
+                  val where = if (inPattern) "pattern " else ""
+                  if (checker.uncheckableCard == 2)
+                    s"the type test for $where$PString cannot be checked at runtime because it has type parameters eliminated by erasure"
+                  else {
+                    val thing =
+                      if (checker.uncheckableType =:= P) s"abstract type $where$PString"
+                      else s"$uncheckableMessage in type $where$PString"
+                    s"$thing is unchecked since it is eliminated by erasure"
+                  }
+                }
+                context.warning(tree.pos, msg, WarningCategory.Unchecked)
               }
-              context.warning(tree.pos, msg, WarningCategory.Unchecked)
+
+            val checker = new CheckabilityChecker(X, P)
+            if (checker.result == RuntimeCheckable)
+              log(checker.summaryString)
+            if (checker.deferred) {
+              debuglog(s"deferred checkCheckable($X, $P)")
+              context.unit.addPostTyperCheck(() => warn(new CheckabilityChecker(X, P, isRecheck = true)))
             }
-            else if (checker.result == RuntimeCheckable) {
-              // register deferred checking for sealed types in current run
-              def recheckFruitless(): Unit = {
-                val rechecker = new CheckabilityChecker(X, P, isRecheck = true)
-                if (rechecker.neverMatches) neverMatchesWarning(rechecker)
-              }
-              def isSealedOrFinal(sym: Symbol) = sym.isSealed || sym.isFinal
-              val Xsym = X.typeSymbol
-              val Psym = P.typeSymbol
-              if ((isSealedOrFinal(Xsym) || isSealedOrFinal(Psym)) && (currentRun.compiles(Xsym) || currentRun.compiles(Psym))) {
-                debuglog(s"deferred recheckFruitless($X, $P)")
-                context.unit.addPostTyperCheck(() => recheckFruitless())
-              }
-            }
+            else warn(checker)
         }
       }
     }
