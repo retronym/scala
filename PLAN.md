@@ -43,9 +43,16 @@ Kind A = per-operation scratch that is semantically per thread. "Runtime today" 
 | Field | Defined at | Runtime today |
 |---|---|---|
 | `commonOwnerMap` | `internal/tpe/CommonOwners.scala:38` | `SynchronizedTypes.scala:28` overrides with `new CommonOwnerMap` per call |
-| `ReusableInstance(..., enabled = isCompilerUniverse)` ×7: `findMemberInstance` (`tpe/FindMembers.scala:245`), `containsCollectorInstances` (`tpe/TypeConstraints.scala:202`), `varianceInTypeCache` (`Variances.scala:272`), `copyRefinedTypeSSM` (`Types.scala:4032`), `cloneSymbolsSubstSymMap` (`Symbols.scala:3801`), `onlyChildAccumulator` (`Trees.scala:2106`), `setChildrenPosAccumulator` (`Positions.scala:305`) | reuse disabled outside the compiler universe; every call allocates |
+| `findMemberInstance` | `tpe/FindMembers.scala:245` | `ReusableInstance(..., enabled = isCompilerUniverse)`: reuse off, every call allocates |
+| `containsCollectorInstances` | `tpe/TypeConstraints.scala:202` | same |
+| `varianceInTypeCache` | `Variances.scala:272` | same |
+| `copyRefinedTypeSSM` | `Types.scala:4032` | same |
+| `cloneSymbolsSubstSymMap` | `Symbols.scala:3801` | same |
+| `onlyChildAccumulator` | `Trees.scala:2106` | same |
+| `setChildrenPosAccumulator` | `Positions.scala:305` | same |
+| compiler-side: `symbolLookupCache` (`Contexts.scala:1320`), `localShadowerCache` (`Implicits.scala:2007`), `classFileDataReader` (`SymbolLoaders.scala:317`) | `src/compiler` | same switch; these types live in the compiler, so a `Scratch` in `src/reflect` cannot hold them |
 
-These are correct today. They are natural members of the composite (a per-thread holder makes reuse safe in runtime too) but moving them is an optimisation, not a fix: future work.
+`ReusableInstance` is this whole design in miniature: a stack of scratch objects indexed by reentrancy depth, correct on one thread only, so the concurrent universe opts out (`enabled = isCompilerUniverse`) and allocates per call. The other kind-A fields express the same reentrancy stack by hand: `LubGlbCaches(outer)`, `TypeCollector.collect` saving and restoring `result`, `VariancedTypeMap.withVariance`, `UndoLog.undo`. Once the thread is the unit that owns `Scratch`, reentrancy is the only remaining concern and `ReusableInstance` is the right shape for it, in every universe.
 
 ### Kind A, shared between threads in runtime reflection (findings)
 
@@ -92,9 +99,11 @@ def scratch: Scratch          // a plain val in internal.SymbolTable
 - The old accessors (`undoLog`, `skolemizationLevel`, `lubGlbCaches`, ...) stay as non-overridden forwarders to `scratch.x` for source compatibility with the compiler, scaladoc, toolbox and third-party plugins. MiMa filters for the removed runtime overrides as needed.
 - Hot paths fetch once: `val s = scratch` at entry of `isSubType`, `isSameType`, `isDifferentType`, `withLubGlbCaches`/`claimLubGlbCaches`, `baseTypeOfNonClassTypeRef`, the `glb` refinement branch, `typeToString`, `Symbol.lock`/`unlock`. The undo-log users in the typer (`Implicits`, `Analyzer`) keep `undoLog`; they are compiler-only.
 - `java.lang.ThreadLocal` instead of the `synchronizedMap(WeakHashMap)`: the composite is reachable from the thread only, so it is collected with the thread; `ThreadLocalStorage` remains for `intersectionWitness`.
-- Shared singletons with mutable state (F2–F7) are fixed by having the call sites use instances held in `Scratch` (`scratch.isRelatableCollector`, ...). The public `object`s stay for binary compatibility and for direct users.
+- Reentrant scratch objects are `ReusableInstance`s held in `Scratch`, always enabled: the seven `enabled = isCompilerUniverse` instances in `src/reflect` move in, so runtime reflection reuses them per thread instead of allocating per call. The shared singletons with mutable state (F2–F7) get the same treatment: call sites go through `scratch.erroneousCollectors.using(_.collect(tp))` etc. The public `object`s stay for binary compatibility and direct users. `commonOwnerMap` likewise.
+- `ReusableInstance` allocates its first instance eagerly, so the `Scratch` field must be initialised after the traits whose classes it instantiates; either a `lazy val` or construction at the end of `SymbolTable`'s initialiser. Pick whichever keeps `scratch` a plain field load in batch.
+- Compiler-side `ReusableInstance`s (`Contexts`, `Implicits`, `SymbolLoaders`) stay as they are: `Scratch` is a `final class` in `src/reflect`. If they matter, `Global` can hold a second, compiler-side composite reached the same way; not in this spike.
 
-What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques), the GIL and every `gilSynchronized`, `LOCKED`, `commonOwnerMap` and the `ReusableInstance`s.
+What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques), the GIL and every `gilSynchronized`, `LOCKED`.
 
 ## Steps
 
@@ -102,14 +111,14 @@ What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques),
 - [ ] 2. Move `skolemizationLevel`, `basetypeRecursions`, `pendingBaseTypes`.
 - [ ] 3. Move `lubGlbCaches`; add `globalGlbDepth` (F1).
 - [ ] 4. Move `indent`, `toStringRecursions`, `toStringSubjects`, `recursionTable`; delete the now-unused overrides.
-- [ ] 5. Per-thread collectors for F2–F7.
-- [ ] 6. Benchmark: JMH `ReflectionScratchBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
-- [ ] 7. Write-up.
+- [ ] 5. `ReusableInstance`s and `commonOwnerMap` into `Scratch`, always enabled.
+- [ ] 6. F2–F7: call sites use `ReusableInstance`s of the collectors / maps held in `Scratch`.
+- [ ] 7. Benchmark: JMH `ReflectionTypeOpsBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
+- [ ] 8. Write-up.
 
 Each step: `reflect/compile`, `compiler/compile`, `junit/testOnly scala.reflect.*`, partest `reflection-sync-*`, `t6240*`, `t7045`, `t6411*`, `lazy-concurrent`, `t6240-universe-code-gen` (regenerates `JavaUniverseForce`).
 
 ## Future work (not in this spike)
 
-- `ReusableInstance`s and `commonOwnerMap` into `Scratch`, so runtime reflection reuses them per thread.
 - `intersectionWitness` as a concurrent weak map shared between threads instead of per-thread copies.
 - Replace the GIL with an owner-and-barrier per completion root (the Scala 3 kind B design): a completer is owned by the thread that starts it; other threads wait on its barrier rather than on a global lock; cycles within one owner keep raising `CyclicReference`.
