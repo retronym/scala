@@ -142,10 +142,8 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
     override def markAllCompleted(): this.type = { _initializationMask = 0L; _initialized = true; this }
 
     @inline final def gilSynchronizedIfNotThreadsafe[T](body: => T): T = {
-      // TODO: debug and fix the race that doesn't allow us uncomment this optimization
-      // if (isCompilerUniverse || isThreadsafe(purpose = AllOps)) body
-      // else gilSynchronized { body }
-      gilSynchronized { body }
+      if (isCompilerUniverse || isThreadsafe(purpose = AllOps)) body
+      else gilSynchronized { body }
     }
 
     override final def getFlag(mask: Long): Long = {
@@ -239,9 +237,12 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
 
   trait SynchronizedTypeSymbol extends TypeSymbol with SynchronizedSymbol {
     // unlike with typeConstructor, a lock is necessary here, because tpe calculation relies on
-    // temporarily assigning NoType to tpeCache to detect cyclic reference errors
+    // temporarily assigning NoType to tpeCache to detect cyclic reference errors.
+    // Always take the GIL first, even for a symbol that is thread-safe: computing `tpe_*` takes the
+    // `typeConstructor` of the type parameters, which may need the GIL, and taking `tpeLock` first
+    // would invert the lock order against a thread that holds the GIL and wants this `tpe_*`.
     private lazy val tpeLock = new Object
-    override def tpe_* : Type = gilSynchronizedIfNotThreadsafe { tpeLock.synchronized { super.tpe_* } }
+    override def tpe_* : Type = gilSynchronized { tpeLock.synchronized { super.tpe_* } }
   }
 
   trait SynchronizedClassSymbol extends ClassSymbol with SynchronizedTypeSymbol
