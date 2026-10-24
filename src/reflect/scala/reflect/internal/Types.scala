@@ -1019,9 +1019,15 @@ trait Types
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
-      def findMemberInternal = scratch.findMembers.using { findMember =>
-        findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
-        findMember()
+      def findMemberInternal = {
+        // `take`/`release` rather than `using`: the closure would be allocated whenever C2 does not
+        // inline `using` here, and `findMember` is among the hottest calls of the typer.
+        val findMembers = scratch.findMembers
+        val findMember = findMembers.take()
+        try {
+          findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
+          findMember()
+        } finally findMembers.release()
       }
 
       if (this.isGround) findMemberInternal
