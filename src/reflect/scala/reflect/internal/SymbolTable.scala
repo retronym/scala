@@ -525,6 +525,12 @@ abstract class SymbolTable extends macros.Universe
      *  to undo constraints in the case of isSubType/isSameType failure.
      */
     val undoLog = new UndoLog
+    /** The current skolemization level, needed for the algorithms
+     *  in isSameType, isSubType that do constraint solving under a prefix.
+     */
+    var skolemizationLevel: Int = 0
+    var basetypeRecursions: Int = 0
+    val pendingBaseTypes = new mutable.HashSet[Type]
   }
   private[this] lazy val _scratch: Scratch = new Scratch
   def scratch: Scratch = _scratch

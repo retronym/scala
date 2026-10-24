@@ -117,12 +117,9 @@ trait Types
     } else new SubstTypeMap(from, to)
   }
 
-  /** The current skolemization level, needed for the algorithms
-   *  in isSameType, isSubType that do constraint solving under a prefix.
-   */
-  private[this] var _skolemizationLevel = 0
-  def skolemizationLevel = _skolemizationLevel
-  def skolemizationLevel_=(value: Int) = _skolemizationLevel = value
+  /** The current skolemization level, see `Scratch.skolemizationLevel`. */
+  def skolemizationLevel: Int = scratch.skolemizationLevel
+  def skolemizationLevel_=(value: Int): Unit = scratch.skolemizationLevel = value
 
   /** A map from lists to compound types that have the given list as parents.
    *  This is used to avoid duplication in the computation of base type sequences and baseClasses.
@@ -2498,14 +2495,16 @@ trait Types
     // two differences with class type basetype:
     // (1) first relativize the type, then go to the requested base type
     // (2) cache for cycle robustness
-    private def baseTypeOfNonClassTypeRef(clazz: Symbol) =
+    private def baseTypeOfNonClassTypeRef(clazz: Symbol) = {
+      val s = scratch
       try {
-        basetypeRecursions += 1
-        if (basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz)
+        s.basetypeRecursions += 1
+        if (s.basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz, s.pendingBaseTypes)
         else relativeInfo.baseType(clazz)
-      } finally basetypeRecursions -= 1
+      } finally s.basetypeRecursions -= 1
+    }
 
-    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol) =
+    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol, pendingBaseTypes: mutable.HashSet[Type]) =
       if (pendingBaseTypes add this) try relativeInfo.baseType(clazz) finally { pendingBaseTypes remove this }
       // TODO: is this optimization for AnyClass worth it? (or is it playing last-ditch cycle defense?)
       // NOTE: for correctness, it only applies for non-class types
@@ -4606,12 +4605,10 @@ trait Types
     i.isEmpty && j.isEmpty
   }
 
-  private[this] var _basetypeRecursions: Int = 0
-  def basetypeRecursions = _basetypeRecursions
-  def basetypeRecursions_=(value: Int) = _basetypeRecursions = value
+  def basetypeRecursions: Int = scratch.basetypeRecursions
+  def basetypeRecursions_=(value: Int): Unit = scratch.basetypeRecursions = value
 
-  private[this] val _pendingBaseTypes = new mutable.HashSet[Type]
-  def pendingBaseTypes = _pendingBaseTypes
+  def pendingBaseTypes: mutable.HashSet[Type] = scratch.pendingBaseTypes
 
   /** Does this type have a prefix that begins with a type variable,
    *  or is it a refinement type? For type prefixes that fulfil this condition,

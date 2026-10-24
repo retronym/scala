@@ -51,10 +51,6 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
     }
   }
 
-  private lazy val _skolemizationLevel = mkThreadLocalStorage(0)
-  override def skolemizationLevel = _skolemizationLevel.get
-  override def skolemizationLevel_=(value: Int) = _skolemizationLevel.set(value)
-
   // One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
   // caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
   // would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
@@ -75,13 +71,6 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
 
   private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
   override def intersectionWitness = _intersectionWitness.get
-
-  private lazy val _basetypeRecursions = mkThreadLocalStorage(0)
-  override def basetypeRecursions = _basetypeRecursions.get
-  override def basetypeRecursions_=(value: Int) = _basetypeRecursions.set(value)
-
-  private lazy val _pendingBaseTypes = mkThreadLocalStorage(new mutable.HashSet[Type])
-  override def pendingBaseTypes = _pendingBaseTypes.get
 
   private lazy val _lubGlbCaches = mkThreadLocalStorage(new LubGlbCaches(null))
   override def lubGlbCaches = _lubGlbCaches.get
