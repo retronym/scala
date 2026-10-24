@@ -126,6 +126,8 @@ trait Types
    *  It makes use of the fact that these two operations depend only on the parents,
    *  not on the refinement.
    */
+  // Read and written only by `CompoundType.memo`, from `defineBaseTypeSeqOfCompoundType` and
+  // `defineBaseClassesOfCompoundType`, which runtime reflection runs under the GIL.
   private[this] val _intersectionWitness = perRunCaches.newWeakMap[List[Type], WeakReference[Type]]()
   def intersectionWitness = _intersectionWitness
 

@@ -14,15 +14,10 @@ package scala
 package reflect
 package runtime
 
-import scala.ref.{WeakReference => sWeakRef}
-
 /** This trait overrides methods in reflect.internal, bracketing
  *  them in synchronized { ... } to make them thread-safe
  */
 private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTable =>
-
-  private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
-  override def intersectionWitness = _intersectionWitness.get
 
   /* The idea of caches is as follows.
    * When in reflexive mode, a cache is either null, or one sentinel
