@@ -3366,6 +3366,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private[this] var flatname: TypeName            = _
     private[this] var _associatedFile: AbstractFile = _
+    private[this] var _associatedJpmsModuleName: String = _
     private[this] var thissym: Symbol               = this
 
     private[this] var thisTypeCache: Type      = _
@@ -3445,6 +3446,17 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     )
     override def associatedFile_=(f: AbstractFile): Unit = { _associatedFile = f }
+
+    def associatedJpmsModuleName: String =
+      if (!isTopLevel) {
+        enclosingTopLevelClass match {
+          case NoSymbol => ""
+          case encl => encl.asClass.associatedJpmsModuleName
+        }
+      } else if (_associatedJpmsModuleName eq null) "" // guarantee not null, but save cost of initializing the var
+      else _associatedJpmsModuleName
+
+    def associatedJpmsModuleName_=(name: String): Unit = _associatedJpmsModuleName = name
 
     override def reset(completer: Type): this.type = {
       super.reset(completer)
@@ -3588,6 +3600,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def sourceModule = companionModule
     override def enclClassChain = Nil
     override def isPackageClass = true
+
+    // Cache this because it is used in JPMS access checks.
+    private[this] var fullNameStringCache: String = null
+    override def fullNameString: String = {
+      val cached = fullNameStringCache
+      if (cached == null) {
+        val computed = super.fullNameString
+        fullNameStringCache = computed
+        computed
+      } else {
+        fullNameStringCache
+      }
+    }
   }
 
   class RefinementClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)

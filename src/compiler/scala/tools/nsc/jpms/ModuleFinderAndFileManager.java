@@ -1,0 +1,45 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc. dba Akka
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
+package scala.tools.nsc.jpms;
+
+import javax.tools.StandardJavaFileManager;
+import javax.tools.StandardLocation;
+import java.lang.module.ModuleFinder;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Optional;
+import java.util.function.Consumer;
+
+/** A configured module finder and java file manager */
+abstract class ModuleFinderAndFileManager {
+    public static ModuleFinderAndFileManager get(Optional<String> release, Consumer<StandardJavaFileManager> optionSetter) {
+        if (release.isPresent()) return new CtSymClassAndModulePath(release.get(), optionSetter);
+        else return new StandardClassAndModulePath(optionSetter);
+    }
+
+    public abstract ModuleFinder moduleFinder();
+
+    public abstract StandardJavaFileManager fileManager();
+
+    static ModuleFinder locationToFinder(StandardJavaFileManager fileManager, StandardLocation location) {
+        Iterable<? extends Path> locationAsPaths = fileManager.getLocationAsPaths(location);
+        if (locationAsPaths == null) {
+            return ModuleFinder.of();
+        }
+        ArrayList<Path> paths = new ArrayList<>();
+        for (Path locationAsPath : locationAsPaths) {
+            paths.add(locationAsPath);
+        }
+        return ModuleFinder.of(paths.toArray(new Path[0]));
+    }
+}

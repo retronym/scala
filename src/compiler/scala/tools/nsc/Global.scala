@@ -159,6 +159,12 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   def classPath: ClassPath = platform.classPath
 
+  /** A module declared in a `module-info.java`, with that file's imports, which `uses` and `provides` may rely on. */
+  final case class JpmsSourceModule(moduleDef: Jpms.ModuleDef, imports: List[Import], unit: CompilationUnit)
+
+  /** Module descriptors for `module-info.java` and the `module-info.class` written for it. */
+  lazy val jpmsModuleInfos: jpms.ModuleInfos[this.type] = new jpms.ModuleInfos[this.type](this)
+
   // sub-components --------------------------------------------------
 
   /** Tree generation, usually based on existing symbols. */
@@ -1242,6 +1248,58 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** A map from compiled top-level symbols to their picklers */
     val symData = new mutable.HashMap[Symbol, PickleBuffer]
 
+    // --------------- JPMS -------------------------------------
+
+    private[this] var _jpmsSourceModule: Option[JpmsSourceModule] = None
+    private[this] var jpmsModuleTableResolved = false
+
+    /** The module declared by a `module-info.java` among the sources. */
+    private[nsc] def jpmsSourceModule: Option[JpmsSourceModule] = _jpmsSourceModule
+
+    /** Called by the parser for the module declared in a `module-info.java` among the sources. */
+    private[nsc] def registerJpmsModuleInfo(md: Jpms.ModuleDef, imports: List[Import], unit: CompilationUnit): Unit =
+      _jpmsSourceModule match {
+        case Some(first) =>
+          globalError(md.pos, s"module-info.java declares a second module in this compilation run, the first was declared in ${first.unit.source.path}")
+        case None =>
+          if (jpmsModuleTableResolved)
+            devWarning(s"module-info.java parsed after the module graph was resolved, its declaration is ignored: ${unit.source.path}")
+          _jpmsSourceModule = Some(JpmsSourceModule(md, imports, unit))
+      }
+
+    /** Under `-Yjpms`, every named module with Scala sources in this run must read the Scala library.
+     *
+     *  Explicit references to the library would be reported one by one, but scalac also adds references of its
+     *  own (`Product` as a parent of case classes, `scala.runtime` helpers), which are not access checked and would
+     *  only fail at run time. scalac does not add the `requires` itself: the declaration in `module-info.class`
+     *  must be the one in `module-info.java`, as seen by javac and the JVM.
+     */
+    private[nsc] def checkJpmsModulesReadScalaLibrary(): Unit = if (settings.Yjpms.value) {
+      val table = jpmsModuleTable
+      val scalaModules = units.filterNot(_.isJava).map(u => table.moduleOfSource(u.source.file)).filter(_.nonEmpty).toSet
+      val library = definitions.PredefModule.moduleClass.asClass.associatedJpmsModuleName
+      for (module <- scalaModules.toList.sorted if !table.isPackageAccessible(module, library, "scala")) {
+        val pos = jpmsSourceModule.filter(_.moduleDef.name.toString == module).map(_.moduleDef.pos).getOrElse(NoPosition)
+        val fix =
+          if (library.isEmpty) "The Scala library is on the class path, in the unnamed module. Put it on the module path, where it is the automatic module scala.library, and add `requires scala.library;`."
+          else s"Add `requires $library;` to the declaration of module $module, or `requires transitive $library;` if the module's API exposes Scala types."
+        reporter.error(pos, s"module $module does not read the Scala library, which its Scala sources depend on\n$fix")
+      }
+    }
+
+    /** The module graph for this run. Resolved on first use, which must come after the parser has seen any
+     *  `module-info.java` among the sources.
+     */
+    lazy val jpmsModuleTable: jpms.ModuleTable = {
+      jpmsModuleTableResolved = true
+      classPath match {
+        case resolver: jpms.ModuleResolver if settings.Yjpms.value =>
+          resolver.resolve(_jpmsSourceModule.flatMap(m => jpmsModuleInfos.resolutionDescriptor(m.moduleDef)))
+        case _ =>
+          jpms.ModuleTable.Unrestricted
+      }
+    }
+
     private var phasec: Int  = 0   // phases completed
     private var unitc: Int   = 0   // units completed this phase
 
@@ -1434,6 +1492,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         runReporting.deprecationWarning(NoPosition, s.name + " is deprecated: " + s.deprecationMessage.get, "", "", "")
       }
       settings.conflictWarning.foreach(runReporting.warning(NoPosition, _, WarningCategory.Other, site = ""))
+      if (!settings.Yjpms.value)
+        for (s <- settings.jpmsOptions if s.isSetByUser)
+          globalError(s"${s.name} requires -Yjpms. Support for JPMS is experimental and incomplete.")
     }
 
     /* An iterator returning all the units being compiled in this run */

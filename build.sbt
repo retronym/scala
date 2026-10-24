@@ -134,12 +134,9 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   // on Scala classes
   compileOrder := CompileOrder.JavaThenScala,
   projectFolder := thisProject.value.id, // overridden in configureAsSubproject
-  Compile / javacOptions ++= Seq("-g", "-source", "1.8", "-target", "1.8", "-Xlint:unchecked"),
-  Compile / javacOptions ++= (
-    if (scala.util.Properties.isJavaAtLeast("20"))
-      Seq("-Xlint:-options")  // allow `-source 1.8` and `-target 1.8`
-    else
-      Seq()),
+  // JDK 17 is the baseline. `--release 17` would be stricter, but javac then reports uses of `sun.misc.Unsafe` without
+  // honouring `@SuppressWarnings("sunapi")`.
+  Compile / javacOptions ++= Seq("-g", "-source", "17", "-target", "17", "-Xlint:unchecked", "-Xlint:-options"),
   Compile / unmanagedJars := Seq.empty,  // no JARs in version control!
   Compile / sourceDirectory := baseDirectory.value,
   Compile / unmanagedSourceDirectories := List(baseDirectory.value),
@@ -572,6 +569,7 @@ lazy val compiler = configureAsSubproject(project)
     pomDependencyExclusions += (("org.scala-lang.modules", "scala-asm"))
   )
   .dependsOn(library, reflect)
+
 
 lazy val interactive = configureAsSubproject(project)
   .settings(disableDocs)

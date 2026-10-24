@@ -46,6 +46,13 @@ sealed abstract class PostProcessorFrontendAccess {
 
   def backendClassPath: BackendClassPath
 
+  /** Under `-Yjpms`, is the package of the public class `target` accessible from class `from`, given the module
+   *  graph (JVMS 5.4.4)? Always true without `-Yjpms`.
+   *
+   *  @param compilingSource the source file path of a class compiled in this run, if it is one
+   */
+  def jpmsPackageAccessible(target: InternalName, from: InternalName, compilingSource: InternalName => Option[String]): Boolean
+
   def getEntryPoints: List[String]
 
   def javaDefinedClasses: Set[InternalName]
@@ -275,6 +282,24 @@ object PostProcessorFrontendAccess {
     object backendClassPath extends BackendClassPath {
       def findClassFile(className: String): Option[AbstractFile] = cp.get.findClassFile(className)
     }
+
+    private[this] lazy val jpmsModules = perRunLazy(this)(new java.util.concurrent.ConcurrentHashMap[InternalName, String]())
+
+    def jpmsPackageAccessible(target: InternalName, from: InternalName, compilingSource: InternalName => Option[String]): Boolean =
+      !global.settings.Yjpms.value || {
+        def moduleOf(c: InternalName): String = jpmsModules.get.computeIfAbsent(c, _ => frontendSynch {
+          compilingSource(c) match {
+            case Some(path) => currentRun.jpmsModuleTable.moduleOfSource(AbstractFile.getFile(path))
+            case None       => classPath.findClass(c.replace('/', '.')).map(_.jpmsModuleName).getOrElse("")
+          }
+        })
+        val pkg = target.lastIndexOf('/') match {
+          case -1 => ""
+          case i  => target.substring(0, i).replace('/', '.')
+        }
+        val (fromModule, targetModule) = (moduleOf(from), moduleOf(target))
+        fromModule == targetModule || frontendSynch(currentRun.jpmsModuleTable.isPackageAccessible(fromModule, targetModule, pkg))
+      }
 
     def getEntryPoints: List[String] = frontendSynch(cleanup.getEntryPoints)
 

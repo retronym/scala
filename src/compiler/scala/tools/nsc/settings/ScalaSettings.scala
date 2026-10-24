@@ -60,6 +60,19 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val classpath     = PathSetting   ("-classpath", "Specify where to find user class files.", defaultClasspath) withAbbreviation "-cp" withAbbreviation "--class-path"
   val outdir        = OutputSetting (".").withPostSetHook(s => try outputDirs.setSingleOutput(s.value) catch { case FatalError(msg) => errorFn(msg) }).tap(_.postSetHook())
 
+  val Yjpms             = BooleanSetting("-Yjpms", "Enable experimental (and incomplete) support for JPMS.").internalOnly()
+  val YjpmsClassPath    = ChoiceSetting("-Yjpms-classpath", "impl", "Class path implementation under -Yjpms: scalac's own, or one backed by javac's file manager.", List("native", "javac"), "native").internalOnly()
+
+  // The JPMS options, with javac's names and syntax: one value per occurrence, repeatable where javac's are.
+  val modulePath        = StringSetting("--module-path", "path", "Where to find application modules.").withAbbreviation("-p").internalOnly()
+  val upgradeModulePath = StringSetting("--upgrade-module-path", "path", "Where to find modules that replace upgradeable modules in the runtime image.").internalOnly()
+  val addModules        = RepeatableStringSetting("--add-modules", "module(,module)*", "Root modules to resolve in addition to the initial modules. May also be ALL-DEFAULT, ALL-SYSTEM or ALL-MODULE-PATH.").internalOnly()
+  val limitModules      = RepeatableStringSetting("--limit-modules", "module(,module)*", "Limit the universe of observable modules.").internalOnly()
+  val addExports        = RepeatableStringSetting("--add-exports", "module/package=other-module(,other-module)*", "Export a package to other modules, or to ALL-UNNAMED, in addition to its module's declaration.").internalOnly()
+  val addReads          = RepeatableStringSetting("--add-reads", "module=other-module(,other-module)*", "Make a module read other modules, or ALL-UNNAMED, in addition to its declaration.").internalOnly()
+  val patchModule       = RepeatableStringSetting("--patch-module", "module=path", "Override or augment a module with classes, or the sources being compiled, in the given paths.").internalOnly()
+  def jpmsOptions: List[Setting] = List(YjpmsClassPath, modulePath, upgradeModulePath, addModules, limitModules, addExports, addReads, patchModule)
+
   val nospecialization = BooleanSetting("-no-specialization", "Ignore @specialize annotations.") withAbbreviation "--no-specialization"
 
   // Would be nice to build this dynamically from scala.languageFeature.

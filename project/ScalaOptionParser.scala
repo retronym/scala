@@ -101,9 +101,11 @@ object ScalaOptionParser {
     "-W",
     "-Wdead-code", "-Werror", "-Wextra-implicit", "-Wnumeric-widen", "-Woctal-literal",
     "-Wvalue-discard", "-Wself-implicit",
+    "-Yjpms",
     "-deprecation", "-explaintypes", "-feature", "-help", "-no-specialization", "-nobootcp", "-nowarn", "-optimise", "-print", "-unchecked", "-uniqid", "-usejavacp", "-usemanifestcp", "-verbose", "-version")
   private def stringSettingNames = List("-Xjline", "-Xgenerate-phase-graph", "-Xmain-class", "-Xpluginsdir", "-Xshow-class", "-Xshow-object", "-Vshow-object", "-Xsource-reader", "-Ydump-classes", "-Ygen-asmp",
-    "-Ypresentation-log", "-Ypresentation-replay", "-Yrepl-outdir", "-d", "-dependencyfile", "-encoding", "-Xscript", "-Vinline", "-Vopt", "-Vshow-class", "-Vshow-member-pos")
+    "-Ypresentation-log", "-Ypresentation-replay", "-Yrepl-outdir", "-d", "-dependencyfile", "-encoding", "-Xscript", "-Vinline", "-Vopt", "-Vshow-class", "-Vshow-member-pos",
+    "-modulepath", "-patchmodule", "-upgrademodulepath", "-limitmodules", "-addmodules", "-addexports", "-addreads", "--module-path", "--patch-module", "--upgrade-module-path", "--limit-modules", "--add-modules", "--add-exports", "--add-reads")
   private def pathSettingNames = List("-bootclasspath", "-classpath", "-extdirs", "-javabootclasspath", "-javaextdirs", "-sourcepath", "-toolcp", "-Vprint-args")
   private val phases = List("all", "parser", "namer", "packageobjects", "typer", "patmat", "superaccessors", "extmethods", "pickler", "refchecks", "uncurry", "tailcalls", "specialize", "explicitouter", "erasure", "posterasure", "fields", "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy", "jvm", "terminal")
   private val phaseSettings = List("-Ystop-after", "-Yskip", "-Yshow", "-Ystop-before",
