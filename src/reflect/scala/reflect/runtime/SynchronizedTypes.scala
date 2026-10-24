@@ -48,24 +48,6 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
     }
   }
 
-  // One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
-  // caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
-  // would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
-  // long-lived thread would keep every universe it ever used.
-  private lazy val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
-  private lazy val scratchRef = new ThreadLocal[jWeakRef[Scratch]]
-  override def scratch: Scratch = {
-    val ref = scratchRef.get
-    val s = if (ref eq null) null else ref.get
-    if (s ne null) s else newScratch()
-  }
-  private def newScratch(): Scratch = {
-    val s = new Scratch
-    scratches.put(Thread.currentThread, s)
-    scratchRef.set(new jWeakRef(s))
-    s
-  }
-
   private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
   override def intersectionWitness = _intersectionWitness.get
 

@@ -82,6 +82,21 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.commonOwnerMap"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.scratch"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.scratch"),
+
+    // interning and counters chosen when the universe is built (`SymbolTable#isConcurrentUniverse`) instead of
+    // overridden in the private[reflect] traits SynchronizedTypes / SynchronizedSymbols / SynchronizedOps;
+    // the private[reflect] trait ThreadLocalStorage is gone, so JavaUniverse no longer implements it
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.isConcurrentUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SymbolTable.isConcurrentUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedOps.synchronizeNames"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.nextId"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.nextExistentialId"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.*"),
+    ProblemFilters.exclude[MissingTypesProblem]("scala.reflect.runtime.JavaUniverse"),
+    ProblemFilters.exclude[MissingTypesProblem]("scala.reflect.runtime.SymbolTable"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.mkThreadLocalStorage"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.reflect.runtime.ThreadLocalStorage"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.reflect.runtime.ThreadLocalStorage$ThreadLocalStorage"),
   )
 
   override val buildSettings = Seq(

@@ -509,13 +509,22 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** Is this universe used from several threads at once? Runtime reflection is.
+   *
+   *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
+   *  or one per thread, plain or atomic symbol ids, plain or synchronized interning. The batch
+   *  compiler gets the single-threaded ones and pays for the choice with a call through a field.
+   *  Must be a constant: it is read while the universe is constructed.
+   */
+  def isConcurrentUniverse = false
+
   /** The scratch state of the type operations of one thread: recursion guards, pending sets,
    *  the undo log of type constraints. Each operation fetches it once and keeps it in a local.
    *
-   *  In a universe that is used from one thread at a time (the compiler, a toolbox) there is one
-   *  instance; runtime reflection (`SynchronizedTypes`) overrides `scratch` to return one per
-   *  thread. Anything that must not be seen by an operation on another thread belongs here, not
-   *  in a field of `SymbolTable`: anything that is shared, such as caches, does not.
+   *  A universe used from one thread at a time (the compiler, a toolbox) has one instance; a
+   *  concurrent one has one per thread. Anything that must not be seen by an operation on another
+   *  thread belongs here, not in a field of `SymbolTable`: anything that is shared, such as caches,
+   *  does not.
    */
   final class Scratch {
     var subsametypeRecursions: Int = 0
@@ -565,8 +574,36 @@ abstract class SymbolTable extends macros.Universe
       case t => t.isWildcard
     })
   }
-  private[this] lazy val _scratch: Scratch = new Scratch
-  def scratch: Scratch = _scratch
+  private[this] lazy val scratches: Scratches = if (isConcurrentUniverse) new PerThreadScratches else new OneScratch
+  final def scratch: Scratch = scratches.get
+
+  private[internal] abstract class Scratches {
+    def get: Scratch
+  }
+  private final class OneScratch extends Scratches {
+    private[this] val scratch = new Scratch
+    def get: Scratch = scratch
+  }
+  /** One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
+   *  caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
+   *  would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
+   *  long-lived thread would keep every universe it ever used.
+   */
+  private final class PerThreadScratches extends Scratches {
+    private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
+    private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
+    def get: Scratch = {
+      val ref = scratchRef.get
+      val s = if (ref eq null) null else ref.get
+      if (s ne null) s else newScratch()
+    }
+    private def newScratch(): Scratch = {
+      val s = new Scratch
+      scratches.put(Thread.currentThread, s)
+      scratchRef.set(new java.lang.ref.WeakReference(s))
+      s
+    }
+  }
 
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
