@@ -22,7 +22,6 @@ import scala.reflect.internal.Mode._
 
 abstract class Erasure extends InfoTransform
                           with scala.reflect.internal.transform.Erasure
-                          with typechecker.Analyzer
                           with TypingTransformers
                           with ast.TreeDSL
                           with TypeAdaptingTransformer
@@ -481,7 +480,19 @@ abstract class Erasure extends InfoTransform
 
 // -------- erasure on trees ------------------------------------------
 
-  override def newTyper(context: Context) = new Eraser(context)
+  /** Erasure retypes trees with its own analyzer, whose typer is [[Eraser]].
+   *  It is a member rather than a mixin so that `Analyzer` can be a class (calls
+   *  from the typechecker to its outer analyzer are then `invokevirtual`).
+   */
+  object erasureAnalyzer extends {
+    val global: Erasure.this.global.type = Erasure.this.global
+  } with typechecker.Analyzer {
+    override def newTyper(context: Context): Typer = new Eraser(context)
+  }
+  type Context = erasureAnalyzer.Context
+  type Typer   = erasureAnalyzer.Typer
+  def newTyper(context: Context): Typer = erasureAnalyzer.newTyper(context)
+  def rootContextPostTyper(unit: CompilationUnit, tree: Tree = EmptyTree): Context = erasureAnalyzer.rootContextPostTyper(unit, tree)
 
   class EnterBridges(@unused unit: CompilationUnit, root: Symbol) {
     val site         = root.thisType
@@ -675,7 +686,7 @@ abstract class Erasure extends InfoTransform
   }
 
   /** The modifier typer which retypes with erased types. */
-  class Eraser(_context: Context) extends Typer(_context) {
+  class Eraser(_context: Context) extends erasureAnalyzer.Typer(_context) {
     val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree) }
     import typeAdapter._
 
@@ -1315,7 +1326,7 @@ abstract class Erasure extends InfoTransform
 
         case Literal(ct) =>
           // We remove the original tree attachments in pre-erasure to free up memory
-          val cleanLiteral = tree.removeAttachment[OriginalTreeAttachment]
+          val cleanLiteral = tree.removeAttachment[erasureAnalyzer.OriginalTreeAttachment]
 
           if (ct.tag == ClazzTag && ct.typeValue.typeSymbol != definitions.UnitClass) {
             val typeValue = ct.typeValue.dealiasWiden
