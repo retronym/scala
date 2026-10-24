@@ -21,7 +21,7 @@ import mutable.{LinkedHashSet, ListBuffer}
 import Flags._
 import scala.util.control.ControlThrowable
 import scala.annotation.{tailrec, unused}
-import util.{ReusableInstance, Statistics}
+import util.Statistics
 import util.ThreeValues._
 import Variance._
 import Depth._
@@ -1019,7 +1019,7 @@ trait Types
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
-      def findMemberInternal = findMemberInstance.using { findMember =>
+      def findMemberInternal = scratch.findMembers.using { findMember =>
         findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
         findMember()
       }
@@ -4028,9 +4028,6 @@ trait Types
   def refinedType(parents: List[Type], owner: Symbol): Type =
     refinedType(parents, owner, newScope, owner.pos)
 
-  private[this] val copyRefinedTypeSSM: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
-
   def copyRefinedType(original: RefinedType, parents: List[Type], decls: Scope, owner: Symbol = null) =
     if ((parents eq original.parents) && (decls eq original.decls) && (owner eq null)) original
     else {
@@ -4045,7 +4042,7 @@ trait Types
         val syms2 = result.decls.toList
         val resultThis = result.typeSymbol.thisType
         val substThisMap = new SubstThisMap(original.typeSymbol, resultThis)
-        copyRefinedTypeSSM.using { (msm: SubstSymMap) =>
+        scratch.substSymMaps.using { (msm: SubstSymMap) =>
           msm.reset(syms1, syms2)
           syms2.foreach(_.modifyInfo(info => msm.apply(substThisMap.apply(info))))
         }

@@ -541,6 +541,16 @@ abstract class SymbolTable extends macros.Universe
     val toStringSubjects = new mutable.HashSet[Type]
     /** The recursion depth of locked symbols, see `-Yrecursion` */
     var recursionTable = Map.empty[Symbol, Int]
+
+    // Reusable instances of helpers with mutable state, one per level of reentrance. As the
+    // `Scratch` is confined to a thread, they are reused in runtime reflection too.
+    val findMembers = ReusableInstance(new FindMember)
+    val containsCollectors = ReusableInstance(new ContainsCollector(null))
+    val varianceInTypes = ReusableInstance(new varianceInType)
+    val substSymMaps = ReusableInstance(SubstSymMap())
+    val onlyChildAccumulators = ReusableInstance(new OnlyChildAccumulator)
+    val setChildrenPosAccumulators = ReusableInstance(new SetChildrenPosAccumulator)
+    val commonOwnerMaps = ReusableInstance(new CommonOwnerMap)
   }
   private[this] lazy val _scratch: Scratch = new Scratch
   def scratch: Scratch = _scratch

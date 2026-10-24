@@ -22,7 +22,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 
-import util.{ReusableInstance, Statistics, shortClassOfInstance}
+import util.{Statistics, shortClassOfInstance}
 import Flags._
 import Variance._
 
@@ -3790,15 +3790,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (syms.isEmpty) Nil
     else {
       val syms1 = mapList(syms)(_.cloneSymbol)
-      cloneSymbolsSubstSymMap.using { (msm: SubstSymMap) =>
+      scratch.substSymMaps.using { (msm: SubstSymMap) =>
         msm.reset(syms, syms1)
         syms1.foreach(_.modifyInfo(msm))
       }
       syms1
     }
-
-  private[this] val cloneSymbolsSubstSymMap: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
 
   def cloneSymbolsAtOwner(syms: List[Symbol], owner: Symbol): List[Symbol] =
     deriveSymbols(syms, _ cloneSymbol owner)

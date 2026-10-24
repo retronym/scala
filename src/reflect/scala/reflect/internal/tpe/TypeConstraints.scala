@@ -17,7 +17,6 @@ package tpe
 
 import scala.collection.mutable.BitSet
 import scala.collection.mutable.Clearable
-import scala.reflect.internal.util.ReusableInstance
 
 private[internal] trait TypeConstraints {
   self: SymbolTable =>
@@ -195,10 +194,8 @@ private[internal] trait TypeConstraints {
     }
   }
 
-  private[this] val containsCollectorInstances: ReusableInstance[ContainsCollector] = ReusableInstance(new ContainsCollector(null), enabled = isCompilerUniverse)
-
   private[this] def containsSymbol(tp: Type, sym: Symbol): Boolean =
-    containsCollectorInstances.using { cc =>
+    scratch.containsCollectors.using { cc =>
       cc.reset(sym)
       cc.collect(tp)
     }

@@ -296,14 +296,13 @@ trait Positions extends api.Positions { self: SymbolTable =>
    *  @param  parent The parent of the child trees to position. All children must be positionable.
    */
   private def setChildrenPos(pos: Position, parent: Tree): Unit = try {
-    setChildrenPosAccumulator.using(_.set(pos, parent))
+    scratch.setChildrenPosAccumulators.using(_.set(pos, parent))
   } catch {
     case ex: Exception =>
       inform("error while set children pos "+pos+" of "+parent.children)
       throw ex
   }
-  private val setChildrenPosAccumulator = ReusableInstance[SetChildrenPosAccumulator](new SetChildrenPosAccumulator, enabled = isCompilerUniverse)
-  private final class SetChildrenPosAccumulator extends (Tree => Boolean) {
+  private[internal] final class SetChildrenPosAccumulator extends (Tree => Boolean) {
     private[this] val wrappingPosAccumulator = new WrappingPosAccumulator
     private[this] var pos: Position = _
     def set(pos: Position, parent: Tree): Unit = {

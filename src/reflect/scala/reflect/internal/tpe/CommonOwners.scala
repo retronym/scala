@@ -30,12 +30,12 @@ private[internal] trait CommonOwners {
   protected[internal] def commonOwner(tps: List[Type]): Symbol =
     if (tps.isEmpty) NoSymbol
     else {
-      commonOwnerMap.clear()
-      tps foreach (commonOwnerMap)
-      if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+      scratch.commonOwnerMaps.using { commonOwnerMap =>
+        commonOwnerMap.clear()
+        tps foreach (commonOwnerMap)
+        if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+      }
     }
-
-  protected def commonOwnerMap: CommonOwnerMap = commonOwnerMapObj
 
   protected class CommonOwnerMap extends TypeCollector[Symbol](null) {
     def clear(): Unit = { result = null }
@@ -55,6 +55,4 @@ private[internal] trait CommonOwners {
       case _                            => tp.foldOver(this)
     }
   }
-
-  private lazy val commonOwnerMapObj = new CommonOwnerMap
 }
