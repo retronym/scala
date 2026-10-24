@@ -75,9 +75,27 @@ The design takes these rules:
 - `TwoWayCaches`: concurrent maps with one computation per key.
 - `runtimeMirror`: a concurrent map from class loader to mirror.
 
+## What retronym/scala3#84 changes in this plan
+
+The same design was built and soaked for Scala 3's presentation compiler. What carries over:
+
+- **Publication is the whole correctness argument.** There, every divergence the soak found was a reader seeing state that was not published, not a scheduling problem. Step 1 here found the same: a class marked thread-safe while its info was still lazy.
+- **Every peek is a race.** Code that looks at in-progress state instead of forcing it (`rawInfo`, `isInitialized`, `hasCompleteInfo`, `unsafeTypeParams`) has to wait when the state belongs to another thread. #84 found seven shapes of peek beyond the ones it had counted.
+- **A waiter re-reads after the wait.** A thread that waited on a barrier must look at the symbol's current info, not at a completer it read before waiting (I44 there). `completeInfo` reads `infos.info` before it locks, so step 4 has to move that read.
+- **Roots coarser than facts turn lock orders into false cycles.** A wait-for chain through a root that covers several facts (a file, a class and its module) is not necessarily a dependency cycle, and raising `CyclicReference` for it makes false errors. Roots should be as small as the completer allows, and step 4 needs a rule to tell a lock order from a dependency cycle before raising.
+- **The four shapes of race in caches** on shared objects: a cache kept in several fields (a value and its period), a sentinel during a computation, a field read twice, a structure published while it is being filled. `TypeSymbol`'s `tpeCache`/`tpePeriod` is the first two at once; `SynchronizedBaseTypeSeq`'s lazy elements are the last. Step 5 sweeps for these shapes.
+- **How to hunt.** An oracle loop with many threads against single-threaded runs, a soak that hammers one pattern from every thread, and review sweeps for the known shapes. `CompletionStressTest` is the first; the other two come with steps 3 to 5.
+- **The batch compiler pays only at construction.** The concurrent path is chosen once, from `isConcurrentUniverse`, as #169 does for kind D.
+
 ## Steps
 
-- [ ] 1. Reproduce the 2014 race. Enable the commented-out fast path, run the `reflection-sync-*`, `t6240*`, `t7045`, `t8946` tests and `ScratchTest` in a loop, and add a stress test: several threads forcing the infos of many classes in a fresh universe, compared with a single-threaded oracle (the printed signatures). Find the completer that marks its symbols done too early, or leaves one unmarked.
+- [x] 1. Reproduce the 2014 race. *Done.* `CompletionStressTest`: threads walk the 344 top-level collection classes of a fresh universe in different orders, and each observation (signature, base classes, declarations' signatures) must be one a single thread makes in some order. With the fast path enabled it fails within a few rounds, from two causes, each fixed in its own commit:
+  - B1: `JavaMirrors.unpickleClass` marked the class and module thread-safe right after unpickling, while their infos were still `LazyTypeRef`s. A `typeParams` on the fast path then ran the unpickler outside the GIL, in a `Scan` another thread was using ("assertion failed: trait IterableOnce" in `readSymbolRef`; `IndexOutOfBoundsException` in the same `Scan`). The `LazyTypeRef`s mark their symbols when they complete; the early marking is removed.
+  - B2: a lock-order inversion. `tpe_*` on a thread-safe class took `tpeLock` without the GIL, then needed the GIL for its type parameters' `typeConstructor`, while another thread held the GIL and waited for that `tpeLock` (a hang, about one run in three). `tpe_*` now always takes the GIL first.
+
+  With both fixed and the fast path enabled: 3 × 200 rounds of 8 threads over 344 classes, and 500 rounds of 16 threads over 60 classes, pass.
+
+  Found along the way, single-threaded: B3, `staticClass(name).toType` on a class that is not completed yet answers the unapplied type constructor, because `SynchronizedSymbol.unsafeTypeParams` reads the completer's empty `typeParams`. Not fixed yet.
 - [ ] 2. Inventory: every completer in runtime reflection (unpickler, `TopClassCompleter`, `LazyPackageType`, `FromJavaClassCompleter`, `PackageScope`), what each writes and where it calls `markAllCompleted`; every peek at in-progress state; every lazy val and object reachable from a completion or a type operation, checked against the lazy-val rule (`JavaUniverseForce` coverage, per-mirror lazy vals, lazy vals of instances).
 - [ ] 3. Fix publication so that "done" is written last; enable the fast path. Completed symbols are then read without the GIL. Measure: this alone may remove most of the contention seen in #169's benchmark.
 - [ ] 4. Owner and barrier (a `ReentrantLock`) per completer, with the wait-for check and the timed deadlock diagnostic, replacing the GIL for completion. A force step for each new mirror, alongside `JavaUniverseForce`. Completion strategy chosen from `isConcurrentUniverse`; remove the `Synchronized*Symbol` mixins and `createXSymbol` overrides.
