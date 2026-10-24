@@ -23,11 +23,7 @@ private[internal] trait TypeConstraints {
   self: SymbolTable =>
   import definitions._
 
-  /** A log of type variable with their original constraints. Used in order
-   *  to undo constraints in the case of isSubType/isSameType failure.
-   */
-  private lazy val _undoLog = new UndoLog
-  def undoLog = _undoLog
+  def undoLog: UndoLog = scratch.undoLog
 
   import TypeConstraints.UndoPair
   class UndoLog extends Clearable {

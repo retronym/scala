@@ -72,6 +72,16 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.lubGlbCaches_="),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.lubGlbCaches"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.lubGlbCaches_="),
+
+    // per-thread scratch state of type operations gathered into `SymbolTable#Scratch`: the private[reflect] traits
+    // SynchronizedTypes / SynchronizedSymbols override `scratch` instead of each field's accessors
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedTypes.*"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.recursionTable"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.recursionTable_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.commonOwnerMap"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.commonOwnerMap"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.scratch"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.scratch"),
   )
 
   override val buildSettings = Seq(

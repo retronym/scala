@@ -68,6 +68,11 @@ None of these is reached under the GIL on the paths listed, so concurrent caller
 | F6 | `wildcardExtrapolation` variance (`VariancedTypeMap._variance`) | `TypeMaps.scala:391`, used at `Definitions.scala:860` (`samOf`) | SAM type computation | wrong variance → wildcard extrapolated to the wrong bound. |
 | F7 | `boxingErasure.boxPrimitives` / `boxing3Erasure` | `transform/Erasure.scala:562` | `erasedValueClassArg` (`Erasure.scala:103`) for parametric value classes | primitive boxed or not depending on another thread being inside an array. |
 | F8 | `perRunCaches.caches` (`::=` on a var) | `internal/SymbolTable.scala:408` | each thread's first `intersectionWitness` access registers a new per-thread map | lost registrations; harmless in runtime (never cleared), noted because `ReflectGlobal` is a compiler universe with the runtime overrides. |
+| F9 | `isWildCardOrNonGroundTypeVarCollector.result` (a `FindTypeCollector` in a field) | `internal/tpe/GlbLubs.scala:195` | `lub` → `elimSub` → `maxTypes` | **Reproduced** by the baseline run of `ReflectionTypeOpsBenchmark.lubLeafOther -t 4`: `NullPointerException: ... FindTypeCollector.result() is null` at `TypeMaps.scala:1153`, from `GlbLubs.maxTypes(GlbLubs.scala:230)`. `collect` saves `result`, sets it to `None`, traverses and restores the saved value; another thread's restore writes back `null` (the field's initial value) under a traversal in progress. |
+
+Covered by the GIL today, listed so that replacing the GIL does not forget them: `typeContainsTypeVar` (`Types.scala:5344`, a `FindTypeCollector` in a field), used only in `defineBaseTypeSeqOfCompoundType`, which runtime reflection runs under `gilSynchronized`.
+
+Shared `Transformer`s, whose `currentOwner` is a mutable field: `duplicateAndResetPos` (`Trees.scala:1912`, compiler only) and `patvarTransformer` (`TreeGen.scala:997`, reached from `ReificationSupport` `SyntacticPatDef` → `gen.mkPatDef`, i.e. quasiquotes evaluated against the runtime universe). Not type operations; out of scope here, but the same shape (F11, F12).
 
 Benign or out of scope: `explainSwitch` (`Types.scala:100`, only set by `explaining`, i.e. `-explaintypes`); `lockedCount` (`Symbols.scala:43`, read only when `isCompilerUniverse`); `_lockingTrace` (`Symbols.scala:47`, only with `-Ycheck-symbol-locks`-style tracing, written under the GIL); `ph`/`per`/`phStack` (`SymbolTable.scala:228`, runtime only ever sets `SomePhase`; per run, not per thread).
 
@@ -112,7 +117,7 @@ What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques),
 - [ ] 3. Move `lubGlbCaches`; add `globalGlbDepth` (F1).
 - [ ] 4. Move `indent`, `toStringRecursions`, `toStringSubjects`, `recursionTable`; delete the now-unused overrides.
 - [ ] 5. `ReusableInstance`s and `commonOwnerMap` into `Scratch`, always enabled.
-- [ ] 6. F2–F7: call sites use `ReusableInstance`s of the collectors / maps held in `Scratch`.
+- [ ] 6. F2–F7, F9: call sites use per-thread instances of the collectors / maps held in `Scratch` (they already save and restore their state on reentrance, so one instance per thread suffices; F7 allocates per call, as `Erasure` is outside `SymbolTable`).
 - [ ] 7. Benchmark: JMH `ReflectionTypeOpsBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
 - [ ] 8. Write-up.
 

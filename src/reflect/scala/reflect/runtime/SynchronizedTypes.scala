@@ -17,7 +17,6 @@ package runtime
 import scala.collection.mutable
 import java.lang.ref.{WeakReference => jWeakRef}
 import scala.ref.{WeakReference => sWeakRef}
-import java.util.IdentityHashMap
 
 /** This trait overrides methods in reflect.internal, bracketing
  *  them in synchronized { ... } to make them thread-safe
@@ -56,21 +55,26 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   override def skolemizationLevel = _skolemizationLevel.get
   override def skolemizationLevel_=(value: Int) = _skolemizationLevel.set(value)
 
-  private lazy val _undoLog = mkThreadLocalStorage(new UndoLog)
-  override def undoLog = _undoLog.get
+  // One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
+  // caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
+  // would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
+  // long-lived thread would keep every universe it ever used.
+  private lazy val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
+  private lazy val scratchRef = new ThreadLocal[jWeakRef[Scratch]]
+  override def scratch: Scratch = {
+    val ref = scratchRef.get
+    val s = if (ref eq null) null else ref.get
+    if (s ne null) s else newScratch()
+  }
+  private def newScratch(): Scratch = {
+    val s = new Scratch
+    scratches.put(Thread.currentThread, s)
+    scratchRef.set(new jWeakRef(s))
+    s
+  }
 
   private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
   override def intersectionWitness = _intersectionWitness.get
-
-  private lazy val _subsametypeRecursions = mkThreadLocalStorage(0)
-  override def subsametypeRecursions = _subsametypeRecursions.get
-  override def subsametypeRecursions_=(value: Int) = _subsametypeRecursions.set(value)
-
-  private lazy val _pendingSubTypes = mkThreadLocalStorage(new mutable.HashSet[SubTypePair])
-  override def pendingSubTypes = _pendingSubTypes.get
-
-  private lazy val _knownFalseSubTypes = mkThreadLocalStorage(new IdentityHashMap[Type, List[Type]])
-  override def knownFalseSubTypes = _knownFalseSubTypes.get
 
   private lazy val _basetypeRecursions = mkThreadLocalStorage(0)
   override def basetypeRecursions = _basetypeRecursions.get

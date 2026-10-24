@@ -509,6 +509,26 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** The scratch state of the type operations of one thread: recursion guards, pending sets,
+   *  the undo log of type constraints. Each operation fetches it once and keeps it in a local.
+   *
+   *  In a universe that is used from one thread at a time (the compiler, a toolbox) there is one
+   *  instance; runtime reflection (`SynchronizedTypes`) overrides `scratch` to return one per
+   *  thread. Anything that must not be seen by an operation on another thread belongs here, not
+   *  in a field of `SymbolTable`: anything that is shared, such as caches, does not.
+   */
+  final class Scratch {
+    var subsametypeRecursions: Int = 0
+    val pendingSubTypes = new mutable.HashSet[SubTypePair]
+    val knownFalseSubTypes = new java.util.IdentityHashMap[Type, List[Type]]
+    /** A log of type variable with their original constraints. Used in order
+     *  to undo constraints in the case of isSubType/isSameType failure.
+     */
+    val undoLog = new UndoLog
+  }
+  private[this] lazy val _scratch: Scratch = new Scratch
+  def scratch: Scratch = _scratch
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
