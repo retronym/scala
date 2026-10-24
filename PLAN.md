@@ -13,6 +13,16 @@ The Scala 3 presentation compiler (retronym/scala3#84) solved the same problem b
 
 The outcome is summarised under "Results" at the end.
 
+## Kinds
+
+From the Scala 3 multi-reader design (retronym/scala3#84, `docs/_docs/internals/interactive-multi-reader.md`), with their Scala 2 instances:
+
+- **A. Per-operation scratch, wrongly shared:** recursion guards, pending sets, the undo log, lub/glb memo tables, helpers with mutable fields (`ReusableInstance` pools, shared `TypeCollector`s). Treatment: confine to the thread (`Scratch`).
+- **B. Lazy facts with a black hole:** symbol completion, runtime reflection's initialisation mask, base type sequences under construction; what the GIL protects. Treatment: owner and barrier per completion root. Not done.
+- **C. Derived caches:** `intersectionWitness`, a type's cached base type sequence, base classes, parents, underlying, normalized. Treatment: safe publication or concurrent maps. Not done, except that `intersectionWitness` is only touched under the GIL and so needs no per-thread copies.
+- **D. Interning and counters:** `unique`, the name table, symbol ids. Treatment: an implementation chosen when the universe is built, from `isConcurrentUniverse`.
+- **E. Trees:** typed trees mutated in place. Not relevant to runtime reflection's type operations.
+
 ## Inventory
 
 Kind A = per-operation scratch that is semantically per thread. "Runtime today" = how `scala.reflect.runtime` handles it.
@@ -122,6 +132,8 @@ What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques),
 - [x] 6. F2–F7, F9: call sites use per-thread instances of the collectors / maps held in `Scratch` (they already save and restore their state on reentrance, so one instance per thread suffices; F7 allocates per call, as `Erasure` is outside `SymbolTable`).
 - [x] 7. Benchmark: JMH `ReflectionTypeOpsBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
 - [x] 8. Write-up.
+- [x] 9. `findMember` takes its `FindMember` with `ReusableInstance.take`/`release` instead of the `using` closure (the batch allocation regression below).
+- [x] 10. Kind D: `isConcurrentUniverse`; the `Scratch` holder, symbol ids (`util.IdCounter`), `synchronizeNames` and the uniques table (`PerRunUniques`, `SynchronizedPerRunUniques`, `SynchronizedWeakUniques`) chosen from it when the universe is built; the corresponding overrides in `SynchronizedTypes`/`SynchronizedSymbols`/`SynchronizedOps` removed. `intersectionWitness` shared (only touched under the GIL) and `ThreadLocalStorage` deleted.
 
 Each step: `reflect/compile`, `compiler/compile`, `junit/testOnly scala.reflect.*`, partest `reflection-sync-*`, `t6240*`, `t7045`, `t6411*`, `lazy-concurrent`, `t6240-universe-code-gen` (regenerates `JavaUniverseForce`).
 
@@ -150,17 +162,28 @@ bench/Jmh/run -t 1 ReflectionTypeOpsBenchmark
 bench/Jmh/run -t 4 ReflectionTypeOpsBenchmark
 ```
 
-| benchmark | -t 1 before | -t 1 after | -t 4 before | -t 4 after |
-|---|---|---|---|---|
-| `subtypeTrue` | 2009 ± 65 ns | 1612 ± 152 ns | 19853 ± 2130 ns | 9700 ± 620 ns |
-| `subtypeFalse` | 3101 ± 170 ns | 2514 ± 211 ns | 21244 ± 902 ns | 16533 ± 868 ns |
-| `asSeenFrom` | 18229 ± 2138 ns | 17140 ± 738 ns | 85824 ± 4511 ns | 84703 ± 4052 ns |
-| `members` | 4278 ± 234 ns | 4423 ± 619 ns | 28680 ± 1775 ns | 28828 ± 2496 ns |
-| `lubLeafOther` | 7.91 ± 0.39 ms | 8.59 ± 1.12 ms | 52.6 ms, 1 of 3 forks (the others crashed, F9) | 54.0 ± 5.2 ms |
+"kind A" is the branch after step 8, "kind D" the tip after step 10.
+
+| benchmark | -t 1 before | -t 1 kind A | -t 1 kind D | -t 4 before | -t 4 kind A | -t 4 kind D |
+|---|---|---|---|---|---|---|
+| `subtypeTrue` | 2009 ± 65 ns | 1612 ± 152 | 1474 ± 91 | 19853 ± 2130 | 9700 ± 620 | 10098 ± 765 |
+| `subtypeFalse` | 3101 ± 170 | 2514 ± 211 | 2383 ± 135 | 21244 ± 902 | 16533 ± 868 | 15878 ± 696 |
+| `asSeenFrom` | 18229 ± 2138 | 17140 ± 738 | 16614 ± 166 | 85824 ± 4511 | 84703 ± 4052 | 84615 ± 4609 |
+| `members` | 4278 ± 234 | 4423 ± 619 | 4230 ± 195 | 28680 ± 1775 | 28828 ± 2496 | 25895 ± 1022 |
+| `lubLeafOther` | 7.91 ± 0.39 ms | 8.59 ± 1.12 ms | 7.39 ± 0.36 ms | 52.6 ms, 1 of 3 forks (the others crashed, F9) | 54.0 ± 5.2 ms | 52.7 ± 3.0 ms |
 
 Subtyping gains 20% on one thread and 2× on four, from replacing per-access monitor-guarded map lookups by one fetch per operation. `asSeenFrom`, `members` and `lub` don't move: they are dominated by the GIL. Even after the change, four threads are slower per operation than one; a stack profile of `subtypeTrue -t 4` shows 48% of samples `WAITING` in `ReentrantLock` (the GIL), entered from `SynchronizedSymbol.rawInfo`/`validTo` via `gilSynchronizedIfNotThreadsafe`: symbols reached by these operations are not marked thread-safe, so every `info` takes the GIL. `lub` creates fresh refinement symbols, which are never thread-safe, and is GIL-bound even on one thread (7.9 ms for one lub of two small class types).
 
 ### Batch compilation
+
+At the tip (campaign `reflect-scratch-typer-2`, same setup as below), batch compilation pays nothing measurable:
+
+| corpus | time, branch vs base | alloc/op, branch vs base |
+|---|---|---|
+| re2s | +0.72% ± 1.28 | +0.03% ± 0.88 |
+| scalap | −0.15% ± 0.87 | +0.79% ± 0.33 |
+
+That needed step 9. The history, after step 8:
 
 `CompileBenchmark` in jvm-perf-lab's scala2 lab, typer only, the two builds paired within each fork (3 forks per corpus), JDK 21.0.12, campaign `reflect-scratch-typer`:
 
@@ -173,7 +196,7 @@ The lab's A/A control (one build against itself, scalap) moves by up to 4.7% in 
 
 An allocation profile of each build (campaign `reflect-scratch-typer-alloc`, `perflab profdiff --event alloc`) puts the whole difference in one class: `Types$Type$$Lambda`, from 0 to 5.5 MB per op (+6.7% of all allocation), allocated in `Type.findMember` by the closure passed to `ReusableInstance.using`. The base build has the same closure (`findMemberInstance.using { ... }`), but C2 scalar-replaces it there. `-XX:+PrintInlining` shows why this is fragile: `ReusableInstance.using` is 116 bytes and shared by every pool, so whether C2 inlines it into `findMember` (and can then eliminate the closure) depends on how it was compiled before; in the branch's run it is reported as "callee is too large" at some sites. Making `_scratch` a plain `val` instead of a `lazy val` did not change the result (the allocation stayed at 5.5 MB per op).
 
-Both builds here are `quick` builds, which are compiled without Scala's optimizer. Release builds compile `scala/**` with `-opt:l:inline -opt-inline-from:scala/**`, which inlines `@inline def using` and removes the closure at compile time, so I expect the shipped compiler not to show this. I have not measured that. Before this is more than a spike, either rerun the A/B with both builds compiled with the release optimizer settings, or take `findMember` off the closure so that it does not depend on C2.
+Both builds here are `quick` builds, which are compiled without Scala's optimizer. Release builds compile `scala/**` with `-opt:l:inline -opt-inline-from:scala/**`, which inlines `@inline def using` and removes the closure at compile time, so I expect the shipped compiler not to show this. I have not measured that. Step 9 takes `findMember` off the closure (`ReusableInstance.take`/`release`); the allocation profile then shows no `Types$Type$$Lambda` and 43.48 MB/op against the base's 43.34.
 
 ## Future work (not in this spike)
 
