@@ -95,6 +95,18 @@ The same design was built and soaked for Scala 3's presentation compiler. What c
 
   With both fixed and the fast path enabled: 3 × 200 rounds of 8 threads over 344 classes, and 500 rounds of 16 threads over 60 classes, pass.
 
+  `ReflectionTypeOpsBenchmark`, JDK 21.0.12, ns/op, #169's tip against this branch:
+
+  | benchmark | 1 thread | 4 threads | 8 threads (this branch) |
+  |---|---|---|---|
+  | `subtypeTrue` | 1474 → 1382 | 10098 → 1586 | 7109 |
+  | `subtypeFalse` | 2383 → 1996 | 15878 → 2682 | 7792 |
+  | `asSeenFrom` | 16614 → 16795 | 84615 → 38141 | 94839 |
+  | `members` | 4230 → 4623 | 25895 → 22620 | 46422 |
+  | `lubLeafOther` | 7.39 → 7.74 ms | 52.7 → 33.7 ms | 66.8 ms |
+
+  At 4 threads subtyping now costs about what it does on one. At 8 it contends again, on what still takes the GIL (`tpe_*`, the `define*` caches, fresh refinement symbols).
+
   Found along the way, single-threaded: B3, `staticClass(name).toType` on a class that is not completed yet answers the unapplied type constructor, because `SynchronizedSymbol.unsafeTypeParams` reads the completer's empty `typeParams`. Not fixed yet.
 - [ ] 2. Inventory: every completer in runtime reflection (unpickler, `TopClassCompleter`, `LazyPackageType`, `FromJavaClassCompleter`, `PackageScope`), what each writes and where it calls `markAllCompleted`; every peek at in-progress state; every lazy val and object reachable from a completion or a type operation, checked against the lazy-val rule (`JavaUniverseForce` coverage, per-mirror lazy vals, lazy vals of instances).
 - [ ] 3. Fix publication so that "done" is written last; enable the fast path. Completed symbols are then read without the GIL. Measure: this alone may remove most of the contention seen in #169's benchmark.
