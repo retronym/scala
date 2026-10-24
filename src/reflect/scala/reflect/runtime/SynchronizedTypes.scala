@@ -72,10 +72,6 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
   override def intersectionWitness = _intersectionWitness.get
 
-  private lazy val _lubGlbCaches = mkThreadLocalStorage(new LubGlbCaches(null))
-  override def lubGlbCaches = _lubGlbCaches.get
-  override def lubGlbCaches_=(caches: LubGlbCaches) = _lubGlbCaches.set(caches)
-
   private lazy val _indent = mkThreadLocalStorage("")
   override def indent = _indent.get
   override def indent_=(value: String) = _indent.set(value)

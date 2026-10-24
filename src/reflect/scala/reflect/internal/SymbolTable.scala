@@ -531,6 +531,10 @@ abstract class SymbolTable extends macros.Universe
     var skolemizationLevel: Int = 0
     var basetypeRecursions: Int = 0
     val pendingBaseTypes = new mutable.HashSet[Type]
+    /** The memo tables and recursion guards of the `lub` or `glb` in progress. */
+    var lubGlbCaches = new LubGlbCaches(null)
+    /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
+    var globalGlbDepth: Depth = Depth.Zero
   }
   private[this] lazy val _scratch: Scratch = new Scratch
   def scratch: Scratch = _scratch

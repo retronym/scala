@@ -309,9 +309,8 @@ private[internal] trait GlbLubs {
       if (outer eq null) here else here + outer.inProgress(isLub, ts)
     }
   }
-  private[this] var _lubGlbCaches = new LubGlbCaches(null)
-  def lubGlbCaches: LubGlbCaches = _lubGlbCaches
-  def lubGlbCaches_=(caches: LubGlbCaches): Unit = _lubGlbCaches = caches
+  def lubGlbCaches: LubGlbCaches = scratch.lubGlbCaches
+  def lubGlbCaches_=(caches: LubGlbCaches): Unit = scratch.lubGlbCaches = caches
 
   def lubResults = lubGlbCaches.lubResults
   def glbResults = lubGlbCaches.glbResults
@@ -328,11 +327,9 @@ private[internal] trait GlbLubs {
    */
   private def withLubGlbCaches[T](isLub: Boolean, ts: List[Type])(body: => T): T = {
     // Single-threaded only: `inUse` and the maps are plain fields, so a holder must never be
-    // visible to two threads. The compiler universe is single-threaded; runtime reflection
-    // (`SynchronizedTypes`) overrides `lubGlbCaches` with thread-local storage, so each thread
-    // gets, replaces and restores only its own holder. A universe used concurrently must do
-    // the same; making `inUse` volatile would not help, as the maps would still be shared.
-    val saved = lubGlbCaches
+    // visible to two threads. It lives in `scratch`, which runtime reflection keeps per thread.
+    val s = scratch
+    val saved = s.lubGlbCaches
     if (!saved.inUse) {
       saved.ownerTs = ts
       saved.ownerIsLub = isLub
@@ -343,8 +340,8 @@ private[internal] trait GlbLubs {
       fresh.inUse = true
       fresh.ownerTs = ts
       fresh.ownerIsLub = isLub
-      lubGlbCaches = fresh
-      try body finally lubGlbCaches = saved
+      s.lubGlbCaches = fresh
+      try body finally s.lubGlbCaches = saved
     }
   }
 
@@ -357,7 +354,7 @@ private[internal] trait GlbLubs {
    *  that installs fresh ones restores them when it finishes.
    */
   private def withEnclosingLubGlbCaches[T](body: LubGlbCaches => T): T = {
-    val caches = lubGlbCaches
+    val caches = scratch.lubGlbCaches
     if (caches.inUse) body(caches) else claimLubGlbCaches(caches, body(caches))
   }
 
@@ -522,13 +519,12 @@ private[internal] trait GlbLubs {
 
   val GlbFailure = new Throwable
 
-  /** A global counter for glb calls in the `specializes` query connected to the `addMembers`
-    *  call in `glb`. There's a possible infinite recursion when `specializes` calls
-    *  memberType, which calls baseTypeSeq, which calls mergePrefixAndArgs, which calls glb.
-    *  The counter breaks this recursion after two calls.
+  /** The limit of `Scratch.globalGlbDepth`, a counter for glb calls in the `specializes` query
+    *  connected to the `addMembers` call in `glb`. There's a possible infinite recursion when
+    *  `specializes` calls memberType, which calls baseTypeSeq, which calls mergePrefixAndArgs,
+    *  which calls glb. The counter breaks this recursion after two calls.
     *  If the recursion is broken, no member is added to the glb.
     */
-  private[this] var globalGlbDepth = Depth.Zero
   private final val globalGlbLimit = Depth(2)
 
   /** The greatest lower bound of a list of types (as determined by `<:<`). */
@@ -643,15 +639,16 @@ private[internal] trait GlbLubs {
                   result
                 })
             }
-            if (globalGlbDepth < globalGlbLimit)
+            val s = scratch
+            if (s.globalGlbDepth < globalGlbLimit)
               try {
-                globalGlbDepth = globalGlbDepth.incr
+                s.globalGlbDepth = s.globalGlbDepth.incr
                 def foreachRefinedDecls(ty: Type): Unit = ty match {
                   case RefinedType(ps, decls) =>
                     ps foreach foreachRefinedDecls
                     if (! decls.isEmpty)
                       decls.iterator.foreach { sym =>
-                        if (globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
+                        if (s.globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
                           try {
                             addMember(glbThisType, glbRefined, glbsym(sym), depth)
                           } catch {
@@ -662,7 +659,7 @@ private[internal] trait GlbLubs {
                 }
                 ts foreach foreachRefinedDecls
               } finally {
-                globalGlbDepth = globalGlbDepth.decr
+                s.globalGlbDepth = s.globalGlbDepth.decr
               }
             if (glbRefined.decls.isEmpty) intersectionType(ts1, glbOwner) else glbRefined
           }
