@@ -551,6 +551,19 @@ abstract class SymbolTable extends macros.Universe
     val onlyChildAccumulators = ReusableInstance(new OnlyChildAccumulator)
     val setChildrenPosAccumulators = ReusableInstance(new SetChildrenPosAccumulator)
     val commonOwnerMaps = ReusableInstance(new CommonOwnerMap)
+
+    // Instances of the type maps and collectors that `TypeMaps` also offers as shared objects.
+    // They keep state in fields, but save and restore it on reentrance, so one per thread will do.
+    val erroneousCollector = new ErroneousCollector
+    val isDependentCollector = new IsDependentCollector
+    val isRelatableCollector = new IsRelatableCollector
+    val unrelatableCollector = new UnrelatableCollector
+    val wildcardExtrapolation = new wildcardExtrapolation
+    // OPT: hoist allocation of the collector and lambda out of the loop in `maxTypes`
+    val isWildCardOrNonGroundTypeVarCollector = new FindTypeCollector({
+      case tv: TypeVar => !tv.isGround
+      case t => t.isWildcard
+    })
   }
   private[this] lazy val _scratch: Scratch = new Scratch
   def scratch: Scratch = _scratch

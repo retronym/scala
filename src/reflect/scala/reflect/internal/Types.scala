@@ -291,7 +291,7 @@ trait Types
     def isError: Boolean = typeSymbol.isError || termSymbol.isError
 
     /** Is this type produced as a repair for an error? */
-    def isErroneous: Boolean = ErroneousCollector.collect(this)
+    def isErroneous: Boolean = scratch.erroneousCollector.collect(this)
 
     /** Can this type only be subtyped by bottom types?
      *  This is assessed to be the case if the class is final,
@@ -2885,7 +2885,7 @@ trait Types
 
     private[this] var isdepmeth: ThreeValue = UNKNOWN
     override def isDependentMethodType: Boolean = {
-      if (isdepmeth == UNKNOWN) isdepmeth = fromBoolean(IsDependentCollector.collect(resultType.dealias))
+      if (isdepmeth == UNKNOWN) isdepmeth = fromBoolean(scratch.isDependentCollector.collect(resultType.dealias))
       toBoolean(isdepmeth)
     }
 
@@ -3715,8 +3715,9 @@ trait Types
     }
 
     private def unrelatable(tp: Type): List[TypeSkolem] = {
-      UnrelatableCollector.barLevel = level
-      UnrelatableCollector.collect(tp)
+      val collector = scratch.unrelatableCollector
+      collector.barLevel = level
+      collector.collect(tp)
     }
 
 
@@ -3725,8 +3726,9 @@ trait Types
       *  skolemization level is higher than the level of this variable.
       */
     def isRelatable(tp: Type): Boolean = {
-      IsRelatableCollector.barLevel = level
-      IsRelatableCollector.collect(tp)
+      val collector = scratch.isRelatableCollector
+      collector.barLevel = level
+      collector.collect(tp)
     }
 
     override def normalize: Type = (
