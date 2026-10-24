@@ -4327,23 +4327,69 @@ trait Types
 
 // Hash consing --------------------------------------------------------------
 
-  private[this] val initialUniquesCapacity = 4096
-  private[this] var uniques: util.WeakHashSet[Type] = _
-  private[this] var uniqueRunId = NoRunId
+  /** The table that makes structurally equal types identical. A compiler universe has runs and
+   *  discards the table at the start of each; runtime reflection has none, so its table is weak
+   *  in the entries, which go when nobody refers to their types. A concurrent universe locks it;
+   *  that includes a toolbox's `ReflectGlobal`, which is a compiler universe.
+   */
+  private[this] val uniques: Uniques =
+    if (!isCompilerUniverse) new SynchronizedWeakUniques
+    else if (isConcurrentUniverse) new SynchronizedPerRunUniques
+    else new PerRunUniques
 
-  final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
+  final def howManyUniqueTypes: Int = uniques.size
 
-  protected def unique[T <: Type](tp: T): T =  {
-    if (uniqueRunId != currentRunId) {
-      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
-      uniqueRunId = currentRunId
+  protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
+
+  private[internal] abstract class Uniques {
+    def unique[T <: Type](tp: T): T
+    def size: Int
+  }
+
+  /** Discarded at the start of each run, and weak within it. */
+  private class PerRunUniques extends Uniques {
+    private[this] val initialUniquesCapacity = 4096
+    private[this] var uniques: util.WeakHashSet[Type] = _
+    private[this] var uniqueRunId = NoRunId
+
+    def size: Int = if (uniques == null) 0 else uniques.size
+
+    def unique[T <: Type](tp: T): T = {
+      if (uniqueRunId != currentRunId) {
+        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
+        // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
+        // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
+        // I've removed the registration for now. I don't think it's particularly harmful anymore
+        // as a) this is now a weak set, and b) it is discarded completely before the next run.
+        uniqueRunId = currentRunId
+      }
+      (uniques findEntryOrUpdate tp).asInstanceOf[T]
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+  }
+
+  private final class SynchronizedPerRunUniques extends PerRunUniques {
+    override def size: Int = synchronized(super.size)
+    override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
+  }
+
+  /** Weak and synchronized, for runtime reflection. The lock can be fine-grained: computing a
+   *  type's hash code and equality does not call any reflection API, so this cannot deadlock.
+   */
+  private final class SynchronizedWeakUniques extends Uniques {
+    private[this] val uniques = mutable.WeakHashMap[Type, java.lang.ref.WeakReference[Type]]()
+
+    def size: Int = synchronized(uniques.size)
+
+    def unique[T <: Type](tp: T): T = synchronized {
+      val inCache = uniques get tp
+      val result = if (inCache.isDefined) inCache.get.get else null
+      if (result ne null) result.asInstanceOf[T]
+      else {
+        uniques(tp) = new java.lang.ref.WeakReference(tp)
+        tp
+      }
+    }
   }
 
 // Helper Classes ---------------------------------------------------------
