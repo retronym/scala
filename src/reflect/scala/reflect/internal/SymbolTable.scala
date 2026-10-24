@@ -518,6 +518,8 @@ abstract class SymbolTable extends macros.Universe
    */
   def isConcurrentUniverse = false
 
+  override protected def synchronizeNames: Boolean = isConcurrentUniverse
+
   /** The scratch state of the type operations of one thread: recursion guards, pending sets,
    *  the undo log of type constraints. Each operation fetches it once and keeps it in a local.
    *
