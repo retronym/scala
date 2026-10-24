@@ -72,17 +72,6 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   private lazy val _intersectionWitness = mkThreadLocalStorage(perRunCaches.newWeakMap[List[Type], sWeakRef[Type]]())
   override def intersectionWitness = _intersectionWitness.get
 
-  private lazy val _indent = mkThreadLocalStorage("")
-  override def indent = _indent.get
-  override def indent_=(value: String) = _indent.set(value)
-
-  private lazy val _toStringRecursions = mkThreadLocalStorage(0)
-  override def toStringRecursions = _toStringRecursions.get
-  override def toStringRecursions_=(value: Int) = _toStringRecursions.set(value)
-
-  private lazy val _toStringSubjects = mkThreadLocalStorage(new mutable.HashSet[Type])
-  override def toStringSubjects = _toStringSubjects.get
-
   /* The idea of caches is as follows.
    * When in reflexive mode, a cache is either null, or one sentinel
    * value representing undefined or the final defined

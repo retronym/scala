@@ -535,6 +535,12 @@ abstract class SymbolTable extends macros.Universe
     var lubGlbCaches = new LubGlbCaches(null)
     /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
     var globalGlbDepth: Depth = Depth.Zero
+    /** The current indentation string for traces */
+    var indent: String = ""
+    var toStringRecursions: Int = 0
+    val toStringSubjects = new mutable.HashSet[Type]
+    /** The recursion depth of locked symbols, see `-Yrecursion` */
+    var recursionTable = Map.empty[Symbol, Int]
   }
   private[this] lazy val _scratch: Scratch = new Scratch
   def scratch: Scratch = _scratch

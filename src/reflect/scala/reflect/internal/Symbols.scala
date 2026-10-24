@@ -36,9 +36,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   protected def nextId() = { ids += 1; ids }
 
   /** Used to keep track of the recursion depth on locked symbols */
-  private[this] var _recursionTable = Map.empty[Symbol, Int]
-  def recursionTable = _recursionTable
-  def recursionTable_=(value: Map[Symbol, Int]) = _recursionTable = value
+  def recursionTable: Map[Symbol, Int] = scratch.recursionTable
+  def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
 
   private[this] var _lockedCount = 0
   def lockedCount = this._lockedCount

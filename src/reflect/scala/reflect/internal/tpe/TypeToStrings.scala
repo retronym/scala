@@ -24,20 +24,19 @@ private[internal] trait TypeToStrings {
     */
   final val maxToStringRecursions = 50
 
-  private[this] var _toStringRecursions = 0
-  def toStringRecursions = _toStringRecursions
-  def toStringRecursions_=(value: Int) = _toStringRecursions = value
+  def toStringRecursions: Int = scratch.toStringRecursions
+  def toStringRecursions_=(value: Int): Unit = scratch.toStringRecursions = value
 
-  private[this] val _toStringSubjects = HashSet[Type]()
-  def toStringSubjects = _toStringSubjects
+  def toStringSubjects: HashSet[Type] = scratch.toStringSubjects
 
-  protected def typeToString(tpe: Type): String =
+  protected def typeToString(tpe: Type): String = {
+    val s = scratch
     // if (toStringSubjects contains tpe) {
     //   // handles self-referential anonymous classes and who knows what else
     //   "..."
     // }
     // else
-    if (toStringRecursions >= maxToStringRecursions) {
+    if (s.toStringRecursions >= maxToStringRecursions) {
       devWarning("Exceeded recursion depth attempting to print " + util.shortClassOfInstance(tpe))
       if (settings.isDebug)
         (new Throwable).printStackTrace
@@ -46,7 +45,7 @@ private[internal] trait TypeToStrings {
     }
     else
       try {
-        toStringRecursions += 1
+        s.toStringRecursions += 1
         // TODO: study performance impact of this cache
         // to quote Jason:
         //   I'm a little uneasy with the performance impact of the fail-safe. We end up calling Type#toString
@@ -55,6 +54,7 @@ private[internal] trait TypeToStrings {
         tpe.safeToString
       } finally {
         // toStringSubjects -= tpe
-        toStringRecursions -= 1
+        s.toStringRecursions -= 1
       }
+  }
 }
