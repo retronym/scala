@@ -6,10 +6,12 @@ Branch: `claude/reflect-scratch-4f66f7`. Scope: kind A only (per-operation scrat
 
 `scala.reflect.internal.SymbolTable` keeps the scratch state of its type operations (recursion counters, pending sets, the undo log, lub/glb memo tables) as fields scattered over the cake: `Types`, `TypeComparers`, `TypeConstraints`, `GlbLubs`, `TypeToStrings`, `Symbols`. Each field is reached through a `def` so that `scala.reflect.runtime.SynchronizedTypes`/`SynchronizedSymbols` can override it with `mkThreadLocalStorage(...)`, one override (and for `var`s, a getter/setter pair) per field. Two consequences:
 
-- The set of "this must be per thread" state is defined only implicitly, by which accessors the runtime remembered to override. Fields added later without an override are silently shared between threads (findings F1–F6 below).
+- The set of "this must be per thread" state is defined only implicitly, by which accessors the runtime remembered to override. Fields added later without an override are silently shared between threads (findings F1–F9 below).
 - `mkThreadLocalStorage` is a `Collections.synchronizedMap(new WeakHashMap[Thread, T])`: every access takes a monitor and hashes `currentThread`. `isSubType` touches `subsametypeRecursions` four times, `undoLog` twice and `knownFalseSubTypes`/`pendingSubTypes` on the slow path, each a separate locked lookup.
 
 The Scala 3 presentation compiler (retronym/scala3#84) solved the same problem by gathering every such field into one object reached through a single accessor that is a plain field in batch and a `ThreadLocal` in the concurrent universe. This spike does the same for Scala 2.
+
+The outcome is summarised under "Results" at the end.
 
 ## Inventory
 
@@ -99,11 +101,11 @@ final class Scratch {
 def scratch: Scratch          // a plain val in internal.SymbolTable
 ```
 
-- `internal.SymbolTable` holds one `Scratch` in a field initialised before any trait body can run a type operation; `def scratch` returns it. Batch (`Global`, toolbox, presentation compiler) pays a field load per fetch.
-- `runtime.SynchronizedOps` overrides `scratch` with one `java.lang.ThreadLocal[Scratch]` (`withInitial`). The 12 kind-A `mkThreadLocalStorage` overrides go away. `ReflectGlobal` (compiler universe + runtime traits) inherits the `ThreadLocal`, as it inherits the overrides today.
+- `internal.SymbolTable` holds one `Scratch` in a `lazy val` (so its initialiser, which allocates the `ReusableInstance`s' first instances, runs after every trait body); `def scratch` returns it. Batch (`Global`, toolbox, presentation compiler) pays a field load per fetch.
+- `runtime.SynchronizedTypes` overrides `scratch` to return one per thread. The 12 kind-A `mkThreadLocalStorage` overrides go away. `ReflectGlobal` (compiler universe + runtime traits) inherits the override, as it inherited the old ones. The universe owns the instances in a `synchronizedMap(WeakHashMap[Thread, Scratch])`, consulted once per thread, and a `ThreadLocal[WeakReference[Scratch]]` is the fast path. A plain `ThreadLocal[Scratch]` leaks: `Scratch` is an inner class, so the value strongly reaches the universe and through it the `ThreadLocal` key, and a pooled thread keeps every universe (and classloader) it used. `ScratchTest.scratchDoesNotRetainUniverse` checks this.
 - The old accessors (`undoLog`, `skolemizationLevel`, `lubGlbCaches`, ...) stay as non-overridden forwarders to `scratch.x` for source compatibility with the compiler, scaladoc, toolbox and third-party plugins. MiMa filters for the removed runtime overrides as needed.
 - Hot paths fetch once: `val s = scratch` at entry of `isSubType`, `isSameType`, `isDifferentType`, `withLubGlbCaches`/`claimLubGlbCaches`, `baseTypeOfNonClassTypeRef`, the `glb` refinement branch, `typeToString`, `Symbol.lock`/`unlock`. The undo-log users in the typer (`Implicits`, `Analyzer`) keep `undoLog`; they are compiler-only.
-- `java.lang.ThreadLocal` instead of the `synchronizedMap(WeakHashMap)`: the composite is reachable from the thread only, so it is collected with the thread; `ThreadLocalStorage` remains for `intersectionWitness`.
+- `ThreadLocalStorage` remains for `intersectionWitness` only.
 - Reentrant scratch objects are `ReusableInstance`s held in `Scratch`, always enabled: the seven `enabled = isCompilerUniverse` instances in `src/reflect` move in, so runtime reflection reuses them per thread instead of allocating per call. The shared singletons with mutable state (F2–F7) get the same treatment: call sites go through `scratch.erroneousCollectors.using(_.collect(tp))` etc. The public `object`s stay for binary compatibility and direct users. `commonOwnerMap` likewise.
 - `ReusableInstance` allocates its first instance eagerly, so the `Scratch` field must be initialised after the traits whose classes it instantiates; either a `lazy val` or construction at the end of `SymbolTable`'s initialiser. Pick whichever keeps `scratch` a plain field load in batch.
 - Compiler-side `ReusableInstance`s (`Contexts`, `Implicits`, `SymbolLoaders`) stay as they are: `Scratch` is a `final class` in `src/reflect`. If they matter, `Global` can hold a second, compiler-side composite reached the same way; not in this spike.
@@ -112,18 +114,70 @@ What stays: everything per run (`perRunCaches`, `intersectionWitness`, uniques),
 
 ## Steps
 
-- [ ] 1. `Scratch` + `scratch` (val / `ThreadLocal`), move the subtyping group: `subsametypeRecursions`, `pendingSubTypes`, `knownFalseSubTypes`, `undoLog`; fetch once in `isSubType`/`isSameType`/`isDifferentType`.
-- [ ] 2. Move `skolemizationLevel`, `basetypeRecursions`, `pendingBaseTypes`.
-- [ ] 3. Move `lubGlbCaches`; add `globalGlbDepth` (F1).
-- [ ] 4. Move `indent`, `toStringRecursions`, `toStringSubjects`, `recursionTable`; delete the now-unused overrides.
-- [ ] 5. `ReusableInstance`s and `commonOwnerMap` into `Scratch`, always enabled.
-- [ ] 6. F2–F7, F9: call sites use per-thread instances of the collectors / maps held in `Scratch` (they already save and restore their state on reentrance, so one instance per thread suffices; F7 allocates per call, as `Erasure` is outside `SymbolTable`).
-- [ ] 7. Benchmark: JMH `ReflectionTypeOpsBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
-- [ ] 8. Write-up.
+- [x] 1. `Scratch` + `scratch` (val / `ThreadLocal`), move the subtyping group: `subsametypeRecursions`, `pendingSubTypes`, `knownFalseSubTypes`, `undoLog`; fetch once in `isSubType`/`isSameType`/`isDifferentType`.
+- [x] 2. Move `skolemizationLevel`, `basetypeRecursions`, `pendingBaseTypes`.
+- [x] 3. Move `lubGlbCaches`; add `globalGlbDepth` (F1).
+- [x] 4. Move `indent`, `toStringRecursions`, `toStringSubjects`, `recursionTable`; delete the now-unused overrides.
+- [x] 5. `ReusableInstance`s and `commonOwnerMap` into `Scratch`, always enabled.
+- [x] 6. F2–F7, F9: call sites use per-thread instances of the collectors / maps held in `Scratch` (they already save and restore their state on reentrance, so one instance per thread suffices; F7 allocates per call, as `Erasure` is outside `SymbolTable`).
+- [x] 7. Benchmark: JMH `ReflectionTypeOpsBenchmark` (1 and 4 threads) before/after; `compiler/compile` / `HotScalacBenchmark` for batch.
+- [x] 8. Write-up.
 
 Each step: `reflect/compile`, `compiler/compile`, `junit/testOnly scala.reflect.*`, partest `reflection-sync-*`, `t6240*`, `t7045`, `t6411*`, `lazy-concurrent`, `t6240-universe-code-gen` (regenerates `JavaUniverseForce`).
 
+## Results
+
+### What `Scratch` contains
+
+`SymbolTable#Scratch` (`internal/SymbolTable.scala`) holds, for one thread: the subtyping guards (`subsametypeRecursions`, `pendingSubTypes`, `knownFalseSubTypes`), the `undoLog`, `skolemizationLevel`, the base type guards, the lub/glb caches and `globalGlbDepth`, the printing guards, `recursionTable`; the seven `ReusableInstance`s of `src/reflect` (now always enabled) plus a pool of `CommonOwnerMap`s; and per-thread instances of the stateful shared collectors (`ErroneousCollector`, `IsDependentCollector`, `IsRelatableCollector`, `UnrelatableCollector`, `wildcardExtrapolation`, the `maxTypes` collector). `SymbolTable` returns one lazily created instance; `SynchronizedTypes` returns one per thread (weak map owned by the universe, `ThreadLocal[WeakReference]` fast path). All twelve kind-A `mkThreadLocalStorage` overrides are gone; `intersectionWitness` (a cache) keeps the last one.
+
+### What the inventory found
+
+Nine places where per-operation state is shared between threads in runtime reflection, listed as F1–F9 under "Inventory". One, F9, is not hypothetical: four threads computing the same `lub` crash within a few dozen iterations (`ScratchTest.concurrentLubs`, and the baseline run of the benchmark). F1–F7 and F9 are fixed on the branch; F8 (registration into `perRunCaches`) is harmless in runtime reflection and left alone. F11/F12 (shared `Transformer`s) are outside type operations and left alone.
+
+A second finding came from the implementation, not the inventory: the natural `ThreadLocal.withInitial(() => new Scratch)` leaks every universe a pooled thread has touched, because the value is an inner class of the universe that owns the `ThreadLocal`. The old `mkThreadLocalStorage` did not leak this way, as its map lives in the universe. The branch keeps that ownership and uses the `ThreadLocal` only as a weak cache.
+
+### Cost in diff
+
+Across `src/` and `project/`: 19 files, 286 insertions, 264 deletions (223/201 ignoring whitespace; `isSubType` is re-indented). `SynchronizedTypes` shrinks from 125 to 100 lines. Plus `ScratchTest` (56 lines) and the benchmark.
+
+### Runtime reflection, before and after
+
+`ReflectionTypeOpsBenchmark` (`test/benchmarks/src/main/scala/scala/reflect/runtime/`), JDK 21.0.12 (Temurin, the sbt server's), 3 forks × 5 × 1 s, average time per operation, before = `c803a64c44`, after = the branch tip:
+
+```
+bench/Jmh/run -t 1 ReflectionTypeOpsBenchmark
+bench/Jmh/run -t 4 ReflectionTypeOpsBenchmark
+```
+
+| benchmark | -t 1 before | -t 1 after | -t 4 before | -t 4 after |
+|---|---|---|---|---|
+| `subtypeTrue` | 2009 ± 65 ns | 1612 ± 152 ns | 19853 ± 2130 ns | 9700 ± 620 ns |
+| `subtypeFalse` | 3101 ± 170 ns | 2514 ± 211 ns | 21244 ± 902 ns | 16533 ± 868 ns |
+| `asSeenFrom` | 18229 ± 2138 ns | 17140 ± 738 ns | 85824 ± 4511 ns | 84703 ± 4052 ns |
+| `members` | 4278 ± 234 ns | 4423 ± 619 ns | 28680 ± 1775 ns | 28828 ± 2496 ns |
+| `lubLeafOther` | 7.91 ± 0.39 ms | 8.59 ± 1.12 ms | 52.6 ms, 1 of 3 forks (the others crashed, F9) | 54.0 ± 5.2 ms |
+
+Subtyping gains 20% on one thread and 2× on four, from replacing per-access monitor-guarded map lookups by one fetch per operation. `asSeenFrom`, `members` and `lub` don't move: they are dominated by the GIL. Even after the change, four threads are slower per operation than one; a stack profile of `subtypeTrue -t 4` shows 48% of samples `WAITING` in `ReentrantLock` (the GIL), entered from `SynchronizedSymbol.rawInfo`/`validTo` via `gilSynchronizedIfNotThreadsafe`: symbols reached by these operations are not marked thread-safe, so every `info` takes the GIL. `lub` creates fresh refinement symbols, which are never thread-safe, and is GIL-bound even on one thread (7.9 ms for one lub of two small class types).
+
+### Batch compilation
+
+`CompileBenchmark` in jvm-perf-lab's scala2 lab, typer only, the two builds paired within each fork (3 forks per corpus), JDK 21.0.12, campaign `reflect-scratch-typer`:
+
+| corpus | time, branch vs base | alloc/op, branch vs base |
+|---|---|---|
+| re2s | +3.96% ± 2.81 (forks +1.1, +4.2, +6.7%) | +6.21% ± 1.69 (forks +6.8, +7.5, +4.3%) |
+| scalap | +1.69% ± 2.20 (forks −0.4, +4.0, +1.5%) | +3.44% ± 0.80 (forks +4.2, +3.6, +2.6%) |
+
+The lab's A/A control (one build against itself, scalap) moves by up to 4.7% in time and 4.4% in allocation per fork, so the time difference is within noise, but the re2s allocation difference is not. Batch compilation does not pay nothing in these builds.
+
+An allocation profile of each build (campaign `reflect-scratch-typer-alloc`, `perflab profdiff --event alloc`) puts the whole difference in one class: `Types$Type$$Lambda`, from 0 to 5.5 MB per op (+6.7% of all allocation), allocated in `Type.findMember` by the closure passed to `ReusableInstance.using`. The base build has the same closure (`findMemberInstance.using { ... }`), but C2 scalar-replaces it there. `-XX:+PrintInlining` shows why this is fragile: `ReusableInstance.using` is 116 bytes and shared by every pool, so whether C2 inlines it into `findMember` (and can then eliminate the closure) depends on how it was compiled before; in the branch's run it is reported as "callee is too large" at some sites. Making `_scratch` a plain `val` instead of a `lazy val` did not change the result (the allocation stayed at 5.5 MB per op).
+
+Both builds here are `quick` builds, which are compiled without Scala's optimizer. Release builds compile `scala/**` with `-opt:l:inline -opt-inline-from:scala/**`, which inlines `@inline def using` and removes the closure at compile time, so I expect the shipped compiler not to show this. I have not measured that. Before this is more than a spike, either rerun the A/B with both builds compiled with the release optimizer settings, or take `findMember` off the closure so that it does not depend on C2.
+
 ## Future work (not in this spike)
 
+- Replace the GIL with an owner-and-barrier per completion root (the Scala 3 kind B design): a completer is owned by the thread that starts it; other threads wait on its barrier rather than on a global lock; cycles within one owner keep raising `CyclicReference`. This is where the remaining multi-thread cost is (see "Results"): `Scratch` removes kind A from the picture, so what is left contending is completion and the `info` of symbols that are not marked thread-safe.
 - `intersectionWitness` as a concurrent weak map shared between threads instead of per-thread copies.
-- Replace the GIL with an owner-and-barrier per completion root (the Scala 3 kind B design): a completer is owned by the thread that starts it; other threads wait on its barrier rather than on a global lock; cycles within one owner keep raising `CyclicReference`.
+- A compiler-side composite for the `ReusableInstance`s in `Contexts`, `Implicits` and `SymbolLoaders`, if the presentation compiler is to run several readers in Scala 2 as well.
+- `Erasure`'s boxing maps (F7) allocate per call in runtime reflection; a per-thread holder for components outside `SymbolTable` would fix that.
