@@ -22,7 +22,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 
-import util.{ReusableInstance, Statistics, shortClassOfInstance}
+import util.{Statistics, shortClassOfInstance}
 import Flags._
 import Variance._
 
@@ -30,15 +30,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
   import statistics._
 
-  protected var ids = 0
-  def getCurrentSymbolIdCount: Int = ids
+  private[this] val symbolIds = util.IdCounter(isConcurrentUniverse)
+  def getCurrentSymbolIdCount: Int = symbolIds.current
 
-  protected def nextId() = { ids += 1; ids }
+  protected def nextId(): Int = symbolIds.next()
 
   /** Used to keep track of the recursion depth on locked symbols */
-  private[this] var _recursionTable = Map.empty[Symbol, Int]
-  def recursionTable = _recursionTable
-  def recursionTable_=(value: Map[Symbol, Int]) = _recursionTable = value
+  def recursionTable: Map[Symbol, Int] = scratch.recursionTable
+  def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
 
   private[this] var _lockedCount = 0
   def lockedCount = this._lockedCount
@@ -48,9 +47,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  private[this] var existentialIds = 0
+  private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  protected def nextExistentialId() = { existentialIds += 1; existentialIds }
+  protected def nextExistentialId(): Int = existentialIds.next()
   @deprecated("Use overload that accepts an id", "2.12.1")
   protected def freshExistentialName(suffix: String): TypeName = freshExistentialName(suffix, nextExistentialId())
   protected def freshExistentialName(suffix: String, id: Int): TypeName = newTypeName("_" + id + suffix)
@@ -3791,15 +3790,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (syms.isEmpty) Nil
     else {
       val syms1 = mapList(syms)(_.cloneSymbol)
-      cloneSymbolsSubstSymMap.using { (msm: SubstSymMap) =>
+      scratch.substSymMaps.using { (msm: SubstSymMap) =>
         msm.reset(syms, syms1)
         syms1.foreach(_.modifyInfo(msm))
       }
       syms1
     }
-
-  private[this] val cloneSymbolsSubstSymMap: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
 
   def cloneSymbolsAtOwner(syms: List[Symbol], owner: Symbol): List[Symbol] =
     deriveSymbols(syms, _ cloneSymbol owner)

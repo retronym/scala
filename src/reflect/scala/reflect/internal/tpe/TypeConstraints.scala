@@ -17,17 +17,12 @@ package tpe
 
 import scala.collection.mutable.BitSet
 import scala.collection.mutable.Clearable
-import scala.reflect.internal.util.ReusableInstance
 
 private[internal] trait TypeConstraints {
   self: SymbolTable =>
   import definitions._
 
-  /** A log of type variable with their original constraints. Used in order
-   *  to undo constraints in the case of isSubType/isSameType failure.
-   */
-  private lazy val _undoLog = new UndoLog
-  def undoLog = _undoLog
+  def undoLog: UndoLog = scratch.undoLog
 
   import TypeConstraints.UndoPair
   class UndoLog extends Clearable {
@@ -199,10 +194,8 @@ private[internal] trait TypeConstraints {
     }
   }
 
-  private[this] val containsCollectorInstances: ReusableInstance[ContainsCollector] = ReusableInstance(new ContainsCollector(null), enabled = isCompilerUniverse)
-
   private[this] def containsSymbol(tp: Type, sym: Symbol): Boolean =
-    containsCollectorInstances.using { cc =>
+    scratch.containsCollectors.using { cc =>
       cc.reset(sym)
       cc.collect(tp)
     }

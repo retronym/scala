@@ -388,7 +388,7 @@ private[internal] trait TypeMaps {
    * For example, the MethodType given by `def bla(x: (_ >: String)): (_ <: Int)`
    * is both a subtype and a supertype of `def bla(x: String): Int`.
    */
-  object wildcardExtrapolation extends VariancedTypeMap {
+  class wildcardExtrapolation extends VariancedTypeMap {
     def apply(tp: Type): Type =
       tp match {
         case BoundedWildcardType(TypeBounds(lo, AnyTpe)) if variance.isContravariant => lo
@@ -397,6 +397,8 @@ private[internal] trait TypeMaps {
         case tp => tp.mapOver(this)
       }
   }
+  /** Not thread-safe, see `Scratch.wildcardExtrapolation` */
+  object wildcardExtrapolation extends wildcardExtrapolation
 
   /** Might the given symbol be important when calculating the prefix
     *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
@@ -909,11 +911,13 @@ private[internal] trait TypeMaps {
   }
 
   // dependent method types
-  object IsDependentCollector extends TypeCollector(initial = false) {
+  class IsDependentCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (tp.isImmediatelyDependent) result = true
       else if (!result) tp.dealias.foldOver(this)
   }
+  /** Not thread-safe, see `Scratch.isDependentCollector` */
+  object IsDependentCollector extends IsDependentCollector
 
   object ApproximateDependentMap extends TypeMap {
     def apply(tp: Type): Type =
@@ -1154,13 +1158,15 @@ private[internal] trait TypeMaps {
         if (p(tp)) result = Some(tp) else tp.foldOver(this)
   }
 
-  object ErroneousCollector extends TypeCollector(initial = false) {
+  class ErroneousCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (!result) {
         result = tp.isError
         if (!result) tp.foldOver(this)
       }
   }
+  /** Not thread-safe, see `Scratch.erroneousCollector` */
+  object ErroneousCollector extends ErroneousCollector
 
   object adaptToNewRunMap extends TypeMap {
 
@@ -1291,7 +1297,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  object UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
+  class UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
     var barLevel: Int = 0
 
     override def apply(tp: Type): Unit = tp match {
@@ -1299,8 +1305,10 @@ private[internal] trait TypeMaps {
       case _ => tp.foldOver(this)
     }
   }
+  /** Not thread-safe, see `Scratch.unrelatableCollector` */
+  object UnrelatableCollector extends UnrelatableCollector
 
-  object IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
+  class IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
     var barLevel: Int = 0
 
     def apply(tp: Type): Unit = if (result) tp match {
@@ -1308,4 +1316,6 @@ private[internal] trait TypeMaps {
       case _ => tp.foldOver(this)
     }
   }
+  /** Not thread-safe, see `Scratch.isRelatableCollector` */
+  object IsRelatableCollector extends IsRelatableCollector
 }

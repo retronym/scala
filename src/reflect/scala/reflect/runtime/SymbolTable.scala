@@ -19,7 +19,7 @@ package runtime
  *  It can be used either from a reflexive universe (class scala.reflect.runtime.JavaUniverse), or else from
  *  a runtime compiler that uses reflection to get a class information (class scala.tools.reflect.ReflectGlobal)
  */
-private[scala] trait SymbolTable extends internal.SymbolTable with JavaMirrors with SymbolLoaders with SynchronizedOps with Gil with ThreadLocalStorage {
+private[scala] trait SymbolTable extends internal.SymbolTable with JavaMirrors with SymbolLoaders with SynchronizedOps with Gil {
 
   def info(msg: => String) =
     if (settings.verbose.value) println("[reflect-compiler] "+msg)
@@ -38,4 +38,9 @@ private[scala] trait SymbolTable extends internal.SymbolTable with JavaMirrors w
    *  in order to prevent memory leaks: https://groups.google.com/group/scala-internals/browse_thread/thread/eabcf3d406dab8b2.
    */
   override def isCompilerUniverse = false
+
+  /** Runtime reflection is used from several threads at once. So is a toolbox's `ReflectGlobal`,
+   *  which is a compiler universe that mixes in this trait.
+   */
+  override def isConcurrentUniverse = true
 }

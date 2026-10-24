@@ -100,7 +100,12 @@ trait Erasure {
     assert(!phase.erasedTypes, "Types are erased")
     val clazz = tref.sym
     if (valueClassIsParametric(clazz)) {
-      val erasureMap = if (clazz.isScala3Defined) boxing3Erasure else boxingErasure
+      // The shared boxing erasures keep state in a field, so runtime reflection needs its own.
+      // They cannot live in `global.scratch`, which only knows the classes of `SymbolTable`.
+      val erasureMap =
+        if (global.isCompilerUniverse) { if (clazz.isScala3Defined) boxing3Erasure else boxingErasure }
+        else if (clazz.isScala3Defined) new Scala3ErasureMap with BoxingErasure
+        else new ScalaErasureMap with BoxingErasure
       erasureMap(tref.memberType(clazz.derivedValueClassUnbox).resultType)
     } else {
       val erasureMap = if (clazz.isScala3Defined) scala3Erasure else scalaErasure

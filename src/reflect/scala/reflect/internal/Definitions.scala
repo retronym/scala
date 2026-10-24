@@ -857,7 +857,7 @@ trait Definitions extends api.StandardDefinitions {
           }
 
           if (samSym.exists && tp.typeSymbol != correspondingFunctionSymbol) // don't treat Functions as SAMs
-            wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
+            scratch.wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
           else NoType
       }
 

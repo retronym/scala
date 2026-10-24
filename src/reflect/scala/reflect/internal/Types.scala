@@ -21,7 +21,7 @@ import mutable.{LinkedHashSet, ListBuffer}
 import Flags._
 import scala.util.control.ControlThrowable
 import scala.annotation.{tailrec, unused}
-import util.{ReusableInstance, Statistics}
+import util.Statistics
 import util.ThreeValues._
 import Variance._
 import Depth._
@@ -117,18 +117,17 @@ trait Types
     } else new SubstTypeMap(from, to)
   }
 
-  /** The current skolemization level, needed for the algorithms
-   *  in isSameType, isSubType that do constraint solving under a prefix.
-   */
-  private[this] var _skolemizationLevel = 0
-  def skolemizationLevel = _skolemizationLevel
-  def skolemizationLevel_=(value: Int) = _skolemizationLevel = value
+  /** The current skolemization level, see `Scratch.skolemizationLevel`. */
+  def skolemizationLevel: Int = scratch.skolemizationLevel
+  def skolemizationLevel_=(value: Int): Unit = scratch.skolemizationLevel = value
 
   /** A map from lists to compound types that have the given list as parents.
    *  This is used to avoid duplication in the computation of base type sequences and baseClasses.
    *  It makes use of the fact that these two operations depend only on the parents,
    *  not on the refinement.
    */
+  // Read and written only by `CompoundType.memo`, from `defineBaseTypeSeqOfCompoundType` and
+  // `defineBaseClassesOfCompoundType`, which runtime reflection runs under the GIL.
   private[this] val _intersectionWitness = perRunCaches.newWeakMap[List[Type], WeakReference[Type]]()
   def intersectionWitness = _intersectionWitness
 
@@ -294,7 +293,7 @@ trait Types
     def isError: Boolean = typeSymbol.isError || termSymbol.isError
 
     /** Is this type produced as a repair for an error? */
-    def isErroneous: Boolean = ErroneousCollector.collect(this)
+    def isErroneous: Boolean = scratch.erroneousCollector.collect(this)
 
     /** Can this type only be subtyped by bottom types?
      *  This is assessed to be the case if the class is final,
@@ -1022,9 +1021,15 @@ trait Types
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
-      def findMemberInternal = findMemberInstance.using { findMember =>
-        findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
-        findMember()
+      def findMemberInternal = {
+        // `take`/`release` rather than `using`: the closure would be allocated whenever C2 does not
+        // inline `using` here, and `findMember` is among the hottest calls of the typer.
+        val findMembers = scratch.findMembers
+        val findMember = findMembers.take()
+        try {
+          findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
+          findMember()
+        } finally findMembers.release()
       }
 
       if (this.isGround) findMemberInternal
@@ -2498,14 +2503,16 @@ trait Types
     // two differences with class type basetype:
     // (1) first relativize the type, then go to the requested base type
     // (2) cache for cycle robustness
-    private def baseTypeOfNonClassTypeRef(clazz: Symbol) =
+    private def baseTypeOfNonClassTypeRef(clazz: Symbol) = {
+      val s = scratch
       try {
-        basetypeRecursions += 1
-        if (basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz)
+        s.basetypeRecursions += 1
+        if (s.basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz, s.pendingBaseTypes)
         else relativeInfo.baseType(clazz)
-      } finally basetypeRecursions -= 1
+      } finally s.basetypeRecursions -= 1
+    }
 
-    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol) =
+    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol, pendingBaseTypes: mutable.HashSet[Type]) =
       if (pendingBaseTypes add this) try relativeInfo.baseType(clazz) finally { pendingBaseTypes remove this }
       // TODO: is this optimization for AnyClass worth it? (or is it playing last-ditch cycle defense?)
       // NOTE: for correctness, it only applies for non-class types
@@ -2886,7 +2893,7 @@ trait Types
 
     private[this] var isdepmeth: ThreeValue = UNKNOWN
     override def isDependentMethodType: Boolean = {
-      if (isdepmeth == UNKNOWN) isdepmeth = fromBoolean(IsDependentCollector.collect(resultType.dealias))
+      if (isdepmeth == UNKNOWN) isdepmeth = fromBoolean(scratch.isDependentCollector.collect(resultType.dealias))
       toBoolean(isdepmeth)
     }
 
@@ -3716,8 +3723,9 @@ trait Types
     }
 
     private def unrelatable(tp: Type): List[TypeSkolem] = {
-      UnrelatableCollector.barLevel = level
-      UnrelatableCollector.collect(tp)
+      val collector = scratch.unrelatableCollector
+      collector.barLevel = level
+      collector.collect(tp)
     }
 
 
@@ -3726,8 +3734,9 @@ trait Types
       *  skolemization level is higher than the level of this variable.
       */
     def isRelatable(tp: Type): Boolean = {
-      IsRelatableCollector.barLevel = level
-      IsRelatableCollector.collect(tp)
+      val collector = scratch.isRelatableCollector
+      collector.barLevel = level
+      collector.collect(tp)
     }
 
     override def normalize: Type = (
@@ -4029,9 +4038,6 @@ trait Types
   def refinedType(parents: List[Type], owner: Symbol): Type =
     refinedType(parents, owner, newScope, owner.pos)
 
-  private[this] val copyRefinedTypeSSM: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
-
   def copyRefinedType(original: RefinedType, parents: List[Type], decls: Scope, owner: Symbol = null) =
     if ((parents eq original.parents) && (decls eq original.decls) && (owner eq null)) original
     else {
@@ -4046,7 +4052,7 @@ trait Types
         val syms2 = result.decls.toList
         val resultThis = result.typeSymbol.thisType
         val substThisMap = new SubstThisMap(original.typeSymbol, resultThis)
-        copyRefinedTypeSSM.using { (msm: SubstSymMap) =>
+        scratch.substSymMaps.using { (msm: SubstSymMap) =>
           msm.reset(syms1, syms2)
           syms2.foreach(_.modifyInfo(info => msm.apply(substThisMap.apply(info))))
         }
@@ -4323,23 +4329,69 @@ trait Types
 
 // Hash consing --------------------------------------------------------------
 
-  private[this] val initialUniquesCapacity = 4096
-  private[this] var uniques: util.WeakHashSet[Type] = _
-  private[this] var uniqueRunId = NoRunId
+  /** The table that makes structurally equal types identical. A compiler universe has runs and
+   *  discards the table at the start of each; runtime reflection has none, so its table is weak
+   *  in the entries, which go when nobody refers to their types. A concurrent universe locks it;
+   *  that includes a toolbox's `ReflectGlobal`, which is a compiler universe.
+   */
+  private[this] val uniques: Uniques =
+    if (!isCompilerUniverse) new SynchronizedWeakUniques
+    else if (isConcurrentUniverse) new SynchronizedPerRunUniques
+    else new PerRunUniques
 
-  final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
+  final def howManyUniqueTypes: Int = uniques.size
 
-  protected def unique[T <: Type](tp: T): T =  {
-    if (uniqueRunId != currentRunId) {
-      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
-      uniqueRunId = currentRunId
+  protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
+
+  private[internal] abstract class Uniques {
+    def unique[T <: Type](tp: T): T
+    def size: Int
+  }
+
+  /** Discarded at the start of each run, and weak within it. */
+  private class PerRunUniques extends Uniques {
+    private[this] val initialUniquesCapacity = 4096
+    private[this] var uniques: util.WeakHashSet[Type] = _
+    private[this] var uniqueRunId = NoRunId
+
+    def size: Int = if (uniques == null) 0 else uniques.size
+
+    def unique[T <: Type](tp: T): T = {
+      if (uniqueRunId != currentRunId) {
+        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
+        // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
+        // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
+        // I've removed the registration for now. I don't think it's particularly harmful anymore
+        // as a) this is now a weak set, and b) it is discarded completely before the next run.
+        uniqueRunId = currentRunId
+      }
+      (uniques findEntryOrUpdate tp).asInstanceOf[T]
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+  }
+
+  private final class SynchronizedPerRunUniques extends PerRunUniques {
+    override def size: Int = synchronized(super.size)
+    override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
+  }
+
+  /** Weak and synchronized, for runtime reflection. The lock can be fine-grained: computing a
+   *  type's hash code and equality does not call any reflection API, so this cannot deadlock.
+   */
+  private final class SynchronizedWeakUniques extends Uniques {
+    private[this] val uniques = mutable.WeakHashMap[Type, java.lang.ref.WeakReference[Type]]()
+
+    def size: Int = synchronized(uniques.size)
+
+    def unique[T <: Type](tp: T): T = synchronized {
+      val inCache = uniques get tp
+      val result = if (inCache.isDefined) inCache.get.get else null
+      if (result ne null) result.asInstanceOf[T]
+      else {
+        uniques(tp) = new java.lang.ref.WeakReference(tp)
+        tp
+      }
+    }
   }
 
 // Helper Classes ---------------------------------------------------------
@@ -4606,12 +4658,10 @@ trait Types
     i.isEmpty && j.isEmpty
   }
 
-  private[this] var _basetypeRecursions: Int = 0
-  def basetypeRecursions = _basetypeRecursions
-  def basetypeRecursions_=(value: Int) = _basetypeRecursions = value
+  def basetypeRecursions: Int = scratch.basetypeRecursions
+  def basetypeRecursions_=(value: Int): Unit = scratch.basetypeRecursions = value
 
-  private[this] val _pendingBaseTypes = new mutable.HashSet[Type]
-  def pendingBaseTypes = _pendingBaseTypes
+  def pendingBaseTypes: mutable.HashSet[Type] = scratch.pendingBaseTypes
 
   /** Does this type have a prefix that begins with a type variable,
    *  or is it a refinement type? For type prefixes that fulfil this condition,
@@ -5200,10 +5250,8 @@ trait Types
     def this(pre: Type, tp: String) = this("malformed type: " + pre + "#" + tp)
   }
 
-  /** The current indentation string for traces */
-  private[this] var _indent: String = ""
-  protected def indent = _indent
-  protected def indent_=(value: String) = _indent = value
+  protected def indent: String = scratch.indent
+  protected def indent_=(value: String): Unit = scratch.indent = value
 
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
