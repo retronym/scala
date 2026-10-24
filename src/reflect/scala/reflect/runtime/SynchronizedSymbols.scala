@@ -18,14 +18,6 @@ import scala.reflect.internal.Flags._
 
 private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: SymbolTable =>
 
-  private lazy val atomicIds = new java.util.concurrent.atomic.AtomicInteger(0)
-  override protected def nextId() = atomicIds.incrementAndGet()
-
-  @deprecated("Global existential IDs no longer used", "2.12.1")
-  private lazy val atomicExistentialIds = new java.util.concurrent.atomic.AtomicInteger(0)
-  @deprecated("Global existential IDs no longer used", "2.12.1")
-  override protected def nextExistentialId() = atomicExistentialIds.incrementAndGet()
-
   // Set the fields which point companions at one another.  Returns the module.
   override def connectModuleToClass(m: ModuleSymbol, moduleClass: ClassSymbol): m.type =
     gilSynchronized { super.connectModuleToClass(m, moduleClass) }

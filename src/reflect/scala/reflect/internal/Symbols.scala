@@ -30,10 +30,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
   import statistics._
 
-  protected var ids = 0
-  def getCurrentSymbolIdCount: Int = ids
+  private[this] val symbolIds = util.IdCounter(isConcurrentUniverse)
+  def getCurrentSymbolIdCount: Int = symbolIds.current
 
-  protected def nextId() = { ids += 1; ids }
+  protected def nextId(): Int = symbolIds.next()
 
   /** Used to keep track of the recursion depth on locked symbols */
   def recursionTable: Map[Symbol, Int] = scratch.recursionTable
@@ -47,9 +47,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  private[this] var existentialIds = 0
+  private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  protected def nextExistentialId() = { existentialIds += 1; existentialIds }
+  protected def nextExistentialId(): Int = existentialIds.next()
   @deprecated("Use overload that accepts an id", "2.12.1")
   protected def freshExistentialName(suffix: String): TypeName = freshExistentialName(suffix, nextExistentialId())
   protected def freshExistentialName(suffix: String, id: Int): TypeName = newTypeName("_" + id + suffix)
