@@ -673,7 +673,8 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
             val len = ByteCodecs.decode(bytes)
             assignAssociatedFile(clazz, module, jclazz)
             unpickler.unpickle(bytes take len, 0, clazz, module, jclazz.getName)
-            markAllCompleted(clazz, module)
+            // Not markAllCompleted(clazz, module): the unpickler leaves their infos as `LazyTypeRef`s,
+            // which mark them when they complete.
           case None =>
             loadBytes[Array[String]]("scala.reflect.ScalaLongSignature") match {
               case Some(slsig) =>
@@ -683,7 +684,8 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
                 val decoded = encoded.take(len)
                 assignAssociatedFile(clazz, module, jclazz)
                 unpickler.unpickle(decoded, 0, clazz, module, jclazz.getName)
-                markAllCompleted(clazz, module)
+                // Not markAllCompleted(clazz, module): the unpickler leaves their infos as `LazyTypeRef`s,
+                // which mark them when they complete.
               case None =>
                 // class does not have a Scala signature; it's a Java class
                 info("translating reflection info for Java " + jclazz) //debug
