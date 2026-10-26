@@ -502,7 +502,7 @@ private[internal] trait TypeMaps {
       *  @param   lhs    its symbol is a type parameter of `clazz`
       *  @param   rhs    a type application constructed from `clazz`
       */
-    private def correspondingTypeArgument(lhs: Type, rhs: Type): Type = {
+    protected def correspondingTypeArgument(lhs: Type, rhs: Type): Type = {
       val TypeRef(_, lhsSym, lhsArgs) = lhs: @unchecked
       val TypeRef(_, rhsSym, rhsArgs) = rhs: @unchecked
       require(lhsSym.owner == rhsSym, s"$lhsSym is not a type parameter of $rhsSym")
@@ -551,30 +551,30 @@ private[internal] trait TypeMaps {
     // are not influenced by the prefix through which they are seen. Note that type params of
     // anonymous type functions, which currently can only arise from normalising type aliases, are
     // owned by the type alias of which they are the eta-expansion.
-    private def classParameterAsSeen(classParam: TypeRef): Type = {
+    protected def classParameterAsSeen(classParam: TypeRef): Type = {
+      classParameterAsSeenImpl(classParam, seenFromPrefix, seenFromClass)
+    }
+
+    protected def classParameterAsSeenImpl(classParam: TypeRef, pre: Type, clazz: Symbol): Type = {
       val tparam = classParam.sym
 
-      @tailrec
-      def loop(pre: Type, clazz: Symbol): Type = {
-        // have to deconst because it may be a Class[T]
-        def nextBase = (pre baseType clazz).deconst
-        //@M! see test pos/tcpoly_return_overriding.scala why mapOver is necessary
-        if (skipPrefixOf(pre, clazz))
-          classParam.mapOver(this)
-        else if (!matchesPrefixAndClass(pre, clazz)(tparam.owner))
-          loop(nextBase.prefix, clazz.owner)
-        else nextBase match {
-          case NoType                         => loop(NoType, clazz.owner) // backstop for scala/bug#2797, must remove `SingletonType#isHigherKinded` and run pos/t2797.scala to get here.
-          case applied @ TypeRef(_, _, _)     => correspondingTypeArgument(classParam, applied)
-          case ExistentialType(eparams, qtpe) => captureSkolems(eparams) ; loop(qtpe, clazz)
-          case t                              => abort(s"$tparam in ${tparam.owner} cannot be instantiated from ${seenFromPrefix.widen}")
-        }
-      }
-      loop(seenFromPrefix, seenFromClass)
+      // have to deconst because it may be a Class[T]
+      def nextBase = (pre baseType clazz).deconst
+      //@M! see test pos/tcpoly_return_overriding.scala why mapOver is necessary
+      if (skipPrefixOf(pre, clazz))
+        classParam.mapOver(this)
+      else if (!matchesPrefixAndClass(pre, clazz)(tparam.owner))
+             classParameterAsSeenImpl(classParam, nextBase.prefix, clazz.owner)
+           else nextBase match {
+             case NoType                         => classParameterAsSeenImpl(classParam, NoType, clazz.owner) // backstop for scala/bug#2797, must remove `SingletonType#isHigherKinded` and run pos/t2797.scala to get here.
+             case applied @ TypeRef(_, _, _)     => correspondingTypeArgument(classParam, applied)
+             case ExistentialType(eparams, qtpe) => captureSkolems(eparams) ; classParameterAsSeenImpl(classParam, qtpe, clazz)
+             case t                              => abort(s"$tparam in ${tparam.owner} cannot be instantiated from ${seenFromPrefix.widen}")
+           }
     }
 
     // Does the candidate symbol match the given prefix and class?
-    private def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = (clazz == candidate) && {
+    protected def matchesPrefixAndClass(pre: Type, clazz: Symbol)(candidate: Symbol) = (clazz == candidate) && {
       val pre1 = pre match {
         case tv: TypeVar =>
           // Needed with existentials in prefixes, e.g. test/files/pos/typevar-in-prefix.scala
@@ -633,23 +633,22 @@ private[internal] trait TypeMaps {
       }
     }
 
-    private def thisTypeAsSeen(tp: ThisType): Type = {
-      @tailrec
-      def loop(pre: Type, clazz: Symbol): Type = {
-        val pre1 = pre match {
-          case SuperType(thistpe, _) => thistpe
-          case _                     => pre
-        }
-        if (skipPrefixOf(pre, clazz))
-          tp.mapOver(this) // TODO - is mapOver necessary here?
-        else if (!matchesPrefixAndClass(pre, clazz)(tp.sym))
-          loop((pre baseType clazz).prefix, clazz.owner)
-        else if (pre1.isStable)
-          pre1
-        else
-          captureThis(pre1, clazz)
+    protected def thisTypeAsSeen(tp: ThisType): Type = {
+      thisTypeAsSeenImpl(tp, seenFromPrefix, seenFromClass)
+    }
+    def thisTypeAsSeenImpl(tp: ThisType, pre: Type, clazz: Symbol): Type = {
+      val pre1 = pre match {
+        case SuperType(thistpe, _) => thistpe
+        case _                     => pre
       }
-      loop(seenFromPrefix, seenFromClass)
+      if (skipPrefixOf(pre, clazz))
+        tp.mapOver(this) // TODO - is mapOver necessary here?
+      else if (!matchesPrefixAndClass(pre, clazz)(tp.sym))
+             thisTypeAsSeenImpl(tp, (pre baseType clazz).prefix, clazz.owner)
+           else if (pre1.isStable)
+                  pre1
+                else
+                  captureThis(pre1, clazz)
     }
 
     private def singleTypeAsSeen(tp: SingleType): Type = {
