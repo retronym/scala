@@ -12,6 +12,7 @@
 
 package scala.tools.nsc.settings
 
+import java.io.File
 import scala.reflect.io.{AbstractFile, PlainFile}
 
 /** Converts paths provided in compiler options (e.g elements of `-classpath` or the target directory of `-d`) to
@@ -37,6 +38,6 @@ trait PathFactory {
 }
 
 object DefaultPathFactory extends PathFactory {
-  override def getDirectory(path: String): AbstractFile = AbstractFile.getDirectory(path)
+  override def getDirectory(path: String): AbstractFile = AbstractFile.getDirectory(new File(path))
   override def getFile(path: String): AbstractFile = new PlainFile(path)
 }
