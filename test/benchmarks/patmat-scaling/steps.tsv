@@ -1,0 +1,12 @@
+b8a36ba100	Propagate unit clauses in linear time in the patmat DPLL solver
+2a6f29e8e3	Convert the reachability prefix of a match to CNF incrementally
+7ef70f4a1c	Test the cheap conditions first in patmat's `excludes`
+ecd27f16b8	Use hashed domain lookups in patmat analysis of large enums
+509dec2b05	Build patmat domains as linked hash sets, not list sets
+921194a6d8	Look up candidate implications by class in patmat analysis
+37dbb3dd2c	Cache the types of a match's substitution targets
+b14b77cbe8	Substitute only the bindings a tree can mention in patmat
+c7fc7fc5c4	Index the trees that patmat analysis hash-conses modulo equivalence
+3361289ef9	Compare a new patmat constant only to types it may be =:= to
+d277354f14	Index the prior tests that patmat's CSE looks for reuse in
+58d365caee	Skip patmat exhaustivity analysis of a match with an irrefutable case
