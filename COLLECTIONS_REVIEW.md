@@ -46,7 +46,7 @@ Randomized differential walk vs `ArraySeq`/`List` with structural validation (`V
 - 🟡 The tiny `prependedAll0` path (:216) allocates a whole Vector via `IndexedSeq.from(prefix)` just to get a `reverseIterator`.
 - 🟡 `VectorN.tail`/`init` never drop a dimension: a `Vector2` drained by `tail` stays a `Vector2` at 1 element (704 such vectors in the walk). Normalise when `length0 <= WIDTH`.
 - 🟡 Big concat is O(min(n,m)/32) when aligned and O(n) element-wise otherwise (unaligned `half ++ half` on a sparse 2^30 vector OOMs). Known design (scala/bug#7725) but undocumented.
-- 🟠 **`VectorMap.removed` never compacts** (VectorMap.scala:125-166 writes tombstones; only `tail`/`init` trim). LRU-style `m.removed(m.head._1).updated(i, i)` x 10^6 leaves `size == 100` with `fields.length == 1,000,100`. Compact when `fields.length > 2*size + c`. Not on scala/bug (#11326 is about bulk ops).
+- 🟠 **`VectorMap.removed` never compacts** (VectorMap.scala:125-166 writes tombstones; only `tail`/`init` trim). LRU-style `m.removed(m.head._1).updated(i, i)` x 10^6 leaves `size == 100` with `fields.length == 1,000,100`. Compact when `fields.length > 2*size + c`. Not on scala/bug (scala/bug#11326 is about bulk ops).
 - 🟡 VectorMap iteration is ~4x slower than ListMap (427 ms vs 104 ms for 100k x 10): `nextValidField` (:72) allocates an `(Int, K)` tuple, pattern-matches Tombstone, then does a `HashMap` lookup per element; `values` also looks up per key.
 
 ### Footguns
@@ -56,7 +56,7 @@ Randomized differential walk vs `ArraySeq`/`List` with structural validation (`V
 - 🟡 `Vector[Int]` boxes; the class doc gives no Vector vs ArraySeq guidance.
 
 ### Checked and fine
-Shared `Vector.emptyIterator` (:91, :131): every mutation on it is idempotent (`drop`/`take`/`slice` write zeros, `copyToArray` copies nothing), sharing is unobservable. Legacy `VectorIterator`/ParVector hooks (`startIndex`/`endIndex`/`initIterator`, :312, :2477): constructor args ignored, `endIndex` dead. Other overflow sites (`slice`/`takeRight`/`dropRight` at `Int.MaxValue`, `iterator.take(Int.MaxValue)`, stepper `estimateSize`, `lengthCompare`, `updated(Int.MaxValue-1)`, `VectorSliceBuilder` `count`/`pos`, `advanceSlice`) correct. `fill(-5)`/`tabulate(-3)` empty. Builder reuse after `result()` without `clear()` at the 32/33 boundary. VectorMap: `updated` of existing key keeps position, builder `aliased` path, tombstone runs straddling a `tail`-dropped prefix, null keys; #11217/#11220 closed and don't reproduce.
+Shared `Vector.emptyIterator` (:91, :131): every mutation on it is idempotent (`drop`/`take`/`slice` write zeros, `copyToArray` copies nothing), sharing is unobservable. Legacy `VectorIterator`/ParVector hooks (`startIndex`/`endIndex`/`initIterator`, :312, :2477): constructor args ignored, `endIndex` dead. Other overflow sites (`slice`/`takeRight`/`dropRight` at `Int.MaxValue`, `iterator.take(Int.MaxValue)`, stepper `estimateSize`, `lengthCompare`, `updated(Int.MaxValue-1)`, `VectorSliceBuilder` `count`/`pos`, `advanceSlice`) correct. `fill(-5)`/`tabulate(-3)` empty. Builder reuse after `result()` without `clear()` at the 32/33 boundary. VectorMap: `updated` of existing key keeps position, builder `aliased` path, tombstone runs straddling a `tail`-dropped prefix, null keys; scala/bug#11217 and scala/bug#11220 closed and don't reproduce.
 
 ### Docs
 - `VectorBuilder` (public, :1397) has no Scaladoc: document reusability, that `addAll(v: Vector)` on an empty builder is O(log n) and shares arrays, and the `Int.MaxValue` limit and what is thrown.
@@ -129,7 +129,7 @@ No clear-then-reuse tests for `VectorMap`/`TreeSeqMap` builders; nothing on `rem
 - 🟡 `TreeMap` doesn't override `keysIterator`/`valuesIterator` (tuple per entry when cold); `RB.TreeIterator` lacks `drop`/`knownSize` (rank descent possible via `count`); `doFrom/doTo/doUntil/doRange` re-insert the pivot with `upd` where `join` needs no comparisons; `split`/`splitLast` allocate `Tuple3/4` per level.
 
 ### Footguns
-- 🟠 Keys identified by `compare == 0`, old key retained: `TreeMap("a"->1)(ci).updated("A", 2) == TreeMap(a -> 2)`. Known (scala/bug#5986, #12228) but undocumented.
+- 🟠 Keys identified by `compare == 0`, old key retained: `TreeMap("a"->1)(ci).updated("A", 2) == TreeMap(a -> 2)`. Known (scala/bug#5986, scala/bug#12228) but undocumented.
 - 🟠 `TreeMap.keySet` shares the map's tree including values; any `TreeSet` derived from it (`incl`, `filter`, union) keeps the values reachable. Verified a 1 MB array retained.
 - 🟡 Mutable tree iterators are not fail-fast and can go backwards after concurrent removal: `(3,3), (2,2), (5,5)...`.
 - 🟡 `TreeMap` primary constructor does not null-check `ordering` (`TreeSet` does); fails late.
@@ -139,7 +139,7 @@ No clear-then-reuse tests for `VectorMap`/`TreeSeqMap` builders; nothing on `rem
 - immutable/TreeMap.scala:29,31: stray `* ` renders literally before the HashMap and SeqMap links.
 - TreeMap.scala:61: `@param ordering ... objects of type A` -> `K`.
 - TreeSet.scala:166 `excl`: `@param elem a new element to add` -> "the element to remove".
-- collection/SortedOps.scala:21-32 `rangeImpl`: "Any mutations in the ranged projection will update this collection and vice versa" is meaningless for immutable and overpromises for mutable (see #12808 and the bugs above).
+- collection/SortedOps.scala:21-32 `rangeImpl`: "Any mutations in the ranged projection will update this collection and vice versa" is meaningless for immutable and overpromises for mutable (see scala/bug#12808 and the bugs above).
 - `minAfter`/`maxBefore`: "None if there is no such node" leaks the implementation.
 - Neither TreeMap/TreeSet nor SortedMap/SortedSet documents: identity is `compare == 0`; `==`/`hashCode`/`contains` may disagree with hash-based sets under a non-equals-consistent ordering; fast paths need `Ordering.==` so prefer `implicit val`. No complexity statements at all (O(log n) lookup/update/head/last/tail/init/take/drop/range, O(1) size, join-based union). Mutable docs don't mention non-fail-fast iterators or that projection `size` is O(n).
 
