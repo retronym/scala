@@ -342,4 +342,16 @@ class FutureTest {
     // NonLocalReturnControl is resolved to its value
     assertEquals(Some(Success(42)), Promise[Int]().completeWith(new ForeignFuture[Int](Failure(new scala.runtime.NonLocalReturnControl("k", 42)))).future.value)
   }
+
+  @Test def andThenInterruptedPreservesOutcome(): Unit = {
+    val reported = ListBuffer.empty[Throwable]
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(_.run(), reported += _)
+    try {
+      val f = Future.successful(5).andThen { case _ => throw new InterruptedException("in andThen") }
+      assertEquals("andThen must pass the original outcome through", Some(Success(5)), f.value)
+      assertEquals(1, reported.size)
+      assertTrue(reported.head.isInstanceOf[InterruptedException])
+      assertTrue("interrupt status must be restored", Thread.interrupted())
+    } finally Thread.interrupted()
+  }
 }

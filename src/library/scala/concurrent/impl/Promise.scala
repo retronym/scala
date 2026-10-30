@@ -490,7 +490,9 @@ private[concurrent] object Promise {
       val wasInterrupted = t.isInstanceOf[InterruptedException]
       if (wasInterrupted || NonFatal(t)) {
         val completed = tryComplete0(get(), resolve(Failure(t)))
-        if (completed && wasInterrupted) Thread.currentThread.interrupt()
+        // Catching the InterruptedException cleared the interrupt status, so restore it for the
+        // benefit of the owner of the current thread (regardless of who completed the promise).
+        if (wasInterrupted) Thread.currentThread.interrupt()
 
         // Report or rethrow failures which are unlikely to otherwise be noticed
         if (_xform == Xform_foreach || _xform == Xform_onComplete || !completed)
