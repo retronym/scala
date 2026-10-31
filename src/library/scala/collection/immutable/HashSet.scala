@@ -27,6 +27,9 @@ import scala.util.hashing.MurmurHash3
 /** This class implements immutable sets using a Compressed Hash-Array Mapped Prefix-tree.
   * See paper https://michael.steindorfer.name/publications/oopsla15.pdf for more details.
   *
+  * Lookup, insertion and removal are effectively constant time (bounded by the trie depth of 7 plus
+  * a scan of full-hash collisions). Iteration order is unspecified but deterministic for a given set of elements.
+  *
   *  @tparam A      the type of the elements contained in this hash set.
   *  @define Coll `immutable.HashSet`
   *  @define coll immutable champ hash set
@@ -1946,6 +1949,7 @@ object HashSet extends IterableFactory[HashSet] {
 
   /** Creates a new Builder which can be reused after calling `result()` without an
     * intermediate call to `clear()` in order to build multiple related results.
+    * Adding elements after calling `result()` first copies the builder's structure (O(n)).
     */
   def newBuilder[A]: ReusableBuilder[A, HashSet[A]] = new HashSetBuilder
 }

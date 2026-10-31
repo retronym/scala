@@ -29,7 +29,10 @@ import scala.util.hashing.MurmurHash3
 /** This class implements immutable maps using a Compressed Hash-Array Mapped Prefix-tree.
   * See paper https://michael.steindorfer.name/publications/oopsla15.pdf for more details.
   *
-  *  @tparam K      the type of the keys contained in this hash set.
+  * Lookup, insertion and removal are effectively constant time (bounded by the trie depth of 7 plus
+  * a scan of full-hash collisions). Iteration order is unspecified but deterministic for a given set of keys.
+  *
+  *  @tparam K      the type of the keys contained in this hash map.
   *  @tparam V      the type of the values associated with the keys in this hash map.
   *
   *  @define Coll `immutable.HashMap`
@@ -306,9 +309,10 @@ final class HashMap[K, +V] private[immutable] (private[immutable] val rootNode: 
     * }}}
     *
     * @param that the HashMap to merge this HashMap with
-    * @param mergef the merge function which resolves collisions between the two HashMaps. If `mergef` is `null`, then
-    *               keys from `this` will overwrite keys from `that`, making the behaviour equivalent to
-    *               `that.concat(this)`
+    * @param mergef the merge function which resolves collisions between the two HashMaps. For each key `k` present
+    *               in both maps, it is called as `mergef((k, thisValue), (k, thatValue))`, and the key-value pair it
+    *               returns is included in the result. (If `mergef` is `null`, entries from `this` overwrite those
+    *               from `that`, as in `that.concat(this)`.)
     *
     * @note In cases where `mergef` returns keys which themselves collide with other keys returned by `merge`, or
     *       found in `this` or `that`, it is not defined which value will be chosen. For example:
@@ -2211,6 +2215,7 @@ object HashMap extends MapFactory[HashMap] {
 
   /** Creates a new Builder which can be reused after calling `result()` without an
     * intermediate call to `clear()` in order to build multiple related results.
+    * Adding elements after calling `result()` first copies the builder's structure (O(n)).
     */
   def newBuilder[K, V]: ReusableBuilder[(K, V), HashMap[K, V]] = new HashMapBuilder[K, V]
 }
