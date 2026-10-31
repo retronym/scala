@@ -829,7 +829,7 @@ trait Namers extends MethodSynthesis {
       override def completeImpl(sym: Symbol): Unit = {
         def needsCycleCheck = sym.isNonClassType && !sym.isParameter && !sym.isExistential
 
-        val annotations = annotSig(tree.mods.annotations, tree, _ => true)
+        val annotations = annotSig(tree.mods.annotations, tree, _ => true) ::: defaultArgAnnotSig(tree)
 
         val tp = typeSig(tree, annotations)
 
@@ -1953,6 +1953,31 @@ trait Namers extends MethodSynthesis {
             AnnotationInfo.lazily(computeInfo)
         }
       }
+
+    /* The `@defaultArg` meta-annotation of a constructor parameter of an annotation class holds the typed default.
+     * It is computed here rather than in typedValDef so that use sites of the annotation that are typechecked first
+     * (e.g., in a source file that comes earlier) also inline the default. Otherwise they would get a call to the
+     * default getter, making the annotation tree, and the pickle, depend on the order of the source files.
+     */
+    private def defaultArgAnnotSig(tree: MemberDef): List[AnnotationInfo] = tree match {
+      case vdef: ValDef if !vdef.rhs.isEmpty && {
+        // Only test the class if its info is complete, to avoid cycles. If the class is still incomplete, typedValDef
+        // adds the meta-annotation.
+        val sym = vdef.symbol
+        sym.owner.isConstructor && sym.enclClass.rawInfo.isComplete && isAnnotationClassCtorParamWithDefault(sym)
+      } =>
+        val sym = vdef.symbol
+        val rhs = vdef.rhs.duplicate
+        val ctx = typer.context
+        def computeInfo: AnnotationInfo = enteringTyper {
+          // The same context as in typedValDef. Errors are reported when typechecking the parameter itself.
+          val rhsTyper = newTyper(ctx.makeConstructorContext.makeSilent(reportAmbiguousErrors = false).makeNewScope(vdef, sym))
+          val rhs1 = rhsTyper.typed(rhs, Mode.EXPRmode | Mode.BYVALmode, rhsTyper.defaultParamPt(sym, sym.tpe))
+          AnnotationInfo(DefaultArgAttr.tpe, List(duplicateAndResetPos.transform(rhs1)), Nil)
+        }
+        AnnotationInfo.lazily(DefaultArgAttr, computeInfo) :: Nil
+      case _ => Nil
+    }
 
     private def annotate(sym: Symbol, annotSigs: List[AnnotationInfo]): Unit = {
       sym setAnnotations annotSigs

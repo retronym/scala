@@ -257,6 +257,27 @@ class DeterminismTest {
     test(List(code))
   }
 
+  @Test def testAnnotationDefaultArgs(): Unit = {
+    // Omitted arguments are inlined from `@defaultArg`, also if the use site is typechecked first
+    def code = List[SourceFile](
+      source("a.scala",
+        """
+          |class ann(x: Int = 1, y: String = "", z: Int = T.i) extends scala.annotation.StaticAnnotation
+          |class kon(x: Int = 1, y: Int = 2) extends scala.annotation.ConstantAnnotation
+          |object T { def i = 0 }
+        """.stripMargin),
+      source("b.scala",
+        """
+          |class Test {
+          |  @ann def m1 = 1
+          |  @ann(y = "a") def m2 = 1
+          |  @kon(y = 22) def k1 = 1
+          |}
+        """.stripMargin)
+    )
+    test(List(code))
+  }
+
   @Test def testAnnotationsJava(): Unit = {
     def code = List[SourceFile](
       source("Annot1.java",
