@@ -23,6 +23,11 @@ import scala.collection.{IterableFactoryDefaults, IterableOnce, SeqFactory, Stri
  *  rather than reversing it (as would be expected from building a new stack
  *  by pushing an element at a time).
  *
+ *  Use `push` and `pushAll` to add elements to the top of the stack. The methods
+ *  `+=`, `addOne`, `++=` and `addAll` are inherited from [[ArrayDeque]] and append
+ *  elements at the bottom of the stack. `pushAll` pushes the elements in iteration
+ *  order, so the last element ends up on top.
+ *
  *  @tparam A    type of the elements contained in this stack.
  *
  *  @define Coll `Stack`

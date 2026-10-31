@@ -100,6 +100,10 @@ trait AsJavaConverters {
    * The returned Java List is backed by the provided Scala `Buffer` and any side-effects of using
    * it via the Java interface will be visible via the Scala interface and vice versa.
    *
+   * The only mutators supported by the returned List are `set`, `add(E)`, `remove(int)` and `clear`.
+   * Other mutators, such as `add(int, E)`, `remove(Object)`, `removeIf` and `Iterator.remove`, throw
+   * `UnsupportedOperationException`.
+   *
    * If the Scala `Buffer` was previously obtained from an implicit or explicit call of
    * `asScala` then the original Java `List` will be returned.
    *
