@@ -261,7 +261,7 @@ class ExtractAPI[GlobalType <: Global](
               if (a.assocs.isEmpty)
                 Array(
                   xsbti.api.AnnotationArgument
-                    .of("", ReusableTreePrinter.mkString(a.args, "(", ",", ")"))
+                    .of("", ReusableTreePrinter.mkString(a.args.mapConserve(normalizeAnnotationArg), "(", ",", ")"))
                 ) // what else to do with a Tree?
               else
                 a.assocs
@@ -273,6 +273,26 @@ class ExtractAPI[GlobalType <: Global](
             )
           }.toArray
       }
+  }
+
+  // An omitted annotation argument with a default is filled in by the typer in one of two ways: if the
+  // annotation class comes from a classfile (or its constructor parameter was already typed), the default's
+  // right-hand side is inlined from the `@defaultArg` meta-annotation on the parameter; otherwise a call to the
+  // default getter (`myAnnot.<init>$default$1`) is inserted. The two render differently, which would make the
+  // extracted API depend on whether the annotation class is compiled in the same run. Normalize to the former.
+  private def normalizeAnnotationArg(arg: Tree): Tree = arg match {
+    case NamedArg(lhs, rhs) =>
+      val rhs1 = normalizeAnnotationArg(rhs)
+      if (rhs1 eq rhs) arg else NamedArg(lhs, rhs1)
+    case treeInfo.Applied(fun, _, _) if fun.symbol != null && fun.symbol.isDefaultGetter =>
+      val getter = fun.symbol
+      val annotationClass = getter.owner.linkedClassOfClass
+      val getterName = getter.name.toString
+      val paramPos = getterName.substring(getterName.lastIndexOf(nme.DEFAULT_GETTER_STRING) + nme.DEFAULT_GETTER_STRING.length).toInt
+      val params = annotationClass.primaryConstructor.paramss.flatten
+      if (paramPos < 1 || paramPos > params.length) arg
+      else params(paramPos - 1).getAnnotation(definitions.DefaultArgAttr).flatMap(_.args.headOption).getOrElse(arg)
+    case _ => arg
   }
 
   // HOT method, hand optimized to reduce allocations and needless creation of Names with calls to getterIn/setterIn
