@@ -22,6 +22,29 @@ Highest-value fixes, in order:
 
 ---
 
+## Follow-up PRs
+
+Draft PRs for the findings that are actionable without a design decision, labelled `collections-review`, each with JUnit tests and a clean MiMa run:
+
+| PR | Fixes |
+|---|---|
+| retronym/scala#182 | 🔴 `MapBuilderImpl.getOrElse` after `clear()` (VectorMap/TreeSeqMap duplicate keys) |
+| retronym/scala#185 | 🔴 mutable TreeMap/TreeSet range projections: `foreachEntry`, `minAfter`/`maxBefore`, steppers, `mutable.TreeSet.from(projection)` |
+| retronym/scala#183 | 🟠 `HashMap.merged` singleton fast path; `HashSet.diff` double computation |
+| retronym/scala#186 | 🟠 `TreeSetBuilder.addAll(TreeMap)` adding keys instead of entries |
+| retronym/scala#187 | 🟠 `TreeSet.from`/`TreeMap.from` unsorted input via the builder (stacked on 186) |
+| retronym/scala#192 | 🟡 `rangeTo` override via `RB.to` (adds a forwards MiMa filter) |
+| retronym/scala#189 | 🟠 `NewVectorIterator.drop` overflow; `Vector6` capacity guard; `empty.last` and `alignTo` messages |
+| retronym/scala#190 | 🟠 `Vector.prependedAll` with an unknown-size prefix (materialise, then share structure) |
+| retronym/scala#191 | 🟠 `LazyZip2` filtered view `isEmpty` inversion |
+| retronym/scala#184 | ⚪ HashMap/HashSet Scaladoc |
+| retronym/scala#188 | ⚪ TreeMap/TreeSet/SortedOps Scaladoc |
+| retronym/scala#193 | ⚪ Map.withDefault, Stack, ListMap, VectorBuilder, Vector, VectorMap, CollectionConverters Scaladoc |
+
+Deliberately not attempted because they need a semantics decision: `HashSet.removedAll(Range)` and `HashSet.diff(Set)` equality semantics, which key instance CHAMP retains, `VectorMap.removed` compaction policy, `ArrayOps.transpose` on ragged input, `Buffer.asJava` mutators, `clear()` on tree range views (scala/bug#12808), and the unification of Vector's `Int.MaxValue` overflow errors.
+
+---
+
 ## 1. Vector and VectorMap
 
 ### Verification done
