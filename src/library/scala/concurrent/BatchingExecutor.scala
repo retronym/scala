@@ -207,7 +207,8 @@ private[concurrent] trait BatchingExecutor extends Executor {
     @tailrec override final def run(): Unit = {
       try runN(BatchingExecutorStatics.runLimit) catch {
         case ie: InterruptedException =>
-          reportFailure(ie) // TODO: Handle InterruptedException differently?
+          reportFailure(ie)
+          Thread.currentThread.interrupt() // We run on the caller's thread, so preserve its interrupt status
         case f if NonFatal(f) =>
           reportFailure(f)
       }
@@ -254,7 +255,8 @@ private[concurrent] trait BatchingExecutor extends Executor {
         try submitForExecution(runnable) // User code so needs to be try-finally guarded here
         catch {
           case ie: InterruptedException =>
-            reportFailure(ie) // TODO: Handle InterruptedException differently?
+            reportFailure(ie)
+            Thread.currentThread.interrupt() // We run on the caller's thread, so preserve its interrupt status
           case f if NonFatal(f) =>
             reportFailure(f)
         }
