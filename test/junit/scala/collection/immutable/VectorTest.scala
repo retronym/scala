@@ -659,6 +659,27 @@ class VectorTest {
     assertEquals(1000000, v2(v2.length-1)) // ArrayIndexOutOfBoundsException
     assertEquals(1024, v2(1023))
   }
+
+  @Test def `prependedAll with unknown-size prefix`: Unit = {
+    for (bigSize <- List(31, 32, 33, 1024, 1025, 40000); prefixSize <- List(0, 1, 3, 33, 1000)) {
+      val big    = Vector.tabulate(bigSize)(i => -i)
+      val prefix = List.tabulate(prefixSize)(identity)
+      val expected = prefix ::: big.toList
+      def check(kind: String, result: Vector[Int]): Unit = {
+        assertEquals(s"$kind bigSize=$bigSize prefixSize=$prefixSize", expected, result.toList)
+        validateDebug(result)
+      }
+      check("List", prefix ++: big)
+      val it = prefix.iterator
+      check("Iterator", it ++: big)
+      assertFalse(it.hasNext)
+      var evaluated = 0
+      val view = prefix.view.map { x => evaluated += 1; x }
+      if (prefixSize > 0) assertEquals(-1, view.knownSize)
+      check("View", view ++: big)
+      assertEquals(prefixSize, evaluated)
+    }
+  }
 }
 
 object VectorUtils {
