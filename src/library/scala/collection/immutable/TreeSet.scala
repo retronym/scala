@@ -154,6 +154,8 @@ final class TreeSet[A] private[immutable] (private[immutable] val tree: RB.Tree[
 
   def rangeImpl(from: Option[A], until: Option[A]): TreeSet[A] = newSetOrSelf(RB.rangeImpl(tree, from, until))
 
+  override def rangeTo(to: A): TreeSet[A] = newSetOrSelf(RB.to(tree, to))
+
   /** Creates a new `TreeSet` with the entry added.
     *
     *  @param elem    a new element to add.

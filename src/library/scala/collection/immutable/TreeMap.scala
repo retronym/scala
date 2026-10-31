@@ -202,6 +202,8 @@ final class TreeMap[K, +V] private (private val tree: RB.Tree[K, V])(implicit va
 
   override def range(from: K, until: K): TreeMap[K,V] = newMapOrSelf(RB.range(tree, from, until))
 
+  override def rangeTo(to: K): TreeMap[K, V] = newMapOrSelf(RB.to(tree, to))
+
   override def foreach[U](f: ((K, V)) => U): Unit = RB.foreach(tree, f)
   override def foreachEntry[U](f: (K, V) => U): Unit = RB.foreachEntry(tree, f)
   override def size: Int = RB.count(tree)

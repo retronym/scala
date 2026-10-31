@@ -339,4 +339,24 @@ class TreeSetTest extends AllocationTest {
       assertSame(src, nonAllocating(src - i))
     }
   }
+
+  @Test
+  def rangeTo(): Unit = {
+    val set = TreeSet(2, 4, 6, 8)
+    for (to <- 0 to 10) {
+      val expected = set.filter(_ <= to)
+      val actual = set.rangeTo(to)
+      assertEquals(s"rangeTo($to)", expected, actual)
+      assertEquals(s"rangeTo($to)", set.rangeUntil(to + 1), actual)
+      RedBlackTree.validate(actual.tree)
+    }
+    assertSame(set, set.rangeTo(8))
+    assertSame(set, set.rangeTo(100))
+    assertEquals(TreeSet.empty[Int], TreeSet.empty[Int].rangeTo(1))
+    val big = TreeSet(1 to 1000: _*)
+    for (to <- List(Int.MinValue, 0, 1, 2, 500, 999, 1000, Int.MaxValue)) {
+      assertEquals(s"rangeTo($to)", big.filter(_ <= to), big.rangeTo(to))
+      RedBlackTree.validate(big.rangeTo(to).tree)
+    }
+  }
 }
