@@ -100,6 +100,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.PackageDef
     this.ClassDef
     this.ModuleDef
+    this.Jpms
     this.ValOrDefDef
     this.ValDef
     this.DefDef
