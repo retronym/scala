@@ -349,4 +349,16 @@ class TreeSetTest extends AllocationTest {
     assertEquals(expected, (TreeSet.newBuilder[Any](o) += 0 ++= tm).result() - 0)
     assertEquals(expected, TreeSet[Any]("x")(o).flatMap[Any](_ => tm)(o))
   }
+
+  @Test
+  def fromUnsorted(): Unit = {
+    val xs = new scala.util.Random(42).shuffle((1 to 1000).toList)
+    val ts = TreeSet.from(xs ++ xs)
+    assertEquals((1 to 1000).toList, ts.toList)
+    RedBlackTree.validate(ts.tree)
+    // the first of several equivalent elements is retained
+    val ci = Ordering.fromLessThan[String](_.compareToIgnoreCase(_) < 0)
+    val ciSet = TreeSet.from(List("b", "a", "B", "A"))(ci)
+    assertEquals(List("a", "b"), ciSet.toList)
+  }
 }
