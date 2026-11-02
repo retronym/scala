@@ -229,12 +229,24 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
      */
     final class EquivalentTrees[A](key: A => Tree) {
       private[this] val buckets = new java.util.HashMap[Integer, mutable.ArrayBuffer[A]]
+      private[this] val all = mutable.ArrayBuffer.empty[A] // SELF-CHECK: every element, as 2.13.x kept them
       def find(t: Tree): Option[A] = {
         val bucket = buckets.get(equivalenceHash(t))
-        if (bucket eq null) None else bucket.find(a => equivalentTree(key(a), t))
+        val found = if (bucket eq null) None else bucket.find(a => equivalentTree(key(a), t))
+        // SELF-CHECK: 2.13.x searched a hash set, so at most one element may be equivalent for the order not to matter
+        val scanned = all.filter(a => equivalentTree(key(a), t))
+        PatmatSelfCheck(scanned.lengthIs <= 1, s"several trees equivalent to $t: $scanned")
+        val same = (scanned.headOption, found) match {
+          case (None, None)       => true
+          case (Some(a), Some(b)) => a.asInstanceOf[AnyRef] eq b.asInstanceOf[AnyRef]
+          case _                  => false
+        }
+        PatmatSelfCheck(same, s"tree equivalent to $t: scan $scanned, indexed $found")
+        found
       }
       def +=(a: A): this.type = {
         val t = key(a)
+        all += a
         if (mayBeEquivalent(t))
           buckets.computeIfAbsent(equivalenceHash(t), _ => new mutable.ArrayBuffer[A](2)).addOne(a)
         this
@@ -343,6 +355,8 @@ trait MatchApproximation extends TreeAndTypeAnalysis with ScalaLogic with MatchT
 
           val okSubst = Substitution(unboundFrom.toList, unboundTo.toList) // it's important substitution does not duplicate trees here -- it helps to keep hash consing simple, anyway
           foreach2(okSubst.from, okSubst.to){(f, t) =>
+            // SELF-CHECK
+            PatmatSelfCheck(t.exists(t1 => pointsToBound(t1.symbol)) == pointsToBound.exists(sym => t.exists(_.symbol == sym)), s"pointsToBound for $t")
             if (tm.isInstanceOf[ExtractorTreeMaker] || t.exists(t1 => pointsToBound(t1.symbol)))
               pointsToBound += f
           }
@@ -479,7 +493,11 @@ trait MatchAnalysis extends MatchApproximation {
   import global.definitions._
 
   trait MatchAnalyzer extends MatchApproximator  {
-    def uncheckedWarning(pos: Position, msg: String, site: Symbol) = runReporting.warning(pos, msg, WarningCategory.Unchecked, site)
+    // SELF-CHECK: collects, instead of reporting, the warnings of an analysis whose result is only compared
+    private[this] var suppressedWarnings: mutable.ListBuffer[String] = null
+    def uncheckedWarning(pos: Position, msg: String, site: Symbol) =
+      if (suppressedWarnings ne null) suppressedWarnings += msg
+      else runReporting.warning(pos, msg, WarningCategory.Unchecked, site)
     def warn(pos: Position, ex: AnalysisBudget.Exception, kind: String, site: Symbol) = uncheckedWarning(pos, s"Cannot check match for $kind.\n${ex.advice}", site)
     def reportWarning(message: String) = typer.context.warning(typer.context.tree.pos, message, WarningCategory.OtherMatchAnalysis)
 
@@ -521,6 +539,7 @@ trait MatchAnalysis extends MatchApproximation {
         // the prefix grows by one conjunct per case, which is converted to CNF only once
         val solver = incrementalSolver(eqAxioms :: symbolicCasesFail ::: symbolicCasesOk)
         solver.addToPrefix(eqAxioms)
+        val oldPrefix = mutable.ArrayBuffer[Prop](eqAxioms) // SELF-CHECK
 
         var prefixRest = symbolicCasesFail
         var current = symbolicCasesOk
@@ -540,7 +559,14 @@ trait MatchAnalysis extends MatchApproximation {
           else {
             solver.addToPrefix(prefHead)
             current = current.tail
-            reachable = solver.hasModelWith(current.head)
+            // SELF-CHECK: the query as 2.13.x built it, from scratch, including whether it exceeds the budget
+            oldPrefix += prefHead
+            def outcome(f: => Boolean): Either[AnalysisBudget.Exception, Boolean] =
+              try Right(f) catch { case ex: AnalysisBudget.Exception => Left(ex) }
+            val oldReachable = outcome(hasModel(eqFreePropToSolvable(And((current.head +: oldPrefix).toIndexedSeq: _*))))
+            val newReachable = outcome(solver.hasModelWith(current.head))
+            PatmatSelfCheck(oldReachable == newReachable, s"reachability of case $caseIndex at ${prevBinder.pos}: old $oldReachable, new $newReachable")
+            reachable = newReachable.fold(ex => throw ex, identity)
           }
         }
 
@@ -563,7 +589,23 @@ trait MatchAnalysis extends MatchApproximation {
       case _                                              => false
     }
 
-    def exhaustive(prevBinder: Symbol, cases: List[List[TreeMaker]], @unused pt: Type): List[String] = if (!settings.warnStrictUnsealedPatMat && uncheckableType(prevBinder.info) || cases.exists(isIrrefutableCase)) Nil else {
+    def exhaustive(prevBinder: Symbol, cases: List[List[TreeMaker]], pt: Type): List[String] =
+      if (!settings.warnStrictUnsealedPatMat && uncheckableType(prevBinder.info)) Nil
+      else if (cases.exists(isIrrefutableCase)) {
+        // SELF-CHECK: the full analysis finds no counter-example, and reports no warning
+        val saved = suppressedWarnings
+        suppressedWarnings = mutable.ListBuffer.empty
+        val full = try exhaustiveAnalysis(prevBinder, cases, pt) finally {
+          val warnings = suppressedWarnings.toList
+          suppressedWarnings = saved
+          PatmatSelfCheck(warnings.isEmpty, s"irrefutable case, but exhaustivity analysis warns at ${prevBinder.pos}: $warnings")
+        }
+        PatmatSelfCheck(full.isEmpty, s"irrefutable case, but exhaustivity analysis finds counter-examples at ${prevBinder.pos}: $full")
+        Nil
+      }
+      else exhaustiveAnalysis(prevBinder, cases, pt)
+
+    private def exhaustiveAnalysis(prevBinder: Symbol, cases: List[List[TreeMaker]], @unused pt: Type): List[String] = {
       debug.patmat("exhaustiveness analysis")
       // customize TreeMakersToProps (which turns a tree of tree makers into a more abstract DAG of tests)
       // - approximate the pattern `List()` (unapplySeq on List with empty length) as `Nil`,

@@ -176,7 +176,7 @@ trait Interface extends ast.TreeDSL {
 
       // Substitutions with more bindings than this are an `IndexedSubstitution`. Building and updating its maps
       // costs more than the linear steps of a `ListSubstitution` save until it's this large.
-      final val IndexAbove = 64
+      final val IndexAbove = 0 // SELF-CHECK: was 64
     }
 
     // Substitutions are composed with `>>` for each tree maker, and the composition mostly shares the `to` trees
@@ -188,7 +188,15 @@ trait Interface extends ast.TreeDSL {
     private def typedStableType(t: Tree): Type = {
       if (stableTypes eq null) stableTypes = new java.util.IdentityHashMap[Tree, Type]()
       val cached = stableTypes.get(t)
-      if (cached ne null) cached
+      if (cached ne null) {
+        // SELF-CHECK: 2.13.x typed the tree again
+        val fresh = typedStable(t).tpe
+        // typing again creates new existential quantifiers (or skolems), which aren't `=:=` to the cached ones
+        def sameUpToQuantifiers =
+          fresh.exists(tp => tp.isInstanceOf[ExistentialType] || tp.typeSymbolDirect.isExistentiallyBound) && fresh.toString == cached.toString
+        PatmatSelfCheck(fresh =:= cached || sameUpToQuantifiers, s"type of substitution target $t: cached $cached, typed again $fresh")
+        cached
+      }
       else {
         val tp = typedStable(t).tpe
         stableTypes.put(t, tp)
@@ -323,6 +331,21 @@ trait Interface extends ast.TreeDSL {
             restrictedFrom += b.from
             restrictedTo += b.to
           }
+          // SELF-CHECK: the bindings left out can't apply, as their symbols don't occur in the tree
+          val kept = restrictedFrom.toSet
+          val left = from.filterNot(kept).toSet
+          if (left.nonEmpty) {
+            def inType(tp: Type) = (tp ne null) && tp.exists {
+              case TypeRef(_, sym, _) => left(sym)
+              case SingleType(_, sym) => left(sym)
+              case _                  => false
+            }
+            val occurring = tree.collect {
+              case t if left(t.symbol) || inType(t.tpe) => t
+              case t: global.DefTree if (t.symbol ne null) && (inType(t.symbol.info) || t.symbol.isModule && inType(t.symbol.moduleClass.info)) => t
+            }
+            PatmatSelfCheck(occurring.isEmpty, s"substitution restricted to $restrictedFrom leaves out bindings of symbols in ${occurring.take(3)} of $tree; $this")
+          }
           substitute(tree, new RestrictedBindings(restrictedFrom.toList, restrictedTo.toList), toIdents, this)
         }
 
@@ -340,7 +363,13 @@ trait Interface extends ast.TreeDSL {
             }
             keys1 -= f
           }
-          new IndexedSubstitution(bindings1, keys1, nonIdents1, nextKey).prepend(other.from, other.to.mapConserve(apply))
+          val result = new IndexedSubstitution(bindings1, keys1, nonIdents1, nextKey).prepend(other.from, other.to.mapConserve(apply))
+          // SELF-CHECK: the composition of 2.13.x
+          val (expectedFrom, expectedTo) = from.zip(to).filterNot { case (f, _) => other.from.contains(f) }.unzip
+          PatmatSelfCheck(result.from == other.from ::: expectedFrom, s"$this >> $other: from ${result.from}")
+          PatmatSelfCheck(result.to.drop(other.size).corresponds(expectedTo)(_ eq _), s"$this >> $other: to ${result.to}")
+          PatmatSelfCheck(result.toIdents == (result.to.forall(_.isInstanceOf[global.Ident])), s"$this >> $other: nonIdents")
+          result
         }
 
       // requires: `from` doesn't bind any symbol of this substitution

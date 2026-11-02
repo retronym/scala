@@ -519,6 +519,9 @@ trait Solving extends Logic {
 
       debug.patmat(s"DPLL\n${cnfString(clauses)}")
       val satisfiableWithModel = findTseitinModel0((java.util.Arrays.copyOf(clauses, clauses.length), Nil) :: Nil)
+      // SELF-CHECK
+      val oldModel = findTseitinModel0Old((java.util.Arrays.copyOf(clauses, clauses.length), Nil) :: Nil)
+      PatmatSelfCheck(oldModel == satisfiableWithModel, s"DPLL models differ: old $oldModel, new $satisfiableWithModel for\n${cnfString(clauses)}")
 
       if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.patmatAnaDPLL, start)
       satisfiableWithModel
@@ -702,5 +705,108 @@ trait Solving extends Logic {
       loop(state)
     }
 
+    // SELF-CHECK: the DPLL of 2.13.x, to compare models with
+    /** Drop trivially true clauses, simplify others by dropping negation of `unitLit`.
+     *
+     *  Disjunctions that contain the literal we're making true in the returned model are trivially true.
+     *  Clauses can be simplified by dropping the negation of the literal we're making true
+     *  (since False \/ X == X)
+     */
+    private def dropUnit(clauses: Array[Clause], unitLit: Lit): Unit = {
+      val negated = -unitLit
+      var i, j = 0
+      while (i < clauses.length) {
+        val clause = clauses(i)
+        if (clause == null) return
+        clauses(i) = null
+        if (!clause.contains(unitLit)) {
+          clauses(j) = clause.excl(negated)
+          j += 1
+        }
+        i += 1
+      }
+    }
+
+    private def findTseitinModel0Old(state: TseitinSearch): TseitinModel = {
+      val pos = new java.util.BitSet()
+      val neg = new java.util.BitSet()
+      @tailrec def loop(state: TseitinSearch): TseitinModel = state match {
+        case Nil => NoTseitinModel
+        case (clauses, assignments) :: rest =>
+          if (clauses.isEmpty || clauses.head == null) assignments
+          else {
+            var i = 0
+            var emptyIndex = -1
+            var unitIndex = -1
+            while (i < clauses.length && emptyIndex == -1) {
+              val clause = clauses(i)
+              if (clause != null) {
+                clause.size match {
+                  case 0 => emptyIndex = i
+                  case 1 if unitIndex == -1 =>
+                    unitIndex = i
+                  case _ =>
+                }
+              }
+              i += 1
+            }
+            if (emptyIndex != -1)
+              loop(rest)
+            else if (unitIndex != -1) {
+              val unitLit = clauses(unitIndex).head
+              dropUnit(clauses, unitLit)
+              val tuples: TseitinSearch = (clauses, unitLit :: assignments) :: rest
+              loop(tuples)
+            } else {
+              // partition symbols according to whether they appear in positive and/or negative literals
+              pos.clear()
+              neg.clear()
+              for (clause <- clauses) {
+                if (clause != null) {
+                  clause.foreach { lit: Lit =>
+                    if (lit.positive) pos.set(lit.variable) else neg.set(lit.variable)
+                  }
+                }
+              }
+
+              // appearing only in either positive/negative positions
+
+              pos.xor(neg)
+              val pures = pos
+
+              if (!pures.isEmpty) {
+                val pureVar = pures.nextSetBit(0)
+                // turn it back into a literal
+                // (since equality on literals is in terms of equality
+                //  of the underlying symbol and its positivity, simply construct a new Lit)
+                val pureLit: Lit = Lit(if (neg.get(pureVar)) -pureVar else pureVar)
+                // debug.patmat("pure: "+ pureLit +" pures: "+ pures)
+                val simplified = clauses.filterNot(clause => clause != null && clause.contains(pureLit))
+                loop((simplified, pureLit :: assignments) :: rest)
+              } else {
+                val split = clauses.find(_ != null).get.head
+                // debug.patmat("split: "+ split)
+                var i = 0
+                var nullIndex = -1
+                while (i < clauses.length && nullIndex == -1) {
+                  if (clauses(i) eq null) nullIndex = i
+                  i += 1
+                }
+
+                val effectiveLength = if (nullIndex == -1) clauses.length else nullIndex
+                val posClauses = java.util.Arrays.copyOf(clauses, effectiveLength + 1)
+                val negClauses = java.util.Arrays.copyOf(clauses, effectiveLength + 1)
+                posClauses(effectiveLength) = Set.empty[Lit] + split
+                negClauses(effectiveLength) = Set.empty[Lit] + (-split)
+
+                val pos = (posClauses, assignments)
+                val neg = (negClauses, assignments)
+                loop(pos :: neg :: rest)
+              }
+            }
+          }
+      }
+      loop(state)
+    }
   }
 }

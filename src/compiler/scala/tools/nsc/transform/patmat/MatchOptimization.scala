@@ -48,7 +48,7 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
       // and for each condition, the (ascending) indices of the keys whose dependencies include it. The index is
       // only built once `dependencies` has more than `IndexAbove` keys; until then, they're searched linearly.
       val simplified      = new mutable.HashMap[Test, Set[Prop]]
-      val IndexAbove      = 32
+      val IndexAbove      = 0 // SELF-CHECK: was 32
       var dependents: DependentsIndex = null
       final class DependentsIndex {
         private[this] val testsInOrder = new mutable.ArrayBuffer[Test]
@@ -108,6 +108,12 @@ trait MatchOptimization extends MatchTreeMaking with MatchApproximation {
             val reusedTest =
               if (dependents eq null) dependencies.find { case (priorTest, deps) => reusable(priorTest, deps) }.map(_._1)
               else dependents.candidates(conds).find(priorTest => reusable(priorTest, dependencies(priorTest)))
+            // SELF-CHECK: the scan of 2.13.x, simplifying each prior test again
+            val scannedTest = dependencies.find { case (priorTest, deps) =>
+              ((simplify(priorTest.prop) == conds) || (conds subsetOf deps)) && (deps subsetOf tested)
+            }.map(_._1)
+            PatmatSelfCheck(reusedTest.map(_.id) == scannedTest.map(_.id) && reusedTest.zip(scannedTest).forall { case (a, b) => a eq b },
+              s"CSE reuse for $test: scan $scannedTest, indexed $reusedTest")
             reusedTest foreach { priorTest =>
                 // if so, note the dependency in both tests
                 registerReuseBy(priorTest, test)

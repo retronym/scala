@@ -731,20 +731,28 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
           override def hashCode = a.hashCode ^ b.hashCode
         }
 
-        val candidates = if (equalitySyms.lengthIs > 16) new ImplicationCandidates(equalitySyms) else null
+        val candidates = if (equalitySyms.lengthIs > 0 /* SELF-CHECK: was 16 */) new ImplicationCandidates(equalitySyms) else null
 
         equalitySyms map { sym =>
           // if we've already excluded the pair at some point (-A \/ -B), then don't exclude the symmetric one (-B \/ -A)
           // (nor the positive implications -B \/ A, or -A \/ B, which would entail the equality axioms falsifying the whole formula)
           def todo(b: Sym) = (b.const != sym.const) && !excludedPair(ExcludedPair(b.const, sym.const))
+          def scan = {
+            val (excluded, notExcluded) = partitionConserve(equalitySyms filter todo)(b => excludes(sym.const, b.const))
+            (excluded, notExcluded filter (b => implies(sym.const, b.const)))
+          }
           val (excluded, implied) =
-            if (candidates eq null) {
-              val (excluded, notExcluded) = partitionConserve(equalitySyms filter todo)(b => excludes(sym.const, b.const))
-              (excluded, notExcluded filter (b => implies(sym.const, b.const)))
-            } else (
-              candidates.excluded(sym.const) filter (b => todo(b) && excludes(sym.const, b.const)),
-              candidates.implied(sym.const) filter (b => todo(b) && !excludes(sym.const, b.const) && implies(sym.const, b.const))
-            )
+            if (candidates eq null) scan
+            else {
+              val indexed = (
+                candidates.excluded(sym.const) filter (b => todo(b) && excludes(sym.const, b.const)),
+                candidates.implied(sym.const) filter (b => todo(b) && !excludes(sym.const, b.const) && implies(sym.const, b.const))
+              )
+              // SELF-CHECK
+              val scanned = scan
+              PatmatSelfCheck(indexed == scanned, s"implications of ${sym.const} in $this: scan $scanned, indexed $indexed")
+              indexed
+            }
 
           debug.patmat("eq axioms for: "+ sym.const)
           debug.patmat("excluded: "+ excluded)
@@ -853,7 +861,7 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
       // (`registerTypeSelection`). So index the type refs to classes other than those by the name of the class.
       // Most matches have few constants, which are compared to each other faster than they are indexed, so the
       // index is only built once there are more than `IndexAbove` keys.
-      private[this] final val IndexAbove = 16
+      private[this] final val IndexAbove = 0 // SELF-CHECK: was 16
       private[this] var indexed = false
       private val byName = new mutable.HashMap[global.Name, mutable.ArrayBuffer[Type]]
       private val others = new mutable.ArrayBuffer[Type]
@@ -875,7 +883,11 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
             val candidates =
               if (name eq null) uniques.keysIterator
               else byName.getOrElse(name, Nil).iterator ++ others.iterator
-            val const = candidates.find(_ =:= normalized).fold(mkFresh)(uniques)
+            // SELF-CHECK: scan all keys first, as 2.13.x did, in case `=:=` has side effects
+            val scanned = uniques.keysIterator.find(_ =:= normalized).map(uniques)
+            val found = candidates.find(_ =:= normalized).map(uniques)
+            PatmatSelfCheck(found == scanned, s"unique const for $normalized: scan $scanned, indexed $found")
+            val const = found.getOrElse(mkFresh)
             if (indexed) index(normalized)
             else if (uniques.size >= IndexAbove) {
               indexed = true
