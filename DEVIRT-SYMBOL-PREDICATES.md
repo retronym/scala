@@ -329,6 +329,33 @@ private final def applyFast2(tp: Type): Type =
 
 The ceiling is the 0.237% of cycles and 0.411% of instructions at @12. The cost is one more type check on the path of the other 30-odd map classes. I would make this change and profile it before spending m4 time on a timing A/B of the Type work.
 
+### Static `SubstMap` branches: results
+
+`m4-devirt-subst-prof`: the previous prototype (`types`) against the change above (`subst`), m4, scala corpus, one fork per build, with `jitRecording`. Each helper is 22 bytes.
+
+| site | cycles before → after | instructions before → after |
+|---|---|---|
+| `applyFast1` @12 → `SubstMap.apply` | 0.197 → 0 | 0.348 → 0 |
+| slow path → `TypeMap.apply` (`applyFast1` @18, now `applyFast2` @18) | 0.191 → 0.115 | 0.227 → 0.172 |
+
+The `SubstMap` dispatch stub is gone. What remains at `applyFast2` @18 is the generic maps the fast path doesn't cover, by time `UnCurry$$anon$1` and `PostErasure.elimErasedValueType`, then `LambdaLift$$anon$1` and `TypeTraverser`.
+
+| | `types` | `subst` | change |
+|---|---|---|---|
+| compiler-thread cycles | 139.22 G | 137.20 G | −1.45% |
+| compiler-thread instructions | 580.9 G | 573.3 G | −1.29% |
+| stubs, share of cycles | 5.56% | 5.52% | −0.04 |
+| stubs, share of instructions | 6.41% | 6.30% | −0.11 |
+| C2 code | 53.37 MB | 53.08 MB | −0.6% |
+
+**These totals don't show a gain, here or in the previous section.** The `types` code is the same in `m4-devirt-type-prof` and this campaign, and its one fork differs between them by 1.4% in cycles (137.29 G, 139.22 G), 2.1% in instructions (569.0 G, 580.9 G) and 0.24 points of stub share (5.80%, 5.56%). That is as large as the differences in both tables of totals. The site-level attribution is what these profiles can support; whether the Type work saves time needs a timing A/B.
+
+`jit` for these methods:
+- `substMapApply` and `SubstSymMap.apply` are called directly and aren't inlined at `applyFast` ("hot method too big", "too big"), as intended.
+- C2 now also compiles `applyFast` as a large standalone unit, 26.8 KB with `AsSeenFromMap.apply` inlined, up from 704 bytes. In `TypeRef.mapOver`'s last compile, `applyFast` is therefore a real call ("already compiled into a big method"), where before it was inlined, and `mapConserveTypes` is now inlined into `TypeRef.mapOver`. A direct call is cheaper than the stub it replaced, but this is the size risk section A named.
+- `applyFast1` and `applyFast2` have 8 and 5 `class_check` deopts, where `applyFast1` previously had 5 `bimorphic_or_optimized_type_check`. Each is a small number against about 3700 in the fork.
+- In this campaign's `types` fork, C2 inlined `SubstSymMap.apply` into `applyFast1`, which it didn't do in the previous campaign's fork of the same code. That moved the stub cost between @12 and @18 (0.237/0.084 there, 0.197/0.191 here), so single-site numbers also vary between forks by up to about 0.1 points.
+
 ## Future work
 
 - The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
