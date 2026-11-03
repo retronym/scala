@@ -222,6 +222,64 @@ Together these sites take about 1.4% of compiler-thread cycles in stubs, before 
 
 **A JVM-flag experiment.** Several sites (`TypeRef.baseType`, `walkBaseClasses` → `decls`) have only three or four receiver classes. C2 inlines at most two by profile (bimorphic). A campaign variant with `-XX:TypeProfileWidth=4` (and/or `TypeProfileMajorReceiverPercent`) would show how much of this C2 recovers by itself. That is a cheap check before writing fast paths by hand.
 
+## Type hierarchy: proposal
+
+The sites the parent session named, as they stand after step 2 and the `owner` fix. Stub % is the share of compiler-thread cycles in the latest profile (`m4-devirt-sym-prof3`, fix cell), against base `00e3bbafb8` (`m4-int00e3bb-kperf-l1d`, by BCI):
+
+| site | base | now | status |
+|---|---|---|---|
+| `SubstMap.apply:755` → `Type.mapOver` | 0.300 | 0 | done in step 2 (`mapOverType`). Its slow path `mapOverType` @38 is 0.048, by time `MethodType` 43%, `PolyType` 42% |
+| `Symbol.typeParams:1833` @9 → `rawInfo` | 0.072 | 0 | done in step 1 |
+| `Symbol.typeParams:1833` @12 → `Type.typeParams` | 0.129 | 0.064 | **proposal B** |
+| `TypeRef.mapOver:2410` @5 → `TypeMap.apply` (`map(pre)`) | 0.213 | 0.249 | **proposal A** |
+| `TypeRef.mapOver:2419` @443 → `Function1.apply` (itable, `args mapConserve map`, `mapConserve` is `@inline`) | 0.303 | 0.314 | **proposal A** |
+| `AsSeenFromMap.isTypeParamOfEnclosingClass` → `isTypeParameter` | 0.090 | 0.113 | **proposal C** |
+
+**Receivers at the visitor sites.** A caller audit of the base build (`audit/typemap-receivers.audit`, run `out/runs/20261104-000150-audit-…`, about two scala-corpus compiles) probes each `TypeMap` class's `apply(Type)`, and its `apply(Object)` bridge, filtered by the caller `TypeRef.mapOver`:
+
+| site | calls | receiver classes | top classes |
+|---|---|---|---|
+| @5 `map(pre)` | 121.7 M | 36 | `SubstTypeMap` 29%, `SubstSymMap` 27%, `AsSeenFromMap` 23% (79% together) |
+| @443 `mapConserve` → `Function1.apply` | 61.6 M | 34 | `SubstTypeMap` 39%, `AsSeenFromMap` 29%, `SubstSymMap` 26% (94% together) |
+
+By time (callee frames in the profile), `AsSeenFromMap.apply` takes 49–70%, since it does the most work per call. These three classes have three `apply` implementations:
+- `AsSeenFromMap.apply`, a class with no subclasses;
+- `SubstMap.apply`, inherited by `SubstTypeMap`;
+- `SubstSymMap.apply`, which overrides it. `SpecializeTypes` subclasses it anonymously, but the subclass doesn't override `apply`.
+
+### A. A final `TypeMap` dispatcher for `TypeRef.mapOver`'s visitor calls
+
+```scala
+// in TypeMap
+final def applyFast(tp: Type): Type =
+  if (this.isInstanceOf[AsSeenFromMap]) this.asInstanceOf[AsSeenFromMap].apply(tp)   // one implementation: binds statically
+  else if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].apply(tp) // 2 implementations, ~2 classes: bimorphic
+  else apply(tp)
+final def mapConserveTypes(tps: List[Type]): List[Type]  // mapConserve's loop, calling applyFast
+```
+
+`TypeRef.mapOver` would use `map.applyFast(pre)` and `map.mapConserveTypes(args)`. The second also removes the `Function1` itable and the `apply(Object)` bridge, so 79–94% of these calls become a type check and a direct call. The 0.56% of cycles in the two stubs is the ceiling, plus whatever inlining follows. The risk is size: `applyFast` must stay small enough to inline (under 35 bytes, see the `owner` lesson), and `AsSeenFromMap.apply` / `SubstMap.apply` must stay out-of-line calls, not be inlined into `TypeRef.mapOver`. The JIT pilot will check both. Other callers with the same shape, `TypeMap.mapOver(List)`, `mapOverArgs` and `MethodType.mapOver`'s params, can use the same helper later.
+
+### B. A fast path for `rawInfo.typeParams` in `Symbol.typeParams`
+
+The audit counts at @12 are `ClassInfoType` 66% (`Type.typeParams = Nil`), `PolyType` 22%, `TypeBounds` 6% (`Nil`) and `ClassNoArgsTypeRef` 3%:
+
+```scala
+rawInfo match { case _: ClassInfoType => Nil  case pt: PolyType => pt.typeParams  case tp => tp.typeParams }
+```
+
+This covers 88%. `PolyType.typeParams` is a case accessor that no subclass overrides, so it binds statically. `ClassInfoType` may be subclassed (`PackageClassInfoType`), but neither class overrides `typeParams`.
+
+### C. A final `isTypeParameter`
+
+One implementation is reached from 9 receiver classes (`TypeSymbol.isTypeParameter = isTypeParameterOrSkolem && !isSkolem`). Make it `final def isTypeParameter = this.isInstanceOf[TypeSymbol] && isTypeParameterOrSkolem && !isSkolem`, in `Symbol`, as for `isClass`. `isTypeParameterOrSkolem` and `isSkolem` are virtual too. `TypeSkolem` overrides `isSkolem` (true), and the rest is flags, so check that it stays under 35 bytes, with `TypeSkolem` as a type check.
+
+### D. Smaller ones, same pattern (each 0.04–0.06%)
+
+`copyTypeRef` → `isAliasType` (another kind predicate: `isInstanceOf[AliasTypeSymbol]`), `SimpleTypeProxy.baseType` → `TypeRef.baseType` (98%), `TypeRef.relativize` → `isTrivial` (`TypeRef` 79%), `normalizePlus` → `TypeRef.normalize` (95%), `AsSeenFromMap.loop$4` → `prefix` (`TypeRef` 83%), `SimpleTypeProxy.baseType` → `ThisType.underlying` (91%), and `mapOverType`'s slow path (add `MethodType`/`PolyType` cases).
+
+**Plan.** Prototype A, B and C as one commit (A is the largest). Run tests locally, then on the m4: a kperf profile with `jitRecording` of the current tip against the prototype (2 cells × 1 fork, about 15 min), asking the parent session for m4 time first. D waits for review.
+
 ## Future work
 
 - The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
