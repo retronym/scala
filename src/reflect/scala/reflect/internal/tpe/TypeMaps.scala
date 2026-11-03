@@ -108,6 +108,21 @@ private[internal] trait TypeMaps {
     /** Map this function over given type */
     def mapOver(tp: Type): Type = if (tp eq null) tp else mapOverType(tp)
 
+    /** `apply(tp)`. OPT: at visitor call sites such as TypeRef.mapOver's, `apply` sees dozens of TypeMap classes,
+     *  but AsSeenFromMap (one implementation) and the SubstMaps (two) receive most calls; test for them first so
+     *  that those calls bind statically or bimorphically.
+     */
+    final def applyFast(tp: Type): Type =
+      if (this.isInstanceOf[AsSeenFromMap]) this.asInstanceOf[AsSeenFromMap].apply(tp)
+      else applyFast1(tp)
+    // Split from `applyFast` so that each stays under C2's MaxInlineSize (35 bytes).
+    private final def applyFast1(tp: Type): Type =
+      if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].apply(tp)
+      else apply(tp)
+
+    /** `tps mapConserve this`, through `applyFast` rather than `Function1.apply`. */
+    final def mapConserveTypes(tps: List[Type]): List[Type] = tps.mapConserve(tp => applyFast(tp))
+
     /** `tp.mapOver(this)`. OPT: a call to `Type.mapOver` sees dozens of receiver classes, but most calls go to
      *  `TypeRef.mapOver` (one implementation for all of TypeRef's classes, so this call binds statically) or to the
      *  identity `Type.mapOver` of `ThisType` and `NoPrefix`.

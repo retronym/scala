@@ -644,7 +644,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def isExistentialSkolem     = false
     def isExistentiallyBound    = false
     def isGADTSkolem            = false
-    def isTypeParameter         = false
+    // OPT: final, see isClass. TypeSymbol's was the only override; TypeSkolem is the only skolem.
+    final def isTypeParameter   = this.isInstanceOf[TypeSymbol] && !this.isInstanceOf[TypeSkolem] && hasFlag(PARAM)
     def isTypeParameterOrSkolem = false
     def isTypeSkolem            = false
     def isInvariant             = !isCovariant && !isContravariant
@@ -1870,7 +1871,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           rawInfo.typeParams
         }
       }
-      if (validTo != NoPeriod) rawInfo.typeParams else completeTypeParams
+      // OPT: a symbol's info is mostly a ClassInfoType (no type params) or a PolyType; `Type.typeParams` would be a
+      //      megamorphic call
+      if (validTo != NoPeriod) rawInfo match {
+        case _: ClassInfoType => Nil
+        case pt: PolyType     => pt.typeParams
+        case tp               => tp.typeParams
+      } else completeTypeParams
     }
 
     /** The value parameter sections of this symbol.
@@ -3230,7 +3237,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def isContravariant         = this hasFlag CONTRAVARIANT
     override def isCovariant             = this hasFlag COVARIANT
     override def isExistentiallyBound    = this hasFlag EXISTENTIAL
-    override def isTypeParameter         = isTypeParameterOrSkolem && !isSkolem
     override def isTypeParameterOrSkolem = this hasFlag PARAM
 
     /** Overridden in subclasses for which it makes sense.
