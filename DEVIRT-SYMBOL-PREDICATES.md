@@ -166,9 +166,7 @@ Run locally on `d2f3e64743`:
 
 Step 2 (`85df493655`): junit 333/333, the stub tests 18/18, `--grep reflection` 76/76, `--grep toolbox` 154/154, full `pos` + `neg` 3322/3325 (the failure is `neg/t12494`, `-Ylog:superaccessors -Ydebug` output that is missing `[context] ++` lines, and it fails the same way on the base `00e3bbafb8`).
 
-Step 2 (`85df493655`): junit 333/333, the stub tests 18/18, `--grep reflection` 76/76, `--grep toolbox` 154/154, full `pos` + `neg` 3322/3325 (the failure is `neg/t12494`, `-Ylog:superaccessors -Ydebug` output that is missing `[context] ++` lines, and it fails the same way on the base `00e3bbafb8`).
-
-Not yet run: the full partest suite, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
+Not yet run: `partest --run --jvm` for step 2, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
 
 ## Remaining stub sites: receiver histograms
 
