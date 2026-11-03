@@ -263,4 +263,21 @@ class UnreachableCodeTest extends ClearAfterClass {
     val lineNumber = BytecodeUtils.previousLineNumber(instr)
     assertEquals(Some(2), lineNumber)
   }
+
+  @Test
+  def noCodeEmittedAtUnreachedJoinPoints(): Unit = {
+    // There is no DCE under -opt:none: anything dead would show up here as a NOP or an extra ATHROW
+    def ops(code: String) = noOptCompiler.compileInstructions(code).dropNonOp
+
+    // both branches of the `if` in the case body jump away, so nothing reaches the end of the `if`
+    val matched = ops("def f(t: (Int, Int)): Int = t match { case (a, b) => a + b }")
+    assert(!matched.contains(Op(NOP)), matched)
+    assertEquals(matched.toString, 1, matched.count(_ == Op(ATHROW)))
+
+    // no return after the ATHROW of a Nothing-typed call
+    val nothing = ops("def f: Int = ???")
+    assertEquals(nothing.toString, Op(ATHROW), nothing.last)
+    assertEquals(nothing.toString, 1, nothing.count(_ == Op(ATHROW)))
+    assert(!nothing.contains(Op(IRETURN)), nothing)
+  }
 }
