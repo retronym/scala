@@ -17,6 +17,7 @@ package model
 import java.nio.file.Paths
 
 import base._
+import scala.collection.mutable
 import scala.tools.nsc.io.AbstractFile
 
 /** This trait extracts all required information for documentation from compilation units */
@@ -72,9 +73,13 @@ trait MemberLookup extends base.MemberLookupBase {
     }
   }
 
+  // `getCanonicalPath` stats every path component; it is needed for each external link
+  private lazy val canonicalPaths = mutable.HashMap.empty[AbstractFile, String]
+  private def canonicalPath(f: AbstractFile): String = canonicalPaths.getOrElseUpdate(f, f.canonicalPath)
+
   private def classpathEntryFor(s: Symbol): Option[String] = {
     Option(s.associatedFile).flatMap(_.underlyingSource).map { src =>
-      val path = src.canonicalPath
+      val path = canonicalPath(src)
       if(path.endsWith(".class")) { // Individual class file -> Classpath entry is root dir
         val nesting = s.ownerChain.count(_.hasPackageFlag)
         if(nesting > 0) {
@@ -82,7 +87,7 @@ trait MemberLookup extends base.MemberLookupBase {
             case (null, _) => null
             case (f, _) => f.container
           }
-          if(p eq null) path else p.canonicalPath
+          if(p eq null) path else canonicalPath(p)
         } else path
       } else path // JAR file (and fallback option)
     }
@@ -94,11 +99,13 @@ trait MemberLookup extends base.MemberLookupBase {
    */
   def isChildOf(f: AbstractFile, dir: String): Boolean = {
     val parent = Paths.get(dir).toAbsolutePath().toString
-    f.canonicalPath.startsWith(parent)
+    canonicalPath(f).startsWith(parent)
   }
 
+  private lazy val javaHome = Paths.get(sys.props("java.home")).toAbsolutePath().toString
+
   private def isJDK(sym: Symbol) =
-    sym.associatedFile.underlyingSource.map(f => isChildOf(f, (sys.props("java.home")))).getOrElse(false)
+    sym.associatedFile.underlyingSource.map(f => canonicalPath(f).startsWith(javaHome)).getOrElse(false)
 
   // ISSUE-12820
   import scala.util.Try
