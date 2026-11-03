@@ -153,7 +153,19 @@ Profile campaign `m4-devirt-sym-prof2` (same settings, step 1 `d2f3e64743` vs st
 | cycles (4 measured ops) | 139.7 G | 140.4 G (+0.5%) |
 | instructions (4 measured ops) | 585.0 G | 585.0 G (0.0%) |
 
-The targeted stubs are gone, but the total does not move. Some call sites changed how they are compiled. `isTypeParamOfEnclosingClass` and `TypeRef.mapOver`'s `mapConserve` site are now real calls, which suggests that C2 spends its inlining budget differently once `TypeRef.mapOver` binds statically and inlines into its callers. A `"jitRecording": true` pilot of step 1 vs step 2, read with `perflab api jit_diff`, would show which inlining decisions changed. Making `isTypeParameter` final (one implementation reached, see above) and specialising `mapConserve` for `TypeMap` would address the two sites that got worse.
+The targeted stubs are gone, but the total does not move.
+
+**JIT pilot** (`m4-devirt-sym-jit`: `jitRecording` over each whole fork, one fork each of step 1, step 2 and step 2 again as an A/A, read with `perflab api jit` / `jit_diff`):
+
+| | step 1 | step 2 | step 2 (A/A) |
+|---|---|---|---|
+| C2 code bytes | 35.37 MB | 36.41 MB | 36.52 MB |
+| C2 inlining failures | 30,132 | 32,036 | 32,341 |
+| `Symbol.owner()` refused as "too big" (in the 16 largest compiled methods) | 0 | 14 | 16 |
+
+The A/A agrees with step 2, so this is not profile pollution. Step 2 made `owner` final with the overrides folded in, which grew it from a 5-byte accessor to 55 bytes of bytecode. That is over C2's `MaxInlineSize` (35), the limit at call sites C2 doesn't consider hot. `AsSeenFromMap.isTypeParamOfEnclosingClass`, for example, inlined `owner` in step 1 and calls it in step 2, which matches its new `_[j]` frame in the profile. Other changes: `TypeRef.mapOver` is a direct call from `mapOverType` but too big to inline there ("hot method too big"), and `ThisType.underlying` grew from 296 to 2,720 bytes of code, because it now inlines the whole `typeOfThis` → `tpe_*` → `info` chain.
+
+**Fix** (`8d581317e6`): `owner`'s fast path returns `rawowner` unless the phase flattens classes or the symbol is NoSymbol. The rest goes to `ownerSlow`, and `owner` is now 31 bytes. The other new finals are under the limit (`typeOfThis` 20, `tpe_*` 20, `thisSym` 17, `isPackageClass` 26, `rawInfo` 20). Still to do: a JIT pilot and profile of step 2 against this fix, then making `isTypeParameter` final and specialising `mapConserve` for `TypeMap`.
 
 ## Testing
 
