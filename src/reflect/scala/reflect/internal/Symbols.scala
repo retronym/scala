@@ -3362,6 +3362,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[this] var thisTypeCache: Type      = _
     private[this] var thisTypePeriod           = NoPeriod
 
+    private[this] var selfTypeIsOwnTypeCache: Boolean = false
+    private[this] var selfTypeIsOwnTypePeriod         = NoPeriod
+    private[this] var selfTypeIsOwnTypeInfo: Type     = _
+    private[this] var selfTypeIsOwnTypeSelfInfo: Type = _
+
     override def resolveOverloadedFlag(flag: Long) = flag match {
       case INCONSTRUCTOR => "<inconstructor>" // INCONSTRUCTOR / CONTRAVARIANT / LABEL
       case EXISTENTIAL   => "<existential>"   // EXISTENTIAL / MIXEDIN
@@ -3470,6 +3475,29 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def typeOfThis_=(tp: Type): Unit = {
       thissym = newThisSym(nme.this_, pos).setInfo(tp)
     }
+
+    /** Is `thisType.baseType(this)` this class's own type `tpe_*`? It is unless a self type refines the class,
+     *  as in `class C[T] { self: C[Int] => }`. Used by `asSeenFrom` (see `isOwnThisSeenFromIdentity`).
+     *
+     *  False while this class or its self type is not completed, so that the check forces nothing. The answer
+     *  is cached per period and for the infos it was computed from.
+     */
+    final def selfTypeIsOwnType: Boolean =
+      if ((thissym eq this) && !isModuleClass) true
+      else if (!hasCompleteInfo || !thissym.hasCompleteInfo) false
+      else {
+        val info = rawInfo
+        val selfInfo = thissym.rawInfo
+        if ((selfTypeIsOwnTypePeriod != currentPeriod) || (selfTypeIsOwnTypeInfo ne info) || (selfTypeIsOwnTypeSelfInfo ne selfInfo)) {
+          // false while computing it: `baseType` can reach `asSeenFrom(thisType, this)` again
+          selfTypeIsOwnTypeCache = false
+          selfTypeIsOwnTypePeriod = currentPeriod
+          selfTypeIsOwnTypeInfo = info
+          selfTypeIsOwnTypeSelfInfo = selfInfo
+          selfTypeIsOwnTypeCache = typeOfThis.baseType(this) eq tpe_*
+        }
+        selfTypeIsOwnTypeCache
+      }
 
     override def cloneSymbolImpl(owner: Symbol, newFlags: Long): ClassSymbol = {
       val clone = owner.newClassSymbol(name, pos, newFlags)

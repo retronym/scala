@@ -732,6 +732,7 @@ trait Types
              this.isTrivial
           || phase.erasedTypes && pre.typeSymbol != ArrayClass
           || skipPrefixOf(pre, clazz)
+          || isSeenFromOwnThis(pre, clazz)
         )
         if (trivial) this
         else {
@@ -743,6 +744,14 @@ trait Types
           else deriveType(m.capturedSkolems, _.cloneSymbol setFlag CAPTURED)(tp1)
         }
       } finally if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
+    }
+
+    // `C.this` seen from `C`, the common case of `TypeRef#baseType` for a class referred to from within its owner
+    private def isSeenFromOwnThis(pre: Type, clazz: Symbol): Boolean = pre match {
+      case ThisType(sym) =>
+        (sym eq clazz) && isOwnThisSeenFromIdentity(clazz) &&
+          !annotationOrTypeVarCollectorInstance.using(_.collect(this))
+      case _ => false
     }
 
     /** The info of `sym`, seen as a member of this type.
