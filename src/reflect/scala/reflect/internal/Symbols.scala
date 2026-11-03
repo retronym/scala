@@ -1228,16 +1228,22 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      * `assertOwner` aborts compilation immediately if called on NoSymbol.
      */
     // OPT: final, with the overrides it replaces (ClassSymbol, ModuleSymbol, NoSymbol, RootSymbol) folded in, so that
-    //      call sites bind statically. Classes and modules are owned by their enclosing package after flatten;
-    //      `needsFlatClasses` includes `!isMethod`, which ModuleSymbol tested. NoSymbol is its own raw owner.
+    //      call sites bind statically. The fast path stays under C2's MaxInlineSize (35 bytes), so that it inlines
+    //      even at call sites C2 doesn't consider hot; the rest is in `ownerSlow`.
     final def owner: Symbol = {
       val o = rawowner
+      if ((o eq this) || phase.flatClasses) ownerSlow(o) else o
+    }
+
+    /** Classes and modules are owned by their enclosing package after flatten (`needsFlatClasses` includes `!isMethod`,
+     *  which ModuleSymbol tested). NoSymbol is its own raw owner.
+     */
+    private def ownerSlow(o: Symbol): Symbol =
       if ((this.isInstanceOf[ClassSymbol] || this.isInstanceOf[ModuleSymbol]) && needsFlatClasses) o.owner
       else {
         if (o eq this) devWarningDumpStack("NoSymbol.owner", 15)
         o
       }
-    }
     final def safeOwner: Symbol   = if (this eq NoSymbol) NoSymbol else owner
     final def assertOwner: Symbol = if (this eq NoSymbol) abort("no-symbol does not have an owner") else owner
 
