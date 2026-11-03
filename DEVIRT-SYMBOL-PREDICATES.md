@@ -189,7 +189,9 @@ Run locally on `d2f3e64743`:
 - `--grep runtime`: 673/674. The one failure is `bench/equality`, which fails to compile (`not found: value testing`) and is unrelated to this change.
 - junit `scala.reflect.*` and `scala.tools.nsc.symtab.*`: 315/315.
 
-Step 2 (`85df493655`): junit 333/333, the stub tests 18/18, `--grep reflection` 76/76, `--grep toolbox` 154/154, full `pos` + `neg` 3322/3325 (the failure is `neg/t12494`, `-Ylog:superaccessors -Ydebug` output that is missing `[context] ++` lines, and it fails the same way on the base `00e3bbafb8`).
+Step 2 (`85df493655`), the `owner` fix (`8d581317e6`) and the Type-hierarchy prototype (`8eeb7c633c`) each pass: junit `scala.reflect.*`, `nsc.symtab.*` and `nsc.typechecker.*` 333/333, the stub tests, `--grep reflection` 76/76, `--grep toolbox` 154/154, and full `pos` + `neg` 3322/3325.
+
+**`neg/t12494` is not a regression from this PR.** It also fails on the base `00e3bbafb8` (`partest test/files/neg/t12494.scala` in the `perf-rebase` checkout, built at that commit), with the same diff. Its check file records `-Ylog:superaccessors -Ydebug` output, and the `[log superaccessors] [context] ++ …` lines are missing in both builds. That fits retronym/scala#148 (typing transformers' contexts made lazily), which is in the base: contexts that are never created are never logged. The check file needs updating on the integration branch.
 
 Not yet run: `partest --run --jvm` for step 2, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
 
