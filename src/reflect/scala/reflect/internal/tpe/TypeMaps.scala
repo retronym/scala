@@ -109,15 +109,19 @@ private[internal] trait TypeMaps {
     def mapOver(tp: Type): Type = if (tp eq null) tp else mapOverType(tp)
 
     /** `apply(tp)`. OPT: at visitor call sites such as TypeRef.mapOver's, `apply` sees dozens of TypeMap classes,
-     *  but AsSeenFromMap (one implementation) and the SubstMaps (two) receive most calls; test for them first so
-     *  that those calls bind statically or bimorphically.
+     *  but AsSeenFromMap and the SubstMaps receive most calls; test for them first so that those calls bind
+     *  statically. The receiver profile is shared by all callers and all SubstMap classes, so C2 can't be relied on
+     *  to do this for a call to `SubstMap.apply`.
      */
     final def applyFast(tp: Type): Type =
       if (this.isInstanceOf[AsSeenFromMap]) this.asInstanceOf[AsSeenFromMap].apply(tp)
       else applyFast1(tp)
     // Split from `applyFast` so that each stays under C2's MaxInlineSize (35 bytes).
     private final def applyFast1(tp: Type): Type =
-      if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].apply(tp)
+      if (this.isInstanceOf[SubstSymMap]) this.asInstanceOf[SubstSymMap].apply(tp)
+      else applyFast2(tp)
+    private final def applyFast2(tp: Type): Type =
+      if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].substMapApply(tp)
       else apply(tp)
 
     /** `tps mapConserve this`, through `applyFast` rather than `Function1.apply`. */
@@ -775,7 +779,10 @@ private[internal] trait TypeMaps {
       false
     }
 
-    def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
+    def apply(tp0: Type): Type = substMapApply(tp0)
+
+    // Final, for `TypeMap.applyFast`: `apply` itself is overridden by `SubstSymMap`.
+    private[TypeMaps] final def substMapApply(tp0: Type): Type = if (from.isEmpty) tp0 else {
       val tp                    = mapOverType(renameBoundSyms(tp0))
       def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
