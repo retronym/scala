@@ -18,7 +18,7 @@ I'm typing a Bippy! It's a DefDef.
 class CustomGlobal(currentSettings: Settings, reporter: Reporter) extends Global(currentSettings, reporter) {
   override lazy val analyzer = new {
     val global: CustomGlobal.this.type = CustomGlobal.this
-  } with AbstractAnalyzer {
+  } with Analyzer {
     override def newTyper(context: Context): Typer = new CustomTyper(context)
 
     class CustomTyper(context : Context) extends Typer(context) {

@@ -18,11 +18,16 @@ import scala.reflect.internal.util.JavaClearable
 
 /** Defines the sub-components for the namer, packageobjects, and typer phases.
  *
- *  Instantiate it as an [[AbstractAnalyzer]]: the analyzer's parts are self-typed with that class, so that the
- *  typechecker's calls to its analyzer are `invokevirtual` rather than `invokeinterface` (see there). The trait
- *  remains, as the type through which compiler plugins and other clients refer to the analyzer.
+ *  The typechecker reaches its analyzer through self types (`self: AbstractAnalyzer =>` in `Typers`, `Namers`,
+ *  `Contexts` ...): through `$outer` from `Typer`, `Namer` and `Context`, and through `this` in the traits'
+ *  methods. When the self type was the trait `Analyzer`, each such call was an `invokeinterface` on the last
+ *  interface in the analyzer's itable, which HotSpot's itable stubs scan linearly once a call site sees more than
+ *  two receiver classes, as it does when Scaladoc, the presentation compiler or macro toolboxes share the JVM with
+ *  the compiler. With a class as the self type the calls are `invokevirtual`.
+ *
+ *  Clients should keep using [[Analyzer]], which extends this class.
  */
-trait Analyzer extends AnyRef
+abstract class AbstractAnalyzer extends AnyRef
             with Contexts
             with Namers
             with Typers
@@ -39,12 +44,12 @@ trait Analyzer extends AnyRef
             with MacroAnnotationAttachments
             with AnalyzerPlugins
             with ImportTracking
-{ self: AbstractAnalyzer =>
+{
   val global : Global
   import global._
 
   object namerFactory extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     val phaseName = "namer"
     val runsAfter = List[String]("parser")
@@ -58,7 +63,7 @@ trait Analyzer extends AnyRef
   }
 
   object packageObjects extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     val deferredOpen: mutable.Set[Symbol] = {
       import scala.jdk.CollectionConverters._
@@ -107,7 +112,7 @@ trait Analyzer extends AnyRef
   }
 
   object typerFactory extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     import global.statistics
     val phaseName = "typer"
@@ -158,20 +163,27 @@ trait Analyzer extends AnyRef
   }
 }
 
-/** The class every [[Analyzer]] is instantiated as.
+/** The analyzer, as clients see it.
  *
- *  The typechecker reaches its analyzer through self types (`self: AbstractAnalyzer =>` in `Typers`, `Namers`,
- *  `Contexts` ...): through `$outer` from `Typer`, `Namer` and `Context`, and through `this` in the traits'
- *  methods. When the self type was the trait `Analyzer`, each such call was an `invokeinterface` on the last
- *  interface in the analyzer's itable, which HotSpot's itable stubs scan linearly once a call site sees more than
- *  two receiver classes, as it does when Scaladoc, the presentation compiler or macro toolboxes share the JVM with
- *  the compiler. With a class as the self type the calls are `invokevirtual`.
- *
- *  `Analyzer` stays a trait so that code compiled against it, which refers to the analyzer as an `Analyzer`, keeps
- *  linking. Code that instantiates its own `... with Analyzer` must now instantiate `... with AbstractAnalyzer`.
+ *  A trait, as it has always been, listing the same parts, so that code compiled against it keeps linking: it
+ *  stays an interface in bytecode with the same super-interfaces. It extends [[AbstractAnalyzer]], so that
+ *  `new { val global = g } with Analyzer` still compiles: the instance's superclass is `AbstractAnalyzer`,
+ *  which satisfies the self types of the parts.
  */
-abstract class AbstractAnalyzer extends Analyzer {
-  // Redeclared so that `global`, the analyzer member the typechecker uses most, is selected from the class:
-  // declared only in the trait, it is called with `invokeinterface Analyzer.global` even through a class-typed self.
-  val global: Global
-}
+trait Analyzer extends AbstractAnalyzer
+            with Contexts
+            with Namers
+            with Typers
+            with Infer
+            with Implicits
+            with EtaExpansion
+            with SyntheticMethods
+            with Unapplies
+            with Macros
+            with NamesDefaults
+            with TypeDiagnostics
+            with ContextErrors
+            with StdAttachments
+            with MacroAnnotationAttachments
+            with AnalyzerPlugins
+            with ImportTracking
