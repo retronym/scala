@@ -7,8 +7,10 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
+import scala.jdk.CollectionConverters._
 import scala.tools.asm.Opcodes._
-import scala.tools.asm.tree.ClassNode
+import scala.tools.asm.tree.{ClassNode, LabelNode}
+import scala.tools.nsc.backend.jvm.analysis.BackendUtils
 import scala.tools.testkit.ASMConverters._
 import scala.tools.testkit.AssertUtil._
 import scala.tools.testkit.BytecodeTesting._
@@ -279,5 +281,40 @@ class UnreachableCodeTest extends ClearAfterClass {
     assertEquals(nothing.toString, Op(ATHROW), nothing.last)
     assertEquals(nothing.toString, 1, nothing.count(_ == Op(ATHROW)))
     assert(!nothing.contains(Op(IRETURN)), nothing)
+  }
+
+  @Test
+  def keepLoopEnteredByJump(): Unit = {
+    // the loop body is only reached by a later jump
+    assertEliminateDead(
+      Jump(GOTO, Label(2)),
+      Label(1),
+      Op(ICONST_0),
+      Op(POP),
+      Label(2),
+      Op(ICONST_0),
+      Jump(IFNE, Label(1)),
+      Op(RETURN)
+    )
+  }
+
+  @Test
+  def deadCodeSkippedByForwardJump(): Unit = {
+    assertEliminateDead(
+      Jump(GOTO, Label(1)),
+      Label(2),
+      Op(ICONST_0).dead,
+      Op(POP).dead,
+      Label(1),
+      Op(RETURN)
+    )
+  }
+
+  @Test
+  def labelStatusWithoutDeadCode(): Unit = {
+    val method = genMethod()(Jump(GOTO, Label(1)), Label(2), Label(1), Op(RETURN))
+    assert(!dceCompiler.global.genBCode.postProcessor.localOpt.removeUnreachableCodeImpl(method, "C"))
+    val labels = method.instructions.iterator.asScala.collect { case l: LabelNode => BackendUtils.isLabelReachable(l) }.toList
+    assertEquals(List(false, true), labels)
   }
 }

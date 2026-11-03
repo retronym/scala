@@ -520,7 +520,74 @@ abstract class LocalOpt {
    * When this method returns, each `labelNode.getLabel` has a status set whether the label is live
    * or not. This can be queried using `BackendUtils.isLabelReachable`.
    */
+  /**
+   * Whether `removeUnreachableCodeImpl` would have nothing to remove from `method`, established in a
+   * single pass over the instructions, without allocating. `false` only means that it was not proved.
+   *
+   * An instruction is known to be reachable if the instruction before it falls through to it, or if
+   * an earlier reachable jump targets a label before it. Assuming that of the method's first
+   * instruction, this covers every instruction by induction, unless the pass stops at one reached
+   * only by a later jump (the shape of a loop entered by a jump) or at code that is really dead.
+   * A method with exception handlers is left to the full analysis.
+   *
+   * On success the labels have the status documented on `removeUnreachableCodeImpl`.
+   */
+  private def nothingToRemove(method: MethodNode): Boolean = {
+    def setTargets(dflt: LabelNode, labels: java.util.List[LabelNode]): Unit = {
+      BackendUtils.setLabelReachable(dflt)
+      var i = 0
+      while (i < labels.size) {
+        BackendUtils.setLabelReachable(labels.get(i))
+        i += 1
+      }
+    }
+
+    if (!method.tryCatchBlocks.isEmpty) return false
+
+    var insn = method.instructions.getFirst
+    while (insn != null) {
+      insn match {
+        case l: LabelNode => BackendUtils.clearLabelReachable(l)
+        case _ =>
+      }
+      insn = insn.getNext
+    }
+
+    var live = true
+    insn = method.instructions.getFirst
+    while (insn != null) {
+      insn match {
+        case l: LabelNode =>
+          if (BackendUtils.isLabelReachable(l)) live = true
+          else if (live) BackendUtils.setLabelReachable(l)
+        case _: LineNumberNode =>
+        case _ =>
+          if (!live) return false
+          insn match {
+            case j: JumpInsnNode =>
+              if (j.getOpcode == JSR) return false
+              BackendUtils.setLabelReachable(j.label)
+              if (j.getOpcode == GOTO) live = false
+            case t: TableSwitchInsnNode =>
+              setTargets(t.dflt, t.labels)
+              live = false
+            case l: LookupSwitchInsnNode =>
+              setTargets(l.dflt, l.labels)
+              live = false
+            case _ =>
+              val op = insn.getOpcode
+              if (op == NOP || op == RET) return false
+              if (op == ATHROW || isReturn(insn)) live = false
+          }
+      }
+      insn = insn.getNext
+    }
+    true
+  }
+
   def removeUnreachableCodeImpl(method: MethodNode, ownerClassName: InternalName): Boolean = {
+    if (nothingToRemove(method)) return false
+
     val size = method.instructions.size
 
     // queue of instruction indices where analysis should start
