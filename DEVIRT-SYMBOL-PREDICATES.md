@@ -356,6 +356,25 @@ The `SubstMap` dispatch stub is gone. What remains at `applyFast2` @18 is the ge
 - `applyFast1` and `applyFast2` have 8 and 5 `class_check` deopts, where `applyFast1` previously had 5 `bimorphic_or_optimized_type_check`. Each is a small number against about 3700 in the fork.
 - In this campaign's `types` fork, C2 inlined `SubstSymMap.apply` into `applyFast1`, which it didn't do in the previous campaign's fork of the same code. That moved the stub cost between @12 and @18 (0.237/0.084 there, 0.197/0.191 here), so single-site numbers also vary between forks by up to about 0.1 points.
 
+## Timing A/B of the whole branch
+
+`m4-devirt-tip-ab`: the base against the tip of this branch, m4, scala corpus, 20 rounds with builds alternating by fork, no profiler, patched JDK 26, `SCALA_RELEASE_OPT=1`, single-shot 4+4. Intervals are 99.9%.
+
+| | base | tip | change |
+|---|---|---|---|
+| ms/op | 9,201 ±38 | 8,825 ±51 | **−4.09% ±0.64** |
+| alloc/op | 5,993.9 MB | 5,999.6 MB | +0.09% ±0.31 (flat) |
+| JIT compilations while measuring | 1,217 | 1,235 | +1.5% ±2.8 (flat) |
+| JIT compile ms while measuring | 3,867 | 3,990 | +3.2% ±7.5 (flat) |
+| deopts while measuring | 19.8 | 19.95 | flat |
+
+The tip was faster in all 20 rounds, by 2.4% to 5.5%, and the fork means don't overlap (base 9,110–9,251, tip 8,738–8,932). The first and second halves of the campaign agree. One attempt was voided for other load (tip, round 1) and run again; its score, 8,912, was in the tip's range.
+
+What this does and doesn't establish:
+- The saving is larger than the stubs removed can explain directly. Stub share of cycles fell from 7.81% in the base's profile to 5.52% in the last prototype's, about 2.3 points, against a 4.1% gain. Those are single forks from two campaigns, with about 0.24 points of noise between forks. The inlined predicates folding into their callers would account for the difference, as suggested under "Evidence from the prototype", but nothing here measures that.
+- This is the whole branch at once, so it doesn't divide the gain between the `Symbol` work and the `Type` work.
+- It covers the scala corpus only, and there is no A/A of two checkouts of the same source, so a bias between the builds themselves isn't excluded.
+
 ## Future work
 
 - The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
