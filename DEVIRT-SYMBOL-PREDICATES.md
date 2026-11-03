@@ -94,11 +94,46 @@ No new flags are needed. If a flag is ever wanted (a `STUB` bit, say), bits 61�
 
 Campaign `m4-devirt-sym-prof` (M4, patched JDK 26 `jdk26-integration-branch-e9e67e`, `SCALA_RELEASE_OPT=1`, scala corpus single-shot 4+4, one fork per build, kperf cycles + instructions): https://perflab.localhost/p/scala2-b7bb3d/ab/index.html
 
-_Results to follow._
+Each stub is attributed to its caller frame. The table uses BCIs: the prototype shifts line numbers in `Symbols.scala`, so a line-level comparison of that file would be misleading. Figures are % of compiler-thread cycles.
+
+| caller @BCI | callee | base | proto |
+|---|---|---|---|
+| `Symbol.info` @28 | `rawInfo` | 0.164 | 0 |
+| `walkBaseClasses` @314 (line 141) | `isRefinementClass` | 0.149 | 0 |
+| `walkBaseClasses` @106 (line 114) | `info` | 0.134 | 0 |
+| `walkBaseClasses` @334 (line 147) | `isClass` | 0.084 | 0 |
+| `Symbol.typeParams` @9 | `rawInfo` | 0.072 | 0 |
+| `isPossiblePrefix` @8 / @1 | `isPackageClass` / `isClass` | 0.071 + 0.057 | 0 |
+| `Symbol.isTopLevel` @4 | `isPackageClass` | 0.058 | 0 |
+| `Symbol.needsFlatClasses` @31 | `isPackageClass` | 0.026 | 0 |
+| `isOverridableMember` @1, `hasCompleteInfo` @11, `isStable` @1 | `isClass`, `rawInfo`, … | 0.027 + 0.022 + 0.026 | 0 + 0.003 + 0.003 |
+| *(out of scope)* `walkBaseClasses` @109 | `Type.decls` | 0.103 | 0.028 |
+| *(out of scope)* `Symbol.typeParams` @12 | `Type.typeParams` | 0.129 | 0.064 |
+| *(out of scope)* `Symbol.isTopLevel` @1 | `owner` | 0.062 | 0.051 |
+
+The new methods (`unsynchronizedInfo`, `unsynchronizedRawInfo`, the `synchronized*` hooks) have no stub samples.
+
+Totals for the compiler thread, one fork per build, so this is not a timing result:
+
+| | base | proto | Δ |
+|---|---|---|---|
+| stub share of cycles | 7.81% | 6.91% | −0.90 pt |
+| stub share of instructions | 9.43% | 8.13% | −1.30 pt |
+| cycles (4 measured ops) | 147.4 G | 141.6 G | −3.9% |
+| instructions (4 measured ops) | 624.5 G | 586.5 G | −6.1% |
+
+Removing the stubs alone accounts for about 0.9 pt of cycles, and the instruction count fell by more than that. This suggests that the inlined predicates fold into their callers (`isClass && !isPackageClass` becomes two type checks and a bit test). But one fork per build cannot separate that from noise. The timing A/B (base vs proto, several forks, scala and scalap as in `m4-int00e3bb-*`) waits for review.
 
 ## Testing
 
-_To do: partest neg stub tests, `--grep reflect` run tests, junit `SymbolTableTest`/reflection, MiMa._
+Run locally on `d2f3e64743`:
+
+- partest on the stub tests (`neg/t5148`, `run/StubError*`, `run/t6440`, `t6440b`, `t7439`, `t8502`, `t8502b`, `t9268`, `t10171`, `typetags_without_scala_reflect_*`, `t6240-universe-code-gen`): 20/20.
+- `partest --grep reflection`: 76/76. `--grep toolbox`: 154/154.
+- `--grep runtime`: 673/674. The one failure is `bench/equality`, which fails to compile (`not found: value testing`) and is unrelated to this change.
+- junit `scala.reflect.*` and `scala.tools.nsc.symtab.*`: 315/315.
+
+Not yet run: the full partest suite, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
 
 ## Future work
 
