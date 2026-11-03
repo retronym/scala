@@ -126,6 +126,35 @@ Removing the stubs alone accounts for about 0.9 pt of cycles, and the instructio
 
 **Timing A/B, step 1 vs base** (campaign `m4-devirt-sym-ab`, M4, no profiler, builds alternating by fork; cancelled after 4 of 5 rounds): scala corpus 9,232 → 9,054 ms/op (**−1.9%** ±6.3 at 99.9%), scalap 196.2 → 193.5 ms/op (**−1.4%** ±2.7). Both corpora move in the same direction, but with 4 forks neither delta clears perflab's 99.9% interval.
 
+### Step 2: `owner`, `thisSym`, `typeOfThis`, `tpe_*`, `mapOver`, `decls`
+
+Commit `85df493655` on the same branch: final `owner` / `thisSym` / `typeOfThis` / `tpe_*` with the overrides folded in (module classes' cached self type behind a virtual `customTypeOfThis`, runtime reflection's `TypeSymbol` locks behind the per-universe constant), `TypeMap.mapOverType` (a `TypeRef` check, then the identity cases `ThisType`/`NoPrefix`, before the virtual call) used by `TypeMap.mapOver`, `SubstMap.apply` and `AsSeenFromMap.apply`, and a `ClassInfoType` check before `decls` in `walkBaseClasses`.
+
+Profile campaign `m4-devirt-sym-prof2` (same settings, step 1 `d2f3e64743` vs step 2, one fork each), stub cycles by caller @BCI, % of compiler-thread cycles:
+
+| caller @BCI | step 1 | step 2 |
+|---|---|---|
+| `SubstMap.apply` @18 (`mapOver`) | 0.314 | 0 |
+| `AsSeenFromMap.apply` @86 (`mapOver`) | 0.147 | 0 |
+| `TypeMap.mapOver` @8 | 0.092 | 0 |
+| `ThisType.underlying` @4 (`typeOfThis`) | 0.066 | 0 |
+| `AsSeenFromMap.loop$4` @60 (`owner`) | 0.064 | 0 |
+| `Symbol.isTopLevel` @1 (`owner`) | 0.057 | 0 |
+| `Symbol.typeOfThis` @4 (`tpe_*`) | 0.049 | 0 |
+| `walkBaseClasses` @109 (`decls`) | 0.016 | 0 |
+| new slow paths: `mapOverType` @38, `typeOfThis` @8, `walkBaseClasses` @281 | — | 0.034 + 0.020 + 0.014 |
+| `TypeRef.mapOver` @443 (`mapConserve`'s `Function1.apply`, itable) | 0.288 | 0.365 |
+| `AsSeenFromMap.isTypeParamOfEnclosingClass` @1 (`isTypeParameter`) | 0 (inlined into its caller) | 0.063 (now a compiled frame `_[j]`) |
+
+| compiler thread | step 1 | step 2 |
+|---|---|---|
+| stub share of cycles | 6.95% | 6.12% |
+| stub share of instructions | 8.20% | 6.90% |
+| cycles (4 measured ops) | 139.7 G | 140.4 G (+0.5%) |
+| instructions (4 measured ops) | 585.0 G | 585.0 G (0.0%) |
+
+The targeted stubs are gone, but the total does not move. Some call sites changed how they are compiled. `isTypeParamOfEnclosingClass` and `TypeRef.mapOver`'s `mapConserve` site are now real calls, which suggests that C2 spends its inlining budget differently once `TypeRef.mapOver` binds statically and inlines into its callers. A `"jitRecording": true` pilot of step 1 vs step 2, read with `perflab api jit_diff`, would show which inlining decisions changed. Making `isTypeParameter` final (one implementation reached, see above) and specialising `mapConserve` for `TypeMap` would address the two sites that got worse.
+
 ## Testing
 
 Run locally on `d2f3e64743`:
@@ -134,6 +163,10 @@ Run locally on `d2f3e64743`:
 - `partest --grep reflection`: 76/76. `--grep toolbox`: 154/154.
 - `--grep runtime`: 673/674. The one failure is `bench/equality`, which fails to compile (`not found: value testing`) and is unrelated to this change.
 - junit `scala.reflect.*` and `scala.tools.nsc.symtab.*`: 315/315.
+
+Step 2 (`85df493655`): junit 333/333, the stub tests 18/18, `--grep reflection` 76/76, `--grep toolbox` 154/154, full `pos` + `neg` 3322/3325 (the failure is `neg/t12494`, `-Ylog:superaccessors -Ydebug` output that is missing `[context] ++` lines, and it fails the same way on the base `00e3bbafb8`).
+
+Step 2 (`85df493655`): junit 333/333, the stub tests 18/18, `--grep reflection` 76/76, `--grep toolbox` 154/154, full `pos` + `neg` 3322/3325 (the failure is `neg/t12494`, `-Ylog:superaccessors -Ydebug` output that is missing `[context] ++` lines, and it fails the same way on the base `00e3bbafb8`).
 
 Not yet run: the full partest suite, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
 
