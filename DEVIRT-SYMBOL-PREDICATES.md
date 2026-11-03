@@ -124,6 +124,8 @@ Totals for the compiler thread, one fork per build, so this is not a timing resu
 
 Removing the stubs alone accounts for about 0.9 pt of cycles, and the instruction count fell by more than that. This suggests that the inlined predicates fold into their callers (`isClass && !isPackageClass` becomes two type checks and a bit test). But one fork per build cannot separate that from noise. The timing A/B (base vs proto, several forks, scala and scalap as in `m4-int00e3bb-*`) waits for review.
 
+**Timing A/B, step 1 vs base** (campaign `m4-devirt-sym-ab`, M4, no profiler, builds alternating by fork; cancelled after 4 of 5 rounds): scala corpus 9,232 → 9,054 ms/op (**−1.9%** ±6.3 at 99.9%), scalap 196.2 → 193.5 ms/op (**−1.4%** ±2.7). Both corpora move in the same direction, but with 4 forks neither delta clears perflab's 99.9% interval.
+
 ## Testing
 
 Run locally on `d2f3e64743`:
