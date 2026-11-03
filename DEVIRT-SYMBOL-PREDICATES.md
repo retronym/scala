@@ -135,9 +135,37 @@ Run locally on `d2f3e64743`:
 
 Not yet run: the full partest suite, and `reflect/mimaReportBinaryIssues` (for `ClassSymbolApi.isClass`).
 
+## Remaining stub sites: receiver histograms
+
+The prototype leaves the largest stub sites in place, on `Type`, `TypeMap` and a few more `Symbol` methods. Most of them have the same shape as `isClass`. Many receiver *classes* reach one to three *implementations*, and C2's profile counts classes: there are 31 classes at `SubstMap.apply → mapOver`, for example, but two implementations take 94% of the calls. A final entry point with a fast path for the dominant case, which calls a virtual on the slow path, would turn most of these calls into a type check and a direct or inlined call.
+
+**Data.** "Stub %" is the share of compiler-thread cycles in that site's vtable stub, from the base kperf profile `m4-int00e3bb-kperf-l1d` (`--bci`). The calls, classes and implementations are exact counts from a caller audit of the base build on the scala corpus, run locally (`perflab run --local --profile audit:audit/receivers.audit`, out `labs/scala2/out/runs/20261103-225136-audit-audit_receivers.audit`). The spec has one `sites … from=<caller> depth=0 qualify=class` probe per class that declares the callee, in reflect and nsc, 185 probes, generated from `javap`. The probes walk the stack on every hit, so the measured op ran into JMH's timeout. The counts cover the setup compile plus part of the measured one, about one compile in all; the shares are what matter.
+
+| call site (stub %) | calls | receiver classes → implementations | top implementations (share of calls) | fast path |
+|---|---|---|---|---|
+| `SubstMap.apply` → `Type.mapOver` (0.300) | 47.3 M | 31 → 15 | `Type` (identity: `UniqueThisType` 28%, `NoPrefix` 25%) 54%, `TypeRef` 40% | in `SubstMap.apply` (or a final `TypeMap.mapOverFast`): `tp match { case tr: TypeRef => tr.mapOver(this)` (one implementation for every TypeRef class, so CHA binds it) `case _: ThisType \| NoPrefix => tp` `case _ => tp.mapOver(this) }`. Covers 94% |
+| `AsSeenFromMap.apply` → `mapOver` (0.109) | 15.5 M | 23 → 10 | `TypeRef` 64%, `Type` 19%, `MethodType` 6% | same helper. Covers 83% |
+| `TypeMap.mapOver(List)` → `mapOver` (0.064) | 2.0 M | 27 → 11 | `TypeRef` 48%, `Type` 42%, `SingleType` 9% | same helper |
+| `Symbol.typeParams` @12 → `Type.typeParams` (0.129) | 29.4 M | 18 → 8 | `Type` (Nil: `ClassInfoType` 66%, `TypeBounds` 6%) 72%, `PolyType` 22% | in `Symbol.typeParams`: `rawInfo match { case pt: PolyType => pt.typeParams` `case _: ClassInfoType => Nil` `case tp => tp.typeParams }`. Covers 94% |
+| `walkBaseClasses` @109 → `Type.decls` (0.103) | 25.2 M | 4 → 3 | `ClassInfoType` 80% (incl. `PackageClassInfoType` 2%), `PolyType` 20% | at the site: `info match { case ci: ClassInfoType => ci.decls case tp => tp.decls }`. Covers 80%. If the `PolyType` case unwraps its result too, 99.7% |
+| `ThisType.underlying` → `Symbol.typeOfThis` (0.094) | 14.4 M | 6 → 3 | `Symbol` 87% (`ClassSymbol` 79%, `RefinementClassSymbol` 8%), `ModuleClassSymbol` 12% (with `PackageClassSymbol`) | final `typeOfThis = if (isInstanceOf[ModuleClassSymbol]) moduleTypeOfThis else thisSym.tpe_*`. `RootClass`'s override extends `ModuleClassSymbol`, so it stays on the virtual slow path |
+| `Symbol.typeOfThis` → `tpe_*` (0.057) | 12.7 M | 6 → 2 | `TypeSymbol` 60%, `Symbol` 40% (`TermSymbol`: self-type symbols) | final `tpe_* = if (isInstanceOf[TypeSymbol]) typeSymbolTpe else symbolTpe`. Runtime reflection's `SynchronizedTypeSymbol.tpe_*` lock goes behind the same per-universe hook as `info` |
+| `AsSeenFromMap.isTypeParamOfEnclosingClass` → `isTypeParameter` (0.090) | 12.4 M | 9 → **1** | `TypeSymbol` 100% | final `isTypeParameter = isInstanceOf[TypeSymbol] && isTypeParameterOrSkolem && !isSkolem`, as for `isClass` |
+| `AsSeenFromMap.loop$4` → `owner` (0.043) | 6.2 M | 4 → **1** | `ClassSymbol.owner` 100% | final `owner` (below) |
+| `Symbol.isTopLevel` @1 → `owner` (0.062; still 0.051 in the prototype) | 6.1 M | 16 → 5 | `Symbol` 56%, `ClassSymbol` 37%, `ModuleSymbol` 7% | final `owner = if (needsFlatClasses && (isClass \|\| isModule)) rawowner.owner else { if (this eq NoSymbol) warnNoSymbolOwner(); rawowner }`. `ClassSymbol`'s and `ModuleSymbol`'s overrides already have that form (`needsFlatClasses` includes `!isMethod`), and `RootSymbol`'s `owner = rootOwner` equals its `rawowner` |
+| `Type.dealiasWiden` → `widen` (0.043) | 9.7 M | 28 → 4 | `Type` (identity) 97% | in `dealiasWiden`, or a final entry: `if (isInstanceOf[TypeRef]) this else widen` (`TypeRef` doesn't override `widen`; `TypeRef` classes are 88% of calls) |
+| `SimpleTypeProxy.baseType` → `baseType` (0.056) | 9.3 M | 15 → 5 | `TypeRef` 92% | `underlying match { case tr: TypeRef => tr.baseType(clazz) case tp => tp.baseType(clazz) }`. `TypeRef.baseType` has one implementation |
+| `TypeRef.baseType` @29 → `sym.info.baseType` (0.054) | 8.1 M | 3 → 2 | `CompoundType` 72% (`ClassInfoType` 63%, `RefinedType0` 9%), `PolyType` 28% | at the site: `case ci: ClassInfoType` first. Only three receiver classes, so a larger `TypeProfileWidth` might let C2 do it unaided (see below) |
+| `Type.asSeenFrom` @180 → `isTrivial` (0.050) | 8.3 M | 23 → 11 | `TypeRef` 63%, `MethodType` 18%, `NullaryMethodType` 9% | `TypeRef` check first. Covers 63% |
+
+Together these sites take about 1.4% of compiler-thread cycles in stubs, before counting any gain from inlining.
+
+**Not covered by the audit.** The two visitor sites in `TypeRef.mapOver` call the *map*, not the type: @443, `mapConserve`'s `Function1.apply` (itable, 0.303), and @5, `TypeMap.apply` (0.213). The audit didn't count them. Time-weighted callee frames in the profile put `AsSeenFromMap.apply` at 53% and 72%, then `SubstSymMap` and `SubstMap`. A type check on `AsSeenFromMap` (if it is effectively final) before the virtual call would cover most of it. The `mapConserve` site would need a specialised `mapConserve(TypeMap)` loop that calls `TypeMap.apply` directly instead of through `Function1`.
+
+**A JVM-flag experiment.** Several sites (`TypeRef.baseType`, `walkBaseClasses` → `decls`) have only three or four receiver classes. C2 inlines at most two by profile (bimorphic). A campaign variant with `-XX:TypeProfileWidth=4` (and/or `TypeProfileMajorReceiverPercent`) would show how much of this C2 recovers by itself. That is a cheap check before writing fast paths by hand.
+
 ## Future work
 
-- `Symbol.owner` (overridden by `NoSymbol`, which logs a warning) feeds `isTopLevel` and others. The same "data, not override" approach may apply.
+- The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
 - `isTerm` / `isType` / `isMethod` / `isModule` have the same API shape as `isClass` (`…SymbolApi` final overrides) and could become type checks or flag tests.
 - `Symbol.typeParams`: `SynchronizedSymbol` overrides it, and the same hook pattern would apply.
-- The largest remaining stub sites are on `Type`/`TypeMap` (`mapOver`, `apply`, `decls`, `typeParams`, `baseType`, `underlying`). These are polymorphic by design and need a different approach.
