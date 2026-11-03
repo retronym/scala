@@ -76,6 +76,10 @@ object MimaFilters extends AutoPlugin {
     // scala/bug#13203: thread-local override of internal state in the private[reflect] trait SynchronizedTypes
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.globalGlbDepth*"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.globalGlbDepth*"),
+
+    // new overrides in 2.13.19: rangeTo implemented directly with RedBlackTree.to
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeMap.rangeTo"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSet.rangeTo"),
   )
 
   override val buildSettings = Seq(
