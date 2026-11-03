@@ -17,6 +17,7 @@ Each PR rebased onto the base (all clean) and merged with `--no-ff`:
 | #11352 | Check a NEW's class before analyzing producers in box-unbox elimination | clean (draft, optimizer only) |
 | #11353 | Build ProdConsAnalyzer's consumer map in place | clean (draft, optimizer only) |
 | retronym/scala#148 | Create typing transformers' contexts lazily | auto-merged `TypingTransformers.scala` (fork draft; `-Yeager-typing-transformer-contexts` restores the old behaviour) |
+| retronym/scala#151 | Cake diet: take implementation-detail traits out of SymbolTable and Global | clean (fork draft; overlaps #11306's goal of fewer interfaces on `Global`) |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
