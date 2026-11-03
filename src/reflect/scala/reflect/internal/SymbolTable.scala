@@ -532,6 +532,11 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** `isCompilerUniverse` as a constant, for `Symbol.info` to select runtime reflection's synchronized path. Read before
+   *  it is initialized, it is false, which selects a path that only differs for runtime reflection's symbols.
+   */
+  private[reflect] final val isCompilerUniverseFinal: Boolean = isCompilerUniverse
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
