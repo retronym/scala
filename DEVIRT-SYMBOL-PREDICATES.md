@@ -282,6 +282,53 @@ One implementation is reached from 9 receiver classes (`TypeSymbol.isTypeParamet
 
 **Plan.** Prototype A, B and C as one commit (A is the largest). Run tests locally, then on the m4: a kperf profile with `jitRecording` of the current tip against the prototype (2 cells × 1 fork, about 15 min), asking the parent session for m4 time first. D waits for review.
 
+### Prototype results
+
+`m4-devirt-type-prof`: the `owner` fix against A, B and C on top of it, m4, scala corpus, one fork per build, with `jitRecording`. This is a profile, not a timing A/B, so the differences in totals are indicative only. Shares are of compiler-thread samples, by BCI.
+
+| | `owner` fix | prototype | change |
+|---|---|---|---|
+| compiler-thread cycles | 139.97 G | 137.29 G | −1.9% |
+| compiler-thread instructions | 577.3 G | 569.0 G | −1.4% |
+| stubs, share of cycles | 6.01% | 5.80% | −0.21 |
+| itable stubs, share of cycles | 1.24% | 0.95% | −0.29 |
+| vtable stubs, share of cycles | 4.77% | 4.84% | +0.07 |
+| stubs, share of instructions | 6.97% | 6.74% | −0.23 |
+
+Stub attribution at the sites the prototype changed:
+
+| site | cycles before → after | instructions before → after |
+|---|---|---|
+| `TypeRef.mapOver` @443 → `Function1.apply` (itable) | 0.300 → 0 | 0.494 → 0 |
+| `TypeRef.mapOver` @5 → `TypeMap.apply` | 0.240 → 0 | 0.308 → 0 |
+| `TypeRef.mapOver` `coevolveSym` call (was @700, now @124) | 0.030 → 0.030 | 0.032 → 0.040 |
+| `Symbol.typeParams` @12 → `Type.typeParams` (now @40, the slow path) | 0.077 → 0.013 | 0.101 → 0.017 |
+| `isTypeParamOfEnclosingClass` → `isTypeParameter` | 0.069 → 0 | 0.131 → 0 |
+| new: `applyFast1` @12 → `SubstMap.apply` | 0 → 0.237 | 0 → 0.411 |
+| new: `applyFast1` @18 → `TypeMap.apply` (slow path) | 0 → 0.084 | 0 → 0.108 |
+| total | 0.716 → 0.364 | 1.066 → 0.576 |
+
+B and C did what they were meant to. In A, the `AsSeenFromMap` branch and the removal of the `Function1` itable worked: `applyFast` inlines into `TypeRef.mapOver`, and `AsSeenFromMap.apply` is a direct call ("already compiled into a medium method"). The `SubstMap` branch did not. The call at `applyFast1` @12 is still a vtable call and is now the largest stub site in the profile. By time its callees are `SubstSymMap.apply` 57% and `SubstMap.apply` 43%.
+
+The proposal assumed C2 would make that call bimorphic. The recording shows it tried and gave up: `applyFast1` has 5 deopts, all `bimorphic_or_optimized_type_check`, and its last C2 compile inlines nothing. Those two implementations are reached from several classes (`SubstTypeMap` and its subclasses, `SubstSymMap` and its anonymous subclass), and `applyFast1` is a single method whose one receiver profile is shared by every caller.
+
+`jit_diff`:
+- `TypeRef.mapOver`'s last C2 compile went from 14.6 KB with 1407 inlined bytes to 3.4 KB with 113. Besides the helpers moving out, `copyTypeRef` is no longer inlined there ("already compiled into a big method"). I don't know whether that part is the change or compile-order noise, and the campaign has no A/A to tell.
+- `mapConserveTypes` isn't inlined into `TypeRef.mapOver` ("already compiled into a big method", 4.0 KB). That is expected for a loop, and it adds a call that was not there when `mapConserve` was inlined.
+- `isTypeParameter` now compiles at C2, and `Symbol.typeParams` grew slightly, 2304 → 2536 bytes.
+- Whole-program totals: C2 code +1.1% (53.9 → 54.5 MB), inlining failures +2.3%, deopts −2.8%. The largest per-method differences (±50–175 KB, in methods the prototype doesn't touch, such as `Traverser.traverseTreess`) look like inlining-budget noise between forks.
+
+**Next step, if wanted.** Bind both `SubstMap` branches statically, instead of relying on the profile. No subclass of `SubstSymMap` overrides `apply`, so a type check on it binds by CHA. `SubstMap.apply` can't bind because `SubstSymMap` overrides it, but its body can move to a final method:
+
+```scala
+private final def applyFast1(tp: Type): Type =
+  if (this.isInstanceOf[SubstSymMap]) this.asInstanceOf[SubstSymMap].apply(tp) else applyFast2(tp)
+private final def applyFast2(tp: Type): Type =
+  if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].substMapApply(tp) else apply(tp)
+```
+
+The ceiling is the 0.237% of cycles and 0.411% of instructions at @12. The cost is one more type check on the path of the other 30-odd map classes. I would make this change and profile it before spending m4 time on a timing A/B of the Type work.
+
 ## Future work
 
 - The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
