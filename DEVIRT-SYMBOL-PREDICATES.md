@@ -165,7 +165,20 @@ The targeted stubs are gone, but the total does not move.
 
 The A/A agrees with step 2, so this is not profile pollution. Step 2 made `owner` final with the overrides folded in, which grew it from a 5-byte accessor to 55 bytes of bytecode. That is over C2's `MaxInlineSize` (35), the limit at call sites C2 doesn't consider hot. `AsSeenFromMap.isTypeParamOfEnclosingClass`, for example, inlined `owner` in step 1 and calls it in step 2, which matches its new `_[j]` frame in the profile. Other changes: `TypeRef.mapOver` is a direct call from `mapOverType` but too big to inline there ("hot method too big"), and `ThisType.underlying` grew from 296 to 2,720 bytes of code, because it now inlines the whole `typeOfThis` → `tpe_*` → `info` chain.
 
-**Fix** (`8d581317e6`): `owner`'s fast path returns `rawowner` unless the phase flattens classes or the symbol is NoSymbol. The rest goes to `ownerSlow`, and `owner` is now 31 bytes. The other new finals are under the limit (`typeOfThis` 20, `tpe_*` 20, `thisSym` 17, `isPackageClass` 26, `rawInfo` 20). Still to do: a JIT pilot and profile of step 2 against this fix, then making `isTypeParameter` final and specialising `mapConserve` for `TypeMap`.
+**Fix** (`8d581317e6`): `owner`'s fast path returns `rawowner` unless the phase flattens classes or the symbol is NoSymbol. The rest goes to `ownerSlow`, and `owner` is now 31 bytes. The other new finals are under the limit (`typeOfThis` 20, `tpe_*` 20, `thisSym` 17, `isPackageClass` 26, `rawInfo` 20).
+
+Profile with `jitRecording` (`m4-devirt-sym-prof3`: kperf cycles + instructions, step 2 `85df493655` vs fix `8d581317e6`, one fork each):
+
+| | step 2 | fix |
+|---|---|---|
+| `owner()` refused "too big" (16 largest methods) | 15 | 0 |
+| C2 code bytes | 54.29 MB | 52.86 MB (−2.6%) |
+| C2 inlining failures | 31,956 | 31,060 (−2.8%) |
+| compiler-thread cycles | 140.1 G | 138.4 G (−1.2%) |
+| compiler-thread instructions | 579.6 G | 575.8 G (−0.7%) |
+| stub share of cycles | 6.13% | 6.18% |
+
+C2 code bytes are higher here than in the pilot because the profiler is loaded, so compare only within one campaign. `isTypeParamOfEnclosingClass` is inlined again (`_[i]`), but its call to `isTypeParameter` still goes through a stub (0.11%), so making `isTypeParameter` final is the next step. Specialising `mapConserve` for `TypeMap` comes after that (`TypeRef.mapOver` @443, 0.31–0.34%).
 
 ## Testing
 
