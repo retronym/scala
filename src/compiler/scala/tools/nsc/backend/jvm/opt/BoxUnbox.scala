@@ -703,7 +703,8 @@ abstract class BoxUnbox {
               yield (ModuleFactory(predefLoad, mi), kind)
           else None
 
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        // checking the class before the instance creation, which needs the method's producers and consumers
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isPrimitiveBoxClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isPrimitiveBoxConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 
@@ -762,7 +763,7 @@ abstract class BoxUnbox {
           else if (isRefZero(mi)) checkKind(mi).map((StaticFactory(mi, loadInitialValues = Some(loadZeroValue(mi))), _))
           else None
 
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isRuntimeRefClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isRuntimeRefConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 
@@ -811,7 +812,7 @@ abstract class BoxUnbox {
 
       insn match {
         // no need to check for TupleN.apply: the compiler transforms case companion apply calls to constructor invocations
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isTupleClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isTupleConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 
