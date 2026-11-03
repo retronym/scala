@@ -52,7 +52,7 @@ abstract class OverridingPairs extends SymbolPairs {
       && !bothJavaOwnedAndEitherIsField(low, high)
       && !high.isPrivate               // private or private[this] members never are overridden
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
-      && (lowMemberType matches (self memberType high))
+      && (lowMemberType matches highMemberType(high))
     ) // TODO we don't call exclude(high), should we?
 
     override protected def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean = {
