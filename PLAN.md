@@ -21,15 +21,19 @@ Subtracting: the writer's own work is about 120 ms/op and 392 MB/op (`replayBloc
 
 This is one fork per workload, cancelled before round 2 and before `nestedClasses`, and the machine had my builds and tests running on it during some of them (`phase` was 684 ms/op on a quiet machine in `m5-backend-ceiling`). The time is weak; the allocation is much more stable. The debug-only label is worth nothing in time and 12.6 MB/op, so it stays parked.
 
-## Result so far
+## Result
 
-Campaign `m5-direct-backend`, m5-pro, `phase`, stopped after two forks per build. #200 at `b8c499db39` against the direct path at `456838f7e0`:
+All on m5-pro, comparing #200 at `b8c499db39` with the direct path at `456838f7e0`.
 
-- `base`: 679.3 and 660.7 ms/op; 1063.2 and 1071.9 MB/op
-- `aa`: 660.3 and 665.6 ms/op; 1062.9 and 1059.3 MB/op
-- `direct`: 607.8 and 611.3 ms/op; 879.6 and 877.5 MB/op
+`phase` (`m5-direct-backend`, stopped after two forks per build): time -9.0% ±6.9 (A/A -1.1% ±7.1), allocation -17.7% ±2.1 (A/A -0.6% ±2.2). The forks were 607.8 and 611.3 ms/op against 660.3 to 679.3, and 879.6 and 877.5 MB/op against 1059.3 to 1071.9.
 
-Against `base`, time is -9.0% ±6.9 (A/A -1.1% ±7.1) and allocation -17.7% ±2.1 (A/A -0.6% ±2.2). `m5-direct-compile` measures a full compile.
+A full compile of the scala corpus (`m5-direct-compile`, stopped at 14 of 30 cells): allocation 6114 MB/op against 6299 and 6307, -3%. Time is unresolved. Cells of one build ranged by about 4% with load of up to 2.6 cores, under the gate of 4, and the expected effect is under 1%.
+
+In profiled forks of that compile (`m5-direct-compile-prof`, two forks per build), the jvm phase is 810 and 843 samples/op against 726 and 771, about -78 or -9%, which is about 0.8% of the compile. Its allocation is 1112 and 1089 MB/op against 905 and 895. The rest of the compile differs by more than that between forks of one build (8953 and 9146 for `base`, 8606 and 9067 for `direct`), which is why the total doesn't show it. Samples are about 1 ms each, judging by their total against the score.
+
+Where it goes, in samples/op on that compile: `sendToDisk` 271 to about 31, and `genPlainClass` 534 to about 670, since the writer's work moved there. `setInnerClasses` at 79 becomes about 24 in `collectNestedClasses` plus part of the 33 under `DirectClassVisitor`, so resolving names still costs something. The largest allocations gone are `LabelNode1`, `MethodNode1` and the instruction nodes. `CodegenLabel` just replaces `Label` in the profile.
+
+The conclusion so far: worth upstreaming if a quiet A/B confirms the time, by the standard of other changes of this size. It saves several times what #200 does in allocation for about 330 lines of new classes, with codegen shared by both paths.
 
 ## Key decisions
 
@@ -74,4 +78,5 @@ The prototype uses this for one thing: if direct emission throws (a too-long UTF
 - DONE direct path with `-Ybackend-tree`, recorded nested classes, class-level redo on exception
 - DONE normalised comparison over library, reflect and compiler
 - DONE all JUnit, partest `--run --jvm --pos --neg`, bootstrap to a byte-identical fixpoint, every class links with `-Xverify:all`
-- TODO before and after with an A/A (`m5-direct-backend`, `m5-direct-compile`); conclusion
+- DONE before and after on `phase`, allocation on a full compile, profiles
+- TODO a full-compile A/B on a quiet machine, for the time
