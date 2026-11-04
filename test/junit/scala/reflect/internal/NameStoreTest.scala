@@ -15,7 +15,7 @@ import scala.tools.testkit.AssertUtil.assertThrows
 class NameStoreTest {
   private val kinds = List("chars", "cached", "string", "bytes", "shared")
 
-  private final class Table(kind: String) extends SymbolTableForUnitTesting {
+  private class Table(kind: String) extends SymbolTableForUnitTesting {
     override protected def nameTableKind: String = kind
   }
 
@@ -151,12 +151,20 @@ class NameStoreTest {
     for ((n, i) <- wides.zipWithIndex) assertEquals(kind, s"$i$wide", n.toString)
   }
 
-  @Test def sharedTablesAgreeOnStringsAndIds(): Unit = {
+  @Test def sharedTablesAgreeOnStrings(): Unit = {
     val (a, b) = (new Table("shared"), new Table("shared"))
-    val (x, y) = (a.newTermName("sharedBetweenTables"), b.newTermName("sharedBetweenTables"))
+    val (x, y) = (a.newTermName("sharedBetweenTables"), b.newTermName("sharedBetweenTables".toCharArray))
     assertNotSame(x, y)
-    assertEquals(x.id, y.id)
     assertSame(x.toString, y.toString)
+    assertSame(x.subName(0, 6).toString, b.newTermName("shared").toString)
+  }
+
+  @Test def idsAreDenseInATable(): Unit = forEachTable { (kind, t) =>
+    if (kind == "shared" || kind == "string") {
+      new Table(kind).newTermName("enteredElsewhere")
+      val n = t.newTermName("enteredHere")
+      assertEquals(kind, t.nameTableSize - 1, n.id)
+    }
   }
 
   private def collectUntil(done: () => Boolean): Unit = {
@@ -167,19 +175,20 @@ class NameStoreTest {
   @Test def sharedTableForgetsStringsNoOneHolds(): Unit = {
     val table = new SharedNameTable
     val kept = new String("kept")
-    val keptEntry = table.intern(kept)
-    locally {
-      var dropped = table.intern(new String("dropped"))
-      val id = dropped.id
-      assertEquals(2, table.size)
-      collectUntil(() => dropped.get eq null)
-      assertNull(dropped.get)
-      dropped = null
-      // Interning a new string removes the cleared entry; the string gets a new id
-      assertNotEquals(id, table.intern(kept + "dropped").id)
-    }
-    assertSame(keptEntry, table.intern(new String("kept")))
-    assertSame(kept, keptEntry.get)
+    assertSame(kept, table.intern(kept))
+    var dropped = new String("dropped")
+    assertSame(dropped, table.intern(dropped))
+    assertEquals(2, table.size)
+    val ref = new java.lang.ref.WeakReference(dropped)
+    dropped = null
+    collectUntil(() => ref.get eq null)
+    assertNull(ref.get)
+    // Interning a new string removes the cleared entry
+    val another = new String("another")
+    table.intern(another)
+    assertEquals(2, table.size)
+    assertSame(kept, table.intern(new String("kept")))
+    assertSame(another, table.intern(new String("another")))
   }
 
   @Test def sharedTableKeepsStringsAUniverseHolds(): Unit = {
@@ -187,9 +196,7 @@ class NameStoreTest {
     val n = a.newTermName(new String("heldByAUniverse"))
     collectUntil(() => { System.gc(); true })
     val b = new Table("shared")
-    val m = b.newTermName(new String("heldByAUniverse"))
-    assertEquals(n.id, m.id)
-    assertSame(n.toString, m.toString)
+    assertSame(n.toString, b.newTermName(new String("heldByAUniverse")).toString)
   }
 
   @Test def sharedTableIsSafeAcrossConcurrentCompilers(): Unit = {
@@ -206,11 +213,11 @@ class NameStoreTest {
     ts.foreach(_.start()); ts.foreach(_.join())
     for (r <- results) assertArrayEquals(strings.asInstanceOf[Array[AnyRef]], r.asInstanceOf[Array[AnyRef]])
     for (s <- strings.take(5000))
-      assertEquals(1, tables.map(_.newTermName(s).id).distinct.length)
+      assertEquals(1, tables.map(_.newTermName(s).toString: AnyRef).map(System.identityHashCode).distinct.length)
   }
 
   @Test def oneTableIsSafeAcrossThreads(): Unit = {
-    val table = new Table("shared")
+    val table = new Table("shared") { override def synchronizeNames = true }
     val strings = (0 until 5000).map(i => s"sameTable$i").toArray
     val seen = new Array[Array[AnyRef]](8)
     val ts = (0 until 8).map { t =>
