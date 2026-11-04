@@ -101,7 +101,8 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
         gen(b, direct)
         GeneratedClass(direct.name, null, postProcessor.finishDirect(direct, isArtifact), sourceClassName, position, isArtifact)
       } catch {
-        case NonFatal(_) =>
+        case NonFatal(ex) =>
+          if (settings.isDebug) ex.printStackTrace()
           b.restorePickles()
           tree(builder)
       }
