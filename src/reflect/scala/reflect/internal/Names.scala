@@ -36,7 +36,7 @@ trait Names extends api.Names {
   private[this] val nameLock: Object = new Object
 
 
-  /** Which `NameStore` holds the characters of names: `chars`, `cached`, `string` or `bytes`. See `-Yname-table`. */
+  /** Which `NameStore` holds the characters of names: `chars`, `string` or `shared`. See `-Yname-table`. */
   protected def nameTableKind: String = "chars"
 
   /** Hashtable for finding term names quickly. */
@@ -50,9 +50,7 @@ trait Names extends api.Names {
    */
   private[this] val store: NameStore = nameTableKind match {
     case "chars"  => new CharStore
-    case "cached" => new CachedCharStore
     case "string" => new StringStore
-    case "bytes"  => new BytesStore
     case "shared" => new SharedStore(SharedNameTable.global)
     case kind     => throw new IllegalArgumentException(s"unknown name table: $kind")
   }
@@ -305,10 +303,13 @@ trait Names extends api.Names {
     }
     }
 
-  /** All names sequentially in one `Array[Char]`, a name being an offset and a length. */
-  private[internal] sealed abstract class CharBackedStore extends NameStore {
-    protected[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE)
-    protected[this] var nc = 0
+  /** The table as it has been: all names sequentially in one `Array[Char]`, a name being an offset and a length. */
+  private[internal] final class CharStore extends NameStore {
+    protected def kind = "chars"
+    private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE)
+    private[this] var nc = 0
+    def termFromString(s: String, cachedString: String): TermName = termFromChars(s.toCharArray(), 0, s.length(), cachedString)
+    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.id, n.length) else n.str
     final def size: Int = nc
     final override def legacyChars: Array[Char] = _chrs
     final override def legacyChars_=(cs: Array[Char]): Unit = _chrs = cs
@@ -485,57 +486,6 @@ trait Names extends api.Names {
       sb.appendAll(_chrs, n.id + start, length)
   }
 
-  /** The table as it has been. */
-  private[internal] final class CharStore extends CharBackedStore {
-    protected def kind = "chars"
-    def termFromString(s: String, cachedString: String): TermName = termFromChars(s.toCharArray(), 0, s.length(), cachedString)
-    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.id, n.length) else n.str
-  }
-
-  /** The same table, but `toString` keeps its result, as nearly all of its calls repeat an earlier one, and a `String`
-   *  enters a name without a temporary array.
-   */
-  private[internal] final class CachedCharStore extends CharBackedStore {
-    protected def kind = "cached"
-    def termFromString(s: String, cachedString: String): TermName = {
-      val len = s.length()
-      val h = s.hashCode & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || !sameAs(n.id, s, len)))
-        n = n.next
-      if (n ne null) n
-      else {
-        val startIndex = nc
-        var capacity = _chrs.length
-        while (nc + len > capacity) capacity *= 2
-        if (capacity != _chrs.length) {
-          val newchrs = new Array[Char](capacity)
-          java.lang.System.arraycopy(_chrs, 0, newchrs, 0, nc)
-          _chrs = newchrs
-        }
-        s.getChars(0, len, _chrs, nc)
-        if (len == 0) nc += 1
-        else nc = nc + len
-        addTerm(h, startIndex, len, cachedString)
-      }
-    }
-    private def sameAs(index: Int, s: String, len: Int): Boolean = {
-      val chrs = _chrs
-      var i = 0
-      while (i < len && chrs(index + i) == s.charAt(i)) i += 1
-      i == len
-    }
-    def toString(n: Name): String = {
-      var s = n.str
-      if (s == null) {
-        s = new String(_chrs, n.id, n.length)
-        n.str = s // a data race at worst builds it twice
-      }
-      s
-    }
-    override def hash(n: Name): Int = { val s = n.str; if (s == null) super.hash(n) else s.hashCode }
-  }
-
   /** The operations of a store whose names each hold a `String`, with `Name.id` a serial number. */
   private[internal] sealed abstract class StringBackedStore extends NameStore {
     final def hash(n: Name): Int = n.str.hashCode
@@ -677,231 +627,6 @@ trait Names extends api.Names {
     protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String = {
       probe.setRegion(s, from, len, hash)
       probed
-    }
-  }
-
-  /** Two tables, as compact strings has two codings: names that are all ASCII are bytes in one, the others are chars
-   *  in the other. A name's contents pick the table, so a string is only ever in one of them. `Name.id` is the
-   *  offset in the bytes, or the complement of the offset in the chars.
-   */
-  private[internal] final class BytesStore extends NameStore {
-    protected def kind = "bytes"
-    private[this] var bytes = new Array[Byte](NAME_SIZE)
-    private[this] var nb = 0
-    private[this] var chars = new Array[Char](0)
-    private[this] var nc = 0
-    def size: Int = nb + nc
-
-    private def reserveBytes(len: Int): Unit = if (nb + len > bytes.length) {
-      var capacity = bytes.length
-      while (nb + len > capacity) capacity *= 2
-      val grown = new Array[Byte](capacity)
-      java.lang.System.arraycopy(bytes, 0, grown, 0, nb)
-      bytes = grown
-    }
-    private def reserveChars(len: Int): Unit = if (nc + len > chars.length) {
-      var capacity = math.max(chars.length, 256)
-      while (nc + len > capacity) capacity *= 2
-      val grown = new Array[Char](capacity)
-      java.lang.System.arraycopy(chars, 0, grown, 0, nc)
-      chars = grown
-    }
-    private def advanceBytes(len: Int): Unit = nb += (if (len == 0) 1 else len)
-
-    def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
-      var h = 0
-      var or = 0
-      var i = 0
-      while (i < len) {
-        val c = cs(offset + i)
-        or |= c
-        h = 31 * h + c
-        i += 1
-      }
-      h &= HASH_MASK
-      val ascii = or < 0x80
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || ascii != (n.id >= 0) || !matches(n, cs, offset, len)))
-        n = n.next
-      if (n ne null) n
-      else if (ascii) {
-        val start = nb
-        reserveBytes(len)
-        val to = bytes
-        i = 0
-        while (i < len) { to(start + i) = cs(offset + i).toByte; i += 1 }
-        advanceBytes(len)
-        addTerm(h, start, len, cachedString)
-      } else if (cs eq chars) addTerm(h, ~offset, len, cachedString) // a subName, already in the chars
-      else {
-        val start = nc
-        reserveChars(len)
-        java.lang.System.arraycopy(cs, offset, chars, start, len)
-        nc += len
-        addTerm(h, ~start, len, cachedString)
-      }
-    }
-    def termFromString(s: String, cachedString: String): TermName = {
-      val len = s.length()
-      var or = 0
-      var i = 0
-      while (i < len) { or |= s.charAt(i); i += 1 }
-      val h = s.hashCode & HASH_MASK
-      val ascii = or < 0x80
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || ascii != (n.id >= 0) || !sameAs(n, s, len)))
-        n = n.next
-      if (n ne null) n
-      else if (ascii) {
-        val start = nb
-        reserveBytes(len)
-        val to = bytes
-        i = 0
-        while (i < len) { to(start + i) = s.charAt(i).toByte; i += 1 }
-        advanceBytes(len)
-        addTerm(h, start, len, cachedString)
-      } else {
-        val start = nc
-        reserveChars(len)
-        s.getChars(0, len, chars, start)
-        nc += len
-        addTerm(h, ~start, len, cachedString)
-      }
-    }
-    override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
-      var h = 0
-      var or = 0
-      var i = 0
-      while (i < len) {
-        val b = bs(offset + i)
-        or |= b
-        h = 31 * h + b
-        i += 1
-      }
-      if (or < 0) super.termFromUtf8(bs, offset, len)
-      else termFromAsciiBytes(bs, offset, len, h & HASH_MASK)
-    }
-    private def termFromAsciiBytes(bs: Array[Byte], offset: Int, len: Int, h: Int): TermName = {
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || n.id < 0 || !sameBytes(n.id, bs, offset, len)))
-        n = n.next
-      if (n ne null) n
-      else if (bs eq bytes) addTerm(h, offset, len, null) // a subName, already in the bytes
-      else {
-        val start = nb
-        reserveBytes(len)
-        java.lang.System.arraycopy(bs, offset, bytes, start, len)
-        advanceBytes(len)
-        addTerm(h, start, len, null)
-      }
-    }
-    private def sameBytes(index: Int, bs: Array[Byte], offset: Int, len: Int): Boolean = {
-      val from = bytes
-      var i = 0
-      while (i < len && from(index + i) == bs(offset + i)) i += 1
-      i == len
-    }
-    private def sameAs(n: Name, s: String, len: Int): Boolean = {
-      var i = 0
-      while (i < len && charAt(n, i) == s.charAt(i)) i += 1
-      i == len
-    }
-    def subName(parent: Name, from: Int, to: Int): TermName = {
-      val len = math.max(to - from, 0)
-      val start = parent.id
-      if (start < 0) termFromChars(chars, ~start + from, len, null) // may be all ASCII, and then goes to the bytes
-      else {
-        val from0 = start + from
-        val bs = bytes
-        var h = 0
-        var i = 0
-        while (i < len) { h = 31 * h + bs(from0 + i); i += 1 }
-        termFromAsciiBytes(bs, from0, len, h & HASH_MASK)
-      }
-    }
-    def hash(n: Name): Int = {
-      val start = n.id
-      if (start < 0) hashValue(chars, ~start, n.length)
-      else {
-        val bs = bytes
-        val len = n.length
-        var h = 0
-        var i = 0
-        while (i < len) { h = 31 * h + bs(start + i); i += 1 }
-        h
-      }
-    }
-    def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = {
-      var i = 0
-      while (i < len && charAt(n, i) == cs(offset + i)) i += 1
-      i == len
-    }
-    def toString(n: Name): String =
-      if (n.str != null) n.str
-      else {
-        val start = n.id
-        if (start < 0) new String(chars, ~start, n.length)
-        else new String(bytes, start, n.length, java.nio.charset.StandardCharsets.ISO_8859_1)
-      }
-    def charAt(n: Name, i: Int): Char = {
-      val start = n.id
-      if (start < 0) chars(~start + i) else bytes(start + i).toChar
-    }
-    override def utf8(n: Name): Array[Byte] = {
-      val start = n.id
-      if (start < 0) super.utf8(n)
-      else java.util.Arrays.copyOfRange(bytes, start, start + n.length)
-    }
-    override def pos(n: Name, c: Char, start: Int): Int = {
-      val index = n.id
-      if (index < 0) super.pos(n, c, start)
-      else {
-        val len = n.length
-        if (c >= 0x80) math.max(len, start)
-        else {
-          val bs = bytes
-          val b = c.toByte
-          var i = start
-          while (i < len && bs(index + i) != b) i += 1
-          i
-        }
-      }
-    }
-    override def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
-      val index = n.id
-      val pindex = prefix.id
-      if ((index | pindex) < 0) super.startsWith(n, prefix, start)
-      else {
-        val bs = bytes
-        val plen = prefix.length
-        val len = n.length
-        var i = 0
-        while (i < plen && start + i < len && bs(index + start + i) == bs(pindex + i)) i += 1
-        i == plen
-      }
-    }
-    override def startsWith(n: Name, prefix: String, start: Int): Boolean = {
-      val index = n.id
-      if (index < 0) super.startsWith(n, prefix, start)
-      else {
-        val bs = bytes
-        val plen = prefix.length
-        val len = n.length
-        var i = 0
-        while (i < plen && start + i < len && bs(index + start + i) == prefix.charAt(i)) i += 1
-        i == plen
-      }
-    }
-    override def endsWith(n: Name, suffix: String, end: Int): Boolean = {
-      val index = n.id
-      if (index < 0) super.endsWith(n, suffix, end)
-      else {
-        val bs = bytes
-        val slen = suffix.length
-        var i = 1
-        while (i <= slen && i <= end && bs(index + end - i) == suffix.charAt(slen - i)) i += 1
-        i > slen
-      }
     }
   }
 

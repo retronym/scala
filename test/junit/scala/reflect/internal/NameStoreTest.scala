@@ -13,7 +13,7 @@ import scala.tools.testkit.AssertUtil.assertThrows
 /** Each name table against the behaviour of `String`, on ASCII, Latin-1, CJK and surrogate pairs. */
 @RunWith(classOf[JUnit4])
 class NameStoreTest {
-  private val kinds = List("chars", "cached", "string", "bytes", "shared")
+  private val kinds = List("chars", "string", "shared")
 
   private class Table(kind: String) extends SymbolTableForUnitTesting {
     override protected def nameTableKind: String = kind
@@ -128,12 +128,12 @@ class NameStoreTest {
 
   @deprecated("tests the deprecated accessor", since = "")
   @Test def tableAccessFailsInformativelyWithoutACharTable(): Unit = {
-    for (kind <- List("chars", "cached")) {
+    for (kind <- List("chars")) {
       val t = new Table(kind)
       val n = t.newTermName("abc")
       assertEquals(kind, "abc", new String(t.chrs, n.start, n.length))
     }
-    for (kind <- List("string", "bytes", "shared")) {
+    for (kind <- List("string", "shared")) {
       val t = new Table(kind)
       val n = t.newTermName("abc")
       for (what <- List[(String, () => Any)](("Name#start", () => n.start), ("Names#chrs", () => t.chrs), ("Names#chrs", () => t.chrs = new Array[Char](1)))) {
