@@ -499,7 +499,6 @@ trait Definitions extends api.StandardDefinitions {
     lazy val SeqClass               = requiredClass[scala.collection.immutable.Seq[_]]
     lazy val SeqFactoryClass        = requiredModule[scala.collection.SeqFactory.type]
     lazy val UnapplySeqWrapperClass = getTypeMember(SeqFactoryClass, tpnme.UnapplySeqWrapper)
-    lazy val ArrayUnapplySeqWrapperClass = getTypeMember(ArrayModule, tpnme.UnapplySeqWrapper)
 
     lazy val JavaStringBuilderClass = requiredClass[java.lang.StringBuilder]
     lazy val JavaStringBufferClass  = requiredClass[java.lang.StringBuffer]
