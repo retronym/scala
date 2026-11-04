@@ -4488,8 +4488,10 @@ trait Types
 
   // The JAVA flag is only reliable once the symbol is initialized: only typeParams forces the classfile to be read,
   // which sets the flag. See #400. OPT: initialized non-Java classes, the common case, avoid calling typeParams.
+  // Test isInitialized first: in runtime reflection, reading JAVA from an uninitialized symbol completes it fully, where
+  // typeParams only loads it, and a class completed part way through its enclosing class's completion can't find its peers.
   def isRawIfWithoutArgs(sym: Symbol) =
-    sym.isClass && (sym.isJavaDefined || !sym.isInitialized) && !sym.typeParams.isEmpty && sym.isJavaDefined
+    sym.isClass && (!sym.isInitialized || sym.isJavaDefined) && !sym.typeParams.isEmpty && sym.isJavaDefined
   /** Is type tp a ''raw type''? */
   def isRawType(tp: Type) = !phase.erasedTypes && (tp match {
     case TypeRef(_, sym, Nil) => isRawIfWithoutArgs(sym)
