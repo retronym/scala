@@ -73,10 +73,12 @@ So for names this short, `StringUTF16.compress` is no slower than the byte route
 
 **Non-ASCII code bases.** I rewrote every identifier that `scalap` and `re2s` define into CJK characters, keeping each first character so that patterns still mean the same, and compiled them without errors.
 
-| Synthetic corpus | Non-ASCII names | Table ASCII | `char[]` used | UTF-8 | Latin-1 or ASCII bytes, with fallback at 2 bytes per char |
-|---|---|---|---|---|---|
-| `scalap` | 16% | 92.5% | 451 KB | 259 KB | 242 KB |
-| `re2s` | 19.5% | 90.4% | 300 KB | 178 KB | 164 KB |
+| Synthetic corpus | Non-ASCII names | Table ASCII | `char[]` used | UTF-8 | Two tables, bytes and chars | ASCII bytes, `String` per other name |
+|---|---|---|---|---|---|---|
+| `scalap` | 16% | 92.5% | 451 KB | 259 KB | 256 KB | about 338 KB |
+| `re2s` | 19.5% | 90.4% | 300 KB | 178 KB | 169 KB | about 241 KB |
+
+The last two columns store a non-ASCII name whole, including its ASCII chars, at 2 bytes per char. The last one adds 40 bytes per name as an estimate of the `String` and array headers.
 
 Classpath names keep the table mostly ASCII, so UTF-8 still shrinks it, and it only passes `char[]` when nearly everything is non-ASCII (the limit is 1.5 times `char[]`). The loss is in time: on synthetic `re2s`, 64% of `charAt`, 93% of `endsWith(String)` and 96% of `pos` calls land on a non-ASCII name, where a UTF-8 table has no O(1) index. Many of these could work on bytes, but `charAt` and every returned index could not, and `encode` calls `charAt` per character.
 
@@ -89,10 +91,15 @@ Classpath names keep the table mostly ASCII, so UTF-8 still shrinks it, and it o
 | C | As B with Latin-1 in the table | A few more names on O(1) bytes (3 of 89,087 on `scala`) | High bytes are not UTF-8, so entry still checks for ASCII |
 | D | Each name holds a `String`, as Scala 3's `SimpleName` does | All `toString` allocation, `char[]` temporaries, `compress`; `toTypeName` rehashing through the cached hash; one code path; JDK-intrinsified scans | About 1.5 MB more retained on `scala` (0.3% of live), `subName` no longer shares, heavier on JDK 8 |
 | E | Keep `char[]`, cache `toString` on first use, enter from `String` without a temporary | Most of the `toString` row, the temporaries | About 3 MB more retained on `scala` if every string is kept; nothing in the table |
+| F | Two tables, a `byte[]` for ASCII names and a `char[]` for the rest | As B, without a `String` per non-ASCII name; never larger than `char[]` | A branch on every operation, mixed cases in comparisons, canonicalising `subName`, no help for `toString` |
 
 D's retained estimate: 89k `String`s at about 64 bytes (5.7 MB) replace the 4.19 MB array. A `Name` stays at 32 bytes, because dropping `len` only leaves padding.
 
-I recommend against A and C. Of the rest I expect D to win, with E as the cheap control that shows how much of D is just the cache. B is what meets the original goal most closely, and I expect it to measure at or below the noise floor: its only time savings are on the unpickler and pickler paths, and it adds a branch to every operation. Everything here is bounded by the 1.3% CPU and 1.6% allocation above, so even D is a modest change on a full compile, and worth more on the backend and for simplicity than for speed.
+F is your suggestion of two internal tables, which applies the idea of compact strings to the table as a whole. A name's content picks its table: all chars below 0x80 goes to bytes, anything else to chars. The rule is canonical, so a string lives in exactly one table and there is nothing to keep in sync. One hash table still serves both, because the hash is the same `31 * h + c` over either form. The hash loop also ORs the input, so a lookup compares only against candidates in the matching table, and a byte entry with a high bit decodes first and takes the char path. `start` stays unique by keeping byte offsets non-negative and storing char offsets as their complement, which `& HASHMASK`, `hashCode`, `toTypeName` and the keyword range check (`idx >= 0`) all accept. `subName` of an ASCII name shares its range, and so does a non-ASCII `subName` that stays non-ASCII. A non-ASCII name's `subName` that turns out all ASCII must be scanned and entered in the byte table, or two names would hold one string. Surrogate pairs need no handling, since the char table holds UTF-16 as today.
+
+The measurements favour F over the other byte designs. On `scala` the char table would hold 23 chars across 4 names, so it can start empty and the byte table does all the work. On the CJK rewrites it is the smallest design measured (169 KB on `re2s`, 256 KB on `scalap`), and it keeps O(1) `charAt` on the 64% to 96% of scan calls that land on non-ASCII names. Unlike UTF-8 it can never exceed today's size. It replaces B and C as the byte design to try. Its limits are those of any byte table: the same 2.1 MB saving on `scala`, the same unpickler and pickler conversions removed, and no effect on `toString`, which is the largest item above. Combining it with E gains little on `scala`, since the roughly 3 MB of cached strings exceed the 2.1 MB saved.
+
+I recommend against A, B and C. Of the rest I expect D to win, with E as the cheap control that shows how much of D is just the cache. F meets the original goal most closely, and I expect it to measure at or below the noise floor: its only time savings are on the unpickler and pickler paths, and it adds a branch to every operation, well predicted on ASCII code and less so on mixed code. Everything here is bounded by the 1.3% CPU and 1.6% allocation above, so even D is a modest change on a full compile, and worth more on the backend and for simplicity than for speed.
 
 The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent of all of these and could be dropped regardless.
 
@@ -124,6 +131,6 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 
 - Read `m5-names-baseline-prof` for the unpickler's share on `scalap` and `re2s` when the queue reaches it.
 - Decision on which designs to spike.
-- Spike, each commit compiling: E, then the chosen table design. Bootstrap with `restarrFull`.
+- Spike, each commit compiling: E, then the chosen table design (D, F or both). Bootstrap with `restarrFull`.
 - A proper JMH run of the string paths in place of the rough loop, including JDK 8 if it can be installed.
 - Numbers from `perflab` on m5-pro with an A/A, on `scala`, `scalap`, `re2s` and `BackendBenchmark`, then a view on whether it is worth having.
