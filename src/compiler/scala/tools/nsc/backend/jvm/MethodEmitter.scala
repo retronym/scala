@@ -13,7 +13,7 @@
 package scala.tools.nsc
 package backend.jvm
 
-import scala.tools.asm.{Handle, Label, MethodVisitor, Opcodes}
+import scala.tools.asm.{AnnotationVisitor, Handle, Label, MethodVisitor, Opcodes}
 import scala.tools.asm.tree.{MethodInsnNode, MethodNode}
 
 /** A label made by codegen, which knows whether a jump to it has been emitted so far. */
@@ -25,12 +25,14 @@ final class CodegenLabel extends Label {
  *  it needs to know is kept here, so that nothing has to be read back from what is underneath.
  *
  *  @param tree the method node underneath, or `null` if it is not a tree. Only for what the optimizer needs.
+ *  @param direct records what the method refers to, or `null` if there is a tree to find that in
  */
-final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) extends MethodVisitor(Opcodes.ASM9, underlying) {
+final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode, direct: DirectClassVisitor) extends MethodVisitor(Opcodes.ASM9, underlying) {
   import Opcodes._
 
   private[this] var pendingLine = -1
   private[this] var pendingLineStart: Label = null
+  private[this] var lastIsLine = false
 
   private[this] var _lastOpcode = -1
   private[this] var _lastLabel: Label = null
@@ -64,11 +66,11 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   /** Replaces the line number of the last thing emitted, if that was a line number. */
   def overwriteLineNumber(line: Int): Boolean =
-    pendingLine != -1 && { pendingLine = line; true }
+    lastIsLine && { pendingLine = line; true }
 
   /** The call just emitted, when there is a tree. */
   def lastCall: MethodInsnNode =
-    if (tree == null || pendingLine != -1) null
+    if (tree == null || lastIsLine) null
     else tree.instructions.getLast match {
       case m: MethodInsnNode => m
       case _ => null
@@ -82,6 +84,7 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   private def before(opcode: Int): Unit = {
     flushLine()
+    lastIsLine = false
     _lastOpcode = opcode
     _lastLabel = null
     unreachable = opcode == GOTO || opcode == ATHROW || opcode == TABLESWITCH || opcode == LOOKUPSWITCH || (opcode >= IRETURN && opcode <= RETURN)
@@ -91,12 +94,28 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   /** To end a method that has code. */
   def endCode(): Unit = {
-    flushLine()
+    if (direct == null) flushLine()
     super.visitMaxs(0, 0)
   }
 
+  override def visitAnnotation(descriptor: String, visible: Boolean): AnnotationVisitor = {
+    val visitor = super.visitAnnotation(descriptor, visible)
+    if (direct != null) direct.annotation(descriptor, visitor) else visitor
+  }
+
+  override def visitParameterAnnotation(parameter: Int, descriptor: String, visible: Boolean): AnnotationVisitor = {
+    val visitor = super.visitParameterAnnotation(parameter, descriptor, visible)
+    if (direct != null) direct.annotation(descriptor, visitor) else visitor
+  }
+
+  override def visitTryCatchBlock(start: Label, end: Label, handler: Label, tpe: String): Unit = {
+    if (direct != null) direct.internalName(tpe)
+    super.visitTryCatchBlock(start, end, handler, tpe)
+  }
+
   override def visitLabel(label: Label): Unit = {
-    flushLine()
+    if (direct == null) flushLine()
+    lastIsLine = false
     unreachableBeforeLastLabel = unreachable
     unreachable = false
     _lastOpcode = -1
@@ -104,10 +123,14 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
     super.visitLabel(label)
   }
 
+  /** Without a tree, a line number is held back past labels too, and dropped if no instruction follows it,
+   *  which is what `LocalOpt.removeEmptyLineNumbers` does otherwise.
+   */
   override def visitLineNumber(line: Int, start: Label): Unit = {
-    flushLine()
+    if (direct == null) flushLine()
     pendingLine = line
     pendingLineStart = start
+    lastIsLine = true
     _lastOpcode = -1
     _lastLabel = null
   }
@@ -130,21 +153,35 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   override def visitTypeInsn(opcode: Int, tpe: String): Unit = {
     before(opcode)
+    if (direct != null) direct.internalName(tpe)
     super.visitTypeInsn(opcode, tpe)
   }
 
   override def visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String): Unit = {
     before(opcode)
+    if (direct != null) {
+      direct.internalName(owner)
+      direct.descriptor(descriptor)
+    }
     super.visitFieldInsn(opcode, owner, name, descriptor)
   }
 
   override def visitMethodInsn(opcode: Int, owner: String, name: String, descriptor: String, isInterface: Boolean): Unit = {
     before(opcode)
+    if (direct != null) {
+      direct.internalName(owner)
+      direct.descriptor(descriptor)
+    }
     super.visitMethodInsn(opcode, owner, name, descriptor, isInterface)
   }
 
   override def visitInvokeDynamicInsn(name: String, descriptor: String, bootstrapMethodHandle: Handle, bootstrapMethodArguments: Object*): Unit = {
     before(INVOKEDYNAMIC)
+    if (direct != null) {
+      direct.descriptor(descriptor)
+      direct.handle(bootstrapMethodHandle)
+      bootstrapMethodArguments.foreach(direct.constant)
+    }
     super.visitInvokeDynamicInsn(name, descriptor, bootstrapMethodHandle, bootstrapMethodArguments: _*)
   }
 
@@ -156,6 +193,7 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   override def visitLdcInsn(value: Object): Unit = {
     before(LDC)
+    if (direct != null) direct.constant(value)
     super.visitLdcInsn(value)
   }
 
@@ -180,6 +218,7 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode) exten
 
   override def visitMultiANewArrayInsn(descriptor: String, numDimensions: Int): Unit = {
     before(MULTIANEWARRAY)
+    if (direct != null) direct.descriptor(descriptor)
     super.visitMultiANewArrayInsn(descriptor, numDimensions)
   }
 }

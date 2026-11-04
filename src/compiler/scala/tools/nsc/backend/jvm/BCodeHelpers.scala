@@ -431,6 +431,16 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
      *
      *  must-single-thread
      */
+    private[this] var takenPickles: List[(Symbol, PickleBuffer)] = Nil
+
+    def forgetTakenPickles(): Unit = takenPickles = Nil
+
+    /** Puts back the pickles that `getAnnotPickle` has taken since `forgetTakenPickles`, to generate the class again. */
+    def restorePickles(): Unit = {
+      currentRun.symData ++= takenPickles
+      takenPickles = Nil
+    }
+
     def getAnnotPickle(@unused jclassName: String, sym: Symbol): Option[AnnotationInfo] = {
       currentRun.symData get sym match {
         case Some(pickle) if !sym.isModuleClass => // pickles for module classes are in the companion / mirror class
@@ -445,8 +455,8 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
             }
             AnnotationInfo(annTp, Nil, (nme.bytes, arg) :: Nil)
           }
-          currentRun.symData -= sym
-          currentRun.symData -= sym.companionSymbol
+          for (s <- sym :: sym.companionSymbol :: Nil; p <- currentRun.symData.remove(s))
+            takenPickles ::= (s -> p)
           Some(scalaAnnot)
         case _ =>
           None
@@ -918,12 +928,11 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
      *
      *  must-single-thread
      */
-    def genMirrorClass(moduleClass: Symbol, cunit: CompilationUnit): asm.tree.ClassNode = {
+    def genMirrorClass(moduleClass: Symbol, cunit: CompilationUnit, mirrorClass: asm.ClassVisitor): Unit = {
       assert(moduleClass.isModuleClass, "Require module class")
       assert(moduleClass.companionClass == NoSymbol, moduleClass)
 
       val bType = mirrorClassClassBType(moduleClass)
-      val mirrorClass = new ClassNode1
       mirrorClass.visit(
         backendUtils.classfileVersion.get,
         bType.info.get.flags,
@@ -945,8 +954,6 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
       mirrorClass.visitEnd()
 
       ("" + moduleClass.name) // this side-effect is necessary, really.
-
-      mirrorClass
     }
 
   } // end of class JMirrorBuilder

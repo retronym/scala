@@ -14,14 +14,16 @@ package scala.tools.nsc
 package backend.jvm
 
 import scala.collection.mutable.ListBuffer
+import scala.tools.asm
 import scala.tools.asm.tree.ClassNode
+import scala.util.control.NonFatal
 
 abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
   val bTypes: BTypesFromSymbols[global.type]
 
   import global._
   import bTypes._
-  import genBCode.generatedClassHandler
+  import genBCode.{generatedClassHandler, postProcessor}
 
   // TODO: do we really need a new instance per run? Is there state that depends on the compiler frontend (symbols, types, settings)?
   private[this] lazy val mirrorCodeGen: LazyVar[CodeGenImpl.JMirrorBuilder] = perRunLazy(this)(new CodeGenImpl.JMirrorBuilder())
@@ -37,12 +39,15 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
       val sym = cd.symbol
       val position = sym.pos
       val fullSymbolName = sym.javaClassName
-      val mainClassNode = genClass(cd, unit)
-      generatedClasses += GeneratedClass(mainClassNode, fullSymbolName, position, isArtifact = false)
+      addSbtIClassShim(cd)
+      generatedClasses += generated(fullSymbolName, position, isArtifact = false)(new CodeGenImpl.SyncAndTryBuilder(unit)) { (b, visitor) =>
+        b.genPlainClass(cd, visitor)
+      }
       if (bTypes.isTopLevelModuleClass(sym)) {
         if (sym.companionClass == NoSymbol) {
-          val mirrorClassNode = genMirrorClass(sym, unit)
-          generatedClasses += GeneratedClass(mirrorClassNode, fullSymbolName, position, isArtifact = true)
+          generatedClasses += generated(fullSymbolName, position, isArtifact = true)(mirrorCodeGen.get) { (b, visitor) =>
+            b.genMirrorClass(sym, unit, visitor)
+          }
         }
         else
           log(s"No mirror class for module with linked class: ${sym.fullName}")
@@ -68,6 +73,41 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
     generatedClassHandler.process(GeneratedCompilationUnit(unit.source.file, generatedClasses.toList))
   }
 
+  /** Whether nothing needs the `ClassNode` of a class, so that codegen can write it directly. With backend threads we
+   *  stay with `ClassNode`s, as the work they do, such as computing stack map frames, would otherwise happen under the
+   *  frontend lock. The output differs in the order of the constant pool, and in that dead code stays as ASM's
+   *  `nop; athrow`.
+   */
+  private def emitsDirectly: Boolean =
+    !settings.YbackendTree.value && !settings.opt.isSetByUser && !settings.optAddToBytecodeRepository && settings.YaddBackendThreads.value == 1
+
+  /** A class as `gen` emits it, directly if we can. If that throws, it is generated again as a `ClassNode`, whose path
+   *  has the checks and messages for a class that can't be written. A string constant that is too long, for example,
+   *  only throws this early when going straight to a `ClassWriter`.
+   */
+  private def generated[B <: CodeGenImpl.BCPickles](sourceClassName: String, position: Position, isArtifact: Boolean)(builder: => B)(gen: (B, asm.ClassVisitor) => Unit): GeneratedClass = {
+    def tree(b: B): GeneratedClass = {
+      val node = new ClassNode1()
+      gen(b, node)
+      GeneratedClass(node.name, node, null, sourceClassName, position, isArtifact)
+    }
+    // TODO: do we need a new builder for each class? could we use one per run? or one per Global compiler instance?
+    val b = builder
+    if (!emitsDirectly) tree(b)
+    else {
+      b.forgetTakenPickles()
+      val direct = new DirectClassVisitor(postProcessor.newClassWriter())
+      try {
+        gen(b, direct)
+        GeneratedClass(direct.name, null, postProcessor.finishDirect(direct, isArtifact), sourceClassName, position, isArtifact)
+      } catch {
+        case NonFatal(_) =>
+          b.restorePickles()
+          tree(builder)
+      }
+    }
+  }
+
   def genClass(cd: ClassDef, unit: CompilationUnit): ClassNode = {
     addSbtIClassShim(cd)
 
@@ -79,7 +119,9 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
   }
 
   def genMirrorClass(classSym: Symbol, unit: CompilationUnit): ClassNode = {
-    mirrorCodeGen.get.genMirrorClass(classSym, unit)
+    val node = new ClassNode1()
+    mirrorCodeGen.get.genMirrorClass(classSym, unit, node)
+    node
   }
 
 

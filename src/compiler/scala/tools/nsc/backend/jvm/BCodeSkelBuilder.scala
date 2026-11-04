@@ -609,8 +609,9 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         jgensig,
         mkArray(thrownExceptions)
       ) match {
-        case tree: asm.tree.MethodNode => new MethodEmitter(tree, tree)
-        case visitor => new MethodEmitter(visitor, null)
+        case emitter: MethodEmitter => emitter
+        case tree: asm.tree.MethodNode => new MethodEmitter(tree, tree, null)
+        case x => throw new MatchError(x)
       }
 
       emitParamNames(mnode, params)
@@ -744,7 +745,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
           mnode.visitTypeInsn(asm.Opcodes.NEW, internalName(methSymbol.enclClass))
           // INVOKESPECIAL <init>
           val callee = methSymbol.enclClass.primaryConstructor
-          mnode.visitMethodInsn(asm.Opcodes.INVOKESPECIAL, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, false)
+          mnode.visitMethodInsn(asm.Opcodes.INVOKESPECIAL, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, isInterface = false)
         }
         // android creator code
         if (isCZParcelable) {
@@ -762,7 +763,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
           }
           // INVOKESTATIC CREATOR(): android.os.Parcelable$Creator; -- TODO where does this Android method come from?
           val callee = definitions.getMember(claszSymbol.companionModule, androidFieldName)
-          mnode.visitMethodInsn(asm.Opcodes.INVOKESTATIC, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, false)
+          mnode.visitMethodInsn(asm.Opcodes.INVOKESTATIC, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, isInterface = false)
           // PUTSTATIC `thisBType.internalName`.CREATOR;
           mnode.visitFieldInsn(asm.Opcodes.PUTSTATIC, thisBType.internalName, "CREATOR", andrFieldDescr)
         }

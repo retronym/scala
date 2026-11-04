@@ -368,6 +368,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   // Allows a specialised jar to be written. For instance one that provides stable hashing of content, or customisation of the file storage
   val YjarFactory = StringSetting   ("-YjarFactory", "classname", "factory for jar files", classOf[DefaultJarFactory].getName)
   val YaddBackendThreads = IntSetting   ("-Ybackend-parallelism", "maximum worker threads for backend", 1, Some((1,16)), (_: String) => None )
+  val YbackendTree = BooleanSetting("-Ybackend-tree", "Build a ClassNode for each class, even if no optimizer needs it")
   val YmaxQueue = IntSetting   ("-Ybackend-worker-queue", "backend threads worker queue size", 0, Some((0,1000)), (_: String) => None )
   val YjarCompressionLevel = IntSetting("-Yjar-compression-level", "compression level to use when writing jar files",
     Deflater.DEFAULT_COMPRESSION, Some((Deflater.DEFAULT_COMPRESSION,Deflater.BEST_COMPRESSION)), (_: String) => None)

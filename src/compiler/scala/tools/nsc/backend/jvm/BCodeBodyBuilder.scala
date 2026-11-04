@@ -613,7 +613,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
                 devWarning(s"Tried to emit impossible cast from primitive type $l to $r (at ${app.pos})")
                 mnode.visitTypeInsn(asm.Opcodes.NEW, jlClassCastExceptionRef.internalName)
                 bc dup ObjectRef
-                mnode.visitMethodInsn(asm.Opcodes.INVOKESPECIAL, jlClassCastExceptionRef.internalName, INSTANCE_CONSTRUCTOR_NAME, "()V", true)
+                mnode.visitMethodInsn(asm.Opcodes.INVOKESPECIAL, jlClassCastExceptionRef.internalName, INSTANCE_CONSTRUCTOR_NAME, "()V", isInterface = true)
                 emit(asm.Opcodes.ATHROW)
               } else {
                 bc boolconst false
@@ -1639,8 +1639,12 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val overriddenMethods = bridges.map(b => methodBTypeFromSymbol(b).toASMType)
       visitInvokeDynamicInsnLMF(bc.jmethod, sam.name.toString, invokedType, samMethodType, implMethodHandle, constrainedType, overriddenMethods, isSerializable)
       if (isSerializable) {
-        val tree = bc.jmethod.tree
-        addIndyLambdaImplMethod(thisBType.internalName, tree, tree.instructions.getLast.asInstanceOf[InvokeDynamicInsnNode], implMethodHandle)
+        cnode match {
+          case direct: DirectClassVisitor => direct.serializableLambdas += implMethodHandle
+          case _ =>
+            val tree = bc.jmethod.tree
+            addIndyLambdaImplMethod(thisBType.internalName, tree, tree.instructions.getLast.asInstanceOf[InvokeDynamicInsnNode], implMethodHandle)
+        }
       }
     }
   }
