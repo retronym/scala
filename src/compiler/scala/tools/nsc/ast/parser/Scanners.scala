@@ -102,12 +102,12 @@ trait ScannersCommon {
   }
 
   def createKeywordArray(keywords: Seq[(Name, Token)], defaultToken: Token): (Token, Array[Token]) = {
-    val names = keywords.sortBy(_._1.start).map { case (k, v) => (k.start, v) }
+    val names = keywords.sortBy(_._1.id).map { case (k, v) => (k.id, v) }
     val low   = names.head._1
     val high  = names.last._1
     val arr   = Array.fill(high - low + 1)(defaultToken)
 
-    names foreach { case (k, v) => arr(k + low) = v }
+    names foreach { case (k, v) => arr(k - low) = v }
     (low, arr)
   }
 }
@@ -289,7 +289,18 @@ trait Scanners extends ScannersCommon {
 
     /** append Unicode character to "cbuf" buffer
      */
-    protected def putChar(c: Char): Unit = cbuf.append(c)
+    protected def putChar(c: Char): Unit = {
+      cbuf.append(c)
+      cbufHash = 31 * cbufHash + c
+    }
+
+    /** `String.hashCode` of the contents of `cbuf`, so that entering a name needn't go through them to compute it. */
+    private[this] var cbufHash = 0
+
+    private def clearCbuf(): Unit = {
+      cbuf.clear()
+      cbufHash = 0
+    }
 
     /** Determines whether this scanner should emit identifier deprecation warnings,
      *  e.g. when seeing `macro` or `then`, which are planned to become keywords in future versions of Scala.
@@ -298,11 +309,11 @@ trait Scanners extends ScannersCommon {
 
     /** Clear buffer and set name and token */
     private def finishNamed(idtoken: Token = IDENTIFIER): Unit = {
-      name = newTermName(cbuf.toCharArray)
-      cbuf.clear()
+      name = newTermNameFromSequence(cbuf, cbufHash)
+      clearCbuf()
       token = idtoken
       if (idtoken == IDENTIFIER) {
-        val idx = name.start - kwOffset
+        val idx = name.id - kwOffset
         if (idx >= 0 && idx < kwArray.length) {
           token = kwArray(idx)
           if (token == IDENTIFIER && allowIdent != name) {
@@ -318,7 +329,7 @@ trait Scanners extends ScannersCommon {
     /** Clear buffer and set string */
     private def setStrVal(): Unit = {
       strVal = cbuf.toString
-      cbuf.clear()
+      clearCbuf()
     }
 
     /** a stack of tokens which indicates whether line-ends can be statement separators
@@ -963,7 +974,7 @@ trait Scanners extends ScannersCommon {
       error(offset, s"unclosed string literal$note")
       // Recover as best we can by pretending the line has ended, so later
       // statements (and completions) are not swallowed by the unclosed literal.
-      cbuf.clear()
+      clearCbuf()
       adjustSepRegions(STRINGLIT)
       token = SEMI
     }
@@ -1050,9 +1061,9 @@ trait Scanners extends ScannersCommon {
             getInterpolatedIdentRest()
           } else {
             next.token = IDENTIFIER
-            next.name = newTermName(cbuf.toCharArray)
-            cbuf.clear()
-            val idx = next.name.start - kwOffset
+            next.name = newTermNameFromSequence(cbuf, cbufHash)
+            clearCbuf()
+            val idx = next.name.id - kwOffset
             if (idx >= 0 && idx < kwArray.length)
               next.token = kwArray(idx)
           }
