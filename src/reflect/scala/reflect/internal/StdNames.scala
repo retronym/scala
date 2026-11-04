@@ -425,7 +425,7 @@ trait StdNames {
     /** Is name a variable name? */
     def isVariableName(name: Name): Boolean = {
       import Character.{isHighSurrogate, isLowSurrogate, isLetter, isLowerCase, isValidCodePoint, toCodePoint}
-      val first = name.startChar
+      val first = if (name.isEmpty) '\u0000' else name.startChar
       def isLowerLetterSupplementary: Boolean =
         first == '$' && {
           val decoded = name.decoded
