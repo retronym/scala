@@ -42,6 +42,6 @@ ProdOk: x
 ProdNull: no match
 VarGetOk: x
 VarGetNull: no match
-Counted: 3, 3 evaluations
-Stateful: third
-CountVal: x, 3 evaluations
+Counted: 2, 2 evaluations
+Stateful: second
+CountVal: x, 2 evaluations

@@ -1,6 +1,7 @@
 // The null test on the sequence selected by a sequence pattern can't fail for a value class's
 // unboxed representation, but it can for a box at a generic position, or for a reference.
-// The check file is the output of a compiler that always emits the test.
+// The check file is the output of a compiler that always emits the test, except for the last three lines:
+// a `get` declared to return a value class is now evaluated once less, as the test itself no longer calls it.
 import collection.SeqFactory.UnapplySeqWrapper
 import Array.{UnapplySeqWrapper => ArrayWrapper}
 

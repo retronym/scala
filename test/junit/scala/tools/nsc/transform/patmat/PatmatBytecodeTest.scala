@@ -217,4 +217,22 @@ class PatmatBytecodeTest extends BytecodeTesting {
     for (m <- List("list", "seq", "star", "empty", "array", "arrayStar", "arrayEmpty"))
       assert(!getInstructions(c, m).exists(cond(_) { case TypeOp(NEW, t) => t.contains("UnapplySeqWrapper") }), textify(c))
   }
+
+  @Test
+  def noBoxOfDeclaredValueClass(): Unit = {
+    val code =
+      """class V(val xs: List[String]) extends AnyVal {
+        |  def isEmpty = false
+        |  def get = this
+        |  def lengthCompare(n: Int) = xs.lengthCompare(n)
+        |  def apply(i: Int) = xs(i)
+        |  def drop(n: Int) = xs.drop(n)
+        |  def toSeq = xs
+        |}
+        |object X { def unapplySeq(a: Int) = new V(Nil) }
+        |class C { def m(i: Int) = i match { case X(a) => a case _ => "" } }
+      """.stripMargin
+    val c = compileClasses(code).find(_.name == "C").get
+    assert(!getInstructions(c, "m").exists(cond(_) { case TypeOp(NEW, "V") => true }), textify(c))
+  }
 }
