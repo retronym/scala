@@ -99,13 +99,13 @@ trait Names extends api.Names {
     if (synchronizeNames) nameLock.synchronized(body) else body
   }
 
-  /** Create a term name from a character sequence whose contents aren't otherwise needed, such as the scanner's buffer. A
-   *  name that exists needs no copy of them. This has its own name so that `newTermName(aName)` stays an error.
+  /** Create a term name from the characters in cs[0..len-1], whose hash the caller has kept as it built them, such as the
+   *  scanner's buffer. A name that exists needs no copy of them.
    *
-   *  @param hash `String.hashCode` of the contents, which the caller has kept as it built them
+   *  @param hash `String.hashCode` of the characters
    */
-  final def newTermNameFromSequence(cs: CharSequence, hash: Int): TermName =
-    if (synchronizeNames) nameLock.synchronized(store.termFromSequence(cs, hash)) else store.termFromSequence(cs, hash)
+  final def newTermNameHashed(cs: Array[Char], len: Int, hash: Int): TermName =
+    if (synchronizeNames) nameLock.synchronized(store.termFromHashed(cs, len, hash)) else store.termFromHashed(cs, len, hash)
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
@@ -179,23 +179,12 @@ trait Names extends api.Names {
       val chars = Codec.fromUTF8(bs, offset, len)
       termFromChars(chars, 0, chars.length, null)
     }
-    def termFromSequence(cs: CharSequence, h: Int): TermName = {
-      val len = cs.length
+    /** Whether the name is in the chain of bucket `h`, comparing arrays or `String`s as the store can. */
+    def termFromHashed(cs: Array[Char], len: Int, h: Int): TermName = {
       var n = termHashtable(h & HASH_MASK)
-      while ((n ne null) && (n.length != len || !sameAsSequence(n, cs, len)))
+      while ((n ne null) && (n.length != len || !matches(n, cs, 0, len)))
         n = n.next
-      if (n ne null) n
-      else {
-        val chars = new Array[Char](len)
-        var i = 0
-        while (i < len) { chars(i) = cs.charAt(i); i += 1 }
-        termFromChars(chars, 0, len, null)
-      }
-    }
-    protected def sameAsSequence(n: Name, cs: CharSequence, len: Int): Boolean = {
-      var i = 0
-      while (i < len && charAt(n, i) == cs.charAt(i)) i += 1
-      i == len
+      if (n ne null) n else termFromChars(cs, 0, len, null)
     }
     def subName(n: Name, from: Int, to: Int): TermName
     def hash(n: Name): Int
@@ -602,13 +591,6 @@ trait Names extends api.Names {
         n = n.next
       if (n ne null) n else add(h, s)
     }
-    override def termFromSequence(cs: CharSequence, h0: Int): TermName = {
-      val h = h0 & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && !n.str.contentEquals(cs))
-        n = n.next
-      if (n ne null) n else add(h, cs.toString)
-    }
     override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
       var h = 0
       var or = 0
@@ -698,9 +680,9 @@ trait Names extends api.Names {
       probe.setChars(cs, offset, len, hashValue(cs, offset, len))
       lookup(probe, cachedString)
     }
-    override def termFromSequence(cs: CharSequence, h: Int): TermName = {
+    override def termFromHashed(cs: Array[Char], len: Int, h: Int): TermName = {
       val probe = probes.get
-      probe.setSequence(cs, cs.length, h)
+      probe.setChars(cs, 0, len, h)
       lookup(probe, null)
     }
     def termFromString(s: String, cachedString: String): TermName = {
@@ -1418,7 +1400,6 @@ private[internal] object SharedNameTable {
     private[this] var chars: Array[Char] = null
     private[this] var bytes: Array[Byte] = null
     private[this] var region: String = null
-    private[this] var sequence: CharSequence = null
     private[this] var offset = 0
     private[this] var len = 0
     private[this] var h = 0
@@ -1426,20 +1407,17 @@ private[internal] object SharedNameTable {
     def setChars(cs: Array[Char], off: Int, length: Int, hash: Int): Unit = { chars = cs; offset = off; len = length; h = hash }
     def setAscii(bs: Array[Byte], off: Int, length: Int, hash: Int): Unit = { bytes = bs; offset = off; len = length; h = hash }
     def setRegion(s: String, off: Int, length: Int, hash: Int): Unit = { region = s; offset = off; len = length; h = hash }
-    def setSequence(cs: CharSequence, length: Int, hash: Int): Unit = { sequence = cs; offset = 0; len = length; h = hash }
-    def clear(): Unit = { chars = null; bytes = null; region = null; sequence = null }
+    def clear(): Unit = { chars = null; bytes = null; region = null }
 
     def newString(): String =
       if (chars ne null) new String(chars, offset, len)
       else if (bytes ne null) new String(bytes, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1)
-      else if (sequence ne null) sequence.toString
       else region.substring(offset, offset + len)
 
     private def matches(s: String): Boolean = (s ne null) && s.length == len && {
       if (region ne null) s.regionMatches(0, region, offset, len)
       else {
         var i = 0
-        if (sequence ne null) return s.contentEquals(sequence)
         if (chars ne null) while (i < len && s.charAt(i) == chars(offset + i)) i += 1
         else while (i < len && s.charAt(i) == bytes(offset + i)) i += 1
         i == len
