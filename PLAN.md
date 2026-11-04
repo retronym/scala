@@ -1,6 +1,6 @@
 # A UTF-8 name table for scalac
 
-Status: measurements done on the `scala`, `scalap` and `re2s` corpora; awaiting a decision before any implementation. The `scalap`/`re2s` CPU and allocation profile is queued.
+Status: `-Yname-table` selects among `chars` (today's table), `cached` (E), `string` (D), `bytes` (F) and `shared` (G). `perflab` numbers and a bootstrap are still to come, and so is the `scalap`/`re2s` profile.
 
 ## Problem
 
@@ -93,6 +93,10 @@ Classpath names keep the table mostly ASCII, so UTF-8 still shrinks it, and it o
 | E | Keep `char[]`, cache `toString` on first use, enter from `String` without a temporary | Most of the `toString` row, the temporaries | About 3 MB more retained on `scala` if every string is kept; nothing in the table |
 | F | Two tables, a `byte[]` for ASCII names and a `char[]` for the rest | As B, without a `String` per non-ASCII name; never larger than `char[]` | A branch on every operation, mixed cases in comparisons, canonicalising `subName`, no help for `toString` |
 
+| G | Strings in a table shared between `Global`s, found through a `ConcurrentHashMap` in each | As D, with no lock on a hit and strings shared by concurrent compiles | A `Name` is still per `Global`, a static table never shrinks, and ids depend on what compiled earlier in the JVM |
+
+G is your suggestion of a `ConcurrentHashMap` that concurrent compiles could share. `Name`s cannot cross `Global`s while they are inner classes: each holds its universe's `$outer`, which the outer test of `_: TermName` checks. This is the obstacle `topic/decake-names-2` ran into in 2019. So each `Global` keeps a `ConcurrentHashMap[String, TermName]`, and they share a table from `String` to a canonical `String` and an id. Lookups from `char[]`, bytes and `subName` use a key object whose `hashCode` is `String.hashCode` of the contents and whose `equals` compares against a `String`, so a hit builds no `String`. This relies on `ConcurrentHashMap.get` calling `equals` on the key it was given.
+
 D's retained estimate: 89k `String`s at about 64 bytes (5.7 MB) replace the 4.19 MB array. A `Name` stays at 32 bytes, because dropping `len` only leaves padding.
 
 F is your suggestion of two internal tables, which applies the idea of compact strings to the table as a whole. A name's content picks its table: all chars below 0x80 goes to bytes, anything else to chars. The rule is canonical, so a string lives in exactly one table and there is nothing to keep in sync. One hash table still serves both, because the hash is the same `31 * h + c` over either form. The hash loop also ORs the input, so a lookup compares only against candidates in the matching table, and a byte entry with a high bit decodes first and takes the char path. `start` stays unique by keeping byte offsets non-negative and storing char offsets as their complement, which `& HASHMASK`, `hashCode`, `toTypeName` and the keyword range check (`idx >= 0`) all accept. `subName` of an ASCII name shares its range, and so does a non-ASCII `subName` that stays non-ASCII. A non-ASCII name's `subName` that turns out all ASCII must be scanned and entered in the byte table, or two names would hold one string. Surrogate pairs need no handling, since the char table holds UTF-16 as today.
@@ -115,6 +119,8 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 
 ## Parked
 
+- How a shared table is released. Scala 3 has the same leak ([scala/scala3#1584](https://github.com/scala/scala3/issues/1584)), which you objected to in 2016, and your recent `scala3` branches hold interned names weakly.
+
 - Resizing the hash tables (fixed 32k buckets, load 2.7 on `scala`).
 - Linking each term name to its type name, which removes `typeHashtable`.
 - Passing bytes through to scala-asm's constant pool, which belongs with the direct emission work.
@@ -122,6 +128,7 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 
 ## DONE
 
+- `-Yname-table` with five stores, tested against `String` in `NameStoreTest`.
 - Branch `claude/utf8-name-table` from `upstream/2.13.x`.
 - Audit of readers and external users; JDK sources for 17, 21 and 25.
 - Table size, ASCII share, entry and operation counts, on real and synthetic corpora.
@@ -130,7 +137,7 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 ## TODO
 
 - Read `m5-names-baseline-prof` for the unpickler's share on `scalap` and `re2s` when the queue reaches it.
-- Decision on which designs to spike.
-- Spike, each commit compiling: E, then the chosen table design (D, F or both). Bootstrap with `restarrFull`.
+- Compare classfiles across all modes, including `shared` compiled twice in one JVM and concurrently.
+- Bootstrap with `restarrFull`.
 - A proper JMH run of the string paths in place of the rough loop, including JDK 8 if it can be installed.
 - Numbers from `perflab` on m5-pro with an A/A, on `scala`, `scalap`, `re2s` and `BackendBenchmark`, then a view on whether it is worth having.
