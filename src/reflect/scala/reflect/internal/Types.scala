@@ -2406,17 +2406,17 @@ trait Types
    * \@M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
   abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
-    override def mapOver(map: TypeMap): Type = {
-      val pre1 = map(pre)
+    final override def mapOver(map: TypeMap): Type = {
+      val pre1 = map.applyFast(pre)
       val args1 = map match {
         case map: VariancedTypeMap if !args.isEmpty && ! map.variance.isInvariant =>
           val tparams = sym.typeParams
           if (tparams.isEmpty)
-            args mapConserve map
+            map.mapConserveTypes(args)
           else
             map.mapOverArgs(args, tparams)
         case _ =>
-          args mapConserve map
+          map.mapConserveTypes(args)
       }
       if ((pre1 eq pre) && (args1 eq args)) this
       else copyTypeRef(this, pre1, this.coevolveSym(pre1), args1)

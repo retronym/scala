@@ -842,7 +842,6 @@ trait Symbols { self: Universe =>
    *  @group API
    */
   trait ClassSymbolApi extends TypeSymbolApi { this: ClassSymbol =>
-    final override def isClass = true
     final override def asClass = this
 
     /** Does this symbol represent the definition of a primitive class?

@@ -106,7 +106,35 @@ private[internal] trait TypeMaps {
     def apply(tp: Type): Type
 
     /** Map this function over given type */
-    def mapOver(tp: Type): Type = if (tp eq null) tp else tp.mapOver(this)
+    def mapOver(tp: Type): Type = if (tp eq null) tp else mapOverType(tp)
+
+    /** `apply(tp)`. OPT: at visitor call sites such as TypeRef.mapOver's, `apply` sees dozens of TypeMap classes,
+     *  but AsSeenFromMap and the SubstMaps receive most calls; test for them first so that those calls bind
+     *  statically. The receiver profile is shared by all callers and all SubstMap classes, so C2 can't be relied on
+     *  to do this for a call to `SubstMap.apply`.
+     */
+    final def applyFast(tp: Type): Type =
+      if (this.isInstanceOf[AsSeenFromMap]) this.asInstanceOf[AsSeenFromMap].apply(tp)
+      else applyFast1(tp)
+    // Split from `applyFast` so that each stays under C2's MaxInlineSize (35 bytes).
+    private final def applyFast1(tp: Type): Type =
+      if (this.isInstanceOf[SubstSymMap]) this.asInstanceOf[SubstSymMap].apply(tp)
+      else applyFast2(tp)
+    private final def applyFast2(tp: Type): Type =
+      if (this.isInstanceOf[SubstMap[_]]) this.asInstanceOf[SubstMap[_]].substMapApply(tp)
+      else apply(tp)
+
+    /** `tps mapConserve this`, through `applyFast` rather than `Function1.apply`. */
+    final def mapConserveTypes(tps: List[Type]): List[Type] = tps.mapConserve(tp => applyFast(tp))
+
+    /** `tp.mapOver(this)`. OPT: a call to `Type.mapOver` sees dozens of receiver classes, but most calls go to
+     *  `TypeRef.mapOver` (one implementation for all of TypeRef's classes, so this call binds statically) or to the
+     *  identity `Type.mapOver` of `ThisType` and `NoPrefix`.
+     */
+    final def mapOverType(tp: Type): Type =
+      if (tp.isInstanceOf[TypeRef]) tp.asInstanceOf[TypeRef].mapOver(this)
+      else if (tp.isInstanceOf[ThisType] || (tp eq NoPrefix)) tp
+      else tp.mapOver(this)
 
     /** The index of the first symbol in `origSyms` which would have its info
       * transformed by this type map.
@@ -444,7 +472,7 @@ private[internal] trait TypeMaps {
       case tp @ ThisType(_)                                            => thisTypeAsSeen(tp)
       case tp @ SingleType(_, sym)                                     => if (sym.isPackageClass) tp else singleTypeAsSeen(tp)
       case tp @ TypeRef(_, sym, _) if isTypeParamOfEnclosingClass(sym) => classParameterAsSeen(tp)
-      case _                                                           => tp.mapOver(this)
+      case _                                                           => mapOverType(tp)
     }
 
     private[this] var _capturedSkolems: List[Symbol] = Nil
@@ -751,8 +779,11 @@ private[internal] trait TypeMaps {
       false
     }
 
-    def apply(tp0: Type): Type = if (from.isEmpty) tp0 else {
-      val tp                    = renameBoundSyms(tp0).mapOver(this)
+    def apply(tp0: Type): Type = substMapApply(tp0)
+
+    // Final, for `TypeMap.applyFast`: `apply` itself is overridden by `SubstSymMap`.
+    private[TypeMaps] final def substMapApply(tp0: Type): Type = if (from.isEmpty) tp0 else {
+      val tp                    = mapOverType(renameBoundSyms(tp0))
       def substFor(sym: Symbol) = subst(tp, sym, from, to)
 
       tp match {
