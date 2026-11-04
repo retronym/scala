@@ -375,6 +375,35 @@ What this does and doesn't establish:
 - This is the whole branch at once, so it doesn't divide the gain between the `Symbol` work and the `Type` work.
 - It covers the scala corpus only, and there is no A/A of two checkouts of the same source, so a bias between the builds themselves isn't excluded.
 
+## Microbenchmark: `SymbolOpsBenchmark`
+
+The full compile can't resolve the individual changes, so `labs/scala2` in jvm-perf-lab now has a benchmark that amplifies them. Setup runs one real compile of the scala corpus in the fork, which fills the receiver profiles as a compile does and keeps the call sites megamorphic. Each op then applies a workload to the classes that compile left: `findMember`, `overridingPairs`, `subst`, and `erasure` (lookups after erasure, and the erasure map and other generic `TypeMap`s before it).
+
+`m4-symops-pilot`, base against tip, m4, one fork per build and workload, kperf profile. It was cancelled after 5 of 8 cells, so `subst` has no tip cell and `erasure` has neither.
+
+| workload | base ms/op | tip ms/op | change |
+|---|---|---|---|
+| `findMember` | 323.5 | 283.2 | −12.5% |
+| `overridingPairs` | 516.4 | 441.7 | −14.5% |
+| `subst` | 24.3 | not run | |
+
+The `overridingPairs` tip cell's cycles and instructions per op (−55.5%, −57.6%) don't fit its time. They imply 2.04 GHz where the other cells show 3.93 GHz, so they look under-counted by about half. The cell hasn't been investigated, and only the times above are used.
+
+`m4-symops-branch`, each source commit with the `all` workload: `findMember`, `overridingPairs`, `subst` × 16, `erasure` × 5 per op, weighted because one pass of `subst` is under 3% of the two largest passes combined. m4, patched JDK 26, no profiler, one fork per commit. The range is a local branch of the PR's five source commits without the survey commits; its `src` matches the PR's tip.
+
+| commit | ms/op | step | against base |
+|---|---|---|---|
+| base | 1,471.1 | | |
+| Final kind predicates, `info`, `rawInfo` | 1,383.9 | −5.9% | −5.9% |
+| Final `owner`, `typeOfThis`, `tpe_*`; `mapOver`, `decls` fast paths | 1,400.7 | +1.2% | −4.8% |
+| `owner` fast path under `MaxInlineSize` | 1,375.2 | −1.8% | −6.5% |
+| `TypeRef.mapOver` dispatch, `typeParams`, `isTypeParameter` | 1,358.4 | −1.2% | −7.7% |
+| Static `SubstMap` branches | 1,341.3 | −1.3% | −8.8% |
+
+With one fork per commit there is no interval, and perflab marks every step flat. The first commit is the only step large enough to stand out. The later steps are 1–2%, which is the size of the fork-to-fork difference seen on the full compile, so their order and size are suggestive at most. The second and third fit the earlier JIT finding: `owner` went over `MaxInlineSize` and the fix brought it back. That agreement doesn't make either step significant on its own.
+
+This is about twice the −4.09% of a full compile. The weights are mine, so the size of the total isn't comparable with either that or the single workloads.
+
 ## Future work
 
 - The fast paths in "Remaining stub sites" above, starting with final `owner`, `isTypeParameter` and `typeOfThis` (the same pattern as this PR) and the `TypeRef` checks for `mapOver`/`baseType`.
