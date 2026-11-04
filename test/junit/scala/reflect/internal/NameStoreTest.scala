@@ -1,0 +1,163 @@
+package scala.reflect.internal
+
+import java.nio.charset.StandardCharsets.UTF_8
+
+import org.junit.Assert._
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.JUnit4
+
+import scala.tools.nsc.symtab.SymbolTableForUnitTesting
+
+/** Each name table against the behaviour of `String`, on ASCII, Latin-1, CJK and surrogate pairs. */
+@RunWith(classOf[JUnit4])
+class NameStoreTest {
+  private val kinds = List("chars", "cached", "string", "bytes", "shared")
+
+  private final class Table(kind: String) extends SymbolTableForUnitTesting {
+    override protected def nameTableKind: String = kind
+  }
+
+  private val samples = List(
+    "", "a", "abc", "abcabc", "toString", "$colon$colon", "foo_=", "foo$bar$baz",
+    "café", "é", "名前", "a名b前c", "abc名", "名abc",
+    "😀", "x😀y", "\u0000", "a\u0000b")
+  private val needles = List("a", "b", "abc", "$", "é", "名", "\ud83d", "\ude00", "zzz")
+
+  private def forEachTable(f: (String, Table) => Unit): Unit = kinds.foreach(k => f(k, new Table(k)))
+
+  @Test def contentsMatchString(): Unit = forEachTable { (kind, t) =>
+    for (s <- samples) {
+      val n = t.newTermName(s)
+      val m = s"$kind '$s'"
+      assertEquals(m, s, n.toString)
+      assertEquals(m, s, n.toTypeName.toString)
+      assertEquals(m, s.length, n.length)
+      assertEquals(m, s, new String(n.toChars))
+      for (i <- 0 until s.length) assertEquals(m, s.charAt(i), n.charAt(i))
+      assertEquals(m, s, new java.lang.StringBuilder().append(n: CharSequence).toString)
+      val sb = new StringBuilder
+      n.appendTo(sb, 0, s.length)
+      assertEquals(m, s, sb.toString)
+      val sbuf = new java.lang.StringBuffer
+      n.appendTo(sbuf, 0, s.length)
+      assertEquals(m, s, sbuf.toString)
+      assertArrayEquals(m, scala.io.Codec.toUTF8(s), n.toUTF8)
+    }
+  }
+
+  @Test def searchesMatchString(): Unit = forEachTable { (kind, t) =>
+    for (s <- samples; x <- needles; other = t.newTermName(x)) {
+      val n = t.newTermName(s)
+      val m = s"$kind '$s' '$x'"
+      assertEquals(m, s.indexOf(x), n.indexOf(x))
+      assertEquals(m, s.lastIndexOf(x), n.lastIndexOf(x))
+      assertEquals(m, s.startsWith(x), n.startsWith(x))
+      assertEquals(m, s.startsWith(x), n.startsWith(other))
+      assertEquals(m, s.endsWith(x), n.endsWith(x))
+      assertEquals(m, s.endsWith(x), n.endsWith(other))
+      assertEquals(m, s.contains(x), n.containsName(other))
+      val c = x.charAt(0)
+      assertEquals(m, s.indexOf(c), n.indexOf(c))
+      assertEquals(m, s.lastIndexOf(c), n.lastIndexOf(c))
+      assertEquals(m, s.indexOf(c) >= 0, n.containsChar(c))
+      for (from <- 0 to s.length) {
+        assertEquals(m, s.startsWith(x, from), n.startsWith(other, from))
+        assertEquals(m, s.startsWith(x, from), n.startsWith(x, from))
+        assertEquals(m, s.indexOf(c, from), n.indexOf(c, from))
+        assertEquals(m, s.substring(0, from).endsWith(x), n.endsWith(x, from))
+        assertEquals(m, s.substring(0, from).endsWith(x), n.endsWith(other, from))
+      }
+    }
+  }
+
+  @Test def everyEntryFindsTheSameName(): Unit = forEachTable { (kind, t) =>
+    for (s <- samples) {
+      val n = t.newTermName(s)
+      val m = s"$kind '$s'"
+      assertSame(m, n, t.newTermName(s.toCharArray))
+      assertSame(m, n, t.newTermName(("xy" + s + "z").toCharArray, 2, s.length))
+      assertSame(m, n, t.newTermNameCached(s))
+      val bytes = s.getBytes(UTF_8)
+      if (new String(bytes, UTF_8) == s) assertSame(m, n, t.newTermName(bytes, 0, bytes.length))
+      assertSame(m, n, n.toTypeName.toTermName)
+      assertSame(m, n.toTypeName, t.newTypeName(s))
+      assertEquals(m, n.start, n.toTypeName.start)
+      assertSame(m, n.toTypeName, t.lookupTypeName(s.toCharArray))
+    }
+  }
+
+  @Test def subNamesAreTheSameNames(): Unit = forEachTable { (kind, t) =>
+    for (s <- samples; from <- 0 to s.length; to <- from to s.length) {
+      val n = t.newTermName(s)
+      val sub = s.substring(from, to)
+      val m = s"$kind '$s' $from $to"
+      val first = n.subName(from, to)
+      assertEquals(m, sub, first.toString)
+      assertSame(m, t.newTermName(sub), first)
+      assertSame(m, first.toTypeName, n.toTypeName.subName(from, to))
+    }
+  }
+
+  @Test def subNameEnteredFirstIsFoundLater(): Unit = forEachTable { (kind, t) =>
+    val n = t.newTermName("prefix名suffix")
+    val ascii = n.subName(0, 6)
+    val cjk = n.subName(6, 7)
+    assertEquals(kind, "prefix", ascii.toString)
+    assertSame(kind, ascii, t.newTermName("prefix"))
+    assertSame(kind, cjk, t.newTermName("名"))
+    assertEquals(kind, "prefixsuffix", ascii.append("suffix").toString)
+  }
+
+  @Test def startIsUniqueToAString(): Unit = forEachTable { (kind, t) =>
+    val names = (samples ++ needles ++ (0 until 500).map("name" + _) ++ (0 until 500).map("名" + _)).distinct.map(t.newTermName(_: String))
+    // A name may share its start with a prefix of it, in a range of the table, but then the lengths differ.
+    assertEquals(kind, names.size, names.map(n => (n.start, n.length)).distinct.size)
+    assertEquals(kind, names.toSet, t.allNames().filter(n => names.contains(n)).toSet)
+  }
+
+  @Test def growsPastItsFirstCapacity(): Unit = forEachTable { (kind, t) =>
+    val long = "x" * 100000
+    val names = (0 until 5).map(i => t.newTermName(s"$i$long"))
+    for ((n, i) <- names.zipWithIndex) assertEquals(kind, s"$i$long", n.toString)
+    val wide = "名" * 100000
+    val wides = (0 until 5).map(i => t.newTermName(s"$i$wide"))
+    for ((n, i) <- wides.zipWithIndex) assertEquals(kind, s"$i$wide", n.toString)
+  }
+
+  @Test def sharedTablesAgreeOnStringsAndIds(): Unit = {
+    val (a, b) = (new Table("shared"), new Table("shared"))
+    val (x, y) = (a.newTermName("sharedBetweenTables"), b.newTermName("sharedBetweenTables"))
+    assertNotSame(x, y)
+    assertEquals(x.start, y.start)
+    assertSame(x.toString, y.toString)
+  }
+
+  @Test def sharedTableIsSafeAcrossConcurrentCompilers(): Unit = {
+    val strings = (0 until 20000).map(i => s"concurrent${i % 5000}").toArray
+    val threads = 8
+    val tables = Array.fill(threads)(new Table("shared"))
+    val results = new Array[Array[String]](threads)
+    val ts = (0 until threads).map { t =>
+      new Thread(() => {
+        val table = tables(t)
+        results(t) = strings.map(s => table.newTermName(s.toCharArray).toString)
+      })
+    }
+    ts.foreach(_.start()); ts.foreach(_.join())
+    for (r <- results) assertArrayEquals(strings.asInstanceOf[Array[AnyRef]], r.asInstanceOf[Array[AnyRef]])
+    for (s <- strings.take(5000))
+      assertEquals(1, tables.map(_.newTermName(s).start).distinct.length)
+  }
+
+  @Test def oneTableIsSafeAcrossThreads(): Unit = {
+    val table = new Table("shared")
+    val strings = (0 until 5000).map(i => s"sameTable$i").toArray
+    val seen = new Array[Array[AnyRef]](8)
+    val ts = (0 until 8).map { t =>
+      new Thread(() => seen(t) = strings.map(s => table.newTermName(s.toCharArray): AnyRef))
+    }
+    ts.foreach(_.start()); ts.foreach(_.join())
+    for (r <- seen; i <- strings.indices) assertSame(seen(0)(i), r(i))
+  }
+}
