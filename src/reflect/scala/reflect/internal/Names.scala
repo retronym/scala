@@ -153,13 +153,17 @@ trait Names extends api.Names {
   /** Where the characters of names live, and the operations that depend on it. Positions and lengths are in UTF-16
    *  units whatever the store. The defaults go through `charAt`; the stores override what they can do better.
    *
-   *  Every store hashes a name to the same value, `String.hashCode` of its contents, and keeps `Name.start` unique to
-   *  a string (apart from names sharing a prefix in one range), as `Scopes`, `Trees` and the keyword tables rely on it.
+   *  Every store hashes a name to the same value, `String.hashCode` of its contents, and keeps `Name.id` unique to a
+   *  string (apart from names sharing a prefix in one range), as `Scopes`, `Trees` and the keyword tables rely on it.
    */
   private[internal] sealed abstract class NameStore {
     def size: Int
-    def legacyChars: Array[Char] = throw new UnsupportedOperationException("chrs needs -Yname-table:chars or cached")
-    def legacyChars_=(cs: Array[Char]): Unit = throw new UnsupportedOperationException("chrs needs -Yname-table:chars or cached")
+    protected def kind: String
+    private def noCharTable(what: String) =
+      throw new UnsupportedOperationException(s"$what is an offset into or the contents of the Array[Char] of the name table, which -Yname-table:$kind doesn't have. Use the operations of Name, such as charAt, toString and appendTo, or -Yname-table:chars.")
+    def legacyChars: Array[Char] = noCharTable("Names#chrs")
+    def legacyChars_=(cs: Array[Char]): Unit = noCharTable("Names#chrs")
+    def legacyStart(n: Name): Int = noCharTable("Name#start")
 
     def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName
     def termFromString(s: String, cachedString: String): TermName
@@ -182,7 +186,7 @@ trait Names extends api.Names {
       // Re-computing the hash saves a field for storing it in the TypeName
       val h = hash(t) & HASH_MASK
       var n = termHashtable(h)
-      while ((n ne null) && n.start != t.start)
+      while ((n ne null) && n.id != t.id)
         n = n.next
       n
     }
@@ -293,6 +297,7 @@ trait Names extends api.Names {
     final def size: Int = nc
     final override def legacyChars: Array[Char] = _chrs
     final override def legacyChars_=(cs: Array[Char]): Unit = _chrs = cs
+    final override def legacyStart(n: Name): Int = n.id
 
     /** Is (the ASCII representation of) name at given index equal to
      *  cs[offset..offset+len-1]?
@@ -324,7 +329,7 @@ trait Names extends api.Names {
     final def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
       val h = hashValue(cs, offset, len) & HASH_MASK
       var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+      while ((n ne null) && (n.length != len || !equals(n.id, cs, offset, len)))
         n = n.next
 
       if (n ne null) n
@@ -344,19 +349,19 @@ trait Names extends api.Names {
       }
     }
     final def subName(n: Name, from: Int, to: Int): TermName = {
-      val offset = n.start + from
+      val offset = n.id + from
       require(offset >= 0, "offset must be non-negative, got " + offset)
       termFromChars(_chrs, offset, math.max(to - from, 0), null)
     }
-    def hash(n: Name): Int = hashValue(_chrs, n.start, n.length)
-    final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = equals(n.start, cs, offset, len)
-    final def charAt(n: Name, i: Int): Char = _chrs(n.start + i)
+    def hash(n: Name): Int = hashValue(_chrs, n.id, n.length)
+    final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = equals(n.id, cs, offset, len)
+    final def charAt(n: Name, i: Int): Char = _chrs(n.id + i)
 
     final override def copyChars(n: Name, cs: Array[Char], offset: Int): Unit =
-      java.lang.System.arraycopy(_chrs, n.start, cs, offset, n.length)
+      java.lang.System.arraycopy(_chrs, n.id, cs, offset, n.length)
     final override def pos(n: Name, c: Char, start: Int): Int = {
       var i = start
-      val index = n.start
+      val index = n.id
       val len = n.length
       val chrs = _chrs
       while (i < len && chrs(index + i) != c) i += 1
@@ -366,7 +371,7 @@ trait Names extends api.Names {
       var i = pos(n, s.charAt(0), start)
       val sLen = s.length()
       if (sLen == 1) return i
-      val index = n.start
+      val index = n.id
       val len = n.length
       val chrs = _chrs
       while (i + sLen <= len) {
@@ -381,24 +386,24 @@ trait Names extends api.Names {
     }
     final override def lastPos(n: Name, c: Char, start: Int): Int = {
       var i = start
-      val index = n.start
+      val index = n.id
       val chrs = _chrs
       while (i >= 0 && chrs(index + i) != c) i -= 1
       i
     }
     final override def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
       val chrs = _chrs
-      val index = n.start
+      val index = n.id
       val len = n.length
       var i = 0
       while (i < prefix.length && start + i < len &&
-             chrs(index + start + i) == chrs(prefix.start + i))
+             chrs(index + start + i) == chrs(prefix.id + i))
         i += 1
       i == prefix.length
     }
     final override def startsWith(n: Name, prefix: String, start: Int): Boolean = {
       val chrs = _chrs
-      val index = n.start
+      val index = n.id
       val len = n.length
       var i = 0
       while (i < prefix.length && start + i < len &&
@@ -409,23 +414,23 @@ trait Names extends api.Names {
     final override def endsWith(n: Name, suffix: Name, end: Int): Boolean = {
       var i = 1
       val chrs = _chrs
-      val index = n.start
+      val index = n.id
       while (i <= suffix.length && i <= end &&
-             chrs(index + end - i) == chrs(suffix.start + suffix.length - i))
+             chrs(index + end - i) == chrs(suffix.id + suffix.length - i))
         i += 1
       i > suffix.length
     }
     final override def endsWith(n: Name, suffix: String, end: Int): Boolean = {
       var i = 1
       val chrs = _chrs
-      val index = n.start
+      val index = n.id
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == suffix.charAt(suffix.length - i))
         i += 1
       i > suffix.length
     }
     final override def containsChar(n: Name, ch: Char): Boolean = {
-      var i = n.start
+      var i = n.id
       val max = i + n.length
       val chrs = _chrs
       while (i < max) {
@@ -440,7 +445,7 @@ trait Names extends api.Names {
       val lastIndex = slength - 1
       val lastChar  = s.charAt(lastIndex)
       val contents  = _chrs
-      val base      = n.start
+      val base      = n.id
       val min       = base + lastIndex
       var end       = base + n.length - 1
 
@@ -460,26 +465,28 @@ trait Names extends api.Names {
       -1
     }
     final override def appendTo(n: Name, buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
-      buffer.append(_chrs, n.start + start, length)
+      buffer.append(_chrs, n.id + start, length)
     final override def appendTo(n: Name, sb: StringBuilder, start: Int, length: Int): Unit =
-      sb.appendAll(_chrs, n.start + start, length)
+      sb.appendAll(_chrs, n.id + start, length)
   }
 
   /** The table as it has been. */
   private[internal] final class CharStore extends CharBackedStore {
+    protected def kind = "chars"
     def termFromString(s: String, cachedString: String): TermName = termFromChars(s.toCharArray(), 0, s.length(), cachedString)
-    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.start, n.length) else n.str
+    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.id, n.length) else n.str
   }
 
   /** The same table, but `toString` keeps its result, as nearly all of its calls repeat an earlier one, and a `String`
    *  enters a name without a temporary array.
    */
   private[internal] final class CachedCharStore extends CharBackedStore {
+    protected def kind = "cached"
     def termFromString(s: String, cachedString: String): TermName = {
       val len = s.length()
       val h = s.hashCode & HASH_MASK
       var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || !sameAs(n.start, s, len)))
+      while ((n ne null) && (n.length != len || !sameAs(n.id, s, len)))
         n = n.next
       if (n ne null) n
       else {
@@ -506,7 +513,7 @@ trait Names extends api.Names {
     def toString(n: Name): String = {
       var s = n.str
       if (s == null) {
-        s = new String(_chrs, n.start, n.length)
+        s = new String(_chrs, n.id, n.length)
         n.str = s // a data race at worst builds it twice
       }
       s
@@ -514,7 +521,7 @@ trait Names extends api.Names {
     override def hash(n: Name): Int = { val s = n.str; if (s == null) super.hash(n) else s.hashCode }
   }
 
-  /** The operations of a store whose names each hold a `String`, with `Name.start` a serial number. */
+  /** The operations of a store whose names each hold a `String`, with `Name.id` a serial number. */
   private[internal] sealed abstract class StringBackedStore extends NameStore {
     final def hash(n: Name): Int = n.str.hashCode
     final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = {
@@ -545,6 +552,7 @@ trait Names extends api.Names {
 
   /** Each name holds a `String`. This is how Scala 3's `SimpleName` works. */
   private[internal] final class StringStore extends StringBackedStore {
+    protected def kind = "string"
     private[this] var nextId = 0
     def size: Int = nextId
 
@@ -611,9 +619,10 @@ trait Names extends api.Names {
    *  so that entering a name needs no lock here or in the shared table.
    *
    *  `Name`s themselves stay per universe: each has the universe's `$outer`, which the outer tests of patterns like
-   *  `_: TermName` check. What the universes share is the strings and `Name.start`.
+   *  `_: TermName` check. What the universes share is the strings and `Name.id`.
    */
   private[internal] final class SharedStore(shared: SharedNameTable) extends StringBackedStore {
+    protected def kind = "shared"
     private[this] val terms = new java.util.concurrent.ConcurrentHashMap[String, TermName](0x8000)
     def size: Int = terms.size
 
@@ -624,9 +633,14 @@ trait Names extends api.Names {
     override def termOf(t: TypeName): TermName = terms.get(t.str)
 
     private def add(s: String): TermName = {
-      val entry = shared.intern(s)
-      val term = new TermName(entry.id, s.length, null, entry.str)
-      val raced = terms.putIfAbsent(entry.str, term)
+      var entry = shared.intern(s)
+      var str = entry.get
+      while (str eq null) { // the entry's string has gone since it was found
+        entry = shared.intern(s)
+        str = entry.get
+      }
+      val term = new TermName(entry.id, s.length, null, str)
+      val raced = terms.putIfAbsent(str, term)
       if (raced eq null) term else raced
     }
     def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
@@ -667,10 +681,11 @@ trait Names extends api.Names {
   }
 
   /** Two tables, as compact strings has two codings: names that are all ASCII are bytes in one, the others are chars
-   *  in the other. A name's contents pick the table, so a string is only ever in one of them. `Name.start` is the
+   *  in the other. A name's contents pick the table, so a string is only ever in one of them. `Name.id` is the
    *  offset in the bytes, or the complement of the offset in the chars.
    */
   private[internal] final class BytesStore extends NameStore {
+    protected def kind = "bytes"
     private[this] var bytes = new Array[Byte](NAME_SIZE)
     private[this] var nb = 0
     private[this] var chars = new Array[Char](0)
@@ -706,7 +721,7 @@ trait Names extends api.Names {
       h &= HASH_MASK
       val ascii = or < 0x80
       var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || ascii != (n.start >= 0) || !matches(n, cs, offset, len)))
+      while ((n ne null) && (n.length != len || ascii != (n.id >= 0) || !matches(n, cs, offset, len)))
         n = n.next
       if (n ne null) n
       else if (ascii) {
@@ -734,7 +749,7 @@ trait Names extends api.Names {
       val h = s.hashCode & HASH_MASK
       val ascii = or < 0x80
       var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || ascii != (n.start >= 0) || !sameAs(n, s, len)))
+      while ((n ne null) && (n.length != len || ascii != (n.id >= 0) || !sameAs(n, s, len)))
         n = n.next
       if (n ne null) n
       else if (ascii) {
@@ -768,7 +783,7 @@ trait Names extends api.Names {
     }
     private def termFromAsciiBytes(bs: Array[Byte], offset: Int, len: Int, h: Int): TermName = {
       var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || n.start < 0 || !sameBytes(n.start, bs, offset, len)))
+      while ((n ne null) && (n.length != len || n.id < 0 || !sameBytes(n.id, bs, offset, len)))
         n = n.next
       if (n ne null) n
       else if (bs eq bytes) addTerm(h, offset, len, null) // a subName, already in the bytes
@@ -793,7 +808,7 @@ trait Names extends api.Names {
     }
     def subName(parent: Name, from: Int, to: Int): TermName = {
       val len = math.max(to - from, 0)
-      val start = parent.start
+      val start = parent.id
       if (start < 0) termFromChars(chars, ~start + from, len, null) // may be all ASCII, and then goes to the bytes
       else {
         val from0 = start + from
@@ -805,7 +820,7 @@ trait Names extends api.Names {
       }
     }
     def hash(n: Name): Int = {
-      val start = n.start
+      val start = n.id
       if (start < 0) hashValue(chars, ~start, n.length)
       else {
         val bs = bytes
@@ -824,21 +839,21 @@ trait Names extends api.Names {
     def toString(n: Name): String =
       if (n.str != null) n.str
       else {
-        val start = n.start
+        val start = n.id
         if (start < 0) new String(chars, ~start, n.length)
         else new String(bytes, start, n.length, java.nio.charset.StandardCharsets.ISO_8859_1)
       }
     def charAt(n: Name, i: Int): Char = {
-      val start = n.start
+      val start = n.id
       if (start < 0) chars(~start + i) else bytes(start + i).toChar
     }
     override def utf8(n: Name): Array[Byte] = {
-      val start = n.start
+      val start = n.id
       if (start < 0) super.utf8(n)
       else java.util.Arrays.copyOfRange(bytes, start, start + n.length)
     }
     override def pos(n: Name, c: Char, start: Int): Int = {
-      val index = n.start
+      val index = n.id
       if (index < 0) super.pos(n, c, start)
       else {
         val len = n.length
@@ -853,8 +868,8 @@ trait Names extends api.Names {
       }
     }
     override def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
-      val index = n.start
-      val pindex = prefix.start
+      val index = n.id
+      val pindex = prefix.id
       if ((index | pindex) < 0) super.startsWith(n, prefix, start)
       else {
         val bs = bytes
@@ -866,7 +881,7 @@ trait Names extends api.Names {
       }
     }
     override def startsWith(n: Name, prefix: String, start: Int): Boolean = {
-      val index = n.start
+      val index = n.id
       if (index < 0) super.startsWith(n, prefix, start)
       else {
         val bs = bytes
@@ -878,7 +893,7 @@ trait Names extends api.Names {
       }
     }
     override def endsWith(n: Name, suffix: String, end: Int): Boolean = {
-      val index = n.start
+      val index = n.id
       if (index < 0) super.endsWith(n, suffix, end)
       else {
         val bs = bytes
@@ -906,8 +921,13 @@ trait Names extends api.Names {
     type ThisNameType >: Null <: Name
     protected[this] def thisName: ThisNameType
 
-    /** Index into name table */
-    final def start: Int = index
+    /** Unique to this name's string, apart from names sharing a prefix in one range of a table, which then differ in
+     *  length. A term name and its type name have the same one. This is for hashing and identity, in any name table.
+     */
+    private[scala] final def id: Int = index
+
+    /** Index into name table, in `chrs`. Only some name tables have one. */
+    final def start: Int = store.legacyStart(this)
 
     /** The next name in the same hash bucket. */
     def next: ThisNameType
@@ -1198,7 +1218,7 @@ trait Names extends api.Names {
         // Re-computing the hash saves a field for storing it in the TermName
         val h = store.hash(this) & HASH_MASK
         var n = typeHashtable(h)
-        while ((n ne null) && n.start != index)
+        while ((n ne null) && n.id != index)
           n = n.next
 
         if (n ne null) n
@@ -1262,21 +1282,36 @@ trait Names extends api.Names {
   }
 }
 
-/** Strings and ids of names, for sharing between universes. Nothing leaves it, so it grows with every new name for as
- *  long as it is reachable.
+/** Strings and ids of names, for sharing between universes. It holds its strings weakly: the universes' names keep them
+ *  alive, so a string lasts as long as some universe has the name, and then its id is forgotten and a later universe
+ *  gets a new one. That is safe as universes only compare ids of names that they hold.
  */
 private[internal] final class SharedNameTable {
-  import SharedNameTable.Entry
-  private[this] val entries = new java.util.concurrent.ConcurrentHashMap[String, Entry](0x8000)
+  import SharedNameTable.{Entry, EntryKey}
+  private[this] val entries = new java.util.concurrent.ConcurrentHashMap[AnyRef, Entry](0x8000)
+  private[this] val cleared = new java.lang.ref.ReferenceQueue[String]
   private[this] val nextId = new java.util.concurrent.atomic.AtomicInteger
 
+  /** The current entry for `s`. A string that is about to go may leave the entry without one, so callers check. */
   def intern(s: String): Entry = {
-    val found = entries.get(s)
-    if (found ne null) found
+    val found = entries.get(new EntryKey(s))
+    if ((found ne null) && (found.get ne null)) found
     else {
-      val entry = new Entry(s, nextId.getAndIncrement())
-      val raced = entries.putIfAbsent(s, entry)
+      expunge()
+      val entry = new Entry(s, nextId.getAndIncrement(), cleared)
+      val raced = entries.putIfAbsent(entry, entry)
       if (raced eq null) entry else raced
+    }
+  }
+
+  /** How many entries are held, which includes those cleared since the last new string. */
+  def size: Int = entries.size
+
+  private def expunge(): Unit = {
+    var entry = cleared.poll()
+    while (entry ne null) {
+      entries.remove(entry)
+      entry = cleared.poll()
     }
   }
 }
@@ -1284,7 +1319,28 @@ private[internal] final class SharedNameTable {
 private[internal] object SharedNameTable {
   val global = new SharedNameTable
 
-  final class Entry(val str: String, val id: Int)
+  /** Its own key in the table. A cleared entry equals only itself, which is how it gets removed. */
+  final class Entry(s: String, val id: Int, queue: java.lang.ref.ReferenceQueue[String]) extends java.lang.ref.WeakReference[String](s, queue) {
+    private[this] val h = s.hashCode
+    override def hashCode = h
+    override def equals(other: Any) = other match {
+      case that: Entry =>
+        (this eq that) || {
+          val a = get
+          (a ne null) && a.equals(that.get)
+        }
+      case _ => false
+    }
+  }
+
+  /** Looks up the entry for a string. */
+  final class EntryKey(s: String) {
+    override def hashCode = s.hashCode
+    override def equals(other: Any) = other match {
+      case that: Entry => s.equals(that.get)
+      case _           => false
+    }
+  }
 
   // Keys that look up a name in a `ConcurrentHashMap[String, _]` without building its `String`. `get` hashes and calls
   // `equals` on the key it is given, never the other way round, and the hash is `String.hashCode` of the contents.

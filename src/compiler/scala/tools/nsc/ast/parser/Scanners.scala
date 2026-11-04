@@ -102,7 +102,7 @@ trait ScannersCommon {
   }
 
   def createKeywordArray(keywords: Seq[(Name, Token)], defaultToken: Token): (Token, Array[Token]) = {
-    val names = keywords.sortBy(_._1.start).map { case (k, v) => (k.start, v) }
+    val names = keywords.sortBy(_._1.id).map { case (k, v) => (k.id, v) }
     val low   = names.head._1
     val high  = names.last._1
     val arr   = Array.fill(high - low + 1)(defaultToken)
@@ -302,7 +302,7 @@ trait Scanners extends ScannersCommon {
       cbuf.clear()
       token = idtoken
       if (idtoken == IDENTIFIER) {
-        val idx = name.start - kwOffset
+        val idx = name.id - kwOffset
         if (idx >= 0 && idx < kwArray.length) {
           token = kwArray(idx)
           if (token == IDENTIFIER && allowIdent != name) {
@@ -1052,7 +1052,7 @@ trait Scanners extends ScannersCommon {
             next.token = IDENTIFIER
             next.name = newTermName(cbuf.toCharArray)
             cbuf.clear()
-            val idx = next.name.start - kwOffset
+            val idx = next.name.id - kwOffset
             if (idx >= 0 && idx < kwArray.length)
               next.token = kwArray(idx)
           }
