@@ -16,7 +16,6 @@ package backend.jvm
 import scala.annotation.{switch, tailrec}
 import scala.collection.mutable
 import scala.tools.asm
-import scala.tools.asm.tree.MethodInsnNode
 import scala.tools.nsc.backend.jvm.BCodeHelpers.TestOp
 import scala.tools.nsc.backend.jvm.GenBCode._
 
@@ -99,7 +98,7 @@ abstract class BCodeIdiomatic {
    */
   abstract class JCodeMethodN {
 
-    def jmethod: asm.tree.MethodNode
+    def jmethod: MethodEmitter
 
     import asm.Opcodes
 
@@ -424,9 +423,8 @@ abstract class BCodeIdiomatic {
     }
 
     def emitInvoke(opcode: Int, owner: String, name: String, desc: String, itf: Boolean, pos: Position): Unit = {
-      val node = new MethodInsnNode(opcode, owner, name, desc, itf)
-      jmethod.instructions.add(node)
-      if (settings.optInlinerEnabled) callsitePositions(node) = pos
+      jmethod.visitMethodInsn(opcode, owner, name, desc, itf)
+      if (settings.optInlinerEnabled) callsitePositions(jmethod.lastCall) = pos
     }
 
     // can-multi-thread

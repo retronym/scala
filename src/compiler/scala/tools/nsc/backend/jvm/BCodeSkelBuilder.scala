@@ -14,7 +14,7 @@ package scala.tools.nsc
 package backend
 package jvm
 
-import scala.annotation.{tailrec, unused}
+import scala.annotation.unused
 import scala.collection.{immutable, mutable}
 import scala.tools.asm
 import scala.tools.nsc.symtab._
@@ -76,7 +76,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     final val MaximumJvmParameters = 254
 
     // current class
-    var cnode: asm.tree.ClassNode   = null
+    var cnode: asm.ClassVisitor     = null
     var thisBType: ClassBType       = null
     var thisBTypeDescriptor: String = null
 
@@ -114,7 +114,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
     /* ---------------- helper utils for generating classes and fields ---------------- */
 
-    def genPlainClass(cd0: ClassDef): Unit = {
+    def genPlainClass(cd0: ClassDef, jclass: asm.ClassVisitor): Unit = {
       assert(cnode == null, "GenBCode detected nested methods.")
 
       claszSymbol         = cd0.symbol
@@ -122,7 +122,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
       isCZStaticModule    = isStaticModuleClass(claszSymbol)
       thisBType           = classBTypeFromSymbol(claszSymbol)
       thisBTypeDescriptor = thisBType.descriptor
-      cnode = new ClassNode1()
+      cnode = jclass
 
       initJClass(cnode)
       val cd = if (isCZStaticModule) {
@@ -173,8 +173,10 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
 
       cnode.visitAttribute(thisBType.inlineInfoAttribute.get)
 
-      if (AsmUtils.traceClassEnabled && cnode.name.contains(AsmUtils.traceClassPattern))
-        AsmUtils.traceClass(cnode)
+      cnode match {
+        case node: asm.tree.ClassNode if AsmUtils.traceClassEnabled && node.name.contains(AsmUtils.traceClassPattern) => AsmUtils.traceClass(node)
+        case _ =>
+      }
 
       assert(cd.symbol == claszSymbol, "Someone messed up BCodePhase.claszSymbol during genPlainClass().")
     } // end of method genPlainClass()
@@ -282,21 +284,21 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         val javagensig = getGenericSignature(f, claszSymbol)
         val flags = javaFieldFlags(f)
 
-        val jfield = new asm.tree.FieldNode(
+        val jfield = cnode.visitField(
           flags,
           f.javaSimpleName.toString,
           symInfoTK(f).descriptor,
           javagensig,
           null // no initial value
         )
-        cnode.fields.add(jfield)
         emitAnnotations(jfield, f.annotations)
+        jfield.visitEnd()
       }
 
     } // end of method addClassFields()
 
     // current method
-    var mnode: asm.tree.MethodNode = null
+    var mnode: MethodEmitter = null
     var jMethodName: String        = null
     var isMethSymStaticCtor        = false
     var returnType: BType          = null
@@ -334,7 +336,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     def getJumpDestOrCreate(labelSym: Symbol): JumpDestination = {
       assert(labelSym.isLabel, s"trying to map a non-label symbol to an asm.Label, at: ${labelSym.pos}")
       jumpDest.getOrElse(labelSym, {
-        val regularDest = JumpDestination.Regular(new asm.Label)
+        val regularDest = JumpDestination.Regular(new CodegenLabel)
         jumpDest += (labelSym -> regularDest)
         regularDest
       })
@@ -477,29 +479,28 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     var varsInScope: List[Tuple2[Symbol, asm.Label]] = null // (local-var-sym -> start-of-scope)
 
     // helpers around program-points.
-    def lastInsn: asm.tree.AbstractInsnNode = mnode.instructions.getLast
     def currProgramPoint(): asm.Label = {
-      lastInsn match {
-        case labnode: LabelNode1 =>
-          // the caller may use this label as the entry of an exception handler, or jump to it
-          labnode.flags &= ~LabelNode1.FORWARD_JUMPS_ONLY
-          labnode.getLabel
-        case _ =>
-          val pp = new asm.Label
-          mnode visitLabel pp
-          pp
+      val last = mnode.lastLabel
+      if (last != null) {
+        // the caller may use this label as the entry of an exception handler, or jump to it
+        mnode.lastLabelIsReachable()
+        last
+      } else {
+        val pp = new CodegenLabel
+        mnode visitLabel pp
+        pp
       }
     }
     /** As `currProgramPoint`, for a label that only records a position (a line number, the range of a
      *  local variable), which is therefore no evidence that control reaches this point.
      */
     def currPositionLabel(): asm.Label = {
-      lastInsn match {
-        case labnode: asm.tree.LabelNode => labnode.getLabel
-        case _ =>
-          val pp = new asm.Label
-          markJoinPoint(pp)
-          pp
+      val last = mnode.lastLabel
+      if (last != null) last
+      else {
+        val pp = new CodegenLabel
+        markJoinPoint(pp)
+        pp
       }
     }
     def markProgramPoint(lbl: asm.Label): Unit = {
@@ -511,38 +512,20 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
      */
     def markJoinPoint(lbl: asm.Label): Unit = {
       markProgramPoint(lbl)
-      mnode.instructions.getLast.asInstanceOf[LabelNode1].flags |= LabelNode1.FORWARD_JUMPS_ONLY
+      mnode.lastLabelIsJoinPoint()
     }
     /** True if control cannot reach the current position, so anything emitted here would be dead.
      *  A `false` result is not a proof of reachability: `removeUnreachableCodeImpl` still has the final say.
      */
-    def isAtUnreachablePoint: Boolean = {
-      @tailrec def loop(insn: asm.tree.AbstractInsnNode): Boolean = insn match {
-        case null => false
-        case _: asm.tree.LineNumberNode => loop(insn.getPrevious)
-        case label: LabelNode1 =>
-          (label.flags & (LabelNode1.FORWARD_JUMPS_ONLY | LabelNode1.JUMP_TARGET)) == LabelNode1.FORWARD_JUMPS_ONLY && loop(insn.getPrevious)
-        case _ =>
-          val op = insn.getOpcode
-          op == asm.Opcodes.GOTO || op == asm.Opcodes.ATHROW || op == asm.Opcodes.TABLESWITCH || op == asm.Opcodes.LOOKUPSWITCH ||
-            (op >= asm.Opcodes.IRETURN && op <= asm.Opcodes.RETURN)
-      }
-      loop(lastInsn)
-    }
-    def isAtProgramPoint(lbl: asm.Label): Boolean = {
-      (lastInsn match { case labnode: asm.tree.LabelNode => (labnode.getLabel == lbl); case _ => false } )
-    }
+    def isAtUnreachablePoint: Boolean = mnode.isAtUnreachablePoint
+    def isAtProgramPoint(lbl: asm.Label): Boolean = mnode.lastLabel == lbl
     def lineNumber(tree: Tree): Unit = if (emitLines && tree.pos.isDefined && !tree.hasAttachment[SyntheticUnitAttachment.type]) {
       val nr = tree.pos.finalPosition.line
       if (nr != lastEmittedLineNr) {
         lastEmittedLineNr = nr
-        lastInsn match {
-          case lnn: asm.tree.LineNumberNode =>
-            // overwrite previous landmark as no instructions have been emitted for it
-            lnn.line = nr
-          case _ =>
-            mnode.visitLineNumber(nr, currPositionLabel())
-        }
+        // overwrite previous landmark as no instructions have been emitted for it
+        if (!mnode.overwriteLineNumber(nr))
+          mnode.visitLineNumber(nr, currPositionLabel())
       }
     }
 
@@ -625,7 +608,10 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
         mdesc,
         jgensig,
         mkArray(thrownExceptions)
-      ).asInstanceOf[asm.tree.MethodNode]
+      ) match {
+        case tree: asm.tree.MethodNode => new MethodEmitter(tree, tree)
+        case visitor => new MethodEmitter(visitor, null)
+      }
 
       emitParamNames(mnode, params)
       emitAnnotations(mnode, others)
@@ -728,18 +714,18 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
             for (p <- params) { emitLocalVarScope(p.symbol, veryFirstProgramPoint, onePastLastProgramPoint, force = true) }
           }
 
-          if (isMethSymStaticCtor) { appendToStaticCtor(dd) }
         } // end of emitNormalMethodBody()
+
+        if (isMethSymStaticCtor) prependToStaticCtorReturns()
 
         lineNumber(rhs)
         emitNormalMethodBody()
-
-        // Note we don't invoke visitMax, thus there are no FrameNode among mnode.instructions.
-        // The only non-instruction nodes to be found are LabelNode and LineNumberNode.
+        mnode.endCode()
       }
+      mnode.visitEnd()
 
-      if (AsmUtils.traceMethodEnabled && mnode.name.contains(AsmUtils.traceMethodPattern))
-        AsmUtils.traceMethod(mnode)
+      if (AsmUtils.traceMethodEnabled && mnode.tree != null && mnode.tree.name.contains(AsmUtils.traceMethodPattern))
+        AsmUtils.traceMethod(mnode.tree)
 
       mnode = null
     } // end of method genDefDef()
@@ -749,67 +735,38 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
      *
      *  TODO document, explain interplay with `fabricateStaticInit()`
      */
-    private def appendToStaticCtor(@unused dd: DefDef): Unit = {
-
-      def insertBefore(
-            location: asm.tree.AbstractInsnNode,
-            i0: asm.tree.AbstractInsnNode,
-            i1: asm.tree.AbstractInsnNode): Unit = {
-        if (i0 != null) {
-          mnode.instructions.insertBefore(location, i0.clone(null))
-          mnode.instructions.insertBefore(location, i1.clone(null))
+    private def prependToStaticCtorReturns(): Unit = if (isCZStaticModule || isCZParcelable) {
+      var creatorFieldAdded = false
+      mnode.beforeReturn = () => {
+        // call object's private ctor from static ctor
+        if (isCZStaticModule) {
+          // NEW `moduleName`
+          mnode.visitTypeInsn(asm.Opcodes.NEW, internalName(methSymbol.enclClass))
+          // INVOKESPECIAL <init>
+          val callee = methSymbol.enclClass.primaryConstructor
+          mnode.visitMethodInsn(asm.Opcodes.INVOKESPECIAL, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, false)
+        }
+        // android creator code
+        if (isCZParcelable) {
+          // add a static field ("CREATOR") to this class to cache android.os.Parcelable$Creator
+          val andrFieldDescr = classBTypeFromSymbol(AndroidCreatorClass).descriptor
+          if (!creatorFieldAdded) {
+            creatorFieldAdded = true
+            cnode.visitField(
+              asm.Opcodes.ACC_STATIC | asm.Opcodes.ACC_FINAL,
+              "CREATOR",
+              andrFieldDescr,
+              null,
+              null
+            )
+          }
+          // INVOKESTATIC CREATOR(): android.os.Parcelable$Creator; -- TODO where does this Android method come from?
+          val callee = definitions.getMember(claszSymbol.companionModule, androidFieldName)
+          mnode.visitMethodInsn(asm.Opcodes.INVOKESTATIC, internalName(callee.owner), callee.javaSimpleName.toString, methodBTypeFromSymbol(callee).descriptor, false)
+          // PUTSTATIC `thisBType.internalName`.CREATOR;
+          mnode.visitFieldInsn(asm.Opcodes.PUTSTATIC, thisBType.internalName, "CREATOR", andrFieldDescr)
         }
       }
-
-      // collect all return instructions
-      var rets: List[asm.tree.AbstractInsnNode] = Nil
-      mnode foreachInsn { i => if (i.getOpcode() == asm.Opcodes.RETURN) { rets ::= i  } }
-      if (rets.isEmpty) { return }
-
-      var insnModA: asm.tree.AbstractInsnNode = null
-      var insnModB: asm.tree.AbstractInsnNode = null
-      // call object's private ctor from static ctor
-      if (isCZStaticModule) {
-        // NEW `moduleName`
-        val className = internalName(methSymbol.enclClass)
-        insnModA      = new asm.tree.TypeInsnNode(asm.Opcodes.NEW, className)
-        // INVOKESPECIAL <init>
-        val callee = methSymbol.enclClass.primaryConstructor
-        val jname  = callee.javaSimpleName.toString
-        val jowner = internalName(callee.owner)
-        val jtype  = methodBTypeFromSymbol(callee).descriptor
-        insnModB   = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESPECIAL, jowner, jname, jtype, false)
-      }
-
-      var insnParcA: asm.tree.AbstractInsnNode = null
-      var insnParcB: asm.tree.AbstractInsnNode = null
-      // android creator code
-      if (isCZParcelable) {
-        // add a static field ("CREATOR") to this class to cache android.os.Parcelable$Creator
-        val andrFieldDescr = classBTypeFromSymbol(AndroidCreatorClass).descriptor
-        cnode.visitField(
-          asm.Opcodes.ACC_STATIC | asm.Opcodes.ACC_FINAL,
-          "CREATOR",
-          andrFieldDescr,
-          null,
-          null
-        )
-        // INVOKESTATIC CREATOR(): android.os.Parcelable$Creator; -- TODO where does this Android method come from?
-        val callee = definitions.getMember(claszSymbol.companionModule, androidFieldName)
-        val jowner = internalName(callee.owner)
-        val jname  = callee.javaSimpleName.toString
-        val jtype  = methodBTypeFromSymbol(callee).descriptor
-        insnParcA  = new asm.tree.MethodInsnNode(asm.Opcodes.INVOKESTATIC, jowner, jname, jtype, false)
-        // PUTSTATIC `thisBType.internalName`.CREATOR;
-        insnParcB  = new asm.tree.FieldInsnNode(asm.Opcodes.PUTSTATIC, thisBType.internalName, "CREATOR", andrFieldDescr)
-      }
-
-      // insert a few instructions for initialization before each return instruction
-      for(r <- rets) {
-        insertBefore(r, insnModA,  insnModB)
-        insertBefore(r, insnParcA, insnParcB)
-      }
-
     }
 
     def emitLocalVarScope(sym: Symbol, start: asm.Label, end: asm.Label, force: Boolean = false): Unit = {

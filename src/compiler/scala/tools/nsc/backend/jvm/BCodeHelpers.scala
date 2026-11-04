@@ -971,7 +971,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
     /*
      * must-single-thread
      */
-    def legacyAddCreatorCode(clinit: asm.MethodVisitor, cnode: asm.tree.ClassNode, thisName: String): Unit = {
+    def legacyAddCreatorCode(clinit: asm.MethodVisitor, cnode: asm.ClassVisitor, thisName: String): Unit = {
       val androidCreatorType = classBTypeFromSymbol(AndroidCreatorClass)
       val tdesc_creator = androidCreatorType.descriptor
 

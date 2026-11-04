@@ -18,7 +18,7 @@ import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.Flags
 import scala.tools.asm
 import scala.tools.asm.Opcodes
-import scala.tools.asm.tree.{ InvokeDynamicInsnNode, MethodInsnNode, MethodNode }
+import scala.tools.asm.tree.InvokeDynamicInsnNode
 import scala.tools.nsc.backend.jvm.BCodeHelpers.{ InvokeStyle, TestOp }
 import scala.tools.nsc.backend.jvm.BackendReporting._
 import scala.tools.nsc.backend.jvm.GenBCode._
@@ -37,7 +37,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
   import genBCode.postProcessor.callGraph.{inlineAnnotatedCallsites, noInlineAnnotatedCallsites}
 
   /*
-   * Functionality to build the body of ASM MethodNode, except for `synchronized` and `try` expressions.
+   * Functionality to build the body of an ASM method, except for `synchronized` and `try` expressions.
    */
   abstract class PlainBodyBuilder(cunit: CompilationUnit) extends PlainSkelBuilder(cunit) {
     /* ---------------- helper utils for generating methods and code ---------------- */
@@ -190,8 +190,8 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
     def genLoadIfTo(tree: If, expectedType: BType, dest: LoadDestination): BType = {
       val If(condp, thenp, elsep) = tree
 
-      val success = new asm.Label
-      val failure = new asm.Label
+      val success = new CodegenLabel
+      val failure = new CodegenLabel
 
       val hasElse = !elsep.isEmpty
 
@@ -205,7 +205,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           def hasUnitBranch = (thenKind == UNIT || elseKind == UNIT)
           val resKind       = if (hasUnitBranch) UNIT else tpeTK(tree)
 
-          val postIf = new asm.Label
+          val postIf = new CodegenLabel
           genLoadTo(thenp, resKind, LoadDestination.Jump(postIf))
           markProgramPoint(failure)
           genLoadTo(elsep, resKind, LoadDestination.FallThrough)
@@ -239,7 +239,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       else if (code == scalaPrimitives.HASH)   genScalaHash(receiver, tree.pos)
       else if (isArrayOp(code))                genArrayOp(tree, code, expectedType)
       else if (isLogicalOp(code) || isComparisonOp(code)) {
-        val success, failure, after = new asm.Label
+        val success, failure, after = new CodegenLabel
         genCond(tree, success, failure, targetIfNoJump = success)
         // success block
         markProgramPoint(success)
@@ -765,11 +765,12 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
               // is on the Select node (not on the Apply node added by UnCurry).
               @tailrec
               def recordInlineAnnotated(t: Tree): Unit = {
-                if (t.hasAttachment[InlineAnnotatedAttachment]) lastInsn match {
-                  case m: MethodInsnNode =>
-                    if (t.hasAttachment[NoInlineCallsiteAttachment.type]) noInlineAnnotatedCallsites += m
-                    else inlineAnnotatedCallsites += m
-                  case _ =>
+                if (t.hasAttachment[InlineAnnotatedAttachment]) {
+                  val call = mnode.lastCall
+                  if (call != null) {
+                    if (t.hasAttachment[NoInlineCallsiteAttachment.type]) noInlineAnnotatedCallsites += call
+                    else inlineAnnotatedCallsites += call
+                  }
                 } else t match {
                   case Apply(fun, _) => recordInlineAnnotated(fun)
                   case _ =>
@@ -823,7 +824,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
       val (generatedType, postMatch, postMatchDest) = {
         if (dest == LoadDestination.FallThrough) {
-          val postMatch = new asm.Label
+          val postMatch = new CodegenLabel
           (tpeTK(tree), postMatch, LoadDestination.Jump(postMatch))
         } else {
           (expectedType, null, dest)
@@ -838,7 +839,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       // collect switch blocks and their keys, but don't emit yet any switch-block.
       for (CaseDef(pat, guard, body) <- tree.cases) {
         assert(guard == EmptyTree, guard)
-        val switchBlockPoint = new asm.Label
+        val switchBlockPoint = new CodegenLabel
         switchBlocks ::= ((switchBlockPoint, body))
         pat match {
           case Literal(value) =>
@@ -935,7 +936,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
       def optimizedMatch(sym: Symbol): Unit = {
         if (dest == LoadDestination.FallThrough) {
-          val label = new asm.Label
+          val label = new CodegenLabel
           jumpDest += ((sym -> JumpDestination.LoadArgTo(expectedType, LoadDestination.Jump(label))))
           stats foreach genStat
           markJoinPoint(label)
@@ -1026,7 +1027,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
          * emitted instruction was an ATHROW. As explained above, it is OK to emit a second ATHROW,
          * the verifiers will be happy.
          */
-        if (lastInsn.getOpcode != asm.Opcodes.ATHROW)
+        if (mnode.lastOpcode != asm.Opcodes.ATHROW)
           emit(asm.Opcodes.ATHROW)
       } else if (from.isNullType) {
         /* After loading an expression of type `scala.runtime.Null$`, introduce POP; ACONST_NULL.
@@ -1040,7 +1041,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
          * In order to fix the above problem, the value returned by nl is dropped and ACONST_NULL is
          * inserted instead - after all, an expression of type scala.runtime.Null$ can only be null.
          */
-        if (lastInsn.getOpcode != asm.Opcodes.ACONST_NULL) {
+        if (mnode.lastOpcode != asm.Opcodes.ACONST_NULL) {
           bc drop from
           if (to != UNIT)
             emit(asm.Opcodes.ACONST_NULL)
@@ -1326,7 +1327,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
         } else {
           if (receiverClass.isTraitOrInterface) {
             // An earlier check in Mixin reports an error in this case, so it doesn't reach the backend
-            assert(cnode.interfaces.contains(receiverName), s"cannot invokespecial $receiverName.$jname, the interface is not a direct parent.")
+            assert(thisBType.info.get.interfaces.exists(_.internalName == receiverName), s"cannot invokespecial $receiverName.$jname, the interface is not a direct parent.")
           }
           bc.invokespecial(receiverName, jname, mdescr, isInterface, pos)
         }
@@ -1481,7 +1482,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
           def genZandOrZor(and: Boolean): Unit = {
             // reaching "keepGoing" indicates the rhs should be evaluated too (ie not short-circuited).
-            val keepGoing = new asm.Label
+            val keepGoing = new CodegenLabel
 
             if (and) genCond(lhs, keepGoing, failure, targetIfNoJump = keepGoing)
             else     genCond(lhs, success,   keepGoing, targetIfNoJump = keepGoing)
@@ -1517,8 +1518,8 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           varsInScope = savedScope
 
         case If(condp, thenp, elsep) =>
-          val innerSuccess = new asm.Label
-          val innerFailure = new asm.Label
+          val innerSuccess = new CodegenLabel
+          val innerFailure = new CodegenLabel
           genCond(condp, innerSuccess, innerFailure, targetIfNoJump = innerSuccess)
           markProgramPoint(innerSuccess)
           genCond(thenp, success, failure, targetIfNoJump = innerFailure)
@@ -1638,15 +1639,15 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val overriddenMethods = bridges.map(b => methodBTypeFromSymbol(b).toASMType)
       visitInvokeDynamicInsnLMF(bc.jmethod, sam.name.toString, invokedType, samMethodType, implMethodHandle, constrainedType, overriddenMethods, isSerializable)
       if (isSerializable) {
-        val indy = bc.jmethod.instructions.getLast.asInstanceOf[InvokeDynamicInsnNode]
-        addIndyLambdaImplMethod(cnode.name, bc.jmethod, indy, implMethodHandle)
+        val tree = bc.jmethod.tree
+        addIndyLambdaImplMethod(thisBType.internalName, tree, tree.instructions.getLast.asInstanceOf[InvokeDynamicInsnNode], implMethodHandle)
       }
     }
   }
 
   private val symTpeToBType = (p: Symbol) => typeToBType(p.tpe) // OPT hoisted to save allocation
 
-  private def visitInvokeDynamicInsnLMF(jmethod: MethodNode, samName: String, invokedType: String, samMethodType: asm.Type,
+  private def visitInvokeDynamicInsnLMF(jmethod: asm.MethodVisitor, samName: String, invokedType: String, samMethodType: asm.Type,
                                         implMethodHandle: asm.Handle, instantiatedMethodType: asm.Type, overriddenMethodTypes: Seq[asm.Type],
                                         serializable: Boolean): Unit = {
     import java.lang.invoke.LambdaMetafactory.{FLAG_BRIDGES, FLAG_SERIALIZABLE}

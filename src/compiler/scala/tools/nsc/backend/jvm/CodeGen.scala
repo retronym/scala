@@ -73,8 +73,9 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
 
     // TODO: do we need a new builder for each class? could we use one per run? or one per Global compiler instance?
     val b = new CodeGenImpl.SyncAndTryBuilder(unit)
-    b.genPlainClass(cd)
-    b.cnode
+    val node = new ClassNode1()
+    b.genPlainClass(cd, node)
+    node
   }
 
   def genMirrorClass(classSym: Symbol, unit: CompilationUnit): ClassNode = {
