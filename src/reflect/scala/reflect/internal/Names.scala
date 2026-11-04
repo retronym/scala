@@ -1175,9 +1175,15 @@ trait Names extends api.Names {
 
     /** Replace operator symbols by corresponding \$op_name. */
     def encode: ThisNameType = {
-      val res = NameTransformer.encodeCharSequence(this)
-      if (res eq this) thisName else newName(res.toString)
+      var result = encodedCache
+      if (result eq null) {
+        val res = NameTransformer.encodeCharSequence(this)
+        result = if (res eq this) thisName else newName(res.toString)
+        encodedCache = result // a data race at worst computes it twice, and names are hash-consed
+      }
+      result
     }
+    private[this] var encodedCache: ThisNameType = null
 
     /** Replace \$op_name by corresponding operator symbol. */
     def decode: String = {
