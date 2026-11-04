@@ -283,7 +283,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val breakCycles     = BooleanSetting    ("-Ybreak-cycles", "Attempt to break cycles encountered during typing")
   val check           = PhasesSetting     ("-Ycheck", "Check the tree at the end of")
   val Ycompacttrees   = BooleanSetting    ("-Ycompact-trees", "Use compact tree printer when displaying trees.")
-  val YnameTable      = ChoiceSetting     ("-Yname-table", "store", "How names are stored: one char array, a String per name, or Strings in a table shared between compilers.", List("chars", "string", "shared"), "chars")
+  val YnameTable      = ChoiceSetting     ("-Yname-table", "store", "How names are stored: one char array, a String per name, or Strings in a table shared between compilers.", List("chars", "string", "shared"), "shared")
   val noCompletion    = BooleanSetting    ("-Yno-completion", "Disable tab-completion in the REPL.")
   val termConflict    = ChoiceSetting     ("-Yresolve-term-conflict", "strategy", "Resolve term conflicts.", List("package", "object", "error"), "error")
   val Ynogenericsig   = BooleanSetting    ("-Yno-generic-signatures", "Suppress generation of generic signatures for Java.")
