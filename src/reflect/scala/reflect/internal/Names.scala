@@ -565,50 +565,56 @@ trait Names extends api.Names {
       sb.underlying.append(n.str, start, start + length)
   }
 
-  /** Each name holds a `String`. This is how Scala 3's `SimpleName` works. */
-  private[internal] final class StringStore extends StringBackedStore {
-    protected def kind = "string"
+  /** Each name holds a `String`, and is found through the chains of the hash table. Only where the `String` of a new
+   *  name comes from varies, and looking up a name that exists doesn't depend on it.
+   */
+  private[internal] sealed abstract class ChainedStringStore extends StringBackedStore {
     private[this] var nextId = 0
-    def size: Int = nextId
+    final def size: Int = nextId
+
+    protected def stringOf(s: String): String
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String
 
     private def add(h: Int, s: String): TermName = {
       val id = nextId
       nextId += 1
       addTerm(h, id, s.length, s)
     }
-    def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
-      val h = hashValue(cs, offset, len) & HASH_MASK
+    final def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
+      val hash = hashValue(cs, offset, len)
+      val h = hash & HASH_MASK
       var n = termHashtable(h)
       while ((n ne null) && (n.length != len || !matches(n, cs, offset, len)))
         n = n.next
       if (n ne null) n
-      else add(h, if (cachedString ne null) cachedString else new String(cs, offset, len))
+      else add(h, if (cachedString ne null) stringOf(cachedString) else stringOf(cs, offset, len, hash))
     }
-    def termFromString(s: String, cachedString: String): TermName = {
+    final def termFromString(s: String, cachedString: String): TermName = {
       val h = s.hashCode & HASH_MASK
       var n = termHashtable(h)
       while ((n ne null) && !n.str.equals(s))
         n = n.next
-      if (n ne null) n else add(h, s)
+      if (n ne null) n else add(h, stringOf(s))
     }
-    override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
-      var h = 0
+    final override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
+      var hash = 0
       var or = 0
       var i = 0
       while (i < len) {
         val b = bs(offset + i)
         or |= b
-        h = 31 * h + b
+        hash = 31 * hash + b
         i += 1
       }
       if (or < 0) termFromString(new String(bs, offset, len, java.nio.charset.StandardCharsets.UTF_8), null)
       else {
-        h &= HASH_MASK
+        val h = hash & HASH_MASK
         var n = termHashtable(h)
         while ((n ne null) && (n.length != len || !sameBytes(n.str, bs, offset, len)))
           n = n.next
-        if (n ne null) n
-        else add(h, new String(bs, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1))
+        if (n ne null) n else add(h, stringOfAscii(bs, offset, len, hash))
       }
     }
     private def sameBytes(s: String, bs: Array[Byte], offset: Int, len: Int): Boolean = {
@@ -616,105 +622,61 @@ trait Names extends api.Names {
       while (i < len && s.charAt(i) == bs(offset + i)) i += 1
       i == len
     }
-    def subName(parent: Name, from: Int, to: Int): TermName = {
+    final def subName(parent: Name, from: Int, to: Int): TermName = {
       val s = parent.str
       val len = math.max(to - from, 0)
-      var h = 0
+      var hash = 0
       var i = 0
-      while (i < len) { h = 31 * h + s.charAt(from + i); i += 1 }
-      h &= HASH_MASK
+      while (i < len) { hash = 31 * hash + s.charAt(from + i); i += 1 }
+      val h = hash & HASH_MASK
       var n = termHashtable(h)
       while ((n ne null) && (n.length != len || !n.str.regionMatches(0, s, from, len)))
         n = n.next
-      if (n ne null) n else add(h, s.substring(from, from + len))
+      if (n ne null) n else add(h, stringOfRegion(s, from, len, hash))
     }
   }
 
-  /** A name holds a `String` from a table that many universes can share, and is found through a `ConcurrentHashMap`,
-   *  so that entering a name needs no lock here or in the shared table.
+  /** Each name holds its own `String`. This is how Scala 3's `SimpleName` works. */
+  private[internal] final class StringStore extends ChainedStringStore {
+    protected def kind = "string"
+    protected def stringOf(s: String): String = s
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String = new String(cs, offset, len)
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String =
+      new String(bs, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1)
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String = s.substring(from, from + len)
+  }
+
+  /** The `String` of a name comes from a table that many universes can share, which is only consulted the first time
+   *  this universe sees the name.
    *
    *  `Name`s themselves stay per universe: each has the universe's `$outer`, which the outer tests of patterns like
-   *  `_: TermName` check. What the universes share is the strings and `Name.id`.
+   *  `_: TermName` check, and so does `Name.id`, which `Scanners` needs to be dense among the keywords. Entering a name
+   *  has the same contract as in the other stores: it needs `synchronizeNames` if threads enter names at once. That
+   *  also covers the one probe.
    */
-  private[internal] final class SharedStore(shared: SharedNameTable) extends StringBackedStore {
+  private[internal] final class SharedStore(shared: SharedNameTable) extends ChainedStringStore {
     protected def kind = "shared"
-    private[this] val terms = new java.util.concurrent.ConcurrentHashMap[String, TermName](0x8000)
-    def size: Int = terms.size
+    private[this] val probe = new SharedNameTable.Probe
 
-    override def allNames: Iterator[TermName] = {
-      val it = terms.values.iterator
-      new Iterator[TermName] { def hasNext = it.hasNext; def next() = it.next() }
-    }
-    override def termOf(t: TypeName): TermName = terms.get(t.str)
-
-    private[this] val probes = new ThreadLocal[SharedNameTable.Probe] {
-      override def initialValue = new SharedNameTable.Probe
-    }
-
-    private def add(s: String): TermName = {
-      var entry = shared.intern(s)
-      var str = entry.get
-      while (str eq null) { // the entry's string has gone since it was found
-        entry = shared.intern(s)
-        str = entry.get
-      }
-      val term = new TermName(entry.id, s.length, null, str)
-      val raced = terms.putIfAbsent(str, term)
-      if (raced eq null) term else raced
-    }
-
-    /** The name the probe describes, building a `String` only if neither table has one. */
-    private def lookup(probe: SharedNameTable.Probe, cachedString: String): TermName = {
-      val found = terms.get(probe)
-      val result =
-        if (found ne null) found
-        else {
-          val known = shared.find(probe)
-          add(if (known ne null) known else if (cachedString ne null) cachedString else probe.newString())
-        }
+    /** The string the probe describes, building it only if the shared table doesn't have one. */
+    private def probed: String = {
+      val known = shared.find(probe)
+      val result = if (known ne null) known else shared.intern(probe.newString())
       probe.clear()
       result
     }
-    def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
-      val probe = probes.get
-      probe.setChars(cs, offset, len, hashValue(cs, offset, len))
-      lookup(probe, cachedString)
+    protected def stringOf(s: String): String = shared.intern(s)
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String = {
+      probe.setChars(cs, offset, len, hash)
+      probed
     }
-    override def termFromHashed(cs: Array[Char], len: Int, h: Int): TermName = {
-      val probe = probes.get
-      probe.setChars(cs, 0, len, h)
-      lookup(probe, null)
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String = {
+      probe.setAscii(bs, offset, len, hash)
+      probed
     }
-    def termFromString(s: String, cachedString: String): TermName = {
-      val found = terms.get(s)
-      if (found ne null) found else add(s)
-    }
-    override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
-      var h = 0
-      var or = 0
-      var i = 0
-      while (i < len) {
-        val b = bs(offset + i)
-        or |= b
-        h = 31 * h + b
-        i += 1
-      }
-      if (or < 0) termFromString(new String(bs, offset, len, java.nio.charset.StandardCharsets.UTF_8), null)
-      else {
-        val probe = probes.get
-        probe.setAscii(bs, offset, len, h)
-        lookup(probe, null)
-      }
-    }
-    def subName(parent: Name, from: Int, to: Int): TermName = {
-      val s = parent.str
-      val len = math.max(to - from, 0)
-      var h = 0
-      var i = 0
-      while (i < len) { h = 31 * h + s.charAt(from + i); i += 1 }
-      val probe = probes.get
-      probe.setRegion(s, from, len, h)
-      lookup(probe, null)
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String = {
+      probe.setRegion(s, from, len, hash)
+      probed
     }
   }
 
@@ -1334,18 +1296,21 @@ private[internal] final class SharedNameTable {
   import SharedNameTable.{Entry, EntryKey}
   private[this] val entries = new java.util.concurrent.ConcurrentHashMap[AnyRef, Entry](0x8000)
   private[this] val cleared = new java.lang.ref.ReferenceQueue[String]
-  private[this] val nextId = new java.util.concurrent.atomic.AtomicInteger
 
-  /** The current entry for `s`. A string that is about to go may leave the entry without one, so callers check. */
-  def intern(s: String): Entry = {
-    val found = entries.get(new EntryKey(s))
-    if ((found ne null) && (found.get ne null)) found
-    else {
-      expunge()
-      val entry = new Entry(s, nextId.getAndIncrement(), cleared)
-      val raced = entries.putIfAbsent(entry, entry)
-      if (raced eq null) entry else raced
+  /** The string in the table equal to `s`, which is `s` if there is none. */
+  def intern(s: String): String = {
+    var result: String = null
+    while (result eq null) { // an entry found or raced with may have just lost its string
+      val found = entries.get(new EntryKey(s))
+      if (found ne null) result = found.get
+      else {
+        expunge()
+        val entry = new Entry(s, cleared)
+        val raced = entries.putIfAbsent(entry, entry)
+        result = if (raced eq null) s else raced.get
+      }
     }
+    result
   }
 
   /** The string of the entry the probe describes, if it still has one. */
@@ -1370,7 +1335,7 @@ private[internal] object SharedNameTable {
   val global = new SharedNameTable
 
   /** Its own key in the table. A cleared entry equals only itself, which is how it gets removed. */
-  final class Entry(s: String, val id: Int, queue: java.lang.ref.ReferenceQueue[String]) extends java.lang.ref.WeakReference[String](s, queue) {
+  final class Entry(s: String, queue: java.lang.ref.ReferenceQueue[String]) extends java.lang.ref.WeakReference[String](s, queue) {
     private[this] val h = s.hashCode
     override def hashCode = h
     override def equals(other: Any) = other match {
@@ -1392,9 +1357,9 @@ private[internal] object SharedNameTable {
     }
   }
 
-  /** A reusable key that looks up a name in either table without building its `String`, from chars, ASCII bytes or part
-   *  of a `String`. `ConcurrentHashMap.get` hashes and calls `equals` on the key it is given, never the other way round,
-   *  and the hash is `String.hashCode` of the contents. It is mutable, so each thread needs its own.
+  /** A reusable key that looks up a string in the table without building it, from chars, ASCII bytes or part of a
+   *  `String`. `ConcurrentHashMap.get` hashes and calls `equals` on the key it is given, never the other way round, and
+   *  the hash is `String.hashCode` of the contents. It is mutable, so its users mustn't share it between threads.
    */
   final class Probe {
     private[this] var chars: Array[Char] = null
@@ -1425,9 +1390,8 @@ private[internal] object SharedNameTable {
     }
     override def hashCode = h
     override def equals(other: Any) = other match {
-      case s: String   => matches(s)
-      case e: Entry    => matches(e.get)
-      case _           => false
+      case e: Entry => matches(e.get)
+      case _        => false
     }
   }
 }
