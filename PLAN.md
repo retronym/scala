@@ -21,6 +21,16 @@ Subtracting: the writer's own work is about 120 ms/op and 392 MB/op (`replayBloc
 
 This is one fork per workload, cancelled before round 2 and before `nestedClasses`, and the machine had my builds and tests running on it during some of them (`phase` was 684 ms/op on a quiet machine in `m5-backend-ceiling`). The time is weak; the allocation is much more stable. The debug-only label is worth nothing in time and 12.6 MB/op, so it stays parked.
 
+## Result so far
+
+Campaign `m5-direct-backend`, m5-pro, `phase`, stopped after two forks per build. #200 at `b8c499db39` against the direct path at `456838f7e0`:
+
+- `base`: 679.3 and 660.7 ms/op; 1063.2 and 1071.9 MB/op
+- `aa`: 660.3 and 665.6 ms/op; 1062.9 and 1059.3 MB/op
+- `direct`: 607.8 and 611.3 ms/op; 879.6 and 877.5 MB/op
+
+Against `base`, time is -9.0% ±6.9 (A/A -1.1% ±7.1) and allocation -17.7% ±2.1 (A/A -0.6% ±2.2). `m5-direct-compile` measures a full compile.
+
 ## Key decisions
 
 **Codegen stops reading the tree, in both modes.** This is what keeps the fork small. Everything codegen asks of the tree today has an O(1) answer it can keep itself: `lastInsn`'s opcode (`ATHROW`, `ACONST_NULL` checks in `emitAdapt`, `isAtProgramPoint`), the pending line number that `lineNumber` overwrites, and `isAtUnreachablePoint`, which walks back through labels. A small `MethodVisitor` wrapper (call it the cursor) holds that state and forwards to whatever is underneath: a `MethodNode1` with `-opt`, a `MethodWriter` without. `jmethod` and `mnode` become the cursor, typed as `MethodVisitor`. `LabelNode1`'s flags move to a `Label` subclass, since `Label.info` is taken by `MethodNode`. This refactoring is worth a commit of its own, and should leave output byte-identical.
