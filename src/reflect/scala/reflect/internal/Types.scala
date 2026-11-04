@@ -4430,10 +4430,11 @@ trait Types
   def typeParamsToExistentials(clazz: Symbol): List[Symbol] =
     typeParamsToExistentials(clazz, clazz.typeParams)
 
-  def isRawIfWithoutArgs(sym: Symbol) = sym.isClass && !sym.typeParams.isEmpty && sym.isJavaDefined
+  // The JAVA flag is only reliable once the symbol is initialized: only typeParams forces the classfile to be read,
+  // which sets the flag. See #400. OPT: initialized non-Java classes, the common case, avoid calling typeParams.
+  def isRawIfWithoutArgs(sym: Symbol) =
+    sym.isClass && (sym.isJavaDefined || !sym.isInitialized) && !sym.typeParams.isEmpty && sym.isJavaDefined
   /** Is type tp a ''raw type''? */
-  //  note: it's important to write the two tests in this order,
-  //  as only typeParams forces the classfile to be read. See #400
   def isRawType(tp: Type) = !phase.erasedTypes && (tp match {
     case TypeRef(_, sym, Nil) => isRawIfWithoutArgs(sym)
     case _                    => false
