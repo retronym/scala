@@ -9,3 +9,39 @@ Wrapped: x
 NullWrapped: NPE
 OptWrapper: x
 OptNullWrap: no match
+NullList: no match
+AnyNullList: no match
+ArrWrapped: x
+ArrNullWrapped: NPE
+ArrOptWrapper: x
+ArrOptNullWrap: no match
+Array: x
+ArrayStar: x
+ArrayEmpty: empty
+ArrayLength: no match
+NullArray: no match
+AnyNullArray: no match
+GenValV: x
+GenValNullV: no match
+GenValNullW: no match
+GenRefV: x
+GenRefNullV: no match
+MemberOk: x
+MemberNull: no match
+BoundedOk: x
+BoundedNull: NPE
+OverridingOk: x
+OverridingUpcast: no match
+DeclaredOk: x
+DeclaredNullInV: NPE
+DeclaredValOk: x
+EmptyParensOk: x
+OverloadedOk: x
+AliasedOk: x
+ProdOk: x
+ProdNull: no match
+VarGetOk: x
+VarGetNull: no match
+Counted: 3, 3 evaluations
+Stateful: third
+CountVal: x, 3 evaluations

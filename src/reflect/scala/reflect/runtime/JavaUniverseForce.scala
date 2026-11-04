@@ -323,6 +323,7 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     definitions.SeqClass
     definitions.SeqFactoryClass
     definitions.UnapplySeqWrapperClass
+    definitions.ArrayUnapplySeqWrapperClass
     definitions.JavaStringBuilderClass
     definitions.JavaStringBufferClass
     definitions.JavaCharSequenceClass
