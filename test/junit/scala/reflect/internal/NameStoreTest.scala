@@ -126,6 +126,11 @@ class NameStoreTest {
     assertEquals(kind, names.toSet, t.allNames().filter(n => names.contains(n)).toSet)
   }
 
+  // The parser asks this of the empty name of a tuple pattern's example, as in neg/t1565-alt.
+  @Test def emptyNameIsNotAVariableName(): Unit = forEachTable { (kind, t) =>
+    assertFalse(kind, t.nme.isVariableName(t.newTermName("")))
+  }
+
   @deprecated("tests the deprecated accessor", since = "")
   @Test def tableAccessFailsInformativelyWithoutACharTable(): Unit = {
     for (kind <- List("chars")) {
