@@ -1,6 +1,6 @@
 # Fast path for `asSeenFrom(C.this, C)`
 
-Status: PROTOTYPE, for review. Branch `claude/asseenfrom-fastpath-d7ef00` (on `scala2-perf-integration` at `00e3bbafb8`), not pushed. Instrumentation on branch `asf-instrument`; unsound ceiling variant on `asf-ceiling`.
+Status: draft for review, on `scala2-perf-integration` at `00e3bbafb8`. The instrumentation (`asf-instrument`) and the unsound ceiling variant (`asf-ceiling`) are local branches, not pushed.
 
 ## Problem
 
@@ -130,6 +130,23 @@ The guard gives back 40% of its gross gain: 1.92 G of the 4.79 G cycles it saves
 
 Other effects: allocation per op falls 1.9% (6,013 MB to 5,901 MB). Scores in the same forks are 9,495 and 9,266 ms/op, which is not evidence for a gain on its own at this sample size.
 
-### Timing A/B
+### Timing A/B: [`m4-asf-ab`](https://perflab.localhost/p/scala2-b7bb3d/ab/index.html#c-m4-asf-ab)
 
-Not run. The agreed bar for one was a frame-level projection of at least 2% end to end, and the net cycle figure of 1.96% falls just short.
+The frame-level projection fell just short of the 2% bar for an A/B, and Jason asked for one anyway. Planned for 10 rounds, stopped after 3 on scala to free the m4, because the rounds agree closely. No profiler, builds alternating fork by fork.
+
+| scala corpus, ms/op | base | proto | Δ |
+|---|---|---|---|
+| round 1 | 9,141.8 | 9,045.6 | −1.05% |
+| round 2 | 9,184.1 | 9,055.4 | −1.40% |
+| round 3 | 9,145.7 | 9,020.9 | −1.36% |
+| mean | 9,157 | 9,041 | **−1.27%** |
+
+The standard deviation of the paired differences is 0.19 points, which gives a 95% interval of about ±0.5 points on 3 pairs. The ranges of the two builds do not overlap. Allocation falls 1.8% (5,985 MB to 5,879 MB per op).
+
+Scalap, the control with few calls of this shape: 196.2 and 196.1 ms/op for base, 194.6 and 196.2 for proto, on 2 pairs. That is too few to resolve anything below about a point, but it shows no sign of a regression. Allocation is unchanged at 166 to 167 MB per op.
+
+The gain is smaller than the kperf projection of 2.0 to 2.5%. That projection came from one pair of forks, whose whole-thread noise is 0.8% of cycles, so the two are not necessarily in conflict. I have not looked for another cause.
+
+## Conclusion
+
+The guard saves about 1.3% on the scala corpus and 1.8% of allocation, with byte-identical output. It costs four fields per `ClassSymbol` and 67 added lines with a subtle soundness argument. It helps code in the cake pattern and does little elsewhere.
