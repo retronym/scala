@@ -468,7 +468,7 @@ abstract class Pickler extends SubComponent {
     /** Write a name in UTF8 format. */
     private def writeName(name: Name): Unit = {
       ensureCapacity(name.length * 3)
-      val utfBytes = Codec toUTF8 name.toString
+      val utfBytes = name.toUTF8
       System.arraycopy(utfBytes, 0, bytes, writeIndex, utfBytes.length)
       writeIndex += utfBytes.length
     }

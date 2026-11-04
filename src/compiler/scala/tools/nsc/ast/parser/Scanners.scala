@@ -107,7 +107,7 @@ trait ScannersCommon {
     val high  = names.last._1
     val arr   = Array.fill(high - low + 1)(defaultToken)
 
-    names foreach { case (k, v) => arr(k + low) = v }
+    names foreach { case (k, v) => arr(k - low) = v }
     (low, arr)
   }
 }
