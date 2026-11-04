@@ -1869,7 +1869,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // don't forget to modify the code over there if you modify this method
     def typeParams: List[Symbol] = {
       def completeTypeParams = {
-        if (isMonomorphicType) Nil
+        // A skolem uses its own info, not its origin's, completed through `info`: Type.load does nothing for its lazy type
+        if (isSkolem) info.typeParams
+        else if (isMonomorphicType) Nil
         else {
           // analogously to the "info" getter, here we allow for two completions:
           //   one: sourceCompleter to LazyType, two: LazyType to completed type
@@ -1882,6 +1884,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
       // OPT: a symbol's info is mostly a ClassInfoType (no type params) or a PolyType; `Type.typeParams` would be a
       //      megamorphic call
+      // OPT: not overridden in the compiler's universe (TypeSkolem's case is in completeTypeParams), so C2 can bind calls
+      //      to this method, whose receivers are too many Symbol classes for a type profile to do so
       if (validTo != NoPeriod) rawInfo match {
         case _: ClassInfoType => Nil
         case pt: PolyType     => pt.typeParams
@@ -3395,9 +3399,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** If type skolem comes from an existential, the tree where it was created */
     override def unpackLocation = origin
-
-    //@M! (not deSkolemize.typeParams!!), also can't leave superclass definition: use info, not rawInfo
-    override def typeParams = info.typeParams
 
     override def cloneSymbolImpl(owner: Symbol, newFlags: Long): TypeSkolem =
       owner.newTypeSkolemSymbol(name, origin, pos, newFlags)
