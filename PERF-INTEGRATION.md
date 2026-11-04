@@ -18,6 +18,10 @@ Each PR rebased onto the base (all clean) and merged with `--no-ff`:
 | #11353 | Build ProdConsAnalyzer's consumer map in place | clean (draft, optimizer only) |
 | retronym/scala#148 | Create typing transformers' contexts lazily | auto-merged `TypingTransformers.scala` (fork draft; `-Yeager-typing-transformer-contexts` restores the old behaviour) |
 | retronym/scala#151 | Cake diet: take implementation-detail traits out of SymbolTable and Global | clean (fork draft; overlaps #11306's goal of fewer interfaces on `Global`) |
+| retronym/scala#199 | Make Symbol's kind predicates and info/rawInfo final | clean (fork draft) |
+| `claude/refchecks-override-cost-c17b91` | Reuse RefChecks' matched pairs in Erasure's double-definition check, reuse the override cursor's member types, test erased types first | no PR yet; `PROPOSAL-refchecks.md` left out; the flip conflicted with the cache in `isErasureDoubleDef`, resolved to test the cache, then erased types, then the match. This combination has not been measured |
+| retronym/scala#205 | Don't box UnapplySeqWrapper to compare it with null | clean (fork draft) |
+| retronym/scala#204 | Select how names are stored with -Yname-table | clean (fork draft; `PLAN.md` left out; `-Yname-table` defaults to `chars`) |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
