@@ -18,6 +18,14 @@ Each PR rebased onto the base (all clean) and merged with `--no-ff`:
 | #11353 | Build ProdConsAnalyzer's consumer map in place | clean (draft, optimizer only) |
 | retronym/scala#148 | Create typing transformers' contexts lazily | auto-merged `TypingTransformers.scala` (fork draft; `-Yeager-typing-transformer-contexts` restores the old behaviour) |
 | retronym/scala#151 | Cake diet: take implementation-detail traits out of SymbolTable and Global | clean (fork draft; overlaps #11306's goal of fewer interfaces on `Global`) |
+| retronym/scala#199 | Make Symbol's kind predicates and info/rawInfo final | clean (fork draft) |
+| retronym/scala#207 | Reuse RefChecks' matched pairs in Erasure's double-definition check, reuse the override cursor's member types, test erased types first | clean (fork draft; merged from its branch before the PR existed; `PROPOSAL-refchecks.md` left in) |
+| retronym/scala#205 | Don't box UnapplySeqWrapper to compare it with null | clean (fork draft) |
+| retronym/scala#204 | Select how names are stored with -Yname-table | clean (fork draft, latest version; `PLAN.md` left out) |
+| retronym/scala#208 | Give Symbol.typeParams one implementation in the compiler | conflict with #199's `typeParams` fast path, kept both (fork draft) |
+| retronym/scala#209 | Test for the singleton types by class, not through their accessors | clean, plus #199's `mapOverType` rewritten to match (fork draft) |
+
+Two commits follow #204: one stops `isVariableName` reading the first char of an empty name, which throws for String-backed names, and one defaults `-Yname-table` to `shared`, so that branch campaigns measure it with one set of options. #204 itself still defaults to `chars`.
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
