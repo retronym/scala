@@ -1224,7 +1224,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       val l = in.token match {
         case TRUE      => !negate
         case FALSE     => negate
-        case CHARLIT   => in.name.charAt(0)
+        case CHARLIT   => if (in.name.isEmpty) '\u0000' else in.name.charAt(0) // the scanner drops the char of '\0', see `intVal`
         case INTLIT    => in.intVal(negate).toInt
         case LONGLIT   => in.intVal(negate)
         case FLOATLIT  => in.floatVal(negate).toFloat
