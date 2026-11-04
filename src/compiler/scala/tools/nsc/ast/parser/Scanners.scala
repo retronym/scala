@@ -22,7 +22,6 @@ import scala.tools.nsc.ast.parser.xml.Utility.isNameStart
 import scala.tools.nsc.settings.ScalaVersion
 import scala.tools.nsc.util.{CharArrayReader, CharArrayReaderData}
 import Tokens._
-import java.lang.StringBuilder
 
 /** The scanner's buffer for the characters of a token. A plain array, as appending and comparing are hot for
  *  identifiers, and it keeps `String.hashCode` of its contents so that entering a name needn't compute it.
