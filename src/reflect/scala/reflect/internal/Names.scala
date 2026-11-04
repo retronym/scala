@@ -632,6 +632,10 @@ trait Names extends api.Names {
     }
     override def termOf(t: TypeName): TermName = terms.get(t.str)
 
+    private[this] val probes = new ThreadLocal[SharedNameTable.Probe] {
+      override def initialValue = new SharedNameTable.Probe
+    }
+
     private def add(s: String): TermName = {
       var entry = shared.intern(s)
       var str = entry.get
@@ -643,10 +647,23 @@ trait Names extends api.Names {
       val raced = terms.putIfAbsent(str, term)
       if (raced eq null) term else raced
     }
+
+    /** The name the probe describes, building a `String` only if neither table has one. */
+    private def lookup(probe: SharedNameTable.Probe, cachedString: String): TermName = {
+      val found = terms.get(probe)
+      val result =
+        if (found ne null) found
+        else {
+          val known = shared.find(probe)
+          add(if (known ne null) known else if (cachedString ne null) cachedString else probe.newString())
+        }
+      probe.clear()
+      result
+    }
     def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
-      val found = terms.get(new SharedNameTable.CharsKey(cs, offset, len, hashValue(cs, offset, len)))
-      if (found ne null) found
-      else add(if (cachedString ne null) cachedString else new String(cs, offset, len))
+      val probe = probes.get
+      probe.setChars(cs, offset, len, hashValue(cs, offset, len))
+      lookup(probe, cachedString)
     }
     def termFromString(s: String, cachedString: String): TermName = {
       val found = terms.get(s)
@@ -664,9 +681,9 @@ trait Names extends api.Names {
       }
       if (or < 0) termFromString(new String(bs, offset, len, java.nio.charset.StandardCharsets.UTF_8), null)
       else {
-        val found = terms.get(new SharedNameTable.AsciiKey(bs, offset, len, h))
-        if (found ne null) found
-        else add(new String(bs, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1))
+        val probe = probes.get
+        probe.setAscii(bs, offset, len, h)
+        lookup(probe, null)
       }
     }
     def subName(parent: Name, from: Int, to: Int): TermName = {
@@ -675,8 +692,9 @@ trait Names extends api.Names {
       var h = 0
       var i = 0
       while (i < len) { h = 31 * h + s.charAt(from + i); i += 1 }
-      val found = terms.get(new SharedNameTable.RegionKey(s, from, len, h))
-      if (found ne null) found else add(s.substring(from, from + len))
+      val probe = probes.get
+      probe.setRegion(s, from, len, h)
+      lookup(probe, null)
     }
   }
 
@@ -1304,6 +1322,12 @@ private[internal] final class SharedNameTable {
     }
   }
 
+  /** The string of the entry the probe describes, if it still has one. */
+  def find(probe: SharedNameTable.Probe): String = {
+    val found = entries.get(probe)
+    if (found ne null) found.get else null
+  }
+
   /** How many entries are held, which includes those cleared since the last new string. */
   def size: Int = entries.size
 
@@ -1342,33 +1366,42 @@ private[internal] object SharedNameTable {
     }
   }
 
-  // Keys that look up a name in a `ConcurrentHashMap[String, _]` without building its `String`. `get` hashes and calls
-  // `equals` on the key it is given, never the other way round, and the hash is `String.hashCode` of the contents.
-  final class CharsKey(cs: Array[Char], offset: Int, len: Int, h: Int) {
-    override def hashCode = h
-    override def equals(other: Any) = other match {
-      case s: String if s.length == len =>
+  /** A reusable key that looks up a name in either table without building its `String`, from chars, ASCII bytes or part
+   *  of a `String`. `ConcurrentHashMap.get` hashes and calls `equals` on the key it is given, never the other way round,
+   *  and the hash is `String.hashCode` of the contents. It is mutable, so each thread needs its own.
+   */
+  final class Probe {
+    private[this] var chars: Array[Char] = null
+    private[this] var bytes: Array[Byte] = null
+    private[this] var region: String = null
+    private[this] var offset = 0
+    private[this] var len = 0
+    private[this] var h = 0
+
+    def setChars(cs: Array[Char], off: Int, length: Int, hash: Int): Unit = { chars = cs; offset = off; len = length; h = hash }
+    def setAscii(bs: Array[Byte], off: Int, length: Int, hash: Int): Unit = { bytes = bs; offset = off; len = length; h = hash }
+    def setRegion(s: String, off: Int, length: Int, hash: Int): Unit = { region = s; offset = off; len = length; h = hash }
+    def clear(): Unit = { chars = null; bytes = null; region = null }
+
+    def newString(): String =
+      if (chars ne null) new String(chars, offset, len)
+      else if (bytes ne null) new String(bytes, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1)
+      else region.substring(offset, offset + len)
+
+    private def matches(s: String): Boolean = (s ne null) && s.length == len && {
+      if (region ne null) s.regionMatches(0, region, offset, len)
+      else {
         var i = 0
-        while (i < len && s.charAt(i) == cs(offset + i)) i += 1
+        if (chars ne null) while (i < len && s.charAt(i) == chars(offset + i)) i += 1
+        else while (i < len && s.charAt(i) == bytes(offset + i)) i += 1
         i == len
-      case _ => false
+      }
     }
-  }
-  final class AsciiKey(bs: Array[Byte], offset: Int, len: Int, h: Int) {
     override def hashCode = h
     override def equals(other: Any) = other match {
-      case s: String if s.length == len =>
-        var i = 0
-        while (i < len && s.charAt(i) == bs(offset + i)) i += 1
-        i == len
-      case _ => false
-    }
-  }
-  final class RegionKey(from: String, offset: Int, len: Int, h: Int) {
-    override def hashCode = h
-    override def equals(other: Any) = other match {
-      case s: String => s.length == len && s.regionMatches(0, from, offset, len)
-      case _ => false
+      case s: String   => matches(s)
+      case e: Entry    => matches(e.get)
+      case _           => false
     }
   }
 }
