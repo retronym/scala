@@ -298,7 +298,7 @@ trait Scanners extends ScannersCommon {
 
     /** Clear buffer and set name and token */
     private def finishNamed(idtoken: Token = IDENTIFIER): Unit = {
-      name = newTermName(cbuf.toCharArray)
+      name = newTermNameFromSequence(cbuf)
       cbuf.clear()
       token = idtoken
       if (idtoken == IDENTIFIER) {
@@ -1050,7 +1050,7 @@ trait Scanners extends ScannersCommon {
             getInterpolatedIdentRest()
           } else {
             next.token = IDENTIFIER
-            next.name = newTermName(cbuf.toCharArray)
+            next.name = newTermNameFromSequence(cbuf)
             cbuf.clear()
             val idx = next.name.id - kwOffset
             if (idx >= 0 && idx < kwArray.length)
