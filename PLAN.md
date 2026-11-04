@@ -8,7 +8,18 @@ Codegen builds a `ClassNode` tree through ASM's visitor API and post-processing 
 
 Campaign `m5-backend-bound`, m5-pro, on top of #200 at `b8c499db39`. No compiler change. All workloads read the same classfiles, so differences separate the parts:
 
-Measuring: job queued. Numbers to follow here.
+- `decode`: 52.4 ms/op, 102.2 MB/op (`ClassReader` into nothing)
+- `decodeTree`: 61.9 ms/op, 220.1 MB/op (into a new `ClassNode`)
+- `replay`: 172.3 ms/op, 481.5 MB/op (into a `ClassWriter`)
+- `replayBlocks`: 172.1 ms/op, 494.1 MB/op (the same, with every label starting a basic block as codegen's do)
+- `readFrames`: 132.5 ms/op, 410.4 MB/op (`ClassNode` into a `ClassWriter`)
+- `write`: 149.6 ms/op, 428.9 MB/op (codegen's `ClassNode`, with its extra labels)
+- `codegen`: 409.5 ms/op, 442.4 MB/op
+- `phase`: 769 ms/op, 1050.6 MB/op
+
+Subtracting: the writer's own work is about 120 ms/op and 392 MB/op (`replayBlocks` less `decode`). Walking a tree is about 12 ms/op and 18 MB/op (`readFrames` less that). Building one is about 10 ms/op and 118 MB/op (`decodeTree` less `decode`). So a tree costs about 22 ms/op and 136 MB/op: about 3% of the phase's time and 13% of its allocation. That excludes `setInnerClasses` and the scan in `localOptimizations`, which go or change too, and what codegen's extra labels cost on top.
+
+This is one fork per workload, cancelled before round 2 and before `nestedClasses`, and the machine had my builds and tests running on it during some of them (`phase` was 684 ms/op on a quiet machine in `m5-backend-ceiling`). The time is weak; the allocation is much more stable. The debug-only label is worth nothing in time and 12.6 MB/op, so it stays parked.
 
 ## Key decisions
 
@@ -23,9 +34,9 @@ Remaining readers, each with a direct answer:
 
 **The fork.** With the above, `-opt` and non-`-opt` differ in four places: which `ClassVisitor` `genPlainClass` and `genMirrorClass` create, `GeneratedClass` holding a node or a finished writer, the branch in `sendToDisk`, and how `setInnerClasses` gets its names. I expect a few hundred changed lines, most of them the mechanical refactoring. The long-term cost is that both paths stay supported, though the codegen above them is shared: bootstrapping exercises the tree path (the release build uses `-opt`) and most of partest the direct one.
 
-**When direct applies.** `-opt` not set by the user (or `-opt:none`), `-Ybackend-parallelism` 1, which is the default, and no ASM tracing. With parallelism the frame work would move under the frontend lock and undo what the threads are for, so that stays on the tree path. An explicit `-opt:unreachable-code` takes the tree path, as `UnreachableCodeTest` and friends expect.
+**When direct applies.** `-opt` not set by the user, `-Ybackend-parallelism` 1, which is the default. `-Ybackend-tree` turns it off. `-opt:none` stays on the tree, because unlike a default compile it keeps empty line numbers. With parallelism the frame work would move under the frontend lock and undo what the threads are for, so that stays on the tree path. An explicit `-opt:unreachable-code` takes the tree path, as `UnreachableCodeTest` and friends expect.
 
-**Unreachable code: accept ASM's `nop; athrow` for what codegen misses.** After #200 that is about 0.18% of methods in library and reflect, and `-opt:none` already emits exactly this today, so it is an output we already ship and test. No scan, because the scan needs a tree. The prototype measures how many methods and classes are affected across library, reflect and compiler, and whether that changes the answer.
+**Unreachable code: accept ASM's `nop; athrow` for what codegen misses.** After #200 that is about 0.18% of methods in library and reflect, and `-opt:none` already emits exactly this today, so it is an output we already test. Default compiles also run `removeEmptyLineNumbers`, which `MethodEmitter` does online, and `removeEmptyExceptionHandlers`, whose absence shows in one method, `ClassBType.info`, where the handler stays around the `nop` of `synchronized {}`. No scan, because the scan needs a tree. Measured across library, reflect and compiler: 243 methods in 159 of 6,846 classes.
 
 **Redo at class level, not method level, and for errors only for now.** On Jason's parked optimistic-write-and-redo idea: what this needs is small. A `ClassWriter` is per class, so discarding one needs no scala-asm change, whereas method-level redo does: `MethodWriter` is linked into the `ClassWriter` at `visitMethod`, and an abandoned attempt leaves orphan constant pool entries in the output. Class-level redo needs `genClass` to be re-runnable. `BackendBenchmark.phase` is evidence that it nearly is, since rerunning the phase reproduces every classfile byte for byte once the pickles are put back. The effects to undo are the pickle taken from `symData` by `getAnnotPickle`, the lambda handles, the `icode` shim and duplicate reports (the reporter filters repeats at one position).
 
@@ -48,12 +59,9 @@ The prototype uses this for one thing: if direct emission throws (a too-long UTF
 
 ## Steps
 
-- DONE bound: workloads in `BackendBenchmark`, campaign `m5-backend-bound`
-- TODO review of this plan
-- TODO cursor refactoring: codegen stops reading the tree, output byte-identical (commit, A/B on its own)
-- TODO `GeneratedClass` holding a node or a writer; direct path behind a `-Y` flag, off by default, inner classes still via a re-read to get it working
-- TODO incremental nested class collection
-- TODO class-level redo on exception
-- TODO normalised comparison over library, reflect and compiler; count `nop; athrow`
-- TODO flag on by default where it applies; backend JUnit, partest, bootstrap
-- TODO before and after from `BackendBenchmark` with an A/A, and a full compile; conclusion
+- DONE bound: workloads in `BackendBenchmark`, campaign `m5-backend-bound` (round 1 only)
+- DONE cursor refactoring: codegen stops reading the tree, output byte-identical
+- DONE direct path with `-Ybackend-tree`, recorded nested classes, class-level redo on exception
+- DONE normalised comparison over library, reflect and compiler
+- DONE all JUnit, partest `--run --jvm --pos --neg`, bootstrap to a byte-identical fixpoint, every class links with `-Xverify:all`
+- TODO before and after with an A/A (`m5-direct-backend`, `m5-direct-compile`); conclusion
