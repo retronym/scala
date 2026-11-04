@@ -437,6 +437,23 @@ private[internal] trait TypeMaps {
     pre.isNoType || pre.isNoPrefix || !isPossiblePrefix(clazz)
     )
 
+  /** Does `AsSeenFromMap(clazz.thisType, clazz)` map every type without annotations and type variables to itself?
+   *
+   *  It replaces `C.this` (for `C` that is `clazz` or, walking outwards through owners, a class enclosing it)
+   *  by the prefix of `pre.baseType(C)` at that step, and a type parameter of such a `C` by the corresponding
+   *  argument of `pre.baseType(C)`. Starting from `clazz.thisType`, `C.this.baseType(C)` is `C`'s own type
+   *  `C.tpe_*` (whose prefix is `C.owner.thisType` and whose arguments are `C`'s type parameters) unless `C`
+   *  has a self type that refines `C`, as in `class C[T] { self: C[Int] => }`. So every step maps to itself if
+   *  no class in the chain has such a self type. The chain ends at a package or a term owner, where
+   *  `skipPrefixOf` stops the map.
+   */
+  @tailrec
+  final def isOwnThisSeenFromIdentity(clazz: Symbol): Boolean =
+    !isPossiblePrefix(clazz) || (clazz match {
+      case cs: ClassSymbol => cs.selfTypeIsOwnType && isOwnThisSeenFromIdentity(cs.owner)
+      case _               => false
+    })
+
   @deprecated("use new AsSeenFromMap instead", "2.12.0")
   final def newAsSeenFromMap(pre: Type, clazz: Symbol): AsSeenFromMap = new AsSeenFromMap(pre, clazz)
 
@@ -1339,6 +1356,17 @@ private[internal] trait TypeMaps {
     }
   }
 
+  /** Does the type contain an annotated type or a type variable? `AsSeenFromMap` changes both even when it
+   *  changes nothing else: it drops annotations other than `TypeConstraint`s, and it replaces an instantiated
+   *  type variable by its instance.
+   */
+  class AnnotationOrTypeVarCollector extends TypeCollector[Boolean](initial = false) {
+    def apply(tp: Type): Unit = if (!result) tp match {
+      case _: AnnotatedType | _: TypeVar => result = true
+      case _                             => tp.foldOver(this)
+    }
+  }
+
   class IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
     var barLevel: Int = 0
 
@@ -1357,4 +1385,6 @@ private[internal] trait TypeMaps {
     ReusableInstance(new UnrelatableCollector, enabled = isCompilerUniverse)
   private[internal] val isRelatableCollectorInstance: ReusableInstance[IsRelatableCollector] =
     ReusableInstance(new IsRelatableCollector, enabled = isCompilerUniverse)
+  private[internal] val annotationOrTypeVarCollectorInstance: ReusableInstance[AnnotationOrTypeVarCollector] =
+    ReusableInstance(new AnnotationOrTypeVarCollector, enabled = isCompilerUniverse)
 }
