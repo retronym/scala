@@ -93,9 +93,11 @@ Classpath names keep the table mostly ASCII, so UTF-8 still shrinks it, and it o
 | E | Keep `char[]`, cache `toString` on first use, enter from `String` without a temporary | Most of the `toString` row, the temporaries | About 3 MB more retained on `scala` if every string is kept; nothing in the table |
 | F | Two tables, a `byte[]` for ASCII names and a `char[]` for the rest | As B, without a `String` per non-ASCII name; never larger than `char[]` | A branch on every operation, mixed cases in comparisons, canonicalising `subName`, no help for `toString` |
 
-| G | Strings in a table shared between `Global`s, found through a `ConcurrentHashMap` in each | As D, with no lock on a hit and strings shared by concurrent compiles | A `Name` is still per `Global`, a static table never shrinks, and ids depend on what compiled earlier in the JVM |
+| G | Strings in a table shared between `Global`s, found through a `ConcurrentHashMap` in each | As D, with no lock on a hit and strings shared by concurrent compiles | A `Name` is still per `Global`, a weak reference per name to process in GC, and ids depend on what compiled earlier in the JVM |
 
 G is your suggestion of a `ConcurrentHashMap` that concurrent compiles could share. `Name`s cannot cross `Global`s while they are inner classes: each holds its universe's `$outer`, which the outer test of `_: TermName` checks. This is the obstacle `topic/decake-names-2` ran into in 2019. So each `Global` keeps a `ConcurrentHashMap[String, TermName]`, and they share a table from `String` to a canonical `String` and an id. Lookups from `char[]`, bytes and `subName` use a key object whose `hashCode` is `String.hashCode` of the contents and whose `equals` compares against a `String`, so a hit builds no `String`. This relies on `ConcurrentHashMap.get` calling `equals` on the key it was given.
+
+The shared table holds its strings weakly, as your `scala3` commit "Hold interned names weakly so they don't outlive compiler runs" does for `SimpleName`. A `Global`'s names keep their strings alive, so a string lasts as long as some `Global` has the name; after that its id is forgotten and a later `Global` gets a new one. Cleared entries are removed from a reference queue whenever a new string is interned, so a table nobody adds to keeps its small entries until the next compile.
 
 D's retained estimate: 89k `String`s at about 64 bytes (5.7 MB) replace the 4.19 MB array. A `Name` stays at 32 bytes, because dropping `len` only leaves padding.
 
@@ -119,7 +121,6 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 
 ## Parked
 
-- How a shared table is released. Scala 3 has the same leak ([scala/scala3#1584](https://github.com/scala/scala3/issues/1584)), which you objected to in 2016, and your recent `scala3` branches hold interned names weakly.
 
 - Resizing the hash tables (fixed 32k buckets, load 2.7 on `scala`).
 - Linking each term name to its type name, which removes `typeHashtable`.
@@ -128,7 +129,7 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 
 ## DONE
 
-- `-Yname-table` with five stores, tested against `String` in `NameStoreTest`.
+- `-Yname-table` with five stores, tested against `String` in `NameStoreTest`. `chrs` and `Name.start` keep working under `chars` and `cached`, and fail with a message naming the flag under the others; the compiler itself uses `Name.id`.
 - Branch `claude/utf8-name-table` from `upstream/2.13.x`.
 - Audit of readers and external users; JDK sources for 17, 21 and 25.
 - Table size, ASCII share, entry and operation counts, on real and synthetic corpora.
@@ -137,7 +138,7 @@ The scanner's `cbuf.toCharArray` per identifier (721,122 calls) is independent o
 ## TODO
 
 - Read `m5-names-baseline-prof` for the unpickler's share on `scalap` and `re2s` when the queue reaches it.
-- Compare classfiles across all modes, including `shared` compiled twice in one JVM and concurrently.
+- Compare classfiles across all modes, including `shared` compiled twice in one JVM and concurrently, after the weak table and the `id`/`start` split.
 - Bootstrap with `restarrFull`.
 - A proper JMH run of the string paths in place of the rough loop, including JDK 8 if it can be installed.
 - Numbers from `perflab` on m5-pro with an A/A, on `scala`, `scalap`, `re2s` and `BackendBenchmark`, then a view on whether it is worth having.
