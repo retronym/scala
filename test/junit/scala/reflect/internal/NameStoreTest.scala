@@ -77,6 +77,7 @@ class NameStoreTest {
       val n = t.newTermName(s)
       val m = s"$kind '$s'"
       assertSame(m, n, t.newTermName(s.toCharArray))
+      assertSame(m, n, t.newTermNameFromSequence(new java.lang.StringBuilder(s)))
       assertSame(m, n, t.newTermName(("xy" + s + "z").toCharArray, 2, s.length))
       assertSame(m, n, t.newTermNameCached(s))
       val bytes = s.getBytes(UTF_8)
@@ -85,6 +86,14 @@ class NameStoreTest {
       assertSame(m, n.toTypeName, t.newTypeName(s))
       assertEquals(m, n.id, n.toTypeName.id)
       assertSame(m, n.toTypeName, t.lookupTypeName(s.toCharArray))
+    }
+  }
+
+  @Test def aSequenceEntersANewName(): Unit = forEachTable { (kind, t) =>
+    for (s <- List("enteredFromASequence", "\u540dFromASequence", "")) {
+      val n = t.newTermNameFromSequence(new java.lang.StringBuilder(s))
+      assertEquals(kind, s, n.toString)
+      assertSame(kind, n, t.newTermName(s))
     }
   }
 
