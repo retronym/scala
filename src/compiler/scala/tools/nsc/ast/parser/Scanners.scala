@@ -24,31 +24,37 @@ import scala.tools.nsc.util.{CharArrayReader, CharArrayReaderData}
 import Tokens._
 import java.lang.StringBuilder
 
-object Cbuf {
-  final val TargetCapacity = 256
+/** The scanner's buffer for the characters of a token. A plain array, as appending and comparing are hot for
+ *  identifiers, and it keeps `String.hashCode` of its contents so that entering a name needn't compute it.
+ */
+final class Cbuf {
+  private[this] var chars = new Array[Char](Cbuf.TargetCapacity)
+  private[this] var size = 0
+  private[this] var h = 0
 
-  def create(): StringBuilder = new StringBuilder(TargetCapacity)
-
-  implicit class StringBuilderOps(val sb: StringBuilder) extends AnyVal {
-    def clear(): Unit = {
-      if (sb.capacity() > TargetCapacity) {
-        sb.setLength(TargetCapacity)
-        sb.trimToSize()
-      }
-      sb.setLength(0)
-    }
-    def toCharArray: Array[Char] = {
-      val n = sb.length()
-      val res = new Array[Char](n)
-      sb.getChars(0, n, res, 0)
-      res
-    }
-    def isEmpty = sb.length() == 0
-    def last = sb.charAt(sb.length() - 1)
+  def append(c: Char): Unit = {
+    if (size == chars.length) chars = java.util.Arrays.copyOf(chars, size * 2)
+    chars(size) = c
+    size += 1
+    h = 31 * h + c
   }
+  def clear(): Unit = {
+    if (chars.length > Cbuf.TargetCapacity) chars = new Array[Char](Cbuf.TargetCapacity)
+    size = 0
+    h = 0
+  }
+  def array: Array[Char] = chars
+  def length: Int = size
+  def hash: Int = h
+  def isEmpty = size == 0
+  def last = chars(size - 1)
+  override def toString = new String(chars, 0, size)
 }
 
-import Cbuf.StringBuilderOps
+object Cbuf {
+  final val TargetCapacity = 256
+  def create(): Cbuf = new Cbuf
+}
 
 /** See Parsers.scala / ParsersCommon for some explanation of ScannersCommon.
  */
@@ -289,18 +295,7 @@ trait Scanners extends ScannersCommon {
 
     /** append Unicode character to "cbuf" buffer
      */
-    protected def putChar(c: Char): Unit = {
-      cbuf.append(c)
-      cbufHash = 31 * cbufHash + c
-    }
-
-    /** `String.hashCode` of the contents of `cbuf`, so that entering a name needn't go through them to compute it. */
-    private[this] var cbufHash = 0
-
-    private def clearCbuf(): Unit = {
-      cbuf.clear()
-      cbufHash = 0
-    }
+    protected def putChar(c: Char): Unit = cbuf.append(c)
 
     /** Determines whether this scanner should emit identifier deprecation warnings,
      *  e.g. when seeing `macro` or `then`, which are planned to become keywords in future versions of Scala.
@@ -309,8 +304,8 @@ trait Scanners extends ScannersCommon {
 
     /** Clear buffer and set name and token */
     private def finishNamed(idtoken: Token = IDENTIFIER): Unit = {
-      name = newTermNameFromSequence(cbuf, cbufHash)
-      clearCbuf()
+      name = newTermNameHashed(cbuf.array, cbuf.length, cbuf.hash)
+      cbuf.clear()
       token = idtoken
       if (idtoken == IDENTIFIER) {
         val idx = name.id - kwOffset
@@ -329,7 +324,7 @@ trait Scanners extends ScannersCommon {
     /** Clear buffer and set string */
     private def setStrVal(): Unit = {
       strVal = cbuf.toString
-      clearCbuf()
+      cbuf.clear()
     }
 
     /** a stack of tokens which indicates whether line-ends can be statement separators
@@ -974,7 +969,7 @@ trait Scanners extends ScannersCommon {
       error(offset, s"unclosed string literal$note")
       // Recover as best we can by pretending the line has ended, so later
       // statements (and completions) are not swallowed by the unclosed literal.
-      clearCbuf()
+      cbuf.clear()
       adjustSepRegions(STRINGLIT)
       token = SEMI
     }
@@ -1061,8 +1056,8 @@ trait Scanners extends ScannersCommon {
             getInterpolatedIdentRest()
           } else {
             next.token = IDENTIFIER
-            next.name = newTermNameFromSequence(cbuf, cbufHash)
-            clearCbuf()
+            next.name = newTermNameHashed(cbuf.array, cbuf.length, cbuf.hash)
+            cbuf.clear()
             val idx = next.name.id - kwOffset
             if (idx >= 0 && idx < kwArray.length)
               next.token = kwArray(idx)

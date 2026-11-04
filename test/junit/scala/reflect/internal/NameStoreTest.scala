@@ -77,7 +77,7 @@ class NameStoreTest {
       val n = t.newTermName(s)
       val m = s"$kind '$s'"
       assertSame(m, n, t.newTermName(s.toCharArray))
-      assertSame(m, n, t.newTermNameFromSequence(new java.lang.StringBuilder(s), s.hashCode))
+      assertSame(m, n, t.newTermNameHashed((s + "zz").toCharArray, s.length, s.hashCode))
       assertSame(m, n, t.newTermName(("xy" + s + "z").toCharArray, 2, s.length))
       assertSame(m, n, t.newTermNameCached(s))
       val bytes = s.getBytes(UTF_8)
@@ -89,9 +89,9 @@ class NameStoreTest {
     }
   }
 
-  @Test def aSequenceEntersANewName(): Unit = forEachTable { (kind, t) =>
-    for (s <- List("enteredFromASequence", "\u540dFromASequence", "")) {
-      val n = t.newTermNameFromSequence(new java.lang.StringBuilder(s), s.hashCode)
+  @Test def aHashedEntryEntersANewName(): Unit = forEachTable { (kind, t) =>
+    for (s <- List("enteredWithAHash", "\u540dWithAHash", "")) {
+      val n = t.newTermNameHashed(s.toCharArray, s.length, s.hashCode)
       assertEquals(kind, s, n.toString)
       assertSame(kind, n, t.newTermName(s))
     }
