@@ -602,6 +602,13 @@ trait Names extends api.Names {
         n = n.next
       if (n ne null) n else add(h, s)
     }
+    override def termFromSequence(cs: CharSequence, h0: Int): TermName = {
+      val h = h0 & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && !n.str.contentEquals(cs))
+        n = n.next
+      if (n ne null) n else add(h, cs.toString)
+    }
     override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
       var h = 0
       var or = 0
@@ -1426,8 +1433,8 @@ private[internal] object SharedNameTable {
       if (region ne null) s.regionMatches(0, region, offset, len)
       else {
         var i = 0
-        if (sequence ne null) while (i < len && s.charAt(i) == sequence.charAt(i)) i += 1
-        else if (chars ne null) while (i < len && s.charAt(i) == chars(offset + i)) i += 1
+        if (sequence ne null) return s.contentEquals(sequence)
+        if (chars ne null) while (i < len && s.charAt(i) == chars(offset + i)) i += 1
         else while (i < len && s.charAt(i) == bytes(offset + i)) i += 1
         i == len
       }
