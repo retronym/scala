@@ -208,10 +208,13 @@ class PatmatBytecodeTest extends BytecodeTesting {
         |  def seq(xs: collection.Seq[String]) = xs match { case Seq(a, b) => a + b case _ => "" }
         |  def star(xs: List[String]) = xs match { case List(a, _*) => a case _ => "" }
         |  def empty(xs: List[String]) = xs match { case List() => "" case _ => "x" }
+        |  def array(xs: Array[String]) = xs match { case Array(a) => a case _ => "" }
+        |  def arrayStar(xs: Array[String]) = xs match { case Array(a, _*) => a case _ => "" }
+        |  def arrayEmpty(xs: Array[String]) = xs match { case Array() => "" case _ => "x" }
         |}
       """.stripMargin
     val c = compileClass(code)
-    for (m <- List("list", "seq", "star", "empty"))
+    for (m <- List("list", "seq", "star", "empty", "array", "arrayStar", "arrayEmpty"))
       assert(!getInstructions(c, m).exists(cond(_) { case TypeOp(NEW, t) => t.contains("UnapplySeqWrapper") }), textify(c))
   }
 }

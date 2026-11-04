@@ -461,10 +461,11 @@ trait MatchTranslation {
             else         _ INT_== _
 
           // `if (binder != null && $checkExpectedLength [== | >=] 0) then else zero`
-          // Except when the extractor returns `UnapplySeqWrapper` itself: `binder` is then the unboxed result of its `get`,
-          // and comparing that with `null` would box it, only to find it is not null. A wrapper from `Option#get` is a box
-          // which can be null, so that one keeps the test.
-          if (fun.tpe.finalResultType.typeSymbol == UnapplySeqWrapperClass) compareOp(checkExpectedLength, ZERO)
+          // Except when the extractor returns one of the standard library's wrappers itself: `binder` is then the unboxed
+          // result of its `get`, and comparing that with `null` would box it, only to find it is not null. A wrapper from
+          // `Option#get` is a box which can be null, so that one keeps the test.
+          val resultClass = fun.tpe.finalResultType.typeSymbol
+          if (resultClass == UnapplySeqWrapperClass || resultClass == ArrayUnapplySeqWrapperClass) compareOp(checkExpectedLength, ZERO)
           else (seqTree(binder, forceImmutable = false) ANY_!= NULL) AND compareOp(checkExpectedLength, ZERO)
         }
 
