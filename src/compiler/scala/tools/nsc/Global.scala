@@ -55,6 +55,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Reporting
     with Parsing { self =>
 
+  Global.recordSubclass(getClass)
+
   // the mirror --------------------------------------------------
 
   override def isCompilerUniverse = true
@@ -1809,6 +1811,24 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 }
 
 object Global {
+  // Diagnostic: the distinct subclasses of Global instantiated in this class loader. From the
+  // third one on, the compiler's call sites see more receiver classes than HotSpot profiles
+  // (TypeProfileWidth=2) and go megamorphic. Throws once more than `scala.globalClasses.max`
+  // (default 2) classes have been seen.
+  private val subclasses = java.util.concurrent.ConcurrentHashMap.newKeySet[Class[_]]()
+  private def recordSubclass(cls: Class[_]): Unit = if (subclasses.add(cls)) {
+    import scala.jdk.CollectionConverters._
+    val all = subclasses.asScala.toList.map(_.getName).sorted
+    val loader = classOf[Global].getClassLoader match {
+      case null => "boot"
+      case l    => s"${l.getClass.getName}@${Integer.toHexString(System.identityHashCode(l))}"
+    }
+    val msg = s"[global-classes] new=${cls.getName} count=${all.size} loader=$loader thread=${Thread.currentThread.getName} all=${all.mkString("[", ", ", "]")}"
+    System.err.println(msg)
+    val max = Integer.getInteger("scala.globalClasses.max", 2)
+    if (all.size > max) throw new IllegalStateException(s"More than $max subclasses of Global in one class loader: $msg")
+  }
+
   def apply(settings: Settings, reporter: Reporter): Global = new Global(settings, reporter)
 
   def apply(settings: Settings): Global = new Global(settings, Reporter(settings))
