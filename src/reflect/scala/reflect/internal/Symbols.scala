@@ -1999,10 +1999,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       def baseTypeSeqLength(sym: Symbol) =
         if (sym.isAbstractType) 1 + sym.info.upperBound.baseTypeSeq.length
         else sym.info.baseTypeSeq.length
+      def isClassProper(sym: Symbol) = sym.isClass && !sym.isRefinementClass
       if (this.isType)
-        (that.isType &&
-         { val diff = baseTypeSeqLength(this) - baseTypeSeqLength(that)
-           diff > 0 || diff == 0 && this.id < that.id })
+        (that.isType && (
+          // An abstract type must sort before the classes in its bound, and the rank below can't
+          // guarantee that: it measures the bound as declared, but seen from a prefix the bound can
+          // be a class with a longer base type sequence. So classes sort after abstract types.
+          // Refinements stay with abstract types, as they must sort before the abstract types among
+          // their parents.
+          if (isClassProper(this) != isClassProper(that)) isClassProper(that)
+          else {
+            val diff = baseTypeSeqLength(this) - baseTypeSeqLength(that)
+            diff > 0 || diff == 0 && this.id < that.id
+          }))
       else
         that.isType || this.id < that.id
     }
