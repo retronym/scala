@@ -42,10 +42,11 @@ trait ExistentialsAndSkolems {
       }
     }
 
-    val saved = skolemizationLevel
-    skolemizationLevel = 0
+    val s = scratch
+    val saved = s.skolemizationLevel
+    s.skolemizationLevel = 0
     try new Deskolemizer().typeSkolems
-    finally skolemizationLevel = saved
+    finally s.skolemizationLevel = saved
   }
 
   def isRawParameter(sym: Symbol) = // is it a type parameter leaked by a raw type?

@@ -34,12 +34,14 @@ class GlbLubsTest {
    */
   @Test def nestedLubKeepsOuterGuard(): Unit = {
     def check(outer: List[Type] => Type, outerDepth: List[Type] => Depth): Unit = {
+      val outerFrame = scratch.frame
       var ts: List[Type] = Nil
       var guardKept: Option[Boolean] = None
       val completer = new LazyType {
         override def complete(sym: Symbol): Unit = {
           lub(List(IntTpe, StringTpe))
-          guardKept = Some(lubResults.get((outerDepth(ts), ts)).contains(AnyTpe))
+          assertTrue("a completer has its own tables", lubResults.isEmpty)
+          guardKept = Some(outerFrame.lubs.isInProgress((outerDepth(ts), ts)))
           sym.setInfo(NullaryMethodType(AnyTpe))
         }
       }
@@ -73,5 +75,74 @@ class GlbLubsTest {
     try lub(ts)
     finally removeAllAnnotationCheckers()
     assertTrue(s"lub re-entered itself $maxNesting times", maxNesting < limit)
+  }
+
+  /** A completion must see empty guards, and they must be restored afterwards. */
+  @Test def completionHasItsOwnFrame(): Unit = {
+    val outer = scratch.frame
+    var inner: Frame = null
+    val sym = rootMirror.RootClass.newMethod(TermName("completed"), NoPosition, 0L)
+    outer.subTypes.enter()
+    try {
+      sym.setInfo(new LazyType {
+        override def complete(s: Symbol): Unit = {
+          inner = scratch.frame
+          assertEquals(0, subsametypeRecursions)
+          s.setInfo(NullaryMethodType(IntTpe))
+        }
+      })
+      sym.info
+    } finally outer.subTypes.exit()
+    assertNotSame(outer, inner)
+    assertSame(outer, scratch.frame)
+    assertSame("frames are reused", inner, outer.next)
+  }
+
+  /** A real `Any` is not a guard hit. */
+  @Test def memoizedAnyIsNotACycle(): Unit = {
+    val frame = scratch.frame
+    val key = (Depth(1), List(IntTpe))
+    frame.lubs.begin(key)
+    assertTrue(frame.lubs.isInProgress(key))
+    assertEquals(NothingTpe, frame.lubs.lookup(key, onCycle = NothingTpe))
+    frame.lubs.end(key, AnyTpe)
+    assertFalse(frame.lubs.isInProgress(key))
+    assertEquals(AnyTpe, frame.lubs.lookup(key, onCycle = NothingTpe))
+    frame.lubs.results.clear()
+    assertNull(frame.lubs.lookup(key, onCycle = NothingTpe))
+  }
+
+  @Test def recursionGuardActivatesAtThreshold(): Unit = {
+    val frame = scratch.frame
+    val guard = new frame.RecursionGuard[String](2)
+    assertTrue("below the threshold, keys aren't tracked", guard.enter("a"))
+    assertTrue(guard.pending.isEmpty)
+    assertTrue(guard.enter("a"))
+    assertFalse("a cycle", guard.enter("a"))
+    assertEquals("a cycle leaves the depth as it was", 2, guard.depth)
+    guard.exit("a")
+    guard.exit("a")
+    assertEquals(0, guard.depth)
+    assertTrue(guard.pending.isEmpty)
+  }
+
+  @Test def subTypeGuardRemembersCyclesForTheOutermostCheck(): Unit = {
+    val frame = scratch.frame
+    val guard = new frame.SubTypeGuard(3)
+    guard.enter()
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    assertFalse("a cycle", guard.enter(IntTpe, StringTpe))
+    assertEquals("a cycle leaves the depth as it was", 3, guard.depth)
+    guard.exit(IntTpe, StringTpe)
+    guard.exit(IntTpe, StringTpe)
+    assertFalse("known to be false, below the threshold too", guard.enter(IntTpe, StringTpe))
+    assertEquals(1, guard.depth)
+    guard.exit()
+    assertEquals(0, guard.depth)
+    assertTrue(guard.pending.isEmpty)
+    assertTrue("forgotten after the outermost check", guard.knownFalse.isEmpty)
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    guard.exit(IntTpe, StringTpe)
   }
 }

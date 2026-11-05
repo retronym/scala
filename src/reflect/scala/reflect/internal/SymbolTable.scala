@@ -509,6 +509,207 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** Is this universe used from several threads at once? Runtime reflection is.
+   *
+   *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
+   *  or one per thread, plain or atomic symbol ids, plain or synchronized interning. The batch
+   *  compiler gets the single-threaded ones and pays for the choice with a call through a field.
+   *  Must be a constant: it is read while the universe is constructed.
+   */
+  def isConcurrentUniverse = false
+
+  override protected def synchronizeNames: Boolean = isConcurrentUniverse
+
+  /** The recursion guards of the type operations at one level of completion, with the undo log
+   *  of type constraints. Each operation fetches its frame once and keeps it in a local.
+   */
+  final class Frame {
+    private[this] var _next: Frame = null
+    /** The frame for a completion started from this one. Kept for reuse once allocated. */
+    def next: Frame = {
+      if (_next eq null) _next = new Frame
+      _next
+    }
+    /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
+     *  every call would be too expensive, and this recursion is rare. On a cycle, the caller decides
+     *  what the answer is. `enter` and `exit` keep hot paths free of closures.
+     */
+    final class RecursionGuard[K](threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[K] = null
+      def pending: mutable.HashSet[K] = {
+        if (_pending eq null) _pending = new mutable.HashSet[K]
+        _pending
+      }
+      /** False if `key` is already being computed. Otherwise the caller must call `exit`. */
+      def enter(key: K): Boolean = {
+        _depth += 1
+        _depth < threshold || pending.add(key) || { _depth -= 1; false }
+      }
+      def exit(key: K): Unit = {
+        if (_depth >= threshold) pending -= key
+        _depth -= 1
+      }
+    }
+
+    /** A `RecursionGuard` for subtype checks. A check must not allocate its key unless it is past
+     *  the threshold, and a cycle is remembered for the rest of the outermost check.
+     */
+    final class SubTypeGuard(threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[SubTypePair] = null
+      def pending: mutable.HashSet[SubTypePair] = {
+        if (_pending eq null) _pending = new mutable.HashSet[SubTypePair]
+        _pending
+      }
+      private[this] var _knownFalse: java.util.IdentityHashMap[Type, List[Type]] = null
+      def knownFalse: java.util.IdentityHashMap[Type, List[Type]] = {
+        if (_knownFalse eq null) _knownFalse = new java.util.IdentityHashMap[Type, List[Type]]
+        _knownFalse
+      }
+      private def isKnownFalse(tp1: Type, tp2: Type): Boolean =
+        (_knownFalse ne null) && !_knownFalse.isEmpty && { val ts = _knownFalse.get(tp1); ts != null && ts.contains(tp2) }
+      private def recordKnownFalse(tp1: Type, tp2: Type): Unit = { // see scala/bug#13119
+        val ts = knownFalse.get(tp1)
+        knownFalse.put(tp1, tp2 :: (if (ts != null) ts else Nil))
+      }
+
+      /** Enter a check with no key of its own, such as `isSameType`. */
+      def enter(): Unit = _depth += 1
+      def exit(): Unit = {
+        _depth -= 1
+        // Called on every top-level check, but the map is only populated for pathological recursive
+        // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
+        if (_depth == 0 && (_knownFalse ne null) && !_knownFalse.isEmpty) _knownFalse.clear()
+        // undoLog.clear() // too eager, breaks #3281, #3866
+      }
+
+      /** False if `tp1 <:< tp2` is already being checked or is known to be false, which is the answer
+       *  (see neg/t8146-no-finitary*). Otherwise the caller must call `exit`.
+       */
+      def enter(tp1: Type, tp2: Type): Boolean = {
+        enter()
+        val proceed =
+          if (_depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { recordKnownFalse(tp1, tp2); false }
+          else !isKnownFalse(tp1, tp2)
+        if (!proceed) exit()
+        proceed
+      }
+      def exit(tp1: Type, tp2: Type): Unit = {
+        if (_depth >= threshold) pending -= SubTypePair(tp1, tp2)
+        exit()
+      }
+    }
+
+    val subTypes = new SubTypeGuard(TypeConstants.DefaultLogThreshhold)
+    /** A log of type variable with their original constraints. Used in order
+     *  to undo constraints in the case of isSubType/isSameType failure.
+     */
+    val undoLog = new UndoLog
+    val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
+    val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
+    /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
+     *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
+     */
+    final class MemoGuard[K] {
+      private[this] val InProgress: Type = new Type {}
+      val results = new mutable.HashMap[K, Type]
+      /** The result for `key`, or `onCycle` if it is in progress, or `null` if neither. */
+      def lookup(key: K, onCycle: Type): Type = results.getOrElse(key, null) match {
+        case InProgress => onCycle
+        case r          => r
+      }
+      def isInProgress(key: K): Boolean = results.get(key).contains(InProgress)
+      def begin(key: K): Unit = results(key) = InProgress
+      def end(key: K, result: Type): Unit = results(key) = result
+    }
+
+    val lubs = new MemoGuard[(Depth, List[Type])]
+    val glbs = new MemoGuard[(Depth, List[Type])]
+    /** Whether an outermost `lub` or `glb` is in progress in this frame. It owns the tables above. */
+    var inLubOrGlb: Boolean = false
+    /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
+    var globalGlbDepth: Depth = Depth.Zero
+  }
+
+  /** The scratch state of the type operations of one thread, other than the guards in `frame`.
+   *
+   *  A universe used from one thread at a time (the compiler, a toolbox) has one instance; a
+   *  concurrent one has one per thread. Anything that must not be seen by an operation on another
+   *  thread belongs here, not in a field of `SymbolTable`: anything that is shared, such as caches,
+   *  does not.
+   */
+  final class Scratch {
+    /** The frame of the completion in progress on this thread. */
+    var frame: Frame = new Frame
+    /** The current skolemization level, needed for the algorithms
+     *  in isSameType, isSubType that do constraint solving under a prefix.
+     */
+    var skolemizationLevel: Int = 0
+    /** The current indentation string for traces */
+    var indent: String = ""
+    var toStringRecursions: Int = 0
+    val toStringSubjects = new mutable.HashSet[Type]
+    /** The recursion depth of locked symbols, see `-Yrecursion` */
+    var recursionTable = Map.empty[Symbol, Int]
+
+    // Reusable instances of helpers with mutable state, one per level of reentrance. As the
+    // `Scratch` is confined to a thread, they are reused in runtime reflection too.
+    val findMembers = ReusableInstance(new FindMember)
+    val containsCollectors = ReusableInstance(new ContainsCollector(null))
+    val varianceInTypes = ReusableInstance(new varianceInType)
+    val substSymMaps = ReusableInstance(SubstSymMap())
+    val onlyChildAccumulators = ReusableInstance(new OnlyChildAccumulator)
+    val setChildrenPosAccumulators = ReusableInstance(new SetChildrenPosAccumulator)
+    val commonOwnerMaps = ReusableInstance(new CommonOwnerMap)
+
+    // Instances of the type maps and collectors that `TypeMaps` also offers as shared objects.
+    // They keep state in fields, but save and restore it on reentrance, so one per thread will do.
+    val erroneousCollector = new ErroneousCollector
+    val isDependentCollector = new IsDependentCollector
+    val isRelatableCollector = new IsRelatableCollector
+    val unrelatableCollector = new UnrelatableCollector
+    val wildcardExtrapolation = new wildcardExtrapolation
+    // OPT: hoist allocation of the collector and lambda out of the loop in `maxTypes`
+    val typeContainsTypeVarCollector = new FindTypeCollector(_.isInstanceOf[TypeVar])
+    val isWildCardOrNonGroundTypeVarCollector = new FindTypeCollector({
+      case tv: TypeVar => !tv.isGround
+      case t => t.isWildcard
+    })
+  }
+  private[this] lazy val scratches: Scratches = if (isConcurrentUniverse) new PerThreadScratches else new OneScratch
+  final def scratch: Scratch = scratches.get
+
+  private[internal] abstract class Scratches {
+    def get: Scratch
+  }
+  private final class OneScratch extends Scratches {
+    private[this] val scratch = new Scratch
+    def get: Scratch = scratch
+  }
+  /** One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
+   *  caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
+   *  would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
+   *  long-lived thread would keep every universe it ever used.
+   */
+  private final class PerThreadScratches extends Scratches {
+    private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
+    private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
+    def get: Scratch = {
+      val ref = scratchRef.get
+      val s = if (ref eq null) null else ref.get
+      if (s ne null) s else newScratch()
+    }
+    private def newScratch(): Scratch = {
+      val s = new Scratch
+      scratches.put(Thread.currentThread, s)
+      scratchRef.set(new java.lang.ref.WeakReference(s))
+      s
+    }
+  }
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
