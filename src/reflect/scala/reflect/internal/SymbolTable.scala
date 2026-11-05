@@ -256,6 +256,7 @@ abstract class SymbolTable extends macros.Universe
   final def phase_=(p: Phase): Unit = {
     if (phasePerThread) {
       val s = scratch
+      s.checkOwner()
       s.ph = p
       s.per = period(currentRunId, p.id)
     } else {
@@ -699,6 +700,13 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
+    /** The thread this belongs to, in a concurrent universe. A `Scratch` must never be kept in a field or a closure
+     *  that outlives the operation that fetched it (a completer or an annotation thunk can run on another thread):
+     *  `-Dscalac.debug.checkScratchOwner` checks it where the registers are written. */
+    val owner: Thread = Thread.currentThread
+    @inline def checkOwner(): Unit =
+      if (CheckScratchOwner && isConcurrentUniverse && (owner ne Thread.currentThread))
+        throw new IllegalStateException(s"the scratch state of $owner used on ${Thread.currentThread}")
     /** The frame of the completion in progress on this thread. */
     var frame: Frame = new Frame
     /** The current skolemization level, needed for the algorithms
@@ -741,6 +749,7 @@ abstract class SymbolTable extends macros.Universe
       case t => t.isWildcard
     })
   }
+  private[this] final val CheckScratchOwner = java.lang.Boolean.getBoolean("scalac.debug.checkScratchOwner")
   private[this] lazy val scratches: Scratches = if (isConcurrentUniverse) new PerThreadScratches else new OneScratch
   final def scratch: Scratch = scratches.get
 
