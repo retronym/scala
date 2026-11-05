@@ -171,6 +171,9 @@ object PerThreadTimes {
 }
 
 object CompletionLock {
+  /** Whether the parallel typer completes member signatures on its pool, with a claim per completion root: unless
+   *  `-Dscalac.parallelTyper.serialSignatures` is set. */
+  lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.serialSignatures") == null
   /** The label of a completion's acquisition. */
   val completing: What = new What("completing a symbol", null)
   /** The label of a wait for another thread's completion. */
