@@ -388,7 +388,7 @@ trait TypeComparers {
       // in any case, we do need to handle one of the types being an existential
       case (ntp1, et2: ExistentialType)                                     => et2.withTypeVars(isSubType(ntp1, _, depth), depth)
       case (et1: ExistentialType, ntp2)                                     =>
-        val s = scratch
+        val s = scratch.frame
         try {
           s.skolemizationLevel += 1
           isSubType(et1.skolemizeExistential, ntp2, depth)
@@ -483,7 +483,7 @@ trait TypeComparers {
       case tv @ TypeVar(_,_) =>
         tv.registerBound(tp2, isLowerBound = false)
       case ExistentialType(_, _) => // TODO: fast initial try for tp1 and tp2 both existentials? (first try instantiating tp2's existentials to tp1's skolems?)
-        val s = scratch
+        val s = scratch.frame
         try {
           s.skolemizationLevel += 1
           isSubType(tp1.skolemizeExistential, tp2, depth)
