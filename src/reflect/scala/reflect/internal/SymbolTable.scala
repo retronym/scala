@@ -241,11 +241,16 @@ abstract class SymbolTable extends macros.Universe
   def isParallelCompiler: Boolean = false
   /** Whether this is a compiler used from several threads at once (`-Yparallel-typer`). */
   final def isConcurrentCompiler: Boolean = phasePerThread
+  // When they are kept per thread, the shared registers hold markers from here on, so that a serial compiler's `phase`
+  // and `currentPeriod` are a field read and a test, as small as the plain getters they replace.
+  if (phasePerThread) { ph = null; per = -1 }
 
   final def atPhaseStack: List[Phase] = phStack.toList
   final def phase: Phase = {
-    if (phasePerThread) scratch.ph else ph
+    val p = ph
+    if (p ne null) p else threadPhase
   }
+  private[this] def threadPhase: Phase = scratch.ph
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
@@ -291,8 +296,10 @@ abstract class SymbolTable extends macros.Universe
   /** The current period. */
   final def currentPeriod: Period = {
     //assert(per == (currentRunId << 8) + phase.id)
-    if (phasePerThread) scratch.per else per
+    val p = per
+    if (p >= 0) p else threadPeriod
   }
+  private[this] def threadPeriod: Period = scratch.per
 
   /** The phase associated with given period. */
   final def phaseOf(period: Period): Phase = phaseWithId(phaseId(period))
