@@ -4,8 +4,8 @@
 #
 #   tools/parallel-typer/oracle.sh <corpus> [threads=8] [repeats=1] [extra scalac options...]
 #
-# <corpus> is `library`, `reflect`, `compiler`, a directory under tools/parallel-typer/corpus, or a file of scalac
-# arguments (options and sources, one per line).
+# <corpus> is `library`, `reflect`, `compiler`, a directory under tools/parallel-typer/corpus, another directory of
+# sources, or a file of scalac arguments (options and sources, one per line).
 # Needs `sbt dist/mkQuick`. Results go to $OUT (default /tmp/parallel-typer-oracle/<corpus>); the exit status is the
 # number of parallel runs that differed from the serial one. JAVA_OPTS is passed through (e.g. -Xss, -Dscalac.parallelTyper.*).
 set -uo pipefail
@@ -37,6 +37,8 @@ case "$CORPUS" in
       find "$ROOT/src/compiler" -name '*.scala' -o -name '*.java' | sort; } > "$args" ;;
   *) if [ -d "$ROOT/tools/parallel-typer/corpus/$CORPUS" ]; then # a small corpus of the oracle's own
        { echo -deprecation; echo -feature; find "$ROOT/tools/parallel-typer/corpus/$CORPUS" -name '*.scala' -o -name '*.java' | sort; } > "$args"
+     elif [ -d "$CORPUS" ]; then # a directory of sources, e.g. a compiler-benchmark corpus
+       { echo -deprecation; echo -feature; find -L "$CORPUS" -name '*.scala' -o -name '*.java' | sort; } > "$args"
      else cp "$CORPUS" "$args"; fi ;;
 esac
 
