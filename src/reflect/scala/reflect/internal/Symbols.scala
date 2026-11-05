@@ -1615,7 +1615,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val frame = s.frame
       s.frame = frame.next
       try tp.complete(this)
-      finally s.frame = frame
+      finally {
+        s.frame = frame
+        frame.next.undoLog.clear() // what it logged can no longer be undone by this completion
+      }
     }
 
     def info_=(info: Type): Unit = {
