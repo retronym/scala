@@ -839,15 +839,27 @@ abstract class SymbolTable extends macros.Universe
     private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
     private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
     // The thread that first asks for a scratch state (the one that makes the universe, the driver's) runs the serial
-    // phases and the signatures pass: its scratch state is in a field, so
-    // that the parser, the namer and the phases after the typer pay a comparison, not a `ThreadLocal` lookup.
+    // phases and the signatures pass: its scratch state is in a field, so that the parser, the namer and the phases
+    // after the typer pay a comparison, not a `ThreadLocal` lookup.
     private[this] val firstThread: Thread = Thread.currentThread
     private[this] var firstThreadScratch: Scratch = null
-    def get: Scratch = Thread.currentThread match {
-      case t if t eq firstThread =>
+    /** Small enough to inline at every `phase` and `currentPeriod` read of a worker: a type test and two loads. */
+    def get: Scratch = {
+      val t = Thread.currentThread
+      if (t.isInstanceOf[util.ScratchThread]) {
+        val st = t.asInstanceOf[util.ScratchThread]
+        if (st.scratchOwner eq SymbolTable.this) return st.scratch.asInstanceOf[Scratch]
+      } else if (t eq firstThread) {
         val s = firstThreadScratch
-        if (s ne null) s else { val s1 = viaThreadLocal; firstThreadScratch = s1; s1 }
-      case t: util.ScratchThread if t.scratchOwner eq SymbolTable.this => t.scratch.asInstanceOf[Scratch]
+        if (s ne null) return s
+      }
+      getSlow(t)
+    }
+    private def getSlow(thread: Thread): Scratch = thread match {
+      case t if t eq firstThread =>
+        val s = viaThreadLocal
+        firstThreadScratch = s
+        s
       case t: util.ScratchThread if t.scratchOwner eq null =>
         val s = viaThreadLocal
         t.scratch = s
