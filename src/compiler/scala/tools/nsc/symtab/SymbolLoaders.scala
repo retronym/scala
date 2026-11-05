@@ -240,7 +240,20 @@ abstract class SymbolLoaders {
       })
     }
 
-    override def complete(root: Symbol): Unit = {
+    // -Yparallel-typer: a loader runs under the completion lock whoever calls it (`info`, but also `load` from
+    // `typeParams`, `exists`, `Typer.isStale`, ...): the classfile parser and the unpickler are one instance with
+    // mutable state. The roots it publishes together (class, module, module class) are marked as completing on this
+    // thread, so that another thread waits rather than read one of them before its members are entered.
+    override def complete(root: Symbol): Unit =
+      if (isConcurrentCompiler) underCompletionLock {
+        val roots = List(root, root.companionSymbol, root.moduleClass, root.companionSymbol.moduleClass).filter(_ ne NoSymbol).distinct
+        val saved = roots.map(_.markCompleting())
+        try completeRoots(root)
+        finally roots.lazyZip(saved).foreach(_ unmarkCompleting _)
+      }
+      else completeRoots(root)
+
+    private def completeRoots(root: Symbol): Unit = {
       val assocFile = associatedFile(root)
       currentRunProfilerBeforeCompletion(root, assocFile)
       try {

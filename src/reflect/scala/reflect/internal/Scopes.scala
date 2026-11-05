@@ -55,9 +55,18 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   private def newScopeEntry(sym: Symbol, owner: Scope): ScopeEntry = {
     val e = new ScopeEntry(sym, owner)
     e.next = owner.elems
+    publishEntry()
     owner.elems = e
     e
   }
+
+  /** In a concurrent compiler a class's scope can be read on one thread while its unit's thread enters into it
+   *  (`addSyntheticMethods` during the typing of a case class). An entry is prepended to the list and to its bucket,
+   *  and published after its fields are written, so that a reader that finds it finds the rest of the chain behind it
+   *  (it can miss the new entry, as a serial compiler that typed the units in another order would). The reader's
+   *  loads are ordered by their dependency on the reference it followed. */
+  @inline private def publishEntry(): Unit =
+    if (isConcurrentCompiler) java.lang.invoke.VarHandle.releaseFence()
 
   object Scope {
     def unapplySeq(decls: Scope): Some[Seq[Symbol]] = Some(decls.toList)
@@ -95,11 +104,14 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** a cache for all elements, to be used by symbol iterator.
      */
-    private[this] var elemsCache: List[Symbol] = null
-    private[this] var cachedSize = -1
+    /** The elements as a list and their number, valid while `elems` is still `head`: one holder, so that a
+     *  thread reads both together, and keyed by the head, so that a list computed by another thread before an entry
+     *  was prepended and stored after the flush is not taken for the current one. */
+    private final class ElemsCache(val head: ScopeEntry, val list: List[Symbol] /* null: not yet */, val size: Int)
+    private[this] var elemsCache: ElemsCache = null
+    private def validElemsCache: ElemsCache = { val c = elemsCache; if ((c ne null) && (c.head eq elems)) c else null }
     private def flushElemsCache(): Unit = {
       elemsCache = null
-      cachedSize = -1
     }
 
     /** size and mask of hash tables
@@ -120,14 +132,18 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** the number of entries in this scope */
     override def size: Int = {
-      if (cachedSize < 0)
-        cachedSize = directSize
-
-      cachedSize
+      val c = validElemsCache
+      if (c ne null) c.size
+      else {
+        val head = elems
+        val n = directSize(head)
+        elemsCache = new ElemsCache(head, null, n) // the size alone
+        n
+      }
     }
-    private def directSize: Int = {
+    private def directSize(head: ScopeEntry): Int = {
       var s = 0
-      var e = elems
+      var e = head
       while (e ne null) {
         s += 1
         e = e.next
@@ -149,6 +165,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     private def enterInHash(table: Array[ScopeEntry], e: ScopeEntry): Unit = {
       val i = e.sym.name.start & HASHMASK
       e.tail = table(i)
+      publishEntry()
       table(i) = e
     }
 
@@ -423,19 +440,21 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     /** Return all symbols as a list in the order they were entered in this scope.
      */
     override def toList: List[Symbol] = {
-      if (elemsCache eq null) {
+      val c = validElemsCache
+      if ((c ne null) && (c.list ne null)) c.list
+      else {
+        val head = elems
         var symbols: List[Symbol] = Nil
         var count = 0
-        var e = elems
+        var e = head
         while ((e ne null) && e.owner == this) {
           count += 1
           symbols ::= e.sym
           e = e.next
         }
-        elemsCache = symbols
-        cachedSize = count
+        elemsCache = new ElemsCache(head, symbols, count)
+        symbols
       }
-      elemsCache
     }
 
     /** Vanilla scope - symbols are stored in declaration order.

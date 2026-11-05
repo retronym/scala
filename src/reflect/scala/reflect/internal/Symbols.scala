@@ -596,7 +596,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           false
         }
       } else {
-        _rawflags |= LOCKED
+        orRawFlags(LOCKED)
         true
       }
     }
@@ -604,7 +604,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // Unlock a symbol
     private[scala] def unlock(): Unit =
       if ((_rawflags & LOCKED) != 0L) {
-        _rawflags &= ~LOCKED
+        andRawFlags(~LOCKED)
         if (lockTracing && !_lockingTrace.isEmpty)
           _lockingTrace.remove(index = _lockingTrace.size - 1, count = 1) // dropRightInPlace(1)
         if (settings.Yrecursion.value != 0)
@@ -759,8 +759,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Does symbol have ALL the flags in `mask` set? */
     final def hasAllFlags(mask: Long): Boolean = getFlag(mask) == mask
 
-    def setFlag(mask: Long): this.type   = { _rawflags |= mask ; this }
-    def resetFlag(mask: Long): this.type = { _rawflags &= ~mask ; this }
+    def setFlag(mask: Long): this.type   = { orRawFlags(mask) ; this }
+    def resetFlag(mask: Long): this.type = { andRawFlags(~mask) ; this }
+
+    /** The read-modify-writes of the flags. In a concurrent compiler a symbol from the classpath or from another unit
+     *  can have its flags set by two threads at once (`TRIEDCOOKING`, `LOCKED` on one thread and `IS_ERROR` on
+     *  another, ...): each is a compare-and-set, so that neither update is lost. The blind stores (`flags_=`,
+     *  `rawflags_=`, `initFlags`) stay plain: they are made by the symbol's creator, or under the completion lock on
+     *  the symbol being completed (`Namers.safeNextOverriddenSymbol`).
+     */
+    @inline private def orRawFlags(mask: Long): Unit =
+      if (isConcurrentCompiler) casRawFlags(mask, 0L) else _rawflags |= mask
+    @inline private def andRawFlags(mask: Long): Unit =
+      if (isConcurrentCompiler) casRawFlags(0L, ~mask) else _rawflags &= mask
+    /** `_rawflags = (_rawflags | set) & ~clear`, atomically. */
+    private def casRawFlags(set: Long, clear: Long): Unit = {
+      var current = _rawflags
+      while (!(SymbolFlagsHandle.rawflags.compareAndSet(this, current, (current | set) & ~clear): Boolean))
+        current = _rawflags
+    }
     def resetFlags(): Unit               = { rawflags = 0 }
 
     /** Default implementation calls the generic string function, which
@@ -1656,7 +1673,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         }
       } else {
         if (lockTracing) _lockingTrace.addOne(this)
-        _rawflags |= LOCKED
+        orRawFlags(LOCKED)
       }
       val current = phase
       if (isCompilerUniverse) {
@@ -4117,4 +4134,15 @@ trait SymbolsStats {
   val symbolsCount        = newView("#symbols")(symbolTable.getCurrentSymbolIdCount)
   val typeSymbolCount     = newCounter("#type symbols")
   val classSymbolCount    = newCounter("#class symbols")
+}
+
+/** The flags of a `Symbol` as a `VarHandle`, for their atomic updates in a concurrent compiler. */
+private[internal] object SymbolFlagsHandle {
+  val rawflags: java.lang.invoke.VarHandle = {
+    import java.lang.invoke.MethodHandles
+    val cls = classOf[Symbols#Symbol]
+    // the field's name is expanded when it is accessed from outside its class (an inlined accessor)
+    val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_rawflags" || n.endsWith("$$_rawflags")).get
+    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, java.lang.Long.TYPE)
+  }
 }
