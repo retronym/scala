@@ -788,22 +788,41 @@ abstract class SymbolTable extends macros.Universe
     })
   }
   private[this] final val CheckScratchOwner = java.lang.Boolean.getBoolean("scalac.debug.checkScratchOwner")
-  private[this] lazy val scratches: Scratches = if (isConcurrentUniverse) new PerThreadScratches else new OneScratch
-  final def scratch: Scratch = scratches.get
+  /** The one `Scratch` of a universe used from one thread at a time, once made; null in a concurrent one. Not
+   *  initialized in the constructor (`= _`): `scratch` can be called while the traits of the cake are initialized,
+   *  before this class's own fields are. */
+  private[this] var oneScratch: Scratch = _
+  /** The scratch states of a concurrent universe, once made; null in one used from one thread at a time. Published
+   *  without a fence: its fields are final. */
+  private[this] var perThreadScratches: PerThreadScratches = _
+  /** The scratch state of this thread. In a universe used from one thread at a time (the batch compiler), a field
+   *  read and a null test: no lazy val's flag and no virtual call. */
+  final def scratch: Scratch = {
+    val s = oneScratch
+    if (s ne null) s
+    else {
+      val p = perThreadScratches
+      if (p ne null) p.get else firstScratch()
+    }
+  }
+  private[this] def firstScratch(): Scratch = synchronized {
+    if (oneScratch ne null) oneScratch
+    else if (perThreadScratches ne null) perThreadScratches.get
+    else if (isConcurrentUniverse) {
+      perThreadScratches = new PerThreadScratches
+      perThreadScratches.get
+    } else {
+      oneScratch = new Scratch
+      oneScratch
+    }
+  }
 
-  private[internal] abstract class Scratches {
-    def get: Scratch
-  }
-  private final class OneScratch extends Scratches {
-    private[this] val scratch = new Scratch
-    def get: Scratch = scratch
-  }
   /** One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
    *  caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
    *  would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
    *  long-lived thread would keep every universe it ever used.
    */
-  private final class PerThreadScratches extends Scratches {
+  private final class PerThreadScratches {
     private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
     private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
     // The thread that made the universe (the driver's) runs the serial phases: its scratch state is in a field, so
