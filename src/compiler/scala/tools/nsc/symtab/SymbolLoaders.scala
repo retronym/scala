@@ -246,10 +246,15 @@ abstract class SymbolLoaders {
     // thread, so that another thread waits rather than read one of them before its members are entered.
     override def complete(root: Symbol): Unit =
       if (isConcurrentCompiler) underCompletionLock {
-        val roots = List(root, root.companionSymbol, root.moduleClass, root.companionSymbol.moduleClass).filter(_ ne NoSymbol).distinct
-        val saved = roots.map(_.markCompleting())
-        try completeRoots(root)
-        finally roots.lazyZip(saved).foreach(_ unmarkCompleting _)
+        // A caller that found this loader as the root's info and then waited for the lock (`Typer.isStale` calls
+        // `load` on what it read before) must not load the class a second time: that gives the class new type
+        // parameters and members under the feet of the threads that use the first ones (I11).
+        if (root.rawInfo eq this) {
+          val roots = List(root, root.companionSymbol, root.moduleClass, root.companionSymbol.moduleClass).filter(_ ne NoSymbol).distinct
+          val saved = roots.map(_.markCompleting())
+          try completeRoots(root)
+          finally roots.lazyZip(saved).foreach(_ unmarkCompleting _)
+        }
       }
       else completeRoots(root)
 
