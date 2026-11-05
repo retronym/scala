@@ -11,7 +11,11 @@ import scala.tools.nsc.symtab.SymbolTableForUnitTesting
 class BaseTypeSeqsTest {
   object symbolTable extends SymbolTableForUnitTesting {
     /** As if the `Int` counter of symbol ids had wrapped around and come back to `id`. */
-    def nextIdWillBe(id: Int): Unit = ids = id - 1
+    def nextIdWillBe(id: Int): Unit = repeatedId = id
+    private[this] var repeatedId = 0 // no symbol has id 0
+    override protected def nextId(): Int =
+      if (repeatedId == 0) super.nextId()
+      else { val id = repeatedId; repeatedId = 0; id }
   }
   import symbolTable._, definitions._
 

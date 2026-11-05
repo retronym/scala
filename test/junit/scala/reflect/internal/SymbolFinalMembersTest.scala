@@ -15,7 +15,7 @@ class SymbolFinalMembersTest {
   // Reads false, and silently turns every cache into an allocation, if the flag is set after the mixins' initializers.
   @Test def reusableInstancesAreEnabledInACompilerUniverse(): Unit = {
     assertTrue(isCompilerUniverse)
-    assertSame(findMemberInstance.using(x => x), findMemberInstance.using(x => x))
+    assertSame(scratch.findMembers.using(x => x), scratch.findMembers.using(x => x))
   }
 
   // ReflectGlobal is a compiler universe, but its symbols must keep runtime reflection's locks.
