@@ -110,7 +110,7 @@ trait Types
   private object substTypeMapCache {
     private[this] var cached: SubstTypeMap = new SubstTypeMap(Nil, Nil)
 
-    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap = if (isCompilerUniverse) {
+    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap = if (isCompilerUniverse && !isConcurrentCompiler) {
       if ((cached.from ne from) || (cached.to ne to))
         cached = new SubstTypeMap(from, to)
       cached
@@ -1447,8 +1447,10 @@ trait Types
     }
     override def underlying: Type = {
       val cache = underlyingCache
-      if (underlyingPeriod == currentPeriod && cache != null) cache
-      else {
+      // In a concurrent compiler, another thread may have stamped the period before it stored the value: the
+      // initial `NoType` is then not an answer, and the slow path waits for the completion lock.
+      if (underlyingPeriod == currentPeriod && cache != null && ((cache ne NoType) || !isConcurrentCompiler)) cache
+      else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineUnderlyingOfSingleType(this) // this line is synchronized in runtime reflection
         underlyingCache
       }
@@ -1628,7 +1630,7 @@ trait Types
       val cached = baseTypeSeqCache
       if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
         cached
-      else {
+      else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineBaseTypeSeqOfCompoundType(this)
         if (baseTypeSeqCache eq undetBaseTypeSeq)
           throw new RecoverableCyclicReference(typeSymbol)
@@ -1642,7 +1644,7 @@ trait Types
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
       if (baseClassesPeriod == currentPeriod && cached != null) cached
-      else {
+      else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineBaseClassesOfCompoundType(this)
         if (baseClassesCache eq null)
           throw new RecoverableCyclicReference(typeSymbol)
@@ -2591,7 +2593,7 @@ trait Types
     override def parents: List[Type] = {
       val cache = parentsCache
       if (parentsPeriod == currentPeriod && cache != null) cache
-      else {
+      else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineParentsOfTypeRef(this)
         parentsCache
       }
@@ -2622,7 +2624,11 @@ trait Types
       val cache = baseTypeSeqCache
       if (baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
         cache
-      else {
+      // In a concurrent compiler, the slow path is under the completion lock, the read of the field after `define`
+      // included: the definition stamps the period before it stores the value (and marks it in progress with
+      // `undetBaseTypeSeq`, or null), so a thread at another phase that redefined it between the two would show this
+      // one its marker, a cycle. Under the lock, a marker is only seen by the thread that set it.
+      else underCompletionLock {
         defineBaseTypeSeqOfTypeRef(this)
         if (baseTypeSeqCache == undetBaseTypeSeq)
           throw new RecoverableCyclicReference(sym)
@@ -4066,7 +4072,7 @@ trait Types
     val sym1 = if (sym.isAbstractType) rebind(pre, sym) else sym
     // don't expand cyclical type alias
     // we require that object is initialized, thus info.typeParams instead of typeParams.
-    if (sym1.isAliasType && sameLength(sym1.info.typeParams, args) && !sym1.lockOK)
+    if (sym1.isAliasType && sameLength(sym1.info.typeParams, args) && !sym1.lockOK && sym1.isLockedHere)
       throw new RecoverableCyclicReference(sym1)
 
     val pre1 = pre match {
@@ -4082,7 +4088,7 @@ trait Types
   // Optimization to avoid creating unnecessary new typerefs.
   def copyTypeRef(tp: Type, pre: Type, sym: Symbol, args: List[Type]): Type = tp match {
     case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.name == sym.name =>
-      if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
+      if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK && sym.isLockedHere)
         throw new RecoverableCyclicReference(sym)
 
       if ((args eq Nil) && (pre eq NoPrefix))
@@ -5223,8 +5229,10 @@ trait Types
     def this(msg: String) = this(NoPosition, msg)
 
     final override def fillInStackTrace() =
-      if (settings.isDebug) super.fillInStackTrace() else this
+      if (settings.isDebug || TypeErrorStacks) super.fillInStackTrace() else this
   }
+  /** `-Dscalac.debug.typeErrorStacks`: type errors keep their stack, without the rest of `-Ydebug`. */
+  private[this] final val TypeErrorStacks = java.lang.Boolean.getBoolean("scalac.debug.typeErrorStacks")
 
   // TODO: RecoverableCyclicReference should be separated from TypeError,
   // but that would be a big change. Left for further refactoring.
