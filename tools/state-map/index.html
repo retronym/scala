@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scalac state map</title>
+<style>
+:root {
+  --bg: #fbfaf8; --panel: #ffffff; --fg: #1d1d1f; --muted: #6b6b70; --line: #d9d6d0; --edge: #8d8a84;
+  --node: #ffffff; --node-head: #f0eee9; --hl: #1f6feb;
+  --kA: #2f6fd0; --kB: #8a4fc7; --kC: #1f8a6a; --kD: #b7791f; --kE: #c2416e; --kL: #5d7a8a; --kU: #9a9a9f;
+  --warn: #d1242f; --warn-bg: #fde7e9; --chip: #f0eee9; --chip-on: #1d1d1f; --chip-on-fg: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151517; --panel: #1d1d20; --fg: #e8e6e3; --muted: #9b9a97; --line: #3a3a3f; --edge: #77757a;
+    --node: #212125; --node-head: #2b2b30; --hl: #58a6ff;
+    --kA: #6ea2ff; --kB: #b98cf0; --kC: #4cc79e; --kD: #e0a94a; --kE: #ef7aa3; --kL: #8fb2c4; --kU: #8a8a90;
+    --warn: #ff6b6b; --warn-bg: #3d1a1d; --chip: #2b2b30; --chip-on: #e8e6e3; --chip-on-fg: #151517;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151517; --panel: #1d1d20; --fg: #e8e6e3; --muted: #9b9a97; --line: #3a3a3f; --edge: #77757a;
+  --node: #212125; --node-head: #2b2b30; --hl: #58a6ff;
+  --kA: #6ea2ff; --kB: #b98cf0; --kC: #4cc79e; --kD: #e0a94a; --kE: #ef7aa3; --kL: #8fb2c4; --kU: #8a8a90;
+  --warn: #ff6b6b; --warn-bg: #3d1a1d; --chip: #2b2b30; --chip-on: #e8e6e3; --chip-on-fg: #151517;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); font: 13px/1.4 -apple-system, system-ui, sans-serif; }
+#app { display: grid; grid-template-columns: 1fr 360px; height: 100vh; }
+#main { display: grid; grid-template-rows: auto 1fr; min-width: 0; }
+#bar { padding: 6px 10px; border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; gap: 3px; }
+.row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.row .lbl { color: var(--muted); font-size: 10px; width: 70px; text-transform: uppercase; letter-spacing: .04em; }
+.chip { border: 1px solid var(--line); background: var(--chip); color: var(--fg); border-radius: 10px; padding: 0 7px; font-size: 11px; cursor: pointer; user-select: none; }
+.chip.on { background: var(--chip-on); color: var(--chip-on-fg); border-color: var(--chip-on); }
+.chip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 4px; vertical-align: 0; }
+.chip.warn.on { background: var(--warn); border-color: var(--warn); color: #fff; }
+button { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 4px; padding: 2px 8px; cursor: pointer; }
+input[type=search] { font: inherit; font-size: 12px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 4px; padding: 2px 6px; width: 220px; }
+#stage { position: relative; overflow: hidden; }
+#svg { width: 100%; height: 100%; cursor: grab; display: block; }
+#side { border-left: 1px solid var(--line); background: var(--panel); overflow: auto; padding: 10px 12px; }
+#side h2 { font-size: 13px; margin: 12px 0 6px; }
+#side h2:first-child { margin-top: 0; }
+table { border-collapse: collapse; font-size: 11px; width: 100%; }
+td, th { border-bottom: 1px solid var(--line); padding: 2px 4px; text-align: right; }
+td:first-child, th:first-child { text-align: left; }
+#detail { font-size: 12px; }
+#detail code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+#detail .sites { max-height: 260px; overflow: auto; }
+details summary { cursor: pointer; font-weight: 600; margin: 10px 0 4px; }
+.rule { font-size: 11px; margin: 3px 0; }
+.rule b { font-family: ui-monospace, Menlo, monospace; }
+#tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); padding: 6px 8px; border-radius: 4px; font-size: 11px; max-width: 460px; display: none; box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+#status { color: var(--muted); font-size: 11px; }
+svg text { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; fill: var(--fg); }
+svg .head { font-family: -apple-system, system-ui, sans-serif; font-weight: 600; font-size: 12px; }
+svg .pkg { fill: var(--muted); font-size: 10px; }
+svg .ty { fill: var(--muted); }
+svg .prot { font-size: 10px; }
+svg .prot.bad { fill: var(--warn); font-weight: 700; }
+svg text.ann { fill: var(--hl); font-weight: 600; }
+svg .nodebox { fill: var(--node); stroke: var(--line); }
+svg .nodebox.sel { stroke: var(--hl); stroke-width: 2; }
+svg .headbox { fill: var(--node-head); }
+svg .rowbad { fill: var(--warn-bg); }
+svg .edge { fill: none; stroke: var(--edge); opacity: .55; }
+svg .edge.hl { stroke: var(--hl); opacity: 1; }
+svg g.n { cursor: pointer; }
+svg a text:hover { text-decoration: underline; }
+button:focus-visible, .chip:focus-visible { outline: 2px solid var(--hl); outline-offset: 1px; }
+@media (max-width: 700px) { #app { grid-template-columns: 1fr; grid-template-rows: 1fr 40vh; } #side { border-left: 0; border-top: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="main">
+    <div id="bar">
+      <div class="row"><span class="lbl">kind</span><span id="f-kind" class="row"></span></div>
+      <div class="row"><span class="lbl">protection</span><span id="f-prot" class="row"></span></div>
+      <div class="row"><span class="lbl">hazard</span><span id="f-haz" class="row"></span></div>
+      <div class="row"><span class="lbl">feature</span><span id="f-feat" class="row"></span></div>
+      <div class="row"><span class="lbl">role / reach</span><span id="f-role" class="row"></span><span id="f-reach" class="row"></span></div>
+      <div class="row"><span class="lbl">source</span><span id="f-source" class="row"></span></div>
+      <div class="row"><span class="lbl">view</span>
+        <button id="b-reset">core view</button>
+        <button id="b-all">every class with a shown field</button>
+        <label class="chip" id="b-types">expand Type families</label>
+        <input type="search" id="q" placeholder="add a class or field (Enter)">
+        <button id="b-theme">theme</button>
+        <span id="status"></span>
+      </div>
+    </div>
+    <div id="stage"><svg id="svg"><defs><marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="var(--edge)"/></marker></defs><g id="vp"></g></svg><div id="tip"></div></div>
+  </div>
+  <div id="side">
+    <h2>Field</h2>
+    <div id="detail"><span class="mono" style="color:var(--muted)">Hover a row for its rules and access sites; click it for its source on GitHub. Click a class header to add the classes its fields point to; alt-click to add the classes that point to it as well; shift-click to remove it. Alt-click a kind, protection or hazard chip to show it alone; a feature or hazard chip brings in the classes with fields it selects. The default view is reach typer without lazy vals; toggle the chips for the rest. The work list is <code>worklist.md</code> beside this page.</span></div>
+    <h2>Shown, kind × protection</h2>
+    <div id="counts"></div>
+    <details><summary>Hazards</summary><div id="hazards"></div></details>
+    <details><summary>Rules</summary><div id="rules"></div></details>
+    <div id="meta" class="mono" style="color:var(--muted); margin-top:10px"></div>
+  </div>
+</div>
+<script src="state-map.data.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/elkjs@0.9.3/lib/elk.bundled.js"></script>
+<script>
+(() => {
+const M = window.STATE_MAP;
+if (!M) { document.getElementById('status').textContent = 'state-map.data.js did not load: run tools/state-map/run.sh'; return; }
+if (!window.ELK) { document.getElementById('status').textContent = 'elkjs did not load (it comes from cdn.jsdelivr.net)'; return; }
+const elk = new ELK();
+const classes = new Map(M.classes.map(c => [c.name, c]));
+const byOwner = new Map();
+for (const f of M.fields) { if (!byOwner.has(f.owner)) byOwner.set(f.owner, []); byOwner.get(f.owner).push(f); }
+const KINDS = ['A', 'B', 'C', 'D', 'E', 'L', 'unclassified'];
+const KCOL = { A: '--kA', B: '--kB', C: '--kC', D: '--kD', E: '--kE', L: '--kL', unclassified: '--kU' };
+const protBase = p => p.split(':')[0];
+const sourceOf = f => (f.kindSource === 'annotated' || f.protectionSource === 'annotated' || f.note) ? 'annotated' : 'inferred';
+const SOURCES = [['annotated', 'annotations.tsv'], ['inferred', 'inferred']];
+const isBad = p => p === 'none' || p.startsWith('partial');
+const PROT_SHORT = { 'thread-confined': 'confined', 'synchronized': 'sync', 'concurrent': 'concurrent', 'volatile': 'volatile', 'seam': 'seam',
+  'lazy-monitor': 'lazy', 'init-only': 'init', 'batch-only': 'batch', 'post-pickler': 'post', 'runtime-reflection': 'runtime', 'driver': 'driver',
+  'gil': 'gil', 'none': '! none', 'partial': '! partial', 'mixed': 'mixed', 'unknown': '?' };
+const PROT_LABELS = { 'thread-confined': 'one thread only', 'synchronized': 'monitor', 'concurrent': 'concurrent structure', 'volatile': 'volatile',
+  'seam': 'chosen by isConcurrentUniverse', 'lazy-monitor': 'lazy val (monitor on init)', 'init-only': 'written during setup', 'batch-only': 'batch only',
+  'post-pickler': 'after pickler', 'runtime-reflection': 'runtime reflection', 'driver': 'driver / tooling', 'gil': 'reflection GIL',
+  none: 'unprotected', partial: 'partly protected', mixed: 'mixed', unknown: 'not seen' };
+const protLabel = p => PROT_LABELS[p] || p;
+const REACHES = ['typer', 'post-pickler', 'runtime', 'driver'];
+
+const simple = n => n.replace(/\$$/, '').split('.').filter(s => /^[A-Z_$]/.test(s)).join('.') || n;
+const isType = n => { const c = classes.get(n); return !!c && (n === 'internal.Types.Type' || c.bases.includes('internal.Types.Type')); };
+const inst = n => (classes.get(n) || {}).instance;
+const GROUPS = [
+  { id: 'ClassSymbol/ModuleSymbol', match: n => /^internal\.Symbols\.(ClassSymbol|ModuleClassSymbol|ModuleSymbol|PackageClassSymbol|PackageObjectClassSymbol|RefinementClassSymbol)$/.test(n) },
+  { id: 'Symbol', match: n => /^internal\.Symbols\.(\w*Symbol|TypeSkolem|TypeHistory)$/.test(n) },
+  { id: 'TypeRef', match: n => /^internal\.Types\.(\w*TypeRef)$/.test(n) },
+  { id: 'CompoundType/ClassInfoType', match: n => /^internal\.Types\.(CompoundType|ClassInfoType|RefinedType|RefinedType0|PackageClassInfoType)$/.test(n) },
+  { id: 'TypeVar', match: n => n === 'internal.Types.TypeVar' || n.startsWith('internal.tpe.TypeConstraints.') },
+  { id: 'Type families', types: true, match: n => isType(n) },
+  { id: 'uniques', match: n => /Uniques/.test(n) },
+  { id: 'Scope', match: n => n.startsWith('internal.Scopes.') },
+  { id: 'Scratch/Frame', match: n => /^internal\.SymbolTable\.(Scratch|Frame|OneScratch|PerThreadScratches|Scratches)/.test(n) },
+  { id: 'Names', match: n => n.startsWith('internal.Names') },
+  { id: 'SymbolTable/Global', match: n => inst(n) === 'universe' && /^(internal|nsc)\.[A-Z]\w*\$?$/.test(n) && !/^(nsc\.Reporting|internal\.Names|internal\.Definitions)/.test(n) },
+  { id: 'Run', match: n => n.startsWith('nsc.Global.Run') },
+  { id: 'Reporting', match: n => /^(nsc\.Reporting|nsc\.reporters\.|internal\.Reporter|internal\.Reporting)/.test(n) },
+  { id: 'CompilationUnit', match: n => n.startsWith('nsc.CompilationUnits.CompilationUnit') },
+  { id: 'Implicits', match: n => n.startsWith('nsc.typechecker.Implicits') },
+  { id: 'Typer/Context/Namer', match: n => /^nsc\.typechecker\.(Typers\.Typer|Contexts\.(Context|ImportContext|ContextReporter|BufferingReporter|ImmediateReporter|ImportInfo)|Namers\.Namer|Infer\.Inferencer)$/.test(n) },
+  { id: 'Analyzer', match: n => inst(n) === 'universe' && n.startsWith('nsc.typechecker.') },
+  { id: 'Loaders/ClassfileParser/Unpickler', match: n => /^(nsc\.symtab\.SymbolLoaders|nsc\.GlobalSymbolLoaders|nsc\.symtab\.classfile\.|internal\.pickling\.|nsc\.tasty\.)/.test(n) },
+  { id: 'Definitions', nodefault: true, match: n => n.startsWith('internal.Definitions') },
+];
+const DEFAULT_NODES = GROUPS.filter(g => !g.nodefault).map(g => g.id);
+
+const state = {
+  kind: new Set(KINDS.filter(k => k !== 'L')), source: new Set(SOURCES.map(s => s[0])), prot: new Set(), feat: null, haz: null,
+  role: new Set(['semantic', 'cache']), reach: new Set(['typer']),
+  expandTypes: false, visible: new Set(DEFAULT_NODES), sel: null,
+};
+const allProts = [...new Set(M.fields.map(f => protBase(f.protection)))].sort();
+allProts.forEach(p => state.prot.add(p));
+const allFeats = M.header.features.map(f => f.id);
+const allHaz = M.header.hazards.map(h => h.id);
+
+function nodeOf(cls) {
+  for (const g of GROUPS) {
+    if (g.types && state.expandTypes) continue;
+    if (g.match(cls)) return g.id;
+  }
+  return cls;
+}
+const groupClasses = new Map();
+function membersOf(node) {
+  const key = node + '|' + state.expandTypes;
+  if (!groupClasses.has(key)) groupClasses.set(key, [...byOwner.keys()].filter(c => nodeOf(c) === node));
+  return groupClasses.get(key);
+}
+function shown(f) {
+  if (!state.kind.has(f.kind)) return false;
+  if (!state.prot.has(protBase(f.protection))) return false;
+  if (!state.role.has(f.role)) return false;
+  if (!state.reach.has(f.reach)) return false;
+  if (!state.source.has(sourceOf(f))) return false;
+  if (state.feat && !f.features.some(x => state.feat.has(x))) return false;
+  if (state.haz && !f.hazards.some(x => state.haz.has(x))) return false;
+  return true;
+}
+function rowsOf(node) {
+  const cs = membersOf(node);
+  const multi = cs.length > 1;
+  const rows = [];
+  for (const c of cs) for (const f of byOwner.get(c) || []) if (shown(f)) rows.push({ f, label: (multi ? simple(c).split('.').pop() + '.' : '') + f.name });
+  return rows;
+}
+
+// ---- chips
+function chips(el, items, set, opts = {}) {
+  el.innerHTML = '';
+  for (const it of items) {
+    const c = document.createElement('span');
+    c.className = 'chip' + (set.has(it.id) ? ' on' : '') + (it.warn ? ' warn' : '');
+    c.innerHTML = (it.color ? `<span class="sw" style="background:var(${it.color})"></span>` : '') + it.label;
+    c.title = it.title || '';
+    c.tabIndex = 0;
+    c.onclick = e => { opts.onclick ? opts.onclick(it, e) : (set.has(it.id) ? set.delete(it.id) : set.add(it.id)); renderChips(); render(); };
+    el.appendChild(c);
+  }
+}
+const count = pred => M.fields.filter(pred).length;
+function renderChips() {
+  chips(document.getElementById('f-kind'), KINDS.map(k => ({ id: k, label: `${k === 'unclassified' ? 'unclassified' : k + ' ' + M.header.kinds[k]} (${count(f => f.kind === k)})`, color: KCOL[k] })), state.kind,
+    { onclick: (it, e) => toggleOnly(state.kind, it.id, e, KINDS) });
+  const protItems = [{ id: '__bad', label: 'unprotected only', warn: true, title: 'none and partial: no protection found at some access' }]
+    .concat(allProts.map(p => ({ id: p, label: `${protLabel(p)} (${count(f => protBase(f.protection) === p)})`, title: p, warn: p === 'none' || p === 'partial' })));
+  const protSet = new Set(state.prot);
+  if ([...state.prot].every(p => p === 'none' || p === 'partial') && state.prot.size > 0) protSet.add('__bad');
+  chips(document.getElementById('f-prot'), protItems, protSet, {
+    onclick: (it, e) => {
+      if (it.id === '__bad') {
+        const bad = [...state.prot].every(p => p === 'none' || p === 'partial');
+        state.prot.clear();
+        (bad ? allProts : ['none', 'partial']).forEach(p => state.prot.add(p));
+      } else toggleOnly(state.prot, it.id, e, allProts);
+    }
+  });
+  const anyChip = (el, all, cur, docs, setter) => chips(el, [{ id: '__all', label: 'any' }].concat(all.map(x => ({ id: x, label: `${x} (${count(f => (setter === 'feat' ? f.features : f.hazards).includes(x))})`, title: (docs.find(d => d.id === x) || {}).doc }))),
+    cur ? cur : new Set(['__all']), {
+    onclick: (it, e) => {
+      let s = state[setter];
+      if (it.id === '__all') s = null;
+      else if (e.altKey || e.metaKey) s = new Set([it.id]);
+      else { s = s || new Set(); s.has(it.id) ? s.delete(it.id) : s.add(it.id); if (!s.size) s = null; }
+      state[setter] = s;
+      addSelectedClasses(); fitted = false;
+    }
+  });
+  anyChip(document.getElementById('f-haz'), allHaz, state.haz, M.header.hazards, 'haz');
+  anyChip(document.getElementById('f-feat'), allFeats, state.feat, M.header.features, 'feat');
+  chips(document.getElementById('f-role'), ['semantic', 'cache'].map(r => ({ id: r, label: `${r} (${count(f => f.role === r)})`, title: r === 'cache' ? 'kind C: derivable, performance only' : 'every other kind' })), state.role);
+  chips(document.getElementById('f-reach'), REACHES.map(r => ({ id: r, label: `${r} (${count(f => f.reach === r)})`, title: (M.header.rules.find(x => x.id === 'R.' + r) || {}).doc })), state.reach);
+  chips(document.getElementById('f-source'), SOURCES.map(([id, label]) => ({ id, label: `${label} (${count(f => sourceOf(f) === id)})`,
+    title: id === 'annotated' ? 'a row of annotations.tsv sets its kind or protection, or adds a note' : 'placed by the rules alone' })), state.source,
+    { onclick: (it, e) => toggleOnly(state.source, it.id, e, SOURCES.map(s => s[0])) });
+  document.getElementById('b-types').className = 'chip' + (state.expandTypes ? ' on' : '');
+}
+// a click toggles; alt-click shows that one alone
+function toggleOnly(set, id, e, all) {
+  if (e.altKey || e.metaKey) { set.clear(); set.add(id); }
+  else set.has(id) ? set.delete(id) : set.add(id);
+  if (!set.size) all.forEach(x => set.add(x));
+}
+
+// ---- graph
+const ROW = 16, HEAD = 34, CH = 6.7, PAD = 8;
+function trunc(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+function buildGraph() {
+  const nodes = [];
+  const rowsBy = new Map();
+  for (const id of state.visible) {
+    const rows = rowsOf(id);
+    if (!rows.length) continue;
+    rowsBy.set(id, rows);
+  }
+  const edges = [];
+  for (const [id, rows] of rowsBy) {
+    const cs = membersOf(id);
+    const title = cs.length === 1 && id === cs[0] ? simple(id) : id;
+    const sub = cs.length === 1 ? `${classes.get(cs[0])?.pkg || ''} · ${inst(cs[0]) || ''}` : `${cs.length} classes`;
+    const nameW = Math.min(40, Math.max(...rows.map(r => r.label.length + (r.f.var ? 0 : 6))));
+    const typeW = Math.min(28, Math.max(...rows.map(r => r.f.type.length)));
+    const protW = Math.max(...rows.map(r => (PROT_SHORT[protBase(r.f.protection)] || r.f.protection).length));
+    const w = Math.max(title.length * 7.6 + 2 * PAD, sub.length * 6 + 2 * PAD, (nameW + typeW + protW + 4) * CH + 2 * PAD + 6);
+    const h = HEAD + rows.length * ROW + 4;
+    const byTarget = new Map();
+    rows.forEach(r => {
+      for (const t of new Set(r.f.edges.map(nodeOf))) if (t !== id && rowsBy.has(t)) {
+        if (!byTarget.has(t)) byTarget.set(t, []);
+        byTarget.get(t).push(r.f);
+      }
+    });
+    for (const [t, fs] of byTarget) edges.push({ id: `${id}->${t}`, sources: [id], targets: [t], from: id, to: t, fields: fs });
+    nodes.push({ id, width: w, height: h, _rows: rows, _title: title, _sub: sub, _nameW: nameW, _typeW: typeW });
+  }
+  return { id: 'root', layoutOptions: {
+      'elk.algorithm': 'layered', 'elk.direction': 'RIGHT', 'elk.layered.spacing.nodeNodeBetweenLayers': '70',
+      'elk.spacing.nodeNode': '28', 'elk.spacing.edgeNode': '16', 'elk.spacing.edgeEdge': '6', 'elk.edgeRouting': 'ORTHOGONAL', 'elk.layered.considerModelOrder.strategy': 'NODES_AND_EDGES' },
+    children: nodes, edges };
+}
+
+const svg = document.getElementById('svg'), vp = document.getElementById('vp'), tip = document.getElementById('tip');
+let view = { x: 20, y: 20, k: 1 }, fitted = false, seq = 0;
+function applyView() { vp.setAttribute('transform', `translate(${view.x},${view.y}) scale(${view.k})`); }
+const NS = 'http://www.w3.org/2000/svg';
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+
+async function render() {
+  const my = ++seq;
+  const g = buildGraph();
+  let laid;
+  try { laid = await elk.layout(g); } catch (e) { document.getElementById('status').textContent = 'layout failed: ' + e; return; }
+  if (my !== seq) return;
+  vp.innerHTML = '';
+  const edgeEls = [];
+  const eg = el('g', {}, vp);
+  for (const e of laid.edges || []) {
+    for (const s of e.sections || []) {
+      const pts = [s.startPoint, ...(s.bendPoints || []), s.endPoint];
+      let d = `M${pts[0].x},${pts[0].y}`;
+      for (const p of pts.slice(1)) d += ` L${p.x},${p.y}`;
+      const src = g.edges.find(x => x.id === e.id);
+      const p = el('path', { d, class: 'edge', 'marker-end': 'url(#arr)', 'stroke-width': Math.min(4, 0.6 + Math.log2(1 + src.fields.length)) }, eg);
+      p._from = src.from; p._to = src.to; p._fields = src.fields;
+      const tt = el('title', {}, p); tt.textContent = `${src.from} → ${src.to}: ${src.fields.map(f => f.name).join(', ')}`;
+      edgeEls.push(p);
+    }
+  }
+  for (const n of laid.children) {
+    const gn = el('g', { class: 'n', transform: `translate(${n.x},${n.y})` }, vp);
+    el('rect', { class: 'nodebox' + (state.sel === n.id ? ' sel' : ''), width: n.width, height: n.height, rx: 4 }, gn);
+    el('rect', { class: 'headbox', width: n.width - 2, x: 1, y: 1, height: HEAD - 4, rx: 3 }, gn);
+    const head = el('text', { class: 'head', x: PAD, y: 15 }, gn); head.textContent = n._title;
+    const sub = el('text', { class: 'pkg', x: PAD, y: 27 }, gn); sub.textContent = n._sub;
+    const hit = el('rect', { width: n.width, height: HEAD, fill: 'transparent' }, gn);
+    hit.onclick = ev => { ev.stopPropagation(); ev.shiftKey ? hide(n.id) : expand(n.id, ev.altKey || ev.metaKey); };
+    hit.onmouseenter = () => edgeEls.forEach(p => p.classList.toggle('hl', p._from === n.id || p._to === n.id));
+    hit.onmouseleave = () => edgeEls.forEach(p => p.classList.remove('hl'));
+    n._rows.forEach((r, i) => {
+      const y = HEAD + i * ROW;
+      const f = r.f;
+      const pb = protBase(f.protection);
+      if (isBad(f.protection)) el('rect', { class: 'rowbad', x: 1, y, width: n.width - 2, height: ROW }, gn);
+      el('rect', { x: 1, y: y + 1, width: 4, height: ROW - 2, fill: `var(${KCOL[f.kind]})` }, gn);
+      const a = el('a', { href: f.url, target: '_blank' }, gn);
+      const t = el('text', { x: PAD + 2, y: y + 12 }, a);
+      t.textContent = trunc((sourceOf(f) === 'annotated' ? '@ ' : '') + r.label + (f.lazy ? ' ⟨lazy⟩' : f.var ? '' : ' ⟨val⟩'), n._nameW + 1);
+      if (sourceOf(f) === 'annotated') t.setAttribute('class', 'ann');
+      const ty = el('text', { class: 'ty', x: PAD + 2 + (n._nameW + 1) * CH, y: y + 12 }, gn); ty.textContent = trunc(f.type, n._typeW);
+      const pr = el('text', { class: 'prot' + (isBad(f.protection) ? ' bad' : ''), x: n.width - PAD, y: y + 12, 'text-anchor': 'end' }, gn);
+      pr.textContent = PROT_SHORT[pb] || pb;
+      a.onmouseenter = ev => { showDetail(f); showTip(ev, f); edgeEls.forEach(p => p.classList.toggle('hl', p._fields.includes(f))); };
+      a.onmousemove = ev => moveTip(ev);
+      a.onmouseleave = () => { tip.style.display = 'none'; edgeEls.forEach(p => p.classList.remove('hl')); };
+    });
+  }
+  if (!fitted) fit(laid);
+  applyView();
+  const nf = laid.children.reduce((s, n) => s + n._rows.length, 0);
+  document.getElementById('status').textContent = `${laid.children.length} classes, ${nf} fields shown of ${M.fields.length}`;
+  renderCounts();
+}
+function fit(laid) {
+  const W = svg.clientWidth, H = svg.clientHeight;
+  const k = Math.min(1.1, (W - 40) / (laid.width || 1), (H - 40) / (laid.height || 1));
+  view = { k: Math.max(0.2, k), x: 20, y: 20 };
+  fitted = true;
+}
+function neighbours(id, incoming) {
+  const out = new Set();
+  for (const c of membersOf(id)) for (const f of byOwner.get(c) || []) if (shown(f)) f.edges.forEach(t => out.add(nodeOf(t)));
+  if (incoming) for (const f of M.fields) if (shown(f) && f.edges.some(t => nodeOf(t) === id)) out.add(nodeOf(f.owner));
+  out.delete(id);
+  return out;
+}
+function expand(id, incoming) {
+  state.sel = id;
+  const ns = neighbours(id, incoming);
+  ns.forEach(n => state.visible.add(n));
+  document.getElementById('status').textContent = `added ${ns.size} classes`;
+  render();
+}
+// a feature or hazard chip brings in the classes with fields it selects
+function addSelectedClasses() {
+  if (!state.feat && !state.haz) return;
+  for (const f of M.fields) if (shown(f)) state.visible.add(nodeOf(f.owner));
+}
+function hide(id) { state.visible.delete(id); render(); }
+
+// ---- detail and tooltip
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+const ruleDoc = id => (M.header.rules.find(r => r.id === id) || {}).doc || '';
+const shortPath = p => p.replace('src/compiler/scala/tools/nsc/', 'nsc/').replace('src/reflect/scala/reflect/', 'reflect/');
+
+function siteLink(s) {
+  const m = s.match(/^(\S+):(\d+) (.*)$/);
+  if (!m) return '';
+  const bad = / (none|concurrent-branch) in /.test(s);
+  return `<div><a class="mono" target="_blank" href="${M.header.github}/${M.header.tip}/${m[1]}#L${m[2]}">${esc(shortPath(m[1]))}:${m[2]}</a> <span class="mono" style="${bad ? 'color:var(--warn)' : ''}">${esc(m[3])}</span></div>`;
+}
+function showDetail(f) {
+  const acc = Object.entries(f.accesses).map(([k, v]) => `${k} ${v}`).join(', ') || 'none seen';
+  const sites = f.sites.map(siteLink).join('');
+  const decl = f.lazy ? 'lazy val' : f.var ? 'var' : 'val';
+  document.getElementById('detail').innerHTML = `
+    <div><b class="mono">${esc(f.owner)}#${esc(f.name)}</b></div>
+    <div class="mono">${f.annotations.map(a => '@' + esc(a) + ' ').join('')}${decl} ${esc(f.name)}: ${esc(f.type)}</div>
+    <div><a target="_blank" href="${f.url}" class="mono">${esc(shortPath(f.file))}:${f.line}</a> <span class="mono">· instance ${esc(f.instance)}${f.sharedVia.length ? ', also as ' + f.sharedVia.map(esc).join(', ') : ''}</span></div>
+    <div style="margin-top:4px"><span class="chip on" style="background:var(${KCOL[f.kind]});border-color:var(${KCOL[f.kind]})">${f.kind}</span>
+      <b>${f.kindSource}</b> ${f.kindRule ? `<b class="mono">${esc(f.kindRule)}</b> ${f.kindSource === 'inferred' ? esc(ruleDoc(f.kindRule)) : ''}` : 'no kind rule matched'}
+      ${f.kindSource === 'annotated' ? `<div class="mono">rules: ${esc(f.inferredKind)} ${esc(f.inferredKindRule)}</div>` : ''}</div>
+    <div style="margin-top:4px"><b class="mono" style="${isBad(f.protection) ? 'color:var(--warn)' : ''}">${esc(f.protection)}</b>
+      <b>${f.protectionSource}</b> (<span class="mono">${esc(f.protectionRule)}</span>, evidence ${f.evidence}) ${f.protectionSource === 'inferred' ? esc(ruleDoc(f.protectionRule)).slice(0, 220) : ''}
+      ${f.protectionSource === 'annotated' ? `<div class="mono">rules: ${esc(f.inferredProtection)} (${esc(f.inferredProtectionRule)})</div>` : ''}</div>
+    ${f.hazards.length ? `<div class="mono" style="margin-top:4px;color:var(--warn)">hazards: ${f.hazards.map(esc).join(', ')}</div>` : ''}
+    ${f.note ? `<div style="margin-top:4px"><b>note</b> ${esc(f.note)}</div>` : ''}
+    ${f.lazy ? `<div class="mono" style="margin-top:4px">initialiser ${f.forcesCompletion ? 'can force completion' : 'forces no completion found'}; calls ${esc(f.lazyCalls.join(', ') || '–')}</div>` : ''}
+    <div class="mono" style="margin-top:4px">accesses outside initialisation: ${esc(acc)}</div>
+    <div class="mono">features: ${f.features.join(', ') || '–'}; ${f.role}; reach ${f.reach} (${esc(f.reachRule)})</div>
+    ${f.mutableCollection ? `<div class="mono">mutable collection: ${esc(f.mutableCollection)}</div>` : ''}
+    ${sites ? `<div style="margin-top:6px"><b>access sites</b> (${f.siteCount}${f.siteCount > f.sites.length ? `, first ${f.sites.length}; all in state-map.json` : ''})</div><div class="sites">${sites}</div>` : ''}`;
+}
+function showTip(ev, f) {
+  tip.innerHTML = `<b class="mono">${esc(f.owner)}#${esc(f.name)}</b><br><span class="mono">${esc(f.type)}</span><br>${f.kind} (${f.kindSource}) · ${esc(f.protection)} (${f.protectionSource}) · ${esc(f.kindRule || 'unclassified')} · ${esc(f.instance)}${f.hazards.length ? '<br>' + esc(f.hazards.join(', ')) : ''}`;
+  tip.style.display = 'block'; moveTip(ev);
+}
+function moveTip(ev) { const r = svg.getBoundingClientRect(); tip.style.left = (ev.clientX - r.left + 14) + 'px'; tip.style.top = (ev.clientY - r.top + 14) + 'px'; }
+
+function renderCounts() {
+  const fs = [];
+  for (const id of state.visible) fs.push(...rowsOf(id).map(r => r.f));
+  const prots = [...new Set(fs.map(f => protBase(f.protection)))].sort();
+  let h = '<table><tr><th></th>' + KINDS.map(k => `<th>${k === 'unclassified' ? '?' : k}</th>`).join('') + '<th>Σ</th></tr>';
+  for (const p of prots) {
+    const row = KINDS.map(k => fs.filter(f => f.kind === k && protBase(f.protection) === p).length);
+    h += `<tr><td style="${p === 'none' || p === 'partial' ? 'color:var(--warn)' : ''}">${p}</td>${row.map(n => `<td>${n || ''}</td>`).join('')}<td>${row.reduce((a, b) => a + b, 0)}</td></tr>`;
+  }
+  h += '</table>';
+  document.getElementById('counts').innerHTML = h;
+}
+function renderStatic() {
+  document.getElementById('hazards').innerHTML = M.header.hazards.map(h => `<div class="rule"><b>${esc(h.id)}</b> (${count(f => f.hazards.includes(h.id))}): ${esc(h.doc)}</div>`).join('');
+  document.getElementById('rules').innerHTML = M.header.rules.map(r => `<div class="rule"><b>${esc(r.id)}</b> → ${esc(r.sets)}: ${esc(r.doc)}</div>`).join('') +
+    `<div class="rule">${esc(M.header.note)}</div>`;
+  document.getElementById('meta').innerHTML = `generated by ${esc(M.header.generator)} at <a target="_blank" href="${M.header.github.replace('/blob', '/tree')}/${M.header.tip}">${esc(M.header.tip.slice(0, 10))}</a>`;
+}
+
+// ---- controls
+document.getElementById('b-reset').onclick = () => {
+  state.expandTypes = false; groupClasses.clear();
+  state.visible = new Set(DEFAULT_NODES); state.sel = null; fitted = false; renderChips(); render();
+};
+document.getElementById('b-all').onclick = () => { state.visible = new Set([...byOwner.keys()].filter(c => (byOwner.get(c) || []).some(shown)).map(nodeOf)); fitted = false; render(); };
+document.getElementById('b-types').onclick = () => {
+  state.expandTypes = !state.expandTypes;
+  if (state.expandTypes) { state.visible.delete('Type families'); for (const c of byOwner.keys()) if (isType(c) && nodeOf(c) === c) state.visible.add(c); }
+  else { for (const c of [...state.visible]) if (isType(c) && !GROUPS.some(g => !g.types && g.match(c))) state.visible.delete(c); state.visible.add('Type families'); }
+  groupClasses.clear(); renderChips(); fitted = false; render();
+};
+document.getElementById('b-theme').onclick = () => {
+  const r = document.documentElement, dark = getComputedStyle(r).getPropertyValue('--bg').trim() === '#151517';
+  r.setAttribute('data-theme', dark ? 'light' : 'dark');
+};
+document.getElementById('q').onkeydown = e => {
+  if (e.key !== 'Enter') return;
+  const q = e.target.value.trim().toLowerCase(); if (!q) return;
+  const hits = new Set();
+  for (const f of M.fields) if ((f.owner + '#' + f.name).toLowerCase().includes(q)) hits.add(nodeOf(f.owner));
+  hits.forEach(h => state.visible.add(h));
+  document.getElementById('status').textContent = `added ${hits.size} classes`;
+  render();
+};
+let drag = null;
+svg.addEventListener('mousedown', e => { drag = { x: e.clientX - view.x, y: e.clientY - view.y }; svg.style.cursor = 'grabbing'; });
+window.addEventListener('mouseup', () => { drag = null; svg.style.cursor = 'grab'; });
+window.addEventListener('mousemove', e => { if (drag) { view.x = e.clientX - drag.x; view.y = e.clientY - drag.y; applyView(); } });
+svg.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = svg.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top;
+  const k = Math.min(3, Math.max(0.1, view.k * Math.exp(-e.deltaY * 0.0015)));
+  view.x = mx - (mx - view.x) * k / view.k; view.y = my - (my - view.y) * k / view.k; view.k = k; applyView();
+}, { passive: false });
+
+renderChips(); renderStatic(); render();
+})();
+</script>
+</body>
+</html>
