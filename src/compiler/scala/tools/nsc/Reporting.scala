@@ -187,6 +187,20 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       textEdits.clear()
     }
 
+    /** For sources parsed at the same time: keep their suspended messages in the order of `sources`, in which a
+     *  serial parser would have met them (the run reports them in that order if it ends before the typer).
+     */
+    def suspendInOrderOf[T](sources: List[SourceFile])(body: => T): T = {
+      synchronized(sources.foreach(s => suspendedMessages.getOrElseUpdate(repSrc(s), mutable.LinkedHashSet.empty)))
+      try body
+      finally synchronized(suspendedMessages.filterInPlace((_, ms) => ms.nonEmpty))
+    }
+
+    /** Forget the messages suspended for `source`, which is parsed again from the start. */
+    def clearSuspendedMessages(source: SourceFile): Unit = synchronized {
+      suspendedMessages.get(repSrc(source)).foreach(_.clear())
+    }
+
     def reportSuspendedMessages(unit: CompilationUnit): Unit = synchronized {
       val src = repSrc(unit.source)
       // sort suppressions. they are not added in any particular order because of lazy type completion

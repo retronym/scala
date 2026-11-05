@@ -165,7 +165,7 @@ abstract class SymbolicXMLBuilder(@unused p: Parsers#Parser, @unused preserveWS:
     import xml.Utility.parseAttributeValue
 
     parseAttributeValue(s, text(pos, _), entityRef(pos, _)) match {
-      case Nil      => gen.mkNil
+      case Nil      => underCompletionLock(gen.mkNil) // may complete `Nil`: the lock before a lazy val's monitor
       case t :: Nil => t
       case ts       => makeXMLseq(pos, ts, toVector = true)
     }
