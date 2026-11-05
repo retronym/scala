@@ -62,6 +62,38 @@ abstract class AbstractAnalyzer extends AnyRef
 
       def apply(unit: CompilationUnit): Unit = newNamer(rootContext(unit)).enterSym(unit.body)
     }
+
+    /** Load the packages that `unit` names, as `Namer.enterPackage` will: the same lookups in the same order, at the
+     *  namer's phase. Most of the namer's time is here (a package loader lists its class path and source path
+     *  entries and enters a symbol for each), and none of it needs the other units, so the parallel parser runs it
+     *  on the driver thread, unit by unit in the order of the units, while the workers parse. Nothing is created: a
+     *  package that does not exist yet is left for the namer, and nothing below it can exist.
+     */
+    def loadPackagesOf(unit: CompilationUnit): Unit = {
+      def existingPackage(owner: Symbol, pid: RefTree): Symbol = {
+        val pkgOwner = pid match {
+          case Ident(_)                 => if (owner.isEmptyPackageClass) rootMirror.RootClass else owner
+          case Select(qual: RefTree, _) => existingPackage(owner, qual).moduleClass
+          case _                        => NoSymbol
+        }
+        if (pkgOwner eq NoSymbol) NoSymbol
+        else {
+          val existing = pkgOwner.info.decls.lookup(pid.name)
+          if (existing.hasPackageFlag && pkgOwner == existing.owner) existing else NoSymbol
+        }
+      }
+      def load(owner: Symbol, tree: Tree): Unit = tree match {
+        case PackageDef(pid, stats) =>
+          val pkg = existingPackage(owner, pid)
+          if (pkg ne NoSymbol) {
+            pkg.info.decls
+            stats.foreach(load(pkg.moduleClass, _))
+          }
+        case DocDef(_, defn) => load(owner, defn)
+        case _               =>
+      }
+      enteringPhase(currentRun.namerPhase)(load(rootMirror.RootClass, unit.body))
+    }
   }
 
   object packageObjects extends {
