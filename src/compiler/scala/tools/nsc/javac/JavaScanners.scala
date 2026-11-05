@@ -700,6 +700,7 @@ trait JavaScanners extends ast.parser.ScannersCommon {
         }
         oct.asInstanceOf[Char]
       } // end octal
+      var skip = false
       def greatEscape: Char = {
         in.next()
         if ('0' <= in.ch && in.ch <= '7') octal
@@ -716,12 +717,13 @@ trait JavaScanners extends ast.parser.ScannersCommon {
             case '\\' => '\\'
             case CR | LF if inTextBlock =>
               if (!scanOnly) in.next()
+              skip = true
               0.toChar
             case _    =>
               if (!scanOnly) syntaxError(in.cpos - 1, "invalid escape character")
               in.ch
           }
-          if (x != 0) in.next()
+          if (!skip) in.next()
           x
         }
       } // end greatEscape
@@ -733,7 +735,7 @@ trait JavaScanners extends ast.parser.ScannersCommon {
           in.next()
           res
         }
-      if (c != 0 && !scanOnly) putChar(c)
+      if (!skip && !scanOnly) putChar(c)
     } // end getlitch
 
     /** read a triple-quote delimited text block, starting after the first three
