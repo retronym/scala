@@ -1578,7 +1578,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def info: Type = {
       if (_validTo == NoPeriod || isConcurrentCompiler && isCompletingElsewhere) completeInfoUnderLock()
-      rawInfo
+      rawInfoHere // not `rawInfo`, which would look for a completion elsewhere a second time
     }
 
     /** In a concurrent compiler, the thread that is completing this symbol, or null.
@@ -1844,11 +1844,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
+      if (isConcurrentCompiler) awaitCompletionElsewhere()
+      rawInfoHere
+    }
+    /** `rawInfo`, once a completion on another thread has been waited for (`info` has done so). The classes that
+     *  override `rawInfo` override `info` too. */
+    private[this] final def rawInfoHere: Type = {
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
       //      likely to inline into hot callers of .info
       val outer = Symbols.this
 
-      if (outer.isConcurrentCompiler) awaitCompletionElsewhere()
       var infos = this.infos
       outer.assert(infos != null, "infos must not be null")
 
