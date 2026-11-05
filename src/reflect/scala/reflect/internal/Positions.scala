@@ -374,7 +374,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
   }
   protected[this] lazy val posAssigner: PosAssigner = new DefaultPosAssigner
   // In a concurrent compiler, one per thread: `pos` is the argument of the `atPos` in progress.
-  private[this] lazy val posAssigners: ThreadLocal[PosAssigner] = ThreadLocal.withInitial(() => new DefaultPosAssigner)
+  private[this] lazy val posAssigners = perThread[PosAssigner](new DefaultPosAssigner)
 
   protected class DefaultPosAssigner extends PosAssigner {
     var pos: Position = _

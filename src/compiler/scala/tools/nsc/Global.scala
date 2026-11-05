@@ -62,6 +62,16 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
    *  universe is constructed, from the constructor parameter `currentSettings`. */
   override def isConcurrentUniverse = currentSettings.YparallelTyper.value
 
+  // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
+  // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
+  // the coarse root.
+  override def completionRoot(sym: Symbol): AnyRef = {
+    val run = currentRun
+    if ((run ne null) && run.compiles(sym)) {
+      if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym } else sym
+    } else scala.reflect.internal.util.CompletionLock.CoarseRoot
+  }
+
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
@@ -1198,11 +1208,12 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     var isDefined = false
     /** The currently compiled unit; set from GlobalPhase. Per thread under `-Yparallel-typer`. */
     private[this] var _currentUnit: CompilationUnit = NoCompilationUnit
-    private[this] val currentUnitPerThread: ThreadLocal[CompilationUnit] =
-      if (isConcurrentUniverse) ThreadLocal.withInitial(() => NoCompilationUnit) else null
-    def currentUnit: CompilationUnit = if (currentUnitPerThread eq null) _currentUnit else currentUnitPerThread.get
+    // a `perThread` holder, not a `ThreadLocal` of the unit, which would keep this compiler alive from a long-lived thread
+    private[this] val currentUnitPerThread: PerThread[Array[CompilationUnit]] =
+      if (isConcurrentUniverse) perThread(Array[CompilationUnit](NoCompilationUnit)) else null
+    def currentUnit: CompilationUnit = if (currentUnitPerThread eq null) _currentUnit else currentUnitPerThread.get(0)
     def currentUnit_=(unit: CompilationUnit): Unit =
-      if (currentUnitPerThread eq null) _currentUnit = unit else currentUnitPerThread.set(unit)
+      if (currentUnitPerThread eq null) _currentUnit = unit else currentUnitPerThread.get(0) = unit
 
     val profiler: Profiler = Profiler(settings)
     keepPhaseStack = settings.log.isSetByUser

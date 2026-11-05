@@ -1147,7 +1147,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           devWarning(s"calling Symbol#exists with sourcefile based symbol loader may give incorrect results.")
         false
       }
-      if (isConcurrentCompiler) { if (!isInitialized || isCompletingElsewhere) underCompletionLock {
+      if (isConcurrentCompiler) { if (!isInitialized || isCompletingElsewhere) withCompletionClaim(this) {
         if (!isInitialized) {
           val saved = markCompleting()
           try rawInfo.load(this)
@@ -1622,11 +1622,62 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Wait for another thread's completion of this symbol to end. */
     private[scala] final def awaitCompletionElsewhere(): Unit =
-      if (isConcurrentCompiler && isCompletingElsewhere) completionLock.await()
+      if (isConcurrentCompiler && isCompletingElsewhere) awaitMarker()
+
+    /** Wait until no other thread is completing this symbol: for the completion lock if a completion holds it, else
+     *  (a local completion, which takes no lock, see `completeLocally`) by parking briefly and looking again. */
+    private def awaitMarker(): Unit = {
+      val lock = completionLock
+      var parkNanos = 10000L
+      while (isCompletingElsewhere) {
+        if (lock.isPerKey) {
+          lock.awaitKey(completionRoot(this), this)
+          if (isCompletingElsewhere) java.util.concurrent.locks.LockSupport.parkNanos(parkNanos) // a local completion
+        }
+        else if (lock.isLocked) lock.await()
+        else {
+          val t0 = System.nanoTime()
+          java.util.concurrent.locks.LockSupport.parkNanos(parkNanos)
+          util.PerThreadTimes.addWait(System.nanoTime() - t0)
+          parkNanos = math.min(parkNanos * 2, 1000000L)
+        }
+      }
+    }
+
+    /** Is this symbol local to a body (owned, through classes, by a term)? Such a symbol is defined by the body that
+     *  a thread is typing, and no other thread reaches it before that unit is done: the inferred types of members
+     *  that other units see do not mention it (`checkNoEscaping`, existential abstraction and refinement clones). */
+    private def isLocalToBody: Boolean = {
+      var o = owner
+      while ((o ne NoSymbol) && !o.isPackageClass) {
+        if (o.isTerm) return true
+        o = o.owner
+      }
+      false
+    }
+
+    /** Complete a symbol local to a body without the completion lock (`-Dscalac.parallelTyper.localCompletions`):
+     *  the marker is claimed with a compare-and-set, so that a thread that reaches the symbol anyway waits for it
+     *  (`awaitMarker`) rather than complete it a second time. */
+    private def completeLocally(): Unit = {
+      val me = Thread.currentThread
+      var claimed = false
+      while (!claimed) {
+        if (_validTo != NoPeriod && !isCompletingElsewhere) return
+        claimed = (_completingThread eq me) || (SymbolFlagsHandle.completingThread.compareAndSet(this, null: Thread, me): Boolean)
+        if (!claimed) awaitMarker()
+      }
+      try completeInfoLoop()
+      finally _completingThread = null
+    }
 
     private def completeInfoUnderLock(): Unit = {
       val lock = completionLock
       if (lock eq null) completeInfoLoop()
+      // a local symbol of a source being compiled: one from the classpath (an unpickled existential owned by a
+      // method, say) is completed with the unpickler's shared state, under the lock
+      else if (localCompletions && isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
+      else if (lock.isPerKey) lock.claim(completionRoot(this), util.CompletionLock.completing, this)(completeInfoLoop())
       else {
         lock.acquire()
         try completeInfoLoop()
@@ -1883,7 +1934,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       // only try once...
       if (phase.erasedTypes || (this hasFlag TRIEDCOOKING))
         return this
-      if (isConcurrentCompiler) underCompletionLock(cookJavaRawInfo0()) else cookJavaRawInfo0()
+      if (!isConcurrentCompiler) cookJavaRawInfo0()
+      else if (isJavaDefined || isType && owner.isJavaDefined || isOverloaded) underCompletionLock(cookJavaRawInfo0())
+      else { // nothing to cook, only the flag to set (atomically) and the info to force (which takes the lock if it must)
+        this setFlag TRIEDCOOKING
+        info
+        this
+      }
     }
     // In a concurrent compiler, under the completion lock: this rewrites the info of a shared (classpath) symbol, and
     // two threads must not both apply `rawToExistential`.
@@ -1952,7 +2009,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
       if (isConcurrentCompiler) {
         if (validTo != NoPeriod && !isCompletingElsewhere) rawInfo.typeParams
-        else underCompletionLock {
+        else withCompletionClaim(this) {
           if (validTo != NoPeriod) rawInfo.typeParams
           else {
             val saved = markCompleting()
@@ -3383,9 +3440,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val period = tpePeriod
       val cache = tpeCache
       if (period == currentPeriod && (cache ne null) && (cache ne NoType)) cache
-      else underCompletionLock {
+      else if (!lockFreeTypeCaches) underCompletionLock {
         maybeUpdateTypeCache()
         tpeCache
+      }
+      else {
+        // Without the lock: the cycle marker is per thread, the value is stored before the period is stamped, and
+        // two threads compute the same (interned) `TypeRef`. A re-entry answers as the serial update would: the
+        // cycle marker `NoType` if the period was stamped (the symbol is initialized), else a cyclic reference.
+        val s = scratch
+        if (s.tpeInProgress.contains(this)) {
+          if (isInitialized) NoType else throw CyclicReference(this, typeConstructor)
+        }
+        else if (period != NoPeriod && (cache ne null) && (cache ne NoType) && isValid(period)) {
+          tpePeriod = currentPeriod
+          cache
+        }
+        else {
+          val saved = s.tpeInProgress
+          s.tpeInProgress = this :: saved
+          try {
+            val stamp = isInitialized
+            val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
+            val tp = newTypeRef(if (noTypeParams) Nil else unsafeTypeParams map (_.typeConstructor))
+            if (noTypeParams && tyconCacheNeedsUpdate) setTyconCache(tp)
+            tpeCache = tp
+            if (stamp) tpePeriod = currentPeriod
+            tp
+          } finally s.tpeInProgress = saved
+        }
       }
     }
     override def typeConstructor: Type = {
@@ -4136,8 +4219,15 @@ trait SymbolsStats {
   val classSymbolCount    = newCounter("#class symbols")
 }
 
-/** The flags of a `Symbol` as a `VarHandle`, for their atomic updates in a concurrent compiler. */
+/** The flags of a `Symbol` as a `VarHandle`, for their atomic updates in a concurrent compiler; and its completion
+ *  marker, claimed with a compare-and-set by a completion that takes no lock. */
 private[internal] object SymbolFlagsHandle {
+  val completingThread: java.lang.invoke.VarHandle = {
+    import java.lang.invoke.MethodHandles
+    val cls = classOf[Symbols#Symbol]
+    val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_completingThread" || n.endsWith("$$_completingThread")).get
+    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, classOf[Thread])
+  }
   val rawflags: java.lang.invoke.VarHandle = {
     import java.lang.invoke.MethodHandles
     val cls = classOf[Symbols#Symbol]

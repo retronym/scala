@@ -125,7 +125,7 @@ trait ParallelTyper {
     val failure = new AtomicReference[Throwable]()
     val done = new AtomicInteger()
     val workers = (1 to nThreads).map { i =>
-      val t = new Thread(null, () => {
+      val t = new scala.reflect.internal.util.ScratchThread(null, () => {
         try {
           phase = typerPhase
           var unit = queue.poll()
