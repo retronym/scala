@@ -541,8 +541,26 @@ abstract class SymbolTable extends macros.Universe
     val pendingBaseTypes = new mutable.HashSet[Type]
     var volatileRecursions: Int = 0
     val pendingVolatiles = new mutable.HashSet[Symbol]
-    /** The memo tables and recursion guards of the `lub` or `glb` in progress. */
-    val lubGlbCaches = new LubGlbCaches
+    /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
+     *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
+     */
+    final class MemoGuard[K] {
+      private[this] val InProgress: Type = new Type {}
+      val results = new mutable.HashMap[K, Type]
+      /** The result for `key`, or `onCycle` if it is in progress, or `null` if neither. */
+      def lookup(key: K, onCycle: Type): Type = results.getOrElse(key, null) match {
+        case InProgress => onCycle
+        case r          => r
+      }
+      def isInProgress(key: K): Boolean = results.get(key).contains(InProgress)
+      def begin(key: K): Unit = results(key) = InProgress
+      def end(key: K, result: Type): Unit = results(key) = result
+    }
+
+    val lubs = new MemoGuard[(Depth, List[Type])]
+    val glbs = new MemoGuard[(Depth, List[Type])]
+    /** Whether an outermost `lub` or `glb` is in progress in this frame. It owns the tables above. */
+    var inLubOrGlb: Boolean = false
     /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
     var globalGlbDepth: Depth = Depth.Zero
   }
