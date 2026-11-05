@@ -57,7 +57,10 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
    *  the map, the addendum should also be printed.
    */
   private val addendums = perRunCaches.newMap[Position, () => String]()
-  private var isTyperInPattern = false
+  // per thread under -Yparallel-typer
+  private[this] lazy val typerInPattern = perThread(Array(false))
+  private def isTyperInPattern: Boolean = typerInPattern.get(0)
+  private def isTyperInPattern_=(b: Boolean): Unit = typerInPattern.get(0) = b
 
   /** Devising new ways of communicating error info out of
    *  desperation to work on error messages.  This is used
@@ -73,9 +76,9 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
 
   def setAddendum(pos: Position, msg: () => String) =
     if (pos != NoPosition)
-      addendums(pos) = msg
+      addendums.synchronized(addendums(pos) = msg)
 
-  def withAddendum(pos: Position) = (_: String) + addendums.getOrElse(pos, () => "")()
+  def withAddendum(pos: Position) = (_: String) + addendums.synchronized(addendums.getOrElse(pos, () => ""))()
 
   def decodeWithKind(name: Name, owner: Symbol): String = {
     val prefix = (

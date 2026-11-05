@@ -411,6 +411,9 @@ trait AnalyzerPlugins { self: Analyzer with splain.SplainData =>
   /** A list of registered macro plugins */
   private var macroPlugins: List[MacroPlugin] = Nil
 
+  /** Are any analyzer or macro plugins registered? (`-Yparallel-typer` does not support them.) */
+  def hasAnalyzerOrMacroPlugins: Boolean = analyzerPlugins.nonEmpty || macroPlugins.nonEmpty
+
   /** Registers a new macro plugin */
   def addMacroPlugin(plugin: MacroPlugin): Unit = {
     if (!macroPlugins.contains(plugin))

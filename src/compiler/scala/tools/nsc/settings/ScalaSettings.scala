@@ -360,6 +360,8 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val YmacroClasspath = PathSetting       ("-Ymacro-classpath", "The classpath used to reflectively load macro implementations, default is the compilation classpath.", "")
 
   val Youtline        = BooleanSetting    ("-Youtline", "Don't compile method bodies. Use together with `-Ystop-after:pickler` to generate the pickled signatures for all source files.").internalOnly()
+  val YparallelTyper  = BooleanSetting    ("-Yparallel-typer", "Typecheck the units on several threads over one compiler (experimental).").internalOnly()
+  val YparallelTyperThreads = IntSetting  ("-Yparallel-typer-threads", "Worker threads for -Yparallel-typer, 0 for the number of processors", 0, Some((0, 256)), (_: String) => None).internalOnly()
 
   val unsafe = MultiStringSetting("-Yrelease", "packages", "Expose platform packages hidden under --release")
   val exposeEmptyPackage = BooleanSetting ("-Yexpose-empty-package", "Internal only: expose the empty package.").internalOnly()

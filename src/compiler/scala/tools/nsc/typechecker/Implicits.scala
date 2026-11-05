@@ -25,7 +25,6 @@ import scala.language.implicitConversions
 import scala.reflect.internal.util.{ReusableInstance, Statistics, TriState}
 import scala.reflect.internal.TypesStats
 import scala.tools.nsc.Reporting.WarningCategory.{Scala3Migration, WFlagSelfImplicit}
-import symtab.Flags._
 import PartialFunction.cond
 
 /** This trait provides methods to find various kinds of implicits.
@@ -251,10 +250,20 @@ trait Implicits extends splain.SplainData {
   private type Infos = List[ImplicitInfo]
   private type Infoss = List[List[ImplicitInfo]]
   private type InfoMap = LinkedHashMap[Symbol, List[ImplicitInfo]] // A map from class symbols to their associated implicits
-  private val implicitsCache = new LinkedHashMap[Type, Infoss]
-  private val infoMapCache = new LinkedHashMap[Symbol, InfoMap]
-  private val improvesCache = perRunCaches.newMap[(ImplicitInfo, ImplicitInfo), Boolean]()
-  private val implicitSearchId = { var id = 1 ; () => try id finally id += 1 }
+  /** The memo tables of implicit search: one set per thread under `-Yparallel-typer`, where a worker's die with it.
+   *  The `ImplicitInfo`s in them have lazy caches of their own, so they are not shared either. */
+  private final class ImplicitsCaches {
+    val implicitsCache = new LinkedHashMap[Type, Infoss]
+    val infoMapCache = new LinkedHashMap[Symbol, InfoMap]
+    val improvesCache = new mutable.HashMap[(ImplicitInfo, ImplicitInfo), Boolean]()
+    val hasMemberCache = new mutable.HashMap[Name, Type]()
+  }
+  private[this] val implicitsCaches = perThread(new ImplicitsCaches)
+  private def implicitsCache = implicitsCaches.get.implicitsCache
+  private def infoMapCache = implicitsCaches.get.infoMapCache
+  private def improvesCache = implicitsCaches.get.improvesCache
+  perRunCaches.recordCache[mutable.Clearable](() => implicitsCaches.get.improvesCache.clear())
+  private val implicitSearchId = { val id = new java.util.concurrent.atomic.AtomicInteger(1) ; () => id.getAndIncrement() }
 
   private val shadowerUseOldImplementation = java.lang.Boolean.getBoolean("scalac.implicit.shadow.old")
   def resetImplicits(): Unit = {
@@ -331,7 +340,7 @@ trait Implicits extends splain.SplainData {
     def isSearchedPrefix: Boolean = name == null && sym == NoSymbol
 
     def isCyclicOrErroneous: Boolean =
-      if(sym.hasFlag(LOCKED)) true
+      if (sym.isLockedHere) true
       else {
         if(!isErroneousCache.isKnown)
           isErroneousCache = computeErroneous
@@ -428,8 +437,8 @@ trait Implicits extends splain.SplainData {
   /** An extractor for types of the form ? { name: ? }
    */
   object HasMember {
-    private val hasMemberCache = perRunCaches.newMap[Name, Type]()
-    def apply(name: Name): Type = hasMemberCache.getOrElseUpdate(name, memberWildcardType(name, WildcardType))
+    perRunCaches.recordCache[mutable.Clearable](() => implicitsCaches.get.hasMemberCache.clear())
+    def apply(name: Name): Type = implicitsCaches.get.hasMemberCache.getOrElseUpdate(name, memberWildcardType(name, WildcardType))
   }
 
   /** An extractor for types of the form ? { name: (? >: argtpe <: Any*)restp }
@@ -2004,10 +2013,11 @@ trait Implicits extends splain.SplainData {
     def isShadowed(name: Name): Boolean
   }
   object Shadower {
-    private[this] val localShadowerCache = ReusableInstance[LocalShadower](new LocalShadower, enabled = isCompilerUniverse)
+    // one per thread under -Yparallel-typer: `ReusableInstance` is not thread safe
+    private[this] val localShadowerCaches = perThread(ReusableInstance[LocalShadower](new LocalShadower, enabled = isCompilerUniverse))
 
     def using[T](local: Boolean)(f: Shadower => T): T =
-      if (local) localShadowerCache.using { shadower =>
+      if (local) localShadowerCaches.get.using { shadower =>
         shadower.clear()
         f(shadower)
       }

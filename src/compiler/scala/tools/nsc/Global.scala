@@ -58,6 +58,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // the mirror --------------------------------------------------
 
   override def isCompilerUniverse = true
+  /** `-Yparallel-typer`: the typer's units are typechecked on several threads (see `ParallelTyper`). Read while the
+   *  universe is constructed, from the constructor parameter `currentSettings`. */
+  override def isConcurrentUniverse = currentSettings.YparallelTyper.value
+
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
@@ -1054,9 +1058,14 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   def currentUnit: CompilationUnit  = if (currentRun eq null) NoCompilationUnit else currentRun.currentUnit
   def currentSource: SourceFile     = if (currentUnit.exists) currentUnit.source else lastSeenSourceFile
   def runReporting: PerRunReporting = currentRun.reporting
-  def currentFreshNameCreator       = if (curFreshNameCreator == null) currentUnit.fresh else curFreshNameCreator
+  def currentFreshNameCreator       = {
+    val c = if (curFreshNameCreatorPerThread eq null) curFreshNameCreator else curFreshNameCreatorPerThread.get
+    if (c == null) currentUnit.fresh else c
+  }
   private[this] var curFreshNameCreator: FreshNameCreator = null
-  private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit = curFreshNameCreator = fresh
+  private[this] val curFreshNameCreatorPerThread: ThreadLocal[FreshNameCreator] = if (isConcurrentUniverse) new ThreadLocal else null
+  private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit =
+    if (curFreshNameCreatorPerThread eq null) curFreshNameCreator = fresh else curFreshNameCreatorPerThread.set(fresh)
 
   def isGlobalInitialized = definitions.isDefinitionsInitialized && rootMirror.isMirrorInitialized
   private def isRunGlobalInitialized = (curRun ne null) && isGlobalInitialized
@@ -1185,8 +1194,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
      *  top of the file so at least they're not trivially null.
      */
     var isDefined = false
-    /** The currently compiled unit; set from GlobalPhase */
-    var currentUnit: CompilationUnit = NoCompilationUnit
+    /** The currently compiled unit; set from GlobalPhase. Per thread under `-Yparallel-typer`. */
+    private[this] var _currentUnit: CompilationUnit = NoCompilationUnit
+    private[this] val currentUnitPerThread: ThreadLocal[CompilationUnit] =
+      if (isConcurrentUniverse) ThreadLocal.withInitial(() => NoCompilationUnit) else null
+    def currentUnit: CompilationUnit = if (currentUnitPerThread eq null) _currentUnit else currentUnitPerThread.get
+    def currentUnit_=(unit: CompilationUnit): Unit =
+      if (currentUnitPerThread eq null) _currentUnit = unit else currentUnitPerThread.set(unit)
 
     val profiler: Profiler = Profiler(settings)
     keepPhaseStack = settings.log.isSetByUser
@@ -1239,8 +1253,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     val compiledFiles   = new mutable.HashSet[String]
 
-    /** A map from compiled top-level symbols to their source files */
-    val symSource = new mutable.HashMap[Symbol, AbstractFile]
+    /** A map from compiled top-level symbols to their source files. Written by the typer: concurrent under
+     *  `-Yparallel-typer`. */
+    val symSource: mutable.Map[Symbol, AbstractFile] =
+      if (isConcurrentUniverse) scala.jdk.CollectionConverters.ConcurrentMapHasAsScala(new java.util.concurrent.ConcurrentHashMap[Symbol, AbstractFile]()).asScala
+      else new mutable.HashMap[Symbol, AbstractFile]
 
     /** A map from compiled top-level symbols to their picklers */
     val symData = new mutable.HashMap[Symbol, PickleBuffer]
@@ -1375,7 +1392,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** take note that a phase on a unit is completed
      *  (for progress reporting)
      */
-    def advanceUnit(): Unit = {
+    def advanceUnit(): Unit = synchronized {
       unitc += 1
       refreshProgress()
     }
@@ -1711,6 +1728,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     /** Compile the unit until `globalPhase`, but at least to phase "typer". */
     def compileLate(unit: CompilationUnit): Unit = {
+      if (analyzer.parallelTyperActive)
+        throw new FatalError(s"-Yparallel-typer does not support compiling a source file late: $unit")
       addUnit(unit)
 
       if (firstPhase ne null) { // we might get here during initialization, is a source is newer than the binary

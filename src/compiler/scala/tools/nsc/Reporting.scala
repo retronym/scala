@@ -155,15 +155,20 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
           Action.Warning
       }
 
-    def clearSuppressionsComplete(sourceFile: SourceFile): Unit = suppressionsComplete -= repSrc(sourceFile)
+    // -Yparallel-typer: the state of this object is read and written by every typer thread, under its monitor.
+    // Messages are rendered before the monitor is taken (rendering can complete symbols, so wait for the completion
+    // lock), and nothing under it completes symbols; the reporter's monitor is taken inside this one, never around it.
 
-    def addSuppression(sup: Suppression): Unit = {
+    def clearSuppressionsComplete(sourceFile: SourceFile): Unit = synchronized { suppressionsComplete -= repSrc(sourceFile) }
+
+    def addSuppression(sup: Suppression): Unit = synchronized {
       val source = sup.annotPos.source
       suppressions.getOrElseUpdate(repSrc(source), mutable.ListBuffer.empty) += sup
     }
 
-    def suppressionExists(pos: Position): Boolean =
+    def suppressionExists(pos: Position): Boolean = synchronized {
       suppressions.getOrElse(repSrc(pos.source), Nil).exists(_.annotPos.point == pos.point)
+    }
 
     def runFinished(hasErrors: Boolean): Unit = {
       // report suspended messages (in case the run finished before typer)
@@ -182,7 +187,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       textEdits.clear()
     }
 
-    def reportSuspendedMessages(unit: CompilationUnit): Unit = {
+    def reportSuspendedMessages(unit: CompilationUnit): Unit = synchronized {
       val src = repSrc(unit.source)
       // sort suppressions. they are not added in any particular order because of lazy type completion
       for (sups <- suppressions.get(src))
@@ -237,10 +242,11 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       }
     }
 
-    def shouldSuspend(warning: Message): Boolean =
+    def shouldSuspend(warning: Message): Boolean = synchronized {
       warning.pos.source != NoSourceFile && !suppressionsComplete(repSrc(warning.pos.source))
+    }
 
-    def issueIfNotSuppressed(warning: Message): Unit =
+    def issueIfNotSuppressed(warning: Message): Unit = synchronized {
       if (shouldSuspend(warning))
         suspendedMessages.getOrElseUpdate(repSrc(warning.pos.source), mutable.LinkedHashSet.empty) += warning
       else nowarnAction(warning) match {
@@ -250,6 +256,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
           issueWarning(warning, verbose = true)
         case _ =>
       }
+    }
 
     private def summarize(action: Action, category: WarningCategory): Unit = {
       def rerunMsg: String = {
@@ -347,6 +354,13 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
     }
 
     def featureWarning(pos: Position, featureName: String, featureDesc: String, featureTrait: Symbol, construct: => String = "", required: Boolean, site: Symbol): Unit = {
+      // rendered outside the monitor
+      val constructString = construct
+      val siteString = siteName(site)
+      val category = featureCategory(featureTrait.nameString)
+      featureWarning0(pos, featureName, featureDesc, featureTrait, constructString, required, siteString, category)
+    }
+    private def featureWarning0(pos: Position, featureName: String, featureDesc: String, featureTrait: Symbol, construct: String, required: Boolean, site: String, category: WarningCategory): Unit = synchronized {
       val req     = if (required) "needs to" else "should"
       val fqname  = s"scala.language.$featureName"
       val explain =
@@ -364,7 +378,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       if (required) {
         val amended = if (isXfix) s"$msg\n${suspendedMessages(repSrc(pos.source)).filter(pos includes _.pos).map(_.msg).mkString("\n")}" else msg
         reporter.error(pos, amended)
-      } else warning(pos, msg, featureCategory(featureTrait.nameString), site)
+      } else warning(pos, msg, category, site)
     }
 
     // Used in the optimizer where we don't have symbols, the site string is created from the class internal name and method name.
@@ -388,7 +402,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       CodeAction(title, pos, newText, desc, expected.forall(e => e._1 == e._2.source.sourceAt(pos)))
 
     // Remember CodeActions that match `-quickfix` and report the error through the reporter
-    def error(pos: Position, msg: String, actions: List[CodeAction]): Unit = {
+    def error(pos: Position, msg: String, actions: List[CodeAction]): Unit = synchronized {
       val quickfixed = {
         if (registerErrorTextEdit(pos, msg, actions)) s"[rewritten by -quickfix] $msg"
         else if (actions.exists(_.edits.nonEmpty) && !settings.quickFixSilent) s"$msg [quickfixable]"

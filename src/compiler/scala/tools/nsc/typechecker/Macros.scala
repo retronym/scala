@@ -496,7 +496,24 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
   /** Keeps track of macros in-flight.
    *  See more informations in comments to `openMacros` in `scala.reflect.macros.whitebox.Context`.
    */
-  var _openMacros = List[MacroContext]()
+  /** The bookkeeping of macro expansion on one thread (per thread under -Yparallel-typer, where an expansion on
+   *  one thread must not be seen as open on another, and the delayed expansions and undetermined type parameters
+   *  are those of the thread's own typing). */
+  private[typechecker] final class MacroState {
+    var openMacros = List[MacroContext]()
+    var hasPendingMacroExpansions = false
+    val forced = scala.reflect.internal.util.WeakHashSet.empty[Tree]
+    val delayed = scala.collection.mutable.WeakHashMap[Tree, scala.collection.mutable.Set[Symbol]]()
+    val undetparams = scala.collection.mutable.HashSet[Symbol]()
+  }
+  private[this] lazy val macroStates = perThread(new MacroState)
+  private def macroState: MacroState = macroStates.get
+  perRunCaches.recordCache[scala.collection.mutable.Clearable] { () =>
+    val s = macroState; s.forced.clear(); s.delayed.clear(); s.undetparams.clear()
+  }
+
+  def _openMacros = macroState.openMacros
+  def _openMacros_=(ms: List[MacroContext]): Unit = macroState.openMacros = ms
   def openMacros = _openMacros
   def pushMacroContext(c: MacroContext) = _openMacros ::= c
   def popMacroContext() = _openMacros = _openMacros.tail
@@ -743,7 +760,9 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
     if (!settings.YmacroFresh.value) currentFreshNameCreator = typer.fresh
     val macroSym = expandee.symbol
     currentRun.profiler.beforeMacroExpansion(macroSym)
-    try {
+    // -Yparallel-typer: one expansion at a time, under the completion lock (not a lock of its own: an expansion
+    // completes symbols, and a completion can expand a macro, so two locks would be taken in both orders).
+    try underCompletionLock {
       pluginsMacroExpand(typer, expandee, mode, pt)
     } finally {
       currentRun.profiler.afterMacroExpansion(macroSym)
@@ -858,10 +877,12 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
    *    1) type vars (tpe.isInstanceOf[TypeVar]) // [Eugene] this check is disabled right now, because TypeVars seem to be created from undetparams anyways
    *    2) undetparams (sym.isTypeParameter && !sym.isSkolem)
    */
-  var hasPendingMacroExpansions = false // JZ this is never reset to false. What is its purpose? Should it not be stored in Context?
-  def typerShouldExpandDeferredMacros: Boolean = hasPendingMacroExpansions && !delayed.isEmpty
-  private val forced = perRunCaches.newWeakSet[Tree]()
-  private val delayed = perRunCaches.newWeakMap[Tree, scala.collection.mutable.Set[Symbol]]()
+  // JZ this is never reset to false. What is its purpose? Should it not be stored in Context?
+  def hasPendingMacroExpansions: Boolean = macroState.hasPendingMacroExpansions
+  def hasPendingMacroExpansions_=(b: Boolean): Unit = macroState.hasPendingMacroExpansions = b
+  def typerShouldExpandDeferredMacros: Boolean = { val s = macroState; s.hasPendingMacroExpansions && !s.delayed.isEmpty }
+  private def forced = macroState.forced
+  private def delayed = macroState.delayed
   private def isDelayed(expandee: Tree) = !delayed.isEmpty && (delayed contains expandee)
   def clearDelayed(): Unit = delayed.clear()
   private def calculateUndetparams(expandee: Tree): scala.collection.mutable.Set[Symbol] =
@@ -876,7 +897,7 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
       macroLogVerbose("calculateUndetparams: %s".format(calculated))
       calculated
     })
-  private val undetparams = perRunCaches.newSet[Symbol]()
+  private def undetparams = macroState.undetparams
   def notifyUndetparamsAdded(newUndets: List[Symbol]): Unit = {
     undetparams ++= newUndets
     if (macroDebugVerbose) newUndets foreach (sym => println("undetParam added: %s".format(sym)))

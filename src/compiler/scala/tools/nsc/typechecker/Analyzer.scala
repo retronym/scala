@@ -35,6 +35,7 @@ trait Analyzer extends AnyRef
             with MacroAnnotationAttachments
             with AnalyzerPlugins
             with ImportTracking
+            with ParallelTyper
 {
   val global : Global
   import global._
@@ -123,6 +124,8 @@ trait Analyzer extends AnyRef
         global.echoPhaseSummary(this)
         val units = currentRun.units
 
+        if (settings.YparallelTyper.value) typeCheckInParallel(this, units.toList, applyPhase(_))
+        else
         while (units.hasNext) {
           applyPhase(units.next())
           undoLog.clear()

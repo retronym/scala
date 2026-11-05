@@ -50,13 +50,19 @@ trait Contexts { self: Analyzer with ImportTracking =>
   }
   private lazy val NoJavaMemberFound = (NoType, NoSymbol)
 
-  private lazy val startContext = NoContext.make(
+  // One per thread under -Yparallel-typer: the root of every context chain has mutable state of its own (the
+  // in-progress marker of `implicitss`, a cycle to any other thread).
+  private lazy val startContexts = perThread(NoContext.make(
     Template(List(), noSelfType, List()) setSymbol global.NoSymbol setType global.NoType,
     rootMirror.RootClass,
     rootMirror.RootClass.info.decls
-  )
+  ))
+  private def startContext = startContexts.get
 
-  var lastAccessCheckDetails: String = ""
+  /** A side channel from `isAccessible` to the error message: per thread under -Yparallel-typer. */
+  private[this] lazy val lastAccessCheckDetailsHolder = perThread(Array(""))
+  def lastAccessCheckDetails: String = lastAccessCheckDetailsHolder.get(0)
+  def lastAccessCheckDetails_=(s: String): Unit = lastAccessCheckDetailsHolder.get(0) = s
 
   val rootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
 
@@ -65,7 +71,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
   // register an import for the narrow purpose of excluding root imports of predef modules
   def registerImport(ctx: Context, imp: Import): Unit = {
     val sym = imp.expr.symbol
-    if (sym != null && !sym.hasPackageFlag && ctx.enclosingNonImportContext.owner.hasPackageFlag && rootImports(ctx.unit).contains(sym)) {
+    if (sym != null && !sym.hasPackageFlag && ctx.enclosingNonImportContext.owner.hasPackageFlag && rootImports(ctx.unit).contains(sym)) excludedRootImportsCached.synchronized {
       var current = excludedRootImportsCached.get(ctx.unit).getOrElse(Nil)
       current = sym :: current
       excludedRootImportsCached += ctx.unit -> current
@@ -87,9 +93,10 @@ trait Contexts { self: Analyzer with ImportTracking =>
     assert(definitions.isDefinitionsInitialized, "definitions uninitialized")
 
     if (unit.isJava) RootImports.javaList
-    else rootImportsCached.get(unit).getOrElse {
+    else rootImportsCached.synchronized(rootImportsCached.get(unit)).getOrElse {
+      // computed outside the monitor: it can complete symbols, and so wait for the completion lock
       val calculated = defaultRootImports
-      rootImportsCached += unit -> calculated
+      rootImportsCached.synchronized(rootImportsCached += unit -> calculated)
       calculated
     }
   }
@@ -1210,7 +1217,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
       else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
-      imp.isRootImport && excludedRootImportsCached.get(unit).exists(_.contains(imp.qual.symbol))
+      imp.isRootImport && excludedRootImportsCached.synchronized(excludedRootImportsCached.get(unit)).exists(_.contains(imp.qual.symbol))
 
     private[Contexts] def requiresQualifier(s: Symbol): Boolean = (
           s.owner.isClass
@@ -1230,7 +1237,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
     def isNameInScope(name: Name) = lookupSymbol(name, _ => true).isSuccess
 
     def lookupSymbol(name: Name, qualifies: Symbol => Boolean): NameLookup =
-      symbolLookupCache.using(_(this, name)(qualifies))
+      symbolLookupCaches.get.using(_(this, name)(qualifies))
 
     final def lookupCompanionInIncompleteOwner(original: Symbol): Symbol = {
       // Must have both a class and module symbol, so that `{ class C; def C }` or `{ type T; object T }` are not companions.
@@ -1317,7 +1324,8 @@ trait Contexts { self: Analyzer with ImportTracking =>
    *  the search continuing as long as no qualifying name is found.
    */
   // OPT: moved this into a (cached) object to avoid costly and non-eliminated {Object,Int}Ref allocations
-  private[Contexts] final val symbolLookupCache = ReusableInstance[SymbolLookup](new SymbolLookup, enabled = isCompilerUniverse)
+  // per thread under -Yparallel-typer: `ReusableInstance` is not thread safe
+  private[Contexts] final lazy val symbolLookupCaches = perThread(ReusableInstance[SymbolLookup](new SymbolLookup, enabled = isCompilerUniverse))
   private[Contexts] final class SymbolLookup {
     private[this] var lookupError: NameLookup  = _ // set to non-null if a definite error is encountered
     private[this] var inaccessible: NameLookup = _ // records inaccessible symbol for error reporting in case none is found
