@@ -9,7 +9,7 @@
 # (the optimizer settings of the published jars). The campaign has four variants, paired by iteration in each fork:
 #   base, aa (base in a second class loader: the noise floor), spike (no flag), and par1 (spike, -Yparallel-typer on
 #   one worker). Corpora: re2s, and with --scala the `scala` corpus (library, reflect, compiler); not scalap, which
-#   stops compiling once scala-reflect carries a top-level `io` package (the vendored scala-sharing).
+#   did not compile with spikes before de26c4b717, whose scala-reflect carried a top-level `io` package (I12).
 # It is queued on the perflab server (the machine's own testbed); follow it on the index URL that perflab prints.
 # Read the result with `perflab ab report campaigns/<name>.json` in the lab: the paired deltas of `spike` and `par1`
 # against `base`, beside `aa`'s, which is how large a delta must be to count.

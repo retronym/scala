@@ -260,6 +260,19 @@ Sites where the serial compiler (no flag) now pays a test or more, for the profi
 
 In a concurrent compiler, `phase` costs a `scratch` lookup: a lazy val read, then for a worker thread a type test and two loads (`ScratchThread`), for any other thread a `ThreadLocal` and a weak reference.
 
+## Overhead
+
+Measured by the profiling agent with perflab at 3c72e64ddf (re2s, typer only; campaigns paired per fork with an A/A noise floor; dashboard https://perflab.localhost/p/scala2-b7bb3d/ab/index.html; rerun with `tools/parallel-typer/perf/compare.sh <commit>`; microbenchmark `test/benchmarks/.../SerialPathBenchmark.scala`):
+
+- No flag, spike against fd95c5c1c1: +2.5 to +5.7%, of which the completion lock's commit +2.1% and the flag's plumbing +1.2%.
+- One worker against no flag: +17 to +24%. Attribution: scratch lookups 10.4%, `forceLazyVals` 7.8% (and all of the +9% allocation), `ThreadLocal`s 3.8%, the name table's locked paths 2.0%, monitors 1.6%, `isCompletingElsewhere` tested twice per `info` 1.5%. `_completingThread` adds 8 bytes to each term and method symbol.
+
+Integrated (one commit each, after 7465c8e730): the scratch state of a serial universe in a field (2539db69d3); `ScratchThread.scratchOwner` not volatile (4c316d022e; its "last scratch" field for the main thread dropped, the driver thread's field path covers it); `PerThread` values in a slot of the `Scratch` (b2c1813c0a, -3.8% on one worker alone); `SerialPathBenchmark` and `perf/compare.sh`; the name table's array read without a volatile load, re-read under the name lock past the stale array's end (0aef07c337); `phase` and `currentPeriod` as one load and a test, markers in the shared registers when they are per thread (881a1ce0e6); the workers' scratch lookup split so that it inlines, with the driver thread's field in the inlined part (6f2732993d); `lockedIfConcurrent` on the typer's shared maps (4b35b8a56d). Then: the cake's lazy vals forced only for two workers or more (eec7a6e439: the deadlock they prevent needs two), and `info` tests the marker once (6d66610ab1: `rawInfoHere` after its own test, `rawInfo` keeps its wait). The profiling agent measured about +18% for one worker against no flag with its fixes, before the last two.
+
+Check after integrating (6d66610ab1): oracle at 8 threads with `checkScratchOwner`, library, reflect, compiler 10 runs each clean (library O1 as before); stress-shared 6 in 100 (I11, all `ArrayList`/`TreeSet` self-type errors; 7 in 200 before); junit `scala.reflect.internal.*`, `scala.tools.nsc.typechecker.*` (285) pass. `bench.sh library` (6 warm-up, 5 measured, load average 5-6): serial 1803 ms, one thread 1520, 4 threads 880, 8 threads 791 (2.28x); bodies 1045 / 338 / 318 ms, pre-pass ≈250 ms. Not an A/B (no same-session run of the build before): perflab is for that.
+
+Left as future work: a side table for `_completingThread` (the 8 bytes per symbol); the lock-order alternative to forcing lazy vals with several workers (take the `definitions`/`runDefinitions` monitors before the completion lock), not simple, since the monitors are taken inside the lazy vals' generated code.
+
 ## Claims per completion root: design sketch (stage 2b)
 
 Read first: Scala 3's `parallel-signatures.md` (§5.7 class headers first, §5.8 the classpath root) and the FAQ of retronym/scala3#84 (wait-for cycles, I74 a Namer completion cannot be unwound, I87/I98 stale wait-for graphs).
