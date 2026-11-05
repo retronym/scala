@@ -85,7 +85,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
    *  Completing them all would type qualifiers that a lookup does not depend on, which can be cyclic.
    */
   private def maskingImportCandidates(unit: CompilationUnit): List[Import] =
-    maskingImportCandidatesCached.synchronized(maskingImportCandidatesCached.get(unit)).getOrElse {
+    lockedIfConcurrent(maskingImportCandidatesCached)(maskingImportCandidatesCached.get(unit)).getOrElse {
       // computed outside the monitor (-Yparallel-typer): `rootImports` can complete symbols
       var names = rootImports(unit).collect[Name] { case sym if !sym.hasPackageFlag => sym.name }.toSet
       val candidates = List.newBuilder[Import]
@@ -101,7 +101,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       }
       if (names.nonEmpty) traverse(unit.body :: Nil)
       val result = candidates.result()
-      maskingImportCandidatesCached.synchronized(maskingImportCandidatesCached.getOrElseUpdate(unit, result))
+      lockedIfConcurrent(maskingImportCandidatesCached)(maskingImportCandidatesCached.getOrElseUpdate(unit, result))
     }
 
   /** Is `sym` the qualifier of a top-level import in `unit`, which masks the root import of that module in the
@@ -129,10 +129,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     assert(definitions.isDefinitionsInitialized, "definitions uninitialized")
 
     if (unit.isJava) RootImports.javaList
-    else rootImportsCached.synchronized(rootImportsCached.get(unit)).getOrElse {
+    else lockedIfConcurrent(rootImportsCached)(rootImportsCached.get(unit)).getOrElse {
       // computed outside the monitor: it can complete symbols, and so wait for the completion lock
       val calculated = defaultRootImports
-      rootImportsCached.synchronized(rootImportsCached += unit -> calculated)
+      lockedIfConcurrent(rootImportsCached)(rootImportsCached += unit -> calculated)
       calculated
     }
   }

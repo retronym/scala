@@ -600,6 +600,11 @@ abstract class SymbolTable extends macros.Universe
   /** Whether symbols local to a body complete without the completion lock (`Symbol.completeLocally`). */
   final lazy val localCompletions: Boolean = isConcurrentCompiler && (System.getProperty("scalac.parallelTyper.lockedLocalCompletions") == null)
 
+  /** `body` holding `lock`'s monitor in a concurrent compiler, else `body`: for the monitors that `-Yparallel-typer`
+   *  puts on the typer's shared maps, which a serial compiler need not pay for. */
+  @inline final def lockedIfConcurrent[T](lock: AnyRef)(body: => T): T =
+    if (isConcurrentCompiler) lock.synchronized(body) else body
+
   /** `body` under the completion lock, in a concurrent compiler. */
   @inline final def underCompletionLock[T](body: => T): T = {
     val lock = completionLock

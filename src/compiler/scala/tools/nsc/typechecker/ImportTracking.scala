@@ -31,7 +31,7 @@ trait ImportTracking { self: AbstractAnalyzer =>
   private val importInfos   = mutable.Map.empty[CompilationUnit, List[TrackedInfo]].withDefaultValue(Nil)
 
   // -Yparallel-typer: both maps are under the monitor of `usedSelectors`; nothing under it completes symbols.
-  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = usedSelectors.synchronized {
+  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = lockedIfConcurrent(usedSelectors) {
     usedSelectors.get(info) match {
       case Some(sels) => sels.addOne(sel)
       case None => usedSelectors.put(info, mutable.Set(sel))
@@ -42,7 +42,7 @@ trait ImportTracking { self: AbstractAnalyzer =>
     val keyword =
       if (info.pos.start != info.pos.point) info
       else ctx.imports.find(p => p.pos.isDefined && p.pos.start != p.pos.point).getOrElse(info)
-    usedSelectors.synchronized { importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn }
+    lockedIfConcurrent(usedSelectors) { importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn }
   }
 
   def warnUnusedImports(unit: CompilationUnit): Unit = if (!unit.isJava) {
