@@ -61,6 +61,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** `-Yparallel-typer`: the typer's units are typechecked on several threads (see `ParallelTyper`). Read while the
    *  universe is constructed, from the constructor parameter `currentSettings`. */
   override def isConcurrentUniverse = currentSettings.YparallelTyper.value
+  override def isParallelCompiler = currentSettings.YparallelTyper.value
 
   // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
   // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
@@ -1087,7 +1088,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     if (c == null) currentUnit.fresh else c
   }
   private[this] var curFreshNameCreator: FreshNameCreator = null
-  private[this] val curFreshNameCreatorPerThread: ThreadLocal[FreshNameCreator] = if (isConcurrentUniverse) new ThreadLocal else null
+  private[this] val curFreshNameCreatorPerThread: ThreadLocal[FreshNameCreator] = if (isParallelCompiler) new ThreadLocal else null
   private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit =
     if (curFreshNameCreatorPerThread eq null) curFreshNameCreator = fresh else curFreshNameCreatorPerThread.set(fresh)
 
@@ -1222,7 +1223,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     private[this] var _currentUnit: CompilationUnit = NoCompilationUnit
     // a `perThread` holder, not a `ThreadLocal` of the unit, which would keep this compiler alive from a long-lived thread
     private[this] val currentUnitPerThread: PerThread[Array[CompilationUnit]] =
-      if (isConcurrentUniverse) perThread(Array[CompilationUnit](NoCompilationUnit)) else null
+      if (isParallelCompiler) perThread(Array[CompilationUnit](NoCompilationUnit)) else null
     def currentUnit: CompilationUnit = if (currentUnitPerThread eq null) _currentUnit else currentUnitPerThread.get(0)
     def currentUnit_=(unit: CompilationUnit): Unit =
       if (currentUnitPerThread eq null) _currentUnit = unit else currentUnitPerThread.get(0) = unit

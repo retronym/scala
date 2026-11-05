@@ -4485,7 +4485,11 @@ trait Types
    */
   private[this] val uniques: Uniques =
     if (!isCompilerUniverse) new SynchronizedWeakUniques
-    else if (isConcurrentUniverse) new SynchronizedPerRunUniques
+    else if (isConcurrentUniverse) {
+      // a power of two
+      val stripes = Integer.highestOneBit(math.max(1, Integer.getInteger("scalac.uniques.stripes", 64).intValue))
+      if (stripes == 1) new SynchronizedPerRunUniques else new StripedPerRunUniques(stripes)
+    }
     else new PerRunUniques
 
   final def howManyUniqueTypes: Int = uniques.size
@@ -4522,6 +4526,19 @@ trait Types
   private final class SynchronizedPerRunUniques extends PerRunUniques {
     override def size: Int = synchronized(super.size)
     override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
+  }
+
+  /** Per run and weak, as `PerRunUniques`, in stripes for a compiler used from several threads (-Yparallel-typer):
+   *  a type is interned in the stripe of its hash (the high bits of a multiplicative mix, independent of the bucket
+   *  index within the stripe), each stripe under its own monitor, so that equal types meet in one stripe and interning
+   *  stays unique, while threads interning different types rarely contend. `-Dscalac.uniques.stripes=1` for one. */
+  private final class StripedPerRunUniques(stripes: Int) extends Uniques {
+    private[this] val shift = 32 - Integer.numberOfTrailingZeros(stripes)
+    private[this] val sets = Array.fill(stripes)(new SynchronizedPerRunUniques)
+    def size: Int = sets.iterator.map(_.size).sum
+    def unique[T <: Type](tp: T): T =
+      if (stripes == 1) sets(0).unique(tp)
+      else sets((tp.hashCode * 0x9E3779B9) >>> shift).unique(tp)
   }
 
   /** Weak and synchronized, for runtime reflection. The lock can be fine-grained: computing a
