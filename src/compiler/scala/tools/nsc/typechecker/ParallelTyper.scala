@@ -127,8 +127,15 @@ trait ParallelTyper {
           buf.foreach(completed.add)
         }
         val membersDone = System.nanoTime()
-        ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
-        logf(f"class headers ${if (headersOnPool) "on the pool" else "serially"} in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations serially in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
+        // -Dscalac.parallelTyper.parallelAnnotations (an experiment): the annotations a unit per task too, each forced
+        // under the claim of its symbol (`LazyAnnotationInfo.claimWith`)
+        val annotationsOnPool = flag("parallelAnnotations")
+        if (annotationsOnPool) {
+          val byUnit = completed.asScala.toList.groupBy(_._1)
+          onPool(typerPhase, ordered.filter(byUnit.contains), nThreads, "annotations")(u => forceAnnotations(byUnit(u)))
+        }
+        else ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        logf(f"class headers ${if (headersOnPool) "on the pool" else "serially"} in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations ${if (annotationsOnPool) "on the pool" else "serially"} in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
         n + count.get
       }
       else {
@@ -348,7 +355,7 @@ trait ParallelTyper {
   private def definesInScalaPackage(unit: CompilationUnit): Boolean = {
     def inScala(sym: Symbol) = (sym ne null) && (sym ne NoSymbol) && sym.ownerChain.exists(o => o == definitions.ScalaPackageClass || o == definitions.ScalaPackage)
     def loop(tree: Tree): Boolean = tree match {
-      case PackageDef(pid, stats) => inScala(pid.symbol) || stats.exists(loop)
+      case PackageDef(pid, stats) => inScala(tree.symbol) || inScala(pid.symbol) || stats.exists(loop)
       case _                      => false
     }
     loop(unit.body)

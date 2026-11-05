@@ -2150,6 +2150,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def setAnnotations(annots: List[AnnotationInfo]): this.type = {
+      if (isConcurrentCompiler && completionLock.isPerKey)
+        annots.foreach { case lzy: LazyAnnotationInfo => lzy.claimWith(this) case _ => }
       _annotations = annots
       this
     }
@@ -3518,9 +3520,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
     override def typeConstructor: Type = {
-      if (tyconCacheNeedsUpdate)
-        setTyconCache(newTypeRef(Nil))
-      tyconCache
+      // read once: `info_=` on another thread (a completion setting this symbol's info) clears the field
+      val tc = tyconCache
+      if ((tc eq null) || tyconRunId != currentRunId) {
+        val tp = newTypeRef(Nil)
+        setTyconCache(tp)
+        tp
+      }
+      else tc
     }
     override def tpeHK: Type = typeConstructor
 
@@ -3528,7 +3535,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def setTyconCache(tycon: Type): Unit = {
       tyconCache = tycon
       tyconRunId = currentRunId
-      assert(tyconCache ne null, this)
+      assert(tycon ne null, this) // not the field: another thread's `info_=` may have cleared it
     }
 
     private def maybeUpdateTypeCache(): Unit = {
