@@ -106,20 +106,36 @@ trait ParallelTyper {
         // signatures a unit per task, each unit's completions under the claim of its unit (`completionRoot`)
         var n = 0
         val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
-        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
-        // the lazy vals of `definitions` before the members run on several threads: one forced from a completion
-        // holds the object's monitor while it waits for a claim, and another thread holding that claim waits for the
-        // monitor (a deadlock the claims cannot see). After the headers, so that what they name is ready (I3).
-        if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val count = new AtomicInteger
+        // The lazy vals of `definitions` before anything runs on several threads: one forced from a completion
+        // holds the object's monitor while it waits for a claim, and another thread holding that claim waits for the
+        // monitor (a deadlock the claims cannot see). They must also come after the headers of what they name (I3),
+        // so the headers can go to the pool (`-Dscalac.parallelTyper.parallelHeaders`, an experiment) only when no
+        // source defines anything in package `scala`: then `definitions` names nothing that is being compiled.
+        val headersOnPool = flag("parallelHeaders") && !units.exists(definesInScalaPackage)
+        if (headersOnPool) {
+          if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
+          onPool(typerPhase, ordered, nThreads, "class headers")(u => count.addAndGet(completeSignatures(u, null, classesOnly = true)))
+        }
+        else units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        val headersOnly = System.nanoTime()
+        if (needForceLazyVals && !headersOnPool) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val headersDone = System.nanoTime()
         onPool(typerPhase, ordered, nThreads, "signatures") { u =>
           val buf = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
           count.addAndGet(completeSignatures(u, buf))
           buf.foreach(completed.add)
         }
-        logf(f"class headers serially in ${(headersDone - t0) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(System.nanoTime() - headersDone) / 1e6}%.1f ms")
-        ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        val membersDone = System.nanoTime()
+        // -Dscalac.parallelTyper.parallelAnnotations (an experiment): the annotations a unit per task too, each forced
+        // under the claim of its symbol (`LazyAnnotationInfo.claimWith`)
+        val annotationsOnPool = flag("parallelAnnotations")
+        if (annotationsOnPool) {
+          val byUnit = completed.asScala.toList.groupBy(_._1)
+          onPool(typerPhase, ordered.filter(byUnit.contains), nThreads, "annotations")(u => forceAnnotations(byUnit(u)))
+        }
+        else ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        logf(f"class headers ${if (headersOnPool) "on the pool" else "serially"} in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations ${if (annotationsOnPool) "on the pool" else "serially"} in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
         n + count.get
       }
       else {
@@ -184,12 +200,14 @@ trait ParallelTyper {
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
+    currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
       workers.foreach(_.start())
       workers.foreach(_.join())
     } finally {
       parallelTyperActive = false
+      currentRun.reporting.deferFeatureExplanations = false
       watchdog.interrupt()
       reporter = savedReporter
       bufferingReporter.issueBuffered()
@@ -261,6 +279,7 @@ trait ParallelTyper {
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
+    currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
       workers.foreach(_.start())
@@ -281,6 +300,7 @@ trait ParallelTyper {
       }
     } finally {
       parallelTyperActive = false
+      currentRun.reporting.deferFeatureExplanations = false
       watchdog.interrupt()
       reporter = savedReporter
       bufferingReporter.issueBuffered()
@@ -361,6 +381,16 @@ trait ParallelTyper {
       catch { case ex: TypeError => reporter.error(sym.pos, ex.getMessage) }
     }
     finally currentRun.currentUnit = savedUnit
+  }
+
+  /** Does `unit` define anything in package `scala` or below? */
+  private def definesInScalaPackage(unit: CompilationUnit): Boolean = {
+    def inScala(sym: Symbol) = (sym ne null) && (sym ne NoSymbol) && sym.ownerChain.exists(o => o == definitions.ScalaPackageClass || o == definitions.ScalaPackage)
+    def loop(tree: Tree): Boolean = tree match {
+      case PackageDef(pid, stats) => inScala(tree.symbol) || inScala(pid.symbol) || stats.exists(loop)
+      case _                      => false
+    }
+    loop(unit.body)
   }
 
   private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)], classesOnly: Boolean = false): Int = {
@@ -463,10 +493,12 @@ trait ParallelTyper {
         }
       buffer.clear()
       ordered.foreach { e =>
+        // a feature is explained at its first warning in this order, not in the order of arrival
+        val msg = currentRun.reporting.explainFeature(e.msg)
         e.severity match {
-          case scala.reflect.internal.Reporter.ERROR   => underlying.error(e.pos, e.msg, e.actions)
-          case scala.reflect.internal.Reporter.WARNING => underlying.warning(e.pos, e.msg, e.actions)
-          case _                         => underlying.echo(e.pos, e.msg, e.actions)
+          case scala.reflect.internal.Reporter.ERROR   => underlying.error(e.pos, msg, e.actions)
+          case scala.reflect.internal.Reporter.WARNING => underlying.warning(e.pos, msg, e.actions)
+          case _                         => underlying.echo(e.pos, msg, e.actions)
         }
       }
     }
