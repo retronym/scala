@@ -29,8 +29,8 @@ import scala.collection.mutable
  *    (`scalac.parallelTyper.xray.holdMicros`, default 50); per call site, the count and totals of all of them.
  *  - The phases on the main thread, GC pauses, and the moment each typer worker ran out of units.
  *
- *  Off unless `ParallelTyperTimeline.current` is set: the hooks test it for null. The lock's events are recorded
- *  while the lock is held, so their tables need no synchronisation of their own.
+ *  Off unless `ParallelTyperTimeline.current` is set: the hooks test it for null. Each thread records its own lock
+ *  events, after the release for a hold, so that recording does not lengthen the holds that others wait on.
  */
 final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   import ParallelTyperTimeline._
@@ -41,16 +41,29 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   val meta = new java.util.LinkedHashMap[String, String]()
   contentionMonitoring(true)
 
-  // threads, by first appearance
-  private[this] val threadNames = mutable.ArrayBuffer.empty[String]
-  private final class PerThread(val tid: Int) { var acquisitions = 0 }
+  // threads, by first appearance, each with its own record of the lock (written only by that thread, so the lock's
+  // events can be recorded after its release, without lengthening the hold)
+  private final class PerThread(val tid: Int) {
+    var acquisitions = 0
+    val holds = new LongBuf // site, what, t0, t1, contended
+    val waits = new LongBuf // site, what, t0, t1
+    val whats = mutable.ArrayBuffer.empty[AnyRef]
+    var sampled = new Array[Long](64 * 3) // per site: count, total, max of the sampled short holds
+    def what(w: AnyRef): Long = if (w eq null) -1 else { whats += w; whats.length - 1L }
+    var whatsRendered: collection.Seq[Int] = Nil
+    def sample(site: Int, held: Long): Unit = {
+      if ((site + 1) * 3 > sampled.length) sampled = java.util.Arrays.copyOf(sampled, math.max(sampled.length * 2, (site + 1) * 3))
+      sampled(site * 3) += 1; sampled(site * 3 + 1) += held; if (held > sampled(site * 3 + 2)) sampled(site * 3 + 2) = held
+    }
+  }
+  private[this] val threads = mutable.ArrayBuffer.empty[(String, PerThread)]
   private[this] val perThread = new ThreadLocal[PerThread]
   private def thread(): PerThread = {
     val t = perThread.get
     if (t ne null) t
-    else threadNames.synchronized {
-      threadNames += Thread.currentThread.getName
-      val n = new PerThread(threadNames.length - 1)
+    else threads.synchronized {
+      val n = new PerThread(threads.length)
+      threads += ((Thread.currentThread.getName, n))
       perThread.set(n)
       n
     }
@@ -86,47 +99,32 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   /** The current thread (a typer worker) found no more units. */
   def idle(): Unit = idleFrom.add(Array(tid().toLong, System.nanoTime()))
 
-  // ---- the completion lock; every field below is written while holding it
+  // ---- the completion lock
 
-  private[this] val sites = new java.util.HashMap[String, Integer]()
+  private[this] val sites = new java.util.concurrent.ConcurrentHashMap[String, Integer]()
   private[this] val siteNames = mutable.ArrayBuffer.empty[String]
-  // per site: count, hold total, hold max, waits, wait total, wait max, waiters (a bit per thread index)
-  private[this] var siteStats = new Array[Long](64 * SiteStride)
-  private[this] val whats = new java.util.IdentityHashMap[AnyRef, Integer]()
-  private[this] val whatList = mutable.ArrayBuffer.empty[AnyRef]
-  private[this] val holds = new LongBuf // tid, site, what, t0, t1, contended
-  private[this] val waits = new LongBuf // tid, site, what, t0, t1
-  private[this] var holdStart, holdTid, holdWhat = 0L
-  private[this] var holdSite: String = null
-  private[this] var holdSampled = false
-  private[this] var sampledHolds = 0L
-
   private def siteId(label: String): Int = {
     val i = sites.get(label)
     if (i ne null) i.intValue
-    else {
-      val n = siteNames.length
-      siteNames += label
-      sites.put(label, n)
-      if ((n + 1) * SiteStride > siteStats.length) siteStats = java.util.Arrays.copyOf(siteStats, siteStats.length * 2)
-      n
+    else siteNames.synchronized {
+      val j = sites.get(label)
+      if (j ne null) j.intValue
+      else { siteNames += label; sites.put(label, siteNames.length - 1); siteNames.length - 1 }
     }
   }
-  private def whatId(what: AnyRef): Long =
-    if (what eq null) -1
-    else {
-      val i = whats.get(what)
-      if (i ne null) i.longValue
-      else { whatList += what; whats.put(what, whatList.length - 1); whatList.length - 1L }
-    }
+  // the current hold: written by its holder, read by it at the release
+  private[this] var holdStart = 0L
+  private[this] var holdSite: String = null
+  private[this] var holdWhat: AnyRef = null
+  private[this] var holdSampled = false
 
   /** `CompletionLock.acquire` while recording: as there, and the wait with its site and what it was for.
    *
    *  The call site costs a stack walk (a few microseconds), so it is taken for one outermost acquisition in
-   *  `siteSample` (a sample), for every one that has to wait (before it waits), and at the release of every hold
+   *  `siteSample` (a sample), for every one that has to wait (before it waits), and after the release of every hold
    *  that is recorded (someone waited, or it took longer than the threshold) and was not walked yet. A site's
    *  totals are then exact for the recorded holds and estimated from the sample for the others (each sampled short
-   *  hold counts `siteSample` times).
+   *  hold counts `siteSample` times). Nothing is walked or recorded while the lock is held.
    */
   def acquire(cl: CompletionLock, lock: ReentrantLock, what: AnyRef): Unit = {
     val outermost = !lock.isHeldByCurrentThread
@@ -139,42 +137,32 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       lock.lock()
       val t1 = System.nanoTime()
       cl.waitNanos.add(t1 - t0); cl.waits.increment(); PerThreadTimes.addWait(t1 - t0)
-      val s = siteId(site)
-      waits.add5(me.tid, s, whatId(what), t0, t1)
-      val o = s * SiteStride
-      val st = siteStats
-      st(o + 3) += 1; st(o + 4) += t1 - t0; if (t1 - t0 > st(o + 5)) st(o + 5) = t1 - t0; st(o + 6) |= 1L << (me.tid & 63)
+      me.waits.add4(siteId(site), me.what(what), t0, t1)
     }
     if (lock.getHoldCount == 1) {
       cl.acquisitions.increment()
-      holdTid = me.tid; holdSite = site; holdSampled = sampled; holdWhat = whatId(what)
+      holdSite = site; holdSampled = sampled; holdWhat = what
       holdStart = System.nanoTime()
     }
   }
 
-  def release(cl: CompletionLock, lock: ReentrantLock): Unit = {
-    if (lock.getHoldCount == 1) {
+  def release(cl: CompletionLock, lock: ReentrantLock): Unit =
+    if (lock.getHoldCount != 1) lock.unlock()
+    else {
       val t1 = System.nanoTime()
-      val held = t1 - holdStart
+      val t0 = holdStart
+      val held = t1 - t0
       cl.holdNanos.add(held); PerThreadTimes.addHold(held)
       // a thread queued now arrived during this hold (it cannot leave the queue before this release)
       val contended = lock.hasQueuedThreads
+      val site = holdSite; val sampled = holdSampled; val what = holdWhat
+      lock.unlock()
       if (contended || held >= holdThresholdNanos) {
-        val s = siteId(if (holdSite ne null) holdSite else callSite()) // the same frames as at the acquisition
-        holds.add6(holdTid, s, holdWhat, holdStart, t1, if (contended) 1 else 0)
-        addHold(s, 1, held)
-      } else if (holdSampled) {
-        addHold(siteId(holdSite), siteSample, held)
-        sampledHolds += 1
-      }
+        val me = thread()
+        // after the release, the stack still has the frames of the acquisition
+        me.holds.add5(siteId(if (site ne null) site else callSite()), me.what(what), t0, t1, if (contended) 1 else 0)
+      } else if (sampled) thread().sample(siteId(site), held)
     }
-    lock.unlock()
-  }
-  private def addHold(site: Int, weight: Long, held: Long): Unit = {
-    val o = site * SiteStride
-    val st = siteStats
-    st(o) += weight; st(o + 1) += weight * held; if (held > st(o + 2)) st(o + 2) = held
-  }
 
   // ---- GC pauses, from the collectors' notifications
 
@@ -243,18 +231,30 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
     arr("phases")(a => phases.forEach { p => a(s(p(0).asInstanceOf[String])); a(us(p(1).asInstanceOf[Long])); a(us(p(2).asInstanceOf[Long])) })
     arr("idle")(a => idleFrom.forEach { p => a(p(0)); a(us(p(1))) })
     arr("gc")(a => gcs.forEach { g => a(s(g(0).asInstanceOf[String])); a(us(g(1).asInstanceOf[Long])); a(us(g(2).asInstanceOf[Long])) })
-    // the lock's tables are complete: the run is over, nobody holds it
-    val siteStr = siteNames.map(n => s(if (n eq null) "(reentrant)" else n))
-    val whatStr = whatList.map(w => s(try render(w) catch { case _: Throwable => String.valueOf(w) }))
-    def what(i: Long): Int = if (i < 0) -1 else whatStr(i.toInt)
-    arr("holds")(a => holds.foreach(6) { (b, i) => a(b(i)); a(siteStr(b(i + 1).toInt)); a(what(b(i + 2))); a(us(b(i + 3))); a(us(b(i + 4))); a(b(i + 5)) })
-    arr("waits")(a => waits.foreach(5) { (b, i) => a(b(i)); a(siteStr(b(i + 1).toInt)); a(what(b(i + 2))); a(us(b(i + 3))); a(us(b(i + 4))) })
+    // the lock's records, per thread; the per-site totals from them
+    val ts = threads.synchronized(threads.toList)
+    val nSites = siteNames.synchronized(siteNames.length)
+    val siteStr = siteNames.synchronized(siteNames.toList).map(s).toArray
+    val st = new Array[Long](nSites * SiteStride) // count, hold total, hold max, waits, wait total, wait max, waiters
+    for ((_, t) <- ts) {
+      val whatStr = t.whats.map(w => s(try render(w) catch { case _: Throwable => String.valueOf(w) }))
+      def what(i: Long): Int = if (i < 0) -1 else whatStr(i.toInt)
+      t.holds.foreach(5) { (b, i) => val o = b(i).toInt * SiteStride; val h = b(i + 3) - b(i + 2); st(o) += 1; st(o + 1) += h; if (h > st(o + 2)) st(o + 2) = h }
+      t.waits.foreach(4) { (b, i) => val o = b(i).toInt * SiteStride; val w = b(i + 3) - b(i + 2); st(o + 3) += 1; st(o + 4) += w; if (w > st(o + 5)) st(o + 5) = w; st(o + 6) |= 1L << (t.tid & 63) }
+      for (i <- 0 until math.min(nSites, t.sampled.length / 3)) {
+        val o = i * SiteStride
+        st(o) += siteSample * t.sampled(i * 3); st(o + 1) += siteSample * t.sampled(i * 3 + 1); if (t.sampled(i * 3 + 2) > st(o + 2)) st(o + 2) = t.sampled(i * 3 + 2)
+      }
+      t.whatsRendered = whatStr
+    }
+    arr("holds")(a => ts.foreach { case (_, t) => t.holds.foreach(5) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))); a(b(i + 4)) } })
+    arr("waits")(a => ts.foreach { case (_, t) => t.waits.foreach(4) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))) } })
     // sites: name, acquisitions, hold total, hold max, waits, wait total, wait max, waiters (bits by thread index)
-    arr("sites")(a => siteNames.indices.foreach { i =>
-      val o = i * SiteStride; val st = siteStats
+    arr("sites")(a => (0 until nSites).foreach { i =>
+      val o = i * SiteStride
       a(siteStr(i)); a(st(o)); a(dur(st(o + 1))); a(dur(st(o + 2))); a(st(o + 3)); a(dur(st(o + 4))); a(dur(st(o + 5))); a(st(o + 6))
     })
-    arr("threads")(a => threadNames.synchronized(threadNames.foreach(n => a(quote(n)))))
+    arr("threads")(a => ts.foreach { case (n, _) => a(quote(n)) })
     arr("strings")(a => strList.foreach(x => a(quote(x))))
     sb.append("}\n").toString
   }
@@ -413,6 +413,9 @@ object ParallelTyperTimeline {
     private[this] var a = new Array[Long](1024)
     private[this] var n = 0
     private def room(k: Int): Unit = if (n + k > a.length) a = java.util.Arrays.copyOf(a, a.length * 2)
+    def add4(x0: Long, x1: Long, x2: Long, x3: Long): Unit = {
+      room(4); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; n += 4
+    }
     def add5(x0: Long, x1: Long, x2: Long, x3: Long, x4: Long): Unit = {
       room(5); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; a(n + 4) = x4; n += 5
     }
