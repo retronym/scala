@@ -94,7 +94,32 @@ trait Names extends api.Names {
       require(offset >= 0, "offset must be non-negative, got " + offset)
       store.termFromChars(cs, offset, math.max(len0, 0), cachedString)
     }
-    if (synchronizeNames) nameLock.synchronized(body) else body
+    if (synchronizeNames) {
+      val existing = if (!lockFreeLookups || offset < 0) null else lookupTermName(cs, offset, math.max(len0, 0), hashValue(cs, offset, math.max(len0, 0)))
+      if (existing ne null) existing else nameLock.synchronized(body)
+    }
+    else body
+  }
+
+  /** Can a name in a table shared by several threads be looked up without the lock? Only in a store with a `String`
+   *  per name (-Yparallel-typer requires `-Yname-table:shared`): a name's fields are final, so a thread that sees a
+   *  name sees its characters. In `CharStore` they are in an array that is replaced when the table grows.
+   */
+  private[this] val lockFreeLookups: Boolean = store.isInstanceOf[StringBackedStore]
+
+  /** The term name with these characters if this thread can see it in the table, else null: the lookup of
+   *  `newTermName` without the lock, for a table shared by several threads, where almost every call is for a name
+   *  that exists (a parser makes one per identifier). Names are only ever added, at the head of a bucket, once
+   *  constructed, and their fields are final: a chain read from a stale head is a suffix of the current one, so that
+   *  a miss here only means looking again under the lock. Only if `lockFreeLookups`.
+   *
+   *  @param hash `String.hashCode` of the characters
+   */
+  private def lookupTermName(cs: Array[Char], offset: Int, len: Int, hash: Int): TermName = {
+    var n = termHashtable(hash & HASH_MASK)
+    while ((n ne null) && (n.length != len || !store.matches(n, cs, offset, len)))
+      n = n.next
+    n
   }
 
   /** Create a term name from the characters in cs[0..len-1], whose hash the caller has kept as it built them, such as the
@@ -103,7 +128,11 @@ trait Names extends api.Names {
    *  @param hash `String.hashCode` of the characters
    */
   final def newTermNameHashed(cs: Array[Char], len: Int, hash: Int): TermName =
-    if (synchronizeNames) nameLock.synchronized(store.termFromHashed(cs, len, hash)) else store.termFromHashed(cs, len, hash)
+    if (synchronizeNames) {
+      val existing = if (lockFreeLookups) lookupTermName(cs, 0, len, hash) else null
+      if (existing ne null) existing else nameLock.synchronized(store.termFromHashed(cs, len, hash))
+    }
+    else store.termFromHashed(cs, len, hash)
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
@@ -945,13 +974,18 @@ trait Names extends api.Names {
     def isTypeName: Boolean = false
     def toTermName: TermName = this
     def toTypeName: TypeName = {
-      def body = {
-        // Re-computing the hash saves a field for storing it in the TermName
-        val h = store.hash(this) & HASH_MASK
+      // Re-computing the hash saves a field for storing it in the TermName
+      def hash = store.hash(this) & HASH_MASK
+      // without the lock: the fields that the search reads are final, and a miss looks again under the lock
+      def existing(h: Int): TypeName = {
         var n = typeHashtable(h)
         while ((n ne null) && n.id != index)
           n = n.next
-
+        n
+      }
+      def body = {
+        val h = hash
+        val n = existing(h)
         if (n ne null) n
         else {
           val next = typeHashtable(h)
@@ -961,7 +995,11 @@ trait Names extends api.Names {
           typeName
         }
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      if (synchronizeNames) {
+        val n = if (lockFreeLookups) existing(hash) else null
+        if (n ne null) n else nameLock.synchronized(body)
+      }
+      else body
     }
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
@@ -986,12 +1024,15 @@ trait Names extends api.Names {
     def isTermName: Boolean = false
     def isTypeName: Boolean = true
     def toTermName: TermName = {
-      def body = {
-        val n = store.termOf(this)
-        assert (n ne null, s"TypeName $this is missing its correspondent")
-        n
-      }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      // without the lock first, as in `toTypeName`
+      val n =
+        if (synchronizeNames) {
+          val n0 = if (lockFreeLookups) store.termOf(this) else null
+          if (n0 ne null) n0 else nameLock.synchronized(store.termOf(this))
+        }
+        else store.termOf(this)
+      assert (n ne null, s"TypeName $this is missing its correspondent")
+      n
     }
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
