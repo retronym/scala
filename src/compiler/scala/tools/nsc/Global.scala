@@ -22,7 +22,7 @@ import scala.annotation._
 import scala.collection.{immutable, mutable}
 import scala.reflect.ClassTag
 import scala.reflect.internal.pickling.PickleBuffer
-import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ScriptSourceFile, SourceFile}
+import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ParallelTyperTimeline, ScriptSourceFile, SourceFile}
 import scala.reflect.internal.{Reporter => InternalReporter}
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.tools.nsc.ast.parser._
@@ -514,8 +514,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val unit0 = currentUnit
         currentRun.currentUnit = unit
         currentRun.profiler.beforeUnit(phase, unit.source.file)
+        val xray = ParallelTyperTimeline.current; val xs = if (xray eq null) null else xray.begin() // xray
         try apply(unit)
         finally {
+          if (xs ne null) xray.end(xs, name, unit.source.file.name) // xray
           currentRun.profiler.afterUnit(phase, unit.source.file)
           currentRun.currentUnit = unit0
           currentRun.advanceUnit()
@@ -1594,6 +1596,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       reporter.reset()
       warnDeprecatedAndConflictingSettings()
       globalPhase = fromPhase
+      val xray = ParallelTyperTimeline.runStarting() // xray
 
       val timePhases = settings.areStatisticsEnabled
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
@@ -1604,9 +1607,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
 
         val profileBefore=profiler.beforePhase(phase)
+        val xrayStart = System.nanoTime() // xray
         try globalPhase.run()
         catch { case _: InterruptedException => reporter.cancelled = true }
         finally if (timePhases) statistics.stopTimer(phaseTimer, startPhase) else ()
+        if (xray ne null) xray.phase(globalPhase.name, xrayStart, System.nanoTime()) // xray
         profiler.afterPhase(phase, profileBefore)
 
         if (timePhases)
@@ -1651,6 +1656,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         advancePhase()
       }
       profiler.finished()
+      ParallelTyperTimeline.runFinished(xray, { case s: Symbol => s.fullNameString; case x => String.valueOf(x) }) // xray
 
       runReporting.runFinished(hasErrors = reporter.hasErrors)
 
