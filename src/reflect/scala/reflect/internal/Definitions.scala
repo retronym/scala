@@ -1071,7 +1071,13 @@ trait Definitions extends api.StandardDefinitions {
         // fails in test/files/jvm/t10512b.scala
         // { val res = samCache.getOrElseUpdate(tpSym, compute); assert(compute eq res, s"samOf($tp) cache discrepancy $compute <-> $res") }
 
-        samCache.getOrElseUpdate(tpSym, compute)
+        // -Yparallel-typer: the monitor is not held while computing, which completes symbols
+        samCache.synchronized(samCache.get(tpSym)) match {
+          case Some(sam) => sam
+          case None =>
+            val sam = compute
+            samCache.synchronized(samCache.getOrElseUpdate(tpSym, sam))
+        }
       } else NoSymbol
     }
 

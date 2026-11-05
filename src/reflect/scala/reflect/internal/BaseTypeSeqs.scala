@@ -71,8 +71,20 @@ trait BaseTypeSeqs {
     //  so that NoType's are seen instead of the original type --> spurious compile error)
     private[this] val pending = new mutable.BitSet(length)
 
-    /** The type at i'th position in this sequence; lazy types are returned evaluated. */
+    /** The type at i'th position in this sequence; lazy types are returned evaluated.
+     *
+     *  In a concurrent compiler, a lazy element is evaluated under the completion lock, so that `pending` holds the
+     *  marks of one thread only: another thread's mark would read as a cycle (and its `clear()` would wipe them).
+     *  An element that is no longer lazy was stored after its mark was cleared.
+     */
     def apply(i: Int): Type =
+      if (isConcurrentCompiler) elems(i) match {
+        case _: RefinedType | ExistentialType(_, _: RefinedType) => underCompletionLock(applyNow(i))
+        case tp => tp
+      }
+      else applyNow(i)
+
+    private def applyNow(i: Int): Type =
       if(pending contains i) {
         pending.clear()
         throw CyclicInheritance

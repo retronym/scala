@@ -39,9 +39,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   def recursionTable: Map[Symbol, Int] = scratch.recursionTable
   def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
 
-  private[this] var _lockedCount = 0
-  def lockedCount = this._lockedCount
-  def lockedCount_=(i: Int) = _lockedCount = i
+  def lockedCount = scratch.lockedCount
+  def lockedCount_=(i: Int) = scratch.lockedCount = i
 
   private[this] val _lockingTrace = ArrayBuffer.empty[Symbol]
   private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
@@ -86,13 +85,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   protected def saveOriginalOwner(sym: Symbol): Unit = {
     // some synthetic symbols have NoSymbol as owner initially
     if (sym.owner != NoSymbol) {
-      if (originalOwnerMap contains sym) ()
+      if (originalOwnerMap.synchronized(originalOwnerMap contains sym)) ()
       else defineOriginalOwner(sym, sym.rawowner)
     }
   }
 
   def defineOriginalOwner(sym: Symbol, owner: Symbol): Unit = {
-    originalOwnerMap(sym) = owner
+    originalOwnerMap.synchronized(originalOwnerMap(sym) = owner) // synchronized: -Yparallel-typer
   }
 
   def symbolOf[T: WeakTypeTag]: TypeSymbol = weakTypeOf[T].typeSymbolDirect.asType
@@ -1137,7 +1136,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           devWarning(s"calling Symbol#exists with sourcefile based symbol loader may give incorrect results.")
         false
       }
-      rawInfo.load(this)
+      if (isConcurrentCompiler) underCompletionLock {
+        if (!isInitialized) {
+          val saved = markCompleting()
+          try rawInfo.load(this)
+          finally unmarkCompleting(saved)
+        }
+      }
+      else rawInfo.load(this)
       rawInfo != NoType || warnIfSourceLoader()
     }
 
@@ -1258,7 +1264,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /**
      * The initial owner of this symbol.
      */
-    def originalOwner: Symbol = originalOwnerMap.getOrElse(this, rawowner)
+    def originalOwner: Symbol = originalOwnerMap.synchronized(originalOwnerMap.getOrElse(this, rawowner))
 
     // TODO - don't allow the owner to be changed without checking invariants, at least
     // when under some flag. Define per-phase invariants for owner/owned relationships,
@@ -1584,9 +1590,71 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     protected def synchronizedInfo: Type = unsynchronizedInfo
 
     protected[reflect] final def unsynchronizedInfo: Type = {
+      if (_validTo == NoPeriod || isConcurrentCompiler && isCompletingElsewhere) {
+        if (isStub) return failStub()
+        completeInfoUnderLock()
+      }
+      unsynchronizedRawInfo // already under the lock, if any
+    }
+
+    /** In a concurrent compiler, the thread that is completing this symbol, or null.
+     *
+     *  Every completion runs under the completion lock (`SymbolTable.completionLock`), and this is set only while
+     *  its thread holds the lock. A completer can publish a provisional info before it is done (a class's info
+     *  before its value class checks, a method's inherited result type, the `ErrorType` of
+     *  `safeNextOverriddenSymbol`), and a loader the infos of a class and its companion before their members.
+     *  Its own thread must see them, as in a serial compiler; another thread must wait until the completion is
+     *  over, so it treats a symbol completing elsewhere as not completed: `info` and `rawInfo` wait for the lock.
+     *
+     *  Publication: the marker is written, then a store-store fence, then the provisional info; a reader loads
+     *  `_validTo` or `infos`, then an acquire fence (the volatile load of this field), so that seeing the
+     *  provisional info implies seeing the marker. The marker is cleared (a volatile store) after the final info.
+     */
+    @volatile private[this] var _completingThread: Thread = null
+
+    /** Is a thread other than this one completing this symbol? Only meaningful in a concurrent compiler. */
+    private[scala] final def isCompletingElsewhere: Boolean = {
+      java.lang.invoke.VarHandle.loadLoadFence() // the caller's load of `_validTo` before the marker's
+      val t = _completingThread
+      (t ne null) && (t ne Thread.currentThread)
+    }
+    /** Is this thread completing this symbol? (In a serial compiler: is anyone?) */
+    private[scala] final def isCompletingHere: Boolean = !isConcurrentCompiler || (_completingThread eq Thread.currentThread)
+
+    /** Mark this symbol as completing on this thread, for the duration of `body`. The caller holds the
+     *  completion lock. Loaders mark the roots that they publish together. */
+    private[scala] final def markCompleting(): Thread = {
+      val saved = _completingThread
+      _completingThread = Thread.currentThread
+      java.lang.invoke.VarHandle.storeStoreFence()
+      saved
+    }
+    private[scala] final def unmarkCompleting(saved: Thread): Unit = _completingThread = saved
+
+    /** Is this symbol `LOCKED` by a completion on this thread, so that a use of it is a cycle? A peek at the
+     *  flag alone would take another thread's completion in progress for a cycle: in a concurrent compiler, that
+     *  completion is waited for (it clears the flag) and the flag read again.
+     */
+    final def isLockedHere: Boolean =
+      hasFlag(LOCKED) && (!isConcurrentCompiler || { awaitCompletionElsewhere(); hasFlag(LOCKED) })
+
+    /** Wait for another thread's completion of this symbol to end. */
+    private[scala] final def awaitCompletionElsewhere(): Unit =
+      if (isConcurrentCompiler && isCompletingElsewhere) completionLock.await()
+
+    private def completeInfoUnderLock(): Unit = {
+      val lock = completionLock
+      if (lock eq null) completeInfoLoop()
+      else {
+        lock.acquire()
+        try completeInfoLoop()
+        finally lock.release()
+      }
+    }
+
+    private def completeInfoLoop(): Unit = {
       var cnt = 0
       while (_validTo == NoPeriod) {
-        if (isStub) return failStub()
         completeInfo()
         cnt += 1
         // allow for two completions:
@@ -1594,10 +1662,18 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         def abortNoProgress() = abort(s"no progress in completing $this: ${infos.info}")
         if (cnt == 3) abortNoProgress()
       }
-      unsynchronizedRawInfo // already under the lock, if any
     }
 
-    private def completeInfo(): Unit = try {
+    // In a concurrent compiler, the marker goes up before `LOCKED`: another thread that sees the flag sees whose
+    // it is (`isLockedHere`).
+    private def completeInfo(): Unit =
+      if (isConcurrentCompiler) {
+        val saved = markCompleting()
+        try completeInfo0()
+        finally unmarkCompleting(saved)
+      } else completeInfo0()
+
+    private def completeInfo0(): Unit = try {
       assert(infos ne null, this.name)
       assert(infos.prev eq null, this.name)
       val tp = infos.info
@@ -1723,6 +1799,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val outer = Symbols.this
 
       if (_validTo == NoPeriod && isStub) return failStub()
+      if (outer.isConcurrentCompiler) awaitCompletionElsewhere()
 
       var infos = this.infos
       outer.assert(infos != null, "infos must not be null")
@@ -1881,7 +1958,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // OPT: final, so C2 can bind calls to this method, whose receivers are too many Symbol classes for a type profile to do so.
     //      Only the slow path, completeTypeParams, is overridden: SynchronizedSymbols copies it without enteringPhase.
     final def typeParams: List[Symbol] =
-      if (validTo != NoPeriod) rawInfo.typeParams else completeTypeParams
+      if (isConcurrentCompiler) concurrentTypeParams
+      else if (validTo != NoPeriod) rawInfo.typeParams else completeTypeParams
+
+    private def concurrentTypeParams: List[Symbol] =
+      if (validTo != NoPeriod && !isCompletingElsewhere) rawInfo.typeParams
+      else underCompletionLock {
+        if (validTo != NoPeriod) rawInfo.typeParams
+        else {
+          val saved = markCompleting()
+          try completeTypeParams
+          finally unmarkCompleting(saved)
+        }
+      }
 
     // NOTE: overridden in SynchronizedSymbols with the code copy/pasted
     // don't forget to modify the code over there if you modify this method
@@ -3162,7 +3251,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       //
       // Out of caution, I've also disable caching if there are active type completers, which also
       // mutate symbol infos during val and def return type inference based the overridden member.
-      if (!isCompilerUniverse || isPastTyper || lockedCount > 0) return pre.computeMemberType(this)
+      // In a concurrent compiler, the four fields of the cache are not written atomically: no cache.
+      if (!isCompilerUniverse || isPastTyper || lockedCount > 0 || isConcurrentCompiler) return pre.computeMemberType(this)
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
@@ -3302,8 +3392,24 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     protected def synchronizedTpe: Type = unsynchronizedTpe
 
     protected[reflect] final def unsynchronizedTpe: Type = {
-      maybeUpdateTypeCache()
-      tpeCache
+      if (isConcurrentCompiler) concurrentTpe
+      else {
+        maybeUpdateTypeCache()
+        tpeCache
+      }
+    }
+    /** `updateTypeCache` stamps the period and stores `NoType` as a cycle marker before the value: in a
+     *  concurrent compiler another thread must not take either for the answer. The update runs under the
+     *  completion lock, and a reader that sees no value waits for it.
+     */
+    private def concurrentTpe: Type = {
+      val period = tpePeriod
+      val cache = tpeCache
+      if (period == currentPeriod && (cache ne null) && (cache ne NoType)) cache
+      else underCompletionLock {
+        maybeUpdateTypeCache()
+        tpeCache
+      }
     }
     override def typeConstructor: Type = {
       if (tyconCacheNeedsUpdate)
@@ -3637,9 +3743,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[this] var typeOfThisCache: Type = _
     private[this] var typeOfThisPeriod      = NoPeriod
 
-    private[this] var implicitMembersCacheValue: Scope = EmptyScope
-    private[this] var implicitMembersCacheKey1: Type = NoType
-    private[this] var implicitMembersCacheKey2: ScopeEntry = null
+    // One immutable holder for the keys and the value, so that a thread reads them together.
+    private[this] var implicitMembersCache: ImplicitMembersCache = null
 
     override def isModuleClass = true
     override def linkedClassOfClass = companionClass
@@ -3658,17 +3763,21 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def implicitMembers: Scope = {
       val tp = info
-      if ((implicitMembersCacheKey1 ne tp) || (implicitMembersCacheKey2 ne tp.decls.elems)) {
-        implicitMembersCacheValue = tp.membersBasedOnFlags(BridgeFlags, IMPLICIT)
-        implicitMembersCacheKey1 = tp
-        implicitMembersCacheKey2 = tp.decls.elems
+      val cache = implicitMembersCache
+      if ((cache eq null) || (cache.tp ne tp) || (cache.elems ne tp.decls.elems)) {
+        val elems = tp.decls.elems
+        val value = tp.membersBasedOnFlags(BridgeFlags, IMPLICIT)
+        implicitMembersCache = new ImplicitMembersCache(tp, elems, value)
+        value
       }
-      implicitMembersCacheValue
+      else cache.value
     }
     // The null check seems to be necessary for the reifier.
     override def sourceModule = if (moduleSymbol ne null) moduleSymbol else companionModule
     override def sourceModule_=(module: Symbol): Unit = { this.moduleSymbol = module }
   }
+
+  private final class ImplicitMembersCache(val tp: Type, val elems: ScopeEntry, val value: Scope)
 
   class PackageObjectClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)
   extends ModuleClassSymbol(owner0, pos0, tpnme.PACKAGE) {
