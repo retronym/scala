@@ -435,7 +435,7 @@ private[internal] trait GlbLubs {
         if (memo ne null) memo
         else {
           lubs.begin(key)
-          val res = if (depth.isNegative) AnyTpe else lub1(ts)
+          val res = if (depth.isNegative) { s.cut("lub depth"); AnyTpe } else lub1(ts)
           lubs.end(key, res)
           res
         }
@@ -609,7 +609,7 @@ private[internal] trait GlbLubs {
         if (memo ne null) memo
         else {
           glbs.begin(key)
-          val res = if (depth.isNegative) NothingTpe else glb1(ts)
+          val res = if (depth.isNegative) { s.cut("glb depth"); NothingTpe } else glb1(ts)
           glbs.end(key, res)
           res
         }
@@ -671,7 +671,8 @@ private[internal] trait GlbLubs {
                   result
                 })
             }
-            if (s.globalGlbDepth < globalGlbLimit)
+            if (s.globalGlbDepth >= globalGlbLimit) s.cut("glb refinement depth")
+            else
               try {
                 s.globalGlbDepth = s.globalGlbDepth.incr
                 def foreachRefinedDecls(ty: Type): Unit = ty match {
@@ -679,7 +680,8 @@ private[internal] trait GlbLubs {
                     ps foreach foreachRefinedDecls
                     if (! decls.isEmpty)
                       decls.iterator.foreach { sym =>
-                        if (s.globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
+                        if (s.globalGlbDepth >= globalGlbLimit) s.cut("glb refinement depth")
+                        else if (!specializesSym(glbThisType, sym, depth))
                           try {
                             addMember(glbThisType, glbRefined, glbsym(sym), depth)
                           } catch {

@@ -72,9 +72,12 @@ class GlbLubsTest {
         true
       }
     })
+    val cuts = scratch.frame.cuts
     try lub(ts)
     finally removeAllAnnotationCheckers()
     assertTrue(s"lub re-entered itself $maxNesting times", maxNesting < limit)
+    assertTrue("the guard that stopped it counts as a cut", scratch.frame.cuts > cuts)
+    assertEquals("lub cycle", scratch.frame.lastCut)
   }
 
   /** A completion must see empty guards, and they must be restored afterwards. */
@@ -102,24 +105,30 @@ class GlbLubsTest {
   @Test def memoizedAnyIsNotACycle(): Unit = {
     val frame = scratch.frame
     val key = (Depth(1), List(IntTpe))
+    val cuts = frame.cuts
     frame.lubs.begin(key)
     assertTrue(frame.lubs.isInProgress(key))
     assertEquals(NothingTpe, frame.lubs.lookup(key, onCycle = NothingTpe))
+    assertEquals(cuts + 1, frame.cuts)
     frame.lubs.end(key, AnyTpe)
     assertFalse(frame.lubs.isInProgress(key))
     assertEquals(AnyTpe, frame.lubs.lookup(key, onCycle = NothingTpe))
+    assertEquals(cuts + 1, frame.cuts)
     frame.lubs.results.clear()
     assertNull(frame.lubs.lookup(key, onCycle = NothingTpe))
   }
 
   @Test def recursionGuardActivatesAtThreshold(): Unit = {
     val frame = scratch.frame
-    val guard = new frame.RecursionGuard[String](2)
+    val guard = new frame.RecursionGuard[String]("test cycle", 2)
     assertTrue("below the threshold, keys aren't tracked", guard.enter("a"))
     assertTrue(guard.pending.isEmpty)
     assertTrue(guard.enter("a"))
+    val cuts = frame.cuts
     assertFalse("a cycle", guard.enter("a"))
     assertEquals("a cycle leaves the depth as it was", 2, guard.depth)
+    assertEquals(cuts + 1, frame.cuts)
+    assertEquals("test cycle", frame.lastCut)
     guard.exit("a")
     guard.exit("a")
     assertEquals(0, guard.depth)

@@ -1613,12 +1613,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def completeInNextFrame(tp: Type): Unit = {
       val s = scratch
       val frame = s.frame
-      s.frame = frame.next
+      val next = frame.next
+      val cuts = next.cuts
+      s.frame = next
       try tp.complete(this)
       finally {
         s.frame = frame
-        frame.next.undoLog.clear() // what it logged can no longer be undone by this completion
+        next.undoLog.clear() // what it logged can no longer be undone by this completion
       }
+      if (reportRecursionCuts && next.cuts != cuts)
+        inform(pos, s"info of $fullLocationString computed after ${next.cuts - cuts} recursion cut(s), last: ${next.lastCut}")
     }
 
     def info_=(info: Type): Unit = {

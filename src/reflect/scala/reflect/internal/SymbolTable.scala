@@ -518,6 +518,11 @@ abstract class SymbolTable extends macros.Universe
    */
   def isConcurrentUniverse = false
 
+  /** Report each symbol whose info was computed using an answer from a recursion guard. Such an info
+   *  can depend on the order of completion, as its computation entered a loop at a particular point.
+   */
+  final val reportRecursionCuts: Boolean = System.getProperty("scalac.debug.recursion-cuts") != null
+
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
 
   /** The recursion guards of the type operations at one level of completion, with the undo log
@@ -530,11 +535,17 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new Frame
       _next
     }
+    /** How many times an answer in this frame came from a recursion guard, not from computing it. */
+    var cuts: Int = 0
+    /** What the last cut was, for diagnostics. */
+    var lastCut: String = null
+    def cut(what: String): Unit = { cuts += 1; lastCut = what }
+
     /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
      *  every call would be too expensive, and this recursion is rare. On a cycle, the caller decides
      *  what the answer is. `enter` and `exit` keep hot paths free of closures.
      */
-    final class RecursionGuard[K](threshold: Int) {
+    final class RecursionGuard[K](what: String, threshold: Int) {
       private[this] var _depth: Int = 0
       def depth: Int = _depth
       private[this] var _pending: mutable.HashSet[K] = null
@@ -545,7 +556,7 @@ abstract class SymbolTable extends macros.Universe
       /** False if `key` is already being computed. Otherwise the caller must call `exit`. */
       def enter(key: K): Boolean = {
         _depth += 1
-        _depth < threshold || pending.add(key) || { _depth -= 1; false }
+        _depth < threshold || pending.add(key) || { _depth -= 1; cut(what); false }
       }
       def exit(key: K): Unit = {
         if (_depth >= threshold) pending -= key
@@ -592,8 +603,8 @@ abstract class SymbolTable extends macros.Universe
       def enter(tp1: Type, tp2: Type): Boolean = {
         enter()
         val proceed =
-          if (_depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { recordKnownFalse(tp1, tp2); false }
-          else !isKnownFalse(tp1, tp2)
+          if (_depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { cut("subtype cycle"); recordKnownFalse(tp1, tp2); false }
+          else !isKnownFalse(tp1, tp2) || { cut("known false subtype"); false }
         if (!proceed) exit()
         proceed
       }
@@ -613,17 +624,17 @@ abstract class SymbolTable extends macros.Universe
      *  A completion starts at level 0: only the levels within it are compared.
      */
     var skolemizationLevel: Int = 0
-    val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
-    val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
+    val baseTypes = new RecursionGuard[Type]("base type cycle", TypeConstants.LogPendingBaseTypesThreshold)
+    val volatiles = new RecursionGuard[Symbol]("volatile cycle", TypeConstants.LogVolatileThreshold)
     /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
      *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
      */
-    final class MemoGuard[K] {
+    final class MemoGuard[K](what: String) {
       private[this] val InProgress: Type = new Type {}
       val results = new mutable.HashMap[K, Type]
       /** The result for `key`, or `onCycle` if it is in progress, or `null` if neither. */
       def lookup(key: K, onCycle: Type): Type = results.getOrElse(key, null) match {
-        case InProgress => onCycle
+        case InProgress => cut(what); onCycle
         case r          => r
       }
       def isInProgress(key: K): Boolean = results.get(key).contains(InProgress)
@@ -631,8 +642,8 @@ abstract class SymbolTable extends macros.Universe
       def end(key: K, result: Type): Unit = results(key) = result
     }
 
-    val lubs = new MemoGuard[(Depth, List[Type])]
-    val glbs = new MemoGuard[(Depth, List[Type])]
+    val lubs = new MemoGuard[(Depth, List[Type])]("lub cycle")
+    val glbs = new MemoGuard[(Depth, List[Type])]("glb cycle")
     /** Whether an outermost `lub` or `glb` is in progress in this frame. It owns the tables above. */
     var inLubOrGlb: Boolean = false
     /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
