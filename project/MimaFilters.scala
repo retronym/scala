@@ -76,6 +76,13 @@ object MimaFilters extends AutoPlugin {
     // scala/bug#13203: thread-local override of internal state in the private[reflect] trait SynchronizedTypes
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.globalGlbDepth*"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.globalGlbDepth*"),
+
+    // isCompilerUniverse is a val in a new mixin of the internal SymbolTable, and universes override computeIsCompilerUniverse.
+    // runtime.SymbolTable is private[scala]; it only escapes as a parent of JavaUniverse.
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SymbolTable.isCompilerUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SymbolTable.computeIsCompilerUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.computeIsCompilerUniverse"),
+    ProblemFilters.exclude[MissingTypesProblem]("scala.reflect.runtime.JavaUniverse"),
   )
 
   override val buildSettings = Seq(

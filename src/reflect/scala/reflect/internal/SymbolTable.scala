@@ -25,7 +25,20 @@ import scala.reflect.internal.settings.MutableSettings
 import scala.reflect.internal.{TreeGen => InternalTreeGen}
 import scala.reflect.io.AbstractFile
 
+/** Is this symbol table a part of a compiler universe?
+ *
+ *  This is `SymbolTable`'s first mixin so that its field is set before the initializers of the others, some of which read it.
+ */
+private[reflect] trait CompilerUniverseFlag {
+  /** Is this symbol table a part of a compiler universe? */
+  final val isCompilerUniverse: Boolean = computeIsCompilerUniverse
+
+  /** The value of `isCompilerUniverse`. An override can't refer to the state of its universe, which doesn't exist yet. */
+  protected def computeIsCompilerUniverse: Boolean = false
+}
+
 abstract class SymbolTable extends macros.Universe
+                              with CompilerUniverseFlag
                               with Collections
                               with Names
                               with Symbols
@@ -504,10 +517,6 @@ abstract class SymbolTable extends macros.Universe
   private final val MaxPhases = 256
   /** The phase which has given index as identifier. */
   final val phaseWithId: Array[Phase] = Array.fill(MaxPhases)(NoPhase)
-
-  /** Is this symbol table a part of a compiler universe?
-   */
-  def isCompilerUniverse = false
 
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
