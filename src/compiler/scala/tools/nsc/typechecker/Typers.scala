@@ -108,6 +108,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
   def newTyper(context: Context): Typer = new NormalTyper(context)
 
+  /** Does `sym` get a `@defaultArg` meta-annotation holding its default, see `NamesDefaults.addDefaults`? */
+  def isAnnotationClassCtorParamWithDefault(sym: Symbol): Boolean =
+    sym.hasDefault && sym.owner.isConstructor && sym.enclClass.isNonBottomSubClass(AnnotationClass)
+
   private class NormalTyper(context : Context) extends Typer(context)
 
   // A transient flag to mark members of anonymous classes
@@ -2114,6 +2118,25 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
+    /** The expected type for the default argument of parameter `sym` with type `tpe`. */
+    def defaultParamPt(sym: Symbol, tpe: Type): Type = {
+      // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
+      // This allows defining "def foo[T](a: T = 1)"
+      val tparams = sym.owner.skipConstructor.info.typeParams
+      val subst = new SubstTypeMap(tparams, WildcardType.fillList(tparams.length)) {
+        @tailrec
+        override def matches(sym: Symbol, sym1: Symbol) =
+          if (sym.isSkolem) matches(sym.deSkolemize, sym1)
+          else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
+          else super.matches(sym, sym1)
+      }
+      // allow defaults on by-name parameters
+      if (sym hasFlag BYNAMEPARAM)
+        if (tpe.typeArgs.isEmpty) WildcardType // during erasure tpt1 is Function0
+        else subst(tpe.typeArgs.head)
+      else subst(tpe)
+    }
+
     // use typedValDef instead. this version is called after creating a new context for the ValDef
     private def typedValDefImpl(vdef: ValDef): ValDef = {
       val sym = vdef.symbol.initialize
@@ -2141,26 +2164,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             LocalVarUninitializedError(vdef)
           vdef.rhs
         } else {
-          val tpt2 = if (sym.hasDefault) {
-            // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
-            // This allows defining "def foo[T](a: T = 1)"
-            val tparams = sym.owner.skipConstructor.info.typeParams
-            val subst = new SubstTypeMap(tparams, WildcardType.fillList(tparams.length)) {
-              @tailrec
-              override def matches(sym: Symbol, sym1: Symbol) =
-                if (sym.isSkolem) matches(sym.deSkolemize, sym1)
-                else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
-                else super.matches(sym, sym1)
-            }
-            // allow defaults on by-name parameters
-            if (sym hasFlag BYNAMEPARAM)
-              if (tpt1.tpe.typeArgs.isEmpty) WildcardType // during erasure tpt1 is Function0
-              else subst(tpt1.tpe.typeArgs.head)
-            else subst(tpt1.tpe)
-          } else tpt1.tpe
+          val tpt2 = if (sym.hasDefault) defaultParamPt(sym, tpt1.tpe) else tpt1.tpe
           transformedOrTyped(vdef.rhs, EXPRmode | BYVALmode, tpt2)
         }
-      if (!isPastTyper && sym.hasDefault && sym.owner.isConstructor && sym.enclClass.isNonBottomSubClass(AnnotationClass))
+      // Usually added by the namer, see `Namer.defaultArgAnnotSig`
+      if (!isPastTyper && isAnnotationClassCtorParamWithDefault(sym) && !sym.hasAnnotation(DefaultArgAttr))
         sym.addAnnotation(AnnotationInfo(DefaultArgAttr.tpe, List(duplicateAndResetPos.transform(rhs1)), Nil))
       val vdef1 = treeCopy.ValDef(vdef, typedMods, sym.name, tpt1, checkDead(context, rhs1)) setType NoType
       if (sym.isSynthetic && sym.name.startsWith(nme.RIGHT_ASSOC_OP_PREFIX))

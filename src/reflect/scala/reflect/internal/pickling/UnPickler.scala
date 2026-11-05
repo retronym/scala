@@ -465,8 +465,9 @@ abstract class UnPickler {
     protected def readAnnotArg(i: Int): Tree = bytes(index(i)) match {
       case TREE => at(i, () => readTree())
       case _    =>
+        // The pickler writes a constant for a `Literal` with a `ConstantType`, see Pickler.putAnnotArg
         val const = at(i, () => readConstant())
-        Literal(const) setType const.tpe
+        Literal(const) setType ConstantType(const)
     }
 
     /** Read a ClassfileAnnotArg (argument to a classfile annotation)
