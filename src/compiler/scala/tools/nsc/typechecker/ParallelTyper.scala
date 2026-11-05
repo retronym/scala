@@ -97,7 +97,7 @@ trait ParallelTyper {
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
     // library), and forcing it before that symbol's unit is ready meets a cycle, which leaves a cache stamped in
     // progress (`CompoundType.baseClasses`) for the rest of the run.
-    forceLazyVals()
+    if (!flag("noForceLazyVals")) forceLazyVals() // the property is for experiments: the lock order needs them forced
     val t2 = System.nanoTime()
     logf(f"lazy vals forced in ${(t2 - t1) / 1e6}%.1f ms")
 
@@ -119,7 +119,9 @@ trait ParallelTyper {
     val timeline = prop("timeline").map(_ => new Timeline)
 
     // largest first, so that the last units to start are small
-    val queue = new ConcurrentLinkedQueue[CompilationUnit](units.sortBy(u => -u.source.content.length).asJava)
+    // (`-Dscalac.parallelTyper.order=source`: in source order, as the serial typer)
+    val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
+    val queue = new ConcurrentLinkedQueue[CompilationUnit](ordered.asJava)
     val failure = new AtomicReference[Throwable]()
     val done = new AtomicInteger()
     val workers = (1 to nThreads).map { i =>
