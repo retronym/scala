@@ -22,7 +22,7 @@ import scala.annotation.tailrec
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 
-import util.{ReusableInstance, Statistics, shortClassOfInstance}
+import util.{Statistics, shortClassOfInstance}
 import Flags._
 import Variance._
 
@@ -30,15 +30,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
   import statistics._
 
-  protected var ids = 0
-  def getCurrentSymbolIdCount: Int = ids
+  private[this] val symbolIds = util.IdCounter(isConcurrentUniverse)
+  def getCurrentSymbolIdCount: Int = symbolIds.current
 
-  protected def nextId() = { ids += 1; ids }
+  protected def nextId(): Int = symbolIds.next()
 
   /** Used to keep track of the recursion depth on locked symbols */
-  private[this] var _recursionTable = Map.empty[Symbol, Int]
-  def recursionTable = _recursionTable
-  def recursionTable_=(value: Map[Symbol, Int]) = _recursionTable = value
+  def recursionTable: Map[Symbol, Int] = scratch.recursionTable
+  def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
 
   private[this] var _lockedCount = 0
   def lockedCount = this._lockedCount
@@ -48,9 +47,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  private[this] var existentialIds = 0
+  private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  protected def nextExistentialId() = { existentialIds += 1; existentialIds }
+  protected def nextExistentialId(): Int = existentialIds.next()
   @deprecated("Use overload that accepts an id", "2.12.1")
   protected def freshExistentialName(suffix: String): TypeName = freshExistentialName(suffix, nextExistentialId())
   protected def freshExistentialName(suffix: String, id: Int): TypeName = newTypeName("_" + id + suffix)
@@ -1132,7 +1131,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           devWarning(s"calling Symbol#exists with sourcefile based symbol loader may give incorrect results.")
         false
       }
-      rawInfo.load(this)
+      loadInNextFrame()
       rawInfo != NoType || warnIfSourceLoader()
     }
 
@@ -1590,7 +1589,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         try {
           assertCorrectThread()
           phase = phaseOf(infos.validFrom)
-          tp.complete(this)
+          completeInNextFrame(tp)
         } finally {
           unlock()
           phase = current
@@ -1599,12 +1598,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else
         // In runtime reflection, there is only one phase, so don't mutate Global.phase
         // which would lead to warnings of data races from when using TSAN to assess thread safety.
-        try tp.complete(this)
+        try completeInNextFrame(tp)
         finally unlock()
     } catch {
       case ex: CyclicReference =>
         devWarning(s"... hit cycle trying to complete $fullLocationString")
         throw ex
+    }
+
+    /** A completer can typecheck code in the middle of a type operation. That code must not see
+     *  the operation's recursion guards, whose answers are only valid for the operation itself.
+     *  This terminates as `LOCKED` stops a symbol being completed within its own completion.
+     */
+    private def completeInNextFrame(tp: Type): Unit = {
+      val s = scratch
+      val frame = s.enterNextFrame()
+      try tp.complete(this) finally s.exitFrame(frame)
+    }
+
+    /** Run `rawInfo.load(this)` in the next frame, as `info` runs a completer. A symbol loader can
+     *  compile a source file, and `typeParams` and `exists` load in the middle of type operations.
+     *  Unlike a completion, a load takes no `LOCKED`. A complete info has nothing to load.
+     */
+    private[scala] final def loadInNextFrame(): Unit = {
+      val tp = rawInfo
+      if (!tp.isComplete) {
+        val s = scratch
+        val frame = s.enterNextFrame()
+        try tp.load(this) finally s.exitFrame(frame)
+      }
     }
 
     def info_=(info: Type): Unit = {
@@ -1832,9 +1854,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         else {
           // analogously to the "info" getter, here we allow for two completions:
           //   one: sourceCompleter to LazyType, two: LazyType to completed type
-          enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+          enteringPhase(phaseOf(infos.validFrom))(loadInNextFrame())
           if (validTo == NoPeriod)
-            enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+            enteringPhase(phaseOf(infos.validFrom))(loadInNextFrame())
 
           rawInfo.typeParams
         }
@@ -3838,15 +3860,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (syms.isEmpty) Nil
     else {
       val syms1 = mapList(syms)(_.cloneSymbol)
-      cloneSymbolsSubstSymMap.using { (msm: SubstSymMap) =>
+      scratch.substSymMaps.using { (msm: SubstSymMap) =>
         msm.reset(syms, syms1)
         syms1.foreach(_.modifyInfo(msm))
       }
       syms1
     }
-
-  private[this] val cloneSymbolsSubstSymMap: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
 
   def cloneSymbolsAtOwner(syms: List[Symbol], owner: Symbol): List[Symbol] =
     deriveSymbols(syms, _ cloneSymbol owner)

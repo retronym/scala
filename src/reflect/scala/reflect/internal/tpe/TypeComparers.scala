@@ -28,17 +28,21 @@ trait TypeComparers {
 
   private final val LogPendingSubTypesThreshold = TypeConstants.DefaultLogThreshhold
 
-  private[this] val _pendingSubTypes = new mutable.HashSet[SubTypePair]
-  def pendingSubTypes = _pendingSubTypes
+  def pendingSubTypes: mutable.HashSet[SubTypePair] = scratch.frame.pendingSubTypes
 
-  private[this] val _knownFalseSubTypes = new IdentityHashMap[Type, List[Type]]
-  def knownFalseSubTypes = _knownFalseSubTypes
+  def knownFalseSubTypes: IdentityHashMap[Type, List[Type]] = scratch.frame.knownFalseSubTypes
+
+  // Leaving an `isSubType`, `isSameType` or `isDifferentType`.
+  private def exitSubSameType(s: CompletionFrame): Unit = {
+    s.subsametypeRecursions -= 1
+    if (s.subsametypeRecursions == 0) exitOutermostCheck(s)
+  }
 
   /** Called when an outermost `isSubType`, `isSameType` or `isDifferentType` exits. */
-  private def exitOutermostCheck(): Unit = {
+  private def exitOutermostCheck(s: CompletionFrame): Unit = {
     // The map is only populated for pathological recursive subtype checks. Guard the `clear()`,
     // as `IdentityHashMap.clear` zeroes the entire table even when empty.
-    val m = knownFalseSubTypes
+    val m = s.knownFalseSubTypes
     if (!m.isEmpty) m.clear()
     // A successful check keeps the constraints it registered on type variables in the undo log.
     // In the compiler, `Infer` and `Implicits` hold a mark in the log across several outermost
@@ -47,7 +51,7 @@ trait TypeComparers {
     // runs and nothing holds a mark outside a check, so clear it here, or each check that solves an
     // existential leaks its type variables and constraints for the life of the thread.
     if (!isCompilerUniverse) {
-      val log = undoLog
+      val log = s.undoLog
       if (!log.log.isEmpty) log.clear()
     }
   }
@@ -64,9 +68,8 @@ trait TypeComparers {
     override def toString = tp1.toString+" <:<? "+tp2
   }
 
-  private[this] var _subsametypeRecursions: Int = 0
-  def subsametypeRecursions = _subsametypeRecursions
-  def subsametypeRecursions_=(value: Int) = _subsametypeRecursions = value
+  def subsametypeRecursions: Int = scratch.frame.subsametypeRecursions
+  def subsametypeRecursions_=(value: Int): Unit = scratch.frame.subsametypeRecursions = value
 
   private def isUnifiable(pre1: Type, pre2: Type) = (
        (isEligibleForPrefixUnification(pre1) || isEligibleForPrefixUnification(pre2))
@@ -106,14 +109,14 @@ trait TypeComparers {
       (sym1.name == sym2.name) && isUnifiableSyms(sym1, pre1, sym2, pre2)
   )
 
-  def isDifferentType(tp1: Type, tp2: Type): Boolean = try {
-    subsametypeRecursions += 1
-    undoLog undo { // undo type constraints that arise from operations in this block
-      !isSameType1(tp1, tp2)
-    }
-  } finally {
-    subsametypeRecursions -= 1
-    if (subsametypeRecursions == 0) exitOutermostCheck()
+  def isDifferentType(tp1: Type, tp2: Type): Boolean = {
+    val s = scratch.frame
+    try {
+      s.subsametypeRecursions += 1
+      s.undoLog undo { // undo type constraints that arise from operations in this block
+        !isSameType1(tp1, tp2)
+      }
+    } finally exitSubSameType(s)
   }
 
   def isDifferentTypeConstructor(tp1: Type, tp2: Type) = !isSameTypeConstructor(tp1, tp2)
@@ -129,26 +132,26 @@ trait TypeComparers {
   )
 
   /** Do `tp1` and `tp2` denote equivalent types? */
-  def isSameType(tp1: Type, tp2: Type): Boolean = try {
-    if (settings.areStatisticsEnabled) statistics.incCounter(sametypeCount)
-    subsametypeRecursions += 1
-    //OPT cutdown on Function0 allocation
-    //was:
-    //    undoLog undoUnless {
-    //      isSameType1(tp1, tp2)
-    //    }
-
-    val before = undoLog.log
-    var result = false
+  def isSameType(tp1: Type, tp2: Type): Boolean = {
+    val s = scratch.frame
     try {
-      result = isSameType1(tp1, tp2)
-    }
-    finally if (!result) undoLog.undoTo(before)
-    result
-  }
-  finally {
-    subsametypeRecursions -= 1
-    if (subsametypeRecursions == 0) exitOutermostCheck()
+      if (settings.areStatisticsEnabled) statistics.incCounter(sametypeCount)
+      s.subsametypeRecursions += 1
+      //OPT cutdown on Function0 allocation
+      //was:
+      //    undoLog undoUnless {
+      //      isSameType1(tp1, tp2)
+      //    }
+
+      val undoLog = s.undoLog
+      val before = undoLog.log
+      var result = false
+      try {
+        result = isSameType1(tp1, tp2)
+      }
+      finally if (!result) undoLog.undoTo(before)
+      result
+    } finally exitSubSameType(s)
   }
 
   // @pre: at least one argument has annotations
@@ -289,58 +292,61 @@ trait TypeComparers {
     )
   }
 
-  def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = try {
-    subsametypeRecursions += 1
+  def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = {
+    val s = scratch.frame
+    try {
+      s.subsametypeRecursions += 1
 
-    //OPT cutdown on Function0 allocation
-    //was:
-    //    undoLog undoUnless { // if subtype test fails, it should not affect constraints on typevars
-    //      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
-    //        val p = new SubTypePair(tp1, tp2)
-    //        if (pendingSubTypes(p))
-    //          false
-    //        else
-    //          try {
-    //            pendingSubTypes += p
-    //            isSubType2(tp1, tp2, depth)
-    //          } finally {
-    //            pendingSubTypes -= p
-    //          }
-    //      } else {
-    //        isSubType2(tp1, tp2, depth)
-    //      }
-    //    }
+      //OPT cutdown on Function0 allocation
+      //was:
+      //    undoLog undoUnless { // if subtype test fails, it should not affect constraints on typevars
+      //      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
+      //        val p = new SubTypePair(tp1, tp2)
+      //        if (pendingSubTypes(p))
+      //          false
+      //        else
+      //          try {
+      //            pendingSubTypes += p
+      //            isSubType2(tp1, tp2, depth)
+      //          } finally {
+      //            pendingSubTypes -= p
+      //          }
+      //      } else {
+      //        isSubType2(tp1, tp2, depth)
+      //      }
+      //    }
 
-    val before = undoLog.log
-    var result = false
+      val undoLog = s.undoLog
+      val before = undoLog.log
+      var result = false
 
-    try result = { // if subtype test fails, it should not affect constraints on typevars
-      if (subsametypeRecursions >= LogPendingSubTypesThreshold) {
-        val p = SubTypePair(tp1, tp2)
-        if (pendingSubTypes(p)) {
-          val ts = knownFalseSubTypes.get(tp1)
-          val cur = if (ts != null) ts else Nil
-          knownFalseSubTypes.put(tp1, tp2 :: cur) // see scala/bug#13119
-          false // see neg/t8146-no-finitary*
-        } else
-          try {
-            pendingSubTypes += p
-            isSubType1(tp1, tp2, depth)
-          } finally {
-            pendingSubTypes -= p
-          }
-      } else if (!knownFalseSubTypes.isEmpty && { val ts = knownFalseSubTypes.get(tp1); ts != null && ts.contains(tp2) }) {
-        // redundant `isEmpty` check is probably premature optimization, but isSubType is perf sensitive
-        false
-      } else {
-        isSubType1(tp1, tp2, depth)
-      }
-    } finally if (!result) undoLog.undoTo(before)
+      try result = { // if subtype test fails, it should not affect constraints on typevars
+        val knownFalseSubTypes = s.knownFalseSubTypes
+        if (s.subsametypeRecursions >= LogPendingSubTypesThreshold) {
+          val p = SubTypePair(tp1, tp2)
+          val pendingSubTypes = s.pendingSubTypes
+          if (pendingSubTypes(p)) {
+            val ts = knownFalseSubTypes.get(tp1)
+            val cur = if (ts != null) ts else Nil
+            knownFalseSubTypes.put(tp1, tp2 :: cur) // see scala/bug#13119
+            false // see neg/t8146-no-finitary*
+          } else
+            try {
+              pendingSubTypes += p
+              isSubType1(tp1, tp2, depth)
+            } finally {
+              pendingSubTypes -= p
+            }
+        } else if (!knownFalseSubTypes.isEmpty && { val ts = knownFalseSubTypes.get(tp1); ts != null && ts.contains(tp2) }) {
+          // redundant `isEmpty` check is probably premature optimization, but isSubType is perf sensitive
+          false
+        } else {
+          isSubType1(tp1, tp2, depth)
+        }
+      } finally if (!result) undoLog.undoTo(before)
 
-    result
-  } finally {
-    subsametypeRecursions -= 1
-    if (subsametypeRecursions == 0) exitOutermostCheck()
+      result
+    } finally exitSubSameType(s)
   }
 
   /** Check whether the subtype or type equivalence relationship
@@ -444,10 +450,11 @@ trait TypeComparers {
       // in any case, we do need to handle one of the types being an existential
       case (ntp1, et2: ExistentialType)                                     => et2.withTypeVars(isSubType(ntp1, _, depth), depth)
       case (et1: ExistentialType, ntp2)                                     =>
+        val s = scratch
         try {
-          skolemizationLevel += 1
+          s.skolemizationLevel += 1
           isSubType(et1.skolemizeExistential, ntp2, depth)
-        } finally { skolemizationLevel -= 1 }
+        } finally { s.skolemizationLevel -= 1 }
       case _                                                                => // @assume !(both .isHigherKinded) thus cannot be subtypes
         def tp_s(tp: Type): String = f"$tp%-20s ${util.shortClassOfInstance(tp)}%s"
         devWarning(s"HK subtype check on $tp1 and $tp2, but both don't normalize to polytypes:\n  tp1=${tp_s(ntp1)}\n  tp2=${tp_s(ntp2)}")
@@ -538,11 +545,12 @@ trait TypeComparers {
       case tv @ TypeVar(_,_) =>
         tv.registerBound(tp2, isLowerBound = false)
       case ExistentialType(_, _) => // TODO: fast initial try for tp1 and tp2 both existentials? (first try instantiating tp2's existentials to tp1's skolems?)
+        val s = scratch
         try {
-          skolemizationLevel += 1
+          s.skolemizationLevel += 1
           isSubType(tp1.skolemizeExistential, tp2, depth)
         } finally {
-          skolemizationLevel -= 1
+          s.skolemizationLevel -= 1
         }
       case _ =>
         thirdTry

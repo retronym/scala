@@ -532,6 +532,121 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** Is this universe used from several threads at once? Runtime reflection is.
+   *
+   *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
+   *  or one per thread, plain or atomic symbol ids, plain or synchronized interning. The batch
+   *  compiler gets the single-threaded ones and pays for the choice with a call through a field.
+   *  Must be a constant: it is read while the universe is constructed.
+   */
+  def isConcurrentUniverse = false
+
+  override protected def synchronizeNames: Boolean = isConcurrentUniverse
+
+  /** The recursion guards of the type operations at one level of completion, with the undo log
+   *  of type constraints. Each operation fetches its frame once and keeps it in a local.
+   */
+  final class CompletionFrame {
+    private[this] var _next: CompletionFrame = null
+    /** The frame for a completion started from this one. Kept for reuse once allocated. */
+    def next: CompletionFrame = {
+      if (_next eq null) _next = new CompletionFrame
+      _next
+    }
+    var subsametypeRecursions: Int = 0
+    val pendingSubTypes = new mutable.HashSet[SubTypePair]
+    val knownFalseSubTypes = new java.util.IdentityHashMap[Type, List[Type]]
+    /** A log of type variable with their original constraints. Used in order
+     *  to undo constraints in the case of isSubType/isSameType failure.
+     */
+    val undoLog = new UndoLog
+    var basetypeRecursions: Int = 0
+    val pendingBaseTypes = new mutable.HashSet[Type]
+    var volatileRecursions: Int = 0
+    val pendingVolatiles = new mutable.HashSet[Symbol]
+    /** The memo tables and recursion guards of the `lub` or `glb` in progress. */
+    val lubGlbCaches = new LubGlbCaches
+    /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
+    var globalGlbDepth: Depth = Depth.Zero
+  }
+
+  /** The scratch state of the type operations of one thread, other than the guards in `frame`.
+   *
+   *  A universe used from one thread at a time (the compiler, a toolbox) has one instance; a
+   *  concurrent one has one per thread. Anything that must not be seen by an operation on another
+   *  thread belongs here, not in a field of `SymbolTable`: anything that is shared, such as caches,
+   *  does not.
+   */
+  final class Scratch {
+    private[this] var _frame: CompletionFrame = new CompletionFrame
+    /** The frame of the completion in progress on this thread. */
+    def frame: CompletionFrame = _frame
+    /** Start a completion in the next frame. Returns the current one, for `exitFrame`. */
+    def enterNextFrame(): CompletionFrame = {
+      val f = _frame
+      _frame = f.next
+      f
+    }
+    /** End the completion that `enterNextFrame` started from `f`. */
+    def exitFrame(f: CompletionFrame): Unit = {
+      _frame = f
+      f.next.undoLog.clear() // what it logged can no longer be undone by the completion
+    }
+    /** The current skolemization level, needed for the algorithms
+     *  in isSameType, isSubType that do constraint solving under a prefix.
+     */
+    var skolemizationLevel: Int = 0
+    /** The current indentation string for traces */
+    var indent: String = ""
+    var toStringRecursions: Int = 0
+    val toStringSubjects = new mutable.HashSet[Type]
+    /** The recursion depth of locked symbols, see `-Yrecursion` */
+    var recursionTable = Map.empty[Symbol, Int]
+
+    // Reusable instances of helpers with mutable state, one per level of reentrance. A concurrent
+    // universe makes a fresh one each time instead: a helper keeps the types and symbols of its last
+    // use, and a `Scratch` there lives as long as its thread, so a pooled one would keep a pool
+    // thread holding a type, and through its symbols a mirror and its class loader.
+    private[this] val pool = !isConcurrentUniverse
+    val findMembers = ReusableInstance(new SymbolTable.this.findMembers.FindMember, enabled = pool)
+    val containsCollectors = ReusableInstance(new ContainsCollector(null), enabled = pool)
+    val varianceInTypes = ReusableInstance(new variances.varianceInType, enabled = pool)
+    val substSymMaps = ReusableInstance(SubstSymMap(), enabled = pool)
+    val onlyChildAccumulators = ReusableInstance(new OnlyChildAccumulator, enabled = pool)
+    val setChildrenPosAccumulators = ReusableInstance(new SetChildrenPosAccumulator, enabled = pool)
+    val commonOwnerMaps = ReusableInstance(new CommonOwnerMap, enabled = pool)
+
+    // Instances of the type maps and collectors that `TypeMaps` also offers as shared objects.
+    // They keep state in fields, but save and restore it on reentrance, so one per thread will do.
+    val erroneousCollector = new ErroneousCollector
+    val isDependentCollector = new IsDependentCollector
+    val isRelatableCollector = new IsRelatableCollector
+    val unrelatableCollector = new UnrelatableCollector
+    val wildcardExtrapolation = new wildcardExtrapolation
+    // OPT: hoist allocation of the collector and lambda out of the loop in `maxTypes`
+    val typeContainsTypeVarCollector = new FindTypeCollector(_.isInstanceOf[TypeVar])
+    val isWildCardOrNonGroundTypeVarCollector = new FindTypeCollector({
+      case tv: TypeVar => !tv.isGround
+      case t => t.isWildcard
+    })
+  }
+  private[this] lazy val scratches: Scratches = if (isConcurrentUniverse) new PerThreadScratches else new OneScratch
+  final def scratch: Scratch = scratches.get
+
+  private[internal] abstract class Scratches {
+    def get: Scratch
+  }
+  private final class OneScratch extends Scratches {
+    private[this] val scratch = new Scratch
+    def get: Scratch = scratch
+  }
+  /** One `Scratch` per thread, which a thread doesn't keep alive alone: see `OwnedThreadLocal`. */
+  private final class PerThreadScratches extends Scratches {
+    private[this] val scratches = new util.OwnedThreadLocal(() => new Scratch)
+    def get: Scratch = scratches.get
+  }
+
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
