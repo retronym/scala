@@ -13,7 +13,7 @@
 package scala.reflect.internal.util
 
 import java.util.concurrent.atomic.LongAdder
-import java.util.concurrent.locks.ReentrantLock
+import io.github.retronym.sharing.{Claimant, CoarseLock, CycleHandler, PerKeyClaims, What}
 
 /** The lock under which every completion of a compiler used from several threads runs (`-Yparallel-typer`):
  *  one reentrant lock, the "serialised" mode of the parallel typer. It is the facade over the concurrency
@@ -22,8 +22,39 @@ import java.util.concurrent.locks.ReentrantLock
  *  It counts what it costs: the time threads waited for it, and the time it was held from the outermost
  *  acquisition. The holder's start time needs no synchronisation: only the holder writes it.
  */
-final class CompletionLock {
-  private[this] val lock = new ReentrantLock
+final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s => throw new IllegalStateException(s"wait-for cycle on $s")) {
+  // scala-sharing's coarse registry: one reentrant lock that keeps what its holder is doing, for the reports of the
+  // threads that wait (`io.github.retronym.sharing.CoarseLock`).
+  private[this] val lock = new CoarseLock((_, _, _, _) => ())
+
+  // With `perKey` (`-Dscalac.parallelTyper.claims=perKey`), a claim per completion root (`PerKeyClaims`): the coarse
+  // root (`CompletionLock.CoarseRoot`, every acquisition without a key) and a source symbol's. A claimant per thread,
+  // which cannot abort (a batch completion cannot be retried); a wait-for cycle is reported to `cycle`.
+  private[this] val claimants: ThreadLocal[Claimant] =
+    ThreadLocal.withInitial(() => new Claimant(Thread.currentThread) {
+      override def canAbort = false
+      override def recordWait(nanos: Long, holderWhat: String, holderName: String): Unit = {
+        waitNanos.add(nanos); waits.increment(); PerThreadTimes.addWait(nanos)
+      }
+    })
+  private[this] val claims: PerKeyClaims =
+    if (perKey) new PerKeyClaims(() => claimants.get, new CycleHandler { def waitCycle(s: AnyRef): Nothing = cycle(s) }) else null
+  def isPerKey: Boolean = claims ne null
+
+  /** `body` holding the claim on `key` (in the coarse mode, the lock), to do `what`; a wait-for cycle on the way is
+   *  reported against `subject`. */
+  def claim[T](key: AnyRef, what: What, subject: AnyRef)(body: => T): T =
+    if (claims eq null) { acquire(what); try body finally release() }
+    else {
+      claims.acquire(key, what, () => cycle(subject))
+      if (claims.ownedHere(key)) acquisitions.increment()
+      try body finally claims.release(key)
+    }
+
+  /** Wait until no other thread holds the claim on `key` (the coarse mode: the lock). */
+  def awaitKey(key: AnyRef, subject: AnyRef): Unit =
+    if (claims eq null) await()
+    else { claims.acquire(key, CompletionLock.waiting, () => cycle(subject)); claims.release(key) }
   private[this] var holdStart = 0L
 
   val waitNanos = new LongAdder
@@ -32,15 +63,25 @@ final class CompletionLock {
   val acquisitions = new LongAdder
 
   def isHeldByCurrentThread: Boolean = lock.isHeldByCurrentThread
+  def isLocked: Boolean = lock.isLocked
   def owner: String = lock.toString
 
-  def acquire(): Unit = {
-    if (!lock.tryLock()) {
-      val t0 = System.nanoTime()
-      lock.lock()
-      waitNanos.add(System.nanoTime() - t0)
+  def acquire(): Unit = acquire(CompletionLock.completing)
+
+  /** Acquire the lock (the coarse root's claim) to do `what` (a site label for the reports of waiting threads). */
+  def acquire(what: What): Unit =
+    if (claims ne null) { claims.acquire(CompletionLock.CoarseRoot, what, () => cycle(CompletionLock.CoarseRoot)) }
+    else acquireLock(what)
+
+  private def acquireLock(what: What): Unit = {
+    val contended = lock.isLocked && !lock.isHeldByCurrentThread
+    val t0 = if (contended) System.nanoTime() else 0L
+    lock.lockFor(what)
+    if (contended) {
+      val waited = System.nanoTime() - t0
+      waitNanos.add(waited)
       waits.increment()
-      PerThreadTimes.addWait(System.nanoTime() - t0)
+      PerThreadTimes.addWait(waited)
     }
     if (lock.getHoldCount == 1) {
       holdStart = System.nanoTime()
@@ -66,13 +107,17 @@ final class CompletionLock {
       sites.asScala.toList.map { case (k, v) => (k, v.sum) }.sortBy(-_._2).take(25).map { case (k, v) => f"$v%10d $k" }.mkString("\n", "\n", "")
     }
 
-  def release(): Unit = {
+  def release(): Unit =
+    if (claims ne null) claims.release(CompletionLock.CoarseRoot)
+    else releaseLock()
+
+  private def releaseLock(): Unit = {
     if (lock.getHoldCount == 1) {
       val held = System.nanoTime() - holdStart
       holdNanos.add(held)
       PerThreadTimes.addHold(held)
     }
-    lock.unlock()
+    lock.unlockFor()
   }
 
   @inline def apply[T](body: => T): T = {
@@ -83,6 +128,8 @@ final class CompletionLock {
 
   /** Wait until no other thread holds the lock: what another thread was completing is then done. */
   def await(): Unit = { acquire(); release() }
+
+  def isHeldHere: Boolean = if (claims ne null) claims.ownedHere(CompletionLock.CoarseRoot) else lock.isHeldByCurrentThread
 
   def reset(): Unit = { waitNanos.reset(); waits.reset(); holdNanos.reset(); acquisitions.reset() }
 
@@ -97,4 +144,15 @@ object PerThreadTimes {
   def addWait(n: Long): Unit = times.get.waitNanos += n
   def addHold(n: Long): Unit = times.get.holdNanos += n
   def current: Times = times.get
+}
+
+object CompletionLock {
+  /** The label of a completion's acquisition. */
+  val completing: What = new What("completing a symbol", null)
+  /** The label of a wait for another thread's completion. */
+  val waiting: What = new What("waiting for a completion", null)
+  /** The claim of everything that is not a source symbol's completion: the classpath (loaders, unpickler, classfile
+   *  parser, which share state across files), the type caches still under the lock, macro expansion. Coarse. */
+  object CoarseRoot
+  val coarse: What = new What("the classpath and shared caches", null, coarse = true)
 }

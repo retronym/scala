@@ -539,17 +539,59 @@ abstract class SymbolTable extends macros.Universe
   /** In a compiler used from several threads (`isConcurrentCompiler`), the lock under which every completion runs;
    *  null otherwise. See `Symbol.info`.
    */
-  final lazy val completionLock: util.CompletionLock = if (isConcurrentCompiler) new util.CompletionLock else null
+  final lazy val completionLock: util.CompletionLock =
+    if (!isConcurrentCompiler) null
+    else new util.CompletionLock(
+      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey",
+      cycle = {
+        case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
+        case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")
+      })
+
+  /** The root whose claim a completion of `sym` takes when completions are claimed per root
+   *  (`-Dscalac.parallelTyper.claims=perKey`): the coarse root here; the compiler gives a source symbol its own. */
+  def completionRoot(sym: Symbol): AnyRef = util.CompletionLock.CoarseRoot
+
+  /** `body` holding the claim on `sym`'s completion root (or the lock), in a concurrent compiler. */
+  @inline final def withCompletionClaim[T](sym: Symbol)(body: => T): T = {
+    val lock = completionLock
+    if (lock eq null) body
+    else if (lock.isPerKey) lock.claim(completionRoot(sym), util.CompletionLock.completing, sym)(body)
+    else {
+      lock.acquire()
+      try body
+      finally lock.release()
+    }
+  }
 
   /** A value of each thread in a concurrent compiler, else one value: for the scratch state of the typer
    *  (caches and side channels kept in fields of the cake) that must be confined to a thread. Must be created after
    *  this universe is constructed. */
   final class PerThread[T <: AnyRef](init: () => T) {
     private[this] val single: T = if (isConcurrentCompiler) null.asInstanceOf[T] else init()
-    private[this] val local: ThreadLocal[T] = if (isConcurrentCompiler) ThreadLocal.withInitial(() => init()) else null
-    def get: T = if (local eq null) single else local.get
+    // As `PerThreadScratches`: the universe holds the values, weakly keyed by thread, and the `ThreadLocal` only a weak
+    // reference. A value holds its universe (an outer pointer), so a `ThreadLocal` holding the value itself would keep
+    // every universe a long-lived thread (a driver's main thread, a build tool's) ever used alive.
+    private[this] val values = if (isConcurrentCompiler) java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, T]) else null
+    private[this] val local: ThreadLocal[java.lang.ref.WeakReference[T]] = if (isConcurrentCompiler) new ThreadLocal else null
+    def get: T =
+      if (local eq null) single
+      else {
+        val ref = local.get
+        val v = if (ref eq null) null.asInstanceOf[T] else ref.get
+        if (v ne null) v
+        else {
+          val created = init()
+          values.put(Thread.currentThread, created)
+          local.set(new java.lang.ref.WeakReference(created))
+          created
+        }
+      }
   }
   final def perThread[T <: AnyRef](init: => T): PerThread[T] = new PerThread(() => init)
+
+  /** Whether symbols local to a body complete without the completion lock (`Symbol.completeLocally`). */
+  final lazy val localCompletions: Boolean = isConcurrentCompiler && (System.getProperty("scalac.parallelTyper.lockedLocalCompletions") == null)
 
   /** `body` under the completion lock, in a concurrent compiler. */
   @inline final def underCompletionLock[T](body: => T): T = {
@@ -705,6 +747,14 @@ abstract class SymbolTable extends macros.Universe
     var recursionTable = Map.empty[Symbol, Int]
     /** The number of Namer completers in progress, see `Symbols.lockedCount` */
     var lockedCount: Int = 0
+    /** The types whose stamped caches this thread is computing, in a concurrent compiler (`Types.lockFreeTypeCaches`):
+     *  the in-progress markers that the serial protocol keeps in the shared fields. */
+    var btsInProgress: List[AnyRef] = Nil
+    var parentsInProgress: List[AnyRef] = Nil
+    var baseClassesInProgress: List[AnyRef] = Nil
+    var underlyingInProgress: List[AnyRef] = Nil
+    /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
+    var tpeInProgress: List[AnyRef] = Nil
     /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
     var ph: Phase = NoPhase
     var per: Period = NoPeriod
@@ -752,7 +802,16 @@ abstract class SymbolTable extends macros.Universe
   private final class PerThreadScratches extends Scratches {
     private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
     private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
-    def get: Scratch = {
+    def get: Scratch = Thread.currentThread match {
+      case t: util.ScratchThread if t.scratchOwner eq SymbolTable.this => t.scratch.asInstanceOf[Scratch]
+      case t: util.ScratchThread if t.scratchOwner eq null =>
+        val s = viaThreadLocal
+        t.scratch = s
+        t.scratchOwner = SymbolTable.this
+        s
+      case _ => viaThreadLocal
+    }
+    private def viaThreadLocal: Scratch = {
       val ref = scratchRef.get
       val s = if (ref eq null) null else ref.get
       if (s ne null) s else newScratch()

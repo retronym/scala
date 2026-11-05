@@ -89,6 +89,8 @@ I-numbers as in the Scala 3 notes; O for order effects (the same on one thread).
 - I2. The read of a stamped cache after its definition was outside the lock: a thread at another phase (`enteringPhaseNotLaterThan`) redefined `Predef`'s `ClassInfoType.baseClasses` between the definition and the read, and the reader saw its null in-progress marker: "illegal cyclic reference involving object Predef" (a `RecoverableCyclicReference` thrown out of `checkUnused`). Fix: the whole slow path under the lock.
 - I3. Forcing `definitions`' lazy vals before the signatures, when compiling the library: `Predef_???` asked for `Predef`'s members while `Predef` was not ready, the cycle left `baseClasses` stamped in progress for the period, and every later reader on any thread saw a cycle. Fix: force them after the pre-pass.
 - I6. `Typer.isStale` (from `reallyExists`, in identifier typing) calls `rawInfo.load(sym)` directly, a loader's completion outside `Symbol.info` and so outside the lock: two threads ran the one `ClassfileParser` on `java.util.Collections` at once, "unsatisfiable cyclic dependency in 'class Collections'", then broken class files everywhere (shared `readIndex`). Found by `corpus/stress-shared` (every run at 8 threads failed). Fix: `SymbolLoader.complete` takes the lock and marks its roots.
+- I7. Body-local symbols complete without the lock (B.1), but "local" was decided from the owner chain alone, and the classpath has local symbols too: an unpickled existential or local class owned by a library method. Two threads completed `LazyTypeRef`s of one classfile at once: `IndexOutOfBoundsException` in `UnPickler.completingStack` (compiler corpus, 1 of 5 runs; re2s, 1 of 5). Fix: lock-free only for a symbol of a source being compiled (`completionRoot(sym)` is not the coarse root).
+- I8. Not a race, a leak: the `ThreadLocal`s of the per-thread holders kept every `Global` a long-lived thread had used (their values hold the universe), so the warm benchmark ran out of a 6 GB heap after about thirty compilations at 8 threads. Fix: `PerThread` holds its values weakly from the thread, as `PerThreadScratches` does; the run's current unit and the position assigners use it.
 - I4. `Global.propCnt`, the depth of `withPropagateCyclicReferences`, was one counter for all threads: a thread's cyclic references propagated or were reported according to another thread's state, and a lost update fails `assert(propCnt >= 0)`. Found in the state map, not yet seen failing. Fix: per thread.
 - I5. `BatchSourceFile.offsetToLine` stored its search result in the `lastLine` cache field and returned the field, which another thread could have changed in between: a wrong line number in a message. Found in the state map. Fix: return the local.
 - O1. Signatures first changes which unit first completes a member, and with it whether `String` in a signature of `StringBuilder` and `WrappedString` is `Predef.String` or `java.lang.String`: `StringBuilder.scala` has `import scala.Predef.{...}`, which removes the root `Predef` import for the rest of the unit once it is completed (`registerImport`), so the answer depends on whether a signature was completed before or after that import, and in the serial compiler on which unit asked first. The types are equivalent (an alias and its expansion); the pickles differ in 2 of 805 files as text and in a third (`Predef.sig`) only in entry order. Completing package-level imports first in the pre-pass changed which signatures differ, not whether. Completing them in the namer, behind the flag only (`eagerImports`, tried and reverted), leaves the same three files different: the serial result is the order-dependent one, so no fix confined to the parallel path can match it. The proof that O1 is order and nothing else: with `-Dscalac.parallelTyper.order=source` (units in source order rather than largest first), `lazySignatures` (no pre-pass) and `noForceLazyVals`, the parallel path on one thread is byte-identical to serial on the library; any one of the three reorders completions and gives O1's three files. A fix would make the serial compiler order-independent here (complete package-level imports in the namer for everyone), a change to the stock compiler.
@@ -108,6 +110,29 @@ The state map (`tools/state-map/worklist.md`, 656 fields reachable from the type
 - Unsynchronised mutable collections (74): the typer's maps above (confined or synchronised); per-unit `transformed`, `synthetics`, `toCheck`: written by the unit's own thread and by completers of its symbols, i.e. the pre-pass; `Run.symSource`: concurrent map; `symData`, `compiledFiles`: pickler and parser (serial); `DocComments`: scaladoc, rejected; `ZipArchive` entries: read-only after the archive is opened (lazily, by loaders under the lock); `BaseTypeSeq.pending`: lock; `ClassInfoType.refs`: lock; `Names` tables: name lock for writes, reads of a bucket can miss a name being entered, which then is entered twice? No: entering is under the lock and looks again (`newTermName` holds the lock for lookup-or-enter).
 - Lazy-val monitors that force completion (302): `definitions`, `runDefinitions` and the cake's private lazies are forced before the workers start; per-instance ones that complete symbols take the completion lock first (`LazyAnnotationInfo`); `OverloadedArgProto`'s lazies are per call. Not yet verified by a sweep that nothing was missed: the watchdog's thread dump is the detector (no hang seen so far).
 - Other unprotected fields (91): not yet gone through one by one (TODO), beyond `BatchSourceFile.lastLine` (fixed) and the ones named above.
+
+## Stage 2a: the cheap scaling steps
+
+`src/library`, warm JVM (`tools/parallel-typer/bench.sh library <out> 6 5`, i.e. 6 warm-up and 5 measured compilations per configuration), medians. The machine was loaded throughout (load average 11-13, other agents' benchmarks running: no quiet machine was available overnight), so the 8-thread configuration, which ran last and contends with them and with the efficiency cores (6 performance and 12 efficiency cores), is not reported: it ran out of heap (I8, fixed since) and before that its timings were dominated by the other load. Each variant is the same build with the earlier steps' system properties.
+
+| variant | serial ms | one thread ms | 2 ms | 4 ms | 6 ms | bodies at 1 / 2 / 4 / 6 threads ms | lock held at 1 thread ms (acquisitions) | lock waited at 4 threads ms |
+|---|---:|---:|---:|---:|---:|---|---:|---:|
+| stage 1 (before B, earlier run) | 2211 | 2169 | 1601 | 1545 | | 1500 / 937 / 878 / - | 488 (98k) | 1596 |
+| B.3 + B.4 (caches and locals locked) | 1874 | 1682 | 1419 | 1393 | 2487 | 1118 / 861 / 723 / 1797 | 362 (75k) | 1231 |
+| B.2-B.4 (locals locked) | 2009 | 1736 | 1355 | 1222 | 1955 | 1211 / 769 / 631 / 1388 | 344 (18k) | 771 |
+| B.1-B.4 | 1953 | 1759 | 1254 | 1148 | 2085 | 1187 / 651 / 524 / 605 | 48 (8.5k) | 25 |
+
+Reading: with all four steps the lock is no longer a bound (held 48 ms of a 1.2 s one-thread body phase; 25 ms waited in total at 4 threads), and the bodies go 2.3x faster on 4 threads and 2.0x on 6 (605 ms against 1187 ms; the 6-thread total is noisy because the serial parts ran beside other load). The one-thread path is at or below serial (1759 against 1953) in every variant: the signatures pre-pass and the bodies together take what the serial typer takes, and the rest of the run is the same. The next bounds, in order:
+
+1. The serial parts: the signatures pre-pass (about 300 ms), then parser, namer, superaccessors, extmethods and pickler (about 800 ms together of a 1.2 s run on 4 threads, by the x-ray recording of the stage 1 build): Amdahl's law caps the whole run near 2x however fast the bodies get. Parallel signatures with claims per root (2b.4) and a unit per task for the parser, superaccessors, extmethods and pickler are the next steps.
+2. The efficiency cores: 6 threads are no faster than 4 for the bodies' share of the work and the totals vary, which fits work landing on efficiency cores beside other load; measure on a quiet machine with `-Yparallel-typer-threads` at the performance-core count.
+3. Uniques: one synchronized interning table (`SynchronizedPerRunUniques`) on every type construction; not yet measured, Scala 3 striped it.
+
+## Build wiring for scala-sharing (2b.2)
+
+Vendored at 33614c2 (`src/sharing`, `src/sharing-macros`, README beside them). The `sharingMacros` project (sources `src/sharing-macros`) is compiled by STARR with STARR's library and reflect as provided dependencies, and `reflect` and `compiler` depend on it at compile time only (`compile-internal->compile`); `reflect` compiles `src/sharing` into scala-reflect.jar, its lint warnings silenced (`-Wconf:src=src/sharing/.*:s`). `Publish.java` compiles with reflect's `-source 1.8 -target 1.8` because javac compiles against the running JDK's class library (21), where `VarHandle` exists; a JDK 8 runtime would fail on the classes that use it (only reached in a concurrent universe), as it would on the fences this branch already uses in `Symbols`. `dist/mkQuick` works; partest and `restarrFull` not yet run with it (TODO).
+
+The completion lock is now scala-sharing's `CoarseLock` behind the `CompletionLock` facade, and `-Dscalac.parallelTyper.claims=perKey` switches it to `PerKeyClaims`: a source symbol's completion claims the symbol (a module and its module class one root), everything else claims the coarse root (`CompletionLock.CoarseRoot`: the classpath, macro expansion and the sites still under the lock), a claimant per thread that cannot abort, and a wait-for cycle reported as the `CyclicReference` a serial nesting would have met. The library's operations (`Sharing.claim` with `Holds` evidence, `Once`, `Stamped`, `Guard`) are not used yet: the facade calls the registries directly, which is the simpler shape for the few sites the compiler has (decision 8).
 
 ## Lazy-signatures mode (A.4)
 
@@ -142,6 +167,42 @@ Reading: the parallel path costs nothing on one thread (2169 against 2211), the 
 - Account for each section of the state map worklist (tools/state-map, merged at the milestone).
 - Measure the cost to the serial compiler (no flag) with a paired A/B against fd95c5c1c1 (perflab): the `phase` read is a field test and a branch, `info` an extra test.
 - Done: serial regressions, partest `--pos --neg` (3336 tests) and junit `scala.reflect.internal`, `nsc.typechecker`, `nsc.reporters`, `nsc.symtab` (378) pass without the flag.
+
+## Decisions made overnight
+
+Each is reversible (a system property, or its own commit).
+
+1. `_rawflags`: atomic compare-and-set in a concurrent compiler rather than an argument that every cross-thread writer holds the lock (the writers are too many to argue about; a lost `LOCKED` update is a missed cycle or a stuck lock). Cost to the serial compiler: one test per `setFlag`.
+2. Case class synthetics entered during body typing: safe publication of scope entries (release fence, head-keyed element cache) rather than moving `addSyntheticMethods` into the pre-pass (which would change when synthetic bodies are typed and needs the template's typer context). Argument and residue in "In-progress protocols".
+3. O1: leave it. The serial compiler is the order-dependent one (proved with `order=source`, `lazySignatures`, `noForceLazyVals`); the namer-level fix (`eagerImports`) does not make the parallel path match serial and was reverted. Units stay largest first by default; `-Dscalac.parallelTyper.order=source` keeps source order.
+4. Lazy-signatures mode stays off: it passes the oracle, but the cross-unit completer hazard is unbounded in principle and the bodies run mostly under the lock.
+5. Stamped type caches off the lock (B.2) with per-thread in-progress markers: two threads may compute the same value, and the re-entry answers mimic the serial protocol at that point. `-Dscalac.parallelTyper.lockedTypeCaches` restores the locked serial protocol.
+6. Symbols local to a body complete without the lock (B.1), claimed with a compare-and-set on `_completingThread`; the confinement argument is that no other thread reaches them (inferred member types are free of local symbols). Waiters on a marker park and look again, or wait for the lock if it is held. `-Dscalac.parallelTyper.lockedLocalCompletions` restores the lock. Known risk: a thread that reached another unit's local symbol while holding the completion lock would wait for a local completion that needs the lock (a deadlock the watchdog would show); no path to it is known.
+7. The phase register for worker threads (B.4) is a field of the thread (`ScratchThread`), found with a type test; other threads keep the `ThreadLocal`.
+8. scala-sharing is used through its registries (`CoarseLock`, `PerKeyClaims`) behind the existing facade rather than through the macro API at each site: the compiler's sites are few, keyed by symbols or one coarse root, and the evidence types would mean threading `Holds` through the completers' signatures for no check the facade does not already make. The macro subproject is wired and builds, ready for `Once`/`Stamped` if a site wants them.
+
+## Hot-path costs
+
+Sites where the serial compiler (no flag) now pays a test or more, for the profiling agent to check against fd95c5c1c1:
+
+- `SymbolTable.phase`, `phase_=`, `currentPeriod`: a test of a final field (`phasePerThread`) and a branch.
+- `Symbol.info`: `isConcurrentCompiler && isCompletingElsewhere` after the `_validTo` test (one field load and branch when serial). `rawInfo`: the same test at entry.
+- `Symbol.setFlag`/`resetFlag` and the `LOCKED` updates: a test of `isConcurrentCompiler` (an outer field load).
+- `TypeSymbol.tpe_*`: a test of `isConcurrentCompiler`.
+- `BaseTypeSeq.apply`: a test of `isConcurrentCompiler`.
+- `SingleType.underlying` fast path: `(cache ne NoType) || !isConcurrentCompiler`.
+- The slow paths of the stamped caches: a test (`lockFreeTypeCaches`) and `underCompletionLock` (a lazy val read and a null test).
+- `Scope.enter`: a test (`publishEntry`); `Scope.size` and `toList`: a holder object per cache refill (allocation), and `size` no longer reuses a size cached separately from the list.
+- `Names._chrs` volatile: every read of a name's characters is a volatile load (cheap on ARM: `ldar`).
+- `atPos`: a test of `isConcurrentCompiler`.
+- `MethodSymbol.typeAsMemberOf`: a test.
+- `ModuleClassSymbol.implicitMembers`: an allocation per refill.
+- `Global.withPropagateCyclicReferences`/`propagateCyclicReferences`: a `perThread` holder's `get` (a field load and a branch when serial, plus an array).
+- The typer's per-thread holders (`perThread(...).get`): a field load and a branch when serial, on `isAccessible` (`lastAccessCheckDetails`), every implicit search (caches, shadower), every pattern (`typingInPattern`), every polymorphic application (macro `undetparams`), every `lookupSymbol` (`symbolLookupCaches`), `instantiate`.
+- `CompilationUnit`/`Run`: `currentUnit` and `currentFreshNameCreator` read a field and branch.
+- `Scratch.checkOwner` in `phase_=` and `completeInNextFrame`: a test of a final field.
+
+In a concurrent compiler, `phase` costs a `scratch` lookup: a lazy val read, then for a worker thread a type test and two loads (`ScratchThread`), for any other thread a `ThreadLocal` and a weak reference.
 
 ## Claims per completion root: design sketch (stage 2b)
 

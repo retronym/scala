@@ -1450,6 +1450,7 @@ trait Types
       // In a concurrent compiler, another thread may have stamped the period before it stored the value: the
       // initial `NoType` is then not an answer, and the slow path waits for the completion lock.
       if (underlyingPeriod == currentPeriod && cache != null && ((cache ne NoType) || !isConcurrentCompiler)) cache
+      else if (lockFreeTypeCaches) concurrentUnderlying(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineUnderlyingOfSingleType(this) // this line is synchronized in runtime reflection
         underlyingCache
@@ -1630,6 +1631,7 @@ trait Types
       val cached = baseTypeSeqCache
       if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
         cached
+      else if (lockFreeTypeCaches) concurrentBaseTypeSeqOfCompoundType(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineBaseTypeSeqOfCompoundType(this)
         if (baseTypeSeqCache eq undetBaseTypeSeq)
@@ -1644,6 +1646,7 @@ trait Types
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
       if (baseClassesPeriod == currentPeriod && cached != null) cached
+      else if (lockFreeTypeCaches) concurrentBaseClassesOfCompoundType(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineBaseClassesOfCompoundType(this)
         if (baseClassesCache eq null)
@@ -1661,11 +1664,15 @@ trait Types
      */
     def memo[A](op1: => A)(op2: Type => A): A = {
       def updateCache(): A = {
-        intersectionWitness(parents) = new WeakReference(this)
+        if (isConcurrentCompiler) intersectionWitness.synchronized(intersectionWitness(parents) = new WeakReference(this))
+        else intersectionWitness(parents) = new WeakReference(this)
         op1
       }
 
-      intersectionWitness get parents match {
+      val witness =
+        if (isConcurrentCompiler) intersectionWitness.synchronized(intersectionWitness get parents)
+        else intersectionWitness get parents
+      witness match {
         case Some(ref) =>
           ref.get match {
             case Some(w) => if (w eq this) op1 else op2(w)
@@ -1728,13 +1735,32 @@ trait Types
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
-        // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
-        // after BTS, map them back.
-        // TODO: rework BTS to deal with TypeVars in the same way on the fly
-        if (tpe.parents exists typeContainsTypeVar) {
-          val tvarFor = mutable.Map.empty[Type, TypeVar]
-          // After this TypeMap, it's safe to recurse (`tpe.parents exists typeContainsTypeVar` above is `false`)
-          val varToParam = new TypeMap {
+        if (tpe.parents exists typeContainsTypeVar) tpe.baseTypeSeqCache = compoundBaseTypeSeqWithTypeVars(tpe)
+        else {
+          if (settings.areStatisticsEnabled) statistics.incCounter(compoundBaseTypeSeqCount)
+          val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
+          try {
+            tpe.baseTypeSeqCache = undetBaseTypeSeq
+            tpe.baseTypeSeqCache = compoundBaseTypeSeqWithoutTypeVars(tpe)
+          } finally {
+            if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
+          }
+        }
+      }
+    }
+    //Console.println(s"baseTypeSeq(${tpe.typeSymbol}) = ${tpe.baseTypeSeqCache.toList}") //DEBUG
+    if (tpe.baseTypeSeqCache eq undetBaseTypeSeq)
+      throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+  }
+
+  /** The base type sequence of a compound type whose parents contain type variables. */
+  private def compoundBaseTypeSeqWithTypeVars(tpe: CompoundType): BaseTypeSeq = {
+    // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
+    // after BTS, map them back.
+    // TODO: rework BTS to deal with TypeVars in the same way on the fly
+    val tvarFor = mutable.Map.empty[Type, TypeVar]
+    // After this TypeMap, it's safe to recurse (`tpe.parents exists typeContainsTypeVar` above is `false`)
+    val varToParam = new TypeMap {
             def apply(tp: Type) = tp match {
               case tv: TypeVar => // Applying a type constructor variable to arguments results in a new instance of AppliedTypeVar each time
                 val toOrigin = appliedType(tv.origin.typeSymbol.typeConstructor, tv.typeArgs.mapConserve(this))
@@ -1743,10 +1769,10 @@ trait Types
               case _ => tp.mapOver(this)
             }
           }
-          // computes tvarFor
-          val tpWithoutTypeVars = copyRefinedType(tpe.asInstanceOf[RefinedType], tpe.parents map varToParam, varToParam mapOver tpe.decls)
+    // computes tvarFor
+    val tpWithoutTypeVars = copyRefinedType(tpe.asInstanceOf[RefinedType], tpe.parents map varToParam, varToParam mapOver tpe.decls)
 
-          val paramToVar = new TypeMap {
+    val paramToVar = new TypeMap {
             val paramToVarMap = tvarFor.toMap // capture the map so we can undo the rewrite when the BTS is queried later
             def apply(tp: Type): Type = tp match {
               case tr: TypeRef => paramToVarMap.getOrElse(tr, mapOver(tp))
@@ -1754,34 +1780,23 @@ trait Types
             }
           }
 
-          tpe.baseTypeSeqCache = tpWithoutTypeVars.baseTypeSeq lateMap paramToVar
-        } else {
-          if (settings.areStatisticsEnabled) statistics.incCounter(compoundBaseTypeSeqCount)
-          val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
-          try {
-            tpe.baseTypeSeqCache = undetBaseTypeSeq
-            tpe.baseTypeSeqCache =
-              if (tpe.typeSymbol.isRefinementClass)
-                tpe.memo(compoundBaseTypeSeq(tpe))(_.baseTypeSeq updateHead tpe.typeSymbol.tpe_*)
-              else
-                compoundBaseTypeSeq(tpe)
-          } finally {
-            if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
-          }
-          // [Martin] suppressing memoization solves the problem with "same type after erasure" errors
-          // when compiling with
-          // scalac scala.collection.IterableViewLike.scala scala.collection.IterableLike.scala
-          // I have not yet figured out precisely why this is the case.
-          // My current assumption is that taking memos forces baseTypeSeqs to be computed
-          // at stale types (i.e. the underlying typeSymbol has already another type).
-          // I do not yet see precisely why this would cause a problem, but it looks
-          // fishy in any case.
-        }
-      }
-    }
-    //Console.println(s"baseTypeSeq(${tpe.typeSymbol}) = ${tpe.baseTypeSeqCache.toList}") //DEBUG
-    if (tpe.baseTypeSeqCache eq undetBaseTypeSeq)
-      throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    tpWithoutTypeVars.baseTypeSeq lateMap paramToVar
+  }
+
+  /** The base type sequence of a compound type whose parents contain no type variables. */
+  private def compoundBaseTypeSeqWithoutTypeVars(tpe: CompoundType): BaseTypeSeq = {
+    if (tpe.typeSymbol.isRefinementClass)
+      tpe.memo(compoundBaseTypeSeq(tpe))(_.baseTypeSeq updateHead tpe.typeSymbol.tpe_*)
+    else
+      compoundBaseTypeSeq(tpe)
+    // [Martin] suppressing memoization solves the problem with "same type after erasure" errors
+    // when compiling with
+    // scalac scala.collection.IterableViewLike.scala scala.collection.IterableLike.scala
+    // I have not yet figured out precisely why this is the case.
+    // My current assumption is that taking memos forces baseTypeSeqs to be computed
+    // at stale types (i.e. the underlying typeSymbol has already another type).
+    // I do not yet see precisely why this would cause a problem, but it looks
+    // fishy in any case.
   }
 
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
@@ -1801,6 +1816,133 @@ trait Types
     }
     if (tpe.baseClassesCache eq null)
       throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+  }
+
+  // ---- The stamped caches of shared types in a concurrent compiler, without a lock (-Yparallel-typer) -----------
+  //
+  // The serial protocol stamps the period, stores an in-progress marker (`undetBaseTypeSeq`, null) and then the
+  // value, so that a re-entry on the same thread sees the marker as a cycle. Here the marker is per thread (the
+  // `Scratch`'s lists of types in progress), the value is computed into a local, stored, and the period stamped
+  // after it. Two threads may both compute a value: they compute the same one (from the same symbol infos, within
+  // the typer's phases where no info transformer changes base classes), and either store will do. A reader that
+  // sees a new stamp with the previous value reads a value that is valid for the same reason; one that sees no
+  // value takes this slow path. A re-entry answers as the serial protocol would at that point: an error for the
+  // base type sequences and base classes, the field as it is for `parents` and `underlying`.
+  // `-Dscalac.parallelTyper.lockedTypeCaches` puts the serial protocol back under the completion lock.
+
+  private[this] lazy val lockedTypeCaches: Boolean = System.getProperty("scalac.parallelTyper.lockedTypeCaches") != null
+  @inline final def lockFreeTypeCaches: Boolean = isConcurrentCompiler && !lockedTypeCaches
+
+  @inline private def inProgress(xs: List[AnyRef], x: AnyRef): Boolean = {
+    var ys = xs
+    while (ys ne Nil) { if (ys.head eq x) return true; ys = ys.tail }
+    false
+  }
+
+  private def concurrentBaseTypeSeqOfTypeRef(tpe: TypeRef): BaseTypeSeq = {
+    val s = scratch
+    if (inProgress(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
+    val period = tpe.baseTypeSeqPeriod
+    val cache = tpe.baseTypeSeqCache
+    if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
+      if (period != currentPeriod) tpe.baseTypeSeqPeriod = currentPeriod
+      cache
+    } else {
+      val saved = s.btsInProgress
+      s.btsInProgress = tpe :: saved
+      try {
+        val bts = tpe.baseTypeSeqImpl
+        tpe.baseTypeSeqCache = bts
+        tpe.baseTypeSeqPeriod = currentPeriod
+        bts
+      } finally s.btsInProgress = saved
+    }
+  }
+
+  private def concurrentParentsOfTypeRef(tpe: TypeRef): List[Type] = {
+    val s = scratch
+    if (inProgress(s.parentsInProgress, tpe)) return tpe.parentsCache
+    val period = tpe.parentsPeriod
+    val cache = tpe.parentsCache
+    if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
+      if (period != currentPeriod) tpe.parentsPeriod = currentPeriod
+      cache
+    } else {
+      val saved = s.parentsInProgress
+      s.parentsInProgress = tpe :: saved
+      try {
+        val ps = tpe.parentsImpl
+        tpe.parentsCache = ps
+        tpe.parentsPeriod = currentPeriod
+        ps
+      } finally s.parentsInProgress = saved
+    }
+  }
+
+  private def concurrentBaseTypeSeqOfCompoundType(tpe: CompoundType): BaseTypeSeq = {
+    val s = scratch
+    if (inProgress(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    val period = tpe.baseTypeSeqPeriod
+    val cache = tpe.baseTypeSeqCache
+    if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
+      if (period != currentPeriod) tpe.baseTypeSeqPeriod = currentPeriod
+      cache
+    } else {
+      val saved = s.btsInProgress
+      s.btsInProgress = tpe :: saved
+      try {
+        val bts =
+          if (tpe.parents exists typeContainsTypeVar) compoundBaseTypeSeqWithTypeVars(tpe)
+          else compoundBaseTypeSeqWithoutTypeVars(tpe)
+        tpe.baseTypeSeqCache = bts
+        tpe.baseTypeSeqPeriod = currentPeriod
+        bts
+      } finally s.btsInProgress = saved
+    }
+  }
+
+  private def concurrentBaseClassesOfCompoundType(tpe: CompoundType): List[Symbol] = {
+    val s = scratch
+    if (inProgress(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+    val period = tpe.baseClassesPeriod
+    val cache = tpe.baseClassesCache
+    if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
+      if (period != currentPeriod) tpe.baseClassesPeriod = currentPeriod
+      cache
+    } else {
+      val saved = s.baseClassesInProgress
+      s.baseClassesInProgress = tpe :: saved
+      try {
+        val bcs = tpe.memo(computeBaseClasses(tpe))(tpe.typeSymbol :: _.baseClasses.tail)
+        tpe.baseClassesCache = bcs
+        tpe.baseClassesPeriod = currentPeriod
+        bcs
+      } finally s.baseClassesInProgress = saved
+    }
+  }
+
+  private def concurrentUnderlying(tpe: SingleType): Type = {
+    val s = scratch
+    if (inProgress(s.underlyingInProgress, tpe)) return tpe.underlyingCache
+    val period = tpe.underlyingPeriod
+    val cache = tpe.underlyingCache
+    if (period != NoPeriod && (cache ne null) && (cache ne NoType) && isValid(period)) {
+      if (period != currentPeriod) tpe.underlyingPeriod = currentPeriod
+      cache
+    } else {
+      val saved = s.underlyingInProgress
+      s.underlyingInProgress = tpe :: saved
+      try {
+        val u = if (tpe.sym == NoSymbol) ThisType(rootMirror.RootClass) else {
+          val result = tpe.pre.memberType(tpe.sym).resultType
+          if (isScalaRepeatedParamType(result)) repeatedToSeq(result) else result
+        }
+        assert(u ne tpe, tpe)
+        tpe.underlyingCache = u
+        tpe.underlyingPeriod = currentPeriod
+        u
+      } finally s.underlyingInProgress = saved
+    }
   }
 
   /** A class representing intersection types with refinements of the form
@@ -2599,6 +2741,7 @@ trait Types
     override def parents: List[Type] = {
       val cache = parentsCache
       if (parentsPeriod == currentPeriod && cache != null) cache
+      else if (lockFreeTypeCaches) concurrentParentsOfTypeRef(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineParentsOfTypeRef(this)
         parentsCache
@@ -2634,6 +2777,7 @@ trait Types
       // included: the definition stamps the period before it stores the value (and marks it in progress with
       // `undetBaseTypeSeq`, or null), so a thread at another phase that redefined it between the two would show this
       // one its marker, a cycle. Under the lock, a marker is only seen by the thread that set it.
+      else if (lockFreeTypeCaches) concurrentBaseTypeSeqOfTypeRef(this)
       else underCompletionLock {
         defineBaseTypeSeqOfTypeRef(this)
         if (baseTypeSeqCache == undetBaseTypeSeq)
