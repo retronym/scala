@@ -542,7 +542,7 @@ abstract class SymbolTable extends macros.Universe
   final lazy val completionLock: util.CompletionLock =
     if (!isConcurrentCompiler) null
     else new util.CompletionLock(
-      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey",
+      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey" || System.getProperty("scalac.parallelTyper.parallelSignatures") != null,
       cycle = {
         case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
         case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")

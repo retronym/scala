@@ -45,6 +45,9 @@ trait ParallelTyper {
 
   import global._
 
+  /** -Dscalac.parallelTyper.parallelSignatures: member signatures a unit per task (an experiment). */
+  lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.parallelSignatures") != null
+
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
 
@@ -78,9 +81,39 @@ trait ParallelTyper {
     val log = flag("log") || settings.verbose.value
     def logf(msg: => String): Unit = if (log) Console.err.println("[parallel-typer] " + msg)
 
+    val nThreads = {
+      val n =
+        if (flag("oneThread")) 1
+        else prop("threads").map(_.toInt).getOrElse {
+          val s = settings.YparallelTyperThreads.value
+          if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
+        }
+      math.max(1, math.min(n, units.length))
+    }
+    // largest first, so that the last units to start are small
+    // (`-Dscalac.parallelTyper.order=source`: in source order, as the serial typer)
+    val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
+
     val t0 = System.nanoTime()
     val signatures =
       if (flag("lazySignatures")) 0
+      else if (parallelSignatures) {
+        // -Dscalac.parallelTyper.parallelSignatures (an experiment): the class headers serially, then the members'
+        // signatures a unit per task, each unit's completions under the claim of its unit (`completionRoot`)
+        var n = 0
+        val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        val count = new AtomicInteger
+        val headersDone = System.nanoTime()
+        onPool(typerPhase, ordered, nThreads, "signatures") { u =>
+          val buf = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
+          count.addAndGet(completeSignatures(u, buf))
+          buf.foreach(completed.add)
+        }
+        logf(f"class headers serially in ${(headersDone - t0) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(System.nanoTime() - headersDone) / 1e6}%.1f ms")
+        ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        n + count.get
+      }
       else {
         var n = 0
         val completed = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
@@ -102,16 +135,6 @@ trait ParallelTyper {
     val t2 = System.nanoTime()
     logf(f"lazy vals forced in ${(t2 - t1) / 1e6}%.1f ms")
 
-    val nThreads = {
-      val n =
-        if (flag("oneThread")) 1
-        else prop("threads").map(_.toInt).getOrElse {
-          val s = settings.YparallelTyperThreads.value
-          if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
-        }
-      math.max(1, math.min(n, units.length))
-    }
-
     val bufferingReporter = new BufferingReporter(reporter)
     val savedReporter = reporter
     reporter = bufferingReporter
@@ -119,9 +142,6 @@ trait ParallelTyper {
     lock.reset()
     val timeline = prop("timeline").map(_ => new Timeline)
 
-    // largest first, so that the last units to start are small
-    // (`-Dscalac.parallelTyper.order=source`: in source order, as the serial typer)
-    val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
     val queue = new ConcurrentLinkedQueue[CompilationUnit](ordered.asJava)
     val failure = new AtomicReference[Throwable]()
     val done = new AtomicInteger()
@@ -170,6 +190,53 @@ trait ParallelTyper {
     val t3 = System.nanoTime()
     logf(f"${units.length} units typed in ${(t3 - t2) / 1e6}%.1f ms on $nThreads threads; ${lock.summary}${lock.siteSummary}")
     timeline.foreach(tl => tl.write(prop("timeline").get, t0, t1, t2, t3, nThreads))
+    failure.get match {
+      case null =>
+      case ex   => throw ex
+    }
+  }
+
+  /** `task` on each of `units`, a unit per task on `nThreads` workers at `phase`, the diagnostics buffered and issued
+   *  in order afterwards. */
+  private def onPool(phase0: Phase, units: List[CompilationUnit], nThreads: Int, name: String)(task: CompilationUnit => Unit): Unit = {
+    val bufferingReporter = new BufferingReporter(reporter)
+    val savedReporter = reporter
+    reporter = bufferingReporter
+    val queue = new ConcurrentLinkedQueue[CompilationUnit](units.asJava)
+    val failure = new AtomicReference[Throwable]()
+    val workers = (1 to nThreads).map { i =>
+      val t = new scala.reflect.internal.util.ScratchThread(null, () => {
+        try {
+          phase = phase0
+          var unit = queue.poll()
+          while (unit != null && failure.get == null) {
+            val saved = currentRun.currentUnit
+            currentRun.currentUnit = unit
+            try ParallelTyperTimeline.span(name, unit.source.file.name)(task(unit)) // xray
+            finally { currentRun.currentUnit = saved; undoLog.clear() }
+            unit = queue.poll()
+          }
+        } catch {
+          case ex: Throwable => failure.compareAndSet(null, ex)
+        } finally {
+          phase = NoPhase
+        }
+      }, s"scalac-$name-$i", 1L << 28)
+      t.setDaemon(true)
+      t
+    }
+    val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
+    parallelTyperActive = true
+    try {
+      watchdog.start()
+      workers.foreach(_.start())
+      workers.foreach(_.join())
+    } finally {
+      parallelTyperActive = false
+      watchdog.interrupt()
+      reporter = savedReporter
+      bufferingReporter.issueBuffered()
+    }
     failure.get match {
       case null =>
       case ex   => throw ex
@@ -248,7 +315,7 @@ trait ParallelTyper {
     finally currentRun.currentUnit = savedUnit
   }
 
-  private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)]): Int = {
+  private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)], classesOnly: Boolean = false): Int = {
     var n = 0
     val seen = mutable.HashSet[Symbol]()
     val savedUnit = currentRun.currentUnit
@@ -260,9 +327,9 @@ trait ParallelTyper {
           sym.initialize
           sym.typeParams.foreach(complete)
           if (sym.isMethod) sym.paramss.foreach(_.foreach(complete))
-          completed += ((unit, sym))
+          if (completed ne null) completed += ((unit, sym))
           if (sym.isModule) complete(sym.moduleClass)
-          if (sym.isClass) {
+          if (sym.isClass && !classesOnly) {
             sym.typeOfThis
             var decls = Set.empty[Symbol]
             var more = true
@@ -281,7 +348,7 @@ trait ParallelTyper {
       case PackageDef(_, stats) => stats.foreach(traverse)
       case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse)
       case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
-      case md: MemberDef        => complete(md.symbol)
+      case md: MemberDef        => if (!classesOnly) complete(md.symbol)
       // in tree order, as the typer types them: an import of a root import module (`import scala.Predef.{...}`)
       // excludes it from the unit's root imports (`Contexts.registerImport`) from then on
       case imp: Import          => complete(imp.symbol)
@@ -289,7 +356,7 @@ trait ParallelTyper {
     }
     try {
       traverse(unit.body)
-      unit.synthetics.keys.toList.foreach(complete)
+      if (!classesOnly) unit.synthetics.keys.toList.foreach(complete)
     } finally currentRun.currentUnit = savedUnit
     n
   }
