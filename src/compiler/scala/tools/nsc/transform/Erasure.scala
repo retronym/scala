@@ -958,9 +958,12 @@ abstract class Erasure extends InfoTransform
       def isErasureDoubleDef(pair: SymbolPair) = {
         import pair._
         log(s"Considering for erasure clash:\n$pair")
-        !exitingRefchecks(lowType matches highType) && sameTypeAfterErasure(low, high)
+        !overridingPairs.matchedAtRefchecks(root, low, high) &&
+          sameTypeAfterErasure(low, high) &&
+          !exitingRefchecks(lowType matches highType)
       }
       (new DoubleDefsCursor(root)).iterator filter isErasureDoubleDef foreach doubleDefError
+      overridingPairs.forgetMatchedAtRefchecks(root)
     }
 
     /**  Add bridge definitions to a template. This means:
