@@ -218,8 +218,10 @@ class BatchSourceFile(val file : AbstractFile, content0: Array[Char]) extends So
       else if (offset >= lines(mid + 1)) findLine(mid + 1, hi, (mid + 1 + hi) / 2)
       else mid
     )
-    lastLine = findLine(0, lines.length, lastLine)
-    lastLine
+    // a local: another thread's search can store its own line in between (-Yparallel-typer)
+    val line = findLine(0, lines.length, lastLine)
+    lastLine = line
+    line
   }
 
   override def lines(start: Int, end: Int): Iterator[String] =

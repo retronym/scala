@@ -62,6 +62,9 @@ trait ParallelTyper {
       (s.check.value.nonEmpty, "-Ycheck"),
       (s.log.isSetByUser, "-Ylog"),
       (s.isScaladoc, "scaladoc"),
+      (s.Vimplicits.value, "-Vimplicits"),     // splain's `ImplicitErrors` is one stack for all threads
+      (s.cyclic.value, "-Vcyclic"),            // the locking trace is one buffer for all threads
+      (s.YnameTable.value != "shared", s"-Yname-table:${s.YnameTable.value}"), // names are read without the lock only in a store with a String per name
     ).collect { case (true, what) => what }
   }
 
@@ -155,7 +158,7 @@ trait ParallelTyper {
       bufferingReporter.issueBuffered()
     }
     val t3 = System.nanoTime()
-    logf(f"${units.length} units typed in ${(t3 - t2) / 1e6}%.1f ms on $nThreads threads; ${lock.summary}")
+    logf(f"${units.length} units typed in ${(t3 - t2) / 1e6}%.1f ms on $nThreads threads; ${lock.summary}${lock.siteSummary}")
     timeline.foreach(tl => tl.write(prop("timeline").get, t0, t1, t2, t3, nThreads))
     failure.get match {
       case null =>

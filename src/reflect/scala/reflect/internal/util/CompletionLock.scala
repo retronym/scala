@@ -45,8 +45,26 @@ final class CompletionLock {
     if (lock.getHoldCount == 1) {
       holdStart = System.nanoTime()
       acquisitions.increment()
+      if (sites ne null) recordSite()
     }
   }
+
+  /** `-Dscalac.parallelTyper.lockSites`: count the outermost acquisitions by the first caller outside the lock's
+   *  plumbing (slow: a stack walk per acquisition). */
+  private[this] val sites: java.util.concurrent.ConcurrentHashMap[String, LongAdder] =
+    if (System.getProperty("scalac.parallelTyper.lockSites") != null) new java.util.concurrent.ConcurrentHashMap else null
+  private def recordSite(): Unit = {
+    val frames = new Throwable().getStackTrace
+    val plumbing = Set("acquire", "apply", "underCompletionLock", "completeInfoUnderLock", "await", "awaitCompletionElsewhere")
+    val f = frames.find(f => !plumbing(f.getMethodName) && !f.getClassName.endsWith("CompletionLock")).getOrElse(frames.last)
+    sites.computeIfAbsent(s"${f.getClassName}.${f.getMethodName}", _ => new LongAdder).increment()
+  }
+  def siteSummary: String =
+    if (sites eq null) ""
+    else {
+      import scala.jdk.CollectionConverters._
+      sites.asScala.toList.map { case (k, v) => (k, v.sum) }.sortBy(-_._2).take(25).map { case (k, v) => f"$v%10d $k" }.mkString("\n", "\n", "")
+    }
 
   def release(): Unit = {
     if (lock.getHoldCount == 1) {
