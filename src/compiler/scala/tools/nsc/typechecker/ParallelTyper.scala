@@ -64,6 +64,7 @@ trait ParallelTyper {
       (s.isScaladoc, "scaladoc"),
       (s.Vimplicits.value, "-Vimplicits"),     // splain's `ImplicitErrors` is one stack for all threads
       (s.cyclic.value, "-Vcyclic"),            // the locking trace is one buffer for all threads
+      (s.VtypeDiffs.value, "-Vtype-diffs"),     // splain's format caches are shared maps
       (s.YnameTable.value != "shared", s"-Yname-table:${s.YnameTable.value}"), // names are read without the lock only in a store with a String per name
     ).collect { case (true, what) => what }
   }
