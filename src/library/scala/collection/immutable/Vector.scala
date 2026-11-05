@@ -197,7 +197,12 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
   override def prependedAll[B >: A](prefix: collection.IterableOnce[B]): Vector[B] = {
     val k = prefix.knownSize
     if (k == 0) this
-    else if (k < 0) super.prependedAll(prefix)
+    else if (k < 0) {
+      // Materialise the prefix so that prependedAll0 can share this vector's structure
+      // rather than copying it element by element in an unaligned builder.
+      val p = Vector.from(prefix)
+      if (p.isEmpty) this else prependedAll0(p, p.length)
+    }
     else prependedAll0(prefix, k)
   }
 
