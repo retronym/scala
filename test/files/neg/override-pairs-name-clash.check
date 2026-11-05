@@ -1,0 +1,31 @@
+override-pairs-name-clash.scala:7: error: name clash between inherited members:
+def f(x: List[String]): Int in trait A1 and
+def f(x: List[Int]): Int in trait A2
+have same type after erasure: (x: List): Int
+abstract class InheritedClash extends A1 with A2
+               ^
+override-pairs-name-clash.scala:10: error: name clash between defined and inherited member:
+def f(x: List[String]): Int in trait B1 and
+def f(x: List[Int]): Int at line 10
+have same type after erasure: (x: List): Int
+abstract class DefinedClash extends B1 { def f(x: List[Int]): Int }
+                                             ^
+override-pairs-name-clash.scala:14: error: name clash between inherited members:
+def f(x: => Int): Int in trait C1 and
+def f(x: () => Int): Int in trait C2
+have same type after erasure: (x: Function0): Int
+abstract class ByNameClash extends C1 with C2
+               ^
+override-pairs-name-clash.scala:18: error: name clash between inherited members:
+def f(x: Int*): Int in trait D1 and
+def f(x: Seq[Int]): Int in trait D2
+have same type after erasure: (x: Seq): Int
+abstract class VarargsClash extends D1 with D2
+               ^
+override-pairs-name-clash.scala:24: error: name clash between inherited members:
+def f(x: V): Int in trait E1 and
+def f(x: String): Int in trait E2
+have same type after erasure: (x: String): Int
+abstract class ValueClassClash extends E1 with E2
+               ^
+5 errors
