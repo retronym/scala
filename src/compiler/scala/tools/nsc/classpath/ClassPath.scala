@@ -68,7 +68,7 @@ private[nsc] case class SourceFileEntryImpl(file: AbstractFile) extends SourceFi
   override def source: Option[AbstractFile] = Some(file)
 }
 
-private[nsc] case class ClassAndSourceFilesEntry(classFile: AbstractFile, srcFile: AbstractFile) extends ClassRepresentation {
+private[nsc] case class ClassAndSourceFilesEntry(classFile: AbstractFile, srcFile: AbstractFile, override val jpmsModuleName: String = "") extends ClassRepresentation {
   override final def fileName: String = classFile.name
   override lazy val name = FileUtils.stripClassExtension(fileName)
   override def binary: Option[AbstractFile] = Some(classFile)

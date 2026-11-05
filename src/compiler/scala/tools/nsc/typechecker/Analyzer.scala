@@ -49,6 +49,11 @@ trait Analyzer extends AnyRef
       override val checkable = false
       override def keepsTypeParams = false
 
+      override def run(): Unit = {
+        currentRun.checkJpmsModulesReadScalaLibrary()
+        super.run()
+      }
+
       def apply(unit: CompilationUnit): Unit = newNamer(rootContext(unit)).enterSym(unit.body)
     }
   }

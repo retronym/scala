@@ -1102,10 +1102,18 @@ abstract class Inliner {
   @tailrec
   final def classIsAccessible(accessed: BType, from: ClassBType): Either[OptimizerWarning, Boolean] = (accessed: @unchecked) match {
     // TODO: A2 requires "same run-time package", which seems to be package + classloader (JVMS 5.3.). is the below ok?
-    case c: ClassBType     => c.isPublic.map(_ || c.packageInternalName == from.packageInternalName)
+    // With modules (JVMS 5.4.4), a public class is accessible only if its package is exported to the module of `from`.
+    case c: ClassBType     => c.isPublic.map(isPublic =>
+      c.packageInternalName == from.packageInternalName || isPublic && jpmsPackageAccessible(c, from))
     case a: ArrayBType     => classIsAccessible(a.elementType, from)
     case _: PrimitiveBType => Right(true)
   }
+
+  private def classIsAccessibleIgnoringModules(c: ClassBType, from: ClassBType): Either[OptimizerWarning, Boolean] =
+    c.isPublic.map(_ || c.packageInternalName == from.packageInternalName)
+
+  private def jpmsPackageAccessible(c: ClassBType, from: ClassBType): Boolean =
+    frontendAccess.jpmsPackageAccessible(c.internalName, from.internalName, n => byteCodeRepository.compilingClasses.get(n).map(_._2))
 
   /**
    * Check if a member reference is accessible from the `destinationClass`, as defined in the
@@ -1173,7 +1181,10 @@ abstract class Inliner {
       }
     }
 
-    classIsAccessible(memberDeclClass, from) match { // B0
+    // B0, checking the module of the class in the member reference: a public member that an exported class
+    // inherits from a class in an unexported package is accessible.
+    val b0 = classIsAccessibleIgnoringModules(memberDeclClass, from).map(_ && jpmsPackageAccessible(memberRefClass, from))
+    b0 match {
       case Right(true) => memberIsAccessibleImpl
       case r => r
     }
