@@ -107,6 +107,11 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.synchronizedRawInfo"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$info"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$rawInfo"),
+
+    // Final Symbol.tpe_*: runtime reflection's locking moves behind a hook, in the private[reflect] trait SynchronizedTypeSymbol
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedTypeSymbol.tpe_*"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedTypeSymbol.synchronizedTpe"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedTypeSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedTypeSymbol$$super$tpe_*"),
   )
 
   override val buildSettings = Seq(
