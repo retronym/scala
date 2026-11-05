@@ -102,23 +102,8 @@ trait Types
   type CommonOwnerMap = commonOwners.CommonOwnerMap
 
   val glbLubs: tpe.GlbLubs[Types.this.type] = new tpe.GlbLubs[Types.this.type](this)
-  /** Memo tables and recursion guards for one outermost `lub` or `glb`. Entries are only
-   *  valid within that call: they may be in-progress placeholders (`Any` / `Nothing`) and
-   *  were computed at the current phase.
-   *
-   *  A nested `lub` or `glb` shares them, so that their guards stop it if it is a cycle. A completer
-   *  forced during the call runs in the next `Frame`, which has its own.
-   */
-  final class LubGlbCaches {
-    val lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
-    val glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
-    var inUse = false
-    def clear(): Unit = { lubResults.clear(); glbResults.clear() }
-  }
-  def lubGlbCaches: LubGlbCaches = scratch.frame.lubGlbCaches
-
-  def lubResults = lubGlbCaches.lubResults
-  def glbResults = lubGlbCaches.glbResults
+  def lubResults = scratch.frame.lubs.results
+  def glbResults = scratch.frame.glbs.results
 
   final def lub(ts: List[Type]): Type = glbLubs.lub(ts)
   protected[internal] final def lub(ts: List[Type], depth: Depth): Type = glbLubs.lub(ts, depth)

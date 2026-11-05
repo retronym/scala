@@ -284,18 +284,26 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       else if (isNumericSubType(t2, t1)) t1.dealiasWiden
       else IntTpe)
 
-  /** Run a `lub` or `glb` in the caches of the enclosing call in this frame. Without one, it is
-   *  outermost and must claim the caches, so that no entries outlive it (scala/bug#6437).
+  /** Run a `lub` or `glb` in the tables of the enclosing call in this frame, whose entries are only
+   *  valid within that call: they may be in progress and were computed at the current phase.
+   *  A nested call shares them, so that their guards stop it if it is a cycle. A completer forced
+   *  during the call runs in the next `Frame`, which has its own. Without an enclosing call, this
+   *  one is outermost and must claim the tables, so that no entries outlive it (scala/bug#6437).
    *
-   *  `body` gets the caches so that it need not look them up again, which in runtime reflection
-   *  costs a thread-local access.
+   *  `body` gets the frame so that it need not look it up again, which in runtime reflection costs
+   *  a thread-local access.
    */
-  private def withLubGlbCaches[T](body: LubGlbCaches => T): T = {
-    val caches = scratch.frame.lubGlbCaches
-    if (caches.inUse) body(caches)
+  private def withLubGlbTables[T](body: Frame => T): T = {
+    val frame = scratch.frame
+    if (frame.inLubOrGlb) body(frame)
     else {
-      caches.inUse = true
-      try body(caches) finally { caches.inUse = false; caches.clear() }
+      frame.inLubOrGlb = true
+      try body(frame)
+      finally {
+        frame.inLubOrGlb = false
+        frame.lubs.results.clear()
+        frame.glbs.results.clear()
+      }
     }
   }
 
@@ -305,7 +313,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
     case _        =>
       if (settings.areStatisticsEnabled) statistics.incCounter(lubCount)
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, lubNanos) else null
-      try withLubGlbCaches { _ =>
+      try withLubGlbTables { _ =>
         val res = lub(ts, lubDepth(ts))
         // If the number of unapplied type parameters in all incoming
         // types is consistent, and the lub does not match that, return
@@ -403,8 +411,8 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
   }
 
   /** The least upper bound wrt <:< of a list of types */
-  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = withLubGlbCaches { caches =>
-    val lubResults = caches.lubResults
+  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = withLubGlbTables { frame =>
+    val lubs = frame.lubs
     def lub0(ts0: List[Type]): Type = elimSub(ts0, depth) match {
       case List() => NothingTpe
       case List(t) => t
@@ -419,14 +427,14 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       case ts @ AnnotatedType(annots, tpe) :: rest =>
         annotationCheckerSupport.annotationsLub(lub0(ts map (_.withoutAnnotations)), ts)
       case ts =>
-        lubResults get ((depth, ts)) match {
-          case Some(lubType) =>
-            lubType
-          case None =>
-            lubResults((depth, ts)) = AnyTpe
-            val res = if (depth.isNegative) AnyTpe else lub1(ts)
-            lubResults((depth, ts)) = res
-            res
+        val key = (depth, ts)
+        val memo = lubs.lookup(key, onCycle = AnyTpe)
+        if (memo ne null) memo
+        else {
+          lubs.begin(key)
+          val res = if (depth.isNegative) AnyTpe else lub1(ts)
+          lubs.end(key, res)
+          res
         }
     }
     def lub1(ts0: List[Type]): Type = {
@@ -554,7 +562,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
     case t :: Nil => t
     case _        =>
       // `elimSuper` runs subtype checks, which must not see the caches of an enclosing call either.
-      withLubGlbCaches { _ =>
+      withLubGlbTables { _ =>
         elimSuper(ts) match {
           case List() => AnyTpe
           case List(t) => t
@@ -569,7 +577,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       }
   }
 
-  protected[internal] def glb(ts: List[Type], depth: Depth): Type = withLubGlbCaches { _ =>
+  protected[internal] def glb(ts: List[Type], depth: Depth): Type = withLubGlbTables { _ =>
     elimSuper(ts) match {
       case List() => AnyTpe
       case List(t) => t
@@ -579,8 +587,8 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
 
   /** The greatest lower bound of a list of types (as determined by `<:<`), which have been normalized
     *  with regard to `elimSuper`. */
-  protected def glbNorm(ts0: List[Type], depth: Depth): Type = withLubGlbCaches { caches =>
-    val glbResults = caches.glbResults
+  protected def glbNorm(ts0: List[Type], depth: Depth): Type = withLubGlbTables { frame =>
+    val glbs = frame.glbs
     def glb0(ts0: List[Type]): Type = ts0 match {
       case List() => AnyTpe
       case List(t) => t
@@ -593,14 +601,14 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       case ts @ TypeBounds(_, _) :: rest =>
         TypeBounds(lub(ts map (_.lowerBound), depth), glb(ts map (_.upperBound), depth))
       case ts =>
-        glbResults get ((depth, ts)) match {
-          case Some(glbType) =>
-            glbType
-          case _ =>
-            glbResults((depth, ts)) = NothingTpe
-            val res = if (depth.isNegative) NothingTpe else glb1(ts)
-            glbResults((depth, ts)) = res
-            res
+        val key = (depth, ts)
+        val memo = glbs.lookup(key, onCycle = NothingTpe)
+        if (memo ne null) memo
+        else {
+          glbs.begin(key)
+          val res = if (depth.isNegative) NothingTpe else glb1(ts)
+          glbs.end(key, res)
+          res
         }
     }
     def glb1(ts0: List[Type]): Type = {
@@ -660,16 +668,15 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
                   result
                 })
             }
-            val s = scratch.frame
-            if (s.globalGlbDepth < globalGlbLimit)
+            if (frame.globalGlbDepth < globalGlbLimit)
               try {
-                s.globalGlbDepth = s.globalGlbDepth.incr
+                frame.globalGlbDepth = frame.globalGlbDepth.incr
                 def foreachRefinedDecls(ty: Type): Unit = ty match {
                   case RefinedType(ps, decls) =>
                     ps foreach foreachRefinedDecls
                     if (! decls.isEmpty)
                       decls.iterator.foreach { sym =>
-                        if (s.globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
+                        if (frame.globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
                           try {
                             addMember(glbThisType, glbRefined, glbsym(sym), depth)
                           } catch {
@@ -680,7 +687,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
                 }
                 ts foreach foreachRefinedDecls
               } finally {
-                s.globalGlbDepth = s.globalGlbDepth.decr
+                frame.globalGlbDepth = frame.globalGlbDepth.decr
               }
             if (glbRefined.decls.isEmpty) intersectionType(ts1, glbOwner) else glbRefined
           }
