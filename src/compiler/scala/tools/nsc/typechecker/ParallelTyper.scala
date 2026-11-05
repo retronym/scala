@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.collection.mutable
 import scala.reflect.internal.util.CodeAction
-import scala.reflect.internal.util.{ParallelTyperTimeline, PerThreadTimes, Position}
+import scala.reflect.internal.util.{ParallelTyperTimeline, PerThreadTimes}
 import scala.tools.nsc.reporters.FilteringReporter
 
 /** `-Yparallel-typer`: the typer phase typechecks its units on several threads over one `Global`.
@@ -90,6 +90,10 @@ trait ParallelTyper {
         }
       math.max(1, math.min(n, units.length))
     }
+    // The lazy vals of the cake are forced up front only for the lock order between their monitors and the completion
+    // lock, which needs two workers to deadlock: one worker skips the cost (≈8% of a one-worker run of re2s, and all of
+    // its extra allocation). `noForceLazyVals` skips it on any number, for experiments.
+    val needForceLazyVals = nThreads > 1 && !flag("noForceLazyVals")
     // largest first, so that the last units to start are small
     // (`-Dscalac.parallelTyper.order=source`: in source order, as the serial typer)
     val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
@@ -106,7 +110,7 @@ trait ParallelTyper {
         // the lazy vals of `definitions` before the members run on several threads: one forced from a completion
         // holds the object's monitor while it waits for a claim, and another thread holding that claim waits for the
         // monitor (a deadlock the claims cannot see). After the headers, so that what they name is ready (I3).
-        if (!flag("noForceLazyVals")) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
+        if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val count = new AtomicInteger
         val headersDone = System.nanoTime()
         onPool(typerPhase, ordered, nThreads, "signatures") { u =>
@@ -134,8 +138,7 @@ trait ParallelTyper {
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
     // library), and forcing it before that symbol's unit is ready meets a cycle, which leaves a cache stamped in
     // progress (`CompoundType.baseClasses`) for the rest of the run.
-    if (!flag("noForceLazyVals")) // the property is for experiments: the lock order needs them forced
-      ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
+    if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
     val t2 = System.nanoTime()
     logf(f"lazy vals forced in ${(t2 - t1) / 1e6}%.1f ms")
 
