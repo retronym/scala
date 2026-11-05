@@ -1613,7 +1613,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (isStub) return failStub()
         completeInfoUnderLock()
       }
-      unsynchronizedRawInfo // already under the lock, if any
+      rawInfoHere // not `unsynchronizedRawInfo`, which would look for a completion elsewhere a second time
     }
 
     /** In a concurrent compiler, the thread that is completing this symbol, or null.
@@ -1887,12 +1887,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     protected def synchronizedRawInfo: Type = unsynchronizedRawInfo
 
     protected[reflect] final def unsynchronizedRawInfo: Type = {
+      if (isConcurrentCompiler) awaitCompletionElsewhere()
+      rawInfoHere
+    }
+    /** `rawInfo`, once a completion on another thread has been waited for (`info` has done so). */
+    private[this] final def rawInfoHere: Type = {
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
       //      likely to inline into hot callers of .info
       val outer = Symbols.this
 
       if (_validTo == NoPeriod && isStub) return failStub()
-      if (outer.isConcurrentCompiler) awaitCompletionElsewhere()
 
       var infos = this.infos
       outer.assert(infos != null, "infos must not be null")
