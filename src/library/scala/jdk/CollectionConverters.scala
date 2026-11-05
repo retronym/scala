@@ -74,6 +74,10 @@ import scala.collection.convert.{AsJavaExtensions, AsScalaExtensions}
   *   scala.collection.Map         => java.util.Map
   * }}}
   *
+  * Wrappers of collections that are not mutable throw `UnsupportedOperationException` on all mutators.
+  * The `java.util.List` wrapper of a `mutable.Buffer` supports only `set`, `add(E)`, `remove(int)` and
+  * `clear` as mutators.
+  *
   * The following one way conversion is provided via `asScala`:
   *
   * {{{
