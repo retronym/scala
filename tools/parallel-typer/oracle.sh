@@ -24,6 +24,7 @@ for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
 JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed 's/^TOOL_CLASSPATH="//; s/"$//' | tr ':' '\n' | grep '\.jar$' | paste -sd: -)"
 SCALAC_CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 
+ORDERED="${ORDERED:-}"; case "$(basename "$CORPUS")" in parser-*) ORDERED=1;; esac
 args="$OUT/args"
 # the sources of an in-repo corpus are copied too, so that editing them during a run does not change it
 SRC="$OUT/src-snapshot"
@@ -62,6 +63,7 @@ run() { # <name> <options...>: options starting with -J go to the JVM
   echo "$status" > "$OUT/$name/status"
   # diagnostics, sorted, without the parallel typer's own log lines
   grep -v '^\[parallel-typer\]' "$OUT/$name/out.txt" | sort > "$OUT/$name/diagnostics.txt"
+  grep -v '^\[parallel-typer\]' "$OUT/$name/out.txt" > "$OUT/$name/ordered.txt"
   printf '%-12s status %s  %.1f s\n' "$name" "$status" "$(echo "$t1 - $t0" | bc)"
 }
 
@@ -71,6 +73,11 @@ compare() { # <name> [<reference>=serial]: 0 if it agrees with the reference run
   if ! diff -q "$OUT/$ref/diagnostics.txt" "$OUT/$name/diagnostics.txt" > /dev/null; then
     echo "  $name: diagnostics differ from $ref ($OUT/$name/diagnostics-$ref.diff)"
     diff "$OUT/$ref/diagnostics.txt" "$OUT/$name/diagnostics.txt" > "$OUT/$name/diagnostics-$ref.diff"; bad=1
+  fi
+  # the order of the diagnostics too, for the corpora that are about it (ORDERED=1, or a corpus named parser-*)
+  if [ -n "$ORDERED" ] && ! cmp -s "$OUT/$ref/ordered.txt" "$OUT/$name/ordered.txt"; then
+    echo "  $name: the order of the diagnostics differs from $ref ($OUT/$name/ordered-$ref.diff)"
+    diff "$OUT/$ref/ordered.txt" "$OUT/$name/ordered.txt" > "$OUT/$name/ordered-$ref.diff"; bad=1
   fi
   local sigdiff
   sigdiff=$(diff -rq "$OUT/$ref/sig" "$OUT/$name/sig" 2>&1)

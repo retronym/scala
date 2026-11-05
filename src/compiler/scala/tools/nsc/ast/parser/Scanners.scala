@@ -275,9 +275,16 @@ trait Scanners extends ScannersCommon {
 
     def isAtEnd = charOffset >= buf.length
 
+    // Errors of the units before this one count: when the units are parsed at the same time, the reporter answers
+    // for the serial order (by having this unit parsed again, after the ones before it).
+    private def hasErrorsSoFar: Boolean = reporter match {
+      case r: UnitOrderReporter => r.hasErrorsInUnitOrder
+      case r                    => r.hasErrors
+    }
+
     def resume(lastCode: Token) = {
       token = lastCode
-      if (next.token != EMPTY && !reporter.hasErrors)
+      if (next.token != EMPTY && !hasErrorsSoFar)
         syntaxError("unexpected end of input: possible missing '}' in XML block")
 
       nextToken()

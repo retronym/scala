@@ -203,23 +203,35 @@ trait ParallelTyper {
     }
   }
 
-  /** `task` on each of `units` on the parallel typer's pool, largest first, for a phase other than the typer. */
-  def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String)(task: CompilationUnit => Unit): Unit = {
-    val n = prop("threads").map(_.toInt).getOrElse {
-      val s = settings.YparallelTyperThreads.value
-      if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
-    }
-    onPool(phase0, units.sortBy(u => -u.source.content.length), math.max(1, math.min(n, units.length)), name)(task)
+  /** Can the phases that run a unit per task do so with the settings of this run? */
+  def parallelPhasesSupported: Boolean = unsupported().isEmpty
+
+  /** `task` on each of `units` on the parallel typer's pool, largest first, for a phase other than the typer.
+   *  With `unitOrder`, the diagnostics are issued in the order of `units` and, within a unit, of arrival, which is
+   *  the serial order of a phase whose task reports only while it works on its own unit; a task may then ask the
+   *  reporter what the serial phase would have reported before it (`UnitOrderReporter`).
+   */
+  def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String, unitOrder: Boolean = false)(task: CompilationUnit => Unit): Unit = {
+    val n =
+      if (flag("oneThread")) 1
+      else prop("threads").map(_.toInt).getOrElse {
+        val s = settings.YparallelTyperThreads.value
+        if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
+      }
+    val order = if (unitOrder) units else null
+    onPool(phase0, units.sortBy(u => -u.source.content.length), math.max(1, math.min(n, units.length)), name, order)(task)
   }
 
   /** `task` on each of `units`, a unit per task on `nThreads` workers at `phase`, the diagnostics buffered and issued
    *  in order afterwards. */
-  private def onPool(phase0: Phase, units: List[CompilationUnit], nThreads: Int, name: String)(task: CompilationUnit => Unit): Unit = {
-    val bufferingReporter = new BufferingReporter(reporter)
+  private def onPool(phase0: Phase, units: List[CompilationUnit], nThreads: Int, name: String, unitOrder: List[CompilationUnit] = null)(task: CompilationUnit => Unit): Unit = {
+    val bufferingReporter = new BufferingReporter(reporter, unitOrder)
     val savedReporter = reporter
     reporter = bufferingReporter
     val queue = new ConcurrentLinkedQueue[CompilationUnit](units.asJava)
     val failure = new AtomicReference[Throwable]()
+    // units whose task asked what the serial phase would have reported before it (`RetryInUnitOrder`)
+    val retry = new ConcurrentLinkedQueue[CompilationUnit]()
     val workers = (1 to nThreads).map { i =>
       val t = new scala.reflect.internal.util.ScratchThread(null, () => {
         try {
@@ -229,6 +241,7 @@ trait ParallelTyper {
             val saved = currentRun.currentUnit
             currentRun.currentUnit = unit
             try ParallelTyperTimeline.span(name, unit.source.file.name)(task(unit)) // xray
+            catch { case ast.parser.RetryInUnitOrder if unitOrder ne null => retry.add(unit) }
             finally { currentRun.currentUnit = saved; undoLog.clear() }
             unit = queue.poll()
           }
@@ -247,6 +260,19 @@ trait ParallelTyper {
       watchdog.start()
       workers.foreach(_.start())
       workers.foreach(_.join())
+      // Again, here, in the order of the units, each with the diagnostics of the units before it at hand.
+      if (failure.get == null && !retry.isEmpty) {
+        val again = retry.asScala.toSet
+        if (flag("log")) Console.err.println(s"[parallel-typer] $name: ${again.size} units again, in the order of the units")
+        val saved = currentRun.currentUnit
+        try unitOrder.foreach { unit =>
+          if (again(unit)) {
+            bufferingReporter.retrying(unit)
+            currentRun.currentUnit = unit
+            ParallelTyperTimeline.span(name, unit.source.file.name)(task(unit)) // xray
+          }
+        } finally currentRun.currentUnit = saved
+      }
     } finally {
       parallelTyperActive = false
       watchdog.interrupt()
@@ -380,15 +406,41 @@ trait ParallelTyper {
   /** The run's reporter while the workers run: every report is under its monitor; the diagnostics are kept and then
    *  issued in a fixed order (by file, then position, then arrival). Filtering (duplicates at a position, -Xmaxerrs)
    *  happens when they are issued, in the underlying reporter. The messages arrive rendered.
+   *
+   *  With `unitOrder` (a phase whose task reports only on its own unit): issued in the order of those units and,
+   *  within a unit, of arrival, which is the order of the serial phase.
    */
-  private final class BufferingReporter(val underlying: FilteringReporter) extends FilteringReporter {
-    private final case class Entry(pos: Position, msg: String, severity: Severity, actions: List[CodeAction], seq: Int)
+  private final class BufferingReporter(val underlying: FilteringReporter, unitOrder: List[CompilationUnit] = null) extends FilteringReporter with ast.parser.UnitOrderReporter {
+    private final case class Entry(pos: Position, msg: String, severity: Severity, actions: List[CodeAction], seq: Int, unit: Int)
     private[this] val buffer = mutable.ArrayBuffer.empty[Entry]
+    private[this] var seqs = 0
+    private[this] val unitIndex: java.util.IdentityHashMap[CompilationUnit, Integer] =
+      if (unitOrder eq null) null
+      else { val m = new java.util.IdentityHashMap[CompilationUnit, Integer]; unitOrder.foreach(u => m.put(u, m.size)); m }
+    // a report outside any of the units (there is none in the parser) goes last
+    private def currentIndex: Int =
+      if (unitIndex eq null) 0 else { val i = unitIndex.get(currentRun.currentUnit); if (i eq null) Int.MaxValue else i }
+    @volatile private[this] var retryingInOrder = false
+
+    /** `unit` is about to be processed again, on the driver thread, after the units before it. */
+    def retrying(unit: CompilationUnit): Unit = synchronized {
+      retryingInOrder = true
+      val i = unitIndex.get(unit)
+      buffer.filterInPlace(_.unit != i)
+    }
+    def isRetryInUnitOrder: Boolean = retryingInOrder
+    def hasErrorsInUnitOrder: Boolean =
+      if (unitIndex eq null) hasErrors
+      else if (!retryingInOrder) throw ast.parser.RetryInUnitOrder
+      else synchronized {
+        val i = currentIndex
+        underlying.hasErrors || buffer.exists(e => e.unit <= i && e.severity == scala.reflect.internal.Reporter.ERROR)
+      }
     def settings: Settings = underlying.settings
     override def filter(pos: Position, msg: String, severity: Severity): Int = 0 // Display
     override def increment(severity: Severity): Unit = synchronized(super.increment(severity))
     override def doReport(pos: Position, msg: String, severity: Severity, actions: List[CodeAction]): Unit =
-      synchronized { buffer += Entry(pos, msg, severity, actions, buffer.length) }
+      synchronized { seqs += 1; buffer += Entry(pos, msg, severity, actions, seqs, currentIndex) }
     override def hasErrors: Boolean = synchronized(super.hasErrors) || underlying.hasErrors
     override def cancelled: Boolean = underlying.cancelled
     override def cancelled_=(b: Boolean): Unit = underlying.cancelled = b
@@ -396,11 +448,13 @@ trait ParallelTyper {
     override def flush(): Unit = ()
 
     def issueBuffered(): Unit = synchronized {
-      val ordered = buffer.sortBy { e =>
-        val p = e.pos
-        val defined = p != null && p.isDefined
-        (if (defined) p.source.file.path else "", if (defined) p.point else -1, e.seq)
-      }
+      val ordered =
+        if (unitIndex ne null) buffer.sortBy(e => (e.unit, e.seq))
+        else buffer.sortBy { e =>
+          val p = e.pos
+          val defined = p != null && p.isDefined
+          (if (defined) p.source.file.path else "", if (defined) p.point else -1, e.seq)
+        }
       buffer.clear()
       ordered.foreach { e =>
         e.severity match {
