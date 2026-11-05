@@ -30,15 +30,23 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
   // With `perKey` (`-Dscalac.parallelTyper.claims=perKey`), a claim per completion root (`PerKeyClaims`): the coarse
   // root (`CompletionLock.CoarseRoot`, every acquisition without a key) and a source symbol's. A claimant per thread,
   // which cannot abort (a batch completion cannot be retried); a wait-for cycle is reported to `cycle`.
-  private[this] val claimants: ThreadLocal[Claimant] =
-    ThreadLocal.withInitial(() => new Claimant(Thread.currentThread) {
+  // Kept in a map of this lock rather than a `ThreadLocal`: the claimant refers to this lock, and so to its `Global`,
+  // and a `ThreadLocal`'s value is held strongly by a thread that outlives the compiler (I8).
+  private[this] val claimants = new java.util.concurrent.ConcurrentHashMap[Thread, Claimant]
+  private[this] val newClaimant: java.util.function.Function[Thread, Claimant] = t =>
+    new Claimant(t) {
       override def canAbort = false
       override def recordWait(nanos: Long, holderWhat: String, holderName: String): Unit = {
         waitNanos.add(nanos); waits.increment(); PerThreadTimes.addWait(nanos)
       }
-    })
+    }
+  private def claimant: Claimant = {
+    val t = Thread.currentThread
+    val c = claimants.get(t)
+    if (c ne null) c else claimants.computeIfAbsent(t, newClaimant)
+  }
   private[this] val claims: PerKeyClaims =
-    if (perKey) new PerKeyClaims(() => claimants.get, new CycleHandler { def waitCycle(s: AnyRef): Nothing = cycle(s) }) else null
+    if (perKey) new PerKeyClaims(() => claimant, new CycleHandler { def waitCycle(s: AnyRef): Nothing = cycle(s) }) else null
   def isPerKey: Boolean = claims ne null
 
   /** `body` holding the claim on `key` (in the coarse mode, the lock), to do `what`; a wait-for cycle on the way is
