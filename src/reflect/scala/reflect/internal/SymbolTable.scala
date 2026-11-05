@@ -234,7 +234,11 @@ abstract class SymbolTable extends macros.Universe
    *  another). Not in runtime reflection, which is always at one phase. Read while the universe is constructed:
    *  until this field is initialized, the phase is the shared one, which is only set later.
    */
-  private[this] val phasePerThread: Boolean = isCompilerUniverse && isConcurrentUniverse
+  private[this] val phasePerThread: Boolean = isCompilerUniverse && isConcurrentUniverse && isParallelCompiler
+
+  /** Is this a compiler whose typer runs on several threads (`-Yparallel-typer`)? Not a toolbox's `ReflectGlobal`,
+   *  which is a concurrent compiler universe used from one thread at a time, under the toolbox's lock. */
+  def isParallelCompiler: Boolean = false
   /** Whether this is a compiler used from several threads at once (`-Yparallel-typer`). */
   final def isConcurrentCompiler: Boolean = phasePerThread
 
