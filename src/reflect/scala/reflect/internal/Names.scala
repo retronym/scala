@@ -638,7 +638,17 @@ trait Names extends api.Names {
         assert (n ne null, s"TypeName $this is missing its correspondent")
         n
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      // The term name was entered before this type name was made and names are immutable, so with synchronized
+      // names the bucket is first read without the lock (the pickler converts names on several threads with
+      // -Yparallel-typer); a reader that does not see the entry yet looks again under the lock.
+      def unlocked: TermName = {
+        val h = hashValue(chrsTo(index + len), index, len) & HASH_MASK
+        var n = termHashtable(h)
+        while ((n ne null) && n.start != index)
+          n = n.next
+        n
+      }
+      if (synchronizeNames) { val n = unlocked; if (n ne null) n else nameLock.synchronized(body) } else body
     }
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
