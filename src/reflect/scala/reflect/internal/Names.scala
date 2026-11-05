@@ -36,14 +36,8 @@ trait Names extends api.Names {
   private[this] val nameLock: Object = new Object
 
 
-  /** Memory to store all names sequentially. */
-  private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE) // TODO this ought to be private
-  @deprecated("Don't access name table contents directly.", "2.12.9")
-  def chrs: Array[Char] = _chrs
-  @deprecated("Don't access name table contents directly.", "2.12.9")
-  def chrs_=(cs: Array[Char]) = _chrs = cs
-  private[this] var nc = 0
-  final def nameTableSize: Int = nc
+  /** Which `NameStore` holds the characters of names: `chars`, `string` or `shared`. See `-Yname-table`. */
+  protected def nameTableKind: String = "chars"
 
   /** Hashtable for finding term names quickly. */
   private[this] val termHashtable = new Array[TermName](HASH_SIZE)
@@ -51,8 +45,25 @@ trait Names extends api.Names {
   /** Hashtable for finding type names quickly. */
   private[this] val typeHashtable = new Array[TypeName](HASH_SIZE)
 
-  final def allNames(): Iterator[TermName] = termHashtable.iterator.filter(_ ne null).flatMap(n => Iterator.iterate(n)(_.next).takeWhile(_ ne null))
+  /** One instance per universe, and only its class is instantiated, so that a compile that uses one store pays for
+   *  no others: the call sites in `Name` stay monomorphic.
+   */
+  private[this] val store: NameStore = nameTableKind match {
+    case "chars"  => new CharStore
+    case "string" => new StringStore
+    case "shared" => new SharedStore(SharedNameTable.global)
+    case kind     => throw new IllegalArgumentException(s"unknown name table: $kind")
+  }
 
+  @deprecated("Don't access name table contents directly.", "2.12.9")
+  def chrs: Array[Char] = store.legacyChars
+  @deprecated("Don't access name table contents directly.", "2.12.9")
+  def chrs_=(cs: Array[Char]) = store.legacyChars = cs
+  final def nameTableSize: Int = store.size
+
+  final def allNames(): Iterator[TermName] = store.allNames
+
+  /** The same value as `String.hashCode`, so that the stores can reuse a `String`'s cached hash. */
   private def hashValue(cs: Array[Char], offset: Int, len: Int): Int = {
     var h = 0
     var i = 0
@@ -61,33 +72,6 @@ trait Names extends api.Names {
       i += 1
     }
     h
-  }
-
-  /** Is (the ASCII representation of) name at given index equal to
-   *  cs[offset..offset+len-1]?
-   */
-  private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
-    var i = 0
-    val chrs = _chrs
-    while ((i < len) && (chrs(index + i) == cs(offset + i)))
-      i += 1
-    i == len
-  }
-
-  /** Enter characters into chrs array. */
-  private def enterChars(cs: Array[Char], offset: Int, len: Int): Unit = {
-    var i = 0
-    while (i < len) {
-      if (nc + i == _chrs.length) {
-        val newchrs = new Array[Char](_chrs.length * 2)
-        java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
-        _chrs = newchrs
-      }
-      _chrs(nc + i) = cs(offset + i)
-      i += 1
-    }
-    if (len == 0) nc += 1
-    else nc = nc + len
   }
 
   /** Create a term name from the characters in cs[offset..offset+len-1]. */
@@ -108,57 +92,42 @@ trait Names extends api.Names {
   final def newTermName(cs: Array[Char], offset: Int, len0: Int, cachedString: String): TermName = {
     def body = {
       require(offset >= 0, "offset must be non-negative, got " + offset)
-      val len = math.max(len0, 0)
-      val h = hashValue(cs, offset, len) & HASH_MASK
-      var n = termHashtable(h)
-      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
-        n = n.next
-
-      if (n ne null) n
-      else {
-        // The logic order here is future-proofing against the possibility
-        // that name.toString will become an eager val, in which case the call
-        // to enterChars cannot follow the construction of the TermName.
-        var startIndex = 0
-        if (cs == _chrs) {
-          // Optimize for subName, the new name is already stored in chrs
-          startIndex = offset
-        } else {
-          startIndex = nc
-          enterChars(cs, offset, len)
-        }
-        val next = termHashtable(h)
-        val termName = new TermName(startIndex, len, next, cachedString)
-        // Add the new termName to the hashtable only after it's been fully constructed
-        termHashtable(h) = termName
-        termName
-      }
+      store.termFromChars(cs, offset, math.max(len0, 0), cachedString)
     }
     if (synchronizeNames) nameLock.synchronized(body) else body
   }
 
+  /** Create a term name from the characters in cs[0..len-1], whose hash the caller has kept as it built them, such as the
+   *  scanner's buffer. A name that exists needs no copy of them.
+   *
+   *  @param hash `String.hashCode` of the characters
+   */
+  final def newTermNameHashed(cs: Array[Char], len: Int, hash: Int): TermName =
+    if (synchronizeNames) nameLock.synchronized(store.termFromHashed(cs, len, hash)) else store.termFromHashed(cs, len, hash)
+
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
 
+  private def newTermNameFromString(s: String, cachedString: String): TermName =
+    if (synchronizeNames) nameLock.synchronized(store.termFromString(s, cachedString)) else store.termFromString(s, cachedString)
+
   /** Create a term name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
-  def newTermName(s: String): TermName = newTermName(s.toCharArray(), 0, s.length(), null)
+  def newTermName(s: String): TermName = newTermNameFromString(s, null)
 
   /** Create a type name from string. */
   @deprecatedOverriding("To synchronize, use `override def synchronizeNames = true`", "2.11.0") // overridden in https://github.com/scala-ide/scala-ide/blob/master/org.scala-ide.sdt.core/src/scala/tools/eclipse/ScalaPresentationCompiler.scala
   def newTypeName(s: String): TypeName = newTermName(s).toTypeName
 
   /** Create a term name from the UTF8 encoded bytes in bs[offset..offset+len-1]. */
-  final def newTermName(bs: Array[Byte], offset: Int, len: Int): TermName = {
-    val chars = Codec.fromUTF8(bs, offset, len)
-    newTermName(chars, 0, chars.length)
-  }
+  final def newTermName(bs: Array[Byte], offset: Int, len: Int): TermName =
+    if (synchronizeNames) nameLock.synchronized(store.termFromUtf8(bs, offset, len)) else store.termFromUtf8(bs, offset, len)
 
   final def newTermNameCached(s: String): TermName =
-    newTermName(s.toCharArray(), 0, s.length(), cachedString = s)
+    newTermNameFromString(s, cachedString = s)
 
   final def newTypeNameCached(s: String): TypeName =
-    newTypeName(s.toCharArray(), 0, s.length(), cachedString = s)
+    newTermNameFromString(s, cachedString = s).toTypeName
 
   /** Create a type name from the characters in cs[offset..offset+len-1]. */
   final def newTypeName(cs: Array[Char], offset: Int, len: Int): TypeName =
@@ -178,11 +147,487 @@ trait Names extends api.Names {
     val hash = hashValue(cs, 0, cs.length) & HASH_MASK
     var typeName = typeHashtable(hash)
 
-    while ((typeName ne null) && (typeName.length != cs.length || !equals(typeName.start, cs, 0, cs.length))) {
+    while ((typeName ne null) && (typeName.length != cs.length || !store.matches(typeName, cs, 0, cs.length))) {
       typeName = typeName.next
     }
     assert(typeName != null, s"TypeName ${new String(cs)} not yet created.")
     typeName
+  }
+
+// Name stores ------------------------------------------------------------------
+
+  /** Where the characters of names live, and the operations that depend on it. Positions and lengths are in UTF-16
+   *  units whatever the store. The defaults go through `charAt`; the stores override what they can do better.
+   *
+   *  Every store hashes a name to the same value, `String.hashCode` of its contents, and keeps `Name.id` unique to a
+   *  string (apart from names sharing a prefix in one range), as `Scopes`, `Trees` and the keyword tables rely on it.
+   */
+  private[internal] sealed abstract class NameStore {
+    def size: Int
+    protected def kind: String
+    private def noCharTable(what: String) =
+      throw new UnsupportedOperationException(s"$what is an offset into or the contents of the Array[Char] of the name table, which -Yname-table:$kind doesn't have. Use the operations of Name, such as charAt, toString and appendTo, or -Yname-table:chars.")
+    def legacyChars: Array[Char] = noCharTable("Names#chrs")
+    def legacyChars_=(cs: Array[Char]): Unit = noCharTable("Names#chrs")
+    def legacyStart(n: Name): Int = noCharTable("Name#start")
+
+    def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName
+    def termFromString(s: String, cachedString: String): TermName
+    def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
+      val chars = Codec.fromUTF8(bs, offset, len)
+      termFromChars(chars, 0, chars.length, null)
+    }
+    /** The term name of cs[0..len-1], whose `String.hashCode` is `h`, which saves copying the array for a name that exists. */
+    def termFromHashed(cs: Array[Char], len: Int, h: Int): TermName = {
+      var n = termHashtable(h & HASH_MASK)
+      while ((n ne null) && (n.length != len || !matches(n, cs, 0, len)))
+        n = n.next
+      if (n ne null) n else termFromChars(cs, 0, len, null)
+    }
+    def subName(n: Name, from: Int, to: Int): TermName
+    def hash(n: Name): Int
+    def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean
+    def toString(n: Name): String
+    def charAt(n: Name, i: Int): Char
+
+    def utf8(n: Name): Array[Byte] = Codec.toUTF8(toString(n))
+
+    def allNames: Iterator[TermName] = termHashtable.iterator.filter(_ ne null).flatMap(n => Iterator.iterate(n)(_.next).takeWhile(_ ne null))
+
+    /** The term name of a type name, which always exists. */
+    def termOf(t: TypeName): TermName = {
+      // Re-computing the hash saves a field for storing it in the TypeName
+      val h = hash(t) & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && n.id != t.id)
+        n = n.next
+      n
+    }
+
+    def copyChars(n: Name, cs: Array[Char], offset: Int): Unit = {
+      var i = 0
+      while (i < n.length) { cs(offset + i) = charAt(n, i); i += 1 }
+    }
+    def pos(n: Name, c: Char, start: Int): Int = {
+      var i = start
+      while (i < n.length && charAt(n, i) != c) i += 1
+      i
+    }
+    def pos(n: Name, s: String, start: Int): Int = {
+      var i = pos(n, s.charAt(0), start)
+      val sLen = s.length()
+      if (sLen == 1) return i
+      while (i + sLen <= n.length) {
+        var j = 1
+        while (s.charAt(j) == charAt(n, i + j)) {
+          j += 1
+          if (j == sLen) return i
+        }
+        i = pos(n, s.charAt(0), i + 1)
+      }
+      n.length
+    }
+    def lastPos(n: Name, c: Char, start: Int): Int = {
+      var i = start
+      while (i >= 0 && charAt(n, i) != c) i -= 1
+      i
+    }
+    def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
+      var i = 0
+      while (i < prefix.length && start + i < n.length && charAt(n, start + i) == charAt(prefix, i))
+        i += 1
+      i == prefix.length
+    }
+    def startsWith(n: Name, prefix: String, start: Int): Boolean = {
+      var i = 0
+      while (i < prefix.length && start + i < n.length && charAt(n, start + i) == prefix.charAt(i))
+        i += 1
+      i == prefix.length
+    }
+    def endsWith(n: Name, suffix: Name, end: Int): Boolean = {
+      var i = 1
+      while (i <= suffix.length && i <= end && charAt(n, end - i) == charAt(suffix, suffix.length - i))
+        i += 1
+      i > suffix.length
+    }
+    def endsWith(n: Name, suffix: String, end: Int): Boolean = {
+      var i = 1
+      while (i <= suffix.length && i <= end && charAt(n, end - i) == suffix.charAt(suffix.length - i))
+        i += 1
+      i > suffix.length
+    }
+    def containsName(n: Name, subname: Name): Boolean = {
+      var start = 0
+      val last = n.length - subname.length
+      while (start <= last && !startsWith(n, subname, start)) start += 1
+      start <= last
+    }
+    def containsChar(n: Name, ch: Char): Boolean = {
+      var i = 0
+      while (i < n.length) {
+        if (charAt(n, i) == ch) return true
+        i += 1
+      }
+      false
+    }
+    def lastIndexOf(n: Name, s: String): Int = {
+      val slength   = s.length()
+      val lastIndex = slength - 1
+      val lastChar  = s.charAt(lastIndex)
+      var end       = n.length - 1
+      while (end >= lastIndex) {
+        if (charAt(n, end) == lastChar) {
+          var i  = end - 1
+          val i0 = i - lastIndex
+          var at = lastIndex - 1
+          while (i > i0 && charAt(n, i) == s.charAt(at)) {
+            i -= 1
+            at -= 1
+          }
+          if (i == i0) return i0 + 1
+        }
+        end -= 1
+      }
+      -1
+    }
+    def appendTo(n: Name, buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
+      buffer.append(n: CharSequence, start, start + length)
+    def appendTo(n: Name, sb: StringBuilder, start: Int, length: Int): Unit =
+      sb.underlying.append(n: CharSequence, start, start + length)
+
+    /** Puts a new term name at the head of bucket `h`, adding it only after it's been fully constructed. */
+    protected final def addTerm(h: Int, start: Int, len: Int, str: String): TermName = {
+      val termName = new TermName(start, len, termHashtable(h), str)
+      termHashtable(h) = termName
+      termName
+    }
+    }
+
+  /** The table as it has been: all names sequentially in one `Array[Char]`, a name being an offset and a length. */
+  private[internal] final class CharStore extends NameStore {
+    protected def kind = "chars"
+    private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE)
+    private[this] var nc = 0
+    def termFromString(s: String, cachedString: String): TermName = termFromChars(s.toCharArray(), 0, s.length(), cachedString)
+    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.id, n.length) else n.str
+    final def size: Int = nc
+    final override def legacyChars: Array[Char] = _chrs
+    final override def legacyChars_=(cs: Array[Char]): Unit = _chrs = cs
+    final override def legacyStart(n: Name): Int = n.id
+
+    /** Is (the ASCII representation of) name at given index equal to
+     *  cs[offset..offset+len-1]?
+     */
+    private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
+      var i = 0
+      val chrs = _chrs
+      while ((i < len) && (chrs(index + i) == cs(offset + i)))
+        i += 1
+      i == len
+    }
+
+    /** Enter characters into chrs array. */
+    private def enterChars(cs: Array[Char], offset: Int, len: Int): Unit = {
+      var i = 0
+      while (i < len) {
+        if (nc + i == _chrs.length) {
+          val newchrs = new Array[Char](_chrs.length * 2)
+          java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
+          _chrs = newchrs
+        }
+        _chrs(nc + i) = cs(offset + i)
+        i += 1
+      }
+      if (len == 0) nc += 1
+      else nc = nc + len
+    }
+
+    final def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
+      val h = hashValue(cs, offset, len) & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !equals(n.id, cs, offset, len)))
+        n = n.next
+
+      if (n ne null) n
+      else {
+        // The logic order here is future-proofing against the possibility
+        // that name.toString will become an eager val, in which case the call
+        // to enterChars cannot follow the construction of the TermName.
+        var startIndex = 0
+        if (cs == _chrs) {
+          // Optimize for subName, the new name is already stored in chrs
+          startIndex = offset
+        } else {
+          startIndex = nc
+          enterChars(cs, offset, len)
+        }
+        addTerm(h, startIndex, len, cachedString)
+      }
+    }
+    final def subName(n: Name, from: Int, to: Int): TermName = {
+      val offset = n.id + from
+      require(offset >= 0, "offset must be non-negative, got " + offset)
+      termFromChars(_chrs, offset, math.max(to - from, 0), null)
+    }
+    def hash(n: Name): Int = hashValue(_chrs, n.id, n.length)
+    final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = equals(n.id, cs, offset, len)
+    final def charAt(n: Name, i: Int): Char = _chrs(n.id + i)
+
+    final override def copyChars(n: Name, cs: Array[Char], offset: Int): Unit =
+      java.lang.System.arraycopy(_chrs, n.id, cs, offset, n.length)
+    final override def pos(n: Name, c: Char, start: Int): Int = {
+      var i = start
+      val index = n.id
+      val len = n.length
+      val chrs = _chrs
+      while (i < len && chrs(index + i) != c) i += 1
+      i
+    }
+    final override def pos(n: Name, s: String, start: Int): Int = {
+      var i = pos(n, s.charAt(0), start)
+      val sLen = s.length()
+      if (sLen == 1) return i
+      val index = n.id
+      val len = n.length
+      val chrs = _chrs
+      while (i + sLen <= len) {
+        var j = 1
+        while (s.charAt(j) == chrs(index + i + j)) {
+          j += 1
+          if (j == sLen) return i
+        }
+        i = pos(n, s.charAt(0), i + 1)
+      }
+      len
+    }
+    final override def lastPos(n: Name, c: Char, start: Int): Int = {
+      var i = start
+      val index = n.id
+      val chrs = _chrs
+      while (i >= 0 && chrs(index + i) != c) i -= 1
+      i
+    }
+    final override def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
+      val chrs = _chrs
+      val index = n.id
+      val len = n.length
+      var i = 0
+      while (i < prefix.length && start + i < len &&
+             chrs(index + start + i) == chrs(prefix.id + i))
+        i += 1
+      i == prefix.length
+    }
+    final override def startsWith(n: Name, prefix: String, start: Int): Boolean = {
+      val chrs = _chrs
+      val index = n.id
+      val len = n.length
+      var i = 0
+      while (i < prefix.length && start + i < len &&
+             chrs(index + start + i) == prefix.charAt(i))
+        i += 1
+      i == prefix.length
+    }
+    final override def endsWith(n: Name, suffix: Name, end: Int): Boolean = {
+      var i = 1
+      val chrs = _chrs
+      val index = n.id
+      while (i <= suffix.length && i <= end &&
+             chrs(index + end - i) == chrs(suffix.id + suffix.length - i))
+        i += 1
+      i > suffix.length
+    }
+    final override def endsWith(n: Name, suffix: String, end: Int): Boolean = {
+      var i = 1
+      val chrs = _chrs
+      val index = n.id
+      while (i <= suffix.length && i <= end &&
+             chrs(index + end - i) == suffix.charAt(suffix.length - i))
+        i += 1
+      i > suffix.length
+    }
+    final override def containsChar(n: Name, ch: Char): Boolean = {
+      var i = n.id
+      val max = i + n.length
+      val chrs = _chrs
+      while (i < max) {
+        if (chrs(i) == ch)
+          return true
+        i += 1
+      }
+      false
+    }
+    final override def lastIndexOf(n: Name, s: String): Int = {
+      val slength   = s.length()
+      val lastIndex = slength - 1
+      val lastChar  = s.charAt(lastIndex)
+      val contents  = _chrs
+      val base      = n.id
+      val min       = base + lastIndex
+      var end       = base + n.length - 1
+
+      while (end >= min) {
+        if (contents(end) == lastChar) {
+          var i  = end - 1
+          val i0 = i - lastIndex
+          var at = lastIndex - 1
+          while (i > i0 && contents(i) == s.charAt(at)) {
+            i -= 1
+            at -= 1
+          }
+          if (i == i0) return i0 + 1 - base
+        }
+        end -= 1
+      }
+      -1
+    }
+    final override def appendTo(n: Name, buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
+      buffer.append(_chrs, n.id + start, length)
+    final override def appendTo(n: Name, sb: StringBuilder, start: Int, length: Int): Unit =
+      sb.appendAll(_chrs, n.id + start, length)
+  }
+
+  /** The operations of a store whose names each hold a `String`, with `Name.id` a serial number. */
+  private[internal] sealed abstract class StringBackedStore extends NameStore {
+    final def hash(n: Name): Int = n.str.hashCode
+    final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = {
+      val s = n.str
+      var i = 0
+      while (i < len && s.charAt(i) == cs(offset + i)) i += 1
+      i == len
+    }
+    final def toString(n: Name): String = n.str
+    final def charAt(n: Name, i: Int): Char = n.str.charAt(i)
+
+    final override def copyChars(n: Name, cs: Array[Char], offset: Int): Unit = n.str.getChars(0, n.length, cs, offset)
+    final override def pos(n: Name, c: Char, start: Int): Int = { val i = n.str.indexOf(c.toInt, start); if (i < 0) math.max(n.length, start) else i }
+    final override def pos(n: Name, s: String, start: Int): Int = { val i = n.str.indexOf(s, start); if (i < 0) n.length else i }
+    final override def lastPos(n: Name, c: Char, start: Int): Int = n.str.lastIndexOf(c.toInt, start)
+    final override def startsWith(n: Name, prefix: Name, start: Int): Boolean = n.str.startsWith(prefix.str, start)
+    final override def startsWith(n: Name, prefix: String, start: Int): Boolean = n.str.startsWith(prefix, start)
+    final override def endsWith(n: Name, suffix: Name, end: Int): Boolean = end >= suffix.length && n.str.startsWith(suffix.str, end - suffix.length)
+    final override def endsWith(n: Name, suffix: String, end: Int): Boolean = end >= suffix.length && n.str.startsWith(suffix, end - suffix.length)
+    final override def containsName(n: Name, subname: Name): Boolean = n.str.contains(subname.str)
+    final override def containsChar(n: Name, ch: Char): Boolean = n.str.indexOf(ch.toInt) >= 0
+    final override def lastIndexOf(n: Name, s: String): Int = n.str.lastIndexOf(s)
+    final override def appendTo(n: Name, buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
+      buffer.append(n.str, start, start + length)
+    final override def appendTo(n: Name, sb: StringBuilder, start: Int, length: Int): Unit =
+      sb.underlying.append(n.str, start, start + length)
+  }
+
+  /** Each name holds a `String`, and is found through the chains of the hash table. Only where the `String` of a new
+   *  name comes from varies, and looking up a name that exists doesn't depend on it.
+   */
+  private[internal] sealed abstract class ChainedStringStore extends StringBackedStore {
+    private[this] var nextId = 0
+    final def size: Int = nextId
+
+    protected def stringOf(s: String): String
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String
+
+    private def add(h: Int, s: String): TermName = {
+      val id = nextId
+      nextId += 1
+      addTerm(h, id, s.length, s)
+    }
+    final def termFromChars(cs: Array[Char], offset: Int, len: Int, cachedString: String): TermName = {
+      val hash = hashValue(cs, offset, len)
+      val h = hash & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !matches(n, cs, offset, len)))
+        n = n.next
+      if (n ne null) n
+      else add(h, if (cachedString ne null) stringOf(cachedString) else stringOf(cs, offset, len, hash))
+    }
+    final def termFromString(s: String, cachedString: String): TermName = {
+      val h = s.hashCode & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && !n.str.equals(s))
+        n = n.next
+      if (n ne null) n else add(h, stringOf(s))
+    }
+    final override def termFromUtf8(bs: Array[Byte], offset: Int, len: Int): TermName = {
+      var hash = 0
+      var or = 0
+      var i = 0
+      while (i < len) {
+        val b = bs(offset + i)
+        or |= b
+        hash = 31 * hash + b
+        i += 1
+      }
+      if (or < 0) termFromString(new String(bs, offset, len, java.nio.charset.StandardCharsets.UTF_8), null)
+      else {
+        val h = hash & HASH_MASK
+        var n = termHashtable(h)
+        while ((n ne null) && (n.length != len || !sameBytes(n.str, bs, offset, len)))
+          n = n.next
+        if (n ne null) n else add(h, stringOfAscii(bs, offset, len, hash))
+      }
+    }
+    private def sameBytes(s: String, bs: Array[Byte], offset: Int, len: Int): Boolean = {
+      var i = 0
+      while (i < len && s.charAt(i) == bs(offset + i)) i += 1
+      i == len
+    }
+    final def subName(parent: Name, from: Int, to: Int): TermName = {
+      val s = parent.str
+      val len = math.max(to - from, 0)
+      var hash = 0
+      var i = 0
+      while (i < len) { hash = 31 * hash + s.charAt(from + i); i += 1 }
+      val h = hash & HASH_MASK
+      var n = termHashtable(h)
+      while ((n ne null) && (n.length != len || !n.str.regionMatches(0, s, from, len)))
+        n = n.next
+      if (n ne null) n else add(h, stringOfRegion(s, from, len, hash))
+    }
+  }
+
+  /** Each name holds its own `String`. This is how Scala 3's `SimpleName` works. */
+  private[internal] final class StringStore extends ChainedStringStore {
+    protected def kind = "string"
+    protected def stringOf(s: String): String = s
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String = new String(cs, offset, len)
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String =
+      new String(bs, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1)
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String = s.substring(from, from + len)
+  }
+
+  /** The `String` of a name comes from a table that many universes can share, which is only consulted the first time
+   *  this universe sees the name.
+   *
+   *  `Name`s themselves stay per universe: each has the universe's `$outer`, which the outer tests of patterns like
+   *  `_: TermName` check, and so does `Name.id`, which `Scanners` needs to be dense among the keywords. Entering a name
+   *  has the same contract as in the other stores: it needs `synchronizeNames` if threads enter names at once. That
+   *  also covers the one probe.
+   */
+  private[internal] final class SharedStore(shared: SharedNameTable) extends ChainedStringStore {
+    protected def kind = "shared"
+    private[this] val probe = new SharedNameTable.Probe
+
+    /** The string the probe describes, building it only if the shared table doesn't have one. */
+    private def probed: String = {
+      try {
+        val known = shared.find(probe)
+        if (known ne null) known else shared.intern(probe.newString())
+      } finally probe.clear()
+    }
+    protected def stringOf(s: String): String = shared.intern(s)
+    protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String = {
+      probe.setChars(cs, offset, len, hash)
+      probed
+    }
+    protected def stringOfAscii(bs: Array[Byte], offset: Int, len: Int, hash: Int): String = {
+      probe.setAscii(bs, offset, len, hash)
+      probed
+    }
+    protected def stringOfRegion(s: String, from: Int, len: Int, hash: Int): String = {
+      probe.setRegion(s, from, len, hash)
+      probed
+    }
   }
 
 // Classes ----------------------------------------------------------------------
@@ -197,12 +642,17 @@ trait Names extends api.Names {
    *  or Strings as Names.  Give names the key functions the absence of which
    *  make people want Strings all the time.
    */
-  sealed abstract class Name(protected val index: Int, protected val len: Int, protected val cachedString: String) extends NameApi with NameHasIsEmpty with CharSequence {
+  sealed abstract class Name(protected val index: Int, protected val len: Int, private[Names] val str: String) extends NameApi with NameHasIsEmpty with CharSequence {
     type ThisNameType >: Null <: Name
     protected[this] def thisName: ThisNameType
 
-    /** Index into name table */
-    final def start: Int = index
+    /** Unique to this name's string, apart from names sharing a prefix in one range of a table, which then differ in
+     *  length. A term name and its type name have the same one. This is for hashing and identity, in any name table.
+     */
+    private[scala] final def id: Int = index
+
+    /** Index into name table, in `chrs`. Only some name tables have one. */
+    final def start: Int = store.legacyStart(this)
 
     /** The next name in the same hash bucket. */
     def next: ThisNameType
@@ -235,8 +685,8 @@ trait Names extends api.Names {
     def mapName(f: String => String): ThisNameType = newName(f(toString))
 
     /** Copy bytes of this name to buffer cs, starting at position `offset`. */
-    final def copyChars(cs: Array[Char], offset: Int) =
-      java.lang.System.arraycopy(_chrs, index, cs, offset, len)
+    final def copyChars(cs: Array[Char], offset: Int): Unit =
+      store.copyChars(this, cs, offset)
 
     /** @return the ascii representation of this name */
     final def toChars: Array[Char] = {  // used by ide
@@ -282,7 +732,7 @@ trait Names extends api.Names {
     ****/
 
     /** @return the i'th Char of this name */
-    final def charAt(i: Int): Char = _chrs(index + i)
+    final def charAt(i: Int): Char = store.charAt(this, i)
 
     /** @return the index of first occurrence of char c in this name, length if not found */
     final def pos(c: Char): Int = pos(c, 0)
@@ -297,12 +747,7 @@ trait Names extends api.Names {
      *  @param start the index from which to search
      *  @return      the index of the first occurrence of c
      */
-    final def pos(c: Char, start: Int): Int = {
-      var i = start
-      val chrs = _chrs
-      while (i < len && chrs(index + i) != c) i += 1
-      i
-    }
+    final def pos(c: Char, start: Int): Int = store.pos(this, c, start)
 
     /** Returns the index of the first occurrence of nonempty string s
      *  in this name from start, length if not found.
@@ -311,21 +756,7 @@ trait Names extends api.Names {
      *  @param start the index from which to search
      *  @return      the index of the first occurrence of s
      */
-    final def pos(s: String, start: Int): Int = {
-      var i = pos(s.charAt(0), start)
-      val sLen = s.length()
-      if (sLen == 1) return i
-      val chrs = _chrs
-      while (i + sLen <= len) {
-        var j = 1
-        while (s.charAt(j) == chrs(index + i + j)) {
-          j += 1
-          if (j == sLen) return i
-        }
-        i = pos(s.charAt(0), i + 1)
-      }
-      len
-    }
+    final def pos(s: String, start: Int): Int = store.pos(this, s, start)
 
     /** Returns the index of last occurrence of char c in this
      *  name, -1 if not found.
@@ -342,98 +773,27 @@ trait Names extends api.Names {
      *  @param start the index from which to search
      *  @return      the index of the last occurrence of c
      */
-    final def lastPos(c: Char, start: Int): Int = {
-      var i = start
-      val chrs = _chrs
-      while (i >= 0 && chrs(index + i) != c) i -= 1
-      i
-    }
+    final def lastPos(c: Char, start: Int): Int = store.lastPos(this, c, start)
 
     /** Does this name start with prefix? */
     final def startsWith(prefix: Name): Boolean = startsWith(prefix, 0)
 
     /** Does this name start with prefix at given start index? */
-    final def startsWith(prefix: Name, start: Int): Boolean = {
-      val chrs = _chrs
-      var i = 0
-      while (i < prefix.length && start + i < len &&
-             chrs(index + start + i) == chrs(prefix.start + i))
-        i += 1
-      i == prefix.length
-    }
-    final def startsWith(prefix: String, start: Int): Boolean = {
-      val chrs = _chrs
-      var i = 0
-      while (i < prefix.length && start + i < len &&
-             chrs(index + start + i) == prefix.charAt(i))
-        i += 1
-      i == prefix.length
-    }
+    final def startsWith(prefix: Name, start: Int): Boolean = store.startsWith(this, prefix, start)
+    final def startsWith(prefix: String, start: Int): Boolean = store.startsWith(this, prefix, start)
 
     /** Does this name end with suffix? */
     final def endsWith(suffix: Name): Boolean = endsWith(suffix, len)
 
     /** Does this name end with suffix just before given end index? */
-    final def endsWith(suffix: Name, end: Int): Boolean = {
-      var i = 1
-      val chrs = _chrs
-      while (i <= suffix.length && i <= end &&
-             chrs(index + end - i) == chrs(suffix.start + suffix.length - i))
-        i += 1
-      i > suffix.length
-    }
-    final def endsWith(suffix: String, end: Int): Boolean = {
-      var i = 1
-      val chrs = _chrs
-      while (i <= suffix.length && i <= end &&
-             chrs(index + end - i) == suffix.charAt(suffix.length - i))
-        i += 1
-      i > suffix.length
-    }
+    final def endsWith(suffix: Name, end: Int): Boolean = store.endsWith(this, suffix, end)
+    final def endsWith(suffix: String, end: Int): Boolean = store.endsWith(this, suffix, end)
 
     final def containsName(subname: String): Boolean = containsName(newTermName(subname))
-    final def containsName(subname: Name): Boolean = {
-      var start = 0
-      val last = len - subname.length
-      while (start <= last && !startsWith(subname, start)) start += 1
-      start <= last
-    }
-    final def containsChar(ch: Char): Boolean = {
-      var i = index
-      val max = index + len
-      val chrs = _chrs
-      while (i < max) {
-        if (chrs(i) == ch)
-          return true
-        i += 1
-      }
-      false
-    }
+    final def containsName(subname: Name): Boolean = store.containsName(this, subname)
+    final def containsChar(ch: Char): Boolean = store.containsChar(this, ch)
 
-    def lastIndexOf(s: String): Int = if (s.isEmpty) length else {
-      val slength   = s.length()
-      val lastIndex = slength - 1
-      val lastChar  = s.charAt(lastIndex)
-      val contents  = _chrs
-      val base      = start
-      val min       = base + lastIndex
-      var end       = base + length - 1
-
-      while (end >= min) {
-        if (contents(end) == lastChar) {
-          var i  = end - 1
-          val i0 = i - lastIndex
-          var at = lastIndex - 1
-          while (i > i0 && contents(i) == s.charAt(at)) {
-            i -= 1
-            at -= 1
-          }
-          if (i == i0) return i0 + 1 - base
-        }
-        end -= 1
-      }
-      -1
-    }
+    def lastIndexOf(s: String): Int = if (s.isEmpty) length else store.lastIndexOf(this, s)
 
     /** Some thoroughly self-explanatory convenience functions.  They
      *  assume that what they're being asked to do is known to be valid.
@@ -484,9 +844,15 @@ trait Names extends api.Names {
 
     /** Replace operator symbols by corresponding \$op_name. */
     def encode: ThisNameType = {
-      val res = NameTransformer.encodeCharSequence(this)
-      if (res eq this) thisName else newName(res.toString)
+      var result = encodedCache
+      if (result eq null) {
+        val res = NameTransformer.encodeCharSequence(this)
+        result = if (res eq this) thisName else newName(res.toString)
+        encodedCache = result // a data race at worst computes it twice, and names are hash-consed
+      }
+      result
     }
+    private[this] var encodedCache: ThisNameType = null
 
     /** Replace \$op_name by corresponding operator symbol. */
     def decode: String = {
@@ -542,11 +908,16 @@ trait Names extends api.Names {
       builder.toString
     }
 
-    override final def toString: String = if (cachedString == null) new String(_chrs, index, len) else cachedString
+    override final def toString: String = store.toString(this)
     final def appendTo(buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
-      buffer.append(_chrs, this.start + start, length)
-    final def appendTo(sb: StringBuilder, start: Int, length: Int): sb.type =
-      sb.appendAll(_chrs, this.start + start, length)
+      store.appendTo(this, buffer, start, length)
+    final def appendTo(sb: StringBuilder, start: Int, length: Int): sb.type = {
+      store.appendTo(this, sb, start, length)
+      sb
+    }
+
+    /** The UTF-8 encoding of this name, a new array. */
+    private[scala] final def toUTF8: Array[Byte] = store.utf8(this)
   }
 
   implicit val NameTag: ClassTag[Name] = ClassTag[Name](classOf[Name])
@@ -566,7 +937,7 @@ trait Names extends api.Names {
 
 
   // SYNCNOTE: caller to constructor must synchronize if `synchronizeNames` is enabled
-  final class TermName(index0: Int, len0: Int, val next: TermName, cachedString: String) extends Name(index0, len0, cachedString) with TermNameApi {
+  final class TermName(index0: Int, len0: Int, val next: TermName, str0: String) extends Name(index0, len0, str0) with TermNameApi {
     type ThisNameType = TermName
     protected[this] def thisName: TermName = this
 
@@ -576,9 +947,9 @@ trait Names extends api.Names {
     def toTypeName: TypeName = {
       def body = {
         // Re-computing the hash saves a field for storing it in the TermName
-        val h = hashValue(_chrs, index, len) & HASH_MASK
+        val h = store.hash(this) & HASH_MASK
         var n = typeHashtable(h)
-        while ((n ne null) && n.start != index)
+        while ((n ne null) && n.id != index)
           n = n.next
 
         if (n ne null) n
@@ -595,10 +966,10 @@ trait Names extends api.Names {
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
     def subName(from: Int, to: Int): TermName =
-      newTermName(_chrs, start + from, to - from)
+      if (synchronizeNames) nameLock.synchronized(store.subName(this, from, to)) else store.subName(this, from, to)
 
     def nameKind = "term"
-    private def createCompanionName(next: TypeName): TypeName = new TypeName(index, len, next, cachedString)
+    private def createCompanionName(next: TypeName): TypeName = new TypeName(index, len, next, str)
   }
 
   implicit val TermNameTag: ClassTag[TermName] = ClassTag[TermName](classOf[TermName])
@@ -608,7 +979,7 @@ trait Names extends api.Names {
     def unapply(name: TermName): Option[String] = Some(name.toString)
   }
 
-  final class TypeName(index0: Int, len0: Int, val next: TypeName, cachedString: String) extends Name(index0, len0, cachedString) with TypeNameApi {
+  final class TypeName(index0: Int, len0: Int, val next: TypeName, str0: String) extends Name(index0, len0, str0) with TypeNameApi {
     type ThisNameType = TypeName
     protected[this] def thisName: TypeName = this
 
@@ -616,12 +987,7 @@ trait Names extends api.Names {
     def isTypeName: Boolean = true
     def toTermName: TermName = {
       def body = {
-        // Re-computing the hash saves a field for storing it in the TypeName
-        val h = hashValue(_chrs, index, len) & HASH_MASK
-        var n = termHashtable(h)
-        while ((n ne null) && n.start != index)
-          n = n.next
-
+        val n = store.termOf(this)
         assert (n ne null, s"TypeName $this is missing its correspondent")
         n
       }
@@ -630,8 +996,10 @@ trait Names extends api.Names {
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
     def companionName: TermName = toTermName
-    def subName(from: Int, to: Int): TypeName =
-      newTypeName(_chrs, start + from, to - from)
+    def subName(from: Int, to: Int): TypeName = {
+      val sub = if (synchronizeNames) nameLock.synchronized(store.subName(this, from, to)) else store.subName(this, from, to)
+      sub.toTypeName
+    }
 
     def nameKind = "type"
     override def decode = if (nameDebug) super.decode + "!" else super.decode
@@ -642,5 +1010,112 @@ trait Names extends api.Names {
   object TypeName extends TypeNameExtractor {
     def apply(s: String) = newTypeName(s)
     def unapply(name: TypeName): Option[String] = Some(name.toString)
+  }
+}
+
+/** Strings of names, for sharing between universes. It holds its strings weakly: the universes' names keep them alive,
+ *  so a string lasts as long as some universe has the name. Cleared entries stay until the next miss in `intern`.
+ */
+private[internal] final class SharedNameTable {
+  import SharedNameTable.{Entry, EntryKey}
+  private[this] val entries = new java.util.concurrent.ConcurrentHashMap[AnyRef, Entry](0x8000)
+  private[this] val cleared = new java.lang.ref.ReferenceQueue[String]
+
+  /** The string in the table equal to `s`, which is `s` if there is none. */
+  def intern(s: String): String = {
+    var result: String = null
+    while (result eq null) { // an entry found or raced with may have just lost its string
+      val found = entries.get(new EntryKey(s))
+      if (found ne null) result = found.get
+      else {
+        expunge()
+        val entry = new Entry(s, cleared)
+        val raced = entries.putIfAbsent(entry, entry)
+        result = if (raced eq null) s else raced.get
+      }
+    }
+    result
+  }
+
+  /** The string of the entry the probe describes, if it still has one. */
+  def find(probe: SharedNameTable.Probe): String = {
+    val found = entries.get(probe)
+    if (found ne null) found.get else null
+  }
+
+  /** How many entries are held, which includes those cleared since the last new string. */
+  def size: Int = entries.size
+
+  private def expunge(): Unit = {
+    var entry = cleared.poll()
+    while (entry ne null) {
+      entries.remove(entry)
+      entry = cleared.poll()
+    }
+  }
+}
+
+private[internal] object SharedNameTable {
+  val global = new SharedNameTable
+
+  /** Its own key in the table. A cleared entry equals only itself, which is how it gets removed. */
+  final class Entry(s: String, queue: java.lang.ref.ReferenceQueue[String]) extends java.lang.ref.WeakReference[String](s, queue) {
+    private[this] val h = s.hashCode
+    override def hashCode = h
+    override def equals(other: Any) = other match {
+      case that: Entry =>
+        (this eq that) || {
+          val a = get
+          (a ne null) && a.equals(that.get)
+        }
+      case _ => false
+    }
+  }
+
+  /** Looks up the entry for a string. */
+  final class EntryKey(s: String) {
+    override def hashCode = s.hashCode
+    override def equals(other: Any) = other match {
+      case that: Entry => s.equals(that.get)
+      case _           => false
+    }
+  }
+
+  /** A reusable key that looks up a string in the table without building it, from chars, ASCII bytes or part of a
+   *  `String`. `ConcurrentHashMap.get` hashes and calls `equals` on the key it is given, never the other way round, and
+   *  the hash is `String.hashCode` of the contents. It is mutable, so its users mustn't share it between threads.
+   */
+  final class Probe {
+    private[this] var chars: Array[Char] = null
+    private[this] var bytes: Array[Byte] = null
+    private[this] var region: String = null
+    private[this] var offset = 0
+    private[this] var len = 0
+    private[this] var h = 0
+
+    def setChars(cs: Array[Char], off: Int, length: Int, hash: Int): Unit = { clear(); chars = cs; offset = off; len = length; h = hash }
+    def setAscii(bs: Array[Byte], off: Int, length: Int, hash: Int): Unit = { clear(); bytes = bs; offset = off; len = length; h = hash }
+    def setRegion(s: String, off: Int, length: Int, hash: Int): Unit = { clear(); region = s; offset = off; len = length; h = hash }
+    def clear(): Unit = { chars = null; bytes = null; region = null }
+
+    def newString(): String =
+      if (chars ne null) new String(chars, offset, len)
+      else if (bytes ne null) new String(bytes, offset, len, java.nio.charset.StandardCharsets.ISO_8859_1)
+      else region.substring(offset, offset + len)
+
+    private def matches(s: String): Boolean = (s ne null) && s.length == len && {
+      if (region ne null) s.regionMatches(0, region, offset, len)
+      else {
+        var i = 0
+        if (chars ne null) while (i < len && s.charAt(i) == chars(offset + i)) i += 1
+        else while (i < len && s.charAt(i) == bytes(offset + i)) i += 1
+        i == len
+      }
+    }
+    override def hashCode = h
+    override def equals(other: Any) = other match {
+      case e: Entry => matches(e.get)
+      case _        => false
+    }
   }
 }
