@@ -83,6 +83,12 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.scratch"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.scratch"),
 
+    // the depth of a recursion guard is private to it
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.subsametypeRecursions_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.basetypeRecursions_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.subsametypeRecursions_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.basetypeRecursions_="),
+
     // interning and counters chosen when the universe is built (`SymbolTable#isConcurrentUniverse`) instead of
     // overridden in the private[reflect] traits SynchronizedTypes / SynchronizedSymbols / SynchronizedOps;
     // the private[reflect] trait ThreadLocalStorage is gone, so JavaUniverse no longer implements it

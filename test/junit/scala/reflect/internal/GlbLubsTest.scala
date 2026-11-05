@@ -82,7 +82,7 @@ class GlbLubsTest {
     val outer = scratch.frame
     var inner: Frame = null
     val sym = rootMirror.RootClass.newMethod(TermName("completed"), NoPosition, 0L)
-    subsametypeRecursions = 7
+    outer.subTypes.enter()
     try {
       sym.setInfo(new LazyType {
         override def complete(s: Symbol): Unit = {
@@ -92,7 +92,7 @@ class GlbLubsTest {
         }
       })
       sym.info
-    } finally subsametypeRecursions = 0
+    } finally outer.subTypes.exit()
     assertNotSame(outer, inner)
     assertSame(outer, scratch.frame)
     assertSame("frames are reused", inner, outer.next)
@@ -110,5 +110,39 @@ class GlbLubsTest {
     assertEquals(AnyTpe, frame.lubs.lookup(key, onCycle = NothingTpe))
     frame.lubs.results.clear()
     assertNull(frame.lubs.lookup(key, onCycle = NothingTpe))
+  }
+
+  @Test def recursionGuardActivatesAtThreshold(): Unit = {
+    val frame = scratch.frame
+    val guard = new frame.RecursionGuard[String](2)
+    assertTrue("below the threshold, keys aren't tracked", guard.enter("a"))
+    assertTrue(guard.pending.isEmpty)
+    assertTrue(guard.enter("a"))
+    assertFalse("a cycle", guard.enter("a"))
+    assertEquals("a cycle leaves the depth as it was", 2, guard.depth)
+    guard.exit("a")
+    guard.exit("a")
+    assertEquals(0, guard.depth)
+    assertTrue(guard.pending.isEmpty)
+  }
+
+  @Test def subTypeGuardRemembersCyclesForTheOutermostCheck(): Unit = {
+    val frame = scratch.frame
+    val guard = new frame.SubTypeGuard(3)
+    guard.enter()
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    assertFalse("a cycle", guard.enter(IntTpe, StringTpe))
+    assertEquals("a cycle leaves the depth as it was", 3, guard.depth)
+    guard.exit(IntTpe, StringTpe)
+    guard.exit(IntTpe, StringTpe)
+    assertFalse("known to be false, below the threshold too", guard.enter(IntTpe, StringTpe))
+    assertEquals(1, guard.depth)
+    guard.exit()
+    assertEquals(0, guard.depth)
+    assertTrue(guard.pending.isEmpty)
+    assertTrue("forgotten after the outermost check", guard.knownFalse.isEmpty)
+    assertTrue(guard.enter(IntTpe, StringTpe))
+    guard.exit(IntTpe, StringTpe)
   }
 }

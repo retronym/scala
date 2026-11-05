@@ -539,17 +539,86 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new Frame
       _next
     }
-    var subsametypeRecursions: Int = 0
-    val pendingSubTypes = new mutable.HashSet[SubTypePair]
-    val knownFalseSubTypes = new java.util.IdentityHashMap[Type, List[Type]]
+    /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
+     *  every call would be too expensive, and this recursion is rare. On a cycle, the caller decides
+     *  what the answer is. `enter` and `exit` keep hot paths free of closures.
+     */
+    final class RecursionGuard[K](threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[K] = null
+      def pending: mutable.HashSet[K] = {
+        if (_pending eq null) _pending = new mutable.HashSet[K]
+        _pending
+      }
+      /** False if `key` is already being computed. Otherwise the caller must call `exit`. */
+      def enter(key: K): Boolean = {
+        _depth += 1
+        _depth < threshold || pending.add(key) || { _depth -= 1; false }
+      }
+      def exit(key: K): Unit = {
+        if (_depth >= threshold) pending -= key
+        _depth -= 1
+      }
+    }
+
+    /** A `RecursionGuard` for subtype checks. A check must not allocate its key unless it is past
+     *  the threshold, and a cycle is remembered for the rest of the outermost check.
+     */
+    final class SubTypeGuard(threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[SubTypePair] = null
+      def pending: mutable.HashSet[SubTypePair] = {
+        if (_pending eq null) _pending = new mutable.HashSet[SubTypePair]
+        _pending
+      }
+      private[this] var _knownFalse: java.util.IdentityHashMap[Type, List[Type]] = null
+      def knownFalse: java.util.IdentityHashMap[Type, List[Type]] = {
+        if (_knownFalse eq null) _knownFalse = new java.util.IdentityHashMap[Type, List[Type]]
+        _knownFalse
+      }
+      private def isKnownFalse(tp1: Type, tp2: Type): Boolean =
+        (_knownFalse ne null) && !_knownFalse.isEmpty && { val ts = _knownFalse.get(tp1); ts != null && ts.contains(tp2) }
+      private def recordKnownFalse(tp1: Type, tp2: Type): Unit = { // see scala/bug#13119
+        val ts = knownFalse.get(tp1)
+        knownFalse.put(tp1, tp2 :: (if (ts != null) ts else Nil))
+      }
+
+      /** Enter a check with no key of its own, such as `isSameType`. */
+      def enter(): Unit = _depth += 1
+      def exit(): Unit = {
+        _depth -= 1
+        // Called on every top-level check, but the map is only populated for pathological recursive
+        // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
+        if (_depth == 0 && (_knownFalse ne null) && !_knownFalse.isEmpty) _knownFalse.clear()
+        // undoLog.clear() // too eager, breaks #3281, #3866
+      }
+
+      /** False if `tp1 <:< tp2` is already being checked or is known to be false, which is the answer
+       *  (see neg/t8146-no-finitary*). Otherwise the caller must call `exit`.
+       */
+      def enter(tp1: Type, tp2: Type): Boolean = {
+        enter()
+        val proceed =
+          if (_depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { recordKnownFalse(tp1, tp2); false }
+          else !isKnownFalse(tp1, tp2)
+        if (!proceed) exit()
+        proceed
+      }
+      def exit(tp1: Type, tp2: Type): Unit = {
+        if (_depth >= threshold) pending -= SubTypePair(tp1, tp2)
+        exit()
+      }
+    }
+
+    val subTypes = new SubTypeGuard(TypeConstants.DefaultLogThreshhold)
     /** A log of type variable with their original constraints. Used in order
      *  to undo constraints in the case of isSubType/isSameType failure.
      */
     val undoLog = new UndoLog
-    var basetypeRecursions: Int = 0
-    val pendingBaseTypes = new mutable.HashSet[Type]
-    var volatileRecursions: Int = 0
-    val pendingVolatiles = new mutable.HashSet[Symbol]
+    val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
+    val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
     /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
      *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
      */
