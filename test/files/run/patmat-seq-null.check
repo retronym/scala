@@ -42,6 +42,34 @@ ProdOk: x
 ProdNull: no match
 VarGetOk: x
 VarGetNull: no match
+GenResWOk: x
+GenResWNull: NPE
+GenResANull: NPE
+GenResVOk: x
+GenResVNull: NPE
+RefinedAnon: NPE
+MixNull: no match
+MixUp: no match
+BridgeNull: NPE
+BridgeUp: NPE
+SelfOk: x
+SelfNullIn: NPE
+ValGetOk: x
+ValGetNull: NPE
+AliasW: NPE
+EmptyD: no match, 0 evaluations
+NullResult: NPE
+WrapEmpty: NPE
+WrapStar: NPE
+WrapOnlyStar: star
+ArrWrapEmpty: NPE
+ArrWrapStar: NPE
+ArrWrapOnlyStar: star
+SomeNullList: no match
+ListOfNullList: no match
+TupNullArr: no match
+SeqNull: no match
+VectorNull: no match
 Counted: 2, 2 evaluations
 Stateful: second
 CountVal: x, 2 evaluations
