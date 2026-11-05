@@ -36,7 +36,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
     def genSynchronized(tree: Apply, expectedType: BType): BType = {
       val Apply(fun, args) = tree
       val monitor = locals.makeLocal(ObjectRef, "monitor")
-      val monCleanup = new asm.Label
+      val monCleanup = new CodegenLabel
 
       // if the synchronized block returns a result, store it in a local variable.
       // Just leaving it on the stack is not valid in MSIL (stack is cleaned when leaving try-blocks).
@@ -48,6 +48,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
       bc dup ObjectRef
       locals.store(monitor)
       emit(asm.Opcodes.MONITORENTER)
+      mnode.protectedDepth += 1
 
       /* ------ (2) Synchronized block.
        *            Reached by fall-through from (1).
@@ -72,7 +73,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
       locals.load(monitor)
       emit(asm.Opcodes.MONITOREXIT)
       if (hasResult) { locals.load(monitorResult) }
-      val postHandler = new asm.Label
+      val postHandler = new CodegenLabel
       bc goTo postHandler
 
       /* ------ (4) exception-handler version of monitor-exit code.
@@ -104,6 +105,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        *            Protected by whatever protects the whole synchronized expression.
        * ------
        */
+      mnode.protectedDepth -= 1
       mnode visitLabel postHandler
 
       lineNumber(tree)
@@ -115,9 +117,10 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
      *  Detects whether no instructions have been emitted since label `lbl` and if so emits a NOP.
      *  Useful to avoid emitting an empty try-block being protected by exception handlers,
      *  which results in "java.lang.ClassFormatError: Illegal exception table range". See scala/bug#6102.
+     *  A line number may have been emitted since `lbl`, for example for a `()` on a line of its own.
      */
     def nopIfNeeded(lbl: asm.Label): Unit = {
-      val noInstructionEmitted = isAtProgramPoint(lbl)
+      val noInstructionEmitted = mnode.nothingEmittedSince(lbl)
       if (noInstructionEmitted) { emit(asm.Opcodes.NOP) }
     }
 
@@ -208,7 +211,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * The name choice emphasizes that the code section lies "after all exception handlers",
        * where "all exception handlers" includes those derived from catch-clauses as well as from finally-blocks.
        */
-      val postHandlers = new asm.Label
+      val postHandlers = new CodegenLabel
 
       val hasFinally   = (finalizer != EmptyTree)
 
@@ -227,7 +230,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * upon early return from the try-body or one of its EHs (but not the EH-version of the finally-clause)
        * AND hasFinally, a cleanup is needed.
        */
-      val finCleanup   = if (hasFinally) new asm.Label else null
+      val finCleanup   = if (hasFinally) new CodegenLabel else null
 
       /* ------ (1) try-block, protected by:
        *                       (1.a) the EHs due to case-clauses,   emitted in (2),
@@ -236,6 +239,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * ------
        */
 
+      mnode.protectedDepth += 1
       val startTryBody = currProgramPoint()
       registerCleanup(finCleanup)
       genLoad(block, kind)
@@ -367,6 +371,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * ------
        */
 
+      mnode.protectedDepth -= 1
       markJoinPoint(postHandlers)
       if (hasFinally) {
         emitFinalizer(finalizer, tmp, isDuplicate = false) // the only invocation of emitFinalizer with `isDuplicate == false`

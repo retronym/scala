@@ -27,10 +27,5 @@ public class LabelNode1 extends LabelNode {
         super(label);
     }
 
-    /** Set by {@link MethodNode1} when a jump or switch that targets this label is visited. */
-    public static final int JUMP_TARGET = 1 << 0;
-    /** Set by codegen: this label is never the target of a jump visited after the label itself. */
-    public static final int FORWARD_JUMPS_ONLY = 1 << 1;
-
     public int flags;
 }

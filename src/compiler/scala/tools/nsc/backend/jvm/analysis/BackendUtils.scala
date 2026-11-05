@@ -122,8 +122,7 @@ abstract class BackendUtils extends PerRunInit {
    * method due to a limitation in the JVM. Instead, we emit a separate invokedynamic bytecode for each group of target
    * methods.
    */
-  def addLambdaDeserialize(classNode: ClassNode, implMethods: Iterable[Handle]): Unit = {
-    val cw = classNode
+  def addLambdaDeserialize(cw: asm.ClassVisitor, implMethods: Iterable[Handle]): Unit = {
 
     // Make sure to reference the ClassBTypes of all types that are used in the code generated
     // here (e.g. java/util/Map) are initialized. Initializing a ClassBType adds it to the
@@ -160,6 +159,8 @@ abstract class BackendUtils extends PerRunInit {
     mv.visitLabel(terminalLabel)
     emitLambdaDeserializeIndy(unsafeWrapArray(groups(numGroups - 1)))
     mv.visitInsn(ARETURN)
+    mv.visitMaxs(0, 0)
+    mv.visitEnd()
   }
 
   /**
@@ -434,6 +435,19 @@ abstract class BackendUtils extends PerRunInit {
     (c.declaredInnerClasses.toList, c.referredInnerClasses.toList)
   }
 
+  /** As the overload for a `ClassNode`, from what `direct` recorded as the class went by. */
+  def collectNestedClasses(direct: DirectClassVisitor): (List[ClassBType], List[ClassBType]) = {
+    val c = new Collector
+    c.visitInternalName(direct.name)
+    c.declaredInnerClasses ++= c.declaredNestedClasses(direct.name)
+    c.visitClassSignature(direct.classSignature)
+    direct.internalNames.forEach(c.visitInternalNameOrArrayReference(_))
+    direct.descriptors.forEach(c.visitDescriptor(_))
+    direct.fieldSignatures.forEach(c.visitFieldSignature(_))
+    direct.methodSignatures.forEach(c.visitMethodSignature(_))
+    (c.declaredInnerClasses.toList, c.referredInnerClasses.toList)
+  }
+
   /*
    * Populates the InnerClasses JVM attribute with `refedInnerClasses`. See also the doc on inner
    * classes in BTypes.scala.
@@ -446,7 +460,7 @@ abstract class BackendUtils extends PerRunInit {
    *
    * can-multi-thread
    */
-  final def addInnerClasses(jclass: asm.tree.ClassNode, declaredInnerClasses: List[ClassBType], refedInnerClasses: List[ClassBType]): Unit = {
+  final def addInnerClasses(jclass: asm.ClassVisitor, declaredInnerClasses: List[ClassBType], refedInnerClasses: List[ClassBType]): Unit = {
     // sorting ensures nested classes are listed after their enclosing class thus satisfying the Eclipse Java compiler
     val allNestedClasses = new mutable.TreeSet[ClassBType]()(Ordering.by(_.internalName))
     allNestedClasses ++= declaredInnerClasses

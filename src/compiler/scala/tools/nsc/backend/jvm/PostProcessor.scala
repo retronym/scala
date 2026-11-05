@@ -60,25 +60,28 @@ abstract class PostProcessor extends PerRunInit {
 
   def sendToDisk(clazz: GeneratedClass, sourceFile: AbstractFile): Unit = {
     val classNode = clazz.classNode
-    val internalName = classNode.name
+    val internalName = clazz.internalName
     val bytes = try {
-      if (!clazz.isArtifact) {
-        localOptimizations(classNode)
-        val indyLambdaBodyMethods = backendUtils.indyLambdaBodyMethods(internalName)
-        if (indyLambdaBodyMethods.nonEmpty)
-          backendUtils.addLambdaDeserialize(classNode, indyLambdaBodyMethods)
-      }
-
       warnCaseInsensitiveOverwrite(clazz)
-      setInnerClasses(classNode)
-      serializeClass(classNode)
+      if (classNode == null) clazz.writer.toByteArray
+      else {
+        if (!clazz.isArtifact) {
+          localOptimizations(classNode)
+          val indyLambdaBodyMethods = backendUtils.indyLambdaBodyMethods(internalName)
+          if (indyLambdaBodyMethods.nonEmpty)
+            backendUtils.addLambdaDeserialize(classNode, indyLambdaBodyMethods)
+        }
+
+        setInnerClasses(classNode)
+        serializeClass(classNode)
+      }
     } catch {
       case ex: InterruptedException => throw ex
       case ex: Throwable =>
         // TODO fail fast rather than continuing to write the rest of the class files?
         if (frontendAccess.compilerSettings.debug) ex.printStackTrace()
         backendReporting.error(NoPosition, s"Error while emitting $internalName\n${ex.getMessage}")
-        if (NonFatal(ex)) checkConformance(classNode)
+        if (NonFatal(ex) && classNode != null) checkConformance(classNode)
         null
     }
 
@@ -122,7 +125,7 @@ abstract class PostProcessor extends PerRunInit {
   }
 
   private def warnCaseInsensitiveOverwrite(clazz: GeneratedClass): Unit = {
-    val name = clazz.classNode.name
+    val name = clazz.internalName
     val lowercaseJavaClassName = name.toLowerCase
 
     val overwrites = caseInsensitively.putIfAbsent(lowercaseJavaClassName, (name, clazz.position))
@@ -171,9 +174,21 @@ abstract class PostProcessor extends PerRunInit {
   }
 
   def serializeClass(classNode: ClassNode): Array[Byte] = {
-    val cw = new ClassWriterWithBTypeLub(backendUtils.extraProc.get)
+    val cw = newClassWriter()
     classNode.accept(cw)
     cw.toByteArray
+  }
+
+  def newClassWriter(): ClassWriter = new ClassWriterWithBTypeLub(backendUtils.extraProc.get)
+
+  /** What remains to do of `sendToDisk` once codegen has finished a class written with `direct`, up to `toByteArray`. */
+  def finishDirect(direct: DirectClassVisitor, isArtifact: Boolean): ClassWriter = {
+    if (!isArtifact && direct.serializableLambdas.nonEmpty)
+      backendUtils.addLambdaDeserialize(direct, direct.serializableLambdas)
+    val (declared, referred) = backendUtils.collectNestedClasses(direct)
+    backendUtils.addInnerClasses(direct, declared, referred)
+    direct.visitEnd()
+    direct.writer
   }
 
   /**
@@ -203,7 +218,9 @@ abstract class PostProcessor extends PerRunInit {
 }
 
 /**
- * The result of code generation. [[isArtifact]] is `true` for mirror and bean-info classes.
+ * The result of code generation: a [[classNode]] still to be post-processed, or if no optimizer needs
+ * one, a [[writer]] that has been given the whole class. The other is `null`. [[isArtifact]] is `true`
+ * for mirror and bean-info classes.
  */
-case class GeneratedClass(classNode: ClassNode, sourceClassName: String, position: Position, isArtifact: Boolean)
+case class GeneratedClass(internalName: String, classNode: ClassNode, writer: ClassWriter, sourceClassName: String, position: Position, isArtifact: Boolean)
 case class GeneratedCompilationUnit(sourceFile: AbstractFile, classes: List[GeneratedClass])
