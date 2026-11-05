@@ -1,0 +1,13 @@
+# Declared overrides of the rules, one per field: owner<TAB>field<TAB>kind<TAB>protection<TAB>note
+# owner and field as in state-map.json's `key` (owner#field); an empty kind or protection keeps the rules' answer.
+# The note is shown in worklist.md as the suggested discipline. Source annotations (@scratch, @guardedBy, ...) are the
+# follow-up; this file stands in for them while other worktrees edit the compiler's sources.
+internal.Types.PerRunUniques	uniques		batch-only	The batch alternative of `SymbolTable.uniques`, chosen only when `!isConcurrentUniverse`; a concurrent compiler universe gets `SynchronizedPerRunUniques`.
+internal.Types.PerRunUniques	uniqueRunId		batch-only	As `uniques`: the batch alternative.
+internal.Symbols	_lockedCount			A read-modify-write through `lockedCount_=` (`lockedCount += 1` in `Symbol.lock`), which the rules do not see: the number of symbols being completed; per-thread (Scratch) once completion runs on several threads.
+internal.Symbols.Symbol	_rawflags			`LOCKED` is the completion black hole, and other flags are set with `|=` from many places: an owner-aware completion lock for `LOCKED`, and atomic flag updates (a `VarHandle` CAS) once the symbol is published.
+internal.SymbolTable	ph			The current phase, read by every `info` and period check: per-thread (Scratch), with `enteringPhase`/`exitingPhase` saving and restoring it per thread.
+internal.SymbolTable	per			The period cached from `ph` and the run id: moves with `ph`, so per-thread too.
+nsc.Global	globalPhase			The run's phase cursor: keep it fixed while the parallel typer runs, written only between phases on the driver thread.
+internal.Names	_chrs			Grown by `enterChars` under `nameLock` when `synchronizeNames`, but `Name.toString` and `chrs` read it without the lock: a reader can see a replaced array mid-copy. Publish the grown array with a volatile write, or read under the lock.
+internal.Scopes.Scope	elemsCache			Rebuilt on read and nulled by `enter`: a benign race only if read once into a local and the scope is frozen once its owner's completion publishes it.
