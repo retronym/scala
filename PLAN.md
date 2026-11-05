@@ -35,6 +35,26 @@ Where it goes, in samples/op on that compile: `sendToDisk` 271 to about 31, and 
 
 The conclusion so far: worth upstreaming if a quiet A/B confirms the time, by the standard of other changes of this size. It saves several times what #200 does in allocation for about 330 lines of new classes, with codegen shared by both paths.
 
+## Review questions, settled by running them
+
+**Load-time failures.** Both real, both now fixed, and neither is quite as first traced. Reproducers compiled at default, `-g:none`, `-g:source`, `-Ybackend-tree` and `-opt:none`, each class loaded under `-Xverify:all`.
+
+- `VerifyError`: one store in a first protected region is fine, because `Frame.merge` merges both a block's input and output locals into the handler. It takes two stores of different types in one block, which at the default debug level means on one line, since a new line starts a block. At `-g:none` and `-g:source` separate lines fail too. The tree path and `-opt:none` were never affected.
+- `ClassFormatError`: `try { () } catch` with `()` on its own line, at the default and also on the tree path with `-opt:none`, so that part is an existing bug. `synchronized` and `finally` are fine, as their ranges include a `monitorexit` or `GOTO`.
+
+No class in library, reflect or compiler has the `VerifyError`, even at `-g:none` before the fix: all 6,846 link under `-Xverify:all`, and likewise after the fix at all four debug levels. So the corpus couldn't have found this, and the tests are what guard it.
+
+**Class files, tree against direct, after the fix.** Library, reflect and compiler, 6,846 classes, at each of `-g:vars`, `-g:line`, `-g:source` and `-g:none`.
+
+- Byte-identical: 1,364 classes at `-g:vars`, 1,410 at the other levels. The rest differ in constant pool order, which follows visit order.
+- Instructions, frames and handlers differ in the same 244 methods of 160 classes at every level. In 243, the only opcode differences are dead code as `nop; athrow` (a dead one-byte instruction is a bare `athrow`), with what follows from that: frames, split handlers, line and local variable entries. The other is `ClassBType.info`, the handler around the `nop` of `synchronized {}`.
+- 75 of those classes have extra constant pool entries, 70 of them just `java/lang/Throwable`, the type of ASM's frame for dead code. No class has an entry only in the tree. No class outside the 160 differs in anything but pool order.
+- Total size is up 0.024% to 0.028%.
+- Not in this corpus, but reproduced in small cases: a `try {}`, `try { () }` or `try { () } finally f()` keeps its handler and the handler's code. `InnerClasses` gets an entry for a class mentioned only in dead code. A lambda created only in dead code keeps `$deserializeLambda$`.
+- Output also depends on the flags, as it didn't before: `-Ybackend-parallelism 2`, or setting `-opt` explicitly, gives the tree path's bytes.
+
+The tree path at this commit is byte-identical to #200 over the corpus at `-g:vars`, so fixing `nopIfNeeded` changes nothing there. `-g:none` still writes local variable entries for a few catch binders, on both paths.
+
 ## Key decisions
 
 **Codegen stops reading the tree, in both modes.** This is what keeps the fork small. Everything codegen asks of the tree today has an O(1) answer it can keep itself: `lastInsn`'s opcode (`ATHROW`, `ACONST_NULL` checks in `emitAdapt`, `isAtProgramPoint`), the pending line number that `lineNumber` overwrites, and `isAtUnreachablePoint`, which walks back through labels. A small `MethodVisitor` wrapper (call it the cursor) holds that state and forwards to whatever is underneath: a `MethodNode1` with `-opt`, a `MethodWriter` without. `jmethod` and `mnode` become the cursor, typed as `MethodVisitor`. `LabelNode1`'s flags move to a `Label` subclass, since `Label.info` is taken by `MethodNode`. This refactoring is worth a commit of its own, and should leave output byte-identical.
