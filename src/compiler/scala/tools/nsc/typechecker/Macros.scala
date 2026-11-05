@@ -287,7 +287,9 @@ trait Macros extends MacroRuntimes with Traces with Helpers {
     macroDef withAnnotation AnnotationInfo(MacroImplAnnotation.tpe, List(pickle), Nil)
   }
 
-  def loadMacroImplBinding(macroDef: Symbol): Option[MacroImplBinding] = {
+  // -Yparallel-typer: under the completion lock (`isBlackbox` reaches it outside an expansion, and reading the
+  // annotations can complete symbols)
+  def loadMacroImplBinding(macroDef: Symbol): Option[MacroImplBinding] = underCompletionLock {
     macroImplBindingCache.getOrElseUpdate(macroDef,
       macroDef.getAnnotation(MacroImplAnnotation) collect {
         case AnnotationInfo(_, List(pickle), _) => MacroImplBinding.unpickle(pickle)

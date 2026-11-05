@@ -37,7 +37,8 @@ trait Names extends api.Names {
 
 
   /** Memory to store all names sequentially. */
-  private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE) // TODO this ought to be private
+  // volatile: a name made on one thread after the table grew is read on another (-Yparallel-typer, runtime reflection)
+  @volatile private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE) // TODO this ought to be private
   @deprecated("Don't access name table contents directly.", "2.12.9")
   def chrs: Array[Char] = _chrs
   @deprecated("Don't access name table contents directly.", "2.12.9")

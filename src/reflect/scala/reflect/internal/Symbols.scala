@@ -1865,6 +1865,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       // only try once...
       if (phase.erasedTypes || (this hasFlag TRIEDCOOKING))
         return this
+      if (isConcurrentCompiler) underCompletionLock(cookJavaRawInfo0()) else cookJavaRawInfo0()
+    }
+    // In a concurrent compiler, under the completion lock: this rewrites the info of a shared (classpath) symbol, and
+    // two threads must not both apply `rawToExistential`.
+    private def cookJavaRawInfo0(): this.type = {
+      if (this hasFlag TRIEDCOOKING)
+        return this
 
       this setFlag TRIEDCOOKING
       info  // force the current info
