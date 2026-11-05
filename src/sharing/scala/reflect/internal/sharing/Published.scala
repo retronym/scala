@@ -1,6 +1,6 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
-import io.github.retronym.sharing.macros.{CastMacros, PublishedMacros}
+import scala.reflect.internal.sharing.macros.{CastMacros, PublishedMacros}
 
 /** The companion of [[Published]], an alias in the Scala 2.13 build: see the package object. A field and its handle:
  *

@@ -1,6 +1,6 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
-import io.github.retronym.sharing.macros.StampedMacros
+import scala.reflect.internal.sharing.macros.StampedMacros
 
 /** A value with the stamp it was computed at, as one immutable object, held in one `var` of the cache's owner. See the
  *  Scala 3 build's documentation; the operations here take the current stamp as an implicit, after the computation:

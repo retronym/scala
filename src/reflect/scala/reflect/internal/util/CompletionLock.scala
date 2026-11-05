@@ -13,7 +13,7 @@
 package scala.reflect.internal.util
 
 import java.util.concurrent.atomic.LongAdder
-import io.github.retronym.sharing.{Claimant, CoarseLock, CycleHandler, PerKeyClaims, What}
+import scala.reflect.internal.sharing.{Claimant, CoarseLock, CycleHandler, PerKeyClaims, What}
 
 /** The lock under which every completion of a compiler used from several threads runs (`-Yparallel-typer`):
  *  one reentrant lock, the "serialised" mode of the parallel typer. It is the facade over the concurrency
@@ -24,7 +24,7 @@ import io.github.retronym.sharing.{Claimant, CoarseLock, CycleHandler, PerKeyCla
  */
 final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s => throw new IllegalStateException(s"wait-for cycle on $s")) {
   // scala-sharing's coarse registry: one reentrant lock that keeps what its holder is doing, for the reports of the
-  // threads that wait (`io.github.retronym.sharing.CoarseLock`).
+  // threads that wait (`scala.reflect.internal.sharing.CoarseLock`).
   private[this] val lock = new CoarseLock((_, _, _, _) => ())
 
   // With `perKey` (`-Dscalac.parallelTyper.claims=perKey`), a claim per completion root (`PerKeyClaims`): the coarse

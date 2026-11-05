@@ -1,4 +1,4 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 import scala.annotation.StaticAnnotation
 

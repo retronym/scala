@@ -1,4 +1,4 @@
-package io.github.retronym.sharing.macros
+package scala.reflect.internal.sharing.macros
 
 import scala.reflect.macros.{blackbox, whitebox}
 

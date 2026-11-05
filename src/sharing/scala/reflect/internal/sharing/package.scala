@@ -1,6 +1,6 @@
-package io.github.retronym
+package scala.reflect.internal
 
-import io.github.retronym.sharing.macros.{ClaimedMacros, OnceMacros, PublishedMacros, PublishedWhiteboxMacros}
+import scala.reflect.internal.sharing.macros.{ClaimedMacros, OnceMacros, PublishedMacros, PublishedWhiteboxMacros}
 
 /** The Scala 2.13 build: the types that Scala 3 declares as opaque, and the operations on them.
  *
@@ -10,7 +10,7 @@ import io.github.retronym.sharing.macros.{ClaimedMacros, OnceMacros, PublishedMa
  *  plain reads and stores type-check, and only its operations check that the field is declared `Published`.
  *
  *  The operations are macros in implicit classes, found by code in this package or that imports it
- *  (`import io.github.retronym.sharing._`). Their expansions never construct the implicit class.
+ *  (`import scala.reflect.internal.sharing._`). Their expansions never construct the implicit class.
  */
 package object sharing {
   import Sharing.{ClaimKind, Holds, Monitor}

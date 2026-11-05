@@ -1,4 +1,4 @@
-package io.github.retronym.sharing.macros
+package scala.reflect.internal.sharing.macros
 
 import scala.reflect.macros.blackbox
 
@@ -12,10 +12,10 @@ private[macros] trait Common {
   import c.internal.{changeOwner, defDef, enclosingOwner, gen, methodType, newMethodSymbol, nullaryMethodType, newTermSymbol, setInfo, setOwner,
     substituteSymbols, valDef}
 
-  final val pkg: Tree = q"_root_.io.github.retronym.sharing"
+  final val pkg: Tree = q"_root_.scala.reflect.internal.sharing"
   final def publish: Tree = q"$pkg.Publish"
 
-  private def module(name: String): ModuleSymbol = c.mirror.staticModule("io.github.retronym.sharing." + name)
+  private def module(name: String): ModuleSymbol = c.mirror.staticModule("scala.reflect.internal.sharing." + name)
   private lazy val SharingModule = module("Sharing")
   private lazy val PublishedModule = module("Published")
   private lazy val PackageObject = module("package")

@@ -1,4 +1,4 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 /** A party that holds and waits for claims in `PerKeyClaims`: one per thread, or one per request that may move
  *  between threads. `PerKeyClaims` compares claimants by identity.

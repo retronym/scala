@@ -1,4 +1,4 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 /** Whether the state that [[Sharing]]'s operations guard is shared between threads.
  *

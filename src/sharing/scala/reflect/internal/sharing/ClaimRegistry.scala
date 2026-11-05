@@ -1,4 +1,4 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 /** Who holds the claims on keys when threads are concurrent. A claim is a reentrant lock per key, whose waits feed a
  *  wait-for graph for deadlock detection ([[PerKeyClaims]]), or the one coarse lock ([[CoarseLock]]).

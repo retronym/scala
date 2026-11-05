@@ -1,8 +1,8 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 import scala.annotation.implicitNotFound
 
-import io.github.retronym.sharing.macros.SharingMacros
+import scala.reflect.internal.sharing.macros.SharingMacros
 
 /** Operations on state shared between threads, with evidence types that make the guarded state reachable only from
  *  inside them: the Scala 2.13 build. The Scala 3 build's documentation of each operation holds here; this one says

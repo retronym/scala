@@ -1,4 +1,4 @@
-package io.github.retronym.sharing
+package scala.reflect.internal.sharing
 
 
 /** The companion of [[Once]], an abstract type in the Scala 2.13 build: see the package object. A field, its handle
