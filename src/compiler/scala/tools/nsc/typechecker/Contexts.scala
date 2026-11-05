@@ -81,7 +81,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
   // register an import for the narrow purpose of excluding root imports of predef modules
   def registerImport(ctx: Context, imp: Import): Unit = {
     val sym = imp.expr.symbol
-    if (sym != null && !sym.hasPackageFlag && ctx.enclosingNonImportContext.owner.hasPackageFlag && rootImports(ctx.unit).contains(sym)) excludedRootImportsCached.synchronized {
+    if (sym != null && !sym.hasPackageFlag && ctx.enclosingNonImportContext.owner.hasPackageFlag && rootImports(ctx.unit).contains(sym)) lockedIfConcurrent(excludedRootImportsCached) {
       var current = excludedRootImportsCached.get(ctx.unit).getOrElse(Nil)
       current = sym :: current
       excludedRootImportsCached += ctx.unit -> current
@@ -103,10 +103,10 @@ trait Contexts { self: Analyzer with ImportTracking =>
     assert(definitions.isDefinitionsInitialized, "definitions uninitialized")
 
     if (unit.isJava) RootImports.javaList
-    else rootImportsCached.synchronized(rootImportsCached.get(unit)).getOrElse {
+    else lockedIfConcurrent(rootImportsCached)(rootImportsCached.get(unit)).getOrElse {
       // computed outside the monitor: it can complete symbols, and so wait for the completion lock
       val calculated = defaultRootImports
-      rootImportsCached.synchronized(rootImportsCached += unit -> calculated)
+      lockedIfConcurrent(rootImportsCached)(rootImportsCached += unit -> calculated)
       calculated
     }
   }
@@ -1249,7 +1249,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
       else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
-      imp.isRootImport && excludedRootImportsCached.synchronized(excludedRootImportsCached.get(unit)).exists(_.contains(imp.qual.symbol))
+      imp.isRootImport && lockedIfConcurrent(excludedRootImportsCached)(excludedRootImportsCached.get(unit)).exists(_.contains(imp.qual.symbol))
 
     private[Contexts] def requiresQualifier(s: Symbol): Boolean = (
           s.owner.isClass

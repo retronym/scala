@@ -85,13 +85,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   protected def saveOriginalOwner(sym: Symbol): Unit = {
     // some synthetic symbols have NoSymbol as owner initially
     if (sym.owner != NoSymbol) {
-      if (originalOwnerMap.synchronized(originalOwnerMap contains sym)) ()
+      if (lockedIfConcurrent(originalOwnerMap)(originalOwnerMap contains sym)) ()
       else defineOriginalOwner(sym, sym.rawowner)
     }
   }
 
   def defineOriginalOwner(sym: Symbol, owner: Symbol): Unit = {
-    originalOwnerMap.synchronized(originalOwnerMap(sym) = owner) // synchronized: -Yparallel-typer
+    lockedIfConcurrent(originalOwnerMap)(originalOwnerMap(sym) = owner) // -Yparallel-typer
   }
 
   def symbolOf[T: WeakTypeTag]: TypeSymbol = weakTypeOf[T].typeSymbolDirect.asType
@@ -1261,7 +1261,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /**
      * The initial owner of this symbol.
      */
-    def originalOwner: Symbol = originalOwnerMap.synchronized(originalOwnerMap.getOrElse(this, rawowner))
+    def originalOwner: Symbol = lockedIfConcurrent(originalOwnerMap)(originalOwnerMap.getOrElse(this, rawowner))
 
     // TODO - don't allow the owner to be changed without checking invariants, at least
     // when under some flag. Define per-phase invariants for owner/owned relationships,

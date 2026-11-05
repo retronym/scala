@@ -126,7 +126,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
   def freshNameCreatorFor(context: Context) = {
     val owner = context.outermostContextAtCurrentPos.enclClassOrMethod.owner
-    typerFreshNameCreators.synchronized(typerFreshNameCreators.getOrElseUpdate(owner, new FreshNameCreator))
+    lockedIfConcurrent(typerFreshNameCreators)(typerFreshNameCreators.getOrElseUpdate(owner, new FreshNameCreator))
   }
 
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
