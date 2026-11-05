@@ -81,6 +81,48 @@ object ProdNull { def unapplySeq(a: Int) = new HasProd[V](Nulls.box[V]) }
 case class VarGet(xs: String*) { def get = new V(List("get")) }
 object VarGet2 { val nullVarargs = new VarGet(null.asInstanceOf[Seq[String]]: _*) }
 
+// A generic `unapplySeq` returns a box, though its result type here is a value class. Unboxing it into the binder is the NPE
+class GenRes[A](r: Any) { def unapplySeq(a: Int): A = r.asInstanceOf[A] }
+object GenResWOk   extends GenRes[UnapplySeqWrapper[String]](new UnapplySeqWrapper[String](List("x")))
+object GenResWNull extends GenRes[UnapplySeqWrapper[String]](null)
+object GenResANull extends GenRes[ArrayWrapper[String]](null)
+object GenResVOk   extends GenRes[V](new V(List("x")))
+object GenResVNull extends GenRes[V](null)
+
+// `get` as declared in a refinement or a mixin isn't the method that's called
+object RefinedAnon { def unapplySeq(a: Int) = new GenRef[V](Nulls.box[V]) { override def get: V = super.get; def extra = 1 } }
+trait TGet { def get: V }
+class MixGet extends GenRef[V](Nulls.box[V]) with TGet
+object MixNull { def unapplySeq(a: Int) = new MixGet }
+object MixUp   { def unapplySeq(a: Int): GenRef[V] with TGet = new MixGet }
+
+// A bridge between a generic `get` and one declared to return the value class
+trait HasGet[A] { def isEmpty = false; def get: A }
+class ImplGet(a: Any) extends HasGet[V] { def get: V = a.asInstanceOf[V] }
+object BridgeNull { def unapplySeq(a: Int) = new ImplGet(null) }
+object BridgeUp   { def unapplySeq(a: Int): HasGet[V] = new ImplGet(null) }
+
+// Other ways of being declared to return a value class
+class SelfV(val xs: List[String]) extends AnyVal {
+  def isEmpty = false
+  def get: this.type = this
+  def lengthCompare(n: Int) = xs.lengthCompare(n)
+  def apply(i: Int) = xs(i)
+  def drop(n: Int) = xs.drop(n)
+  def toSeq = xs
+}
+object SelfOk     { def unapplySeq(a: Int) = new SelfV(List("x")) }
+object SelfNullIn { def unapplySeq(a: Int) = new SelfV(null) }
+class ValGet(val get: V) { def isEmpty = false }
+object ValGetOk   { def unapplySeq(a: Int) = new ValGet(new V(List("x"))) }
+object ValGetNull { def unapplySeq(a: Int) = new ValGet(Nulls.box[V]) }
+object AliasW     { type W = UnapplySeqWrapper[String]; def unapplySeq(a: Int): W = new UnapplySeqWrapper[String](null) }
+
+// `isEmpty` is still what guards `get`, and a null extractor result is still the NPE
+class EmptyDecl { var n = 0; def isEmpty = true; def get: V = { n += 1; new V(List("x")) } }
+object EmptyD     { val c = new EmptyDecl; def unapplySeq(a: Int) = c }
+object NullResult { def unapplySeq(a: Int): Declared = null }
+
 // A `get` written by the user can tell how many times it is evaluated
 class Counting { var n = 0; def isEmpty = false; def get: V = { n += 1; new V(List(s"$n")) } }
 object Counted { val c = new Counting; def unapplySeq(a: Int) = c }
@@ -147,6 +189,42 @@ object Test {
 
     t("VarGetOk")(VarGet("x") match { case VarGet(a) => a case _ => "no match" })
     t("VarGetNull")(VarGet2.nullVarargs match { case VarGet(a) => a case _ => "no match" })
+
+    t("GenResWOk")(1 match { case GenResWOk(a) => a case _ => "no match" })
+    t("GenResWNull")(1 match { case GenResWNull(a) => a case _ => "no match" })
+    t("GenResANull")(1 match { case GenResANull(a) => a case _ => "no match" })
+    t("GenResVOk")(1 match { case GenResVOk(a) => a case _ => "no match" })
+    t("GenResVNull")(1 match { case GenResVNull(a) => a case _ => "no match" })
+
+    t("RefinedAnon")(1 match { case RefinedAnon(a) => a case _ => "no match" })
+    t("MixNull")(1 match { case MixNull(a) => a case _ => "no match" })
+    t("MixUp")(1 match { case MixUp(a) => a case _ => "no match" })
+    t("BridgeNull")(1 match { case BridgeNull(a) => a case _ => "no match" })
+    t("BridgeUp")(1 match { case BridgeUp(a) => a case _ => "no match" })
+
+    t("SelfOk")(1 match { case SelfOk(a) => a case _ => "no match" })
+    t("SelfNullIn")(1 match { case SelfNullIn(a) => a case _ => "no match" })
+    t("ValGetOk")(1 match { case ValGetOk(a) => a case _ => "no match" })
+    t("ValGetNull")(1 match { case ValGetNull(a) => a case _ => "no match" })
+    t("AliasW")(1 match { case AliasW(a) => a case _ => "no match" })
+
+    t("EmptyD")(1 match { case EmptyD(a) => a case _ => s"no match, ${EmptyD.c.n} evaluations" })
+    t("NullResult")(1 match { case NullResult(a) => a case _ => "no match" })
+
+    // The length guards, with each wrapper around null
+    t("WrapEmpty")(1 match { case NullWrapped() => "empty" case _ => "no match" })
+    t("WrapStar")(1 match { case NullWrapped(a, _*) => a case _ => "no match" })
+    t("WrapOnlyStar")(1 match { case NullWrapped(_*) => "star" case _ => "no match" })
+    t("ArrWrapEmpty")(1 match { case ArrNullWrapped() => "empty" case _ => "no match" })
+    t("ArrWrapStar")(1 match { case ArrNullWrapped(a, _*) => a case _ => "no match" })
+    t("ArrWrapOnlyStar")(1 match { case ArrNullWrapped(_*) => "star" case _ => "no match" })
+
+    // A null scrutinee at a nested position, and through the other factories
+    t("SomeNullList")((Some(null): Option[List[String]]) match { case Some(List(a)) => a case _ => "no match" })
+    t("ListOfNullList")(List[List[String]](null) match { case List(List(a)) => a case _ => "no match" })
+    t("TupNullArr")(((null: Array[String]), 1) match { case (Array(a), _) => a case _ => "no match" })
+    t("SeqNull")((null: collection.Seq[String]) match { case collection.Seq(a) => a case _ => "no match" })
+    t("VectorNull")((null: Vector[String]) match { case Vector(a) => a case _ => "no match" })
 
     t("Counted")(1 match { case Counted(a) => s"$a, ${Counted.c.n} evaluations" case _ => "no match" })
     t("Stateful")(1 match { case Stateful(a) => a case _ => "no match" })
