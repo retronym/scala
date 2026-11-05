@@ -73,6 +73,31 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.lubGlbCaches"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.lubGlbCaches_="),
 
+    // per-thread scratch state of type operations gathered into `SymbolTable#Scratch`: the private[reflect] traits
+    // SynchronizedTypes / SynchronizedSymbols no longer override each field's accessors with thread-local storage
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedTypes.*"),
+    ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.*"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.recursionTable"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.recursionTable_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.commonOwnerMap"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.commonOwnerMap"),
+    ProblemFilters.exclude[InheritedNewAbstractMethodProblem]("scala.reflect.runtime.SymbolTable.findMemberInstance"),
+    ProblemFilters.exclude[InheritedNewAbstractMethodProblem]("scala.reflect.runtime.SynchronizedOps.findMemberInstance"),
+    ProblemFilters.exclude[InheritedNewAbstractMethodProblem]("scala.reflect.runtime.SynchronizedTypes.findMemberInstance"),
+
+    // interning and counters chosen when the universe is built (`SymbolTable#isConcurrentUniverse`) instead of
+    // overridden in the private[reflect] traits SynchronizedTypes / SynchronizedSymbols / SynchronizedOps
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.isConcurrentUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SymbolTable.isConcurrentUniverse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedOps.synchronizeNames"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.nextId"),
+    ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.nextExistentialId"),
+
+    // the private[reflect] trait ThreadLocalStorage is gone
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.mkThreadLocalStorage"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.reflect.runtime.ThreadLocalStorage"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.reflect.runtime.ThreadLocalStorage$ThreadLocalStorage"),
+
     // scala/bug#13203: thread-local override of internal state in the private[reflect] trait SynchronizedTypes
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedTypes.globalGlbDepth*"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.JavaUniverse.globalGlbDepth*"),

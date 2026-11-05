@@ -34,12 +34,14 @@ class GlbLubsTest {
    */
   @Test def nestedLubKeepsOuterGuard(): Unit = {
     def check(outer: List[Type] => Type, outerDepth: List[Type] => Depth): Unit = {
+      val outerCaches = lubGlbCaches
       var ts: List[Type] = Nil
       var guardKept: Option[Boolean] = None
       val completer = new LazyType {
         override def complete(sym: Symbol): Unit = {
           lub(List(IntTpe, StringTpe))
-          guardKept = Some(lubResults.get((outerDepth(ts), ts)).contains(AnyTpe))
+          assertTrue("a completer has its own tables", lubResults.isEmpty)
+          guardKept = Some(outerCaches.lubResults.get((outerDepth(ts), ts)).contains(AnyTpe))
           sym.setInfo(NullaryMethodType(AnyTpe))
         }
       }
@@ -73,5 +75,26 @@ class GlbLubsTest {
     try lub(ts)
     finally removeAllAnnotationCheckers()
     assertTrue(s"lub re-entered itself $maxNesting times", maxNesting < limit)
+  }
+
+  /** A completion must see empty guards, and they must be restored afterwards. */
+  @Test def completionHasItsOwnFrame(): Unit = {
+    val outer = scratch.frame
+    var inner: Frame = null
+    val sym = rootMirror.RootClass.newMethod(TermName("completed"), NoPosition, 0L)
+    subsametypeRecursions = 7
+    try {
+      sym.setInfo(new LazyType {
+        override def complete(s: Symbol): Unit = {
+          inner = scratch.frame
+          assertEquals(0, subsametypeRecursions)
+          s.setInfo(NullaryMethodType(IntTpe))
+        }
+      })
+      sym.info
+    } finally subsametypeRecursions = 0
+    assertNotSame(outer, inner)
+    assertSame(outer, scratch.frame)
+    assertSame("frames are reused", inner, outer.next)
   }
 }

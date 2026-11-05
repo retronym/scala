@@ -22,13 +22,14 @@ private[internal] final class TypeToStrings[U <: SymbolTable with Singleton](val
     */
   final val maxToStringRecursions = 50
 
-  def typeToString(tpe: Type): String =
+  def typeToString(tpe: Type): String = {
+    val s = scratch
     // if (toStringSubjects contains tpe) {
     //   // handles self-referential anonymous classes and who knows what else
     //   "..."
     // }
     // else
-    if (toStringRecursions >= maxToStringRecursions) {
+    if (s.toStringRecursions >= maxToStringRecursions) {
       devWarning("Exceeded recursion depth attempting to print " + util.shortClassOfInstance(tpe))
       if (settings.isDebug)
         (new Throwable).printStackTrace
@@ -37,7 +38,7 @@ private[internal] final class TypeToStrings[U <: SymbolTable with Singleton](val
     }
     else
       try {
-        toStringRecursions += 1
+        s.toStringRecursions += 1
         // TODO: study performance impact of this cache
         // to quote Jason:
         //   I'm a little uneasy with the performance impact of the fail-safe. We end up calling Type#toString
@@ -46,6 +47,7 @@ private[internal] final class TypeToStrings[U <: SymbolTable with Singleton](val
         tpe.safeToString
       } finally {
         // toStringSubjects -= tpe
-        toStringRecursions -= 1
+        s.toStringRecursions -= 1
       }
+  }
 }
