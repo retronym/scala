@@ -660,9 +660,9 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
                   result
                 })
             }
-            if (frame.globalGlbDepth < globalGlbLimit)
+            if (frame.globalGlbDepth < globalGlbLimit) {
+              frame.enterGlobalGlb()
               try {
-                frame.globalGlbDepth = frame.globalGlbDepth.incr
                 def foreachRefinedDecls(ty: Type): Unit = ty match {
                   case RefinedType(ps, decls) =>
                     ps foreach foreachRefinedDecls
@@ -678,9 +678,8 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
                   case _ =>
                 }
                 ts foreach foreachRefinedDecls
-              } finally {
-                frame.globalGlbDepth = frame.globalGlbDepth.decr
-              }
+              } finally frame.exitGlobalGlb()
+            }
             if (glbRefined.decls.isEmpty) intersectionType(ts1, glbOwner) else glbRefined
           }
         existentialAbstraction(tparams, glbType)

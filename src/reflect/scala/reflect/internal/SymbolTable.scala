@@ -543,6 +543,91 @@ abstract class SymbolTable extends macros.Universe
 
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
 
+  /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
+   *  every call would be too expensive, and this recursion is rare. On a cycle, the caller decides
+   *  what the answer is. `enter` and `exit` keep hot paths free of closures.
+   */
+  final class RecursionGuard[K](threshold: Int) {
+    private[this] var _depth: Int = 0
+    def depth: Int = _depth
+    private[this] var _pending: mutable.HashSet[K] = null
+    private[internal] def pending: mutable.HashSet[K] = {
+      if (_pending eq null) _pending = new mutable.HashSet[K]
+      _pending
+    }
+    /** False if `key` is already being computed. Otherwise the caller must call `exit`.
+     *  The depth only changes once nothing can throw: hashing a key can overflow the stack.
+     */
+    def enter(key: K): Boolean = {
+      val depth = _depth + 1
+      (depth < threshold || pending.add(key)) && { _depth = depth; true }
+    }
+    def exit(key: K): Unit =
+      try { if (_depth >= threshold) pending -= key }
+      finally _depth -= 1
+    /** Is no call in progress, nor any key pending? */
+    def isIdle: Boolean = _depth == 0 && ((_pending eq null) || _pending.isEmpty)
+  }
+
+  /** A `RecursionGuard` for subtype checks. A check must not allocate its key unless it is past
+   *  the threshold, and a cycle is remembered for the rest of the outermost check.
+   */
+  final class SubTypeGuard(threshold: Int, undoLog: UndoLog) {
+    private[this] var _depth: Int = 0
+    def depth: Int = _depth
+    private[this] var _pending: mutable.HashSet[SubTypePair] = null
+    private[internal] def pending: mutable.HashSet[SubTypePair] = {
+      if (_pending eq null) _pending = new mutable.HashSet[SubTypePair]
+      _pending
+    }
+    private[this] var _knownFalse: java.util.IdentityHashMap[Type, List[Type]] = null
+    private[internal] def knownFalse: java.util.IdentityHashMap[Type, List[Type]] = {
+      if (_knownFalse eq null) _knownFalse = new java.util.IdentityHashMap[Type, List[Type]]
+      _knownFalse
+    }
+    private def isKnownFalse(tp1: Type, tp2: Type): Boolean =
+      (_knownFalse ne null) && !_knownFalse.isEmpty && { val ts = _knownFalse.get(tp1); ts != null && ts.contains(tp2) }
+    private def recordKnownFalse(tp1: Type, tp2: Type): Unit = { // see scala/bug#13119
+      val ts = knownFalse.get(tp1)
+      knownFalse.put(tp1, tp2 :: (if (ts != null) ts else Nil))
+    }
+
+    /** Enter a check with no key of its own, such as `isSameType`. */
+    def enter(): Unit = _depth += 1
+    def exit(): Unit = {
+      _depth -= 1
+      // Called on every top-level check, but the map is only populated for pathological recursive
+      // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
+      if (_depth == 0 && (_knownFalse ne null) && !_knownFalse.isEmpty) _knownFalse.clear()
+      // A successful check keeps the constraints it registered on type variables in the undo log.
+      // In the compiler, `Infer` and `Implicits` hold a mark in the log across several outermost
+      // checks and roll back to it, so clearing here would break that (scala/bug#3281, scala/bug#3866);
+      // the typer clears the log after each unit, and every run clears it. Runtime reflection has no
+      // runs and nothing holds a mark outside a check, so clear it here, or each check that solves an
+      // existential leaks its type variables and constraints for the life of the thread.
+      if (_depth == 0 && !isCompilerUniverse && !undoLog.log.isEmpty) undoLog.clear()
+    }
+
+    /** False if `tp1 <:< tp2` is already being checked or is known to be false, which is the answer
+     *  (see neg/t8146-no-finitary*). Otherwise the caller must call `exit`.
+     */
+    def enter(tp1: Type, tp2: Type): Boolean = {
+      // As in `RecursionGuard.enter`. A refusal leaves nothing to undo: it never happens at depth 0.
+      val depth = _depth + 1
+      val proceed =
+        if (depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { recordKnownFalse(tp1, tp2); false }
+        else !isKnownFalse(tp1, tp2)
+      if (proceed) _depth = depth
+      proceed
+    }
+    def exit(tp1: Type, tp2: Type): Unit =
+      try { if (_depth >= threshold) pending -= SubTypePair(tp1, tp2) }
+      finally exit()
+    /** Is no check in progress, nor any pair pending or known to be false? */
+    def isIdle: Boolean =
+      _depth == 0 && ((_pending eq null) || _pending.isEmpty) && ((_knownFalse eq null) || _knownFalse.isEmpty)
+  }
+
   /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
    *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
    */
@@ -572,17 +657,13 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new CompletionFrame
       _next
     }
-    var subsametypeRecursions: Int = 0
-    val pendingSubTypes = new mutable.HashSet[SubTypePair]
-    val knownFalseSubTypes = new java.util.IdentityHashMap[Type, List[Type]]
     /** A log of type variable with their original constraints. Used in order
      *  to undo constraints in the case of isSubType/isSameType failure.
      */
     val undoLog = new UndoLog
-    var basetypeRecursions: Int = 0
-    val pendingBaseTypes = new mutable.HashSet[Type]
-    var volatileRecursions: Int = 0
-    val pendingVolatiles = new mutable.HashSet[Symbol]
+    val subTypes = new SubTypeGuard(TypeConstants.DefaultLogThreshhold, undoLog)
+    val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
+    val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
     val lubs = new MemoGuard[(Depth, List[Type])]
     val glbs = new MemoGuard[(Depth, List[Type])]
     private[this] var inLubOrGlb: Boolean = false
@@ -595,8 +676,12 @@ abstract class SymbolTable extends macros.Universe
       lubs.clear()
       glbs.clear()
     }
+    private[this] var _globalGlbDepth: Depth = Depth.Zero
     /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
-    var globalGlbDepth: Depth = Depth.Zero
+    def globalGlbDepth: Depth = _globalGlbDepth
+    /** Start a `glb` adding members. The caller must `exitGlobalGlb`. */
+    def enterGlobalGlb(): Unit = _globalGlbDepth = _globalGlbDepth.incr
+    def exitGlobalGlb(): Unit = _globalGlbDepth = _globalGlbDepth.decr
   }
 
   /** The scratch state of the type operations of one thread, other than the guards in `frame`.

@@ -950,19 +950,12 @@ trait Definitions extends api.StandardDefinitions {
       def isVolatileAbstractType: Boolean = {
         def sym = tp.typeSymbol
         def volatileUpperBound = isVolatile(tp.upperBound)
-        val s = scratch.frame
-        def safeIsVolatile = (
-          if (s.volatileRecursions < TypeConstants.LogVolatileThreshold)
-            volatileUpperBound
-          // we can return true when pendingVolatiles contains sym, because
-          // a cycle will be detected afterwards and an error will result anyway.
-          else s.pendingVolatiles(sym) || {
-            s.pendingVolatiles += sym
-            try volatileUpperBound finally s.pendingVolatiles -= sym
-          }
-        )
-        s.volatileRecursions += 1
-        try safeIsVolatile finally s.volatileRecursions -= 1
+        val guard = scratch.frame.volatiles
+        // we can return true on a cycle, because
+        // a cycle will be detected afterwards and an error will result anyway.
+        !guard.enter(sym) || {
+          try volatileUpperBound finally guard.exit(sym)
+        }
       }
       /*  A refined type P1 with ... with Pn { decls } is volatile if
        *  one of the parent types Pi is an abstract type, and
