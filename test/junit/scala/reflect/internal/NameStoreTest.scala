@@ -188,12 +188,18 @@ class NameStoreTest {
     dropped = null
     collectUntil(() => ref.get eq null)
     assertNull(ref.get)
-    // Interning a new string removes the cleared entry
-    val another = new String("another")
-    table.intern(another)
-    assertEquals(2, table.size)
+    // Only a miss drains the queue, and the reference handler enqueues a cleared entry some time after clearing it.
+    val held = collection.mutable.ListBuffer.empty[String]
+    def missDrainsTheQueue() = {
+      val another = new String("another" + held.size)
+      held += another
+      table.intern(another)
+      table.size == 1 + held.size
+    }
+    collectUntil(() => missDrainsTheQueue())
+    assertEquals(1 + held.size, table.size)
     assertSame(kept, table.intern(new String("kept")))
-    assertSame(another, table.intern(new String("another")))
+    assertSame(held.head, table.intern(new String(held.head)))
   }
 
   @Test def sharedTableKeepsStringsAUniverseHolds(): Unit = {
@@ -202,6 +208,25 @@ class NameStoreTest {
     collectUntil(() => { System.gc(); true })
     val b = new Table("shared")
     assertSame(n.toString, b.newTermName(new String("heldByAUniverse")).toString)
+  }
+
+  // `SharedStore` reuses one probe, and a throw from `newString` or the table can leave its key behind.
+  @Test def aProbeForgetsAnEarlierKey(): Unit = {
+    import SharedNameTable.{Entry, Probe}
+    val sets = List[(String, (Probe, String) => Unit)](
+      ("chars",  (p, s) => p.setChars(("x" + s).toCharArray, 1, s.length, s.hashCode)),
+      ("ascii",  (p, s) => p.setAscii(("x" + s).getBytes(UTF_8), 1, s.length, s.hashCode)),
+      ("region", (p, s) => p.setRegion("x" + s, 1, s.length, s.hashCode)))
+    val queue = new java.lang.ref.ReferenceQueue[String]
+    for ((first, setFirst) <- sets; (second, setSecond) <- sets) {
+      val p = new Probe
+      setFirst(p, "stale")
+      setSecond(p, "fresh")
+      val m = s"$first then $second"
+      assertEquals(m, "fresh", p.newString())
+      assertTrue(m, p.equals(new Entry("fresh", queue)))
+      assertFalse(m, p.equals(new Entry("stale", queue)))
+    }
   }
 
   @Test def sharedTableIsSafeAcrossConcurrentCompilers(): Unit = {
