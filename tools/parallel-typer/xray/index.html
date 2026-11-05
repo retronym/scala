@@ -411,7 +411,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     g.strokeStyle = css('--grid'); g.fillStyle = css('--dim'); g.font = '11px system-ui'; g.lineWidth = 1;
     for (let t = Math.ceil(view.x0 / st) * st; t <= view.x1; t += st) {
       const x = Math.round(X(t, w)) + .5; g.beginPath(); g.moveTo(x, y0); g.lineTo(x, y1); g.stroke();
-      if (labels) g.fillText(fmt(t).replace('.00 s', ' s'), x + 3, y0 + 10);
+      if (labels) g.fillText(st >= 10 ? fmt(t).replace('.00 s', ' s') : t.toFixed(Math.max(0, -Math.floor(Math.log10(st)) + (st < 1 ? 0 : 0))) + ' ms', x + 3, y0 + 10);
     }
   }
   let hatch = null;
@@ -455,7 +455,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     // threads scale
     g.fillStyle = css('--dim'); g.font = '11px system-ui'; g.textAlign = 'right';
     for (let k = 1; k <= N; k++) { if (N > 4 && k % 2 && k !== 1) continue; const yy = Math.round(y(k)) + .5; g.strokeStyle = css('--grid'); g.setLineDash(k === 1 ? [3, 3] : []); g.beginPath(); g.moveTo(L, yy); g.lineTo(w - R, yy); g.stroke(); g.setLineDash([]); g.fillText(k + (k === 1 ? ' thread' : ''), L - 6, yy + 4); }
-    g.fillText('working', L - 6, top + 10);
+    g.fillText('threads', L - 6, top - 2);
     g.textAlign = 'left';
     // labels over the stretches that are wide enough
     g.font = '600 11px system-ui';
@@ -480,7 +480,7 @@ if (typeof module !== 'undefined') module.exports = XR;
   function lanes() {
     const r = cur, out = [{ kind: 'phases', h: 16, name: 'phases' }];
     out.push({ kind: 'thread', tid: 0, h: 22, name: 'main' });
-    for (const t of r.workers) out.push({ kind: 'thread', tid: t, h: 22, name: r.threads[t].replace('scalac-typer-', 'worker ') });
+    for (const t of r.workers.slice().sort((p, q) => +r.threads[p].replace(/\D/g, '') - +r.threads[q].replace(/\D/g, ''))) out.push({ kind: 'thread', tid: t, h: 22, name: r.threads[t].replace('scalac-typer-', 'worker ') });
     r.threads.forEach((n, t) => { if (t !== 0 && !r.workers.includes(t)) out.push({ kind: 'thread', tid: t, h: 22, name: n }); });
     out.push({ kind: 'gc', h: 12, name: 'GC' });
     let y = 18; for (const l of out) { l.y = y; y += l.h + 3; }
@@ -517,7 +517,8 @@ if (typeof module !== 'undefined') module.exports = XR;
         const x0 = X(x.t0, w), x1 = X(x.t1, w); const off = view.hiddenSteps.has(x.step);
         g.fillStyle = XR.stepColor(x.step); g.globalAlpha = off ? 0.08 : 0.3 + 0.7 * (x.e === undefined ? 1 : x.e);
         g.fillRect(Math.max(L, x0), l.y, Math.max(minPx, Math.min(w - R, x1) - Math.max(L, x0) - (x1 - x0 > 3 ? 0.5 : 0)), l.h); g.globalAlpha = 1;
-        if (!off && x1 - x0 > 60) { const lab = x.label, tw = g.measureText(lab).width; if (x1 - x0 > tw + 6) { g.fillStyle = fg; g.globalAlpha = .75; g.fillText(lab, Math.max(L, x0) + 3, l.y + 10); g.globalAlpha = 1; } }
+        const vis = Math.min(w - R, x1) - Math.max(L, x0);
+        if (!off && vis > 60) { const lab = x.label, tw = g.measureText(lab).width; if (vis > tw + 6) { g.fillStyle = fg; g.globalAlpha = .75; g.fillText(lab, Math.max(L, x0) + 3, l.y + 10); g.globalAlpha = 1; } }
       }
       for (const x of bt.idle) { const x0 = Math.max(L, X(x.t0, w)), x1 = Math.min(w - R, X(x.t1, w)); if (x1 <= x0) continue; g.strokeStyle = dim; g.setLineDash([2, 3]); g.beginPath(); g.moveTo(x0, l.y + l.h / 2 + .5); g.lineTo(x1, l.y + l.h / 2 + .5); g.stroke(); g.setLineDash([]); }
       // zoomed out, a wait or hold is a fraction of a pixel: draw per pixel column the fraction of the time spent
