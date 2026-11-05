@@ -60,6 +60,29 @@ class ExtractAPITest extends BridgeTesting {
   // named `test.<refinement>.a` from source and `test.KleisliMonadReader.<refinement>.a`
   // when unpickled, flipping the API hash of every class built on the type lambda.
   @Test
+  def `ExtractAPI should render annotation default arguments the same from source and from classfile`(): Unit = {
+    val ann =
+      """|package test
+         |class myThrows[T <: Throwable](cause: String = "") extends _root_.scala.annotation.StaticAnnotation
+         |""".stripMargin
+    val use =
+      """|package test
+         |trait A { @myThrows[IndexOutOfBoundsException] def apply(i: Int): Int }
+         |""".stripMargin
+    def applyAnnotation(apis: Set[ClassLike]): Annotation = {
+      val a = apis.find(_.name == "test.A").get
+      val apply = a.structure.declared.collect { case d: Def if d.name == "apply" => d }.head
+      apply.annotations.head
+    }
+    // `use` is typed before the annotation class' constructor parameter, so the default is a default getter call
+    val fromSource = applyAnnotation(extractApisFromSrcs(List(use, ann)).head)
+    // the annotation class is loaded from the classfile, the default is inlined from the `@defaultArg` meta-annotation
+    val fromClassfile = applyAnnotation(extractApisFromSrcs(List(ann), List(use))(1))
+    assertEquals(fromClassfile.arguments.head.value, fromSource.arguments.head.value)
+    assertEquals("(\"\")", fromSource.arguments.head.value)
+  }
+
+  @Test
   def `ExtractAPI should give stable names to type parameters owned by a refinement class (sbt-sbt-1079)`(): Unit = {
     val monadReader =
       """|package test
