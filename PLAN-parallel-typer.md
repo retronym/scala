@@ -205,6 +205,65 @@ Every measurement above that stops at typer or pickler had a pessimised serial c
 
 Fixed by treating the head as the end of the list unless the period is at `NoPhase` itself. Through typer, cold, total allocation: library 1520 to 967 MB, compiler 2175 to 1291 MB, pickles unchanged; the one-thread parallel run is now slightly above serial (1008 and 1377 MB). Library, warm, after the fix (medians, loaded laptop): serial 1381 ms, one thread 1472 ms, 4 threads 813 ms, 8 threads 777 ms (1.78x); bodies 987 / 349 / 276 ms at 1 / 4 / 8 threads, signatures about 240-260 ms. The earlier speed-up figures (2.08x, 2.28x) were against the pessimised serial run. The perflab campaigns that used `-Ystop-after:typer` predate the fix and should be rerun before their serial-path and one-worker percentages are quoted. The fix is independent of the parallel typer and could go to 2.13.x by itself.
 
+## Parallel parser and the index (namer's enter step)
+
+Both behind system properties, under `-Yparallel-typer`: `scalac.parallelTyper.parallelParser` (a unit per task on the pool) and, with it, `scalac.parallelTyper.loadPackages` (the packages the units name are loaded while they are parsed). The index itself stays serial; the reasons and the numbers are below.
+
+### What the parser shares, and what was done about each
+
+- Scanner, parser, tree builder, XML parser and builder, brace patches, `smartParse`'s buffered errors: per parser instance, one per unit. The keyword tables (`Scanners.kwArray`/`kwOffset`) are filled when the `SyntaxAnalyzer` is constructed, on the main thread; `JavaScannerConfiguration` is a nested object (a volatile module field, initialised under the analyzer's monitor by whichever parser first scans Java; its initialiser only makes names).
+- Fresh names: `unit.fresh`, per unit. `currentRun.currentUnit` and the global fresh name creator are per thread under the flag, and the pool sets the unit.
+- The name table. It was the bound: every `newTermName`, `toTypeName` and `toTermName` took the one name lock, and a parser makes a name per identifier, so the parser took as long on eight threads as on one (about 80 ms on the library). Names are only added, at the head of a bucket, with final fields: the lookup now reads the bucket without the lock (an acquire fence after the head, pairing with a release fence before a new name is linked, so that the name's characters are in the table for a thread that sees it), and only a miss takes the lock and looks again. The typer's threads use the same path.
+- Positions: `atPos` has an assigner per thread already. Position validation (`-Yrangepos`) runs after the phase, on the main thread, as before.
+- The reporter. Only errors reach it during parsing; the pool's buffering reporter can now issue in the order of the units and, within a unit, of arrival (`parallelPhase(..., unitOrder = true)`), which is exactly what the serial parser prints (the default order, by file path and position, is for the typer, where a unit's thread reports on other units). The oracle compares the order of the diagnostics, not only their sorted set, for the two corpora that are about it.
+- Warnings (deprecations, `-Xsource:3` migration, lints). `runReporting` suspends them per source until the typer has seen the unit's `@nowarn`s; the map of suspended messages is kept in the order of the units while they are parsed (`suspendInOrderOf`), because a run that ends before the typer reports them in that order (`runFinished`).
+- One order dependence in the scanner: at the end of an XML literal with a token in hand, `Scanner.resume` reports "possible missing '}' in XML block" unless `reporter.hasErrors`, which counts the errors of the units before this one, and the choice changes the token stream. A unit that reaches that test while other units are being parsed is abandoned (`RetryInUnitOrder`) and parsed again on the driver thread after the workers, in the order of the units, with its buffered diagnostics dropped, its suspended warnings cleared and its fresh names reset; the reporter then answers from the errors of the units before it. Corpus `parser-neg` has two such units.
+- Symbols. The parsers read a few members of `definitions`, and a lazy val there is initialised under the monitor of `definitions`: one whose initialiser completes a symbol would take the completion lock inside the monitor, the reverse of a completion that reads a lazy val. Those of the root classes (`AnyTpe`, `ObjectClass`, `UnitTpe` and the primitive types of the Java parser, `TupleClass` for `mkTuple`) are forced before the workers start, which changes nothing a serial run sees, since `definitions.init` has completed those classes. The ones that can complete a class of the class path or the source path are read under the completion lock where they are used, so that the lock comes first: `Predef` for a Java class literal, `String` for an enum's `valueOf`, the `native`/`transient`/`volatile`/`strictfp` annotations, `Nil` for an empty XML attribute. Forcing those up front instead would complete classes that a serial run leaves alone.
+- Not run in parallel: `-Ymemberpos` (prints as it goes), the REPL's incomplete-input handler, a single unit, and whatever the parallel typer rejects (profiler, statistics, scaladoc: `parallelPhasesSupported`).
+- Harmless: `lastSeenSourceFile` (a crash report may name another thread's file), `Run.advanceUnit` (synchronised), `informUnitStarting` in arrival order.
+
+### The index: what the enter step shares
+
+The namer phase enters only top-level symbols (members are entered when their class is completed). Per unit it:
+
+- finds or creates the package symbols (`createPackageSymbol`: a lookup in the owner's scope, then create and enter: a check-then-act on a scope that every unit of the package shares);
+- for each top-level class and object looks the name up in the package scope and either overwrites the symbol a loader put there (`updatePosFlags`: `reset`, new flags and position, `invalidateCaches` over the old info, and `setInfo NoType` on the companion, which may belong to another unit) or creates and enters a new one (`enterInScope`, with the double definition check: the error names the earlier symbol and is reported at the later, and the earlier is unlinked);
+- links companions through the same scope (`companionSymbolOf`, `ensureCompanionObject` for case classes and constructor defaults, `validateCompanionDefs`, whose error goes to whichever of two files comes second);
+- writes `currentRun.symSource` and the class's associated file;
+- allocates symbol ids in entry order. `Symbol.isLess` breaks ties between classes whose base type sequences have the same length by id, and that order decides the order of the parents of a lub, so the relative ids of top-level classes can reach a pickle;
+- for Java sources, records the unit's classes (`patmat.javaClassesByUnit`) and types the `permits` clause of a sealed class, which completes other symbols at the namer's phase;
+- creates the unit's root context, whose chain ends in the creating thread's `startContext` (per thread under the flag, I1's family): contexts made on a pool thread would outlive it and be shared by the typer's threads.
+
+Package objects are opened by the next phase, in the order in which their packages were loaded or met (`deferredOpen`), which the above also decides.
+
+A fully parallel enter would have to make each of those deterministic: ids in unit order (blocks of ids per unit), scope entry order, double definitions and split companions resolved as if in unit order, root contexts made on the driver. The alternative, per-unit work in parallel and a serial commit in source order, has nothing to put in the parallel half: the symbols need their owner and the scope lookup first, and what follows (completers, type parameters, companion trees) is small.
+
+### Where the namer's time goes, and the decision
+
+Timers in the namer (temporary, not committed), warm, serial compiler, three samples each:
+
+| corpus | namer phase ms | of which package loading ms (loads) | root contexts ms | entering proper ms |
+|---|---:|---:|---:|---:|
+| library (574 units) | 37.5 / 40.4 / 42.9 | 30.7 / 33.6 / 35.8 (28) | 1.2 | about 6-7 |
+| compiler | 44.5 / 53.0 / 60.0 | 35.4 / 43.6 / 43.7 (38) | 3.6-9.7 | about 6-9 |
+| reflect | 26.9 / 33.8 / 57.8 | 20.0 / 22.2 / 23.2 (13) | 3.8-30.9 | about 3-4 |
+
+About four fifths of the phase is one expression, `sym.info.decls` in `enterPackage`: the first time a unit names a package, its `PackageLoader` lists the class path and source path entries and enters a symbol and a loader for every class, about 1 ms a package. The enter step proper, everything in the list above, is 3-9 ms (on the library: lookups, creation and overwrite 2.5 ms, companions 2.8, completers 0.8, the rest of `enterClassDef`/`enterModuleDef` about 3).
+
+Decision: the index stays serial. Eight threads could take 6-9 ms to perhaps 2-3, half a percent of a 780 ms run, less the start and join of a pool step, and would put ids, scope order and double definitions at risk for it. Scala 3's PR 84 kept indexing serial as well.
+
+What pays is the package loading, and it needs no concurrency in the symbol table: the loads depend on nothing in the other units, and the driver thread is idle while the workers parse. With `loadPackages` the driver walks the units in their order as they finish parsing and makes the lookups that `enterPackage` will make (`namerFactory.loadPackagesOf`: the same `info.decls.lookup` chain per `PackageDef`, at the namer's phase, creating nothing; a package that does not exist yet is left to the namer). The loads are the same, in the same order, with the same `deferredOpen` order, as in the serial namer, which then finds every package complete; symbol ids of the loaded classes keep their relative order. For the walk to make progress the parser's tasks start in the order of the units, not largest first. A unit that is to be parsed again (`RetryInUnitOrder`) stops the walk, and the namer loads the rest as it always did. The loader runs under the completion lock on the driver; the parsers take that lock only at the rare sites above.
+
+### Checks and numbers so far
+
+Oracle at 8 threads with both properties and `-Dscalac.debug.checkScratchOwner=true`, 50 runs each: parser-neg, parser-warn, annotations, annotations-neg, case-classes clean (order of diagnostics included for the two parser corpora); stress-shared 2 in 50, one I11 (`TreeSet` self-type) and one new signature, I13 below. library, reflect, compiler: 5 runs each clean with the parser alone and 3 with both (library O1 as before); their 50 runs were still going when this was written. junit `scala.tools.nsc.typechecker.*`, `scala.reflect.internal.*`, `nsc.parser`, `nsc.reporters`, `nsc.symtab` (381) pass.
+
+- I13 (open, not attributed). stress-shared, 1 run in 50: `NullPointerException` in `Type.computeMemberType` from `ImplicitInfo.tpe` during an implicit search in a body: `sym.tpeHK` was null, i.e. a term symbol whose info another thread had not finished setting. It looks like I11's family (a peek at a classpath symbol being loaded) rather than the parser, which is long done by then, but it had not been seen in the 200-run batches before this branch: stress-shared needs 200 runs with and without the two properties on this build to say which.
+
+Parser phase on the library, warm, wall time (the machine at load average 15-17 from the sibling sessions, so only the shape is to be trusted): one worker 93 ms, four 36 ms, eight 28 ms, after the name table change; before it 79 / 87 / 89 ms. With `loadPackages` the driver loaded the packages of all 574 units in 34-50 ms beside the parse. Whole-run medians at that load were too noisy to rank the variants (8 threads: 1023 ms without, 909 ms with both, one sample of nine runs each); `bench.sh` at 1, 4 and 8 threads on a quiet machine is still owed.
+
+Recommendation, pending those two: make the parallel parser the default under `-Yparallel-typer` (it is exact in its diagnostics and takes about 50-60 ms off the serial path at 8 threads), and `loadPackages` with it (another 30-40 ms, by the driver's own timing); keep the index serial.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
@@ -220,7 +279,7 @@ Fixed by treating the head as the end of the list unless the period is at `NoPha
 - Parallel signatures as the default: I11, then 50 clean runs per corpus.
 - I11 (open, parked): see the race log for the next step.
 - The tail: tasks finer than a unit.
-- The serial phases after the typer and the parser, a unit per task (a parser draft is behind `-Dscalac.parallelTyper.parallelParser`).
+- The serial phases after the typer, a unit per task. The parser is done behind `-Dscalac.parallelTyper.parallelParser`; owed: 50 oracle runs on library, reflect and compiler, I13's attribution, and `bench.sh` on a quiet machine before it becomes the default.
 - `elemsCache` residue: `unlink` in the middle of a scope while another thread reads it (serial phases only today).
 - `_annotations` read-modify-write on a symbol of another unit during body typing (not known to happen).
 - The state map's 91 "other" fields were annotated by reading, not by a test each.
@@ -238,7 +297,7 @@ Each is reversible (a system property, or its own commit).
 7. The phase register for worker threads (B.4) is a field of the thread (`ScratchThread`), found with a type test; other threads keep the `ThreadLocal`.
 8. scala-sharing is used through its registries (`CoarseLock`, `PerKeyClaims`) behind the existing facade rather than through the macro API at each site: the compiler's sites are few, keyed by symbols or one coarse root, and the evidence types would mean threading `Holds` through the completers' signatures for no check the facade does not already make. The macro subproject is wired and builds, ready for `Once`/`Stamped` if a site wants them.
 9. Parallel signatures use symbol roots (with lending at a provisional info on a wait cycle) rather than unit roots: unit roots gave false cycles on reflect (I9). Still behind `parallelSignatures`, off: I11 and fewer than 50 clean runs per corpus.
-10. The parallel parser stays behind `parallelParser`, off: it saves ≈50 ms of 890 on the library and adds a pool step's tail; not worth the default before the tail is shortened.
+10. The parallel parser stays behind `parallelParser`, off: it saves ≈50 ms of 890 on the library and adds a pool step's tail; not worth the default before the tail is shortened. Superseded: it did not scale then because of the name lock; see "Parallel parser and the index".
 11. Unit order stays largest first by source length; ordering by tree size cost ≈40 ms serially for ≈13 ms of tail.
 12. The vendored scala-sharing is relocated to `scala.reflect.internal.sharing` (I12): the vendoring README records the relocation so that a re-copy repeats it.
 
