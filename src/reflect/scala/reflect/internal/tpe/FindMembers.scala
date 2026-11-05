@@ -13,7 +13,6 @@
 package scala.reflect.internal
 package tpe
 
-import util.ReusableInstance
 import Flags._
 import scala.runtime.Statics.releaseFence
 
@@ -257,8 +256,6 @@ trait FindMembers {
       if (isNew) members.enter(sym)
     }
   }
-  private[reflect] val findMemberInstance: ReusableInstance[FindMember] = ReusableInstance(new FindMember, enabled = isCompilerUniverse)
-
   private[reflect] final class FindMember
     extends FindMemberBase[Symbol] {
 
