@@ -1792,6 +1792,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       } else
         infos = TypeHistory(currentPeriod, info, null)
       unlock()
+      // The history's fields before `_validTo`: a thread that reads a valid `_validTo` without the completion lock
+      // (`info`'s fast path, whose load-load fence is in `isCompletingElsewhere`) then reads `infos.info`, and
+      // must not see a history whose `_info` has not arrived (I13: a null info in an implicit search).
+      if (isConcurrentCompiler) java.lang.invoke.VarHandle.storeStoreFence()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
     }
 
