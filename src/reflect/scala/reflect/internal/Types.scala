@@ -2529,21 +2529,14 @@ trait Types
     // (1) first relativize the type, then go to the requested base type
     // (2) cache for cycle robustness
     private def baseTypeOfNonClassTypeRef(clazz: Symbol) = {
-      val s = scratch.frame
-      try {
-        s.basetypeRecursions += 1
-        if (s.basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz, s.pendingBaseTypes)
-        else relativeInfo.baseType(clazz)
-      } finally s.basetypeRecursions -= 1
-    }
-
-    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol, pendingBaseTypes: mutable.HashSet[Type]) =
-      if (pendingBaseTypes add this) try relativeInfo.baseType(clazz) finally { pendingBaseTypes remove this }
+      val guard = scratch.frame.baseTypes
+      if (guard.enter(this)) try relativeInfo.baseType(clazz) finally guard.exit(this)
       // TODO: is this optimization for AnyClass worth it? (or is it playing last-ditch cycle defense?)
       // NOTE: for correctness, it only applies for non-class types
       // (e.g., a package class should not get AnyTpe as its supertype, ever)
       else if (clazz eq AnyClass) AnyTpe
       else NoType
+    }
 
     // eta-expand, subtyping relies on eta-expansion of higher-kinded types
     protected def normalizeImpl: Type = if (isHigherKinded) etaExpand else super.normalize
@@ -4675,10 +4668,9 @@ trait Types
     i.isEmpty && j.isEmpty
   }
 
-  def basetypeRecursions: Int = scratch.frame.basetypeRecursions
-  def basetypeRecursions_=(value: Int): Unit = scratch.frame.basetypeRecursions = value
+  def basetypeRecursions: Int = scratch.frame.baseTypes.depth
 
-  def pendingBaseTypes: mutable.HashSet[Type] = scratch.frame.pendingBaseTypes
+  def pendingBaseTypes: mutable.HashSet[Type] = scratch.frame.baseTypes.pending
 
   /** Does this type have a prefix that begins with a type variable,
    *  or is it a refinement type? For type prefixes that fulfil this condition,

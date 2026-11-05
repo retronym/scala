@@ -82,7 +82,7 @@ class GlbLubsTest {
     val outer = scratch.frame
     var inner: Frame = null
     val sym = rootMirror.RootClass.newMethod(TermName("completed"), NoPosition, 0L)
-    subsametypeRecursions = 7
+    outer.subTypes.enter()
     try {
       sym.setInfo(new LazyType {
         override def complete(s: Symbol): Unit = {
@@ -92,7 +92,7 @@ class GlbLubsTest {
         }
       })
       sym.info
-    } finally subsametypeRecursions = 0
+    } finally outer.subTypes.exit()
     assertNotSame(outer, inner)
     assertSame(outer, scratch.frame)
     assertSame("frames are reused", inner, outer.next)
