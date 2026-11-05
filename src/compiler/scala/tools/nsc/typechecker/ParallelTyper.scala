@@ -184,12 +184,14 @@ trait ParallelTyper {
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
+    currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
       workers.foreach(_.start())
       workers.foreach(_.join())
     } finally {
       parallelTyperActive = false
+      currentRun.reporting.deferFeatureExplanations = false
       watchdog.interrupt()
       reporter = savedReporter
       bufferingReporter.issueBuffered()
@@ -261,6 +263,7 @@ trait ParallelTyper {
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
+    currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
       workers.foreach(_.start())
@@ -281,6 +284,7 @@ trait ParallelTyper {
       }
     } finally {
       parallelTyperActive = false
+      currentRun.reporting.deferFeatureExplanations = false
       watchdog.interrupt()
       reporter = savedReporter
       bufferingReporter.issueBuffered()
@@ -462,10 +466,12 @@ trait ParallelTyper {
         }
       buffer.clear()
       ordered.foreach { e =>
+        // a feature is explained at its first warning in this order, not in the order of arrival
+        val msg = currentRun.reporting.explainFeature(e.msg)
         e.severity match {
-          case scala.reflect.internal.Reporter.ERROR   => underlying.error(e.pos, e.msg, e.actions)
-          case scala.reflect.internal.Reporter.WARNING => underlying.warning(e.pos, e.msg, e.actions)
-          case _                         => underlying.echo(e.pos, e.msg, e.actions)
+          case scala.reflect.internal.Reporter.ERROR   => underlying.error(e.pos, msg, e.actions)
+          case scala.reflect.internal.Reporter.WARNING => underlying.warning(e.pos, msg, e.actions)
+          case _                         => underlying.echo(e.pos, msg, e.actions)
         }
       }
     }

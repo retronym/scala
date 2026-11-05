@@ -1,6 +1,6 @@
 // A race finder for -Yparallel-typer: compiles a small corpus to the pickler over and over in one JVM, a fresh
-// Global each time (so the classpath is loaded again), and prints the runs whose diagnostics differ from the first
-// serial run's.
+// Global each time (so the classpath is loaded again), and prints the runs whose diagnostics differ from those of
+// a parallel run on one thread.
 //
 //   Stress <args file> <iterations> <threads> [extra scalac options...]
 //
@@ -14,7 +14,7 @@ object Stress {
   def main(args: Array[String]): Unit = {
     val argsFile = args(0); val iterations = args(1).toInt; val threads = args(2)
     val extraOpts = args.drop(3).toList
-    val fileArgs = Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty)
+    val fileArgs = Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty).map(_.stripPrefix("\"").stripSuffix("\""))
     val out = Files.createTempDirectory("stress").toString
     def compile(extra: List[String]): List[String] = {
       val s = new Settings(msg => sys.error(msg))
@@ -27,8 +27,11 @@ object Stress {
       catch { case t: Throwable => return List("crash: " + t) ++ t.getStackTrace.take(30).map("  at " + _) }
       reporter.infos.toList.map(i => s"${i.severity} ${i.pos.source.file.name}:${if (i.pos.isDefined) i.pos.line else 0} ${i.msg}").sorted
     }
-    val expected = compile(Nil)
-    println(s"serial: ${expected.length} diagnostics")
+    // the reference is the parallel path on one thread, as in the oracle: it differs from serial by order effects
+    // (which occurrence of a feature warning carries the explanation)
+    val serial = compile(Nil)
+    val expected = compile(List("-Yparallel-typer", "-Yparallel-typer-threads", "1"))
+    println(s"serial: ${serial.length} diagnostics; the one-thread run ${if (serial == expected) "agrees" else "differs"}")
     var failures = 0
     val t0 = System.nanoTime()
     for (i <- 1 to iterations) {
