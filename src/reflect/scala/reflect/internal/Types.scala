@@ -1862,7 +1862,12 @@ trait Types
 
     override def kind = "RefinedType"
     override def mapOver(map: TypeMap): Type = {
-      val parents1 = parents mapConserve map
+      val parents0 = parents mapConserve map
+      // A map can replace a parent by an intersection, as ExistentialExtrapolation does with `_$1 with T` where
+      // `_$1 >: A with B`. Keep it flat, as `normalize` would: subtype checks and `isHigherKinded` walk the nesting.
+      val parents1 =
+        if ((parents0 eq parents) || !parents0.exists { case RefinedType(_, ds) => ds.isEmpty; case _ => false }) parents0
+        else parents0.flatMap { case RefinedType(ps, ds) if ds.isEmpty => ps; case p => p :: Nil }
       val decls1 = map.mapOver(decls)
       copyRefinedType(this, parents1, decls1)
     }
