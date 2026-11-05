@@ -1236,9 +1236,23 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      * `owner` behaves like `safeOwner`, but logs NoSymbol.owner calls under -Xdev.
      * `assertOwner` aborts compilation immediately if called on NoSymbol.
      */
-    def owner: Symbol = {
-      rawowner
+    // OPT: final, with the overrides it replaces (ClassSymbol, ModuleSymbol, NoSymbol, RootSymbol) folded in, so that
+    //      call sites bind statically. The fast path stays under C2's MaxInlineSize (35 bytes), so that it inlines
+    //      even at call sites C2 doesn't consider hot; the rest is in `ownerSlow`.
+    final def owner: Symbol = {
+      val o = rawowner
+      if ((o eq this) || phase.flatClasses) ownerSlow(o) else o
     }
+
+    /** Classes and modules are owned by their enclosing package after flatten (`needsFlatClasses` includes `!isMethod`,
+     *  which ModuleSymbol tested). NoSymbol is its own raw owner.
+     */
+    private def ownerSlow(o: Symbol): Symbol =
+      if ((this.isInstanceOf[ClassSymbol] || this.isInstanceOf[ModuleSymbol]) && needsFlatClasses) o.owner
+      else {
+        if (o eq this) devWarningDumpStack("NoSymbol.owner", 15)
+        o
+      }
     final def safeOwner: Symbol   = if (this eq NoSymbol) NoSymbol else owner
     final def assertOwner: Symbol = if (this eq NoSymbol) abort("no-symbol does not have an owner") else owner
 
@@ -1544,7 +1558,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  you are responsible for them as if it they were your own
      *  minor children.
      */
-    def tpe_* : Type = info
+    // OPT: final, so that call sites bind statically: TypeSymbol's is its cached type ref.
+    final def tpe_* : Type = if (this.isInstanceOf[TypeSymbol]) this.asInstanceOf[TypeSymbol].typeSymbolTpe else info
 
     // Alternate implementation of def tpe for warning about misuse,
     // disabled to keep the method maximally hotspot-friendly:
@@ -2168,12 +2183,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *          DON'T: if (clazz.thisSym ne clazz) ...
      *
      */
-    def thisSym: Symbol = this
+    final def thisSym: Symbol = if (this.isInstanceOf[ClassSymbol]) this.asInstanceOf[ClassSymbol].classThisSym else this
 
     def hasSelfType = (thisSym ne this) && (typeOfThis.typeConstructor ne typeConstructor)
 
     /** The type of `this` in a class, or else the type of the symbol itself. */
-    def typeOfThis = thisSym.tpe_*
+    // OPT: final, with a fast path for the default; module classes cache theirs in `customTypeOfThis`.
+    final def typeOfThis: Type = if (this.isInstanceOf[ModuleClassSymbol]) customTypeOfThis else thisSym.tpe_*
+    protected def customTypeOfThis: Type = thisSym.tpe_*
 
     /** If symbol is a class, the type `this.type` in this class,
      * otherwise `NoPrefix`.
@@ -3078,11 +3095,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final override def skipPackageObject: Symbol =
       if (isPackageObject) owner else this
 
-    override def owner = {
-      // a non-static module symbol gets the METHOD flag in uncurry's info transform -- see isModuleNotMethod
-      if (!isMethod && needsFlatClasses) rawowner.owner
-      else rawowner
-    }
     override protected[this] def flattenedName: TermName = {
       if (flatname eq null)
         flatname = nme.flattenedName(rawowner, rawname)
@@ -3270,7 +3282,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      * undergo substitution in which the dummies are replaced by actual
      * type arguments.
      */
-    override def tpe_* : Type = {
+    private[Symbols] final def typeSymbolTpe: Type = if (isCompilerUniverse) unsynchronizedTpe else synchronizedTpe
+
+    /** Overridden in runtime reflection to call `unsynchronizedTpe` under its locks. */
+    protected def synchronizedTpe: Type = unsynchronizedTpe
+
+    protected[reflect] final def unsynchronizedTpe: Type = {
       maybeUpdateTypeCache()
       tpeCache
     }
@@ -3495,10 +3512,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       thisTypeCache
     }
 
-    override def owner: Symbol = {
-      if (needsFlatClasses) rawowner.owner else rawowner
-    }
-
     override protected[this] def flattenedName: TypeName = {
       if (flatname eq null)
         flatname = tpnme.flattenedName(rawowner, rawname)
@@ -3506,7 +3519,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     /** A symbol carrying the self type of the class as its type */
-    override def thisSym: Symbol = thissym
+    private[Symbols] final def classThisSym: Symbol = thissym
 
     /** Sets the self type of the class */
     override def typeOfThis_=(tp: Type): Unit = {
@@ -3618,7 +3631,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** the self type of an object foo is foo.type, not class<foo>.this.type
      */
-    override def typeOfThis = {
+    override protected def customTypeOfThis = {
       val period = typeOfThisPeriod
       if (period != currentPeriod) {
         if (!isValid(period))
@@ -3766,10 +3779,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def enclosingPackageClass: Symbol = this
     override def enclMethod: Symbol = this
     override def associatedFile = NoAbstractFile
-    override def owner: Symbol = {
-      devWarningDumpStack("NoSymbol.owner", 15)
-      this
-    }
     override def ownerChain: List[Symbol] = Nil
     override def ownersIterator: Iterator[Symbol] = Iterator.empty
     override def alternatives: List[Symbol] = List()
