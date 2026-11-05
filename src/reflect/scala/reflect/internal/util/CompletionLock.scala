@@ -51,10 +51,21 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
       try body finally claims.release(key)
     }
 
-  /** Wait until no other thread holds the claim on `key` (the coarse mode: the lock). */
-  def awaitKey(key: AnyRef, subject: AnyRef): Unit =
+  /** Claim `key` (per-key mode only); a wait that would close a wait-for cycle calls `onCycle`. */
+  def acquireKey(key: AnyRef, what: What, onCycle: () => Nothing): Unit = {
+    claims.acquire(key, what, onCycle)
+    acquisitions.increment()
+  }
+  def releaseKey(key: AnyRef): Unit = claims.release(key)
+
+  /** Wait until no other thread holds the claim on `key` (the coarse mode: the lock). A wait that would close a
+   *  wait-for cycle calls `onCycle` (which throws). */
+  def awaitKey(key: AnyRef, subject: AnyRef, onCycle: () => Nothing = null): Unit =
     if (claims eq null) await()
-    else { claims.acquire(key, CompletionLock.waiting, () => cycle(subject)); claims.release(key) }
+    else {
+      claims.acquire(key, CompletionLock.waiting, if (onCycle ne null) onCycle else () => cycle(subject))
+      claims.release(key)
+    }
   private[this] var holdStart = 0L
 
   val waitNanos = new LongAdder
@@ -160,4 +171,7 @@ object CompletionLock {
    *  parser, which share state across files), the type caches still under the lock, macro expansion. Coarse. */
   object CoarseRoot
   val coarse: What = new What("the classpath and shared caches", null, coarse = true)
+  /** Thrown by a wait for another thread's completion that would close a wait-for cycle, to the waiter, which then
+   *  reads a provisional info if the completion has published one (as a serial nesting would), or reports the cycle. */
+  object WaitCycle extends scala.util.control.ControlThrowable
 }

@@ -103,6 +103,10 @@ trait ParallelTyper {
         var n = 0
         val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
         units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        // the lazy vals of `definitions` before the members run on several threads: one forced from a completion
+        // holds the object's monitor while it waits for a claim, and another thread holding that claim waits for the
+        // monitor (a deadlock the claims cannot see). After the headers, so that what they name is ready (I3).
+        if (!flag("noForceLazyVals")) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val count = new AtomicInteger
         val headersDone = System.nanoTime()
         onPool(typerPhase, ordered, nThreads, "signatures") { u =>
@@ -194,6 +198,15 @@ trait ParallelTyper {
       case null =>
       case ex   => throw ex
     }
+  }
+
+  /** `task` on each of `units` on the parallel typer's pool, largest first, for a phase other than the typer. */
+  def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String)(task: CompilationUnit => Unit): Unit = {
+    val n = prop("threads").map(_.toInt).getOrElse {
+      val s = settings.YparallelTyperThreads.value
+      if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
+    }
+    onPool(phase0, units.sortBy(u => -u.source.content.length), math.max(1, math.min(n, units.length)), name)(task)
   }
 
   /** `task` on each of `units`, a unit per task on `nThreads` workers at `phase`, the diagnostics buffered and issued

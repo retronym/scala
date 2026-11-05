@@ -1631,7 +1631,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var parkNanos = 10000L
       while (isCompletingElsewhere) {
         if (lock.isPerKey) {
-          lock.awaitKey(completionRoot(this), this)
+          // A wait that would close a wait-for cycle (with parallel signatures): on one thread, this completion would
+          // have nested in the other, and read the provisional info it had published (an inherited result type,
+          // `classSig`'s early class info), if any; without one it is the cycle a serial nesting meets.
+          try lock.awaitKey(completionRoot(this), this, () => throw util.CompletionLock.WaitCycle)
+          catch {
+            case util.CompletionLock.WaitCycle =>
+              if (_validTo != NoPeriod) return
+              else throw CyclicReference(this, ErrorType)
+          }
           if (isCompletingElsewhere) java.util.concurrent.locks.LockSupport.parkNanos(parkNanos) // a local completion
         }
         else if (lock.isLocked) lock.await()
@@ -1677,7 +1685,21 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       // a local symbol of a source being compiled: one from the classpath (an unpickled existential owned by a
       // method, say) is completed with the unpickler's shared state, under the lock
       else if (localCompletions && isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
-      else if (lock.isPerKey) lock.claim(completionRoot(this), util.CompletionLock.completing, this)(completeInfoLoop())
+      else if (lock.isPerKey) {
+        val root = completionRoot(this)
+        // see `awaitMarker`: a claim that would close a wait-for cycle reads a provisional info if there is one
+        val claimed =
+          try { lock.acquireKey(root, util.CompletionLock.completing, () => throw util.CompletionLock.WaitCycle); true }
+          catch {
+            case util.CompletionLock.WaitCycle =>
+              if (_validTo != NoPeriod) false
+              else throw CyclicReference(this, ErrorType)
+          }
+        if (claimed) {
+          try completeInfoLoop()
+          finally lock.releaseKey(root)
+        }
+      }
       else {
         lock.acquire(this) // xray: names the symbol
         try completeInfoLoop()

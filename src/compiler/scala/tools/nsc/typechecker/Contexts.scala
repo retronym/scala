@@ -59,6 +59,16 @@ trait Contexts { self: Analyzer with ImportTracking =>
   ))
   private def startContext = startContexts.get
 
+  /** The contexts whose implicits this thread is collecting (-Yparallel-typer): `Context.implicitssImpl`'s cycle
+   *  marker. */
+  private[typechecker] lazy val implicitsInProgress = perThread(new ContextSet)
+  private[typechecker] final class ContextSet {
+    private[this] val set = new java.util.IdentityHashMap[AnyRef, AnyRef]()
+    def contains(c: AnyRef): Boolean = set.containsKey(c)
+    def +=(c: AnyRef): Unit = set.put(c, c)
+    def -=(c: AnyRef): Unit = set.remove(c)
+  }
+
   /** A side channel from `isAccessible` to the error message: per thread under -Yparallel-typer. */
   private[this] lazy val lastAccessCheckDetailsHolder = perThread(Array(""))
   def lastAccessCheckDetails: String = lastAccessCheckDetailsHolder.get(0)
@@ -1103,7 +1113,29 @@ trait Contexts { self: Analyzer with ImportTracking =>
         }
 
         val CycleMarker = NoRunId - 1
-        if (implicitsRunId == CycleMarker) {
+        if (isConcurrentCompiler) {
+          // -Yparallel-typer: a context of the namer is shared by the completers of its members, which may run on
+          // several threads (parallel signatures). The in-progress marker is per thread, and the cache is stored
+          // before its run id.
+          val inProgress = implicitsInProgress.get
+          if (inProgress.contains(this)) withOuter(Nil)
+          else {
+            val cache = implicitsCache
+            if (implicitsRunId == currentRunId && (cache ne null)) withOuter(cache)
+            else {
+              inProgress += this
+              val is = try implicits finally inProgress -= this
+              is match {
+                case None => withOuter(Nil)
+                case Some(is) =>
+                  implicitsCache = is
+                  implicitsRunId = currentRunId
+                  withOuter(is)
+              }
+            }
+          }
+        }
+        else if (implicitsRunId == CycleMarker) {
           debuglog(s"cycle while collecting implicits at owner ${owner}, probably due to an implicit without an explicit return type. Continuing with implicits from enclosing contexts.")
           withOuter(Nil)
         } else if (implicitsRunId != currentRunId) {

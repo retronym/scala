@@ -171,12 +171,17 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** enter a symbol
      */
-    def enter[T <: Symbol](sym: T): sym.type = {
+    def enter[T <: Symbol](sym: T): sym.type = writing {
       enterEntry(newScopeEntry(sym, this))
       sym
     }
 
-    final def enterBefore(sym: Symbol, next: ScopeEntry): sym.type = {
+    /** In a concurrent compiler, the writes to a scope are under its monitor: the completers of two members of one
+     *  class can enter into its scope on two threads (default getters, with parallel signatures). Readers take no
+     *  lock (entries are published after their fields). Nothing under the monitor completes a symbol. */
+    @inline private def writing[T](body: => T): T = if (isConcurrentCompiler) synchronized(body) else body
+
+    final def enterBefore(sym: Symbol, next: ScopeEntry): sym.type = writing {
       assert(this != EmptyScope, sym)
       require(sym.name.hashCode() == next.sym.name.hashCode(), (sym, next.sym))
       require(sym != next.sym, (sym, next.sym))
@@ -200,7 +205,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       enter(sym)
     }
 
-    def enterIfNew[T <: Symbol](sym: T): T = {
+    def enterIfNew[T <: Symbol](sym: T): T = writing {
       val existing = lookupEntry(sym.name)
       if (existing == null) enter(sym)
       else existing.sym.asInstanceOf[T]
@@ -231,7 +236,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       }
     }
 
-    def rehash(sym: Symbol, newname: Name): Unit = {
+    def rehash(sym: Symbol, newname: Name): Unit = writing {
       if (hashtable ne null) {
         val index = sym.name.start & HASHMASK
         var e1 = hashtable(index)
@@ -258,7 +263,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** remove entry
      */
-    def unlink(e: ScopeEntry): Unit = {
+    def unlink(e: ScopeEntry): Unit = writing {
       if (elems == e) {
         elems = e.next
       } else {
@@ -280,7 +285,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     /** remove symbol */
-    def unlink(sym: Symbol): Unit = {
+    def unlink(sym: Symbol): Unit = writing {
       var e = lookupEntry(sym.name)
       while (e ne null) {
         if (e.sym == sym) unlink(e)

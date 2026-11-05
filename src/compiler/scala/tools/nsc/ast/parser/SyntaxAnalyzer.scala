@@ -98,6 +98,16 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
     override val checkable = false
     override val keepsTypeParams = false
 
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelParser: a unit per task on the parallel typer's pool. A
+    // parser's state is its own (scanner, tree builder, the unit's fresh names); the names are interned under the
+    // name table's lock and positions are assigned per thread.
+    override def run(): Unit =
+      if (settings.YparallelTyper.value && System.getProperty("scalac.parallelTyper.parallelParser") != null) {
+        global.echoPhaseSummary(this)
+        global.analyzer.parallelPhase(this, currentRun.units.toList, "parser")(applyPhase(_))
+      }
+      else super.run()
+
     def apply(unit: CompilationUnit): Unit = {
       informProgress("parsing " + unit)
       // if the body is already filled in, don't overwrite it
