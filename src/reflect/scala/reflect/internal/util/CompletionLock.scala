@@ -82,6 +82,7 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
     else acquireLock(what)
 
   private def acquireLock(what: What): Unit = {
+    val xray = ParallelTyperTimeline.current; if (xray ne null) { xray.acquire(this, lock, what); return } // xray
     val contended = lock.isLocked && !lock.isHeldByCurrentThread
     val t0 = if (contended) System.nanoTime() else 0L
     lock.lockFor(what)
@@ -97,6 +98,9 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
       if (sites ne null) recordSite()
     }
   }
+
+  /** `acquire`, naming what is completed for the x-ray (`ParallelTyperTimeline`). */
+  def acquire(what: AnyRef): Unit = { val xray = ParallelTyperTimeline.current; if (xray ne null) xray.acquire(this, lock, what) else acquire() } // xray
 
   /** `-Dscalac.parallelTyper.lockSites`: count the outermost acquisitions by the first caller outside the lock's
    *  plumbing (slow: a stack walk per acquisition). */
@@ -120,6 +124,7 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
     else releaseLock()
 
   private def releaseLock(): Unit = {
+    val xray = ParallelTyperTimeline.current; if (xray ne null) { xray.release(this, lock); return } // xray
     if (lock.getHoldCount == 1) {
       val held = System.nanoTime() - holdStart
       holdNanos.add(held)

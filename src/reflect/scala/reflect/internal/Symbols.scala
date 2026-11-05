@@ -1679,7 +1679,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else if (localCompletions && isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
       else if (lock.isPerKey) lock.claim(completionRoot(this), util.CompletionLock.completing, this)(completeInfoLoop())
       else {
-        lock.acquire()
+        lock.acquire(this) // xray: names the symbol
         try completeInfoLoop()
         finally lock.release()
       }

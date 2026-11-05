@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 
 import scala.collection.mutable
 import scala.reflect.internal.util.CodeAction
-import scala.reflect.internal.util.{PerThreadTimes, Position}
+import scala.reflect.internal.util.{ParallelTyperTimeline, PerThreadTimes, Position}
 import scala.tools.nsc.reporters.FilteringReporter
 
 /** `-Yparallel-typer`: the typer phase typechecks its units on several threads over one `Global`.
@@ -84,12 +84,12 @@ trait ParallelTyper {
       else {
         var n = 0
         val completed = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
-        units.foreach(u => n += completeSignatures(u, completed))
+        units.foreach(u => n += ParallelTyperTimeline.span("signatures", u.source.file.name)(completeSignatures(u, completed))) // xray
         // Then their annotations, in a pass of their own: an annotation is lazy so that its arguments can refer to
         // symbols still being completed. A thunk types the annotation with its symbol's context, in place, so it
         // must not run on another unit's thread; and outside `info`, the lock would not cover it (it is taken
         // before the lazy val's monitor, `LazyAnnotationInfo.forcedInfo`, for the ones that are left).
-        forceAnnotations(completed)
+        ParallelTyperTimeline.span("annotations", s"${completed.length} symbols")(forceAnnotations(completed)) // xray
         n
       }
     val t1 = System.nanoTime()
@@ -97,7 +97,8 @@ trait ParallelTyper {
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
     // library), and forcing it before that symbol's unit is ready meets a cycle, which leaves a cache stamped in
     // progress (`CompoundType.baseClasses`) for the rest of the run.
-    if (!flag("noForceLazyVals")) forceLazyVals() // the property is for experiments: the lock order needs them forced
+    if (!flag("noForceLazyVals")) // the property is for experiments: the lock order needs them forced
+      ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
     val t2 = System.nanoTime()
     logf(f"lazy vals forced in ${(t2 - t1) / 1e6}%.1f ms")
 
@@ -144,6 +145,7 @@ trait ParallelTyper {
             done.incrementAndGet()
             unit = queue.poll()
           }
+          if (ParallelTyperTimeline.current ne null) ParallelTyperTimeline.current.idle() // xray
         } catch {
           case ex: Throwable => failure.compareAndSet(null, ex)
         } finally {
