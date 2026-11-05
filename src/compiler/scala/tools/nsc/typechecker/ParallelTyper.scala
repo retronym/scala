@@ -1,0 +1,337 @@
+/*
+ * Scala (https://www.scala-lang.org)
+ *
+ * Copyright EPFL and Lightbend, Inc. dba Akka
+ *
+ * Licensed under Apache License 2.0
+ * (http://www.apache.org/licenses/LICENSE-2.0).
+ *
+ * See the NOTICE file distributed with this work for
+ * additional information regarding copyright ownership.
+ */
+
+package scala.tools.nsc
+package typechecker
+
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
+
+import scala.collection.mutable
+import scala.reflect.internal.util.CodeAction
+import scala.reflect.internal.util.{PerThreadTimes, Position}
+import scala.tools.nsc.reporters.FilteringReporter
+
+/** `-Yparallel-typer`: the typer phase typechecks its units on several threads over one `Global`.
+ *
+ *  Parser, namer and packageobjects run serially as before. Then, on the main thread: the lazy vals of `definitions`
+ *  and `runDefinitions` are forced (their initialisers complete symbols under the lazy val's monitor, a deadlock
+ *  against the completion lock), and by default the signature of every member defined in the sources is completed
+ *  ("signatures first"): a Namer completer types trees of its own unit with its own unit's contexts and per-unit
+ *  maps, so it must not run on another unit's thread while that unit's thread types the same state. Then the bodies
+ *  are typed with a unit per task, largest first, on a pool of workers, each with its own phase, current unit and
+ *  scratch state. Every completion that still happens runs under the completion lock (`SymbolTable.completionLock`).
+ *  The diagnostics are buffered and issued after the last unit in a fixed order (by file, then position, then
+ *  arrival). The phases after the typer run on the main thread as before.
+ *
+ *  System properties, for measurement:
+ *   - `scalac.parallelTyper.lazySignatures`: no signatures-first pre-pass (completers run where they are reached).
+ *   - `scalac.parallelTyper.oneThread`: the parallel path on one worker, to tell order effects from concurrency.
+ *   - `scalac.parallelTyper.threads=N`: the number of workers (else `-Yparallel-typer-threads`, else the processors).
+ *   - `scalac.parallelTyper.log`: a summary on stderr. `scalac.parallelTyper.timeline=<file>`: a JSON timeline.
+ *   - `scalac.parallelTyper.watchdog=<seconds>`: dump the threads when the phase runs longer (default 120).
+ */
+trait ParallelTyper {
+  self: AbstractAnalyzer =>
+
+  import global._
+
+  /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
+  @volatile var parallelTyperActive = false
+
+  private def prop(name: String): Option[String] = Option(System.getProperty("scalac.parallelTyper." + name))
+  private def flag(name: String): Boolean = prop(name).exists(v => v.isEmpty || v.toBoolean)
+
+  private def unsupported(): List[String] = {
+    val s = settings
+    List(
+      (s.YmacroAnnotations.value, "-Ymacro-annotations"),
+      (hasAnalyzerOrMacroPlugins, "analyzer or macro plugins"),
+      (s.Ytyperdebug.value, "-Ytyper-debug"),
+      (s.YprofileEnabled.value, "-Yprofile-enabled"),
+      (s.areStatisticsEnabled, "-Ystatistics"),
+      (s.check.value.nonEmpty, "-Ycheck"),
+      (s.log.isSetByUser, "-Ylog"),
+      (s.isScaladoc, "scaladoc"),
+    ).collect { case (true, what) => what }
+  }
+
+  def typeCheckInParallel(typerPhase: Phase, units: List[CompilationUnit], applyPhase: CompilationUnit => Unit): Unit = {
+    assert(isConcurrentCompiler, "-Yparallel-typer: the universe was not constructed for it")
+    val bad = unsupported()
+    if (bad.nonEmpty) {
+      globalError(s"-Yparallel-typer does not support ${bad.mkString(", ")}")
+      return
+    }
+    val log = flag("log") || settings.verbose.value
+    def logf(msg: => String): Unit = if (log) Console.err.println("[parallel-typer] " + msg)
+
+    val t0 = System.nanoTime()
+    val signatures =
+      if (flag("lazySignatures")) 0
+      else {
+        var n = 0
+        units.foreach(u => n += completeSignatures(u))
+        n
+      }
+    val t1 = System.nanoTime()
+    logf(f"$signatures signatures completed serially in ${(t1 - t0) / 1e6}%.1f ms")
+    // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
+    // library), and forcing it before that symbol's unit is ready meets a cycle, which leaves a cache stamped in
+    // progress (`CompoundType.baseClasses`) for the rest of the run.
+    forceLazyVals()
+    val t2 = System.nanoTime()
+    logf(f"lazy vals forced in ${(t2 - t1) / 1e6}%.1f ms")
+
+    val nThreads = {
+      val n =
+        if (flag("oneThread")) 1
+        else prop("threads").map(_.toInt).getOrElse {
+          val s = settings.YparallelTyperThreads.value
+          if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
+        }
+      math.max(1, math.min(n, units.length))
+    }
+
+    val bufferingReporter = new BufferingReporter(reporter)
+    val savedReporter = reporter
+    reporter = bufferingReporter
+    val lock = completionLock
+    lock.reset()
+    val timeline = prop("timeline").map(_ => new Timeline)
+
+    // largest first, so that the last units to start are small
+    val queue = new ConcurrentLinkedQueue[CompilationUnit](units.sortBy(u => -u.source.content.length).asJava)
+    val failure = new AtomicReference[Throwable]()
+    val done = new AtomicInteger()
+    val workers = (1 to nThreads).map { i =>
+      val t = new Thread(null, () => {
+        try {
+          phase = typerPhase
+          var unit = queue.poll()
+          while (unit != null && failure.get == null) {
+            val s0 = System.nanoTime()
+            val c0 = Timeline.cpuNow()
+            val times = PerThreadTimes.current
+            val w0 = times.waitNanos
+            val h0 = times.holdNanos
+            try applyPhase(unit)
+            finally {
+              undoLog.clear()
+              timeline.foreach(_.add(unit.source.file.name, s0, System.nanoTime(), Timeline.cpuNow() - c0,
+                times.waitNanos - w0, times.holdNanos - h0))
+            }
+            done.incrementAndGet()
+            unit = queue.poll()
+          }
+        } catch {
+          case ex: Throwable => failure.compareAndSet(null, ex)
+        } finally {
+          phase = NoPhase
+        }
+      }, s"scalac-typer-$i", 1L << 28)
+      t.setDaemon(true)
+      t
+    }
+    val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
+    parallelTyperActive = true
+    try {
+      watchdog.start()
+      workers.foreach(_.start())
+      workers.foreach(_.join())
+    } finally {
+      parallelTyperActive = false
+      watchdog.interrupt()
+      reporter = savedReporter
+      bufferingReporter.issueBuffered()
+    }
+    val t3 = System.nanoTime()
+    logf(f"${units.length} units typed in ${(t3 - t2) / 1e6}%.1f ms on $nThreads threads; ${lock.summary}")
+    timeline.foreach(tl => tl.write(prop("timeline").get, t0, t1, t2, t3, nThreads))
+    failure.get match {
+      case null =>
+      case ex   => throw ex
+    }
+  }
+
+  /** The thread dump of a phase that runs longer than `seconds`, and again every `seconds`. */
+  private def newWatchdog(seconds: Int): Thread = {
+    val t = new Thread(() => {
+      try {
+        while (true) {
+          Thread.sleep(seconds * 1000L)
+          val infos = java.lang.management.ManagementFactory.getThreadMXBean.dumpAllThreads(true, true)
+          val sb = new StringBuilder(s"[parallel-typer] still running after $seconds s; ${completionLock.summary}\n")
+          infos.foreach { ti =>
+            sb.append(ti.toString.linesIterator.take(1).mkString).append('\n')
+            ti.getStackTrace.take(60).foreach(f => sb.append("\tat ").append(f).append('\n'))
+          }
+          Console.err.println(sb)
+        }
+      } catch { case _: InterruptedException => () }
+    }, "scalac-typer-watchdog")
+    t.setDaemon(true)
+    t
+  }
+
+  /** Force the lazy vals of `definitions` and `runDefinitions` (and their nested objects) on this thread: their
+   *  initialisers complete symbols while they hold the monitor of the enclosing object, and a worker that held the
+   *  completion lock while it waited for that monitor would deadlock with one that held the monitor while it waited
+   *  for the lock. Optional classes are missing in some configurations: such a failure is ignored here (as it is
+   *  in use, where the lazy val is retried).
+   */
+  private def forceLazyVals(): Unit = {
+    val seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean])
+    def force(obj: AnyRef, depth: Int): Unit = if (obj != null && depth < 3 && seen.add(obj)) {
+      var cls: Class[_] = obj.getClass
+      while (cls != null && cls != classOf[Object]) {
+        val methods = cls.getDeclaredMethods
+        val names = methods.iterator.map(_.getName).toSet
+        val fields = cls.getDeclaredFields.iterator.map(_.getName).toSet
+        for (m <- methods if m.getParameterCount == 0 && !m.getName.endsWith("$lzycompute")) {
+          val isLazy = names(m.getName + "$lzycompute")
+          val isModule = fields(m.getName + "$module")
+          if (isLazy || isModule) {
+            try {
+              m.setAccessible(true)
+              val v = m.invoke(obj)
+              if (isModule) force(v.asInstanceOf[AnyRef], depth + 1)
+            } catch { case _: Throwable => () }
+          }
+        }
+        cls = cls.getSuperclass
+      }
+    }
+    force(definitions, 0)
+    force(currentRun.runDefinitions, 0)
+    // private lazy vals of the cake that complete symbols, e.g. `TypeConstraints.numericLoBound`
+    for (m <- global.getClass.getMethods ++ global.getClass.getDeclaredMethods
+         if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")) {
+      try { m.setAccessible(true); m.invoke(global) } catch { case _: Throwable => () }
+    }
+  }
+
+  /** Complete the signature of every member that `unit` defines, outside method bodies: the classes, objects, their
+   *  type parameters, members (those of the trees and the synthetic ones in their scopes), self types and
+   *  annotations. Returns the number of symbols completed. A type error that escapes a completion is reported here,
+   *  at the symbol, where the serial typer would report it at the tree that first needed the symbol.
+   */
+  private def completeSignatures(unit: CompilationUnit): Int = {
+    var n = 0
+    val seen = mutable.HashSet[Symbol]()
+    val savedUnit = currentRun.currentUnit
+    currentRun.currentUnit = unit
+    def complete(sym: Symbol): Unit =
+      if (sym != null && sym != NoSymbol && seen.add(sym)) {
+        n += 1
+        try {
+          sym.initialize
+          sym.typeParams.foreach(complete)
+          if (sym.isMethod) sym.paramss.foreach(_.foreach(complete))
+          sym.annotations.foreach(_.completeInfo())
+          if (sym.isModule) complete(sym.moduleClass)
+          if (sym.isClass) {
+            sym.typeOfThis
+            var decls = Set.empty[Symbol]
+            var more = true
+            while (more) { // completing a member can enter more (default getters, case class methods)
+              val ds = sym.info.decls.toList.filterNot(decls)
+              decls ++= ds
+              ds.foreach(complete)
+              more = ds.nonEmpty
+            }
+          }
+        } catch {
+          case ex: TypeError => reporter.error(sym.pos, ex.getMessage)
+        }
+      }
+    def traverse(tree: Tree): Unit = tree match {
+      case PackageDef(_, stats) => stats.foreach(traverse)
+      case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse)
+      case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
+      case md: MemberDef        => complete(md.symbol)
+      // in tree order, as the typer types them
+      case imp: Import          => complete(imp.symbol)
+      case _                    =>
+    }
+    try {
+      traverse(unit.body)
+      unit.synthetics.keys.toList.foreach(complete)
+    } finally currentRun.currentUnit = savedUnit
+    n
+  }
+
+  /** The run's reporter while the workers run: every report is under its monitor; the diagnostics are kept and then
+   *  issued in a fixed order (by file, then position, then arrival). Filtering (duplicates at a position, -Xmaxerrs)
+   *  happens when they are issued, in the underlying reporter. The messages arrive rendered.
+   */
+  private final class BufferingReporter(val underlying: FilteringReporter) extends FilteringReporter {
+    private final case class Entry(pos: Position, msg: String, severity: Severity, actions: List[CodeAction], seq: Int)
+    private[this] val buffer = mutable.ArrayBuffer.empty[Entry]
+    def settings: Settings = underlying.settings
+    override def filter(pos: Position, msg: String, severity: Severity): Int = 0 // Display
+    override def increment(severity: Severity): Unit = synchronized(super.increment(severity))
+    override def doReport(pos: Position, msg: String, severity: Severity, actions: List[CodeAction]): Unit =
+      synchronized { buffer += Entry(pos, msg, severity, actions, buffer.length) }
+    override def hasErrors: Boolean = synchronized(super.hasErrors) || underlying.hasErrors
+    override def cancelled: Boolean = underlying.cancelled
+    override def cancelled_=(b: Boolean): Unit = underlying.cancelled = b
+    override def comment(pos: Position, msg: String): Unit = underlying.comment(pos, msg)
+    override def flush(): Unit = ()
+
+    def issueBuffered(): Unit = synchronized {
+      val ordered = buffer.sortBy { e =>
+        val p = e.pos
+        val defined = p != null && p.isDefined
+        (if (defined) p.source.file.path else "", if (defined) p.point else -1, e.seq)
+      }
+      buffer.clear()
+      ordered.foreach { e =>
+        e.severity match {
+          case scala.reflect.internal.Reporter.ERROR   => underlying.error(e.pos, e.msg, e.actions)
+          case scala.reflect.internal.Reporter.WARNING => underlying.warning(e.pos, e.msg, e.actions)
+          case _                         => underlying.echo(e.pos, e.msg, e.actions)
+        }
+      }
+    }
+  }
+
+  /** What each worker did: a span per unit with its wall and CPU time, and its time waiting for and holding the
+   *  completion lock. Written as JSON, with the serial steps before it. */
+  private final class Timeline {
+    private final case class Span(thread: String, unit: String, start: Long, end: Long, cpu: Long, lockWait: Long, lockHold: Long)
+    private[this] val spans = new ConcurrentLinkedQueue[Span]()
+    def add(unit: String, start: Long, end: Long, cpu: Long, lockWait: Long, lockHold: Long): Unit =
+      spans.add(Span(Thread.currentThread.getName, unit, start, end, cpu, lockWait, lockHold))
+    def write(file: String, t0: Long, t1: Long, t2: Long, t3: Long, threads: Int): Unit = {
+      def ms(ns: Long) = f"${ns / 1e6}%.3f"
+      def str(s: String) = "\"" + s.flatMap { case '"' => "\\\""; case '\\' => "\\\\"; case c => c.toString } + "\""
+      val ss = spans.asScala.toList.sortBy(_.start)
+      val json = new StringBuilder
+      json.append(s"""{"threads":$threads,"signaturesMs":${ms(t1 - t0)},"lazyValsMs":${ms(t2 - t1)},"bodiesMs":${ms(t3 - t2)},\n"spans":[\n""")
+      json.append(ss.map(s => s"[${str(s.thread)},${str(s.unit)},${ms(s.start - t2)},${ms(s.end - t2)},${ms(s.cpu)},${ms(s.lockWait)},${ms(s.lockHold)}]").mkString(",\n"))
+      json.append("]}\n")
+      java.nio.file.Files.write(java.nio.file.Paths.get(file), json.toString.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+    }
+  }
+  private object Timeline {
+    private[this] val bean = java.lang.management.ManagementFactory.getThreadMXBean
+    def cpuNow(): Long = bean.getCurrentThreadCpuTime
+  }
+
+  private implicit class AsJava[T](xs: List[T]) {
+    def asJava: java.util.Collection[T] = { val l = new java.util.ArrayList[T](xs.length); xs.foreach(l.add); l }
+  }
+  private implicit class AsScala[T](q: ConcurrentLinkedQueue[T]) {
+    def asScala: Iterator[T] = { val it = q.iterator; Iterator.continually(it).takeWhile(_.hasNext).map(_.next()) }
+  }
+}

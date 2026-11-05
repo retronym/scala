@@ -30,16 +30,19 @@ trait ImportTracking { self: AbstractAnalyzer =>
   private val usedSelectors = mutable.Map.empty[ImportInfo, mutable.Set[ImportSelector]]
   private val importInfos   = mutable.Map.empty[CompilationUnit, List[TrackedInfo]].withDefaultValue(Nil)
 
-  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = usedSelectors.get(info) match {
-    case Some(sels) => sels.addOne(sel)
-    case None => usedSelectors.put(info, mutable.Set(sel))
+  // -Yparallel-typer: both maps are under the monitor of `usedSelectors`; nothing under it completes symbols.
+  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = usedSelectors.synchronized {
+    usedSelectors.get(info) match {
+      case Some(sels) => sels.addOne(sel)
+      case None => usedSelectors.put(info, mutable.Set(sel))
+    }
   }
 
   def recordImportContext(ctx: Context): Unit = ctx.firstImport.foreach { info =>
     val keyword =
       if (info.pos.start != info.pos.point) info
       else ctx.imports.find(p => p.pos.isDefined && p.pos.start != p.pos.point).getOrElse(info)
-    importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn
+    usedSelectors.synchronized { importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn }
   }
 
   def warnUnusedImports(unit: CompilationUnit): Unit = if (!unit.isJava) {
@@ -67,7 +70,7 @@ trait ImportTracking { self: AbstractAnalyzer =>
       val unused: List[Culled] =
         infos.flatMap {
           case (tracked @ (info, _, _)) =>
-            val used = usedSelectors.remove(info).getOrElse(mutable.Set.empty)
+            val used = usedSelectors.synchronized(usedSelectors.remove(info)).getOrElse(mutable.Set.empty)
             info.tree.selectors.collect {
               case selector if !selector.isMask && !used(selector) => selector -> tracked
             }
@@ -187,6 +190,6 @@ trait ImportTracking { self: AbstractAnalyzer =>
       if (settings.quickfix.isSetByUser && !settings.quickFixSilent) emitEdits()
       else unused.foreach(emit(_, actions = Nil))
     }
-    importInfos.remove(unit).foreach(warnUnusedSelections)
+    usedSelectors.synchronized(importInfos.remove(unit)).foreach(warnUnusedSelections)
   }
 }
