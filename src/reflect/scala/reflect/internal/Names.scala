@@ -306,10 +306,21 @@ trait Names extends api.Names {
   /** The table as it has been: all names sequentially in one `Array[Char]`, a name being an offset and a length. */
   private[internal] final class CharStore extends NameStore {
     protected def kind = "chars"
+    // A plain field, read through `chrsTo` by a name's methods. When the table grows the old array is left as it was, and
+    // holds the same characters below its length as the new one, so a thread that reads a stale array (a name made on
+    // another thread after the table grew: -Yparallel-typer, runtime reflection) reads the right characters unless the
+    // name ends beyond it, which `chrsTo` checks, reading the field again under the lock that the table grows under.
     private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE)
+    /** The characters of the name table, at least up to `end`. */
+    @inline private def chrsTo(end: Int): Array[Char] = {
+      val cs = _chrs
+      if (end <= cs.length) cs else chrsLocked
+    }
+    private def chrsLocked: Array[Char] = nameLock.synchronized(_chrs)
+    @inline private def chrsOf(n: Name): Array[Char] = chrsTo(n.id + n.length)
     private[this] var nc = 0
     def termFromString(s: String, cachedString: String): TermName = termFromChars(s.toCharArray(), 0, s.length(), cachedString)
-    def toString(n: Name): String = if (n.str == null) new String(_chrs, n.id, n.length) else n.str
+    def toString(n: Name): String = if (n.str == null) new String(chrsOf(n), n.id, n.length) else n.str
     final def size: Int = nc
     final override def legacyChars: Array[Char] = _chrs
     final override def legacyChars_=(cs: Array[Char]): Unit = _chrs = cs
@@ -320,7 +331,7 @@ trait Names extends api.Names {
      */
     private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
       var i = 0
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while ((i < len) && (chrs(index + i) == cs(offset + i)))
         i += 1
       i == len
@@ -329,13 +340,16 @@ trait Names extends api.Names {
     /** Enter characters into chrs array. */
     private def enterChars(cs: Array[Char], offset: Int, len: Int): Unit = {
       var i = 0
+      var chrs = _chrs
       while (i < len) {
-        if (nc + i == _chrs.length) {
-          val newchrs = new Array[Char](_chrs.length * 2)
-          java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
+        if (nc + i == chrs.length) {
+          val newchrs = new Array[Char](chrs.length * 2)
+          java.lang.System.arraycopy(chrs, 0, newchrs, 0, chrs.length)
+          java.lang.invoke.VarHandle.releaseFence() // the copy before the array, for a reader on another thread
           _chrs = newchrs
+          chrs = newchrs
         }
-        _chrs(nc + i) = cs(offset + i)
+        chrs(nc + i) = cs(offset + i)
         i += 1
       }
       if (len == 0) nc += 1
@@ -367,19 +381,19 @@ trait Names extends api.Names {
     final def subName(n: Name, from: Int, to: Int): TermName = {
       val offset = n.id + from
       require(offset >= 0, "offset must be non-negative, got " + offset)
-      termFromChars(_chrs, offset, math.max(to - from, 0), null)
+      termFromChars(chrsOf(n), offset, math.max(to - from, 0), null)
     }
-    def hash(n: Name): Int = hashValue(_chrs, n.id, n.length)
+    def hash(n: Name): Int = hashValue(chrsOf(n), n.id, n.length)
     final def matches(n: Name, cs: Array[Char], offset: Int, len: Int): Boolean = equals(n.id, cs, offset, len)
-    final def charAt(n: Name, i: Int): Char = _chrs(n.id + i)
+    final def charAt(n: Name, i: Int): Char = chrsTo(n.id + i + 1)(n.id + i)
 
     final override def copyChars(n: Name, cs: Array[Char], offset: Int): Unit =
-      java.lang.System.arraycopy(_chrs, n.id, cs, offset, n.length)
+      java.lang.System.arraycopy(chrsOf(n), n.id, cs, offset, n.length)
     final override def pos(n: Name, c: Char, start: Int): Int = {
       var i = start
       val index = n.id
       val len = n.length
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       while (i < len && chrs(index + i) != c) i += 1
       i
     }
@@ -389,7 +403,7 @@ trait Names extends api.Names {
       if (sLen == 1) return i
       val index = n.id
       val len = n.length
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       while (i + sLen <= len) {
         var j = 1
         while (s.charAt(j) == chrs(index + i + j)) {
@@ -403,12 +417,12 @@ trait Names extends api.Names {
     final override def lastPos(n: Name, c: Char, start: Int): Int = {
       var i = start
       val index = n.id
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       while (i >= 0 && chrs(index + i) != c) i -= 1
       i
     }
     final override def startsWith(n: Name, prefix: Name, start: Int): Boolean = {
-      val chrs = _chrs
+      val chrs = chrsTo(math.max(n.id + n.length, prefix.id + prefix.length))
       val index = n.id
       val len = n.length
       var i = 0
@@ -418,7 +432,7 @@ trait Names extends api.Names {
       i == prefix.length
     }
     final override def startsWith(n: Name, prefix: String, start: Int): Boolean = {
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       val index = n.id
       val len = n.length
       var i = 0
@@ -429,7 +443,7 @@ trait Names extends api.Names {
     }
     final override def endsWith(n: Name, suffix: Name, end: Int): Boolean = {
       var i = 1
-      val chrs = _chrs
+      val chrs = chrsTo(math.max(n.id + n.length, suffix.id + suffix.length))
       val index = n.id
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == chrs(suffix.id + suffix.length - i))
@@ -438,7 +452,7 @@ trait Names extends api.Names {
     }
     final override def endsWith(n: Name, suffix: String, end: Int): Boolean = {
       var i = 1
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       val index = n.id
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == suffix.charAt(suffix.length - i))
@@ -448,7 +462,7 @@ trait Names extends api.Names {
     final override def containsChar(n: Name, ch: Char): Boolean = {
       var i = n.id
       val max = i + n.length
-      val chrs = _chrs
+      val chrs = chrsOf(n)
       while (i < max) {
         if (chrs(i) == ch)
           return true
@@ -460,7 +474,7 @@ trait Names extends api.Names {
       val slength   = s.length()
       val lastIndex = slength - 1
       val lastChar  = s.charAt(lastIndex)
-      val contents  = _chrs
+      val contents  = chrsOf(n)
       val base      = n.id
       val min       = base + lastIndex
       var end       = base + n.length - 1
@@ -481,9 +495,9 @@ trait Names extends api.Names {
       -1
     }
     final override def appendTo(n: Name, buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
-      buffer.append(_chrs, n.id + start, length)
+      buffer.append(chrsOf(n), n.id + start, length)
     final override def appendTo(n: Name, sb: StringBuilder, start: Int, length: Int): Unit =
-      sb.appendAll(_chrs, n.id + start, length)
+      sb.appendAll(chrsOf(n), n.id + start, length)
   }
 
   /** The operations of a store whose names each hold a `String`, with `Name.id` a serial number. */
