@@ -3731,12 +3731,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** the type this.type in this class */
     override def thisType: Type = {
+      // The value is read before it is trusted: another thread writes the value, then the stamp, as plain stores,
+      // and this thread can see the stamp first (seen on ARM as a null prefix in `typeRef`). `ThisType` is interned,
+      // so two threads store the same value.
       val period = thisTypePeriod
-      if (period != currentPeriod) {
-        if (!isValid(period)) thisTypeCache = ThisType(this)
+      var tp = thisTypeCache
+      if (period != currentPeriod || (tp eq null)) {
+        if ((tp eq null) || !isValid(period)) {
+          tp = ThisType(this)
+          thisTypeCache = tp
+        }
         thisTypePeriod = currentPeriod
       }
-      thisTypeCache
+      tp
     }
 
     override def owner: Symbol = {
@@ -3863,12 +3870,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     override def typeOfThis = {
       val period = typeOfThisPeriod
-      if (period != currentPeriod) {
-        if (!isValid(period))
-          typeOfThisCache = singleType(owner.thisType, sourceModule)
+      var tp = typeOfThisCache // read before it is trusted, as in `ClassSymbol.thisType`
+      if (period != currentPeriod || (tp eq null)) {
+        if ((tp eq null) || !isValid(period)) {
+          tp = singleType(owner.thisType, sourceModule)
+          typeOfThisCache = tp
+        }
         typeOfThisPeriod = currentPeriod
       }
-      typeOfThisCache
+      tp
     }
 
     def implicitMembers: Scope = {
