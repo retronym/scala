@@ -266,18 +266,20 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     }
   }
 
-  private var propCnt = 0
+  // per thread under -Yparallel-typer: whether a cyclic reference propagates is a property of the thread's computation
+  private[this] lazy val propCnts = perThread(Array(0))
   @inline final def withPropagateCyclicReferences[T](t: => T): T = {
+    val propCnt = propCnts.get
     try {
-      propCnt = propCnt+1
+      propCnt(0) += 1
       t
     } finally {
-      propCnt = propCnt-1
-      assert(propCnt >= 0, "Bad propCnt")
+      propCnt(0) -= 1
+      assert(propCnt(0) >= 0, "Bad propCnt")
     }
   }
 
-  def propagateCyclicReferences: Boolean = propCnt > 0
+  def propagateCyclicReferences: Boolean = propCnts.get(0) > 0
 
   /** Representing ASTs as graphs */
   object treeBrowsers extends {

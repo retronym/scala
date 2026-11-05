@@ -1916,6 +1916,12 @@ trait Types
      *  @See Kennedy, Pierce: On Decidability of Nominal Subtyping with Variance
      */
     private[scala] def expansiveRefs(tparam: Symbol) = {
+      // In a concurrent compiler under the completion lock: the computation propagates through the states of other
+      // classes' infos, and `refs` is reassigned while it runs.
+      if (isConcurrentCompiler) underCompletionLock(expansiveRefs0(tparam))
+      else expansiveRefs0(tparam)
+    }
+    private def expansiveRefs0(tparam: Symbol) = {
       if (state == UnInitialized) {
         computeRefs()
         while (state != Initialized) propagate()
