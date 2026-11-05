@@ -1507,6 +1507,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private[Symbols] var infos: TypeHistory = null
     def originalInfo = {
+      // a peek at the info, as `rawInfo`: another thread's provisional info is not to be read (I11)
+      if (isConcurrentCompiler) awaitCompletionElsewhere()
       if (infos eq null) null
       else {
         var is = infos
@@ -1969,6 +1971,17 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def cookJavaRawInfo0(): this.type = {
       if (this hasFlag TRIEDCOOKING)
         return this
+      if (isConcurrentCompiler) {
+        // `TRIEDCOOKING` goes up before the info is rewritten: another thread that sees it skips the cooking and
+        // reads the info, which must then wait for the cooked one (I11). So the symbols are marked as completing.
+        val syms = if (isOverloaded) this :: alternatives else this :: Nil
+        val saved = syms.map(_.markCompleting())
+        try cookJavaRawInfo1()
+        finally syms.lazyZip(saved).foreach(_ unmarkCompleting _)
+      }
+      else cookJavaRawInfo1()
+    }
+    private def cookJavaRawInfo1(): this.type = {
 
       this setFlag TRIEDCOOKING
       info  // force the current info
@@ -3470,6 +3483,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         // Without the lock: the cycle marker is per thread, the value is stored before the period is stamped, and
         // two threads compute the same (interned) `TypeRef`. A re-entry answers as the serial update would: the
         // cycle marker `NoType` if the period was stamped (the symbol is initialized), else a cyclic reference.
+        // A symbol another thread is completing (a class being loaded) has no type parameters yet: wait (I11).
+        awaitCompletionElsewhere()
         val s = scratch
         if (s.tpeInProgress.contains(this)) {
           if (isInitialized) NoType else throw CyclicReference(this, typeConstructor)
@@ -3486,8 +3501,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
             val tp = newTypeRef(if (noTypeParams) Nil else unsafeTypeParams map (_.typeConstructor))
             if (noTypeParams && tyconCacheNeedsUpdate) setTyconCache(tp)
-            tpeCache = tp
-            if (stamp) tpePeriod = currentPeriod
+            // Only a value computed from a completed symbol is stored: one computed before (no type parameters yet,
+            // from a loader's lazy type) would be stored after a correct one from another thread, under its stamp (I11).
+            if (stamp) {
+              tpeCache = tp
+              tpePeriod = currentPeriod
+            }
             tp
           } finally s.tpeInProgress = saved
         }
