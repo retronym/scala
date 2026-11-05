@@ -608,6 +608,11 @@ abstract class SymbolTable extends macros.Universe
      *  to undo constraints in the case of isSubType/isSameType failure.
      */
     val undoLog = new UndoLog
+    /** The current skolemization level, needed for the algorithms
+     *  in isSameType, isSubType that do constraint solving under a prefix.
+     *  A completion starts at level 0: only the levels within it are compared.
+     */
+    var skolemizationLevel: Int = 0
     val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
     val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
     /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
@@ -644,10 +649,6 @@ abstract class SymbolTable extends macros.Universe
   final class Scratch {
     /** The frame of the completion in progress on this thread. */
     var frame: Frame = new Frame
-    /** The current skolemization level, needed for the algorithms
-     *  in isSameType, isSubType that do constraint solving under a prefix.
-     */
-    var skolemizationLevel: Int = 0
     /** The current indentation string for traces */
     var indent: String = ""
     var toStringRecursions: Int = 0

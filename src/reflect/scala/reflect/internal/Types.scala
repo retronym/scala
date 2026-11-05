@@ -118,8 +118,8 @@ trait Types
   }
 
   /** The current skolemization level, see `Scratch.skolemizationLevel`. */
-  def skolemizationLevel: Int = scratch.skolemizationLevel
-  def skolemizationLevel_=(value: Int): Unit = scratch.skolemizationLevel = value
+  def skolemizationLevel: Int = scratch.frame.skolemizationLevel
+  def skolemizationLevel_=(value: Int): Unit = scratch.frame.skolemizationLevel = value
 
   /** A map from lists to compound types that have the given list as parents.
    *  This is used to avoid duplication in the computation of base type sequences and baseClasses.

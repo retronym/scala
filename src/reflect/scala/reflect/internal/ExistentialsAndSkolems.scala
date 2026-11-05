@@ -42,7 +42,7 @@ trait ExistentialsAndSkolems {
       }
     }
 
-    val s = scratch
+    val s = scratch.frame
     val saved = s.skolemizationLevel
     s.skolemizationLevel = 0
     try new Deskolemizer().typeSkolems
