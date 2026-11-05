@@ -43,16 +43,19 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
 
   // threads, by first appearance
   private[this] val threadNames = mutable.ArrayBuffer.empty[String]
-  private[this] val threadIndex = new ThreadLocal[Integer]
-  private def tid(): Int = {
-    val i = threadIndex.get
-    if (i ne null) i.intValue
+  private final class PerThread(val tid: Int) { var acquisitions = 0 }
+  private[this] val perThread = new ThreadLocal[PerThread]
+  private def thread(): PerThread = {
+    val t = perThread.get
+    if (t ne null) t
     else threadNames.synchronized {
       threadNames += Thread.currentThread.getName
-      threadIndex.set(threadNames.length - 1)
-      threadNames.length - 1
+      val n = new PerThread(threadNames.length - 1)
+      perThread.set(n)
+      n
     }
   }
+  private def tid(): Int = thread().tid
 
   // ---- spans
 
@@ -93,7 +96,10 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   private[this] val whatList = mutable.ArrayBuffer.empty[AnyRef]
   private[this] val holds = new LongBuf // tid, site, what, t0, t1, contended
   private[this] val waits = new LongBuf // tid, site, what, t0, t1
-  private[this] var holdStart, holdTid, holdSite, holdWhat = 0L
+  private[this] var holdStart, holdTid, holdWhat = 0L
+  private[this] var holdSite: String = null
+  private[this] var holdSampled = false
+  private[this] var sampledHolds = 0L
 
   private def siteId(label: String): Int = {
     val i = sites.get(label)
@@ -114,26 +120,34 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       else { whatList += what; whats.put(what, whatList.length - 1); whatList.length - 1L }
     }
 
-  /** `CompletionLock.acquire` while recording: as there, and the wait with its site and what it was for. */
+  /** `CompletionLock.acquire` while recording: as there, and the wait with its site and what it was for.
+   *
+   *  The call site costs a stack walk (a few microseconds), so it is taken for one outermost acquisition in
+   *  `siteSample` (a sample), for every one that has to wait (before it waits), and at the release of every hold
+   *  that is recorded (someone waited, or it took longer than the threshold) and was not walked yet. A site's
+   *  totals are then exact for the recorded holds and estimated from the sample for the others (each sampled short
+   *  hold counts `siteSample` times).
+   */
   def acquire(cl: CompletionLock, lock: ReentrantLock, what: AnyRef): Unit = {
-    // the caller's site, before the lock is taken: the stack walk is neither wait nor hold
-    val site = if (lock.isHeldByCurrentThread) null else callSite()
-    val me = tid()
+    val outermost = !lock.isHeldByCurrentThread
+    val me = thread()
+    val sampled = outermost && { me.acquisitions += 1; me.acquisitions % siteSample == 0 }
+    var site = if (sampled) callSite() else null
     if (!lock.tryLock()) {
+      if (site eq null) site = callSite()
       val t0 = System.nanoTime()
       lock.lock()
       val t1 = System.nanoTime()
       cl.waitNanos.add(t1 - t0); cl.waits.increment(); PerThreadTimes.addWait(t1 - t0)
       val s = siteId(site)
-      val w = whatId(what)
-      waits.add5(me, s, w, t0, t1)
+      waits.add5(me.tid, s, whatId(what), t0, t1)
       val o = s * SiteStride
       val st = siteStats
-      st(o + 3) += 1; st(o + 4) += t1 - t0; if (t1 - t0 > st(o + 5)) st(o + 5) = t1 - t0; st(o + 6) |= 1L << (me & 63)
+      st(o + 3) += 1; st(o + 4) += t1 - t0; if (t1 - t0 > st(o + 5)) st(o + 5) = t1 - t0; st(o + 6) |= 1L << (me.tid & 63)
     }
     if (lock.getHoldCount == 1) {
       cl.acquisitions.increment()
-      holdTid = me; holdSite = siteId(site); holdWhat = if (what eq null) -2 else whatId(what)
+      holdTid = me.tid; holdSite = site; holdSampled = sampled; holdWhat = whatId(what)
       holdStart = System.nanoTime()
     }
   }
@@ -143,15 +157,23 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       val t1 = System.nanoTime()
       val held = t1 - holdStart
       cl.holdNanos.add(held); PerThreadTimes.addHold(held)
-      val o = holdSite.toInt * SiteStride
-      val st = siteStats
-      st(o) += 1; st(o + 1) += held; if (held > st(o + 2)) st(o + 2) = held
       // a thread queued now arrived during this hold (it cannot leave the queue before this release)
       val contended = lock.hasQueuedThreads
-      if (contended || held >= holdThresholdNanos)
-        holds.add6(holdTid, holdSite, holdWhat, holdStart, t1, if (contended) 1 else 0)
+      if (contended || held >= holdThresholdNanos) {
+        val s = siteId(if (holdSite ne null) holdSite else callSite()) // the same frames as at the acquisition
+        holds.add6(holdTid, s, holdWhat, holdStart, t1, if (contended) 1 else 0)
+        addHold(s, 1, held)
+      } else if (holdSampled) {
+        addHold(siteId(holdSite), siteSample, held)
+        sampledHolds += 1
+      }
     }
     lock.unlock()
+  }
+  private def addHold(site: Int, weight: Long, held: Long): Unit = {
+    val o = site * SiteStride
+    val st = siteStats
+    st(o) += weight; st(o + 1) += weight * held; if (held > st(o + 2)) st(o + 2) = held
   }
 
   // ---- GC pauses, from the collectors' notifications
@@ -207,7 +229,7 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       sb.append(']')
     }
     sb.append("{\"version\":1,\"startEpochMillis\":").append(startEpochMillis).append(",\"wallUs\":").append(dur(end - startNanos))
-      .append(",\"holdThresholdUs\":").append(dur(holdThresholdNanos))
+      .append(",\"holdThresholdUs\":").append(dur(holdThresholdNanos)).append(",\"siteSample\":").append(siteSample)
     sb.append(",\n\"meta\":{")
     val m = new java.util.LinkedHashMap[String, String](environment); m.putAll(meta)
     var first = true
@@ -248,6 +270,8 @@ object ParallelTyperTimeline {
   private final val SiteStride = 7
 
   def threshold: Long = java.lang.Long.getLong("scalac.parallelTyper.xray.holdMicros", 50L) * 1000L
+  /** One outermost acquisition in this many has its call site walked (see `acquire`). */
+  private val siteSample: Int = math.max(1, Integer.getInteger("scalac.parallelTyper.xray.siteSample", 16).intValue)
 
   /** A run starts: with `-Dscalac.parallelTyper.xray=<file>`, record it (unless a recording is already installed). */
   def runStarting(): ParallelTyperTimeline = {
