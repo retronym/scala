@@ -2150,6 +2150,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def setAnnotations(annots: List[AnnotationInfo]): this.type = {
+      if (isConcurrentCompiler && completionLock.isPerKey)
+        annots.foreach { case lzy: LazyAnnotationInfo => lzy.claimWith(this) case _ => }
       _annotations = annots
       this
     }
@@ -3518,9 +3520,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
     override def typeConstructor: Type = {
-      if (tyconCacheNeedsUpdate)
-        setTyconCache(newTypeRef(Nil))
-      tyconCache
+      // read once: `info_=` on another thread (a completion setting this symbol's info) clears the field
+      val tc = tyconCache
+      if ((tc eq null) || tyconRunId != currentRunId) {
+        val tp = newTypeRef(Nil)
+        setTyconCache(tp)
+        tp
+      }
+      else tc
     }
     override def tpeHK: Type = typeConstructor
 
@@ -3528,7 +3535,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def setTyconCache(tycon: Type): Unit = {
       tyconCache = tycon
       tyconRunId = currentRunId
-      assert(tyconCache ne null, this)
+      assert(tycon ne null, this) // not the field: another thread's `info_=` may have cleared it
     }
 
     private def maybeUpdateTypeCache(): Unit = {
@@ -3731,12 +3738,19 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** the type this.type in this class */
     override def thisType: Type = {
+      // The value is read before it is trusted: another thread writes the value, then the stamp, as plain stores,
+      // and this thread can see the stamp first (seen on ARM as a null prefix in `typeRef`). `ThisType` is interned,
+      // so two threads store the same value.
       val period = thisTypePeriod
-      if (period != currentPeriod) {
-        if (!isValid(period)) thisTypeCache = ThisType(this)
+      var tp = thisTypeCache
+      if (period != currentPeriod || (tp eq null)) {
+        if ((tp eq null) || !isValid(period)) {
+          tp = ThisType(this)
+          thisTypeCache = tp
+        }
         thisTypePeriod = currentPeriod
       }
-      thisTypeCache
+      tp
     }
 
     override def owner: Symbol = {
@@ -3863,12 +3877,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     override def typeOfThis = {
       val period = typeOfThisPeriod
-      if (period != currentPeriod) {
-        if (!isValid(period))
-          typeOfThisCache = singleType(owner.thisType, sourceModule)
+      var tp = typeOfThisCache // read before it is trusted, as in `ClassSymbol.thisType`
+      if (period != currentPeriod || (tp eq null)) {
+        if ((tp eq null) || !isValid(period)) {
+          tp = singleType(owner.thisType, sourceModule)
+          typeOfThisCache = tp
+        }
         typeOfThisPeriod = currentPeriod
       }
-      typeOfThisCache
+      tp
     }
 
     def implicitMembers: Scope = {
