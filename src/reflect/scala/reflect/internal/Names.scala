@@ -78,7 +78,7 @@ trait Names extends api.Names {
    */
   private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
     var i = 0
-    val chrs = _chrs
+    val chrs = chrsTo(index + len)
     while ((i < len) && (chrs(index + i) == cs(offset + i)))
       i += 1
     i == len
@@ -143,12 +143,35 @@ trait Names extends api.Names {
         val next = termHashtable(h)
         val termName = new TermName(startIndex, len, next, cachedString)
         // Add the new termName to the hashtable only after it's been fully constructed
+        // (and, for `lookupTermName` on another thread, after its characters are in the table)
+        if (synchronizeNames) java.lang.invoke.VarHandle.releaseFence()
         termHashtable(h) = termName
         termName
       }
     }
-    if (synchronizeNames) nameLock.synchronized(body) else body
+    if (synchronizeNames) {
+      val existing = lookupTermName(cs, offset, len0)
+      if (existing ne null) existing else nameLock.synchronized(body)
+    }
+    else body
   }
+
+  /** The term name with these characters if this thread can see it in the table, else null: the lookup of
+   *  `newTermName` without the lock, for a table shared by several threads, where almost every call is for a name
+   *  that exists (a parser makes one per identifier). Names are only ever added, at the head of a bucket, after
+   *  their characters and behind a release fence, and a name's fields are final: a chain read from a stale head is
+   *  a suffix of the current one, so that a miss here only means looking again under the lock.
+   */
+  private def lookupTermName(cs: Array[Char], offset: Int, len0: Int): TermName =
+    if (offset < 0) null
+    else {
+      val len = math.max(len0, 0)
+      var n = termHashtable(hashValue(cs, offset, len) & HASH_MASK)
+      java.lang.invoke.VarHandle.acquireFence() // the head before the characters of the names behind it
+      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+        n = n.next
+      n
+    }
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
@@ -587,13 +610,18 @@ trait Names extends api.Names {
     def isTypeName: Boolean = false
     def toTermName: TermName = this
     def toTypeName: TypeName = {
-      def body = {
-        // Re-computing the hash saves a field for storing it in the TermName
-        val h = hashValue(chrsTo(index + len), index, len) & HASH_MASK
+      // Re-computing the hash saves a field for storing it in the TermName
+      def hash = hashValue(chrsTo(index + len), index, len) & HASH_MASK
+      // without the lock: the fields that the search reads are final, and a miss looks again under the lock
+      def existing(h: Int): TypeName = {
         var n = typeHashtable(h)
         while ((n ne null) && n.start != index)
           n = n.next
-
+        n
+      }
+      def body = {
+        val h = hash
+        val n = existing(h)
         if (n ne null) n
         else {
           val next = typeHashtable(h)
@@ -603,7 +631,11 @@ trait Names extends api.Names {
           typeName
         }
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      if (synchronizeNames) {
+        val n = existing(hash)
+        if (n ne null) n else nameLock.synchronized(body)
+      }
+      else body
     }
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
@@ -635,10 +667,12 @@ trait Names extends api.Names {
         while ((n ne null) && n.start != index)
           n = n.next
 
-        assert (n ne null, s"TypeName $this is missing its correspondent")
         n
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      // without the lock first, as in `toTypeName`
+      val n = if (synchronizeNames) { val n0 = body; if (n0 ne null) n0 else nameLock.synchronized(body) } else body
+      assert (n ne null, s"TypeName $this is missing its correspondent")
+      n
     }
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
