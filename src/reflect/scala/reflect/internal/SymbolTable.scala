@@ -589,25 +589,12 @@ abstract class SymbolTable extends macros.Universe
    *  this universe is constructed. */
   final class PerThread[T <: AnyRef](init: () => T) {
     private[this] val single: T = if (isConcurrentCompiler) null.asInstanceOf[T] else init()
-    // As `PerThreadScratches`: the universe holds the values, weakly keyed by thread, and the `ThreadLocal` only a weak
-    // reference. A value holds its universe (an outer pointer), so a `ThreadLocal` holding the value itself would keep
-    // every universe a long-lived thread (a driver's main thread, a build tool's) ever used alive.
-    private[this] val values = if (isConcurrentCompiler) java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, T]) else null
-    private[this] val local: ThreadLocal[java.lang.ref.WeakReference[T]] = if (isConcurrentCompiler) new ThreadLocal else null
-    def get: T =
-      if (local eq null) single
-      else {
-        val ref = local.get
-        val v = if (ref eq null) null.asInstanceOf[T] else ref.get
-        if (v ne null) v
-        else {
-          val created = init()
-          values.put(Thread.currentThread, created)
-          local.set(new java.lang.ref.WeakReference(created))
-          created
-        }
-      }
+    /** In a concurrent compiler, this value's slot in each thread's `Scratch`, -1 otherwise. The `Scratch` holds the
+     *  values, so they live as long as it does: as long as its thread, or its universe. */
+    private[this] val slot: Int = if (isConcurrentCompiler) perThreadSlots.getAndIncrement() else -1
+    def get: T = if (slot < 0) single else scratch.perThreadValue(slot, init).asInstanceOf[T]
   }
+  private[this] val perThreadSlots = new java.util.concurrent.atomic.AtomicInteger
   final def perThread[T <: AnyRef](init: => T): PerThread[T] = new PerThread(() => init)
 
   /** Whether symbols local to a body complete without the completion lock (`Symbol.completeLocally`). */
@@ -778,6 +765,25 @@ abstract class SymbolTable extends macros.Universe
     /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
     var ph: Phase = NoPhase
     var per: Period = NoPeriod
+
+    /** The values of this thread's `PerThread`s, by slot, made on first use. */
+    private[this] var perThreadValues: Array[AnyRef] = null
+    def perThreadValue(slot: Int, init: () => AnyRef): AnyRef = {
+      val vs = perThreadValues
+      if ((vs ne null) && slot < vs.length) {
+        val v = vs(slot)
+        if (v ne null) return v
+      }
+      newPerThreadValue(slot, init)
+    }
+    private def newPerThreadValue(slot: Int, init: () => AnyRef): AnyRef = {
+      if (perThreadValues eq null) perThreadValues = new Array[AnyRef](math.max(16, slot + 1))
+      else if (slot >= perThreadValues.length)
+        perThreadValues = java.util.Arrays.copyOf(perThreadValues, math.max(slot + 1, perThreadValues.length * 2))
+      val v = init()
+      perThreadValues(slot) = v
+      v
+    }
 
     // Reusable instances of helpers with mutable state, one per level of reentrance. As the
     // `Scratch` is confined to a thread, they are reused in runtime reflection too.
