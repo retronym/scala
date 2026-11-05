@@ -351,6 +351,23 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
     }
 
     private[this] var reportedFeature = Set[Symbol]()
+    // the features (`scala.language.x`) that have been explained, by name: the parallel typer's reporter has the message only
+    private[this] var explainedFeatures = Set[String]()
+    /** Set while the parallel typer's workers run. */
+    @volatile var deferFeatureExplanations = false
+    /** The message of a feature warning made while the parallel typer's workers ran, as it is to be issued: with its
+     *  explanation if it is the first of its feature to be issued, else without. */
+    def explainFeature(msg: String): String = synchronized {
+      val start = msg.indexOf(Reporting.featureExplanationStart)
+      val end = if (start < 0) -1 else msg.indexOf(Reporting.featureExplanationEnd, start)
+      if (end < 0) msg
+      else {
+        val nameStart = start + Reporting.featureExplanationStart.length
+        val fqname = msg.substring(nameStart, msg.indexOf('\'', nameStart))
+        if (!explainedFeatures(fqname)) { explainedFeatures += fqname; msg }
+        else msg.substring(0, start - 1) + msg.substring(end + Reporting.featureExplanationEnd.length)
+      }
+    }
     protected def featureReported(featureTrait: Symbol): Unit = reportedFeature += featureTrait
 
     // we don't have access to runDefinitions here, so mapping from strings instead of feature symbols
@@ -377,14 +394,17 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
     private def featureWarning0(pos: Position, featureName: String, featureDesc: String, featureTrait: Symbol, construct: String, required: Boolean, site: String, category: WarningCategory): Unit = synchronized {
       val req     = if (required) "needs to" else "should"
       val fqname  = s"scala.language.$featureName"
+      // While the parallel typer's workers run, which occurrence is the first is a matter of arrival: every one is
+      // explained, and the buffering reporter keeps the explanation of the first in its fixed order (`explainFeature`).
+      val deferred = deferFeatureExplanations
       val explain =
-        if (reportedFeature contains featureTrait) ""
+        if ((reportedFeature contains featureTrait) || explainedFeatures(fqname)) ""
         else sm"""|
-                  |This can be achieved by adding the import clause 'import $fqname'
+                  |${Reporting.featureExplanationStart}$fqname'
                   |or by setting the compiler option -language:$featureName.
                   |See the Scaladoc for value $fqname for a discussion
-                  |why the feature $req be explicitly enabled."""
-      reportedFeature += featureTrait
+                  |why the feature $req ${Reporting.featureExplanationEnd}"""
+      if (!deferred) { reportedFeature += featureTrait; explainedFeatures += fqname }
 
       val msg = s"$featureDesc $req be enabled\nby making the implicit value $fqname visible.$explain".replace("#", construct)
       // on postfix error, include interesting infix warning
@@ -552,6 +572,9 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
 }
 
 object Reporting {
+  // the ends of a feature warning's explanation, for `PerRunReporting.explainFeature`
+  final val featureExplanationStart = "This can be achieved by adding the import clause 'import "
+  final val featureExplanationEnd = "be explicitly enabled."
   sealed trait Message {
     def pos: Position
     def msg: String
