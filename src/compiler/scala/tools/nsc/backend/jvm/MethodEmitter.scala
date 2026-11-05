@@ -19,6 +19,8 @@ import scala.tools.asm.tree.{MethodInsnNode, MethodNode}
 /** A label made by codegen, which knows whether a jump to it has been emitted so far. */
 final class CodegenLabel extends Label {
   var isJumpTarget: Boolean = false
+  /** How many instructions the method had when this label was visited. */
+  var insnsBefore: Int = -1
 }
 
 /** What codegen goes through to emit a method, and what it asks about the code emitted so far. Everything
@@ -39,6 +41,17 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode, direc
 
   private[this] var unreachable = false
   private[this] var unreachableBeforeLastLabel = false
+
+  private[this] var insnCount = 0
+
+  /** The number of `try` and `synchronized` bodies being emitted, whose handlers `underlying` hasn't seen yet. */
+  var protectedDepth = 0
+
+  /** No instruction has been emitted since `label`, even if a line number or another label has. */
+  def nothingEmittedSince(label: Label): Boolean = label match {
+    case l: CodegenLabel => l.insnsBefore == insnCount
+    case _ => false
+  }
 
   /** Emitted immediately before each `RETURN`. */
   var beforeReturn: () => Unit = null
@@ -84,6 +97,7 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode, direc
 
   private def before(opcode: Int): Unit = {
     flushLine()
+    insnCount += 1
     lastIsLine = false
     _lastOpcode = opcode
     _lastLabel = null
@@ -120,6 +134,10 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode, direc
     unreachable = false
     _lastOpcode = -1
     _lastLabel = label
+    label match {
+      case l: CodegenLabel => l.insnsBefore = insnCount
+      case _ =>
+    }
     super.visitLabel(label)
   }
 
@@ -149,6 +167,10 @@ final class MethodEmitter(underlying: MethodVisitor, val tree: MethodNode, direc
   override def visitVarInsn(opcode: Int, varIndex: Int): Unit = {
     before(opcode)
     super.visitVarInsn(opcode, varIndex)
+    // `MethodWriter.visitVarInsn` starts a basic block after a store if it has seen a handler, so that the handler's frame
+    // merges the locals at each instruction it covers. `MethodNode.accept` visits handlers before the code, but codegen
+    // only visits one after the code it protects. Without a tree, we have to start that block ourselves.
+    if (direct != null && protectedDepth > 0 && opcode >= ISTORE) super.visitLabel(new Label)
   }
 
   override def visitTypeInsn(opcode: Int, tpe: String): Unit = {

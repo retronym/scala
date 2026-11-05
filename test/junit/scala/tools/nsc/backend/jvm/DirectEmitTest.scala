@@ -66,6 +66,100 @@ class DirectEmitTest {
     assertEquals(1, loader.define().getDeclaredMethods.count(_.getName == "f")) // links, so verifies, the class
   }
 
+  private def assertLinks(c: Compiler, code: String): Unit = {
+    val List((file, bytes)) = c.compileToBytes(code, allowMessage = _ => true)
+    assertEquals("C.class", file)
+    val loader = new ClassLoader(null) { def define() = defineClass("C", bytes, 0, bytes.length) }
+    loader.define().getDeclaredMethods // links, so verifies, the class
+  }
+
+  /** A handler's frame merges the locals at the start and end of each block in its range, so a block in which `s` is
+   *  stored twice with different types needs splitting. `MethodWriter` only does that once it has seen a handler, and
+   *  codegen shows it the handler after the code it protects. A new line starts a block too, which hides this.
+   */
+  @Test def twoStoresInFirstProtectedRegion(): Unit = {
+    assertLinks(direct, """class C { def g(): Unit = (); def f(): Object = { var s: Object = null; try { s = "a"; g(); s = Integer.valueOf(1); g(); s } catch { case _: Exception => s } } }""")
+    val tryCatch =
+      """class C {
+        |  def g(): Unit = ()
+        |  def f(): Object = {
+        |    var s: Object = null
+        |    try {
+        |      s = "a"
+        |      g()
+        |      s = Integer.valueOf(1)
+        |      g()
+        |      s
+        |    } catch { case _: Exception => s }
+        |  }
+        |}
+        |""".stripMargin
+    assertLinks(direct, tryCatch)
+    assertLinks(directNoLines, tryCatch)
+    assertLinks(directNoLines,
+      """class C {
+        |  def g(): Unit = ()
+        |  def f(): Object = {
+        |    var s: Object = null
+        |    this.synchronized {
+        |      s = "a"
+        |      g()
+        |      s = Integer.valueOf(1)
+        |      g()
+        |    }
+        |    s
+        |  }
+        |}
+        |""".stripMargin)
+    // in a handler, which a surrounding `finally` protects
+    assertLinks(directNoLines,
+      """class C {
+        |  def g(): Unit = ()
+        |  def f(): Object = {
+        |    var s: Object = null
+        |    try g()
+        |    catch {
+        |      case _: Exception =>
+        |        s = "a"
+        |        g()
+        |        s = Integer.valueOf(1)
+        |        g()
+        |    } finally println(s)
+        |    s
+        |  }
+        |}
+        |""".stripMargin)
+  }
+
+  /** A line number without an instruction still needs a `NOP`, or the handler's range is empty. That is otherwise only
+   *  saved by `removeEmptyExceptionHandlers`, which `-opt:none` doesn't run and direct emission can't.
+   */
+  @Test def unitOnItsOwnLineInTry(): Unit = {
+    val code =
+      """class C {
+        |  def f(): Unit =
+        |    try {
+        |      ()
+        |    } catch { case _: Exception => () }
+        |}
+        |""".stripMargin
+    assertLinks(direct, code)
+    assertLinks(treeNoOpt, code)
+    assertLinks(tree, code)
+    assertLinks(directNoLines, code)
+    assertLinks(direct,
+      """class C {
+        |  def f(): Int = {
+        |    throw new Exception
+        |    try {
+        |      ()
+        |    } catch { case _: Exception => () }
+        |    1
+        |  }
+        |}
+        |""".stripMargin)
+  }
+
   /** A string constant that is too long throws during emission, and generating the class again reports as ever. */
   @Test def errorsFromTheTreePath(): Unit = {
     val code = s"""class C { def f = "${"x" * 70000}" }"""
@@ -85,5 +179,7 @@ class DirectEmitTest {
 
 object DirectEmitTest {
   private lazy val direct = newCompiler()
+  private lazy val directNoLines = newCompiler(extraArgs = "-g:none")
   private lazy val tree = newCompiler(extraArgs = "-Ybackend-tree")
+  private lazy val treeNoOpt = newCompiler(extraArgs = "-opt:none")
 }

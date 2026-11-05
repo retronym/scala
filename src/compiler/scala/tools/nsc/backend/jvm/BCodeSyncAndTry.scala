@@ -48,6 +48,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
       bc dup ObjectRef
       locals.store(monitor)
       emit(asm.Opcodes.MONITORENTER)
+      mnode.protectedDepth += 1
 
       /* ------ (2) Synchronized block.
        *            Reached by fall-through from (1).
@@ -104,6 +105,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        *            Protected by whatever protects the whole synchronized expression.
        * ------
        */
+      mnode.protectedDepth -= 1
       mnode visitLabel postHandler
 
       lineNumber(tree)
@@ -115,9 +117,10 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
      *  Detects whether no instructions have been emitted since label `lbl` and if so emits a NOP.
      *  Useful to avoid emitting an empty try-block being protected by exception handlers,
      *  which results in "java.lang.ClassFormatError: Illegal exception table range". See scala/bug#6102.
+     *  A line number may have been emitted since `lbl`, for example for a `()` on a line of its own.
      */
     def nopIfNeeded(lbl: asm.Label): Unit = {
-      val noInstructionEmitted = isAtProgramPoint(lbl)
+      val noInstructionEmitted = mnode.nothingEmittedSince(lbl)
       if (noInstructionEmitted) { emit(asm.Opcodes.NOP) }
     }
 
@@ -236,6 +239,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * ------
        */
 
+      mnode.protectedDepth += 1
       val startTryBody = currProgramPoint()
       registerCleanup(finCleanup)
       genLoad(block, kind)
@@ -367,6 +371,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * ------
        */
 
+      mnode.protectedDepth -= 1
       markJoinPoint(postHandlers)
       if (hasFinally) {
         emitFinalizer(finalizer, tmp, isDuplicate = false) // the only invocation of emitFinalizer with `isDuplicate == false`
