@@ -1072,11 +1072,11 @@ trait Definitions extends api.StandardDefinitions {
         // { val res = samCache.getOrElseUpdate(tpSym, compute); assert(compute eq res, s"samOf($tp) cache discrepancy $compute <-> $res") }
 
         // -Yparallel-typer: the monitor is not held while computing, which completes symbols
-        samCache.synchronized(samCache.get(tpSym)) match {
+        lockedIfConcurrent(samCache)(samCache.get(tpSym)) match {
           case Some(sam) => sam
           case None =>
             val sam = compute
-            samCache.synchronized(samCache.getOrElseUpdate(tpSym, sam))
+            lockedIfConcurrent(samCache)(samCache.getOrElseUpdate(tpSym, sam))
         }
       } else NoSymbol
     }

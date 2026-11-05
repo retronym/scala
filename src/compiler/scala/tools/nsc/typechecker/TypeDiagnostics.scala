@@ -76,9 +76,9 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
 
   def setAddendum(pos: Position, msg: () => String) =
     if (pos != NoPosition)
-      addendums.synchronized(addendums(pos) = msg)
+      lockedIfConcurrent(addendums)(addendums(pos) = msg)
 
-  def withAddendum(pos: Position) = (_: String) + addendums.synchronized(addendums.getOrElse(pos, () => ""))()
+  def withAddendum(pos: Position) = (_: String) + lockedIfConcurrent(addendums)(addendums.getOrElse(pos, () => ""))()
 
   def decodeWithKind(name: Name, owner: Symbol): String = {
     val prefix = (
