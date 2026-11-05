@@ -470,9 +470,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     def run(): Unit = {
       echoPhaseSummary(this)
-      val units = currentRun.units
-      while (units.hasNext)
-        applyPhase(units.next())
+      if (!currentRun.runOnPool(this)) {
+        val units = currentRun.units
+        while (units.hasNext)
+          applyPhase(units.next())
+      }
     }
 
     def apply(unit: CompilationUnit): Unit
@@ -1418,6 +1420,38 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** take note that a phase on a unit is completed
      *  (for progress reporting)
      */
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelPostTyper[=steps|fusedTransforms|fused]: superaccessors,
+    // extmethods and pickler run a unit per task on the parallel typer's pool. `steps` (the default): each phase is
+    // a pool step of its own, so that a phase has finished on every unit before the next starts on any, as in a
+    // serial run. The fused modes are experiments: the phases of a group run back to back on a unit, and the
+    // pickler of one unit can then meet symbols that another unit's superaccessors or extmethods is renaming.
+    private[this] val postTyperGroups: List[List[String]] =
+      if (!settings.YparallelTyper.value) Nil
+      else System.getProperty("scalac.parallelTyper.parallelPostTyper") match {
+        case null | "false"    => Nil
+        case "fused"           => List(List("superaccessors", "extmethods", "pickler"))
+        case "fusedTransforms" => List(List("superaccessors", "extmethods"), List("pickler"))
+        case _                 => List(List("superaccessors"), List("extmethods"), List("pickler"))
+      }
+    private[this] var ranFused: Set[Phase] = Set.empty
+
+    /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
+    private[nsc] def runOnPool(ph: GlobalPhase): Boolean =
+      if (postTyperGroups.isEmpty) false
+      else if (ranFused(ph)) true
+      else postTyperGroups.find(_.head == ph.name) match {
+        case Some(group) =>
+          // a group is fused only if its phases follow each other in this run (-Yskip, -Ystop-after, plugin phases)
+          val chain = Iterator.iterate[Phase](ph)(_.next).take(group.length).toList
+          val phases = if (chain.map(_.name) == group) chain.map(_.asInstanceOf[GlobalPhase]) else ph :: Nil
+          ranFused ++= phases.tail
+          val us = units.toList
+          if (phases.tail.isEmpty) analyzer.parallelPhase(ph, us, ph.name)(ph.applyPhase(_))
+          else analyzer.parallelPhase(ph, us, "post-typer")(u => phases.foreach { p => phase = p; p.applyPhase(u) })
+          true
+        case None => postTyperGroups.exists(_.contains(ph.name)) && { analyzer.parallelPhase(ph, units.toList, ph.name)(ph.applyPhase(_)); true }
+      }
+
     def advanceUnit(): Unit = synchronized {
       unitc += 1
       refreshProgress()

@@ -237,7 +237,8 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     def rehash(sym: Symbol, newname: Name): Unit = writing {
-      if (hashtable ne null) {
+      if (isConcurrentCompiler) rehashForReaders(sym, newname)
+      else if (hashtable ne null) {
         val index = sym.name.start & HASHMASK
         var e1 = hashtable(index)
         var e: ScopeEntry = null
@@ -258,6 +259,30 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
           e.tail = hashtable(newindex)
           hashtable(newindex) = e
         }
+      }
+    }
+
+    /** `rehash` while another thread may be reading this scope (the phases after the typer rename private members,
+     *  `makeNotPrivate`, a unit per thread, while other units look members up in its classes): the entry is not
+     *  moved, since a reader standing on it would follow its new `tail` into the other bucket and miss the rest of
+     *  its own. It is bypassed in its bucket and left as it is, and a fresh entry takes its place in the element
+     *  list and goes to the head of the new bucket. */
+    private def rehashForReaders(sym: Symbol, newname: Name): Unit = if (hashtable ne null) {
+      val index = sym.name.start & HASHMASK
+      val newindex = newname.start & HASHMASK
+      var e = hashtable(index)
+      while ((e ne null) && (e.sym ne sym)) e = e.tail
+      if ((e ne null) && index != newindex) {
+        val e2 = new ScopeEntry(sym, this)
+        e2.next = e.next
+        e2.tail = hashtable(newindex)
+        publishEntry()
+        if (hashtable(index) eq e) hashtable(index) = e.tail
+        else { var e1 = hashtable(index); while (e1.tail ne e) e1 = e1.tail; e1.tail = e.tail }
+        if (elems eq e) elems = e2
+        else { var e1 = elems; while (e1.next ne e) e1 = e1.next; e1.next = e2 }
+        hashtable(newindex) = e2
+        flushElemsCache()
       }
     }
 

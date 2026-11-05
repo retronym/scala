@@ -205,7 +205,7 @@ trait ParallelTyper {
 
   /** `task` on each of `units` on the parallel typer's pool, largest first, for a phase other than the typer. */
   def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String)(task: CompilationUnit => Unit): Unit = {
-    val n = prop("threads").map(_.toInt).getOrElse {
+    val n = if (flag("oneThread")) 1 else prop("threads").map(_.toInt).getOrElse {
       val s = settings.YparallelTyperThreads.value
       if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
     }
