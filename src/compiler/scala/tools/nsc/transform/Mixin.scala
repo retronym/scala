@@ -427,7 +427,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
 
     /** The rootContext used for typing */
     private val rootContext =
-      erasure.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)
+      erasure.erasureAnalyzer.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)
 
     private val nullables = mutable.HashMap[Symbol, Map[Symbol, List[Symbol]]]()
 
