@@ -1130,13 +1130,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           devWarning(s"calling Symbol#exists with sourcefile based symbol loader may give incorrect results.")
         false
       }
-      if (isConcurrentCompiler) underCompletionLock {
+      if (isConcurrentCompiler) { if (!isInitialized || isCompletingElsewhere) underCompletionLock {
         if (!isInitialized) {
           val saved = markCompleting()
           try rawInfo.load(this)
           finally unmarkCompleting(saved)
         }
-      }
+      }}
       else rawInfo.load(this)
       rawInfo != NoType || warnIfSourceLoader()
     }
@@ -1686,6 +1686,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     private def completeInNextFrame(tp: Type): Unit = {
       val s = scratch
+      s.checkOwner()
       val frame = s.frame
       s.frame = frame.next
       try tp.complete(this)

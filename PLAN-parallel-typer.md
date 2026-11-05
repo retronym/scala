@@ -21,7 +21,11 @@ A Namer completer for a symbol of unit B runs on whichever thread first asks for
 
 What the pre-pass does not cover: definitions local to a body (confined to the thread typing that body, which is the unit's own); classpath completions (loaders and unpickling, which still run under the completion lock from any thread); members that the typer itself adds to a class while typing its template (`addSyntheticMethods`: the case class methods), see open problems.
 
-The pre-pass completes, per unit in tree order, the imports at package level (an `import scala.Predef.{...}` excludes the root import for the rest of the unit, `Contexts.registerImport`), classes and objects with their type parameters, self type, members (from the scope, so that synthetic ones are included, to a fixed point) and annotations, the members' parameters, and the unit's `synthetics`. A type error that escapes a completion there is reported at the symbol.
+The pre-pass completes, per unit in tree order, the imports at package level (an `import scala.Predef.{...}` excludes the root import for the rest of the unit, `Contexts.registerImport`), classes and objects with their type parameters, self type, members (from the scope, so that synthetic ones are included, to a fixed point), the members' parameters, and the unit's `synthetics`. A type error that escapes a completion there is reported at the symbol. While doing so, `currentRun.currentUnit` is the unit being completed (as in the serial typer, a completion of another unit's symbol nested in it sees the outer unit, and so takes fresh names from it).
+
+Annotations are forced in a second serial sub-pass, after every signature is complete, not interleaved with them: an annotation is lazy so that its arguments can refer to symbols still being completed. A `LazyAnnotationInfo` thunk types unit B's annotation trees with B's context, and is forced by whichever thread first asks for `sym.annotations` (`hasAnnotation`, `getAnnotation`: `@implicitNotFound`, `@compileTimeOnly`, `@deprecated`, `@nowarn`, ...), outside `Symbol.info`, so neither the lock nor a pass over `info` would cover it. A thunk that is still lazy after the sub-pass (local or synthetic symbols) is forced under the completion lock, taken before the lazy val's monitor. Annotations added during body typing (`annotate` in `typedDefDef`/`typedValDef`/`typedClassDef`, `@unchecked` on scrutinees, `T @ann` in an `AnnotatedType`) are on the unit's own symbols and trees, typed by the unit's thread; another unit can see them through a signature only after the pre-pass, and through a member's annotations only while the owning unit's typer adds them (the read-modify-write of `_annotations` on such a symbol is not atomic: noted, not seen). Deprecation and `@compileTimeOnly` checks at use sites run in refchecks, after the pickler, so serially. Classpath annotations are read by the unpickler and the classfile parser inside a loader's completion (the lock); Java annotation arguments in the classfile parser are not thunks over the shared buffer (TODO confirm for `-Ytasty-reader`).
+
+The oracle has two small corpora of its own for this (`tools/parallel-typer/corpus/annotations`, `annotations-neg`): a deprecated member and class used from other files, annotation arguments that refer to the annotated class's own companion (a static and a constant annotation), `@implicitNotFound` consulted from two other files (errors), and a Java annotation with enum and array arguments, written in Java and used from Scala.
 
 Cost, measured on `src/library` (574 units): the pre-pass takes about 2.0-2.5 s of a typer phase whose serial total is about 4-5 s, because in Scala 2 an inferred result type types its body inside the completer. That is the serial fraction that bounds the speed-up (Amdahl), see Measurements.
 
@@ -49,6 +53,8 @@ The rule from Scala 3 holds: "in progress on another thread" is never a state to
 Lazy vals hold the monitor of their enclosing object while the initialiser runs. Any lazy val whose initialiser completes a symbol (about 300 in `Definitions`/`RunDefinitions`) would deadlock against the completion lock: A holds the lock and wants the monitor, B holds the monitor and wants the lock. Rules: (1) force them all on the main thread before the workers start (`ParallelTyper.forceLazyVals`, a reflective sweep of `$lzycompute` and `$module` accessors, after the signatures: forced before, `Predef_???` met Predef mid-completion when compiling the library, I3); (2) a per-instance lazy val that completes symbols takes the completion lock before its monitor (`forcedInfo`); (3) no `synchronized` block in this work calls anything that can complete a symbol: maps that need a computation (`samCache`, `rootImportsCached`) read under the monitor, compute outside it, store under it.
 
 ### Ambient state, per thread
+
+Rule: a per-thread object (`Scratch`, `Frame`, a `perThread` holder's value) is fetched into a local for the duration of an operation and never kept in a field of a `Typer`, `Context`, `Namer`, `ImplicitSearch`, completer or tree, nor captured by a closure that outlives the operation: completers, annotation thunks, deferred post-unit checks and delayed macro expansions capture typers and contexts and run later, possibly on another thread, where they must use that thread's state. All the state made per thread here is reached through `perThread(...).get` at the point of use (the implicit search caches, the shadower, `lastAccessCheckDetails`, `isTyperInPattern`, `instantiate`, the macro bookkeeping, `startContext`, the position assigner). `-Dscalac.debug.checkScratchOwner` records each `Scratch`'s thread and checks it where the phase register and the completion frame are written; the oracle's runs pass with it. Nothing was made "per typer" on the assumption that a typer is a thread.
 
 - `phase`/`currentPeriod`: in `Scratch` (`ph`, `per`) when `phasePerThread`, else the plain fields. TODO: a field on the worker thread instead of the `ThreadLocal` + `WeakReference` lookup, and a measurement of the serial cost.
 - `currentRun.currentUnit`, `currentFreshNameCreator`: `ThreadLocal`s under the flag.
@@ -101,7 +107,19 @@ The state map (`tools/state-map/worklist.md`, 656 fields reachable from the type
 
 ## Measurements
 
-`src/library`, 574 units, M-series laptop, cold `scalac` processes (`-J-Xss64m`), so these are first impressions, not benchmarks: serial typer phase about 4-5 s; parallel path on one thread: pre-pass 2.0 s, bodies 3.6 s; on 8 threads: pre-pass 2.1-2.6 s, bodies 2.2-2.4 s, with about 478k outermost acquisitions of the completion lock, held 1.2-1.3 s in total and waited for 11-12 s in total across threads. The lock is taken mostly by the slow paths of the stamped type caches, not by completions.
+Oracle (cold processes, `tools/parallel-typer/oracle.sh`): `src/library` (574 units, 805 pickles) 20 runs at 8 threads, all agree with the one-thread run, and differ from serial only by O1; `src/reflect` (213 pickles, 7 warnings) 5 runs and `src/compiler` (480 pickles, 4 warnings) 5 runs at 8 threads agree with serial byte for byte, diagnostics included; the annotation corpora 10 runs at 4 threads each agree. No crash or hang in these runs once I1-I3 were fixed.
+
+Speed, `src/library` to the pickler, warm JVM (`tools/parallel-typer/Bench.scala`: 6 warm-up and 5 measured compilations per configuration in one JVM, `-Xss64m -Xmx6g`, M-series laptop with other work running, so a first look, not a benchmark), medians:
+
+| config | total ms | signatures pre-pass ms | bodies ms | lock held ms | lock acquisitions | lock waited ms (sum over threads) |
+|---|---:|---:|---:|---:|---:|---:|
+| serial | 2211 | | | | | |
+| one thread | 2169 | 384 | 1500 | 488 | 98k | 0 |
+| 2 threads | 1601 | 401 | 937 | 430 | 102k | 374 |
+| 4 threads | 1545 | 366 | 878 | 569 | 104k | 1596 |
+| 8 threads | 2616 (min 1602) | 470 | 1800 | 1510 | 105k | 6529 |
+
+Reading: the parallel path costs nothing on one thread (2169 against 2211), the bodies speed up 1.6-1.7x on 2-4 threads, and 8 threads are slower than 4. Two serial fractions bound it: the pre-pass (about a fifth of the typer phase, because inferred result types type their bodies there) and the time under the lock during the bodies (about a third of the one-thread bodies time). The acquisitions by call site (`-Dscalac.parallelTyper.lockSites`, 4 threads): `Symbol.info` slow path 35k (completions, mostly of local symbols, which need no lock as they are confined to their unit), `TypeSymbol.tpe_*` 24k, `cookJavaRawInfo` 24k, `TypeRef.baseTypeSeq` 18k, `SingleType.underlying` 9k, `CompoundType.baseClasses` 7k, `CompoundType.baseTypeSeq` 3k, annotations 2k, `expansiveRefs` 2k, macro bindings 1k. A first version took the lock in `Symbol.exists` unconditionally: 395k acquisitions, bodies 9.4 s on 4 threads; it now takes it only on the slow path. At 8 threads the time held grows (1510 ms against 430-570), a sign of convoying: the holders are descheduled while waiters spin and park.
 
 ## DONE
 
@@ -110,17 +128,18 @@ The state map (`tools/state-map/worklist.md`, 656 fields reachable from the type
 
 ## TODO (stage 1)
 
-- Repeat the oracle on the library 20 times at 8 threads; reflect; compiler.
-- `ClassInfoType.expansiveRefs` under the lock.
 - `_rawflags` read-modify-write on shared symbols (`cookJavaRawInfo`'s `TRIEDCOOKING` and `rawToExistential` on classpath Java symbols): under the lock, or an atomic updater if the oracle shows lost updates.
 - `addSyntheticMethods` enters case class members into decls while other threads look them up: confirm the publication argument (scope entries are prepended; the hash table is published filled), or a serial pre-pass.
 - Cross-unit `toCheck` additions after the home unit drained them (only from completers, so covered by the pre-pass unless lazy signatures).
 - Account for each section of the state map worklist (tools/state-map, merged at the milestone).
-- Serial regressions: partest pos/neg slice, junit for the touched areas.
+- Measure the cost to the serial compiler (no flag) with a paired A/B against fd95c5c1c1 (perflab): the `phase` read is a field test and a branch, `info` an extra test.
+- Done: serial regressions, partest `--pos --neg` (3336 tests) and junit `scala.reflect.internal`, `nsc.typechecker`, `nsc.reporters`, `nsc.symtab` (378) pass without the flag.
 
 ## Future work (stage 2)
 
-- Timeline per worker; quantify lock waiting by caller (the type caches dominate the acquisitions).
+- Timeline per worker (`-Dscalac.parallelTyper.timeline` writes per-unit spans with lock wait and hold; not yet looked at).
+- No lock for completions of symbols local to a body (confined to the unit's thread): the largest single site.
+- The stamped type caches without the lock: per-thread in-progress markers, value then stamp (or one immutable holder), so that only a real recomputation contends.
 - Phase register as a field of the worker thread.
 - A claim per completion root (the `PerKeyClaims` of scala-sharing) instead of one lock; per-thread in-progress markers for the stamped caches so that their slow paths need no lock.
 - Deterministic symbol ids per unit if `isLess` ties show in pickles.

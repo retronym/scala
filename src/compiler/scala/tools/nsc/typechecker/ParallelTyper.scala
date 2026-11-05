@@ -82,7 +82,13 @@ trait ParallelTyper {
       if (flag("lazySignatures")) 0
       else {
         var n = 0
-        units.foreach(u => n += completeSignatures(u))
+        val completed = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
+        units.foreach(u => n += completeSignatures(u, completed))
+        // Then their annotations, in a pass of their own: an annotation is lazy so that its arguments can refer to
+        // symbols still being completed. A thunk types the annotation with its symbol's context, in place, so it
+        // must not run on another unit's thread; and outside `info`, the lock would not cover it (it is taken
+        // before the lazy val's monitor, `LazyAnnotationInfo.forcedInfo`, for the ones that are left).
+        forceAnnotations(completed)
         n
       }
     val t1 = System.nanoTime()
@@ -227,7 +233,17 @@ trait ParallelTyper {
    *  annotations. Returns the number of symbols completed. A type error that escapes a completion is reported here,
    *  at the symbol, where the serial typer would report it at the tree that first needed the symbol.
    */
-  private def completeSignatures(unit: CompilationUnit): Int = {
+  private def forceAnnotations(syms: Iterable[(CompilationUnit, Symbol)]): Unit = {
+    val savedUnit = currentRun.currentUnit
+    try syms.foreach { case (unit, sym) =>
+      currentRun.currentUnit = unit
+      try sym.annotations.foreach(_.completeInfo())
+      catch { case ex: TypeError => reporter.error(sym.pos, ex.getMessage) }
+    }
+    finally currentRun.currentUnit = savedUnit
+  }
+
+  private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)]): Int = {
     var n = 0
     val seen = mutable.HashSet[Symbol]()
     val savedUnit = currentRun.currentUnit
@@ -239,7 +255,7 @@ trait ParallelTyper {
           sym.initialize
           sym.typeParams.foreach(complete)
           if (sym.isMethod) sym.paramss.foreach(_.foreach(complete))
-          sym.annotations.foreach(_.completeInfo())
+          completed += ((unit, sym))
           if (sym.isModule) complete(sym.moduleClass)
           if (sym.isClass) {
             sym.typeOfThis
