@@ -40,10 +40,16 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
   final val shortenImports = false
 
-  // All typechecked RHS of ValDefs for right-associative operator desugaring
-  private val rightAssocValDefs = new mutable.HashMap[Symbol, Tree]
-  // Symbols of ValDefs for right-associative operator desugaring which are passed by name and have been inlined
-  private val inlinedRightAssocValDefs = new mutable.HashSet[Symbol]
+  // Produced and consumed while typing one block, so on one thread: per thread under -Yparallel-typer.
+  private final class RightAssocState {
+    // All typechecked RHS of ValDefs for right-associative operator desugaring
+    val rightAssocValDefs = new mutable.HashMap[Symbol, Tree]
+    // Symbols of ValDefs for right-associative operator desugaring which are passed by name and have been inlined
+    val inlinedRightAssocValDefs = new mutable.HashSet[Symbol]
+  }
+  private[this] lazy val rightAssocStates = perThread(new RightAssocState)
+  private def rightAssocValDefs = rightAssocStates.get.rightAssocValDefs
+  private def inlinedRightAssocValDefs = rightAssocStates.get.inlinedRightAssocValDefs
 
   // For each class, we collect a mapping from constructor param accessors that are aliases of their superclass
   // param accessors. At the end of the typer phase, when this information is available all the way up the superclass
@@ -119,7 +125,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val InterpolatorIdentRegex = """\$[\w]+""".r // note that \w doesn't include $
 
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
-  def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
+  def freshNameCreatorFor(context: Context) = {
+    val owner = context.outermostContextAtCurrentPos.enclClassOrMethod.owner
+    typerFreshNameCreators.synchronized(typerFreshNameCreators.getOrElseUpdate(owner, new FreshNameCreator))
+  }
 
   /** Does the context of tree `tree` require a stable type?
    *  It reads no typer state, so a phase after typer can ask without a typer (or a context) at hand.
@@ -1736,7 +1745,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           //         in this source file. See `ImplicitSearch#isValid` and `ImplicitInfo#isCyclicOrErroneous`.
           val dummy = context.outer.owner.newLocalDummy(context.owner.pos)
           val cscope = context.outer.makeNewScope(ctor, dummy)
-          if (dummy.isTopLevel) currentRun.symSource(dummy) = currentUnit.source.file
+          if (dummy.isTopLevel) currentRun.symSource(dummy) = context.unit.source.file
           val cbody2 = { // called both during completion AND typing.
             val typer1 = newTyper(cscope)
             // XXX: see about using the class's symbol....
@@ -2305,7 +2314,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               }
             }
             if (!accToSuperAcc.isEmpty) {
-              superConstructorCalls(clazz) = accToSuperAcc
+              superConstructorCalls.synchronized(superConstructorCalls(clazz) = accToSuperAcc)
             }
           }
         }
@@ -3127,7 +3136,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                     =>
               val sam = samOf(pt)
               if (sam.exists && sam.info.params.lengthCompare(numVparams) == 0)
-                wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
+                scratch.wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
               else pt // allow type slack (pos/6221)
           }
 

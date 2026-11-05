@@ -17,7 +17,6 @@ import scala.collection.{immutable, mutable}, mutable.ListBuffer
 import scala.reflect.internal.Depth
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.util.control.ControlThrowable
-import symtab.Flags._
 
 /** This trait contains methods related to type parameter inference.
  *
@@ -142,7 +141,10 @@ trait Infer extends Checkable {
   /** Map every TypeVar to its constraint.inst field.
    *  throw a NoInstance exception if a NoType or WildcardType is encountered.
    */
-  object instantiate extends TypeMap {
+  // per thread under -Yparallel-typer: `excludedVars` is the state of an instantiation in progress
+  private[this] lazy val instantiates = perThread(new Instantiate)
+  def instantiate: Instantiate = instantiates.get
+  final class Instantiate extends TypeMap {
     private var excludedVars = immutable.Set[TypeVar]()
     private def applyTypeVar(tv: TypeVar): Type = tv match {
       case TypeVar(origin, constr) if !constr.instValid => throw new DeferredNoInstance(() => s"no unique instantiation of type variable $origin could be found")
@@ -298,7 +300,7 @@ trait Infer extends Checkable {
         }
         if (accessible eq NoSymbol)
           checkAccessibleError(tree, sym, pre, site)
-        else if (context.owner.isTermMacro && accessible.hasFlag(LOCKED))
+        else if (context.owner.isTermMacro && accessible.isLockedHere)
           throw CyclicReference(accessible, CheckAccessibleMacroCycle)
         else {
           val sym1 =
