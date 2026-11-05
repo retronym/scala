@@ -65,10 +65,20 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
   // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
   // the coarse root.
+  // With -Dscalac.parallelTyper.parallelSignatures=unit, the root of a source symbol is its unit (its source file): the
+  // Namer's completers of one unit share its contexts, its per-unit maps and its classes' scopes. Otherwise, the
+  // symbol, with those made safe for two writers (per-thread implicits markers, concurrent unit maps, scope writes
+  // under the scope's monitor).
   override def completionRoot(sym: Symbol): AnyRef = {
     val run = currentRun
     if ((run ne null) && run.compiles(sym)) {
-      if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym } else sym
+      if (analyzer.parallelSignatures && System.getProperty("scalac.parallelTyper.parallelSignatures") == "unit") {
+        val top0 = sym.originalEnclosingTopLevelClassOrDummy
+        val top = if (top0.isModuleClass) top0.sourceModule else top0
+        val file = run.symSource.getOrElse(top, null)
+        if (file ne null) file else sym
+      }
+      else if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym } else sym
     } else scala.reflect.internal.util.CompletionLock.CoarseRoot
   }
 

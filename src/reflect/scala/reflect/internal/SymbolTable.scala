@@ -558,7 +558,7 @@ abstract class SymbolTable extends macros.Universe
   final lazy val completionLock: util.CompletionLock =
     if (!isConcurrentCompiler) null
     else new util.CompletionLock(
-      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey",
+      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey" || System.getProperty("scalac.parallelTyper.parallelSignatures") != null,
       cycle = {
         case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
         case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")
@@ -818,7 +818,14 @@ abstract class SymbolTable extends macros.Universe
   private final class PerThreadScratches extends Scratches {
     private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
     private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
+    // The thread that made the universe (the driver's) runs the serial phases: its scratch state is in a field, so
+    // that the parser, the namer and the phases after the typer pay a comparison, not a `ThreadLocal` lookup.
+    private[this] val firstThread: Thread = Thread.currentThread
+    private[this] var firstScratch: Scratch = null
     def get: Scratch = Thread.currentThread match {
+      case t if t eq firstThread =>
+        val s = firstScratch
+        if (s ne null) s else { val s1 = viaThreadLocal; firstScratch = s1; s1 }
       case t: util.ScratchThread if t.scratchOwner eq SymbolTable.this => t.scratch.asInstanceOf[Scratch]
       case t: util.ScratchThread if t.scratchOwner eq null =>
         val s = viaThreadLocal
