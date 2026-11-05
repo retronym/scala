@@ -30,7 +30,7 @@ object Rules {
     Rule("A.iterator", "A", "a field of an `Iterator`: one traversal's"),
     Rule("A.macro", "A", "a field of a class in `reflect.reify`, `reflect.quasiquotes`, `reflect.macros.contexts` or the string interpolators, not a universe singleton: one macro expansion's state"),
     Rule("A.parser", "A","a field of a class in `nsc.ast.parser`, `nsc.javac` or a `CharArrayReader`: one unit's parser or scanner"),
-    Rule("B.symbol", "B", "`_rawowner`, `_rawname`, `_rawflags`, `infos`, `_validTo`, `_annotations`, `_privateWithin` and the other own state of a `Symbol` (not its caches): written by completion and by info transformers, read everywhere; `_rawflags` carries the `LOCKED` black hole"),
+    Rule("B.symbol", "B", "`_rawowner`, `_rawname`, `_rawflags`, `infos`, `_validTo`, `_annotations`, `_privateWithin` and the other own state of a `Symbol` (not its caches), and the `TypeHistory` chain of its infos: written by completion and by info transformers, read everywhere; `_rawflags` carries the `LOCKED` black hole"),
     Rule("B.completer", "B", "a field of a `LazyType` (Namers' completers, `SymbolLoaders.SymbolLoader`, unpickler completers) or of `LazyAnnotationInfo`"),
     Rule("B.unpickler", "B", "a field of a class in `internal.pickling`, `nsc.symtab.classfile`, `nsc.tasty` or `SymbolLoaders`: lazy reads of pickles, classfiles and TASTy"),
     Rule("B.scope", "B", "a field of `Scopes.Scope` (`elems`, the hash table, `elemsCache`): completions enter into scopes that other code iterates"),
@@ -691,7 +691,7 @@ final class Model(classes: Map[String, ClassInfo], fieldList: List[FieldInfo], a
     else if (is("scala.collection.Iterator") || cls(o).exists(_.bases.exists(_.endsWith("Iterator")))) ("A", "A.iterator")
     else if (parserPkgs.exists(p => o.startsWith(p))) ("A", "A.parser")
     else if (macroPkgs.exists(p => o.startsWith(p)) && !onUniverse(f)) ("A", "A.macro")
-    else if (is("internal.Symbols.Symbol") && symbolOwn(f.name)) ("B", "B.symbol")
+    else if (is("internal.Symbols.Symbol") && symbolOwn(f.name) || o == "internal.Symbols.TypeHistory") ("B", "B.symbol")
     else if (is("internal.Types.LazyType") || is("internal.AnnotationInfos.LazyAnnotationInfo") || is("nsc.symtab.SymbolLoaders.SymbolLoader")) ("B", "B.completer")
     else if (List("internal.pickling", "nsc.symtab.classfile", "nsc.tasty", "tools.tasty").exists(p => pkgOf(f) == p || pkgOf(f).startsWith(p + ".")) || o.startsWith("nsc.symtab.SymbolLoaders")) ("B", "B.unpickler")
     else if (is("internal.Scopes.Scope") || is("internal.Scopes.ScopeEntry")) ("B", "B.scope")

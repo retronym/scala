@@ -13,12 +13,12 @@ Line format: `field: Type` — `file:line` — kind/rule — instance — unprot
 | [Context state reachable from completers](#context-state-reachable-from-completers) | 13 |
 | [Per-instance state reached through a universe singleton](#per-instance-state-reached-through-a-universe-singleton) | 6 |
 | [Sentinels and cycle detection](#sentinels-and-cycle-detection) | 12 |
-| [Black-hole protocols (lazy facts)](#black-hole-protocols-lazy-facts) | 78 |
+| [Black-hole protocols (lazy facts)](#black-hole-protocols-lazy-facts) | 81 |
 | [Non-atomic read-modify-write](#non-atomic-read-modify-write) | 42 |
 | [Stamp and value in separate fields](#stamp-and-value-in-separate-fields) | 12 |
 | [Unsynchronised mutable collections](#unsynchronised-mutable-collections) | 74 |
 | [Lazy-val monitors that force completion](#lazy-val-monitors-that-force-completion) | 302 |
-| [Other unprotected fields](#other-unprotected-fields) | 94 |
+| [Other unprotected fields](#other-unprotected-fields) | 91 |
 
 ## Ambient globals
 
@@ -248,6 +248,12 @@ Written by completion, by unpicklers and loaders, or by info transformers: compl
 ### `tools.tasty.TastyReader` (instance)
 
 - `bp: Int` (var) — [`src/compiler/scala/tools/tasty/TastyReader.scala:30`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/compiler/scala/tools/tasty/TastyReader.scala#L30) — B/unpickler — 23 sites (6 w) — black-hole, rmw — completion lock (the completer's)
+
+### `internal.Symbols.TypeHistory` (instance)
+
+- `_validFrom: Symbols.this.Period` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — B/symbol — 8 sites (3 w) — black-hole — completion lock; publish after completion
+- `_info: Symbols.this.Type` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — B/symbol — 7 sites (2 w) — black-hole — completion lock; publish after completion
+- `_prev: Symbols.this.TypeHistory` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — B/symbol — 7 sites (2 w) — black-hole — completion lock; publish after completion
 
 ### `nsc.symtab.classfile.ClassfileParser.ConstantPool` (instance)
 
@@ -796,12 +802,6 @@ No hazard shape detected beyond being written without protection: decide per fie
 - `printOwners: Boolean` (var) — [`src/reflect/scala/reflect/api/Printers.scala:157`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/api/Printers.scala#L157) — unclassified/ — 4 sites (2 w) —  — decide: per-thread, publish-once benign, or synchronized
 - `printKinds: Boolean` (var) — [`src/reflect/scala/reflect/api/Printers.scala:158`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/api/Printers.scala#L158) — unclassified/ — 3 sites (2 w) —  — decide: per-thread, publish-once benign, or synchronized
 - `printMirrors: Boolean` (var) — [`src/reflect/scala/reflect/api/Printers.scala:159`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/api/Printers.scala#L159) — unclassified/ — 3 sites (2 w) —  — decide: per-thread, publish-once benign, or synchronized
-
-### `internal.Symbols.TypeHistory` (instance)
-
-- `_validFrom: Symbols.this.Period` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — unclassified/ — 8 sites (3 w) —  — decide: per-thread, publish-once benign, or synchronized
-- `_info: Symbols.this.Type` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — unclassified/ — 7 sites (2 w) —  — decide: per-thread, publish-once benign, or synchronized
-- `_prev: Symbols.this.TypeHistory` (var) — [`src/reflect/scala/reflect/internal/Symbols.scala:3919`](https://github.com/retronym/scala/blob/fd95c5c1c14636f0ad2f7dfdd442472abf111040/src/reflect/scala/reflect/internal/Symbols.scala#L3919) — unclassified/ — 7 sites (2 w) —  — decide: per-thread, publish-once benign, or synchronized
 
 ### `internal.InfoTransformers.InfoTransformer` (instance)
 
