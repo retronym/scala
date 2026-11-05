@@ -17,7 +17,7 @@ package scala.reflect.internal.util
  *  loads, where a `ThreadLocal` hashes into the thread's map and checks a weak key. Other threads use the `ThreadLocal`.
  */
 class ScratchThread(group: ThreadGroup, body: Runnable, name: String, stackSize: Long) extends Thread(group, body, name, stackSize) {
-  /** The universe whose scratch state `scratch` is, or null. */
-  @volatile var scratchOwner: AnyRef = null
+  /** The universe whose scratch state `scratch` is, or null. Plain: only this thread reads and writes both fields. */
+  var scratchOwner: AnyRef = null
   var scratch: AnyRef = null
 }
