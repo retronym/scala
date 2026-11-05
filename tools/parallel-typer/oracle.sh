@@ -8,12 +8,20 @@
 # Needs `sbt dist/mkQuick`. Results go to $OUT (default /tmp/parallel-typer-oracle/<corpus>); the exit status is the
 # number of parallel runs that differed from the serial one. JAVA_OPTS is passed through (e.g. -Xss, -Dscalac.parallelTyper.*).
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
-SCALAC="$ROOT/build/quick/bin/scalac"
+ROOT="${ORACLE_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
+# bash reads a script as it runs it: run from a copy, so that editing this file does not disturb a run in progress
+if [ -z "${ORACLE_ROOT:-}" ]; then
+  copy="$(mktemp -t oracle.XXXXXX)"; cp "$0" "$copy"; ORACLE_ROOT="$ROOT" exec bash "$copy" "$@"
+fi
 CORPUS="$1"; THREADS="${2:-8}"; REPEATS="${3:-1}"; shift; shift || true; shift || true
 OUT="${OUT:-/tmp/parallel-typer-oracle/$(basename "$CORPUS")}"
 rm -rf "$OUT"; mkdir -p "$OUT"
 QUICK="$ROOT/build/quick/classes"
+# a snapshot of the compiler, so that a build during the run does not change it
+SNAP="$OUT/compiler-snapshot"; mkdir -p "$SNAP"
+for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
+JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed 's/^TOOL_CLASSPATH="//; s/"$//' | tr ':' '\n' | grep '\.jar$' | paste -sd: -)"
+SCALAC_CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 
 args="$OUT/args"
 case "$CORPUS" in
@@ -29,11 +37,14 @@ case "$CORPUS" in
   *) cp "$CORPUS" "$args" ;;
 esac
 
-run() { # <name> <extra options...>
+run() { # <name> <options...>: options starting with -J go to the JVM
   local name="$1"; shift
   rm -rf "$OUT/$name"; mkdir -p "$OUT/$name/sig" "$OUT/$name/classes"
+  local jvm=() opts=()
+  for o in "$@"; do case "$o" in -J*) jvm+=("${o#-J}");; *) opts+=("$o");; esac; done
   local t0=$(date +%s.%N)
-  "$SCALAC" -J-Xss64m -J-Xmx4g -d "$OUT/$name/classes" -Ystop-after:pickler -Ypickle-write "$OUT/$name/sig" "$@" "@$args" > "$OUT/$name/out.txt" 2>&1
+  java -Xss64m -Xmx4g ${JAVA_OPTS:-} "${jvm[@]}" -cp "$SCALAC_CP" -Dscala.usejavacp=true scala.tools.nsc.Main \
+    -d "$OUT/$name/classes" -Ystop-after:pickler -Ypickle-write "$OUT/$name/sig" "${opts[@]}" "@$args" > "$OUT/$name/out.txt" 2>&1
   local status=$?
   local t1=$(date +%s.%N)
   echo "$status" > "$OUT/$name/status"
@@ -42,30 +53,35 @@ run() { # <name> <extra options...>
   printf '%-12s status %s  %.1f s\n' "$name" "$status" "$(echo "$t1 - $t0" | bc)"
 }
 
-compare() { # <name>: 0 if it agrees with serial
-  local name="$1" bad=0
-  if ! cmp -s "$OUT/serial/status" "$OUT/$name/status"; then echo "  $name: exit status differs"; bad=1; fi
-  if ! diff -q "$OUT/serial/diagnostics.txt" "$OUT/$name/diagnostics.txt" > /dev/null; then
-    echo "  $name: diagnostics differ ($OUT/$name/diagnostics.diff)"
-    diff "$OUT/serial/diagnostics.txt" "$OUT/$name/diagnostics.txt" > "$OUT/$name/diagnostics.diff"; bad=1
+compare() { # <name> [<reference>=serial]: 0 if it agrees with the reference run
+  local name="$1" ref="${2:-serial}" bad=0
+  if ! cmp -s "$OUT/$ref/status" "$OUT/$name/status"; then echo "  $name: exit status differs from $ref"; bad=1; fi
+  if ! diff -q "$OUT/$ref/diagnostics.txt" "$OUT/$name/diagnostics.txt" > /dev/null; then
+    echo "  $name: diagnostics differ from $ref ($OUT/$name/diagnostics-$ref.diff)"
+    diff "$OUT/$ref/diagnostics.txt" "$OUT/$name/diagnostics.txt" > "$OUT/$name/diagnostics-$ref.diff"; bad=1
   fi
   local sigdiff
-  sigdiff=$(diff -rq "$OUT/serial/sig" "$OUT/$name/sig" 2>&1)
+  sigdiff=$(diff -rq "$OUT/$ref/sig" "$OUT/$name/sig" 2>&1)
   if [ -n "$sigdiff" ]; then
-    echo "  $name: $(echo "$sigdiff" | wc -l | tr -d ' ') pickles differ ($OUT/$name/sig.diff)"; echo "$sigdiff" > "$OUT/$name/sig.diff"; bad=1
+    echo "  $name: $(echo "$sigdiff" | wc -l | tr -d ' ') pickles differ from $ref ($OUT/$name/sig-$ref.diff)"; echo "$sigdiff" > "$OUT/$name/sig-$ref.diff"; bad=1
   fi
   if grep -q 'Exception\|error: \[parallel-typer\]\|still running after' "$OUT/$name/out.txt"; then echo "  $name: crash or hang signature in output"; bad=1; fi
   return $bad
 }
 
+# Differences from `serial` that `one` shares are order effects of the parallel path (signatures first); differences
+# of a parallel run from `one` are effects of concurrency.
 run serial "$@"
 echo "  $(find "$OUT/serial/sig" -name '*.sig' | wc -l | tr -d ' ') pickles, $(wc -l < "$OUT/serial/diagnostics.txt" | tr -d ' ') diagnostic lines"
-failures=0
+failures=0; orderOnly=0
 run one -Yparallel-typer -J-Dscalac.parallelTyper.oneThread "$@"
-compare one || failures=$((failures+1))
+oneDiffers=0; compare one || oneDiffers=1
 for i in $(seq 1 "$REPEATS"); do
   run "par$i" -Yparallel-typer -Yparallel-typer-threads "$THREADS" -J-Dscalac.parallelTyper.log "$@"
-  if compare "par$i"; then rm -rf "$OUT/par$i/sig" "$OUT/par$i/classes"; else failures=$((failures+1)); fi
+  if compare "par$i" one; then
+    compare "par$i" serial > /dev/null || orderOnly=$((orderOnly+1))
+    rm -rf "$OUT/par$i/sig" "$OUT/par$i/classes"
+  else failures=$((failures+1)); compare "par$i" serial > /dev/null; fi
 done
-echo "$failures of $((REPEATS+1)) runs differ from serial"
-exit $failures
+echo "one-thread run differs from serial: $oneDiffers; $failures of $REPEATS parallel runs differ from the one-thread run; $orderOnly agree with it but differ from serial (order effects)"
+exit $((failures + oneDiffers))
