@@ -3,7 +3,9 @@
 //
 //   Bench <args file> <warmup> <runs> <config>...
 //
-// A config is `serial`, `one` (the parallel path on one worker) or a number of threads. The args file is the one
+// A config is `serial`, `one` (the parallel path on one worker) or a number of threads, the last two with an optional
+// suffix for the phases after the typer: `p` (a pool step each), `t` (the transforms fused), `f` (all fused), e.g.
+// `onep`, `8p`. The args file is the one
 // the oracle writes (options and sources). Run with the quick compiler on the classpath, -Xss64m and enough heap.
 import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters._
@@ -15,8 +17,14 @@ object Bench {
     val argsFile = args(0); val warmup = args(1).toInt; val runs = args(2).toInt
     val configs = args.drop(3).toList
     val fileArgs = Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty).map(_.stripPrefix("\"").stripSuffix("\""))
-    for (config <- configs) {
-      val extra = config match {
+    for (config0 <- configs) {
+      val config = config0
+      val postTyper = Map('p' -> "steps", 't' -> "fusedTransforms", 'f' -> "fused").get(config0.last)
+      postTyper match {
+        case Some(mode) => System.setProperty("scalac.parallelTyper.parallelPostTyper", mode)
+        case None       => System.clearProperty("scalac.parallelTyper.parallelPostTyper")
+      }
+      val extra = (if (postTyper.isDefined) config0.init else config0) match {
         case "serial" => Nil
         case "one"    => System.setProperty("scalac.parallelTyper.oneThread", ""); List("-Yparallel-typer")
         case n        => System.clearProperty("scalac.parallelTyper.oneThread"); List("-Yparallel-typer", "-Yparallel-typer-threads", n)
