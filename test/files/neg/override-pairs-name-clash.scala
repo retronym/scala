@@ -32,13 +32,16 @@ trait G1[T] { def f(x: T): Int }
 trait G2 extends G1[String] { def f(x: String): Int }
 abstract class MatchedTwice extends G1[String] with G2
 
-// Patmat substitutes the binder in these infos with `updateInfo`, at the phase whose infos the check reads.
+// Patmat substitutes the binder in the infos of these members with `updateInfo`, in the phase whose infos the check reads.
+// It rewrites both members of a pair and the parents of the class, so they go on matching.
 class P { type T }
+trait Q[A] { def f(x: List[A]): Int }
 object LocalClassesInCase {
   def m(a: Any): Int = a match {
     case p: P =>
       trait H { def f(x: List[p.T]): Int }
       abstract class L extends H { def f(x: List[p.T]): Int }
-      0
+      abstract class M extends Q[p.T] { def f(x: List[p.T]): Int }
+      (new L { def f(x: List[p.T]) = x.size }).f(Nil) + (new M { def f(x: List[p.T]) = x.size }).f(Nil)
   }
 }
