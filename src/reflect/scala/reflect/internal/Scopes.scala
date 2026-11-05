@@ -145,10 +145,11 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         createHash()
     }
 
-    private def enterInHash(e: ScopeEntry): Unit = {
+    private def enterInHash(e: ScopeEntry): Unit = enterInHash(hashtable, e)
+    private def enterInHash(table: Array[ScopeEntry], e: ScopeEntry): Unit = {
       val i = e.sym.name.start & HASHMASK
-      e.tail = hashtable(i)
-      hashtable(i) = e
+      e.tail = table(i)
+      table(i) = e
     }
 
     /** enter a symbol
@@ -188,16 +189,19 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       else existing.sym.asInstanceOf[T]
     }
 
+    // The table is filled before it is published: a reader on another thread (-Yparallel-typer) that finds the
+    // table finds every entry that was in the scope when it was made.
     private def createHash(): Unit = {
-      hashtable = new Array[ScopeEntry](HASHSIZE)
-      enterAllInHash(elems)
+      val table = new Array[ScopeEntry](HASHSIZE)
+      enterAllInHash(table, elems)
+      hashtable = table
     }
 
-    private def enterAllInHash(e: ScopeEntry, n: Int = 0): Unit = {
+    private def enterAllInHash(table: Array[ScopeEntry], e: ScopeEntry, n: Int = 0): Unit = {
       if (e ne null) {
         if (n < maxRecursions) {
-          enterAllInHash(e.next, n + 1)
-          enterInHash(e)
+          enterAllInHash(table, e.next, n + 1)
+          enterInHash(table, e)
         } else {
           var entries: List[ScopeEntry] = List()
           var ee = e
@@ -205,7 +209,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
             entries = ee :: entries
             ee = ee.next
           }
-          entries foreach enterInHash
+          entries.foreach(enterInHash(table, _))
         }
       }
     }

@@ -373,6 +373,8 @@ trait Positions extends api.Positions { self: SymbolTable =>
     var pos: Position
   }
   protected[this] lazy val posAssigner: PosAssigner = new DefaultPosAssigner
+  // In a concurrent compiler, one per thread: `pos` is the argument of the `atPos` in progress.
+  private[this] lazy val posAssigners: ThreadLocal[PosAssigner] = ThreadLocal.withInitial(() => new DefaultPosAssigner)
 
   protected class DefaultPosAssigner extends PosAssigner {
     var pos: Position = _
@@ -401,8 +403,9 @@ trait Positions extends api.Positions { self: SymbolTable =>
    */
   def atPos[T <: Tree](pos: Position)(tree: T): tree.type = {
     if (useOffsetPositions || !pos.isOpaqueRange) {
-      posAssigner.pos = pos
-      posAssigner.traverse(tree)
+      val pa = if (isConcurrentCompiler) posAssigners.get else posAssigner
+      pa.pos = pos
+      pa.traverse(tree)
     }
     else if (!tree.isEmpty && tree.canHaveAttrs && tree.pos == NoPosition) {
       tree.setPos(pos)

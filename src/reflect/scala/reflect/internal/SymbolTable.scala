@@ -229,9 +229,18 @@ abstract class SymbolTable extends macros.Universe
   private[this] var ph: Phase = NoPhase
   private[this] var per = NoPeriod
 
+  /** Whether the phase and period are kept per thread, in `Scratch`: in a compiler used from several threads at
+   *  once (`-Yparallel-typer`), each thread is at a phase of its own (`enteringPhase` on one thread must not move
+   *  another). Not in runtime reflection, which is always at one phase. Read while the universe is constructed:
+   *  until this field is initialized, the phase is the shared one, which is only set later.
+   */
+  private[this] val phasePerThread: Boolean = isCompilerUniverse && isConcurrentUniverse
+  /** Whether this is a compiler used from several threads at once (`-Yparallel-typer`). */
+  final def isConcurrentCompiler: Boolean = phasePerThread
+
   final def atPhaseStack: List[Phase] = phStack.toList
   final def phase: Phase = {
-    ph
+    if (phasePerThread) scratch.ph else ph
   }
 
   def atPhaseStackMessage = atPhaseStack match {
@@ -240,8 +249,14 @@ abstract class SymbolTable extends macros.Universe
   }
 
   final def phase_=(p: Phase): Unit = {
-    ph = p
-    per = period(currentRunId, p.id)
+    if (phasePerThread) {
+      val s = scratch
+      s.ph = p
+      s.per = period(currentRunId, p.id)
+    } else {
+      ph = p
+      per = period(currentRunId, p.id)
+    }
   }
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
@@ -271,7 +286,7 @@ abstract class SymbolTable extends macros.Universe
   /** The current period. */
   final def currentPeriod: Period = {
     //assert(per == (currentRunId << 8) + phase.id)
-    per
+    if (phasePerThread) scratch.per else per
   }
 
   /** The phase associated with given period. */
@@ -408,7 +423,7 @@ abstract class SymbolTable extends macros.Universe
     private[this] var caches = List[WeakReference[Clearable]]()
     private[this] var javaCaches = List[JavaClearable[_]]()
 
-    def recordCache[T <: Clearable](cache: T): cache.type = {
+    def recordCache[T <: Clearable](cache: T): cache.type = synchronized {
       cache match {
         case jc: JavaClearable[_] =>
           javaCaches ::= jc
@@ -519,6 +534,32 @@ abstract class SymbolTable extends macros.Universe
   def isConcurrentUniverse = false
 
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
+
+  /** In a compiler used from several threads (`isConcurrentCompiler`), the lock under which every completion runs;
+   *  null otherwise. See `Symbol.info`.
+   */
+  final lazy val completionLock: util.CompletionLock = if (isConcurrentCompiler) new util.CompletionLock else null
+
+  /** A value of each thread in a concurrent compiler, else one value: for the scratch state of the typer
+   *  (caches and side channels kept in fields of the cake) that must be confined to a thread. Must be created after
+   *  this universe is constructed. */
+  final class PerThread[T <: AnyRef](init: () => T) {
+    private[this] val single: T = if (isConcurrentCompiler) null.asInstanceOf[T] else init()
+    private[this] val local: ThreadLocal[T] = if (isConcurrentCompiler) ThreadLocal.withInitial(() => init()) else null
+    def get: T = if (local eq null) single else local.get
+  }
+  final def perThread[T <: AnyRef](init: => T): PerThread[T] = new PerThread(() => init)
+
+  /** `body` under the completion lock, in a concurrent compiler. */
+  @inline final def underCompletionLock[T](body: => T): T = {
+    val lock = completionLock
+    if (lock eq null) body
+    else {
+      lock.acquire()
+      try body
+      finally lock.release()
+    }
+  }
 
   /** The recursion guards of the type operations at one level of completion, with the undo log
    *  of type constraints. Each operation fetches its frame once and keeps it in a local.
@@ -654,6 +695,11 @@ abstract class SymbolTable extends macros.Universe
     val toStringSubjects = new mutable.HashSet[Type]
     /** The recursion depth of locked symbols, see `-Yrecursion` */
     var recursionTable = Map.empty[Symbol, Int]
+    /** The number of Namer completers in progress, see `Symbols.lockedCount` */
+    var lockedCount: Int = 0
+    /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
+    var ph: Phase = NoPhase
+    var per: Period = NoPeriod
 
     // Reusable instances of helpers with mutable state, one per level of reentrance. As the
     // `Scratch` is confined to a thread, they are reused in runtime reflection too.
