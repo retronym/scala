@@ -195,8 +195,11 @@ abstract class Pickler extends SubComponent {
 
     def close(): Unit = { index = null; entries = null }
 
+    // A type name and its term name share their id in the name table, so this compares them by it,
+    // not `sym.name.toTermName == rootName`: the conversion looks the term name up in the table, and this test runs
+    // for every owner of every symbol that a pickle meets (on several threads with -Yparallel-typer).
     private def isRootSym(sym: Symbol) =
-      sym.name.toTermName == rootName && sym.owner == rootOwner
+      sym.owner == rootOwner && { val n = sym.name; n.id == rootName.id && n.length == rootName.length }
 
     /** Usually `sym.owner`, except when `sym` is pickle-local, while `sym.owner` is not.
       *
