@@ -177,7 +177,7 @@ trait Names extends api.Names {
       val chars = Codec.fromUTF8(bs, offset, len)
       termFromChars(chars, 0, chars.length, null)
     }
-    /** Whether the name is in the chain of bucket `h`, comparing arrays or `String`s as the store can. */
+    /** The term name of cs[0..len-1], whose `String.hashCode` is `h`, which saves copying the array for a name that exists. */
     def termFromHashed(cs: Array[Char], len: Int, h: Int): TermName = {
       var n = termHashtable(h & HASH_MASK)
       while ((n ne null) && (n.length != len || !matches(n, cs, 0, len)))
@@ -610,10 +610,10 @@ trait Names extends api.Names {
 
     /** The string the probe describes, building it only if the shared table doesn't have one. */
     private def probed: String = {
-      val known = shared.find(probe)
-      val result = if (known ne null) known else shared.intern(probe.newString())
-      probe.clear()
-      result
+      try {
+        val known = shared.find(probe)
+        if (known ne null) known else shared.intern(probe.newString())
+      } finally probe.clear()
     }
     protected def stringOf(s: String): String = shared.intern(s)
     protected def stringOf(cs: Array[Char], offset: Int, len: Int, hash: Int): String = {
@@ -642,7 +642,7 @@ trait Names extends api.Names {
    *  or Strings as Names.  Give names the key functions the absence of which
    *  make people want Strings all the time.
    */
-  sealed abstract class Name(protected val index: Int, protected val len: Int, private[Names] var str: String) extends NameApi with NameHasIsEmpty with CharSequence {
+  sealed abstract class Name(protected val index: Int, protected val len: Int, private[Names] val str: String) extends NameApi with NameHasIsEmpty with CharSequence {
     type ThisNameType >: Null <: Name
     protected[this] def thisName: ThisNameType
 
@@ -1013,9 +1013,8 @@ trait Names extends api.Names {
   }
 }
 
-/** Strings and ids of names, for sharing between universes. It holds its strings weakly: the universes' names keep them
- *  alive, so a string lasts as long as some universe has the name, and then its id is forgotten and a later universe
- *  gets a new one. That is safe as universes only compare ids of names that they hold.
+/** Strings of names, for sharing between universes. It holds its strings weakly: the universes' names keep them alive,
+ *  so a string lasts as long as some universe has the name. Cleared entries stay until the next miss in `intern`.
  */
 private[internal] final class SharedNameTable {
   import SharedNameTable.{Entry, EntryKey}
@@ -1094,9 +1093,9 @@ private[internal] object SharedNameTable {
     private[this] var len = 0
     private[this] var h = 0
 
-    def setChars(cs: Array[Char], off: Int, length: Int, hash: Int): Unit = { chars = cs; offset = off; len = length; h = hash }
-    def setAscii(bs: Array[Byte], off: Int, length: Int, hash: Int): Unit = { bytes = bs; offset = off; len = length; h = hash }
-    def setRegion(s: String, off: Int, length: Int, hash: Int): Unit = { region = s; offset = off; len = length; h = hash }
+    def setChars(cs: Array[Char], off: Int, length: Int, hash: Int): Unit = { clear(); chars = cs; offset = off; len = length; h = hash }
+    def setAscii(bs: Array[Byte], off: Int, length: Int, hash: Int): Unit = { clear(); bytes = bs; offset = off; len = length; h = hash }
+    def setRegion(s: String, off: Int, length: Int, hash: Int): Unit = { clear(); region = s; offset = off; len = length; h = hash }
     def clear(): Unit = { chars = null; bytes = null; region = null }
 
     def newString(): String =
