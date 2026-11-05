@@ -19,7 +19,7 @@ import scala.annotation.{nowarn, tailrec}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.reflect.macros.Attachments
-import util.{ReusableInstance, Statistics, StringContextStripMarginOps}
+import util.{Statistics, StringContextStripMarginOps}
 
 trait Trees extends api.Trees {
   self: SymbolTable =>
@@ -206,7 +206,7 @@ trait Trees extends api.Trees {
 
     /** Equivalent to `this.children.headOption.getOrElse(EmptyTree)`, but more efficient. */
     final def onlyChild: Tree = {
-      onlyChildAccumulator.using(accum => { foreachChild(accum); accum.result()})
+      scratch.onlyChildAccumulators.using(accum => { foreachChild(accum); accum.result()})
     }
 
     def freeTerms: List[FreeTermSymbol] = freeSyms(terms = true, types = false).asInstanceOf[List[FreeTermSymbol]]
@@ -2100,7 +2100,7 @@ trait Trees extends api.Trees {
       throw new IllegalStateException("Not a Function: " + t + "/" + t.getClass)
   }
 
-  private final class OnlyChildAccumulator extends (Tree => Boolean) {
+  private[internal] final class OnlyChildAccumulator extends (Tree => Boolean) {
     private[this] var only: Tree = _
     def apply(t: Tree): Boolean = {
       if (only == null) {
@@ -2119,7 +2119,6 @@ trait Trees extends api.Trees {
       }
     }
   }
-  private val onlyChildAccumulator = ReusableInstance[OnlyChildAccumulator](new OnlyChildAccumulator, enabled = isCompilerUniverse)
 
 // -------------- Classtags --------------------------------------------------------
 
