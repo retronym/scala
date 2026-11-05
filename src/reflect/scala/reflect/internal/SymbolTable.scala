@@ -543,6 +543,25 @@ abstract class SymbolTable extends macros.Universe
 
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
 
+  /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
+   *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
+   */
+  final class MemoGuard[K] {
+    private[this] val InProgress: Type = new Type {}
+    private[this] val _results = new mutable.HashMap[K, Type]
+    private[internal] def results: collection.Map[K, Type] = _results
+    /** The result for `key`, or `onCycle` if it is in progress, or `null` if neither. */
+    def lookup(key: K, onCycle: Type): Type = _results.getOrElse(key, null) match {
+      case InProgress => onCycle
+      case r          => r
+    }
+    def isInProgress(key: K): Boolean = _results.get(key).contains(InProgress)
+    def begin(key: K): Unit = _results(key) = InProgress
+    def end(key: K, result: Type): Unit = _results(key) = result
+    /** Forget every key, at the end of the operation the entries are valid for. */
+    def clear(): Unit = _results.clear()
+  }
+
   /** The recursion guards of the type operations at one level of completion, with the undo log
    *  of type constraints. Each operation fetches its frame once and keeps it in a local.
    */
@@ -564,8 +583,18 @@ abstract class SymbolTable extends macros.Universe
     val pendingBaseTypes = new mutable.HashSet[Type]
     var volatileRecursions: Int = 0
     val pendingVolatiles = new mutable.HashSet[Symbol]
-    /** The memo tables and recursion guards of the `lub` or `glb` in progress. */
-    val lubGlbCaches = new LubGlbCaches
+    val lubs = new MemoGuard[(Depth, List[Type])]
+    val glbs = new MemoGuard[(Depth, List[Type])]
+    private[this] var inLubOrGlb: Boolean = false
+    /** Claim `lubs` and `glbs` for an outermost `lub` or `glb`. False if a call in this frame has
+     *  them already. Who claims them must `releaseLubGlbTables`.
+     */
+    def claimLubGlbTables(): Boolean = !inLubOrGlb && { inLubOrGlb = true; true }
+    def releaseLubGlbTables(): Unit = {
+      inLubOrGlb = false
+      lubs.clear()
+      glbs.clear()
+    }
     /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
     var globalGlbDepth: Depth = Depth.Zero
   }

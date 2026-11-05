@@ -34,14 +34,14 @@ class GlbLubsTest {
    */
   @Test def nestedLubKeepsOuterGuard(): Unit = {
     def check(outer: List[Type] => Type, outerDepth: List[Type] => Depth): Unit = {
-      val outerCaches = lubGlbCaches
+      val outerFrame = scratch.frame
       var ts: List[Type] = Nil
       var guardKept: Option[Boolean] = None
       val completer = new LazyType {
         override def complete(sym: Symbol): Unit = {
           lub(List(IntTpe, StringTpe))
           assertTrue("a completer has its own tables", lubResults.isEmpty)
-          guardKept = Some(outerCaches.lubResults.get((outerDepth(ts), ts)).contains(AnyTpe))
+          guardKept = Some(outerFrame.lubs.isInProgress((outerDepth(ts), ts)))
           sym.setInfo(NullaryMethodType(AnyTpe))
         }
       }
