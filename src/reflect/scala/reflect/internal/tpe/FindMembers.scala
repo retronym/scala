@@ -111,7 +111,11 @@ trait FindMembers {
 
       while (!bcs.isEmpty) {
         val currentBaseClass = bcs.head
-        val decls = currentBaseClass.info.decls
+        // OPT: a base class's info is a ClassInfoType, or a PolyType around one; `Type.decls` would be a megamorphic call
+        val decls = currentBaseClass.info match {
+          case ci: ClassInfoType => ci.decls
+          case tp                => tp.decls
+        }
         var entry = if (findAll) decls.elems else decls.lookupEntry(name)
         while (entry ne null) {
           visited += 1
