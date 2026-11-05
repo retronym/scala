@@ -515,12 +515,6 @@ abstract class LocalOpt {
   }
 
   /**
-   * Removes unreachable basic blocks, returns `true` if instructions were removed.
-   *
-   * When this method returns, each `labelNode.getLabel` has a status set whether the label is live
-   * or not. This can be queried using `BackendUtils.isLabelReachable`.
-   */
-  /**
    * Whether `removeUnreachableCodeImpl` would have nothing to remove from `method`, established in a
    * single pass over the instructions, without allocating. `false` only means that it was not proved.
    *
@@ -530,7 +524,9 @@ abstract class LocalOpt {
    * only by a later jump (the shape of a loop entered by a jump) or at code that is really dead.
    * A method with exception handlers is left to the full analysis.
    *
-   * On success the labels have the status documented on `removeUnreachableCodeImpl`.
+   * On success the labels have the status documented on `removeUnreachableCodeImpl`, except that a
+   * label following one that only a later jump reaches stays unreachable, with no instruction between
+   * them. Only `removeEmptyExceptionHandlers` reads the status, and a method that passes has no handlers.
    */
   private def nothingToRemove(method: MethodNode): Boolean = {
     def setTargets(dflt: LabelNode, labels: java.util.List[LabelNode]): Unit = {
@@ -585,6 +581,12 @@ abstract class LocalOpt {
     true
   }
 
+  /**
+   * Removes unreachable basic blocks, returns `true` if instructions were removed.
+   *
+   * When this method returns, each `labelNode.getLabel` has a status set whether the label is live
+   * or not. This can be queried using `BackendUtils.isLabelReachable`.
+   */
   def removeUnreachableCodeImpl(method: MethodNode, ownerClassName: InternalName): Boolean = {
     if (nothingToRemove(method)) return false
 
