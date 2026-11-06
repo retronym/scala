@@ -48,6 +48,8 @@ trait ParallelTyper {
   /** Whether signatures are completed under a claim per symbol: the default, with only the class headers serial.
    *  `-Dscalac.parallelTyper.serialSignatures` restores the serial pre-pass under the one completion lock. */
   lazy val parallelSignatures: Boolean = scala.reflect.internal.util.CompletionLock.parallelSignatures
+  /** `-Dscalac.parallelTyper.eagerImports`: complete every import with the class headers (see `completeSignatures`). */
+  private lazy val eagerImports: Boolean = System.getProperty("scalac.parallelTyper.eagerImports") != null
 
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
@@ -421,8 +423,12 @@ trait ParallelTyper {
       case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse)
       case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
       case md: MemberDef        => if (!classesOnly) complete(md.symbol)
-      // in tree order, as the typer types them
-      case imp: Import          => complete(imp.symbol)
+      // In tree order, as the typer types them. With `classesOnly` an import is left to the thread that first looks a
+      // name up through it, as in the serial compiler: completing an import loads the classes it names, and all of them
+      // up front was four fifths of the class headers step (`-Dscalac.parallelTyper.eagerImports` completes them all
+      // here). The root import mask needs none of them up front, as `Contexts.isMaskedRootImport` completes the
+      // imports it depends on.
+      case imp: Import          => if (!classesOnly || eagerImports) complete(imp.symbol)
       case _                    =>
     }
     try {
