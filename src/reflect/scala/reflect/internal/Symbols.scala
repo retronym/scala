@@ -1594,26 +1594,52 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  `_validTo` or `infos`, then an acquire fence (the volatile load of this field), so that seeing the
      *  provisional info implies seeing the marker. The marker is cleared (a volatile store) after the final info.
      */
-    @volatile private[this] var _completingThread: Thread = null
+    @volatile private[this] var _completingThread: AnyRef = null
 
     /** Is a thread other than this one completing this symbol? Only meaningful in a concurrent compiler. */
     private[scala] final def isCompletingElsewhere: Boolean = {
       java.lang.invoke.VarHandle.loadLoadFence() // the caller's load of `_validTo` before the marker's
       val t = _completingThread
-      (t ne null) && (t ne Thread.currentThread)
+      (t ne null) && (t ne Thread.currentThread) && !SymbolFlagsHandle.marks(t, Thread.currentThread)
     }
     /** Is this thread completing this symbol? (In a serial compiler: is anyone?) */
-    private[scala] final def isCompletingHere: Boolean = !isConcurrentCompiler || (_completingThread eq Thread.currentThread)
-
-    /** Mark this symbol as completing on this thread, for the duration of `body`. The caller holds the
-     *  completion lock. Loaders mark the roots that they publish together. */
-    private[scala] final def markCompleting(): Thread = {
-      val saved = _completingThread
-      _completingThread = Thread.currentThread
-      java.lang.invoke.VarHandle.storeStoreFence()
-      saved
+    private[scala] final def isCompletingHere: Boolean = !isConcurrentCompiler || {
+      val t = _completingThread
+      (t eq Thread.currentThread) || SymbolFlagsHandle.marks(t, Thread.currentThread)
     }
-    private[scala] final def unmarkCompleting(saved: Thread): Unit = _completingThread = saved
+
+    /** Mark this symbol as completing on this thread, until `unmarkCompleting` with the result. Marks may overlap: the
+     *  claims under which they are taken (the coarse root for an info transform, the symbol's root for its completion)
+     *  do not exclude each other, and a thread whose wait for a completion would close a wait-for cycle goes on with its
+     *  provisional info. So the marker is the set of threads that have a mark up, each counted once: a thread marks
+     *  and unmarks only itself, and a reader waits until no other thread's mark is left. Saving and restoring the whole
+     *  field would leave a mark of a thread that has finished, for good, when two marks end out of order.
+     *
+     *  @return this thread if it had a mark up already (the unmark is then the outer one's), else null
+     */
+    private[scala] final def markCompleting(): Thread = {
+      val me = Thread.currentThread
+      while (true) {
+        val cur = _completingThread
+        if ((cur eq me) || SymbolFlagsHandle.marks(cur, me)) return me
+        val next = if (cur eq null) me else SymbolFlagsHandle.withMark(cur, me)
+        if (SymbolFlagsHandle.completingThread.compareAndSet(this, cur, next): Boolean) { // a store-store fence, as well
+          if ((cur ne null) && SymbolFlagsHandle.debugMarks) SymbolFlagsHandle.reportOverlap(this, cur)
+          return null
+        }
+      }
+      null
+    }
+    private[scala] final def unmarkCompleting(saved: Thread): Unit = {
+      val me = Thread.currentThread
+      if (saved ne me) {
+        var done = false
+        while (!done) {
+          val cur = _completingThread
+          done = SymbolFlagsHandle.completingThread.compareAndSet(this, cur, SymbolFlagsHandle.withoutMark(cur, me)): Boolean
+        }
+      }
+    }
 
     /** Is this symbol `LOCKED` by a completion on this thread, so that a use of it is a cycle? A peek at the
      *  flag alone would take another thread's completion in progress for a cycle: in a concurrent compiler, that
@@ -1681,13 +1707,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def completeLocally(): Unit = {
       val me = Thread.currentThread
       var claimed = false
+      var saved: Thread = null
       while (!claimed) {
         if (_validTo != NoPeriod && !isCompletingElsewhere) return
-        claimed = (_completingThread eq me) || (SymbolFlagsHandle.completingThread.compareAndSet(this, null: Thread, me): Boolean)
+        if (isCompletingHere) { saved = me; claimed = true }
+        else claimed = SymbolFlagsHandle.completingThread.compareAndSet(this, null: AnyRef, me): Boolean
         if (!claimed) awaitMarker()
       }
       try completeInfoLoop()
-      finally _completingThread = null
+      finally unmarkCompleting(saved)
     }
 
     private def completeInfoUnderLock(): Unit = {
@@ -2056,7 +2084,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (phase.erasedTypes || (this hasFlag TRIEDCOOKING))
         return this
       if (!isConcurrentCompiler) cookJavaRawInfo0()
-      else if (isJavaDefined || isType && owner.isJavaDefined || isOverloaded) underCompletionLock(cookJavaRawInfo0())
+      else if (isJavaDefined || isType && owner.isJavaDefined || isOverloaded) {
+        // The completion of a source symbol runs under its own root, not this lock, so what is about to be rewritten
+        // is complete before the lock is taken and a mark goes up: a mark over a completion would have this thread
+        // read and rewrite its provisional info, and the completion's final info would then replace the cooked one.
+        symsToCook.foreach(s => if (!s.isCompletingHere) s.info)
+        underCompletionLock(cookJavaRawInfo0())
+      }
       else { // nothing to cook, only the flag to set (atomically) and the info to force (which takes the lock if it must)
         this setFlag TRIEDCOOKING
         info
@@ -2071,13 +2105,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isConcurrentCompiler) {
         // `TRIEDCOOKING` goes up before the info is rewritten: another thread that sees it skips the cooking and
         // reads the info, which must then wait for the cooked one (I11). So the symbols are marked as completing.
-        val syms = if (isOverloaded) this :: alternatives else this :: Nil
+        val syms = symsToCook
         val saved = syms.map(_.markCompleting())
         try cookJavaRawInfo1()
         finally syms.lazyZip(saved).foreach(_ unmarkCompleting _)
       }
       else cookJavaRawInfo1()
     }
+    /** The symbols whose info `cookJavaRawInfo` may rewrite. */
+    private def symsToCook: List[Symbol] = if (isOverloaded) this :: alternatives.filter(_.isJavaDefined) else this :: Nil
     private def cookJavaRawInfo1(): this.type = {
 
       this setFlag TRIEDCOOKING
@@ -4386,7 +4422,32 @@ private[internal] object SymbolFlagsHandle {
     import java.lang.invoke.MethodHandles
     val cls = classOf[Symbols#Symbol]
     val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_completingThread" || n.endsWith("$$_completingThread")).get
-    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, classOf[Thread])
+    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, classOf[AnyRef])
+  }
+  /** The marker of a symbol with marks of several threads up (`Symbol.markCompleting`); with one, the thread itself. */
+  private final class Marks(val threads: List[Thread])
+  def marks(marker: AnyRef, t: Thread): Boolean = marker match {
+    case m: Marks => m.threads.exists(_ eq t)
+    case _        => false
+  }
+  def withMark(marker: AnyRef, t: Thread): AnyRef = marker match {
+    case m: Marks => new Marks(t :: m.threads)
+    case other    => new Marks(t :: other.asInstanceOf[Thread] :: Nil)
+  }
+  def withoutMark(marker: AnyRef, t: Thread): AnyRef = marker match {
+    case m: Marks =>
+      m.threads.filter(_ ne t) match {
+        case single :: Nil => single
+        case rest          => new Marks(rest)
+      }
+    case _ => null
+  }
+  /** `-Dscalac.parallelTyper.debugMarks`: print where a mark goes up over another thread's. */
+  val debugMarks: Boolean = java.lang.Boolean.getBoolean("scalac.parallelTyper.debugMarks")
+  def reportOverlap(sym: Symbols#Symbol, others: AnyRef): Unit = {
+    val names = others match { case m: Marks => m.threads.map(_.getName).mkString(","); case t => t.toString }
+    Console.err.println(s"[parallel-typer] mark overlap on ${sym.fullName} (${Thread.currentThread.getName} over $names)\n" +
+      new Throwable().getStackTrace.iterator.slice(1, 25).mkString("    ", "\n    ", ""))
   }
   val validTo: java.lang.invoke.VarHandle = {
     import java.lang.invoke.MethodHandles
