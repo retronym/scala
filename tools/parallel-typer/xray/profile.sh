@@ -10,8 +10,8 @@
 # tools/parallel-typer/xray/profiles/<corpus>/: the raw run-<config>.jfr, run-<config>.json with the page's profile
 # data, and flame-<threads>-{cpu,wall}.html from jfrconv --spans. Regenerates timeline.data.js from every corpus under
 # profiles/. Needs `sbt dist/mkQuick`.
-# Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (1ms),
-# WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile),
+# Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (0.5ms),
+# WALL_INTERVAL (1ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile),
 # FRAMES=<rounds> (instead: CPU profiles of serial and the thread count in turn, REPEATS compilations each, as collapsed
 # stacks under OUT, compared by frames.py; with FRAMES_EVENT="--alloc --total" and -Dxray.frames.alloc in JAVA_OPTS, bytes allocated), CLASSES=<dir> (the compiler to record, with compiler/ library/ reflect/).
 set -euo pipefail
@@ -25,8 +25,8 @@ THREADS="${2:-4}"
 NAME="${XRAY_NAME:-$(basename "$CORPUS")}" # XRAY_NAME: a name for this recording other than the corpus (a variant of it)
 WARMUP="${WARMUP:-14}"
 REPEATS="${REPEATS:-10}"
-CPU_INTERVAL="${CPU_INTERVAL:-1ms}"
-WALL_INTERVAL="${WALL_INTERVAL:-2ms}"
+CPU_INTERVAL="${CPU_INTERVAL:-0.5ms}"
+WALL_INTERVAL="${WALL_INTERVAL:-1ms}"
 ASYNC="${PERFLAB:-$HOME/code/retronym/jvm-perf-lab}/tools/build/async-profiler/build"
 LIB="$ASYNC/lib/libasyncProfiler.dylib"; [ -f "$LIB" ] || LIB="$ASYNC/lib/libasyncProfiler.so"
 [ -f "$LIB" ] || { echo "no $LIB: mise run tools:async-profiler in jvm-perf-lab" >&2; exit 1; }

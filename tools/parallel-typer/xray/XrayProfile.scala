@@ -33,8 +33,8 @@ object XrayProfile {
     else record(args(0), Paths.get(args(1)), args(2), args(3).toInt, args(4).toInt, args(5), args(6), args.drop(7).toList)
 
   /** As perflab profiles: native frames through the VM, and a stack depth the typer's recursion does not exceed. */
-  /** The CPU recording samples allocation too (`-Dxray.alloc=<bytes>`, default 256k; empty for none), in the same JFR. */
-  val allocInterval: String = System.getProperty("xray.alloc", "256k")
+  /** The CPU recording samples allocation too (`-Dxray.alloc=<bytes>`, default 128k; empty for none), in the same JFR. */
+  val allocInterval: String = System.getProperty("xray.alloc", "128k")
   private def startProfiler(event: String, interval: String, jfr: Path): Unit = {
     val alloc = if (event == "cpu" && allocInterval.nonEmpty) s",alloc=$allocInterval" else ""
     AsyncProfiler.getInstance().execute(s"start,jfr,event=$event,interval=$interval$alloc,jstackdepth=8192,cstack=vm,features=mixed+vtable+comptask,file=$jfr")
