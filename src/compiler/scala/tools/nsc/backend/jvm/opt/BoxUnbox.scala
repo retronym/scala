@@ -22,7 +22,7 @@ import scala.tools.asm.Opcodes._
 import scala.tools.asm.Type
 import scala.tools.asm.tree._
 import scala.tools.nsc.backend.jvm.BTypes.InternalName
-import scala.tools.nsc.backend.jvm.analysis.{AsmAnalyzer, BackendUtils, ProdConsAnalyzer}
+import scala.tools.nsc.backend.jvm.analysis.{AsmAnalyzer, BackendUtils, ProdConsAnalyzer, ProdConsCache}
 import scala.tools.nsc.backend.jvm.opt.BytecodeUtils._
 
 abstract class BoxUnbox {
@@ -180,7 +180,10 @@ abstract class BoxUnbox {
    * Note: these tasks are not urgent because the call graph is not currently used during / after
    * method-local optimizations, only before to perform inlining and closure rewriting.
    */
-  def boxUnboxElimination(method: MethodNode, owner: InternalName): Boolean = {
+  def boxUnboxElimination(method: MethodNode, owner: InternalName): Boolean =
+    boxUnboxElimination(method, owner, new ProdConsCache(method, owner))
+
+  def boxUnboxElimination(method: MethodNode, owner: InternalName, prodConsCache: ProdConsCache): Boolean = {
     AsmAnalyzer.sizeOKForSourceValue(method) && {
       val toInsertBefore = mutable.Map.empty[AbstractInsnNode, List[AbstractInsnNode]]
       val toReplace = mutable.Map.empty[AbstractInsnNode, List[AbstractInsnNode]]
@@ -188,7 +191,7 @@ abstract class BoxUnbox {
 
       val knownHandled = mutable.Set.empty[AbstractInsnNode]
 
-      lazy val prodCons = new ProdConsAnalyzer(method, owner)
+      lazy val prodCons = prodConsCache.get
 
       var nextLocal = BackendUtils.maxLocals(method)
       def getLocal(size: Int) = {
@@ -700,7 +703,8 @@ abstract class BoxUnbox {
               yield (ModuleFactory(predefLoad, mi), kind)
           else None
 
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        // checking the class before the instance creation, which needs the method's producers and consumers
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isPrimitiveBoxClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isPrimitiveBoxConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 
@@ -759,7 +763,7 @@ abstract class BoxUnbox {
           else if (isRefZero(mi)) checkKind(mi).map((StaticFactory(mi, loadInitialValues = Some(loadZeroValue(mi))), _))
           else None
 
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isRuntimeRefClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isRuntimeRefConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 
@@ -808,7 +812,7 @@ abstract class BoxUnbox {
 
       insn match {
         // no need to check for TupleN.apply: the compiler transforms case companion apply calls to constructor invocations
-        case ti: TypeInsnNode if ti.getOpcode == NEW =>
+        case ti: TypeInsnNode if ti.getOpcode == NEW && isTupleClass(ti.desc) =>
           for ((dupOp, initCall) <- BoxKind.checkInstanceCreation(ti, prodCons) if isTupleConstructor(initCall); kind <- checkKind(initCall))
             yield (InstanceCreation(ti, dupOp, initCall), kind)
 

@@ -47,10 +47,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     with Closeable
     with CompilationUnits
     with Plugins
-    with PhaseAssembly
     with Trees
     with Printers
-    with DocComments
     with Positions
     with Reporting
     with Parsing { self =>
@@ -230,6 +228,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   } with OverridingPairs
 
   type SymbolPair = overridingPairs.SymbolPair
+
+  /** Called by computePhaseDescriptors to compute phase order. */
+  def computePhaseAssembly(): List[SubComponent] =
+    new PhaseAssembly[Global.this.type](this).computePhaseAssembly(phasesSet)
+
+  val docCommentsSupport: DocComments[Global.this.type] = new DocComments[Global.this.type](this)
+  final def docComments: mutable.WeakHashMap[Symbol, DocComment] = docCommentsSupport.docComments
+  type DocComment = docCommentsSupport.DocComment
+  final lazy val DocComment: docCommentsSupport.DocComment.type = docCommentsSupport.DocComment
 
   // Components for collecting and generating output
 
@@ -609,9 +616,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // I only changed analyzer.
   //
   // factory for phases: namer, packageobjects, typer
-  lazy val analyzer =
-    if (settings.YmacroAnnotations.value) new { val global: Global.this.type = Global.this } with Analyzer with MacroAnnotationNamers
-    else new { val global: Global.this.type = Global.this } with Analyzer
+  // The type is declared so that the erased result type is still Analyzer, which
+  // precompiled callers such as the sbt compiler bridge link against.
+  lazy val analyzer: Analyzer { val global: Global.this.type } =
+    if (settings.YmacroAnnotations.value) new { val global: Global.this.type = Global.this } with AbstractAnalyzer with MacroAnnotationNamers
+    else new { val global: Global.this.type = Global.this } with AbstractAnalyzer
 
   // phaseName = "superaccessors"
   object superAccessors extends {

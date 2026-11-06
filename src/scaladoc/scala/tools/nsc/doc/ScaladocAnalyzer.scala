@@ -14,12 +14,12 @@ package scala.tools.nsc
 package doc
 
 import scala.tools.nsc.ast.parser.{BracePatch, SyntaxAnalyzer}
-import typechecker.Analyzer
+import typechecker.AbstractAnalyzer
 import scala.reflect.internal.util.{BatchSourceFile, Position}
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.tools.nsc.doc.base.{CommentFactoryBase, LinkTo, MemberLookupBase}
 
-trait ScaladocAnalyzer extends Analyzer {
+trait ScaladocAnalyzer extends AbstractAnalyzer {
   val global : Global // generally, a ScaladocGlobal
   import global._
 
@@ -58,7 +58,7 @@ trait ScaladocAnalyzer extends Analyzer {
       super.typedDocDef(docDef, mode, pt)
     }
 
-    def defineUseCases(useCase: UseCase): List[Symbol] = {
+    def defineUseCases(useCase: docCommentsSupport.UseCase): List[Symbol] = {
       def stringParser(str: String): syntaxAnalyzer.Parser = {
         val file = new BatchSourceFile(context.unit.source.file, str) {
           override def positionInUltimateSource(pos: Position) = {
@@ -73,7 +73,7 @@ trait ScaladocAnalyzer extends Analyzer {
 
       def defineAlias(name: Name) = (
         if (context.scope.lookup(name) == NoSymbol) {
-          lookupVariable(name.toString.substring(1), enclClass) foreach { repl =>
+          docCommentsSupport.lookupVariable(name.toString.substring(1), enclClass) foreach { repl =>
             silent(_.typedTypeConstructor(stringParser(repl).typ())) map { tpt =>
               val alias = enclClass.newAliasType(name.toTypeName, useCase.pos)
               val tparams = cloneSymbolsAtOwner(tpt.tpe.typeSymbol.typeParams, alias)
