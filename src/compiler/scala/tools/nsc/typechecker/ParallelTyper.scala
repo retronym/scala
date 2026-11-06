@@ -166,8 +166,7 @@ trait ParallelTyper {
     val queue = new ConcurrentLinkedQueue[CompilationUnit](ordered.asJava)
     val failure = new AtomicReference[Throwable]()
     val done = new AtomicInteger()
-    val workers = (1 to nThreads).map { i =>
-      val t = new scala.reflect.internal.util.ScratchThread(null, () => {
+    val body: Runnable = () => {
         try {
           phase = typerPhase
           var unit = queue.poll()
@@ -192,17 +191,13 @@ trait ParallelTyper {
         } finally {
           phase = NoPhase
         }
-      }, s"scalac-typer-$i", 1L << 28)
-      t.setDaemon(true)
-      t
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
     currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
-      workers.foreach(_.start())
-      workers.foreach(_.join())
+      workers.start(nThreads, body).await()
     } finally {
       parallelTyperActive = false
       currentRun.reporting.deferFeatureExplanations = false
@@ -215,7 +210,7 @@ trait ParallelTyper {
     timeline.foreach(tl => tl.write(prop("timeline").get, t0, t1, t2, t3, nThreads))
     failure.get match {
       case null =>
-      case ex   => throw ex
+      case ex   => closeWorkers(); throw ex
     }
   }
 
@@ -253,8 +248,7 @@ trait ParallelTyper {
     val failure = new AtomicReference[Throwable]()
     // units whose task asked what the serial phase would have reported before it (`RetryInUnitOrder`)
     val retry = new ConcurrentLinkedQueue[CompilationUnit]()
-    val workers = (1 to nThreads).map { i =>
-      val t = new scala.reflect.internal.util.ScratchThread(null, () => {
+    val body: Runnable = () => {
         try {
           phase = phase0
           var unit = queue.poll()
@@ -271,18 +265,15 @@ trait ParallelTyper {
         } finally {
           phase = NoPhase
         }
-      }, s"scalac-$name-$i", 1L << 28)
-      t.setDaemon(true)
-      t
     }
     val watchdog = newWatchdog(prop("watchdog").map(_.toInt).getOrElse(120))
     parallelTyperActive = true
     currentRun.reporting.deferFeatureExplanations = true
     try {
       watchdog.start()
-      workers.foreach(_.start())
-      if (meanwhile ne null) meanwhile(() => workers.exists(_.isAlive))
-      workers.foreach(_.join())
+      val running = workers.start(nThreads, body)
+      if (meanwhile ne null) meanwhile(() => running.getCount > 0)
+      running.await()
       // Again, here, in the order of the units, each with the diagnostics of the units before it at hand.
       if (failure.get == null && !retry.isEmpty) {
         val again = retry.asScala.toSet
@@ -305,9 +296,41 @@ trait ParallelTyper {
     }
     failure.get match {
       case null =>
-      case ex   => throw ex
+      case ex   => closeWorkers(); throw ex
     }
   }
+
+  /** The worker threads of a run, `scalac-worker-1` and up. Every step that runs a unit per task runs on them: they
+   *  are made when a step first needs them and kept until the run ends (`closeWorkers`). A worker's scratch state, with what it caches, then lasts for the run, and a timeline has a
+   *  lane per worker. A worker refers to this compiler, so workers must not outlive the run.
+   */
+  private object workers {
+    private[this] val Stop: Runnable = () => ()
+    private final class Worker(i: Int) {
+      private[this] val jobs = new java.util.concurrent.LinkedBlockingQueue[Runnable]
+      private[this] val thread = new scala.reflect.internal.util.ScratchThread(null, () => {
+        var job = jobs.take()
+        while (job ne Stop) {
+          try job.run() catch { case _: Throwable => } // a job reports its own failure
+          job = jobs.take()
+        }
+      }, s"scalac-worker-$i", 1L << 28)
+      thread.setDaemon(true)
+      thread.start()
+      def submit(job: Runnable): Unit = jobs.put(job)
+    }
+    private[this] val all = mutable.ArrayBuffer.empty[Worker]
+    /** `body` on `n` workers at once; the latch opens when all of them are done with it. */
+    def start(n: Int, body: Runnable): java.util.concurrent.CountDownLatch = synchronized {
+      while (all.length < n) all += new Worker(all.length + 1)
+      val done = new java.util.concurrent.CountDownLatch(n)
+      all.iterator.take(n).foreach(_.submit(() => try body.run() finally done.countDown()))
+      done
+    }
+    def close(): Unit = synchronized { all.foreach(_.submit(Stop)); all.clear() }
+  }
+  /** End the worker threads of this run, if it had any. */
+  def closeWorkers(): Unit = workers.close()
 
   /** The thread dump of a phase that runs longer than `seconds`, and again every `seconds`. */
   private def newWatchdog(seconds: Int): Thread = {
