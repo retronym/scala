@@ -360,10 +360,21 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
   case class TypeDiag(tp: Type, sym: Symbol) extends Ordered[TypeDiag] {
     // save the name because it will be mutated until it has been
     // distinguished from the other types in the same error message
-    private val savedName = sym.name
+    //
+    // With -Yparallel-typer the symbol is not renamed, only shown under another name on this thread: `name_=` moves the
+    // symbol to another bucket of its owner's scope, and any symbol can be in a message, so another thread would not
+    // find `scala.Long` while this one renders a mismatch with `java.lang.Long`, even a silent one.
+    private def currentName: Name =
+      if (isConcurrentCompiler) { val shown = scratch.shownNames.get(sym).asInstanceOf[Name]; if (shown ne null) shown else sym.name }
+      else sym.name
+    private def setName(name: Name): Unit =
+      if (!isConcurrentCompiler) sym.name = name
+      else if (name eq sym.name) scratch.shownNames.remove(sym)
+      else scratch.shownNames.put(sym, name)
+    private val savedName = currentName
     private var postQualifiedWith: List[Symbol] = Nil
-    def restoreName()     = sym.name = savedName
-    def modifyName(f: String => String): Unit = sym setName newTypeName(f(sym.name.toString))
+    def restoreName()     = setName(savedName)
+    def modifyName(f: String => String): Unit = setName(newTypeName(f(currentName.toString)))
 
     // functions to manipulate the name
     def preQualify()   = modifyName(trueOwner.fullName + "." + _)
