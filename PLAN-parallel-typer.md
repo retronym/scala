@@ -494,6 +494,32 @@ First things the profiles show: the compiler's largest serial stretch, class hea
 
 A hang seen once, on the library at 4 threads under the abandoned `itimer` configuration and not again in about 150 compilations: a signatures worker had exited while another spun in `awaitMarker` on a `_completingThread` still naming it, with the others waiting on that worker's claim. `markCompleting` and `unmarkCompleting` save and restore the field non-atomically, which could leave such a marker if two threads' marks interleave. That is a hypothesis; I did not reproduce it.
 
+## Why it stopped scaling at 2.4x, and what was done (6 Nov)
+
+A full compile to class files with every step on the pool (`parallelParser`, `loadPackages`, `parallelPostTyper`, `parallelLatePhases`) levelled off: library 4430 ms serially, 1991 / 1820 / 1847 ms at 4 / 6 / 8 threads; compiler 7015 ms, 3047 / 2908 / 2838 ms. Thread CPU summed over the spans of a step grew with the thread count in every step (typer bodies of the compiler corpus 2305 ms serially, 3824 ms at 8).
+
+How it was taken apart:
+
+- A control. Eight independent serial compilations side by side in one JVM, each in its own `Global`, cost 34% more CPU each than one alone (20% at 4 and 6). That much is the machine (6 fast cores and 12 slower ones, shared caches) and no change to the compiler removes it. The parallel compiler at 8 threads cost 116% more, so the rest was ours.
+- HotSpot. JDK 25, which has the fix for the secondary supers cache that makes interface casts scale badly, gives the same times as JDK 21 (1421 against 1431 ms at 8 threads). The cake's casts are not the limit.
+- Profiles. `event=cpu` with the patched async-profiler over several warm compilations, serial against 8 threads, compared by frame.
+
+What the profiles showed, largest first, and what became of each:
+
+1. The hand-off of the coarse claim. 21% of all samples at 8 threads were `Unsafe.park` and `unpark`, 95% of them from `Symbol.transformInfosUnderLock`: every info transform of a late phase takes the coarse root. The time running under the claim was 3%; the cost was that a waiter parked on the claim's latch at once, every waiter was woken at the release, one won and the rest parked again. `PerKeyClaims.acquire` now looks again up to 2000 times before it parks (`-Dscalac.parallelTyper.claimSpins`; 20000 measures the same). Library at 8 threads 1828 to about 1500 ms. The transforms are still serialised by the coarse root: this is the late-phases work's to change.
+2. The same claim in the front end. A completer runs at the namer's phase and the body at the typer's, so the first read of every symbol's info in the typer had `_validTo` behind the period, and went to `transformInfosUnderLock` to move it on with no transformer to run: 6.8% of front-end CPU at 8 threads. `_validTo` is now advanced with a compare-and-set when no transformer lies in between (`Symbol.advanceValidTo`). A plain write would not do: it could move `_validTo` back behind a transform another thread had just finished, which would then run twice.
+3. Fields of shared objects written on the hottest paths. `Trees.nodeCount` at every tree made, `analyzer.lastTreeToTyper` at every `typed`, `Global.lastSeenContext` at every context: each a field of the universe or the analyzer, which every thread reads constantly, so the line it is on moved from core to core. They are per thread now, in `Scratch`. The sign was `SymbolTable.NoSymbol`, a lazy val whose bitmap is such a neighbour: 342-424 samples against 112 serially, 125 after. The parser gained most (CPU summed over its workers at 8 threads from about 270 to 165 ms).
+4. The lookup of the thread's phase. `Symbol.needsFlatClasses` (behind every `name` and `owner`), `Scope.lookupEntry` and `Symbol.flags` asked for the phase to learn that it is before flatten and has the initial flag mask. The universe notes when a thread first reaches such a phase (`flatClassesSeen`, `lateFlagsSeen`), and until then they do not ask. Scratch lookups 5.2% to 3.2% of front-end CPU at 8 threads.
+5. `stat`. Listing a package of a directory classpath asked the file system two or three times about each entry. 45% of the serial class headers step was file system calls. Names are tested first now and the `.tasty` sibling is looked up in the listing. This is serial compiler time too (2% of its CPU on the compiler corpus).
+
+Found on the way, in the late phases, and passed to that work: a hang (a completion mark left by a thread that has gone: the info transform marks under the coarse root, a completion under the symbol's own, and the two do not exclude each other), and an NPE (`TypeRef.normalize` reading its cache field twice while another thread clears it).
+
+Where it stands. Front end of the compiler corpus (through the pickler) at 8 threads, interleaved runs on a loaded machine: 777-1206 ms before the changes of 2 to 5, 674-934 ms after. A profile of it now has 4% more CPU samples than the serial compiler's, where it had 13%.
+
+What still limits the front end at 8 threads, in order: the bodies' CPU, which is the machine's 34% and little else; the class headers, serial, 90-170 ms of about 700; class file loading, all of it under the coarse root (5% of CPU, and every other thread that needs the root waits for a load to finish); setup, 45-70 ms. Tried and dropped: no serial class headers at all (`lazySignatures`) fails with wait-for cycles through the coarse root, because what holds the root (lazy elements of a base type sequence, `cookJavaRawInfo`, a macro expansion) asks for the info of a class that another thread is completing while waiting for the root. The next step with a real return is class file loading under a claim of its own, per class, which also makes headers on the pool worth another look.
+
+Measuring. The machine was shared with other sessions' soak runs throughout (load average 10-18), and wall times of one compilation differ by 10% and more from run to run. The changes above were judged by CPU samples in the frames concerned, which do not depend on the load, and by interleaved before and after runs. None of the wall times here is fit to quote as a result; a quiet machine or perflab is owed.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
