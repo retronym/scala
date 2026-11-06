@@ -33,7 +33,11 @@ abstract class Erasure extends InfoTransform
 
   val phaseName: String = "erasure"
 
-  val requiredDirectInterfaces = perRunCaches.newMap[Symbol, mutable.Set[Symbol]]()
+  // the values are immutable: a reader in an info transform or in the back end gets a set no one is adding to
+  val requiredDirectInterfaces = perRunCaches.newConcurrentMap[Symbol, Set[Symbol]]()
+  def addRequiredDirectInterface(clazz: Symbol, iface: Symbol): Unit = lockedIfConcurrent(requiredDirectInterfaces) {
+    requiredDirectInterfaces(clazz) = requiredDirectInterfaces.getOrElse(clazz, Set.empty[Symbol]) + iface
+  }
 
   def newTransformer(unit: CompilationUnit): AstTransformer =
     new ErasureTransformer(unit)
@@ -54,7 +58,9 @@ abstract class Erasure extends InfoTransform
   private object NeedsSigCollector {
     private val NeedsSigCollector_true = new NeedsSigCollector(isClassConstructor = true)
     private val NeedsSigCollector_false = new NeedsSigCollector(isClassConstructor = false)
-    def apply(isClassConstructor: Boolean) = if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
+    def apply(isClassConstructor: Boolean) =
+      if (isConcurrentCompiler) new NeedsSigCollector(isClassConstructor) // it keeps its result in a field
+      else if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
   }
   private class NeedsSigCollector(isClassConstructor: Boolean) extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
@@ -1289,7 +1295,7 @@ abstract class Erasure extends InfoTransform
             }
 
             if (sym.isJavaDefined && qualSym.isTraitOrInterface)
-              requiredDirectInterfaces.getOrElseUpdate(context.enclClass.owner, mutable.Set.empty) += qualSym
+              addRequiredDirectInterface(context.enclClass.owner, qualSym)
 
             if (qualSym != owner)
               tree.updateAttachment(new QualTypeSymAttachment(qualSym))

@@ -407,6 +407,62 @@ Make it the default under `-Yparallel-typer` (keep the property as an off switch
 
 Residues: a lookup, from another unit, of a `private[C]` member by its unexpanded name while its unit's superaccessors renames it (order-dependent in the serial compiler too; not known to be reachable in a program that compiles); the remaining `toTermName` calls in the pickler (module class names of external references, `companionModule0`) now take the lock only when the lock-free read misses. The fused modes should be deleted with the experiment, they exist to show the race.
 
+## Parallel late phases (refchecks to jvm)
+
+`-Dscalac.parallelTyper.parallelLatePhases` (under `-Yparallel-typer`; no value or `all`: every phase below that is known to work; otherwise a comma-separated list of phase names, for bisection) runs each named phase a unit per task on the pool. The goal is a full compile to class files with every unit-wise phase on the pool, byte-identical to the serial compile.
+
+### Decisions
+
+Steps, as for the post-typer phases: each phase is a pool step over all units, so a phase has finished on every unit before the next starts on any. What is left to argue is only what two units do to each other within one phase. That matters more here than before the pickler, because a good deal of the serial compiler's correctness rests on "phase N is done everywhere": scopes are not versioned by phase, so lifted methods, bridges and mixed-in members appear in a class's `decls` for every reader at every phase from the moment they are entered. Fusing is a later measured experiment and nothing in the design depends on it.
+
+Units start in their command-line order and diagnostics are issued in unit order (`parallelPhase(..., unitOrder = true)`). So the one-thread path is the serial compiler apart from the typer's own changes, and a difference between them points at the pool rather than at an order effect.
+
+The lazy info transformers are the central problem, and they get the existing protocol: a transform of a symbol's info runs under the completion lock, with the symbol marked as completing, so that another thread waits rather than reading a half-advanced history. No transformer is assumed to be pure. They enter members, make new classes, set flags and fill per-run maps, and the lock covers all of it, nested transforms of other symbols included.
+
+Pre-pass, considered and not adopted as the first step: forcing every source symbol's info at each phase on the driver before its step would remove the concurrency from the transforms and fix their order, at the cost of a serial step per phase and of transforming symbols a serial run leaves alone (which changes when specialization's members appear). Kept in reserve for a phase whose transforms turn out to be order-dependent.
+
+### What is common to every phase
+
+- `Symbol.rawInfoHere`/`transformInfos`. `_validTo` is advanced stepwise "to enable reads from same symbol during info-transform", and `infos` is appended to. Unlocked, two threads run a transformer twice on one symbol (two specializations of one class), and a reader sees an intermediate info. Plan: above. Readers on the fast path need the history's fields published before `this.infos` and `_validTo`.
+- Stamped caches. Up to the pickler no transformer changes base classes, so the residual "a new stamp with the previous value" was harmless. It no longer is: past erasure (and specialize, mixin, explicitouter's successors) a stale pair is a wrong answer, and phase travel means two threads at different phases write the same fields. Value and stamp must be read as one: an immutable holder in a concurrent compiler for `TypeRef.parents/baseTypeSeq/relativeInfo`, `CompoundType.baseTypeSeq/baseClasses`, `SingleType.underlying`, `TypeSymbol.tpeCache`, `typeOfThis`.
+- `global.typer`, one `object` with one `Context`: used by `gen.mkCast`-style paths and by erasure, uncurry, lambdalift and tailcalls through `typedPos`. Per thread.
+- Lazy vals of the phase objects whose initialisers complete symbols (`Erasure.interceptedMethods`, `LambdaLift.refCreateMethod`, `SpecializeTypes.specializableTypes`, the duplicator's analyzer): the lock order rule, forced before the first step.
+- `perRunCaches` maps at phase level: synchronised, or moved to the per-unit transformer when they are in fact per unit.
+- Absolute symbol ids now vary from run to run, and `Symbol.hashCode` is the id. Iteration over a hash collection of symbols that reaches a class file is a difference; the oracle is the detector, and the fix is at the site (a linked collection, or a sort).
+- Cross-unit reads of a scope that another unit's tree transform is entering into: the scope publication argument of the typer, with the order-independence argued per phase below.
+
+### Per phase
+
+| phase | info transformer | phase-level mutable state | cross-unit writes | fresh names | expected difficulty |
+|---|---|---|---|---|---|
+| refchecks | modules become methods (flags) | `separatelyCompiledScalaSuperclass` | bridge for a structural member and `makeNotPrivate`, own classes | none at phase level | low |
+| patmat | none | translators are per match, `javaClassesByUnit` read-only | none | translator's `ctr`, per instance | low (exhaustivity results must not depend on ids) |
+| uncurry | yes, repeated and by-name types | none | own classes | `unit.fresh` | low |
+| fields | yes, adds trait fields and setters | `moduleOrLazyVarOf` | `makeNotPrivate`, setters on the class being transformed; a subclass's transform reads the trait's | none | medium |
+| tailcalls | none | per-transformer `perRunCaches` maps | none | none | low |
+| specialize | yes, creates classes and members, unlinks from owners | `specializedClass`, `overloads`, `info`, `typeEnv`, `anyrefSpecCache`, `wasSpecializedForTypeVars`, `concreteSpecMethods`; `duplicator`'s `oldClassOwner`, `newClassOwner`, `envSubstitution`, `invalidSyms` | owner's scope, from the info transform; `makeNotPrivate` from a call site | none | high |
+| explicitouter | yes, outer accessors | none | `makeNotPrivate` on a member of an enclosing class, own unit | none | low |
+| erasure | yes | `requiredDirectInterfaces`, `boxingErasure.boxPrimitives`; bridges in `root.info.decls` | own class's scope, read by subclasses' bridges in other units (filtered by `isBridge`) | none | medium |
+| posterasure | yes, derived value types | none | none | none | low |
+| lambdalift | yes, adds free variable parameters | per-transformer | moves locals into their enclosing class, own unit; `iface.info.decls` for a getter in a trait, own unit | `unit.fresh` | low |
+| constructors | none | `guardedCtorStats`, `ctorParams` (read for a specialized subclass, same unit); `currentUnit.fresh` | unlinks omittable members, own class | per unit | medium |
+| flatten | yes, lifts classes into the package's scope | `liftedDefs` | package scope, from the info transform, read by every unit | none | medium: `rehash` and `unlink` on a shared scope |
+| mixin | yes, none on classes but `publicizeTraitMethods` and `mixinTraitMembers` change a trait of another unit from the subclass's transform | `treatedClassInfos`, `_bitmapInfo`, `_slowPathFor` | a trait's symbols and scope, from any subclass | none | high |
+| cleanup | none | `entryPoints` (order of a set, read by the back end only for the inliner's entry points) | none | `unit.fresh`; `symbolsStoredAsStatic` per transformer | low |
+| delambdafy | none | per-transformer | enters lifted methods into its own class | none | low |
+| jvm | none | `frontendSynch` around each class; `BTypes` caches, `CoreBTypes`, `bCodeAsmCommon`, `symData -=` | none | none | see below |
+
+`jvm` is not a transform but a walk of the trees that reads symbols through phase travel, and it already serialises the front-end part by taking `frontendLock` around every top-level class, while `-Ybackend-parallelism` covers writing only. Its class-level state (`PlainClassBuilder`) is per instance, so the work is the `BTypes` caches and the order in which `generatedClassHandler` receives units. To be attempted last; recorded here as serial with a concrete obstacle if it does not fit.
+
+### Order of attack
+
+1. Oracle for class files, and a corpus. Serial against serial must be clean first.
+2. The common machinery, with no phase on the pool: the info transform protocol, holders for the stamped caches, `global.typer`. Each of these must leave the existing oracle clean and be free for the serial compiler.
+3. The phases with no or trivial transformers: tailcalls, patmat, uncurry, explicitouter, posterasure, lambdalift, delambdafy, cleanup, refchecks.
+4. The ones with phase-level state: constructors, fields, erasure, flatten.
+5. Mixin, specialize.
+6. jvm.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.

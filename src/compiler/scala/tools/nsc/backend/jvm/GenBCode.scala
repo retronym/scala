@@ -95,6 +95,12 @@ abstract class GenBCode extends SubComponent {
       postProcessorFrontendAccess.initialize()
       postProcessor.initialize(global)
       generatedClassHandler = GeneratedClassHandler(global)
+      if (currentRun.onPool(phaseName)) {
+        // as for any phase on the pool (the lock order). The cached setting is read before anyone relies on it.
+        codeGen.CodeGenImpl.delambdafyInline()
+        List[AnyRef](codeGen, codeGen.CodeGenImpl, bTypes, bTypes.coreBTypes, postProcessor.backendUtils, postProcessor, postProcessorFrontendAccess)
+          .foreach(analyzer.forceLazyValsOfObject(_))
+      }
       statistics.stopTimer(statistics.bcodeInitTimer, initStart)
     }
     def writeOtherFiles(): Unit = {

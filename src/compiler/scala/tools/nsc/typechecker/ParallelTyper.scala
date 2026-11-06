@@ -335,7 +335,23 @@ trait ParallelTyper {
    */
   private def forceLazyVals(): Unit = {
     val seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean])
-    def force(obj: AnyRef, depth: Int): Unit = if (obj != null && depth < 3 && seen.add(obj)) {
+    def force(obj: AnyRef, depth: Int): Unit = forceLazyValsOf(obj, depth, seen)
+    force(definitions, 0)
+    force(currentRun.runDefinitions, 0)
+    // private lazy vals of the cake that complete symbols, e.g. `TypeConstraints.numericLoBound`
+    for (m <- global.getClass.getMethods ++ global.getClass.getDeclaredMethods
+         if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")) {
+      try { m.setAccessible(true); m.invoke(global) } catch { case _: Throwable => () }
+    }
+  }
+
+  /** The lazy vals of a phase's component, before its workers start: as `forceLazyVals`. */
+  def forceLazyValsOf(component: SubComponent): Unit = if (!flag("oneThread")) forceLazyValsOf(component: AnyRef, 0, java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean]))
+
+  def forceLazyValsOfObject(obj: AnyRef): Unit = if (!flag("oneThread")) forceLazyValsOf(obj, 0, java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean]))
+
+  private def forceLazyValsOf(obj: AnyRef, depth: Int, seen: java.util.Set[AnyRef]): Unit =
+    if (obj != null && depth < 3 && seen.add(obj)) {
       var cls: Class[_] = obj.getClass
       while (cls != null && cls != classOf[Object]) {
         val methods = cls.getDeclaredMethods
@@ -348,21 +364,13 @@ trait ParallelTyper {
             try {
               m.setAccessible(true)
               val v = m.invoke(obj)
-              if (isModule) force(v.asInstanceOf[AnyRef], depth + 1)
+              if (isModule) forceLazyValsOf(v.asInstanceOf[AnyRef], depth + 1, seen)
             } catch { case _: Throwable => () }
           }
         }
         cls = cls.getSuperclass
       }
     }
-    force(definitions, 0)
-    force(currentRun.runDefinitions, 0)
-    // private lazy vals of the cake that complete symbols, e.g. `TypeConstraints.numericLoBound`
-    for (m <- global.getClass.getMethods ++ global.getClass.getDeclaredMethods
-         if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")) {
-      try { m.setAccessible(true); m.invoke(global) } catch { case _: Throwable => () }
-    }
-  }
 
   /** Complete the signature of every member that `unit` defines, outside method bodies: the classes, objects, their
    *  type parameters, members (those of the trees and the synthetic ones in their scopes), self types and

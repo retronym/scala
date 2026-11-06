@@ -27,7 +27,6 @@ import scala.util.chaining._
 abstract class TailCalls extends Transform {
   import global._                     // the global environment
   import definitions._                // standard classes and methods
-  import typer.typedPos               // methods to type trees
 
   val phaseName: String = "tailcalls"
 
@@ -247,7 +246,7 @@ abstract class TailCalls extends Transform {
         def rewriteTailCall(recv: Tree): Tree = {
           debuglog(s"Rewriting tail recursive call: [${fun.pos.lineContent.trim}]")
           accessed += ctx.label
-          typedPos(fun.pos) {
+          typer.typedPos(fun.pos) {
             val args = mapWithIndex(transformedArgs) { (arg, i) =>
               mkAttributedCastHack(arg, ctx.label.info.params(i + 1).tpe)
             }
@@ -299,7 +298,7 @@ abstract class TailCalls extends Transform {
               val newThis = newCtx.newThis(tree.pos)
               val vpSyms  = vparamss.flatten.map(_.symbol)
 
-              typedPos(tree.pos)(Block(
+              typer.typedPos(tree.pos)(Block(
                 List(ValDef(newThis, This(currentClass))),
                 LabelDef(newCtx.label, newThis :: vpSyms, mkAttributedCastHack(newRHS, newCtx.label.tpe.resultType))
               ))

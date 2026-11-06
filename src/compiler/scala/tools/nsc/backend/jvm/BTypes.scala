@@ -825,7 +825,14 @@ abstract class BTypes {
     final def apply[T](internalName: InternalName, t: T, fromSymbol: Boolean)(init: (ClassBType, T) => Either[NoClassBTypeInfo, ClassInfo]): ClassBType = {
       val cached = classBTypeCache.get(internalName)
       if (cached ne null) cached
-      else {
+      // From symbols, one at a time: a class's info refers to other classes, and with the units on a pool two threads
+      // could each hold the monitor of one (below) while asking for the info of the other.
+      else if (fromSymbol) frontendSynch(create(internalName, t, fromSymbol)(init))
+      else create(internalName, t, fromSymbol)(init)
+    }
+
+    private def create[T](internalName: InternalName, t: T, fromSymbol: Boolean)(init: (ClassBType, T) => Either[NoClassBTypeInfo, ClassInfo]): ClassBType = {
+      {
         val newRes =
           if (fromSymbol) new ClassBTypeFromSymbol(internalName)
           else new ClassBTypeFromClassfile(internalName)

@@ -495,6 +495,10 @@ abstract class SymbolTable extends macros.Universe
     def newWeakMap[K, V]()        = recordCache(mutable.WeakHashMap.empty[K, V])
     def newMap[K, V]()            = recordCache(mutable.HashMap.empty[K, V])
     def newSet[K]()               = recordCache(mutable.HashSet.empty[K])
+    /** A map that a phase on the pool shares between its workers (`-Yparallel-typer`): each operation is atomic, and
+     *  its iteration order is not the serial map's. */
+    def newConcurrentMap[K, V](): mutable.Map[K, V] =
+      if (isConcurrentCompiler) recordCache(scala.collection.concurrent.TrieMap.empty[K, V]) else newMap[K, V]()
     def newWeakSet[K <: AnyRef]() = recordCache(WeakHashSet.empty[K])
 
     @nowarn("cat=deprecation")
@@ -767,6 +771,7 @@ abstract class SymbolTable extends macros.Universe
     var underlyingInProgress: List[AnyRef] = Nil
     /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
     var tpeInProgress: List[AnyRef] = Nil
+    var boxPrimitives: Boolean = true
     /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
     var ph: Phase = NoPhase
     var per: Period = NoPeriod
