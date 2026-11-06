@@ -1341,10 +1341,12 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     val compiledFiles   = new mutable.HashSet[String]
 
+    /** For `compiles`, which the wrapper's `isDefinedAt` would allocate an `Option` for at each look. */
+    private[this] val concurrentSymSource = if (isConcurrentUniverse) new java.util.concurrent.ConcurrentHashMap[Symbol, AbstractFile]() else null
     /** A map from compiled top-level symbols to their source files. Written by the typer: concurrent under
      *  `-Yparallel-typer`. */
     val symSource: mutable.Map[Symbol, AbstractFile] =
-      if (isConcurrentUniverse) scala.jdk.CollectionConverters.ConcurrentMapHasAsScala(new java.util.concurrent.ConcurrentHashMap[Symbol, AbstractFile]()).asScala
+      if (concurrentSymSource ne null) scala.jdk.CollectionConverters.ConcurrentMapHasAsScala(concurrentSymSource).asScala
       else new mutable.HashMap[Symbol, AbstractFile]
 
     /** A map from compiled top-level symbols to their picklers */
@@ -1623,7 +1625,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     @tailrec
     final def compiles(sym: Symbol): Boolean =
       if (sym == NoSymbol) false
-      else if (symSource.isDefinedAt(sym)) true
+      else if (if (concurrentSymSource ne null) concurrentSymSource.containsKey(sym) else symSource.isDefinedAt(sym)) true
       else if (!sym.isTopLevel) compiles(sym.originalEnclosingTopLevelClassOrDummy)
       else if (sym.isModuleClass) compiles(sym.sourceModule)
       else false

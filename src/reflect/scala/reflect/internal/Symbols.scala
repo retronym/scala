@@ -796,7 +796,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     final def flags: Long = {
-      flags(if (lateFlagsSeen) phase.flagMask else InitialFlags)
+      // A phase's mask differs from the initial one only in the late and anti flags, so a symbol that has none (nearly
+      // all, until the late phases add them) has the same flags at every phase, and need not ask which phase this
+      // thread is at, a lookup of the thread's state in a concurrent compiler.
+      val raw = _rawflags
+      if ((raw & (LateFlags | AntiFlags)) == 0L) raw & InitialFlags
+      else flags(phase.flagMask)
     }
 
     private[reflect] final def flags(phaseFlagMask: Long): Long = {
@@ -1584,9 +1589,24 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Get type info associated with symbol at current phase, after
      *  ensuring that symbol is initialized (i.e. type is completed).
      */
-    def info: Type = {
-      if (_validTo == NoPeriod || isConcurrentCompiler && isCompletingElsewhere) completeInfoUnderLock()
-      rawInfoHere // not `rawInfo`, which would look for a completion elsewhere a second time
+    def info: Type =
+      if (isConcurrentCompiler) concurrentInfo
+      else {
+        if (_validTo == NoPeriod) completeInfoUnderLock()
+        rawInfoHere
+      }
+
+    /** `info` in a concurrent compiler. `isCompletingElsewhere` orders the load of `validTo` before its load of the
+     *  marker, and that load, being volatile, before the load of `infos` in `concurrentRawInfoAt`: the order that
+     *  `concurrentRawInfo` needs a fence for. Not `rawInfo`, which would look for a completion elsewhere a second time.
+     */
+    private[this] def concurrentInfo: Type = {
+      val validTo = _validTo
+      if (validTo == NoPeriod || isCompletingElsewhere) {
+        completeInfoUnderLock()
+        concurrentRawInfo
+      }
+      else concurrentRawInfoAt(validTo)
     }
 
     /** In a concurrent compiler, the thread that is completing this symbol, or null.
@@ -1958,6 +1978,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def concurrentRawInfo: Type = {
       val validTo = _validTo
       java.lang.invoke.VarHandle.loadLoadFence()
+      concurrentRawInfoAt(validTo)
+    }
+    /** @param validTo `_validTo`, loaded before this method's load of `infos` */
+    private[this] def concurrentRawInfoAt(validTo: Period): Type = {
       var infos = this.infos
       assert(infos != null, "infos must not be null")
       if (validTo == NoPeriod) infos.info
