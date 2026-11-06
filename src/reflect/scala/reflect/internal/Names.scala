@@ -92,7 +92,10 @@ trait Names extends api.Names {
   final def newTermName(cs: Array[Char], offset: Int, len0: Int, cachedString: String): TermName = {
     def body = {
       require(offset >= 0, "offset must be non-negative, got " + offset)
-      store.termFromChars(cs, offset, math.max(len0, 0), cachedString)
+      val len = math.max(len0, 0)
+      // xray: names carry their strings for the completions' profiler spans (off: only this name's cost)
+      val string = if ((cachedString eq null) && util.ParallelTyperTimeline.completionSpans) new String(cs, offset, len) else cachedString
+      store.termFromChars(cs, offset, len, string)
     }
     if (synchronizeNames) {
       val existing = if (!lockFreeLookups || offset < 0) null else lookupTermName(cs, offset, math.max(len0, 0), hashValue(cs, offset, math.max(len0, 0)))
