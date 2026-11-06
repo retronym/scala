@@ -41,6 +41,7 @@ final class PerKeyClaims(currentClaimant: () => Claimant, cycles: CycleHandler, 
     var seen: Claim /* | Null */ = null
     var cycleSince = 0L
     var lastChain: List[Claim] /* | Null */ = null
+    var spins = 0
     while (true) {
       val c = claims.get(key)
       if (c == null) {
@@ -56,6 +57,12 @@ final class PerKeyClaims(currentClaimant: () => Claimant, cycles: CycleHandler, 
       } else if (c.owner eq me) {
         c.holds += 1
         return
+      } else if (spins < PerKeyClaims.spinLimit) {
+        // Most holds are short (an info transform under the coarse root takes microseconds), and a claimant that
+        // parks for one costs more than the hold: it is unparked with every other waiter, one of them wins and the
+        // rest park again. So look again a bounded number of times before parking.
+        spins += 1
+        Thread.onSpinWait()
       } else {
         if (waitedSince == 0L) {
           waitedSince = System.nanoTime()
@@ -86,6 +93,7 @@ final class PerKeyClaims(currentClaimant: () => Claimant, cycles: CycleHandler, 
         me.waitingOn = c
         try c.done.await(5, TimeUnit.MILLISECONDS)
         finally me.waitingOn = null
+        spins = 0 // the claim this claimant slept on is likely released: the next holder's may be short too
       }
     }
   }
@@ -147,6 +155,9 @@ final class PerKeyClaims(currentClaimant: () => Claimant, cycles: CycleHandler, 
 }
 
 object PerKeyClaims {
+  /** How many times a claimant looks at a claim held by another before it parks (`-Dscalac.parallelTyper.claimSpins`). */
+  private val spinLimit: Int = java.lang.Integer.getInteger("scalac.parallelTyper.claimSpins", 2000)
+
   /** A claimant's claim on a key, released when its holds come back to 0. */
   final class Claim(val owner: Claimant, val what: What, val ownerName: String) {
     // changed only by the owner (`acquire` re-entering, `release`)

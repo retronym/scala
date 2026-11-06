@@ -399,7 +399,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def lookupEntry(name: Name): ScopeEntry = {
       var e: ScopeEntry = null
-      val flat = phase.flatClasses
+      val flat = flatClassesSeen && phase.flatClasses
       if (hashtable ne null) {
         e = hashtable(name.start & HASHMASK)
         while ((e ne null) && (e.name(flat) ne name)) {
@@ -421,7 +421,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
       var e = entry
-      val flat = phase.flatClasses
+      val flat = flatClassesSeen && phase.flatClasses
       val entryName = entry.name(flat)
       if (hashtable ne null)
         do { e = e.tail } while ((e ne null) && e.name(flat) != entryName)

@@ -796,7 +796,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     final def flags: Long = {
-      flags(phase.flagMask)
+      flags(if (lateFlagsSeen) phase.flagMask else InitialFlags)
     }
 
     private[reflect] final def flags(phaseFlagMask: Long): Long = {
@@ -866,7 +866,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final def isDelambdafyFunction = isSynthetic && (name containsName tpnme.DELAMBDAFY_LAMBDA_CLASS_NAME)
     final def isDelambdafyTarget  = isArtifact && isMethod && hasAttachment[DelambdafyTarget.type]
     final def isDefinedInPackage  = effectiveOwner.isPackageClass
-    final def needsFlatClasses    = phase.flatClasses && (rawowner ne NoSymbol) && !rawowner.isPackageClass && !isMethod
+    final def needsFlatClasses    = flatClassesSeen && phase.flatClasses && (rawowner ne NoSymbol) && !rawowner.isPackageClass && !isMethod
 
     // TODO introduce a flag for these?
     final def isPatternTypeVariable: Boolean =
@@ -1960,9 +1960,31 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
           infos.info
         }
+        else if (advanceValidTo(validTo, curPeriod)) {
+          val curPid = phaseId(curPeriod)
+          while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
+          infos.info
+        }
         else transformInfosClaimed(curPeriod)
       }
     }
+
+    /** If no info transformer runs between the phase this symbol's history is valid to (`validTo`, as read by the
+     *  caller) and this phase, there is nothing to transform: advance `_validTo` as `transformInfos` would, without
+     *  the completion lock. This is every symbol at its first read in the typer's phase (a completer runs at the
+     *  namer's, and no transformer is installed before uncurry), which under the lock made each of them wait its
+     *  turn. A compare-and-set, so that a `_validTo` that a transform on another thread has moved on is not moved
+     *  back: its transformers would then be run a second time. A history of an earlier run is left to the lock.
+     */
+    private def advanceValidTo(validTo: Period, curPeriod: Period): Boolean =
+      runId(validTo) == currentRunId && {
+        val itr = nextFrom(phaseId(validTo))
+        val none = itr.pid == NoPhase.id
+        (none || itr.pid >= phaseId(curPeriod)) && {
+          SymbolFlagsHandle.validTo.compareAndSet(this, validTo, if (none) curPeriod else period(currentRunId, itr.pid)): Boolean
+          true
+        }
+      }
 
     /** Bring this symbol's history up to `curPeriod`, one thread at a time per symbol.
      *
@@ -4467,6 +4489,12 @@ private[internal] object SymbolFlagsHandle {
     val names = others match { case m: Marks => m.threads.map(_.getName).mkString(","); case t => t.toString }
     Console.err.println(s"[parallel-typer] mark overlap on ${sym.fullName} (${Thread.currentThread.getName} over $names)\n" +
       new Throwable().getStackTrace.iterator.slice(1, 25).mkString("    ", "\n    ", ""))
+  }
+  val validTo: java.lang.invoke.VarHandle = {
+    import java.lang.invoke.MethodHandles
+    val cls = classOf[Symbols#Symbol]
+    val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_validTo" || n.endsWith("$$_validTo")).get
+    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, java.lang.Integer.TYPE)
   }
   val rawflags: java.lang.invoke.VarHandle = {
     import java.lang.invoke.MethodHandles
