@@ -141,7 +141,10 @@ trait Analyzer extends AnyRef
           unit.body = typer.typed(unit.body)
           // interactive typed may finish by throwing a `TyperResult`
           if (!settings.Youtline.value) {
-            while (unit.toCheck.nonEmpty) unit.toCheck.removeHead().apply()
+            // under the deque's monitor, as `addPostUnitCheck`: a completion of one of this unit's symbols on another thread adds to it
+            def nextToCheck(): CompilationUnit.ToCheck = unit.toCheck.synchronized(if (unit.toCheck.nonEmpty) unit.toCheck.removeHead() else null)
+            var check = nextToCheck()
+            while (check ne null) { check.apply(); check = nextToCheck() }
             if (!settings.isScaladoc && settings.warnUnusedImport)
               warnUnusedImports(unit)
             if (!settings.isScaladoc && settings.warnUnused.isSetByUser)
