@@ -348,6 +348,8 @@ trait ParallelTyper {
   /** The lazy vals of a phase's component, before its workers start: as `forceLazyVals`. */
   def forceLazyValsOf(component: SubComponent): Unit = if (!flag("oneThread")) forceLazyValsOf(component: AnyRef, 0, java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean]))
 
+  def forceLazyValsOfObject(obj: AnyRef): Unit = if (!flag("oneThread")) forceLazyValsOf(obj, 0, java.util.Collections.newSetFromMap(new java.util.IdentityHashMap[AnyRef, java.lang.Boolean]))
+
   private def forceLazyValsOf(obj: AnyRef, depth: Int, seen: java.util.Set[AnyRef]): Unit =
     if (obj != null && depth < 3 && seen.add(obj)) {
       var cls: Class[_] = obj.getClass

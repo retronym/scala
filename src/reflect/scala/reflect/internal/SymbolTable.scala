@@ -771,6 +771,7 @@ abstract class SymbolTable extends macros.Universe
     var underlyingInProgress: List[AnyRef] = Nil
     /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
     var tpeInProgress: List[AnyRef] = Nil
+    var boxPrimitives: Boolean = true
     /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
     var ph: Phase = NoPhase
     var per: Period = NoPeriod

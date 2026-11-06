@@ -5,10 +5,12 @@
 //   Stress <args file> <iterations> <threads> [extra scalac options...]
 //
 // Much faster than the oracle's process per run for a race in class loading; it does not compare pickles.
+// With -Dstress.full, every phase runs and the class files, are compared too (by checksum).
 import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters._
 import scala.tools.nsc.{Global, Settings}
 import scala.tools.nsc.reporters.StoreReporter
+import scala.reflect.io.AbstractFile
 
 object Stress {
   def main(args: Array[String]): Unit = {
@@ -16,16 +18,31 @@ object Stress {
     val extraOpts = args.drop(3).toList
     val fileArgs = Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty).map(_.stripPrefix("\"").stripSuffix("\""))
     val out = Files.createTempDirectory("stress").toString
+    val full = System.getProperty("stress.full") != null
+    def deleteAll(p: java.nio.file.Path): Unit = {
+      val stream = Files.walk(p)
+      try stream.iterator.asScala.toList.reverse.foreach(Files.delete) finally stream.close()
+    }
+    def checksums(dir: AbstractFile): List[String] = dir.iterator.toList.flatMap { f =>
+      if (f.isDirectory) checksums(f)
+      else { val c = new java.util.zip.CRC32; c.update(f.toByteArray); List(s"class ${f.path} ${c.getValue}") }
+    }
     def compile(extra: List[String]): List[String] = {
       val s = new Settings(msg => sys.error(msg))
       s.usejavacp.value = true
-      val (ok, rest) = s.processArguments(List("-Ystop-after:pickler", "-d", out) ++ extra ++ extraOpts ++ fileArgs, processAll = true)
+      val (ok, rest) = s.processArguments((if (full) Nil else List("-Ystop-after:pickler")) ++ List("-d", out) ++ extra ++ extraOpts ++ fileArgs, processAll = true)
       assert(ok, rest)
+      // a directory, not memory: a virtual directory makes the back end write in the order of the units
+      val classesDir = Files.createTempDirectory(Paths.get(out), "c")
+      val classes = AbstractFile.getDirectory(classesDir.toFile)
+      if (full) s.outputDirs.setSingleOutput(classes)
       val reporter = new StoreReporter(s)
       val g = new Global(s, reporter)
       try new g.Run().compile(rest)
       catch { case t: Throwable => return List("crash: " + t) ++ t.getStackTrace.take(30).map("  at " + _) }
-      reporter.infos.toList.map(i => s"${i.severity} ${i.pos.source.file.name}:${if (i.pos.isDefined) i.pos.line else 0} ${i.msg}").sorted
+      val sums = if (full) checksums(classes).map(_.replace(classesDir.toString, "")) else Nil
+      deleteAll(classesDir)
+      (reporter.infos.toList.map(i => s"${i.severity} ${i.pos.source.file.name}:${if (i.pos.isDefined) i.pos.line else 0} ${i.msg}") ++ sums).sorted
     }
     // the reference is the parallel path on one thread, as in the oracle: it differs from serial by order effects
     // (which occurrence of a feature warning carries the explanation)

@@ -57,7 +57,9 @@ abstract class Erasure extends InfoTransform
   private object NeedsSigCollector {
     private val NeedsSigCollector_true = new NeedsSigCollector(isClassConstructor = true)
     private val NeedsSigCollector_false = new NeedsSigCollector(isClassConstructor = false)
-    def apply(isClassConstructor: Boolean) = if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
+    def apply(isClassConstructor: Boolean) =
+      if (isConcurrentCompiler) new NeedsSigCollector(isClassConstructor) // it keeps its result in a field
+      else if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
   }
   private class NeedsSigCollector(isClassConstructor: Boolean) extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
