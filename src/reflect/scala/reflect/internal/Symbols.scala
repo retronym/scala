@@ -1933,9 +1933,31 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
           infos.info
         }
+        else if (advanceValidTo(validTo, curPeriod)) {
+          val curPid = phaseId(curPeriod)
+          while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
+          infos.info
+        }
         else transformInfosUnderLock(curPeriod)
       }
     }
+
+    /** If no info transformer runs between the phase this symbol's history is valid to (`validTo`, as read by the
+     *  caller) and this phase, there is nothing to transform: advance `_validTo` as `transformInfos` would, without
+     *  the completion lock. This is every symbol at its first read in the typer's phase (a completer runs at the
+     *  namer's, and no transformer is installed before uncurry), which under the lock made each of them wait its
+     *  turn. A compare-and-set, so that a `_validTo` that a transform on another thread has moved on is not moved
+     *  back: its transformers would then be run a second time. A history of an earlier run is left to the lock.
+     */
+    private def advanceValidTo(validTo: Period, curPeriod: Period): Boolean =
+      runId(validTo) == currentRunId && {
+        val itr = nextFrom(phaseId(validTo))
+        val none = itr.pid == NoPhase.id
+        (none || itr.pid >= phaseId(curPeriod)) && {
+          SymbolFlagsHandle.validTo.compareAndSet(this, validTo, if (none) curPeriod else period(currentRunId, itr.pid)): Boolean
+          true
+        }
+      }
 
     private def transformInfosUnderLock(curPeriod: Period): Type = {
       val curPhase = phase
@@ -4365,6 +4387,12 @@ private[internal] object SymbolFlagsHandle {
     val cls = classOf[Symbols#Symbol]
     val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_completingThread" || n.endsWith("$$_completingThread")).get
     MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, classOf[Thread])
+  }
+  val validTo: java.lang.invoke.VarHandle = {
+    import java.lang.invoke.MethodHandles
+    val cls = classOf[Symbols#Symbol]
+    val name = cls.getDeclaredFields.iterator.map(_.getName).find(n => n == "_validTo" || n.endsWith("$$_validTo")).get
+    MethodHandles.privateLookupIn(cls, MethodHandles.lookup()).findVarHandle(cls, name, java.lang.Integer.TYPE)
   }
   val rawflags: java.lang.invoke.VarHandle = {
     import java.lang.invoke.MethodHandles
