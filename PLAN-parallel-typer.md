@@ -637,6 +637,25 @@ One thread is now 7-15% slower than serial (compiler 9%, library 13%, junit 15%)
 
 The pekko corpus's two longest units were `FanInShapeN.scala` and `FanOutShapeN.scala` (353 ms each in typer and 285 each in refchecks at 8 threads): twenty-one constructors each build a port list as a cons chain of `Inlet[T0] :: Inlet[T1] :: ... :: Nil`, whose element type is inferred as a lub at every `::`. The corpus now passes `List[Inlet[_]](in0, in1, ...)` instead (the originals are beside the files as `.orig.txt`). pekko serial 5255 to 4251 ms; at 8 threads 1430 to 1035 ms (3.7x to 4.1x), with typer 530 to 341 ms and refchecks 317 to 42, measured at load 13-29 from other sessions' file indexing and builds, so the serial figure is firmer than the parallel one. Typer's longest unit is now `UnzipWithApply.scala`, 144 ms.
 
+### The GC pause, and the allocation profile (7 Nov)
+
+A GC log of the compiler corpus at 8 threads (12 GB heap, ParallelGC, so a 3.3 GB eden): a compile allocates 3.5-4.3 GB, so one young collection lands in nearly every compile and copies what is live in the middle of it, 0.5-1.3 GB, at 30-100 ms (`3660M->846M 60 ms`, `4358M->1337M 102 ms`). The 444 MB survivor space overflows, so part of that is promoted and the old generation is later collected in full. The pause is the live set being copied, not a misconfiguration; the levers are a larger young generation (the benchmark could, a build less so), allocating less per compile, and retaining less mid-compile.
+
+The x-ray's CPU recording now samples allocation as well (`alloc=256k` in the same JFR, a third profile button, "allocation", and jfrconv's `--alloc --total` graph). Per compile at 8 threads: compiler 3.7 GB, pekko 3.0 GB, library 2.3 GB, the same on one thread to within 1%. The largest self frames, compiler corpus, per compile:
+
+```
+ 489 MB  13.2%  DirectMethodHandle.allocateInstance   closures: lambda captures through invokedynamic
+ 206 MB   5.6%  TypeRef.apply
+ 180 MB   4.8%  Context.make                          makeSilent 45, ValDef.transform 44, makeNewScope 35, DefDef.transform 20
+ 150 MB   4.0%  Arrays.copyOf                         newNestedScope copies the hash table, 56; ByteArrayOutputStream 37; BTypeExporter 19
+  84 MB   2.3%  List.::
+  74 MB   2.0%  ListBuffer.addOne
+  72 MB   1.9%  Type.asSeenFrom
+  59 MB   1.6%  TypeHistory.apply                     info_= 52, publishStep 7
+```
+
+Who makes the closures (nearest caller outside `java.lang.invoke`): `TypeHistory.<init>` 35 MB, `Typer.typedSelect` 31, `Scope.enter` 29, `Infer.checkAccessible` 26, `ValDef.transform` 22, `ImportInfo.importedSelectedSymbol` 13, `SymbolLookup.searchPrefix` 10, `cloneSymbols` 10, `Symbol.suchThat` 9. Two of those are by-name arguments that the build's inliner did not remove: `assert(cond, this)` in `TypeHistory`'s constructor (stock code), and the spike's `Scope.writing(body)` around every `enter`. Both are rewritten as plain code; the rest are stock and worth the same treatment in 2.13.x on their own (`sym.filter(context.isAccessible(_, ...))` in `checkAccessible`, the `silent` and `withMode` closures in `typedSelect`).
+
 Specialize on the compiler corpus at 8 threads went from 125 ms of wall to 38. What limits each corpus now, from the per-phase tables (`phases.js` over the recording):
 
 - One thread against serial: 11-22% slower (compiler 11%, pekko 19%, junit 22%), spread over every phase. The one-thread-parity work has it at about 40% per-thread phase and period lookup, 15-30% GC from extra allocation, and the rest `Stamped` holders, a `SubstTypeMap` per call and class headers.

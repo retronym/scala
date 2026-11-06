@@ -4468,8 +4468,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
   /** A class for type histories */
   private final case class TypeHistory protected (private var _validFrom: Period, private var _info: Type, private var _prev: TypeHistory) {
-    assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
-    assert(validFrom != NoPeriod, this)
+    // not `assert(cond, this)`: its by-name message is a closure allocated at every construction (35 MB per compile
+    // of the compiler corpus in the x-ray's allocation profile)
+    if (((prev ne null) && phaseId(validFrom) <= phaseId(prev.validFrom)) || validFrom == NoPeriod) throwAssertionError(this)
 
     def validFrom: Int = _validFrom
     def validFrom_=(x: Int): Unit = {_validFrom = x }
