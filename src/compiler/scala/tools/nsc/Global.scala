@@ -1090,7 +1090,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** Let's share a lot more about why we crash all over the place.
    *  People will be very grateful.
    */
-  protected var lastSeenContext: analyzer.Context = analyzer.NoContext
+  // Per thread, in the scratch state: written at every context made.
+  protected def lastSeenContext: analyzer.Context = { val c = scratch.lastSeenContext; if (c eq null) analyzer.NoContext else c.asInstanceOf[analyzer.Context] }
+  protected def lastSeenContext_=(c: analyzer.Context): Unit = scratch.lastSeenContext = c
 
   /** The currently active run
    */
