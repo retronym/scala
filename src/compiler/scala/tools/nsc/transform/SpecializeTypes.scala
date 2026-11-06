@@ -80,28 +80,28 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   private implicit val typeOrdering: Ordering[Type] = Ordering[String] on ("" + _.typeSymbol.name)
 
   /** For a given class and concrete type arguments, give its specialized class */
-  val specializedClass = perRunCaches.newAnyRefMap[Symbol, HashMap[TypeEnv, Symbol]]()
+  val specializedClass = perRunCaches.newConcurrentMap[Symbol, Map[TypeEnv, Symbol]]()
 
   // read-only map, where missing value defaults to empty immutable.Map
   def specializationOf(sym: Symbol) = specializedClass.getOrElse(sym, Map.empty[TypeEnv, Symbol])
 
   /** Map a method symbol to a list of its specialized overloads in the same class. */
-  private val overloads = perRunCaches.newMap[Symbol, List[Overload]]() withDefaultValue Nil
+  private val overloads = perRunCaches.newConcurrentMap[Symbol, List[Overload]]() withDefaultValue Nil
 
   /** Map a symbol to additional information on specialization. */
-  private val info = perRunCaches.newMap[Symbol, SpecializedInfo]()
+  private val info = perRunCaches.newConcurrentMap[Symbol, SpecializedInfo]()
 
   /** Map class symbols to the type environments where they were created. */
-  private val typeEnv = perRunCaches.newMap[Symbol, TypeEnv]() withDefaultValue emptyEnv
+  private val typeEnv = perRunCaches.newConcurrentMap[Symbol, TypeEnv]() withDefaultValue emptyEnv
 
   //    Key: a specialized class or method
   //  Value: a map from tparams in the original class to tparams in the specialized class.
-  private val anyrefSpecCache = perRunCaches.newMap[Symbol, mutable.Map[Symbol, Symbol]]()
+  private val anyrefSpecCache = perRunCaches.newConcurrentMap[Symbol, mutable.Map[Symbol, Symbol]]()
 
   // holds mappings from members to the type variables in the class
   // that they were already specialized for, so that they don't get
   // specialized twice (this is for AnyRef specializations)
-  private val wasSpecializedForTypeVars = perRunCaches.newMap[Symbol, Set[Symbol]]() withDefaultValue Set()
+  private val wasSpecializedForTypeVars = perRunCaches.newConcurrentMap[Symbol, Set[Symbol]]() withDefaultValue Set()
 
   /** Concrete methods that use a specialized type, or override such methods. */
   private val concreteSpecMethods = perRunCaches.newWeakSet[Symbol]()
@@ -521,19 +521,21 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *  `tparam` in the original class. It will create it if needed or use the one from the cache.
    */
   private def typeParamSubAnyRef(tparam: Symbol, sClass: Symbol): Type = {
-    val sClassMap = anyrefSpecCache.getOrElseUpdate(sClass, mutable.Map[Symbol, Symbol]())
+    underCompletionLock {
+      val sClassMap = anyrefSpecCache.getOrElseUpdate(sClass, mutable.Map[Symbol, Symbol]())
 
-    sClassMap.getOrElseUpdate(tparam,
-      tparam.cloneSymbol(sClass, tparam.flags, tparam.name append tpnme.SPECIALIZED_SUFFIX)
-        modifyInfo (info => TypeBounds(info.lowerBound, AnyRefTpe))
-    ).tpe
+      sClassMap.getOrElseUpdate(tparam,
+        tparam.cloneSymbol(sClass, tparam.flags, tparam.name append tpnme.SPECIALIZED_SUFFIX)
+          modifyInfo (info => TypeBounds(info.lowerBound, AnyRefTpe))
+      ).tpe
+    }
   }
 
   /** Cleans the anyrefSpecCache of all type parameter symbols of a class.
    */
   private def cleanAnyRefSpecCache(clazz: Symbol, decls: List[Symbol]): Unit = {
     // remove class type parameters and those of normalized members.
-    clazz :: decls foreach (anyrefSpecCache remove _)
+    underCompletionLock(clazz :: decls foreach (anyrefSpecCache remove _))
   }
 
   /** Type parameters that survive when specializing in the specified environment. */
@@ -630,7 +632,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
       val env = mapAnyRefsInSpecSym(env0, clazz, sClass)
       typeEnv(sClass) = env
-      specializedClass.getOrElseUpdate(clazz, HashMap.empty).update(env0, sClass)
+      specializedClass(clazz) = specializedClass.getOrElse(clazz, Map.empty[TypeEnv, Symbol]).updated(env0, sClass)
 
       val decls1                        = newScope  // declarations of the newly specialized class 'sClass'
       var oldClassTParams: List[Symbol] = Nil       // original unspecialized type parameters
@@ -1547,15 +1549,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     class CollectMethodBodies extends InternalTraverser {
       override def traverse(tree: Tree) = tree match {
         case DefDef(_, _, _, vparams :: Nil, _, rhs) =>
-          if (concreteSpecMethods(tree.symbol) || tree.symbol.isConstructor) {
+          if (lockedIfConcurrent(concreteSpecMethods)(concreteSpecMethods(tree.symbol)) || tree.symbol.isConstructor) {
             // debuglog("!!! adding body of a defdef %s, symbol %s: %s".format(tree, tree.symbol, rhs))
             body(tree.symbol) = rhs
             //          body(tree.symbol) = tree // whole method
             parameters(tree.symbol) = vparams.map(_.symbol)
-            concreteSpecMethods -= tree.symbol
+            lockedIfConcurrent(concreteSpecMethods)(concreteSpecMethods -= tree.symbol)
           } // no need to descend further down inside method bodies
 
-        case ValDef(mods, name, tpt, rhs) if concreteSpecMethods(tree.symbol) =>
+        case ValDef(mods, name, tpt, rhs) if lockedIfConcurrent(concreteSpecMethods)(concreteSpecMethods(tree.symbol)) =>
           body(tree.symbol) = rhs
           // log("!!! adding body of a valdef " + tree.symbol + ": " + rhs)
           //super.traverse(tree)
@@ -2107,7 +2109,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *        that here are not garbage collected at the end of a compiler run!
    */
   def addConcreteSpecMethod(m: Symbol): Unit = {
-    if (currentRun.compiles(m)) concreteSpecMethods += m
+    if (currentRun.compiles(m)) lockedIfConcurrent(concreteSpecMethods)(concreteSpecMethods += m)
   }
 
   private def makeArguments(fun: Symbol, vparams: List[Symbol]): List[Tree] = (

@@ -31,8 +31,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer = new ConstructorTransformer(unit)
 
-  private val guardedCtorStats: mutable.Map[Symbol, List[Tree]] = perRunCaches.newMap[Symbol, List[Tree]]()
-  private val ctorParams: mutable.Map[Symbol, List[Symbol]] = perRunCaches.newMap[Symbol, List[Symbol]]()
+  private val guardedCtorStats: mutable.Map[Symbol, List[Tree]] = perRunCaches.newConcurrentMap[Symbol, List[Tree]]()
+  private val ctorParams: mutable.Map[Symbol, List[Symbol]] = perRunCaches.newConcurrentMap[Symbol, List[Symbol]]()
 
   class ConstructorTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     /*
