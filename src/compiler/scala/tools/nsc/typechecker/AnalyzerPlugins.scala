@@ -440,7 +440,7 @@ trait AnalyzerPlugins { self: Analyzer with splain.SplainData =>
             case None =>
             case s @ Some(_) =>
               if (result.isDefined) {
-                typer.context.error(op.position, s"both $resultPlugin and $plugin want to ${op.description}")
+                typerHere.context.error(op.position, s"both $resultPlugin and $plugin want to ${op.description}")
                 op.default
               } else {
                 result = s

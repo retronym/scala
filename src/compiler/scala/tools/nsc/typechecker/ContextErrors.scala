@@ -1558,7 +1558,7 @@ trait ContextErrors extends splain.SplainErrors {
   }
 
   object NamesDefaultsErrorsGen {
-    private def setError(t: Tree): Tree = typer.infer.setError(t)
+    private def setError(t: Tree): Tree = typerHere.infer.setError(t)
 
     def NameClashError(sym: Symbol, arg: Tree)(implicit context: Context) = {
       setError(arg) // to distinguish it from ambiguous reference error

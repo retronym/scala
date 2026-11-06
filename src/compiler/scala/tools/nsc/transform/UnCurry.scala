@@ -594,7 +594,7 @@ abstract class UnCurry extends InfoTransform
          * - synthetic Java varargs forwarders for repeated parameters
          */
         case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
+          localTyper = typerHere.atOwner(tree, currentClass)
           useNewMembers(currentClass) {
             newMembers =>
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
@@ -844,7 +844,7 @@ abstract class UnCurry extends InfoTransform
       val isRepeated = enteringUncurry(dd.symbol.info.paramss.flatten.map(sym => definitions.isRepeatedParamType(sym.tpe)))
       val oldPs = flatdd.symbol.paramss.head
 
-      val theTyper = typer.atOwner(dd, currentClass)
+      val theTyper = typerHere.atOwner(dd, currentClass)
       val forwTree = theTyper.typedPos(dd.pos) {
         val seqArgs = map3(newPs, oldPs, isRepeated)((param, _, isRep) => {
           if (!isRep) Ident(param)
