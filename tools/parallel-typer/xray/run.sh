@@ -7,7 +7,9 @@
 # tools/parallel-typer/xray/timeline.data.js (read by index.html beside it) and one JSON per run under $OUT
 # (default /tmp/parallel-typer-xray/<corpus>). Needs `sbt dist/mkQuick`.
 # Environment: WARMUP (default 12 compilations), JAVA_OPTS, OVERHEAD=<pairs> (instead: timeline on vs off, at the
-# largest thread count).
+# largest thread count), ROUNDS=<n> (instead: the configurations in turn, n recordings each, compared by step with
+# rounds.py), CLASSES=<dir> (the compiler to record, a directory with compiler/ library/ reflect/, instead of a
+# snapshot of build/quick: to compare two builds).
 set -euo pipefail
 JAVA="${JAVA:-java}" # the JVM to record on, e.g. a patched JDK's bin/java
 # GC: the collector's options (default -XX:+UseParallelGC: a batch compile wants throughput, and G1's concurrent
@@ -22,10 +24,12 @@ WARMUP="${WARMUP:-12}"
 OUT="${OUT:-/tmp/parallel-typer-xray/$(basename "$CORPUS")}"
 mkdir -p "$OUT"
 QUICK="$ROOT/build/quick/classes"
-[ -d "$QUICK/compiler" ] || { echo "no $QUICK/compiler: run sbt dist/mkQuick" >&2; exit 1; }
-# a snapshot of the compiler, so that a build during the run does not change it
-SNAP="$OUT/compiler-snapshot"; rm -rf "$SNAP"; mkdir -p "$SNAP"
-for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
+if [ -n "${CLASSES:-}" ]; then SNAP="$CLASSES"; else
+  [ -d "$QUICK/compiler" ] || { echo "no $QUICK/compiler: run sbt dist/mkQuick" >&2; exit 1; }
+  # a snapshot of the compiler, so that a build during the run does not change it
+  SNAP="$OUT/compiler-snapshot"; rm -rf "$SNAP"; mkdir -p "$SNAP"
+  for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
+fi
 JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed 's/^TOOL_CLASSPATH="//; s/"$//' | tr ':' '\n' | grep '\.jar$' | paste -sd: -)"
 CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 
@@ -54,6 +58,7 @@ if [ -n "${OVERHEAD:-}" ]; then
   exec "${JVM[@]}" XrayBench --overhead "$args" "$last" "$WARMUP" "$OVERHEAD"
 fi
 configs="serial $THREADS"
+if [ -n "${ROUNDS:-}" ]; then exec "${JVM[@]}" XrayBench --rounds "$args" "$OUT" "$(basename "$CORPUS")" "$WARMUP" "$ROUNDS" $configs; fi
 "${JVM[@]}" XrayBench "$args" "$OUT" "$(basename "$CORPUS")" "$WARMUP" $configs
 cp "$OUT/timeline.data.js" "$HERE/timeline.data.js"
 echo

@@ -544,6 +544,72 @@ What still limits the front end at 8 threads, in order: the bodies' CPU, which i
 
 Measuring. The machine was shared with other sessions' soak runs throughout (load average 10-18), and wall times of one compilation differ by 10% and more from run to run. The changes above were judged by CPU samples in the frames concerned, which do not depend on the load, and by interleaved before and after runs. None of the wall times here is fit to quote as a result; a quiet machine or perflab is owed.
 
+## The one-thread gap: where it goes (7 Nov)
+
+A full compile with every step on the pool, one worker, against the serial compiler, at the tip this work started from (7731edde06). The gap is paid at every thread count, so it bounds the speed-up.
+
+How it was taken. Patched JDK 26, ParallelGC, 12 GB heap, classpath, sources and output in memory, `nice -n 10` beside other sessions' builds and soaks (load average 27-46, so wall times are poor and the samples are what to trust; `taskpolicy -b` gets too little CPU at that load to finish). `ROUNDS=6 run.sh <corpus> 1` alternates recordings of serial and one thread in one JVM (12 warm-up compilations), and `rounds.py` gives medians per step. `FRAMES=2 REPEATS=4 profile.sh <corpus> 1` alternates two CPU profiles of 4 compilations each at 1 ms, and `frames.py` compares them by frame. Numbers are samples per compilation (about ms of CPU).
+
+Whole compile, CPU samples on all threads:
+
+```
+            serial     one      gap
+library       6203    6870     +667 (+10.8%)
+compiler     12498   13942    +1444 (+11.6%)
+```
+
+By step, samples on the compiler's own threads (no GC or JIT):
+
+```
+                  library              compiler
+step              serial    one  diff  serial    one  diff
+typer + headers     2018   2217  +199    4751   4893  +142     (headers: 68, 92; the serial compiler does this work lazily inside the typer, or not at all)
+erasure              874    972   +98    1471   1610  +139
+refchecks            767    855   +89     551    601   +50
+jvm                  478    536   +59     863    949   +87
+mixin                209    246   +37     198    273   +75
+specialize           185    210   +25     234    330   +96
+patmat               165    173    +8    1084   1233  +150
+uncurry              168    177    +9     431    490   +59
+flatten               54     56    +2     133    176   +43
+fields, lambdalift,
+ explicitouter,
+ posterasure, ...    505    534   +29    1100   1267  +167
+parser                95    101    +6     153    151    -1
+outside any span      29     86   +57      26    109   +83
+```
+
+So the serial work the serial compiler does not do at all is small: the part of class headers that is not merely moved, and what is outside any span (a look at the compiler corpus: `readSources`' setup, `patternsIn` weighing the units, the pool's starts and joins), together at most 10-13% of the gap. The rest is slower per unit, and it is spread over all phases, most in the late ones as a fraction (erasure and after 8-40%, against 1-10% in the typer).
+
+By kind of frame (self samples; a frame goes in the first bucket that names it):
+
+```
+                                              library                compiler
+                                          serial    one  diff  %   serial    one  diff  %
+scratch: phase, period, per-thread lookup     80    300  +220 33      131    638  +507 35
+GC threads                                    23    116   +92 14      551    853  +302 21
+all other frames                            5337   5441  +104 16    10683  10884  +201 14
+stamped type caches                            1     63   +62  9        2    149  +147 10
+class headers (step)                           0     69   +69 10        0     92   +92  6
+outside any span (step)                       29     86   +57  9       26    109   +83  6
+claims, locks, ConcurrentHashMap               12     53   +41  6       32    107   +75  5
+info read: rawInfo, marker, fence            123    165   +42  6      307    322   +15  1
+pool, thread hand-off, spans                  56     86   +30  5       67     82   +15  1
+name table, flags                             59     60    +1  0      190    200   +10  1
+JIT threads                                  483    432   -51 -8      510    507    -3  0
+```
+
+Reading it:
+
+- The lookup of the thread's phase and period is the largest cost by far, a third of the gap: 638 samples on the compiler, against 131 for the plain fields. Callers, on the compiler corpus: `concurrentRawInfo` 149 (each read of an info asks for the period), `Symbol.flags` 79, `needsFlatClasses` 30, the stamped caches about 75 (they ask for the period to test the stamp), `Tree.<init>` 28 (`nodeCount`), `normalize`, `phase_=`, `enteringPhase`, then a long tail. This is what the write-once hints cannot reach once a thread has passed flatten.
+- GC threads, a fifth of the gap on the compiler, are a surprise. Allocation is 6% higher on the library (2376 to 2520 MB), so this is more than the allocation alone; it is the next thing to take apart. With a single young collection or two per compilation, two profiles per configuration resolve it poorly.
+- The stamped caches, including the `Stamped` holders that they allocate on every period change, are 10%.
+- Claims are 5-6% of the gap: `CompletionLock.claim` from mixin and from `transformInfosClaimed` in the late phases, with the `Claim`, the latch and a lookup of the thread's claimant per acquisition.
+- The marker and its fence, which the brief expected to matter, net out small: `rawInfoHere` moved to `concurrentRawInfo`, and that frame plus `isCompletingElsewhere` and `loadLoadFence` is +42 and +15. `Names.lookupTermName` against `body$1` is the same work under another name.
+- "All other frames" (+1-2% of their own size) is what a compiler slower by nothing in particular looks like; a part of it will be skid and inlining.
+
+The typer and class headers together cost little on the compiler (+3%). One phase's wall time in the recordings runs the other way: the median of the typer phase in `rounds.py` is lower with one thread than serially (compiler 4610 against 4203 ms). The samples do not show that (4751 against 4893), and I take the samples.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.

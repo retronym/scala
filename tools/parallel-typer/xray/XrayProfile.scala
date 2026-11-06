@@ -29,12 +29,31 @@ import one.profiler.AsyncProfiler
 object XrayProfile {
   def main(args: Array[String]): Unit =
     if (args(0) == "--overhead") overhead(args(1), args(2), args(3).toInt, args(4).toInt, args(5), args(6), Paths.get(args(7)))
+    else if (args(0) == "--frames") frames(args(1), Paths.get(args(2)), args(3).toInt, args(4).toInt, args(5).toInt, args(6), args.drop(7).toList)
     else record(args(0), Paths.get(args(1)), args(2), args(3).toInt, args(4).toInt, args(5), args(6), args.drop(7).toList)
 
   /** As perflab profiles: native frames through the VM, and a stack depth the typer's recursion does not exceed. */
   private def startProfiler(event: String, interval: String, jfr: Path): Unit =
     AsyncProfiler.getInstance().execute(s"start,jfr,event=$event,interval=$interval,jstackdepth=8192,cstack=vm,features=mixed+vtable+comptask,file=$jfr")
   private def stopProfiler(): Unit = AsyncProfiler.getInstance().execute("stop")
+
+  /** For a comparison by frame (`frames.py`): the configs in turn, `rounds` times, a CPU profile of `repeats` compilations
+   *  each (`cmp-<config>-<round>.jfr`). Unlike `record`, `serial` is profiled too. */
+  def frames(argsFile: String, out: Path, warmup: Int, rounds: Int, repeats: Int, interval: String, configs: List[String]): Unit = {
+    val files = XrayBench.fileArgs(argsFile)
+    Files.createDirectories(out)
+    XrayBench.warm(configs, files, warmup)
+    for (r <- 1 to rounds; c <- configs) {
+      System.gc()
+      startProfiler("cpu", interval, out.resolve(s"cmp-$c-$r.jfr"))
+      val mss = for (_ <- 1 to repeats) yield {
+        ParallelTyperTimeline.current = new ParallelTyperTimeline(ParallelTyperTimeline.threshold)
+        try XrayBench.compile(c, files)._1 finally ParallelTyperTimeline.current = null
+      }
+      stopProfiler()
+      println(s"profiled $c round $r: ${mss.map(ms => f"$ms%.0f").mkString(" ")} ms")
+    }
+  }
 
   def record(argsFile: String, out: Path, corpus: String, warmup: Int, repeats: Int, cpu: String, wall: String, configs: List[String]): Unit = {
     val files = XrayBench.fileArgs(argsFile)

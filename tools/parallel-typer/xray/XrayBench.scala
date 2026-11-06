@@ -3,9 +3,11 @@
 //
 //   XrayBench <args file> <out dir> <corpus name> <warmup> <config>...
 //   XrayBench --overhead <args file> <config> <warmup> <pairs>
+//   XrayBench --rounds <args file> <out dir> <corpus name> <warmup> <rounds> <config>...
 //
 // A config is `serial` or a number of typer threads. The warm-up cycles through the configs, unrecorded. With
-// --overhead, the same config alternately with and without the timeline, and the medians of each.
+// --overhead, the same config alternately with and without the timeline, and the medians of each. With --rounds, the
+// configs in turn, each recorded `rounds` times (run-<config>-<i>.json), for `rounds.py` to compare step by step.
 import java.nio.file.{Files, Path, Paths}
 import java.nio.charset.StandardCharsets.UTF_8
 import scala.jdk.CollectionConverters._
@@ -16,6 +18,7 @@ import scala.tools.nsc.reporters.StoreReporter
 object XrayBench {
   def main(args: Array[String]): Unit =
     if (args(0) == "--overhead") overhead(args(1), args(2), args(3).toInt, args(4).toInt)
+    else if (args(0) == "--rounds") rounds(args(1), Paths.get(args(2)), args(3), args(4).toInt, args(5).toInt, args.drop(6).toList)
     else record(args(0), Paths.get(args(1)), args(2), args(3).toInt, args.drop(4).toList)
 
   def fileArgs(argsFile: String): List[String] =
@@ -77,25 +80,37 @@ object XrayBench {
     val files = fileArgs(argsFile)
     warm(configs, files, warmup)
     Files.createDirectories(out)
-    val jsons = for (c <- configs) yield {
-      System.gc()
-      val tl = new ParallelTyperTimeline(ParallelTyperTimeline.threshold)
-      tl.meta.put("corpus", corpus)
-      tl.meta.put("config", c)
-      tl.meta.put("threads", if (c == "serial") "0" else c)
-      tl.meta.put("flags", (stopOptions ++ options(c) ++ files.filter(_.startsWith("-"))).mkString(" "))
-      tl.meta.put("sources", files.count(f => f.endsWith(".scala") || f.endsWith(".java")).toString)
-      tl.meta.put("warmup", warmup.toString)
-      ParallelTyperTimeline.current = tl
-      val (ms, errors) = try compile(c, files) finally ParallelTyperTimeline.current = null
-      tl.meta.put("compileMs", f"$ms%.1f")
-      tl.meta.put("errors", errors.toString)
-      val json = tl.toJson
-      Files.write(out.resolve(s"run-$c.json"), json.getBytes(UTF_8))
-      println(f"recorded $c%-6s $ms%8.1f ms${if (errors > 0) s"  $errors errors" else ""}")
-      json
-    }
+    val jsons = for (c <- configs) yield recordOne(out, corpus, warmup, files, c, s"run-$c.json")
     Files.write(out.resolve("timeline.data.js"), jsons.mkString("window.XRAY_RUNS = (window.XRAY_RUNS || []).concat([\n", ",\n", "]);\n").getBytes(UTF_8))
+  }
+
+  private def recordOne(out: Path, corpus: String, warmup: Int, files: List[String], c: String, fileName: String): String = {
+    System.gc()
+    val tl = new ParallelTyperTimeline(ParallelTyperTimeline.threshold)
+    tl.meta.put("corpus", corpus)
+    tl.meta.put("config", c)
+    tl.meta.put("threads", if (c == "serial") "0" else c)
+    tl.meta.put("flags", (stopOptions ++ options(c) ++ files.filter(_.startsWith("-"))).mkString(" "))
+    tl.meta.put("sources", files.count(f => f.endsWith(".scala") || f.endsWith(".java")).toString)
+    tl.meta.put("warmup", warmup.toString)
+    val threads = java.lang.management.ManagementFactory.getThreadMXBean.asInstanceOf[com.sun.management.ThreadMXBean]
+    val allocated0 = threads.getTotalThreadAllocatedBytes
+    ParallelTyperTimeline.current = tl
+    val (ms, errors) = try compile(c, files) finally ParallelTyperTimeline.current = null
+    tl.meta.put("allocatedMB", ((threads.getTotalThreadAllocatedBytes - allocated0) / 1000000).toString)
+    tl.meta.put("compileMs", f"$ms%.1f")
+    tl.meta.put("errors", errors.toString)
+    val json = tl.toJson
+    Files.write(out.resolve(fileName), json.getBytes(UTF_8))
+    println(f"recorded $fileName%-20s $ms%8.1f ms${if (errors > 0) s"  $errors errors" else ""}")
+    json
+  }
+
+  def rounds(argsFile: String, out: Path, corpus: String, warmup: Int, rounds: Int, configs: List[String]): Unit = {
+    val files = fileArgs(argsFile)
+    warm(configs, files, warmup)
+    Files.createDirectories(out)
+    for (i <- 1 to rounds; c <- configs) recordOne(out, corpus, warmup, files, c, s"run-$c-$i.json")
   }
 
   def overhead(argsFile: String, config: String, warmup: Int, pairs: Int): Unit = {

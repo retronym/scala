@@ -11,7 +11,9 @@
 # data, and flame-<threads>-{cpu,wall}.html from jfrconv --spans. Regenerates timeline.data.js from every corpus under
 # profiles/. Needs `sbt dist/mkQuick`.
 # Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (1ms),
-# WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile).
+# WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile),
+# FRAMES=<rounds> (instead: CPU profiles of serial and the thread count in turn, REPEATS compilations each, as collapsed
+# stacks under OUT, compared by frames.py), CLASSES=<dir> (the compiler to record, with compiler/ library/ reflect/).
 set -euo pipefail
 JAVA="${JAVA:-java}" # the JVM to record on, e.g. a patched JDK's bin/java
 # GC: the collector's options (default -XX:+UseParallelGC: a batch compile wants throughput, and G1's concurrent
@@ -28,14 +30,16 @@ WALL_INTERVAL="${WALL_INTERVAL:-2ms}"
 ASYNC="${PERFLAB:-$HOME/code/retronym/jvm-perf-lab}/tools/build/async-profiler/build"
 LIB="$ASYNC/lib/libasyncProfiler.dylib"; [ -f "$LIB" ] || LIB="$ASYNC/lib/libasyncProfiler.so"
 [ -f "$LIB" ] || { echo "no $LIB: mise run tools:async-profiler in jvm-perf-lab" >&2; exit 1; }
-OUT="$HERE/profiles/$NAME"
+OUT="${OUT:-$HERE/profiles/$NAME}"
 WORK="${WORK:-/tmp/parallel-typer-xray/$NAME-profile}"
 mkdir -p "$OUT" "$WORK"
 QUICK="$ROOT/build/quick/classes"
-[ -d "$QUICK/compiler" ] || { echo "no $QUICK/compiler: run sbt dist/mkQuick" >&2; exit 1; }
-# a snapshot of the compiler, so that a build during the run does not change it
-SNAP="$WORK/compiler-snapshot"; rm -rf "$SNAP"; mkdir -p "$SNAP"
-for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
+if [ -n "${CLASSES:-}" ]; then SNAP="$CLASSES"; else
+  [ -d "$QUICK/compiler" ] || { echo "no $QUICK/compiler: run sbt dist/mkQuick" >&2; exit 1; }
+  # a snapshot of the compiler, so that a build during the run does not change it
+  SNAP="$WORK/compiler-snapshot"; rm -rf "$SNAP"; mkdir -p "$SNAP"
+  for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
+fi
 JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed 's/^TOOL_CLASSPATH="//; s/"$//' | tr ':' '\n' | grep '\.jar$' | paste -sd: -)"
 CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 PROFILER_JARS="$ASYNC/jar/async-profiler.jar:$ASYNC/jar/jfr-converter.jar"
@@ -61,6 +65,14 @@ JVM=("$JAVA" -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} ${GC:--XX:+UseParallelGC}
   -Dscalac.parallelTyper.xray.completionSpans=true ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS")
 if [ -n "${OVERHEAD:-}" ]; then
   exec "${JVM[@]}" XrayProfile --overhead "$args" "$THREADS" "$WARMUP" "$OVERHEAD" "$CPU_INTERVAL" "$WALL_INTERVAL" "$WORK"
+fi
+if [ -n "${FRAMES:-}" ]; then
+  mkdir -p "$OUT"
+  "${JVM[@]}" XrayProfile --frames "$args" "$OUT" "$WARMUP" "$FRAMES" "$REPEATS" "$CPU_INTERVAL" serial $THREADS
+  for c in serial $THREADS; do
+    for j in "$OUT"/cmp-$c-*.jfr; do "$ASYNC/bin/jfrconv" -o collapsed --cpu --spans --threads "$j" "${j%.jfr}.collapsed"; rm -f "$j"; done
+  done
+  exit 0
 fi
 # [threads] may be a list ("1 2 4 8"): each count is then recorded with a CPU profile and with a wall clock profile.
 # The raw JFR and the full flame graph pages are kept for the last count only (they are 50-180 MB each).
