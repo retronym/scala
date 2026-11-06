@@ -6,6 +6,7 @@
 #
 # <corpus> is `library`, `reflect`, `compiler`, a directory under tools/parallel-typer/corpus, another directory of
 # sources, or a file of scalac arguments (options and sources, one per line).
+# With FULL=1, every phase runs (no -Ystop-after) and the class files are compared byte for byte instead of the pickles.
 # Needs `sbt dist/mkQuick`. Results go to $OUT (default /tmp/parallel-typer-oracle/<corpus>); the exit status is the
 # number of parallel runs that differed from the serial one. JAVA_OPTS is passed through (e.g. -Xss, -Dscalac.parallelTyper.*).
 set -uo pipefail
@@ -24,6 +25,7 @@ for d in compiler library reflect; do cp -R "$QUICK/$d" "$SNAP/$d"; done
 JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed 's/^TOOL_CLASSPATH="//; s/"$//' | tr ':' '\n' | grep '\.jar$' | paste -sd: -)"
 SCALAC_CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 
+FULL="${FULL:-}"
 ORDERED="${ORDERED:-}"; case "$(basename "$CORPUS")" in parser-*) ORDERED=1;; esac
 args="$OUT/args"
 # the sources of an in-repo corpus are copied too, so that editing them during a run does not change it
@@ -52,12 +54,13 @@ esac
 run() { # <name> <options...>: options starting with -J go to the JVM
   local name="$1"; shift
   rm -rf "$OUT/$name"; mkdir -p "$OUT/$name/sig" "$OUT/$name/classes"
-  local jvm=() opts=()
+  local jvm=() opts=() stop=()
+  [ -n "$FULL" ] || stop=(-Ystop-after:pickler -Ypickle-write "$OUT/$name/sig")
   for o in "$@"; do case "$o" in -J*) jvm+=("${o#-J}");; *) opts+=("$o");; esac; done
   local t0=$(date +%s.%N)
   # a run that takes longer than $RUN_TIMEOUT seconds (default 600) is killed: a hang is a failure (status 124)
   timeout "${RUN_TIMEOUT:-600}" java -Xss64m -Xmx4g ${JAVA_OPTS:-} "${jvm[@]}" -cp "$SCALAC_CP" -Dscala.usejavacp=true scala.tools.nsc.Main \
-    -d "$OUT/$name/classes" -Ystop-after:pickler -Ypickle-write "$OUT/$name/sig" "${opts[@]}" "@$args" > "$OUT/$name/out.txt" 2>&1
+    -d "$OUT/$name/classes" ${stop[@]+"${stop[@]}"} "${opts[@]}" "@$args" > "$OUT/$name/out.txt" 2>&1
   local status=$?
   local t1=$(date +%s.%N)
   echo "$status" > "$OUT/$name/status"
@@ -84,6 +87,13 @@ compare() { # <name> [<reference>=serial]: 0 if it agrees with the reference run
   if [ -n "$sigdiff" ]; then
     echo "  $name: $(echo "$sigdiff" | wc -l | tr -d ' ') pickles differ from $ref ($OUT/$name/sig-$ref.diff)"; echo "$sigdiff" > "$OUT/$name/sig-$ref.diff"; bad=1
   fi
+  if [ -n "$FULL" ]; then
+    local clsdiff
+    clsdiff=$(diff -rq "$OUT/$ref/classes" "$OUT/$name/classes" 2>&1)
+    if [ -n "$clsdiff" ]; then
+      echo "  $name: $(echo "$clsdiff" | wc -l | tr -d ' ') class files differ from $ref ($OUT/$name/classes-$ref.diff)"; echo "$clsdiff" > "$OUT/$name/classes-$ref.diff"; bad=1
+    fi
+  fi
   if grep -q 'Exception\|error: \[parallel-typer\]\|still running after' "$OUT/$name/out.txt"; then echo "  $name: crash or hang signature in output"; bad=1; fi
   return $bad
 }
@@ -91,7 +101,10 @@ compare() { # <name> [<reference>=serial]: 0 if it agrees with the reference run
 # Differences from `serial` that `one` shares are order effects of the parallel path (signatures first); differences
 # of a parallel run from `one` are effects of concurrency.
 run serial "$@"
-echo "  $(find "$OUT/serial/sig" -name '*.sig' | wc -l | tr -d ' ') pickles, $(wc -l < "$OUT/serial/diagnostics.txt" | tr -d ' ') diagnostic lines"
+if [ -n "${SERIAL_CHECK:-}" ]; then # the oracle's own check: serial against serial must agree
+  run serial2 "$@"; if compare serial2; then echo "serial against serial: agree"; else echo "serial against serial: DIFFER"; exit 1; fi
+fi
+echo "  $(find "$OUT/serial/sig" -name '*.sig' | wc -l | tr -d ' ') pickles, $(find "$OUT/serial/classes" -name '*.class' | wc -l | tr -d ' ') class files, $(wc -l < "$OUT/serial/diagnostics.txt" | tr -d ' ') diagnostic lines"
 failures=0; orderOnly=0
 run one -Yparallel-typer -J-Dscalac.parallelTyper.oneThread "$@"
 oneDiffers=0; compare one || oneDiffers=1
