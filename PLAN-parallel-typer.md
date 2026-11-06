@@ -610,6 +610,20 @@ scalapb      2363   2654   1415    807    584 ms    4.0x
 re2s-x32     2866   3205   1689    921    647 ms    4.4x
 ```
 
+The same recording after the late-phases and one-thread-parity branches were merged (the three fixes of I19 and I20, the stable `Global.typer` restored, and the one-thread work), same setup, load average 5-12:
+
+```
+            serial     1      2      4      8 threads
+compiler     5448   5933   3159   1767   1291 ms    4.2x at 8
+library      3459   3892   2041   1116    769 ms    4.5x
+pekko        5255   5854   2991   1764   1430 ms    3.7x
+junit        3461   3964   2136   1249    946 ms    3.7x
+scalapb      2459   2698   1453    820    614 ms    4.0x
+re2s-x32     2868   3085   1654    915    619 ms    4.6x
+```
+
+One thread is now 7-15% slower than serial (compiler 9%, library 13%, junit 15%), from 11-22%. The class-file oracle on the merge at 8 threads with every switch on: reflect 0 of 30 and 0 of 10, compiler 0 of 10, library 0 of 10 and pekko 0 of 10 differ from the one-thread run; against serial the one-thread run differs in the known fresh-name files (compiler 11, library 3) and in 5 of pekko's, not inspected.
+
 Specialize on the compiler corpus at 8 threads went from 125 ms of wall to 38. What limits each corpus now, from the per-phase tables (`phases.js` over the recording):
 
 - One thread against serial: 11-22% slower (compiler 11%, pekko 19%, junit 22%), spread over every phase. The one-thread-parity work has it at about 40% per-thread phase and period lookup, 15-30% GC from extra allocation, and the rest `Stamped` holders, a `SubstTypeMap` per call and class headers.
