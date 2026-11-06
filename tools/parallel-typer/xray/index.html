@@ -145,7 +145,7 @@ details summary { cursor: pointer; color: var(--dim); }
   <section><h2>Units by time under the lock</h2><div class="scroll"><table id="lockT"></table></div></section>
 </div>
 <section id="scaling">
-  <h2>Thread scaling <span class="dim">every loaded run of this corpus, on one scale</span></h2>
+  <h2>Thread scaling <span class="dim">every loaded run of this corpus, on one scale; speed-ups against</span> <button id="baseSerial" title="the serial compiler: what switching the parallel typer on gains">serial</button> <button id="baseOne" title="the same compiler on one thread: how it scales, apart from what it costs to switch on">1 thread</button></h2>
   <div class="mult" id="mult"></div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:10px"><div id="speedup" style="flex:0 1 460px;min-width:300px"></div><div style="flex:1 1 420px;overflow:auto"><table id="scaleT"></table></div></div>
 </section>
@@ -497,12 +497,17 @@ if (typeof module !== 'undefined') module.exports = XR;
     draw();
   }
 
+  // What a speed-up is measured against: the serial compiler (what a user gains), or the same compiler on one thread
+  // (how the machinery scales, with what it costs to switch it on taken out). The buttons are in the scaling section.
+  const baseOf = (ref) => view.baseOne && ref.one ? ref.one : (ref.serial || ref.one);
+  const baseName = (ref) => baseOf(ref) === ref.serial ? 'serial' : '1 thread';
+
   // ---- numbers at the top
   function renderKpis() {
-    const r = cur, a = XR.analyse(r), ref = XR.reference(runs, r), base = ref.serial || ref.one;
+    const r = cur, a = XR.analyse(r), ref = XR.reference(runs, r), base = baseOf(ref);
     const k = [];
     k.push([fmt(r.wall), `wall, ${r.config === 'serial' ? 'serial compiler' : r.N + ' typer thread' + (r.N > 1 ? 's' : '')}`]);
-    if (base && base !== r) k.push([(base.wall / r.wall).toFixed(2) + '×', `speed-up vs ${ref.serial ? 'serial' : '1 thread'} (${fmt(base.wall)})`]);
+    if (base && base !== r) k.push([(base.wall / r.wall).toFixed(2) + '×', `speed-up vs ${baseName(ref)} (${fmt(base.wall)})`]);
     if (r.N) {
       k.push([fmt(a.serialMs), `on one thread by design (${(100 * a.serialMs / r.wall).toFixed(0)}% of wall)`]);
       k.push([fmt(a.winMs), 'bodies, on the workers']);
@@ -536,6 +541,8 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('siteSel').value = view.site;
   }
   $('siteSel').onchange = () => { view.site = $('siteSel').value; draw(); };
+  $('baseSerial').onclick = () => { view.baseOne = false; renderKpis(); renderBar(); renderScaling(); renderStatus(); };
+  $('baseOne').onclick = () => { view.baseOne = true; renderKpis(); renderBar(); renderScaling(); renderStatus(); };
   $('showHolds').onchange = $('showWaits').onchange = () => draw();
 
   // ---- canvases
@@ -814,13 +821,13 @@ if (typeof module !== 'undefined') module.exports = XR;
     let html = barSvg(r, r.wall, 30, true);
     html += '<div class="legend">' + parts.map((p) => `<span><span class="sw" style="background:${XR.barColor(p.k)}${p.k === 'hold, others waiting' ? ';background:var(--ink)' : ''}"></span> ${esc(XR.stepName(p.k))} <b>${fmt(p.ms)}</b> <span class="dim">${(100 * p.ms / r.wall).toFixed(1)}%</span></span>`).join('') + '</div>';
     if (r.N) {
-      const base = ref.serial || ref.one;
+      const base = baseOf(ref);
       let t = `Outside the bodies: <b>${fmt(a.serialMs)}</b> (${(100 * a.serialMs / r.wall).toFixed(0)}% of this run). Bodies: ${fmt(a.winMs)} of wall on ${r.N} worker${r.N > 1 ? 's' : ''}, ${fmt(a.workerCpu)} of worker CPU; the lock held ${fmt(a.holdInBodies)} and waited for ${fmt(a.waitInBodies)} (summed over workers) inside the units.`;
       if (ref.one) {
         const am = XR.amdahl(ref.one, Math.max(1, r.N));
         t += ` From the one-thread run (${fmt(ref.one.wall)}): serial fraction <b>${(100 * am.s).toFixed(0)}%</b>, so Amdahl bounds the speed-up at ${r.N} threads by <b>${am.bound.toFixed(2)}×</b>; counting its ${fmt(XR.analyse(ref.one).holdInBodies)} under the lock as serial too (${(100 * am.sLock).toFixed(0)}%), by <b>${am.boundLock.toFixed(2)}×</b>.`;
       }
-      if (base && base !== r) t += ` Measured: <b>${(base.wall / r.wall).toFixed(2)}×</b> against ${ref.serial ? 'the serial compiler' : 'one thread'}${ref.serial && ref.one ? ` (${(ref.one.wall / r.wall).toFixed(2)}× against one thread)` : ''}.`;
+      if (base && base !== r) t += ` Measured: <b>${(base.wall / r.wall).toFixed(2)}×</b> against ${base === ref.serial ? 'the serial compiler' : 'one thread'}${base === ref.serial && ref.one ? ` (${(ref.one.wall / r.wall).toFixed(2)}× against one thread)` : ''}.`;
       html += `<p class="note">${t}</p>`;
     }
     $('bar').innerHTML = html;
@@ -855,8 +862,10 @@ if (typeof module !== 'undefined') module.exports = XR;
 
   // ---- thread scaling
   function renderScaling() {
-    const same = runs.filter((q) => q.corpus === cur.corpus && !isWallRun(q)), ref = XR.reference(runs, cur), base = ref.serial || ref.one;
+    const same = runs.filter((q) => q.corpus === cur.corpus && !isWallRun(q)), ref = XR.reference(runs, cur), base = baseOf(ref);
     const maxW = Math.max(...same.map((q) => q.wall));
+    $('baseSerial').className = view.baseOne ? '' : 'on'; $('baseOne').className = view.baseOne ? 'on' : '';
+    $('baseOne').disabled = !ref.one; $('baseSerial').disabled = !ref.serial;
     $('mult').innerHTML = same.map((q) => {
       const a = XR.analyse(q);
       return `<div><button class="${q === cur ? 'on' : ''}" data-i="${runs.indexOf(q)}">${q.config === 'serial' ? 'serial' : q.config + (q.N === 1 ? ' thread' : ' threads')}</button></div><div>${barSvg(q, maxW, 18, false)}</div><div class="num dim">${fmt(q.wall)}${base && base !== q ? `, ${(base.wall / q.wall).toFixed(2)}×` : ''}${q.N ? `; outside bodies ${fmt(a.serialMs)}, bodies ${fmt(a.winMs)}, convoy ${fmt(a.convoyMs)}, tail ${fmt(a.tailMs)}` : ''}</div>`;
@@ -874,7 +883,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     let g = '';
     for (let v = 0; v <= maxY; v += maxY > 6 ? 2 : 1) g += `<line x1="${Lp}" x2="${W - Rp}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${Lp - 4}" y="${y(v) + 4}" text-anchor="end">${v}×</text>`;
     for (let n = 0; n <= maxN; n++) g += `<text x="${x(n)}" y="${H - Bp + 14}" text-anchor="middle"${pts.some((q) => q.N === n) ? ' class="lab"' : ''}>${n}</text>`;
-    g += `<text x="${(Lp + W - Rp) / 2}" y="${H - 4}" text-anchor="middle">typer threads</text><text x="4" y="11">speed-up vs ${ref.serial ? 'serial compiler' : '1 thread'}</text>`;
+    g += `<text x="${(Lp + W - Rp) / 2}" y="${H - 4}" text-anchor="middle">typer threads</text><text x="4" y="11">speed-up vs ${base === ref.serial ? 'serial compiler' : '1 thread'}</text>`;
     // a curve ends where it leaves the plot: held at the top edge it read as a plateau
     const curve = (f) => { let d = ''; for (let n = 1; n <= maxN && f(n) <= maxY; n += 0.25) d += `${d ? 'L' : 'M'}${x(n)},${y(f(n))}`; return d; };
     const k1 = ref.one ? base.wall / ref.one.wall : 1; // the one-thread run against the baseline
@@ -1115,10 +1124,10 @@ if (typeof module !== 'undefined') module.exports = XR;
   // ---- the sticky header: what is being looked at
   function renderStatus() {
     if (!cur) return;
-    const ref = XR.reference(runs, cur), base = ref.serial || ref.one, P = XR.profileOf(cur);
+    const ref = XR.reference(runs, cur), base = baseOf(ref), P = XR.profileOf(cur);
     const whole = view.x0 <= 0 && view.x1 >= cur.wall;
     const bits = [`<b>${esc(cur.corpus)}</b>`, cur.config === 'serial' ? 'serial' : `${cur.N} thread${cur.N === 1 ? '' : 's'}`, fmt(cur.wall)];
-    if (base && base !== cur) bits.push(`${(base.wall / cur.wall).toFixed(2)}× vs ${ref.serial ? 'serial' : '1 thread'}`);
+    if (base && base !== cur) bits.push(`${(base.wall / cur.wall).toFixed(2)}× vs ${baseName(ref)}`);
     bits.push(whole ? 'whole run' : `viewing ${shortMs(view.x0)}–${shortMs(view.x1)} ms (${fmt(view.x1 - view.x0)})`);
     if (P) {
       bits.push(`${P.event === 'cpu' ? 'CPU' : 'wall clock'} profile, ${P.raw.interval}, ${P.raw.repeats} compilations`);
