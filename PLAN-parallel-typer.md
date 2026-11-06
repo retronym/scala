@@ -504,7 +504,18 @@ What still takes the coarse root after the typer, as total hold per compile at 8
 | `expansiveRefs` | 1 ms | 10 ms |
 | `cookJavaRawInfo`, loaders | 10 ms | 6 ms |
 
-These are holds, an upper bound on what a thread can queue for behind them: about 170 ms on the compiler and 225 ms on pekko, across all phases. Waits are not recorded with per-key claims. The next candidate is the back end's: `BTypes` creates a `ClassBType` from a symbol under `frontendSynch` (line 830), and on pekko that is the largest single hold. Taking it off the lock needs the creation to tolerate two threads, which has not been tried. Specialize no longer shows as a site of its own.
+These are holds, an upper bound on what a thread can queue for behind them: about 170 ms on the compiler and 225 ms on pekko, across all phases. Waits are not recorded with per-key claims. Specialize no longer shows as a site of its own.
+
+`frontendSynch` was the largest of these on pekko, nearly all of it creating a `ClassBType` from a symbol (65 ms of holds, with 8 ms in `LazyWithLock`). A class's own monitor was held across the computation of its info, and the coarse root around that, since two threads could otherwise block on each other's monitors. Now nobody waits: a thread that wants an unfinished info computes it as well (`ClassBType.pendingInfo`), and the first result is kept. The computation only reads symbols, so the results are equal. With `-opt` the old path stays, as the byte code repository is not safe for two threads. That leaves `frontendSynch` at 10 ms on pekko. Stress 0 of 1060 on seven corpora; class files against the one-thread run: compiler 0 of 10, pekko 0 of 10, scalap 0 of 30, re2s 0 of 30.
+
+The gain in wall time is small and not separated from noise. Four alternating pairs at 8 threads, load 4-7, medians in ms:
+
+| corpus | locked | off the lock | pairs (off minus locked) |
+|---|---:|---:|---|
+| pekko | 1531 | 1505 | -23, -72, +45, -52 |
+| compiler | 1332 | 1301 | +68, -27, -34, -50 |
+
+So holds were not where threads were losing most of their time, and the coarse root is no longer a limit worth chasing here: the remaining sites total about 90 ms of holds on pekko. "What limits each corpus now" above is the better list.
 
 ### Order of attack
 

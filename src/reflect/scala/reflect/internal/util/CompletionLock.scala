@@ -126,7 +126,7 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
   private[this] var holdSite: String = null
   private def recordSite(): Unit = {
     val frames = new Throwable().getStackTrace
-    val plumbing = Set("acquire", "apply", "underCompletionLock", "completeInfoUnderLock", "await", "awaitCompletionElsewhere")
+    val plumbing = Set("acquire", "apply", "underCompletionLock", "completeInfoUnderLock", "await", "awaitCompletionElsewhere", "onCompletionLock", "frontendSynch")
     val f = frames.find(f => !plumbing(f.getMethodName) && !f.getClassName.endsWith("CompletionLock")).getOrElse(frames.last)
     // the worker's name gives the phase, on the pool
     val site = s"${Thread.currentThread.getName.replaceAll("-[0-9]+$", "")} ${f.getClassName}.${f.getMethodName}"
