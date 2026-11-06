@@ -8,7 +8,7 @@ A spike: port Scala 3's `-Yparallel-typer` (retronym/scala3#84) to the Scala 2 c
 
 Parser, namer and packageobjects run serially as before. The typer phase (`Analyzer.typerFactory.TyperPhase.run`) hands its units to `ParallelTyper.typeCheckInParallel`, which on the main thread:
 
-1. completes the signature of every member the sources define ("signatures first"): the class headers serially, then the members a unit per task on the pool under a claim per symbol, then the annotations serially (the default since 6 Nov; `-Dscalac.parallelTyper.serialSignatures` restores the wholly serial pre-pass under the one lock);
+1. completes the class headers serially; a member's signature is then completed by the first thread that asks for it, under a claim per symbol, and its annotations by its own unit's task (the default since 6 Nov; `-Dscalac.parallelTyper.serialSignatures` restores the wholly serial pre-pass under the one lock, `poolSignatures` the members' own pool step);
 2. forces the lazy vals of `definitions`, `runDefinitions` and the private lazy vals of the cake (lock order, below);
 3. types the bodies on a pool of workers, a unit per task, largest first; each worker sets its own phase, current unit and scratch state, and clears its undo log after each unit;
 4. after the join, issues the buffered diagnostics in a fixed order; `finishComputeParamAlias` and `clearDelayed` then run on the main thread as before, and so do the phases after the typer.
@@ -198,15 +198,15 @@ Superseded by the next section: the pool step for members and the one for annota
 
 ## Only the class headers serial (`foldSignatures`, 6 Nov)
 
-`-Dscalac.parallelTyper.foldSignatures` (off): the class headers are completed serially and nothing else. A member's signature is completed by the first thread that asks for it, under the symbol's claim, and its annotations by the body typing of its own unit, so the typer has one pool step and one tail. The direction is Jason's (the serial pre-pass does too much); the profile behind it is in the notes of the session that asked: of the pre-pass, 38% is typing right-hand sides for inferred types, 32% `methodSig`, 11% class headers.
+The default (it was the experiment `foldSignatures`; `-Dscalac.parallelTyper.poolSignatures` keeps the previous default for comparison): the class headers are completed serially and nothing else. A member's signature is completed by the first thread that asks for it, under the symbol's claim, and its annotations by the body typing of its own unit, so the typer has one pool step and one tail. The direction is Jason's (the serial pre-pass does too much); the profile behind it is in the notes of the session that asked: of the pre-pass, 38% is typing right-hand sides for inferred types, 32% `methodSig`, 11% class headers.
 
 Serial time left in the typer phase, `src/library`, warm, 6 warm-up and 5 measured compilations, one sitting at load average 19-23, medians (ms):
 
 | mode | serial run | total 4 / 8 threads | serial signature step 4 / 8 | bodies, or members and bodies, 4 / 8 | min total 4 / 8 |
 |---|---:|---:|---:|---:|---:|
 | serial pre-pass, coarse lock | 2525 | 1282 / 1118 | 372 / 358 | 490 / 398 | 1123 / 910 |
-| members on the pool (the present default) | 2240 | 1281 / 1054 | 285 / 218 | 665 / 502 | 1099 / 951 |
-| headers only | 2617 | 1138 / 1018 | 82 / 74 | 716 / 592 | 1121 / 974 |
+| members on the pool (`poolSignatures`) | 2240 | 1281 / 1054 | 285 / 218 | 665 / 502 | 1099 / 951 |
+| headers only (the default) | 2617 | 1138 / 1018 | 82 / 74 | 716 / 592 | 1121 / 974 |
 
 The serial step falls by a factor of about 4.5. The total gains less: the work moves into the bodies, and the medians improve by 11% at 4 threads and 9% at 8 while the minimums do not improve at all. The serial runs alone vary by 17% across the sitting, so these totals cannot separate the modes; the serial step can be read, the totals need a quiet machine or perflab. In this table the pool step gains nothing over the serial pre-pass at 4 threads, which is the argument for folding it rather than keeping it as a stage.
 
@@ -227,7 +227,7 @@ Measured by a new comparison of full compiles (the oracle stops at the pickler),
 
 - A program that compiles: the same classfile bytes in every run and at every thread count, in both modes. Pickles equal the one-thread run on every corpus. Four corpora is a small sample for "every run", and library has not been through the classfile comparison.
 - Against serial: identical on re2s and reflect; 1 class differs on scalap and 7 on compiler, all in fresh numbers. Read individually: parameter local names (`x2` against `x1`) in two anonfuns, `eta$` locals, and `FormatInterpolator$$typecreator2$1` becoming `$typecreator1$2`, which renames 4 local classes. The bodies of those 4 were not compared line by line. Making the per-member creator unconditional would remove the difference by changing the serial compiler's numbers. O1 is unchanged.
-- A program with a genuine cycle (`corpus/cycles-neg`): rejected in every run (0 of 80 cold runs exit 0), but which symbol is blamed and the wording vary, because the reporting party of a wait-for cycle is chosen by thread identity, and a nesting on one thread blames wherever that thread started. Runs differing from the one-thread run: in one JVM, 35 of 100 folded and 56 of 100 with members on the pool, against 0 of 100 with the serial pre-pass; cold, 2 of 40 and 0 of 40. Some say "illegal cyclic reference involving method inh" where serial says "recursive method inh needs result type". So `cycles-neg` can fail the oracle in the folded mode and in the present default until this is settled (it passed the last 3-run oracle, and 2 of 40 runs differed before that).
+- A program with a genuine cycle (`corpus/cycles-neg`): rejected in every run (0 of 80 cold runs exit 0), but which symbol is blamed and the wording vary, because the reporting party of a wait-for cycle is chosen by thread identity, and a nesting on one thread blames wherever that thread started. Runs differing from the one-thread run: in one JVM, 35 of 100 folded and 56 of 100 with members on the pool, against 0 of 100 with the serial pre-pass; cold, 2 of 40 and 0 of 40. Some say "illegal cyclic reference involving method inh" where serial says "recursive method inh needs result type". So `cycles-neg` can fail the oracle in the default and with `poolSignatures` until this is settled (it passed the last 3-run oracle, and 2 of 40 runs differed before that).
 - A lent provisional info is read only when a wait would close a cycle, as a serial nesting would read it. No pickle differed, which is evidence and not an argument: a lent info in a valid program could in principle change an inferred type.
 
 Options for stable cycle messages: choose the reporter by source position (reduces it, does not end it, because of nesting on one thread); or, on any cycle error, type the run again serially in a fresh `Global`, which the buffering reporter makes possible and which costs only builds that fail. Recommendation: the second, later; it is not needed to measure.
@@ -238,7 +238,7 @@ They can move to the owning unit's task, and in this mode they have: `typedTempl
 
 ### 4. Class headers
 
-They stay serial, as in Scala 3's PR 84: 63-99 ms warm on the library, against the 74-82 ms step above. On the pool they fail on cake-style code: "not found: type Namer", "not found: value rootMirror" in 16 of 20 runs of reflect and 11 of 20 of compiler. The cause was not separated (lazy vals forced before the headers they name, I3, or a lookup in a class whose header another thread is completing), since the experiment excludes such units once its package test works. The corpora where it passes save too little to justify a second code path. Recommendation: remove `parallelHeaders`.
+They stay serial, as in Scala 3's PR 84: 63-99 ms warm on the library, against the 74-82 ms step above. On the pool they fail on cake-style code: "not found: type Namer", "not found: value rootMirror" in 16 of 20 runs of reflect and 11 of 20 of compiler. The cause was not separated (lazy vals forced before the headers they name, I3, or a lookup in a class whose header another thread is completing), since the experiment excludes such units once its package test works. The corpora where it passes save too little to justify a second code path, so `parallelHeaders` is removed, and `parallelAnnotations` with it, since annotations now belong to the unit's task.
 
 ## Lazy-signatures mode (A.4)
 
@@ -280,7 +280,6 @@ Fixed by treating the head as the end of the list unless the period is at `NoPha
 ## TODO
 
 - Measure the cost to the serial compiler (no flag) with a paired A/B against fd95c5c1c1 (the profiling agent's perflab campaign); see "Hot-path costs".
-- The default: headers only (`foldSignatures`) in place of members on the pool; needs Jason's call.
 - The oracle: compare classfiles of a full compile as well as pickles, library included.
 - Stable messages for genuine cycles (see "Only the class headers serial", 2).
 - The 50-run oracle bar per corpus and a quiet-machine rerun of `bench.sh` and the x-ray are owed.
