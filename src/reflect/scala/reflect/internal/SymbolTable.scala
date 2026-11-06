@@ -250,7 +250,13 @@ abstract class SymbolTable extends macros.Universe
     val p = ph
     if (p ne null) p else threadPhase
   }
-  private[this] def threadPhase: Phase = scratch.ph
+  // A worker's own phase and period are in its thread (`util.ScratchThread`, which says why this is spelled out here).
+  private[this] def threadPhase: Phase = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].ph
+    else otherThreadPhase
+  }
+  private[this] def otherThreadPhase: Phase = scratch.ph
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
@@ -264,19 +270,21 @@ abstract class SymbolTable extends macros.Universe
    */
   private[this] var _flatClassesSeen = false
   final def flatClassesSeen: Boolean = _flatClassesSeen
-  /** Likewise: has any thread been at a phase whose flag mask is not the initial one? Until then `Symbol.flags`
-   *  masks with `InitialFlags` without asking for the phase. */
-  private[this] var _lateFlagsSeen = false
-  final def lateFlagsSeen: Boolean = _lateFlagsSeen
 
   final def phase_=(p: Phase): Unit = {
     if (!_flatClassesSeen && p.flatClasses) _flatClassesSeen = true
-    if (!_lateFlagsSeen && p.flagMask != Flags.InitialFlags) _lateFlagsSeen = true
     if (phasePerThread) {
       val s = scratch
       s.checkOwner()
+      val pr = period(currentRunId, p.id)
       s.ph = p
-      s.per = period(currentRunId, p.id)
+      s.per = pr
+      val t = Thread.currentThread
+      if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) {
+        val st = t.asInstanceOf[util.ScratchThread]
+        st.ph = p
+        st.per = pr
+      }
     } else {
       ph = p
       per = period(currentRunId, p.id)
@@ -313,7 +321,12 @@ abstract class SymbolTable extends macros.Universe
     val p = per
     if (p >= 0) p else threadPeriod
   }
-  private[this] def threadPeriod: Period = scratch.per
+  private[this] def threadPeriod: Period = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].per
+    else otherThreadPeriod
+  }
+  private[this] def otherThreadPeriod: Period = scratch.per
 
   /** The phase associated with given period. */
   final def phaseOf(period: Period): Phase = phaseWithId(phaseId(period))
@@ -858,11 +871,16 @@ abstract class SymbolTable extends macros.Universe
    *  read and a null test: no lazy val's flag and no virtual call. */
   final def scratch: Scratch = {
     val s = oneScratch
-    if (s ne null) s
-    else {
-      val p = perThreadScratches
-      if (p ne null) p.get else firstScratch()
-    }
+    if (s ne null) s else threadScratch
+  }
+  private[this] def threadScratch: Scratch = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].scratch.asInstanceOf[Scratch]
+    else otherThreadScratch
+  }
+  private[this] def otherThreadScratch: Scratch = {
+    val p = perThreadScratches
+    if (p ne null) p.get else firstScratch()
   }
   private[this] def firstScratch(): Scratch = synchronized {
     if (oneScratch ne null) oneScratch
@@ -889,13 +907,10 @@ abstract class SymbolTable extends macros.Universe
     // after the typer pay a comparison, not a `ThreadLocal` lookup.
     private[this] val firstThread: Thread = Thread.currentThread
     private[this] var firstThreadScratch: Scratch = null
-    /** Small enough to inline at every `phase` and `currentPeriod` read of a worker: a type test and two loads. */
+    /** The state of a thread other than a worker of this universe (`threadScratch` has dealt with those). */
     def get: Scratch = {
       val t = Thread.currentThread
-      if (t.isInstanceOf[util.ScratchThread]) {
-        val st = t.asInstanceOf[util.ScratchThread]
-        if (st.scratchOwner eq SymbolTable.this) return st.scratch.asInstanceOf[Scratch]
-      } else if (t eq firstThread) {
+      if (t eq firstThread) {
         val s = firstThreadScratch
         if (s ne null) return s
       }
@@ -909,6 +924,8 @@ abstract class SymbolTable extends macros.Universe
       case t: util.ScratchThread if t.scratchOwner eq null =>
         val s = viaThreadLocal
         t.scratch = s
+        t.ph = s.ph
+        t.per = s.per
         t.scratchOwner = SymbolTable.this
         s
       case _ => viaThreadLocal

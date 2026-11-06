@@ -796,7 +796,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     final def flags: Long = {
-      flags(if (lateFlagsSeen) phase.flagMask else InitialFlags)
+      // A phase's mask differs from the initial one only in the late and anti flags, so a symbol that has none (nearly
+      // all, until the late phases add them) has the same flags at every phase, and need not ask which phase this
+      // thread is at, a lookup of the thread's state in a concurrent compiler.
+      val raw = _rawflags
+      if ((raw & (LateFlags | AntiFlags)) == 0L) raw & InitialFlags
+      else flags(phase.flagMask)
     }
 
     private[reflect] final def flags(phaseFlagMask: Long): Long = {
