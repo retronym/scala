@@ -210,7 +210,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
 
   // can't use the referenced field since it already tracks the module's moduleClass
-  private[this] val moduleOrLazyVarOf = perRunCaches.newMap[Symbol, Symbol]()
+  private[this] val moduleOrLazyVarOf = perRunCaches.newConcurrentMap[Symbol, Symbol]()
 
   // TODO: can we drop FINAL? In any case, since these variables are MUTABLE, they cannot and will
   // not be emitted as ACC_FINAL. They are FINAL in the Scala sense, though: cannot be overridden.

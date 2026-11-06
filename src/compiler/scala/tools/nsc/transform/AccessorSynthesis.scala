@@ -118,8 +118,8 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
 
 
   // TODO: better way to communicate from info transform to tree transform?
-  private[this] val _bitmapInfo  = perRunCaches.newMap[Symbol, BitmapInfo]()
-  private[this] val _slowPathFor = perRunCaches.newMap[Symbol, Symbol]()
+  private[this] val _bitmapInfo  = perRunCaches.newConcurrentMap[Symbol, BitmapInfo]()
+  private[this] val _slowPathFor = perRunCaches.newConcurrentMap[Symbol, Symbol]()
 
   def checkedAccessorSymbolSynth(clz: Symbol): CheckedAccessorSymbolSynth =
     new CheckedAccessorSymbolSynth(clz)

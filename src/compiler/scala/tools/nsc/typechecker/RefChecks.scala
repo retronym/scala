@@ -71,7 +71,7 @@ abstract class RefChecks extends Transform {
     case _                                                   => tp1 <:< tp2
   }
 
-  private val separatelyCompiledScalaSuperclass = perRunCaches.newAnyRefMap[Symbol, Unit]()
+  private val separatelyCompiledScalaSuperclass = perRunCaches.newConcurrentMap[Symbol, Unit]()
   final def isSeparatelyCompiledScalaSuperclass(sym: Symbol) = if (globalPhase.refChecked){
     separatelyCompiledScalaSuperclass.contains(sym)
   } else {
