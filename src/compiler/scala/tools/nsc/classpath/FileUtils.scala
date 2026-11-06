@@ -38,9 +38,11 @@ object FileUtils {
   }
 
   implicit class FileOps(val file: JFile) extends AnyVal {
-    def isPackage: Boolean = file.isDirectory && mayBeValidPackage(file.getName)
+    // The name is tested first: `isDirectory` and `isFile` are a `stat` each, and listing a package of a directory
+    // classpath asked both of every entry.
+    def isPackage: Boolean = { val name = file.getName; mayBeValidPackage(name) && !endsClass(name) && file.isDirectory }
 
-    def isClass: Boolean = file.isFile && endsClass(file.getName)
+    def isClass: Boolean = endsClass(file.getName) && file.isFile
   }
   private val SUFFIX_CLASS = ".class"
   private val SUFFIX_SCALA = ".scala"
