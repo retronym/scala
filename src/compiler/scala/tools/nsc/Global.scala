@@ -404,6 +404,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
 // ------------ File interface -----------------------------------------
 
+  // the charset of the sources, and whether `reader` is the stock one: `readSources` then makes more of them
+  private[this] var sourceCharset: Charset = null
+  private[this] var stockSourceReader = false
+
   private val reader: SourceReader = {
     val defaultEncoding = Properties.sourceEncoding
 
@@ -433,7 +437,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       }
     }
 
+    sourceCharset = charset
     settings.sourceReader.valueSetByUser flatMap loadReader getOrElse {
+      stockSourceReader = true
       new SourceReader(charset.newDecoder(), reporter)
     }
   }
@@ -445,6 +451,45 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     )
 
   def getSourceFile(f: AbstractFile): BatchSourceFile = new BatchSourceFile(f, reader read f)
+
+  /** The source files named, in order. With the parallel parser of `-Yparallel-typer`, read on several threads:
+   *  reading them one after the other was more than half of the time before the first phase (the compiler's 300
+   *  sources: 20 ms). A thread only opens, reads and decodes, with a reader of its own; a file it cannot find or
+   *  decode is left to `getSourceFile` on this thread, afterwards and in order, which reports it as it always has.
+   */
+  private def readSources(names: List[String]): List[SourceFile] = {
+    val n = names.length
+    val threads = math.min(8, math.min(Runtime.getRuntime.availableProcessors, n / 16))
+    if (threads < 2 || !stockSourceReader || !settings.YparallelTyper.value || System.getProperty("scalac.parallelTyper.parallelParser") == null)
+      names.map(getSourceFile)
+    else {
+      val in = names.toArray
+      val out = new Array[SourceFile](n)
+      val next = new java.util.concurrent.atomic.AtomicInteger
+      val workers = (1 to threads).map { i =>
+        val t = new Thread(() => {
+          val errors = new reporters.StoreReporter(settings)
+          val r = new SourceReader(sourceCharset.newDecoder(), errors)
+          var j = next.getAndIncrement()
+          while (j < n) {
+            try {
+              val file = settings.pathFactory.getFile(in(j))
+              if (file ne null) {
+                val chars = r.read(file)
+                if (errors.hasErrors) errors.reset() else out(j) = new BatchSourceFile(file, chars)
+              }
+            } catch { case _: Exception => } // read again below
+            j = next.getAndIncrement()
+          }
+        }, s"scalac-sources-$i")
+        t.setDaemon(true)
+        t.start()
+        t
+      }
+      workers.foreach(_.join())
+      List.tabulate(n)(j => if (out(j) ne null) out(j) else getSourceFile(in(j)))
+    }
+  }
 
   def getSourceFile(name: String): SourceFile = {
     val f = settings.pathFactory.getFile(name)
@@ -1802,7 +1847,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
             globalError("can only compile one script at a time")
             Nil
           }
-          else filenames.map(getSourceFile)
+          else readSources(filenames)
 
         profiler.afterPhase(Global.InitPhase, snap)
         compileSources(sources)
