@@ -536,7 +536,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val xray = ParallelTyperTimeline.current; val xs = if (xray eq null) null else xray.begin() // xray
         try apply(unit)
         finally {
-          if (xs ne null) xray.end(xs, name, unit.source.file.name) // xray
+          if (xs ne null) xray.end(xs, name, unit.spanLabel) // xray
           currentRun.profiler.afterUnit(phase, unit.source.file)
           currentRun.currentUnit = unit0
           currentRun.advanceUnit()

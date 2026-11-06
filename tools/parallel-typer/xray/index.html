@@ -32,6 +32,13 @@ h2 .dim, .dim { color: var(--dim); font-weight: 400; }
 code { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; margin-top: 10px; }
 header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+header { position: sticky; top: 0; z-index: 9; background: var(--bg); padding: 6px 0; border-bottom: 1px solid var(--line); }
+#status { flex-basis: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+#status:empty { display: none; }
+header #runs { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; }
+header #runs button { white-space: nowrap; flex: none; }
+header .sp { display: none; }
+@media (max-width: 900px) { header h1 { display: none; } }
 header .sp { flex: 1; }
 button, select { font: inherit; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 3px 9px; cursor: pointer; }
 button.on { border-color: var(--active); box-shadow: inset 0 0 0 1px var(--active); font-weight: 600; }
@@ -45,6 +52,13 @@ canvas { display: block; width: 100%; }
 #tlCanvas { cursor: grab; }
 #tlCanvas.drag { cursor: grabbing; }
 #miniCanvas { height: 34px; margin-top: 4px; cursor: pointer; }
+#flameWrap { max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 4px; }
+#flameCanvas { cursor: pointer; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 12px; margin-top: 10px; }
+.pgrid h3 { font-size: 12px; font-weight: 600; margin: 0 0 4px; }
+.pgrid .scroll { max-height: 260px; overflow-y: auto; }
+.pgrid td.l { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
+.pfilter { display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--active); border-radius: 10px; padding: 0 8px; cursor: pointer; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; font-size: 12px; max-width: 520px; box-shadow: 0 4px 16px rgba(0,0,0,.18); white-space: pre-wrap; display: none; }
 .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px 1px 6px; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; user-select: none; font-size: 12px; }
@@ -81,6 +95,7 @@ details summary { cursor: pointer; color: var(--dim); }
   <div id="runs"></div>
   <span class="sp"></span>
   <label class="dim"><input type="file" id="file" accept=".json,.js" multiple hidden><button id="fileBtn" title="load run JSON files or a timeline.data.js (or drop them on the page)">Load…</button></label>
+  <div id="status"></div>
 </header>
 <div id="drop" hidden>No recording loaded. Run <code>tools/parallel-typer/xray/run.sh library</code>, which writes <code>timeline.data.js</code> beside this page, or drop run JSON files (from <code>-Dscalac.parallelTyper.xray=&lt;file&gt;</code>) here.</div>
 <div id="app" hidden>
@@ -97,6 +112,19 @@ details summary { cursor: pointer; color: var(--dim); }
   <div id="tlWrap"><canvas id="tlCanvas"></canvas></div>
   <canvas id="miniCanvas" title="the whole run: click or drag to move the view"></canvas>
   <div class="legend"><span><span class="sw" style="background:var(--ink)"></span> lock held, someone waited</span><span><span class="sw" style="background:var(--ink);opacity:.45"></span> lock held &gt; threshold, uncontended</span><span><span class="sw hatch"></span> waiting for the lock</span><span><span class="sw" style="background:var(--gc)"></span> GC pause</span><span>span opacity: CPU / wall (pale: blocked or descheduled)</span><span>dotted: worker out of units</span></div>
+</section>
+<section id="profSec" hidden>
+  <h2>Where the CPU went <span class="dim">async-profiler samples of what the timeline shows: zoom or click a stretch to narrow the time, click a span for that span alone</span></h2>
+  <div class="ctl" id="profCtl"></div>
+  <div class="ctl" id="profSteps"></div>
+  <div class="dim" id="profInfo" style="margin-bottom:6px"></div>
+  <div id="flameWrap"><canvas id="flameCanvas"></canvas></div>
+  <div class="pgrid">
+    <div><h3>Top frames, self</h3><div class="scroll"><table id="pSelf"></table></div></div>
+    <div><h3>Top frames, total <span class="dim">click: only stacks through the frame</span></h3><div class="scroll"><table id="pTotal"></table></div></div>
+    <div><h3>Units <span class="dim">click to filter</span></h3><div class="scroll"><table id="pUnits"></table></div></div>
+    <div><h3>Completions <span class="dim">innermost symbol being completed; click to filter</span></h3><div class="scroll"><table id="pSyms"></table></div></div>
+  </div>
 </section>
 <section>
   <h2>Where the time went <span class="dim">the run's wall time; inside the bodies, each worker's time divided by the number of workers</span></h2>
@@ -327,6 +355,77 @@ var XR = (function () {
   }
 
   // a run file: one run's JSON, an array of them, or a timeline.data.js
+  // ---- the profile of a run (profile.sh): samples, each with the innermost span around it
+  function profileOf(r) {
+    if (r.prof !== undefined) return r.prof;
+    const p = r.raw.profile;
+    if (!p) return r.prof = null;
+    const byTid = new Map();
+    for (const x of r.spans) { if (!byTid.has(x.tid)) byTid.set(x.tid, []); byTid.get(x.tid).push(x); }
+    for (const xs of byTid.values()) xs.sort((a, b) => a.t0 - b.t0);
+    const spanAt = (tid, t) => {
+      const xs = byTid.get(tid); if (!xs) return null;
+      let lo = 0, hi = xs.length - 1, i = -1;
+      while (lo <= hi) { const m = (lo + hi) >> 1; if (xs[m].t0 <= t) { i = m; lo = m + 1; } else hi = m - 1; }
+      for (let k = 0; i >= 0 && k < 8; i--, k++) if (xs[i].t1 > t) return xs[i];
+      return null;
+    };
+    const decodeSamples = (a) => {
+      const out = [];
+      for (let i = 0; i < a.length; i += 5) {
+        // a time below 0 is a sample in no recorded span, which on the main thread the page may have filled in
+        const inSpan = a[i + 1] >= 0, t = (inSpan ? a[i + 1] : -1 - a[i + 1]) / 1000;
+        out.push({ tid: a[i], t, node: a[i + 2], sym: a[i + 3], n: a[i + 4], span: a[i] >= 0 && (inSpan || a[i] === r.main) ? spanAt(a[i], t) : null });
+      }
+      return out;
+    };
+    const jvm = new Set(p.jvmFrames);
+    // a node's parent is stored as its distance back
+    const n = p.parent.length, parent = new Int32Array(n), kids = new Array(n + 1);
+    for (let i = 0; i <= n; i++) kids[i] = [];
+    for (let i = 0; i < n; i++) { parent[i] = p.parent[i] < 0 ? -1 : i - p.parent[i] - 1; kids[parent[i] < 0 ? n : parent[i]].push(i); } // kids[n]: the roots
+    return r.prof = { raw: p, event: p.event, frames: p.frames, parent, frame: p.frame, symbols: p.symbols, others: p.others, jvm, kids, samples: decodeSamples(p.samples) };
+  }
+  /** The samples under a filter (t0, t1, tid, step, label, sym, frame), aggregated. Threads outside the
+   *  recording are counted apart. */
+  function profileSelect(r, f) {
+    const P = profileOf(r), n = P.parent.length;
+    const self = new Float64Array(n), total = new Float64Array(n);
+    const through = f.frame == null ? null : (() => {
+      const m = new Uint8Array(n);
+      for (let i = 0; i < n; i++) m[i] = P.frame[i] === f.frame || (P.parent[i] >= 0 && m[P.parent[i]]) ? 1 : 0;
+      return m;
+    })();
+    let count = 0, outside = 0;
+    const units = new Map(), syms = new Map(), steps = new Map(), others = new Map();
+    const bump = (m, k, v) => m.set(k, (m.get(k) || 0) + v);
+    for (const s of P.samples) {
+      if (f.t0 != null && (s.t < f.t0 || s.t >= f.t1)) continue;
+      if (s.tid < 0) { outside += s.n; bump(others, P.others[-1 - s.tid].replace(/[#\s]+$/, ''), s.n); continue; }
+      if (f.tid != null && s.tid !== f.tid) continue;
+      if (f.label != null && !(s.span && s.span.label === f.label)) continue;
+      if (f.sym != null && s.sym !== f.sym) continue;
+      if (through && !through[s.node]) continue;
+      if (s.span) bump(steps, s.span.step, s.n); else bump(steps, '(no span)', s.n);
+      if (f.step != null && !(s.span ? s.span.step === f.step : f.step === '(no span)')) continue;
+      count += s.n;
+      if (s.node >= 0) self[s.node] += s.n;
+      if (s.span) bump(units, s.span.label, s.n);
+      if (s.sym >= 0) bump(syms, s.sym, s.n);
+    }
+    total.set(self);
+    for (let i = n - 1; i >= 0; i--) if (P.parent[i] >= 0) total[P.parent[i]] += total[i];
+    // per frame: self, and total once per stack (a stack has each frame once, except for its leaf)
+    const fSelf = new Float64Array(P.frames.length), fTotal = new Float64Array(P.frames.length), stamp = new Int32Array(P.frames.length).fill(-1);
+    for (let i = 0; i < n; i++) if (self[i] > 0) {
+      fSelf[P.frame[i]] += self[i];
+      for (let j = i; j >= 0; j = P.parent[j]) { const fr = P.frame[j]; if (stamp[fr] !== i) { stamp[fr] = i; fTotal[fr] += self[i]; } }
+    }
+    const top = (a, k) => Array.from(a.keys()).filter((i) => a[i] > 0).sort((x, y) => a[y] - a[x]).slice(0, k).map((i) => ({ frame: i, name: P.frames[i], n: a[i] }));
+    const rank = (m, k) => [...m.entries()].sort((x, y) => y[1] - x[1]).slice(0, k);
+    return { count, outside, self, total, topSelf: top(fSelf, 60), topTotal: top(fTotal, 60), units: rank(units, 60), syms: rank(syms, 60), steps: rank(steps, 30), others: rank(others, 8) };
+  }
+
   function parseFile(text) {
     const t = text.trim();
     // one or more recordings, one after the other (a file per corpus, concatenated)
@@ -334,7 +433,7 @@ var XR = (function () {
     const j = JSON.parse(t); return Array.isArray(j) ? j : [j];
   }
 
-  return { STEPS, decode, analyse, amdahl, barParts, barColor, stepColor, stepName, causeColor, holdsDuring, reference, summary, parseFile };
+  return { profileOf, profileSelect, STEPS, decode, analyse, amdahl, barParts, barColor, stepColor, stepName, causeColor, holdsDuring, reference, summary, parseFile };
 })();
 if (typeof module !== 'undefined') module.exports = XR;
 </script>
@@ -348,6 +447,8 @@ if (typeof module !== 'undefined') module.exports = XR;
   let runs = [], cur = null;
   const view = { x0: 0, x1: 1, sel: null, hiddenSteps: new Set(), site: '' };
 
+  // a run's wall clock profile is a recording of its own, reached from the profile panel
+  const isWallRun = (r) => /-wall$/.test(r.config);
   function load(raws) {
     for (const raw of raws) {
       const r = XR.decode(raw);
@@ -356,15 +457,17 @@ if (typeof module !== 'undefined') module.exports = XR;
     }
     runs.sort((p, q) => p.corpus.localeCompare(q.corpus) || (p.N - q.N) || (p.config === 'serial' ? -1 : 1));
     $('drop').hidden = runs.length > 0; $('app').hidden = runs.length === 0;
-    if (runs.length) select(runs.find((r) => r.N === Math.max(...runs.map((q) => q.N))) || runs[0]);
+    const shown = runs.filter((q) => !isWallRun(q));
+    if (runs.length) select(shown.find((r) => r.N === Math.max(...shown.map((q) => q.N))) || runs[0]);
   }
 
   function select(r) {
     cur = r; view.x0 = 0; view.x1 = r.wall; view.sel = null; view.site = '';
-    $('runs').innerHTML = runs.map((q, i) => `<button data-i="${i}" class="${q === r ? 'on' : ''}">${esc(q.corpus)} · ${q.config === 'serial' ? 'serial' : q.config + (q.N === 1 ? ' thread' : ' threads')} · ${fmt(q.wall)}</button>`).join('');
+    $('runs').innerHTML = runs.map((q, i) => isWallRun(q) ? '' : `<button data-i="${i}" class="${q === r || r.config === q.config + '-wall' && r.corpus === q.corpus ? 'on' : ''}">${esc(q.corpus)} · ${q.config === 'serial' ? 'serial' : q.config + (q.N === 1 ? ' thread' : ' threads')} · ${fmt(q.wall)}</button>`).join('');
     $('runs').querySelectorAll('button').forEach((b) => b.onclick = () => select(runs[+b.dataset.i]));
     XR.analyse(r);
     renderKpis(); renderStretches(); renderChips(); renderSites(); renderBar(); renderTables(); renderScaling(); renderMeta();
+    Object.assign(prof, { span: null, step: null, label: null, sym: null, frame: null, root: null, lastCount: null });
     draw();
   }
 
@@ -593,7 +696,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     c.onmousedown = (ev) => { move(ev); const mm = (e) => move(e), up = () => { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', up); }; window.addEventListener('mousemove', mm); window.addEventListener('mouseup', up); };
   }
 
-  function draw() { if (!cur) return; drawPar(); drawTl(); drawMini(); }
+  function draw() { if (!cur) return; drawPar(); drawTl(); drawMini(); scheduleProfile(); }
   function zoomTo(t0, t1) {
     const span = Math.max(0.02, t1 - t0); let a = t0, b = t0 + span;
     if (a < 0) { b -= a; a = 0; } if (b > cur.wall) { a = Math.max(0, a - (b - cur.wall)); b = cur.wall; }
@@ -656,6 +759,7 @@ if (typeof module !== 'undefined') module.exports = XR;
       if (h && h.kind === 'wait') view.sel = { wait: h.x, holds: XR.holdsDuring(cur, h.x) };
       else if (h && h.kind === 'hold') { const ws = cur.waits.filter((w) => w.t0 < h.x.t1 && w.t1 > h.x.t0 && w.tid !== h.x.tid); view.sel = ws.length ? { wait: ws[0], holds: [h.x] } : null; }
       else view.sel = null;
+      if (h && h.kind === 'span') { prof.span = h.x; prof.root = null; scheduleProfile(); }
       drawTl();
     }
   });
@@ -725,7 +829,7 @@ if (typeof module !== 'undefined') module.exports = XR;
 
   // ---- thread scaling
   function renderScaling() {
-    const same = runs.filter((q) => q.corpus === cur.corpus), ref = XR.reference(runs, cur), base = ref.serial || ref.one;
+    const same = runs.filter((q) => q.corpus === cur.corpus && !isWallRun(q)), ref = XR.reference(runs, cur), base = ref.serial || ref.one;
     const maxW = Math.max(...same.map((q) => q.wall));
     $('mult').innerHTML = same.map((q) => {
       const a = XR.analyse(q);
@@ -774,6 +878,164 @@ if (typeof module !== 'undefined') module.exports = XR;
   }
 
   // ---- loading files
+  // ---- where the CPU went
+  const prof = { simple: true, span: null, step: null, label: null, sym: null, frame: null, root: null };
+  let profTimer = 0;
+  // `typechecker.Typers$Typer.typed` is `Typer.typed`; a closure's body and a local method are in the method they are named for
+  function simpleName(n) {
+    const dot = n.lastIndexOf('.');
+    if (dot < 0 || /[:(\[]/.test(n)) return n;
+    const parts = n.slice(0, dot).split(/[.$]/).filter((x) => x && !/^\d+$/.test(x) && !/^0x/.test(x));
+    const mparts = n.slice(dot + 1).split('$').filter((x) => x && x !== 'anonfun' && x !== 'adapted' && !/^\d+$/.test(x));
+    // a private member's expanded name ends with the member
+    const m = mparts.length ? mparts[mparts.length > 1 && n.includes('$$') ? mparts.length - 1 : 0] : n.slice(dot + 1);
+    return (parts.length ? parts[parts.length - 1] + '.' : '') + m;
+  }
+  function frameLabel(P, fr) {
+    if (!prof.simple) return P.frames[fr];
+    if (!P.simple) P.simple = P.frames.map(simpleName);
+    return P.simple[fr];
+  }
+  function scheduleProfile() { clearTimeout(profTimer); profTimer = setTimeout(renderProfile, 60); }
+  const shortMs = (t) => t < 10 ? t.toFixed(1) : t.toFixed(0);
+  function renderProfile() {
+    const P = cur && XR.profileOf(cur);
+    $('profSec').hidden = !P;
+    if (!P) { renderStatus(); return; }
+    const whole = view.x0 <= 0 && view.x1 >= cur.wall;
+    const f = { step: prof.step, label: prof.label, sym: prof.sym, frame: prof.frame };
+    if (prof.span) { f.tid = prof.span.tid; f.t0 = prof.span.t0; f.t1 = prof.span.t1; }
+    else if (!whole) { f.t0 = view.x0; f.t1 = view.x1; }
+    const A = XR.profileSelect(cur, f);
+    const pct = (n) => A.count ? (100 * n / A.count).toFixed(n * 1000 < A.count ? 2 : 1) + '%' : '';
+    const pills = [];
+    if (prof.span) pills.push(['span', `span: ${prof.span.label} in ${prof.span.step}, ${cur.threads[prof.span.tid]}`]);
+    if (prof.label != null) pills.push(['label', `unit: ${prof.label}`]);
+    if (prof.sym != null) pills.push(['sym', `completing: ${P.symbols[prof.sym]}`]);
+    if (prof.frame != null) pills.push(['frame', `through: ${frameLabel(P, prof.frame)}`]);
+    const dir = P.raw.dir, cfg = cur.config.replace(/-wall$/, '');
+    const sibling = (e) => runs.find((q) => q.corpus === cur.corpus && q.config === (e === 'cpu' ? cfg : cfg + '-wall'));
+    $('profCtl').innerHTML = ['cpu', 'wall'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${e === P.event ? 'this recording' : 'a recording of its own, so its times differ a little'}">${e === 'cpu' ? 'CPU' : 'wall clock'}</button>`).join('') +
+      `<button id="nameSimple" class="${prof.simple ? 'on' : ''}" title="class and method, without packages and enclosing classes">simple names</button><button id="nameFull" class="${prof.simple ? '' : 'on'}" title="the frames as recorded">full names</button>` +
+      `<button id="flipFlame" class="${prof.reversed ? 'on' : ''}" title="root at the frames where time is spent, with their callers below">reversed</button>` +
+      pills.map(([k, t]) => `<span class="pfilter" data-k="${k}" title="remove this filter">${esc(t)} ×</span>`).join('') +
+      `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
+    $('profCtl').querySelectorAll('button[data-ev]').forEach((b) => b.onclick = () => { 
+      if (b.dataset.ev === P.event) return;
+      const { x0, x1 } = view, { step, label } = prof, o = sibling(b.dataset.ev);
+      select(o);
+      Object.assign(prof, { step, label });
+      zoomTo(Math.min(x0, o.wall), Math.min(x1, o.wall));
+    });
+    $('nameSimple').onclick = () => { prof.simple = true; renderProfile(); };
+    $('nameFull').onclick = () => { prof.simple = false; renderProfile(); };
+    $('flipFlame').onclick = () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); };
+    $('profCtl').querySelectorAll('.pfilter').forEach((e) => e.onclick = () => { prof[e.dataset.k] = null; prof.root = null; renderProfile(); });
+    $('profSteps').innerHTML = '<span class="dim">steps here</span> ' + A.steps.map(([s, n]) => `<span class="chip${prof.step === s ? '' : (prof.step ? ' off' : '')}" data-s="${esc(s)}"><span class="sw" style="background:${XR.stepColor(s)}"></span>${esc(XR.stepName(s))} <span class="dim">${n}</span></span>`).join(' ');
+    $('profSteps').querySelectorAll('.chip').forEach((c) => c.onclick = () => { prof.step = prof.step === c.dataset.s ? null : c.dataset.s; prof.root = null; renderProfile(); });
+    const interval = P.raw.interval;
+    const range = prof.span ? `${shortMs(prof.span.t0)}–${shortMs(prof.span.t1)} ms` : whole ? 'the whole run' : `${shortMs(view.x0)}–${shortMs(view.x1)} ms`;
+    const out = A.outside ? `; outside the recording's threads in the same time: ${A.others.map(([k, n]) => `${esc(k)} ${n}`).join(', ')}` : '';
+    const few = A.count && A.count < 50 ? ' <b>Few samples: read this as a hint.</b>' : '';
+    $('profInfo').innerHTML = `${A.count} ${P.event === 'cpu' ? 'CPU' : 'wall clock'} samples in ${esc(range)} (interval ${esc(interval)}, ${P.raw.repeats} compilation${P.raw.repeats > 1 ? 's' : ''} projected onto the one shown)${out}.${few}`;
+    const table = (id, rows, cols, click) => {
+      $(id).innerHTML = `<tbody>${rows.map((r, i) => `<tr data-i="${i}">${cols(r).map((c, j) => `<td${j === 0 ? ' class="l" title="' + esc(c) + '"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
+      if (click) $(id).querySelectorAll('tr').forEach((tr) => tr.onclick = () => click(rows[+tr.dataset.i]));
+    };
+    const setFrame = (r) => { prof.frame = r.frame; prof.root = null; renderProfile(); };
+    table('pSelf', A.topSelf, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
+    table('pTotal', A.topTotal, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
+    table('pUnits', A.units, ([k, n]) => [k, n, pct(n)], ([k]) => { prof.label = k; prof.root = null; renderProfile(); });
+    table('pSyms', A.syms, ([k, n]) => [P.symbols[k], n, pct(n)], ([k]) => { prof.sym = k; prof.root = null; renderProfile(); });
+    drawFlame(P, A);
+    prof.lastCount = A.count;
+    renderStatus();
+  }
+  const ROW = 16;
+  let flameBoxes = [];
+  const hash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+  function flameColor(P, fr) {
+    if (P.jvm.has(fr)) return `hsl(${28 + hash(P.frames[fr]) % 22}, 70%, 68%)`;
+    const n = P.frames[fr];
+    const base = /^typechecker\.|^tools\.nsc\.typechecker/.test(n) ? 205 : /^(Types|Symbols|Names|tpe|Scopes|BaseTypeSeqs)/.test(n) ? 150 : /^(java|jdk|sun)\./.test(n) ? 280 : 100;
+    return `hsl(${base + hash(n) % 26}, 48%, ${62 + hash(n) % 12}%)`;
+  }
+  /** The selection's stacks as a tree, from the root, or reversed from the leaf through its callers. */
+  function flameTree(P, A) {
+    const top = { fr: -1, t: 0, s: 0, up: null, kids: new Map() };
+    for (let i = 0; i < P.parent.length; i++) {
+      const v = A.self[i]; if (!(v > 0)) continue;
+      const path = [];
+      for (let j = i; j >= 0; j = P.parent[j]) path.push(P.frame[j]); // leaf first
+      if (!prof.reversed) path.reverse();
+      let n = top; n.t += v;
+      for (const fr of path) {
+        let k = n.kids.get(fr);
+        if (!k) { k = { fr, t: 0, s: 0, up: n, kids: new Map() }; n.kids.set(fr, k); }
+        k.t += v; n = k;
+      }
+      n.s += v;
+    }
+    return top;
+  }
+  function drawFlame(P, A) {
+    const c = $('flameCanvas'), width = c.parentElement.clientWidth - 2, tree = flameTree(P, A);
+    // the zoom is a path of frames, so that it survives a change of the filters
+    let root = tree;
+    if (prof.root) for (const fr of prof.root) root = (root && root.kids.get(fr)) || null;
+    if (!root) { prof.root = null; root = tree; }
+    flameBoxes = [];
+    const kx = root.t ? width / root.t : 0;
+    let depthMax = 0;
+    const order = prof.reversed ? (p, q) => q.t - p.t : (p, q) => (P.frames[p.fr] < P.frames[q.fr] ? -1 : 1);
+    const tails = [];
+    const walk = (n, x, depth) => {
+      let narrow = 0;
+      for (const k of [...n.kids.values()].sort(order)) {
+        const w = k.t * kx;
+        if (w >= 0.5) { flameBoxes.push({ n: k, x, y: depth * ROW, w }); depthMax = Math.max(depthMax, depth); walk(k, x, depth + 1); x += w; }
+        else { narrow += w; }
+      }
+      // the frames too narrow to draw, together at the end of their parent
+      if (narrow >= 0.5) { tails.push({ x, y: depth * ROW, w: narrow }); depthMax = Math.max(depthMax, depth); }
+    };
+    if (root === tree) walk(root, 0, 0);
+    else { flameBoxes.push({ n: root, x: 0, y: 0, w: width }); depthMax = 0; walk(root, 0, 1); }
+    const { g } = setup(c, Math.max(ROW * 3, (depthMax + 1) * ROW));
+    g.font = '11px ui-monospace, Menlo, monospace'; g.textBaseline = 'middle';
+    for (const b of flameBoxes) {
+      g.fillStyle = flameColor(P, b.n.fr); g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
+      if (b.w > 28) { g.save(); g.beginPath(); g.rect(b.x, b.y, b.w - 1, ROW); g.clip(); g.fillStyle = '#17171a'; g.fillText(frameLabel(P, b.n.fr), b.x + 3, b.y + ROW / 2); g.restore(); }
+    }
+    g.fillStyle = css('--grid');
+    for (const b of tails) g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
+    if (!flameBoxes.length) { g.fillStyle = css('--dim'); g.fillText('no samples here', 8, ROW); }
+    const at = (ev) => { const q = c.getBoundingClientRect(), x = ev.clientX - q.left, y = ev.clientY - q.top; return flameBoxes.find((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + ROW); };
+    const relation = prof.reversed ? 'callers below it' : 'callees below it';
+    c.onmousemove = (ev) => { const b = at(ev); if (!b) return hideTip(); showTip(ev, `${P.frames[b.n.fr]}\n${b.n.t} samples, ${(100 * b.n.t / (A.count || 1)).toFixed(2)}% (self ${b.n.s}), ${relation}\nclick to zoom, double-click to reset`); };
+    c.onmouseleave = hideTip;
+    c.onclick = (ev) => { const b = at(ev); if (!b) return; const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); prof.root = path; renderProfile(); };
+    c.ondblclick = () => { prof.root = null; renderProfile(); };
+  }
+
+  // ---- the sticky header: what is being looked at
+  function renderStatus() {
+    if (!cur) return;
+    const ref = XR.reference(runs, cur), base = ref.serial || ref.one, P = XR.profileOf(cur);
+    const whole = view.x0 <= 0 && view.x1 >= cur.wall;
+    const bits = [`<b>${esc(cur.corpus)}</b>`, cur.config === 'serial' ? 'serial' : `${cur.N} thread${cur.N === 1 ? '' : 's'}`, fmt(cur.wall)];
+    if (base && base !== cur) bits.push(`${(base.wall / cur.wall).toFixed(2)}× vs ${ref.serial ? 'serial' : '1 thread'}`);
+    bits.push(whole ? 'whole run' : `viewing ${shortMs(view.x0)}–${shortMs(view.x1)} ms (${fmt(view.x1 - view.x0)})`);
+    if (P) {
+      bits.push(`${P.event === 'cpu' ? 'CPU' : 'wall clock'} profile, ${P.raw.interval}, ${P.raw.repeats} compilations`);
+      if (prof.lastCount != null) bits.push(`${prof.lastCount} samples selected`);
+      const fs = [prof.step && `step ${XR.stepName(prof.step)}`, prof.span && `span ${prof.span.label}`, prof.label && `unit ${prof.label}`, prof.sym != null && `completing ${P.symbols[prof.sym]}`, prof.frame != null && `through ${frameLabel(P, prof.frame)}`, prof.reversed && 'reversed'].filter(Boolean);
+      if (fs.length) bits.push(fs.map(esc).join(', '));
+    } else bits.push('no profile');
+    if (cur.meta.errors && cur.meta.errors !== '0') bits.push(`<b>${esc(cur.meta.errors)} errors</b>`);
+    $('status').innerHTML = bits.join(' <span class="dim">·</span> ');
+  }
+
   const readFiles = async (files) => { const raws = []; for (const f of files) raws.push(...XR.parseFile(await f.text())); load(raws); };
   $('fileBtn').onclick = () => $('file').click();
   $('file').onchange = () => readFiles($('file').files);
