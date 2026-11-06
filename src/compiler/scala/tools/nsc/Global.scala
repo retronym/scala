@@ -1520,7 +1520,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
           case null => units.toList
           case seed => new scala.util.Random(seed.toLong + ph.id).shuffle(units.toList)
         }
-        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true)(ph.applyPhase(_))
+        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true, largestFirst = System.getProperty("scalac.parallelTyper.lateOrderSeed") == null)(ph.applyPhase(_))
         if (System.getProperty("scalac.parallelTyper.log") != null)
           Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
         if (ph.name == "jvm" && System.getProperty("scalac.parallelTyper.lockSites") != null)

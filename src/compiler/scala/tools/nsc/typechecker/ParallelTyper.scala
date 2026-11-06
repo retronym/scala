@@ -176,8 +176,11 @@ trait ParallelTyper {
             val times = PerThreadTimes.current
             val w0 = times.waitNanos
             val h0 = times.holdNanos
+            val trees0 = nodeCount
             try applyPhase(unit)
             finally {
+              unitWeights.put(unit, nodeCount - trees0)
+              patternWeights.put(unit, patternsIn(unit.body))
               undoLog.clear()
               timeline.foreach(_.add(unit.source.file.name, s0, System.nanoTime(), Timeline.cpuNow() - c0,
                 times.waitNanos - w0, times.holdNanos - h0))
@@ -221,11 +224,13 @@ trait ParallelTyper {
    *  With `unitOrder`, the diagnostics are issued in the order of `units` and, within a unit, of arrival, which is
    *  the serial order of a phase whose task reports only while it works on its own unit; a task may then ask the
    *  reporter what the serial phase would have reported before it (`UnitOrderReporter`); the units are then also
-   *  started in that order. `meanwhile` runs on the calling thread while the workers run, and is given a test of
-   *  whether any of them still does.
+   *  started in that order, unless `largestFirst`: a phase whose tasks do not ask starts its largest units first
+   *  all the same, so that a large unit started late is not left running alone at the end (in the compiler's sources,
+   *  `Typers.scala` was, in every phase after the typer). `meanwhile` runs on the calling thread while the workers
+   *  run, and is given a test of whether any of them still does.
    */
   def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String, unitOrder: Boolean = false,
-                    meanwhile: (() => Boolean) => Unit = null)(task: CompilationUnit => Unit): Unit = {
+                    meanwhile: (() => Boolean) => Unit = null, largestFirst: Boolean = false)(task: CompilationUnit => Unit): Unit = {
     val n =
       if (flag("oneThread")) 1
       else prop("threads").map(_.toInt).getOrElse {
@@ -233,8 +238,9 @@ trait ParallelTyper {
         if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
       }
     val nThreads = math.max(1, math.min(n, units.length))
-    if (unitOrder) onPool(phase0, units, nThreads, name, units, meanwhile)(task)
-    else onPool(phase0, units.sortBy(u => -u.source.content.length), nThreads, name, null, meanwhile)(task)
+    def bySize = units.sortBy(u => -weightOf(u, name))
+    if (unitOrder) onPool(phase0, if (largestFirst) bySize else units, nThreads, name, units, meanwhile)(task)
+    else onPool(phase0, bySize, nThreads, name, null, meanwhile)(task)
   }
 
   /** `task` on each of `units`, a unit per task on `nThreads` workers at `phase`, the diagnostics buffered and issued
@@ -330,7 +336,30 @@ trait ParallelTyper {
     def close(): Unit = synchronized { all.foreach(_.submit(Stop)); all.clear() }
   }
   /** End the worker threads of this run, if it had any. */
-  def closeWorkers(): Unit = workers.close()
+  def closeWorkers(): Unit = { workers.close(); unitWeights.clear(); patternWeights.clear() }
+
+  /** How many trees the typer made for each unit of this run: what the phases after it take as the unit's weight, to
+   *  start the heaviest first. The length of the source, which orders the typer's own units, is a poor guide to
+   *  what a typed unit costs later: a short file of quasiquotes or of matches is a large tree (in the compiler's
+   *  sources `Extractors.scala` was started late by its length and left patmat running on it alone). */
+  private[this] val unitWeights = new java.util.concurrent.ConcurrentHashMap[CompilationUnit, Integer]
+  /** For patmat, the trees in a unit's patterns, counted when it is typed: what that phase costs follows the
+   *  patterns, and a file can be all patterns (`Extractors.scala` again, which by its trees alone still started 84th). */
+  private[this] val patternWeights = new java.util.concurrent.ConcurrentHashMap[CompilationUnit, Integer]
+  private def patternsIn(tree: Tree): Int = {
+    var n = 0
+    new Traverser {
+      override def traverse(t: Tree): Unit = t match {
+        case CaseDef(pat, guard, body) => pat.foreach(_ => n += 1); traverse(guard); traverse(body)
+        case _                         => super.traverse(t)
+      }
+    }.traverse(tree)
+    n
+  }
+  private def weightOf(unit: CompilationUnit, phaseName: String): Int = {
+    val w = (if (phaseName == "patmat") patternWeights else unitWeights).get(unit)
+    if (w ne null) w.intValue else unit.source.content.length
+  }
 
   /** The thread dump of a phase that runs longer than `seconds`, and again every `seconds`. */
   private def newWatchdog(seconds: Int): Thread = {
