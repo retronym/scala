@@ -846,13 +846,15 @@ if (typeof module !== 'undefined') module.exports = XR;
     const maxN = Math.max(...pts.map((q) => q.N), 2), W = 440, H = 240, Lp = 36, Rp = 34, Tp = 20, Bp = 30;
     const sp = (q) => base.wall / q.wall;
     const am = ref.one ? (n) => XR.amdahl(ref.one, n) : null;
-    const maxY = Math.max(2, ...pts.map(sp), Math.min(maxN, 4)) * 1.1;
+    // room for the Amdahl bound at the largest thread count as well as for the points
+    const maxY = Math.max(2, ...pts.map(sp), Math.min(maxN, 4), am ? am(maxN).bound * (ref.one ? base.wall / ref.one.wall : 1) : 0) * 1.1;
     const x = (n) => Lp + n / maxN * (W - Lp - Rp), y = (v) => H - Bp - v / maxY * (H - Tp - Bp);
     let g = '';
     for (let v = 0; v <= maxY; v += maxY > 6 ? 2 : 1) g += `<line x1="${Lp}" x2="${W - Rp}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${Lp - 4}" y="${y(v) + 4}" text-anchor="end">${v}×</text>`;
     for (let n = 0; n <= maxN; n++) g += `<text x="${x(n)}" y="${H - Bp + 14}" text-anchor="middle"${pts.some((q) => q.N === n) ? ' class="lab"' : ''}>${n}</text>`;
     g += `<text x="${(Lp + W - Rp) / 2}" y="${H - 4}" text-anchor="middle">typer threads</text><text x="4" y="11">speed-up vs ${ref.serial ? 'serial compiler' : '1 thread'}</text>`;
-    const curve = (f) => { let d = ''; for (let n = 1; n <= maxN; n += 0.25) d += `${d ? 'L' : 'M'}${x(n)},${y(Math.min(maxY, f(n)))}`; return d; };
+    // a curve ends where it leaves the plot: held at the top edge it read as a plateau
+    const curve = (f) => { let d = ''; for (let n = 1; n <= maxN && f(n) <= maxY; n += 0.25) d += `${d ? 'L' : 'M'}${x(n)},${y(f(n))}`; return d; };
     const k1 = ref.one ? base.wall / ref.one.wall : 1; // the one-thread run against the baseline
     // the curves are named in a legend under the plot, not on it, where their labels ran into each other and the points
     const key = [['measured', 'var(--active)', '']];
