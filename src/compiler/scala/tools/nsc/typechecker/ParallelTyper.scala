@@ -382,7 +382,7 @@ trait ParallelTyper {
     t
   }
 
-  /** Force the lazy vals of `definitions` and `runDefinitions` (and their nested objects) on this thread: their
+  /** Force the lazy vals of `definitions`, `runDefinitions` and the analyzer (and their nested objects) on this thread: their
    *  initialisers complete symbols while they hold the monitor of the enclosing object, and a worker that held the
    *  completion lock while it waited for that monitor would deadlock with one that held the monitor while it waited
    *  for the lock. Optional classes are missing in some configurations: such a failure is ignored here (as it is
@@ -393,6 +393,7 @@ trait ParallelTyper {
     def force(obj: AnyRef, depth: Int): Unit = forceLazyValsOf(obj, depth, seen)
     force(definitions, 0)
     force(currentRun.runDefinitions, 0)
+    force(this, 0) // e.g. `caseObjectSymbols`, which reads `Object_equals` under the analyzer's monitor
     // private lazy vals of the cake that complete symbols, e.g. `TypeConstraints.numericLoBound`
     for (m <- global.getClass.getMethods ++ global.getClass.getDeclaredMethods
          if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")) {

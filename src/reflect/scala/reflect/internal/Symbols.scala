@@ -1711,9 +1711,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** The cyclic reference of a wait for this symbol's completion that would close a wait-for cycle, with no
      *  provisional info to read. `-Dscalac.parallelTyper.debugCycles` prints where. */
     private def waitCycleError(): Throwable = {
-      if (java.lang.Boolean.getBoolean("scalac.parallelTyper.debugCycles"))
-        Console.err.println(s"[parallel-typer] wait cycle on $this in ${owner.fullName} (${Thread.currentThread.getName}); holders: ${completionLock.holders}\n" +
-          new Throwable().getStackTrace.iterator.filter(f => f.getMethodName.matches("complete.*|typed[A-Z].*|.*Sig|isLockedHere|inferImplicit.*|typeParams|info")).take(40).mkString("    ", "\n    ", ""))
+      reportWaitCycle(s"$this in ${owner.fullName}")
       CyclicReference(this, ErrorType)
     }
 
