@@ -1963,7 +1963,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (validTo == NoPeriod) infos.info
       else {
         val curPeriod = currentPeriod
-        if (validTo >= curPeriod) {
+        // `adaptInfo` is between its two writes: the history is about to be replaced, and its phases mean nothing
+        if (runId(infos.validFrom) != runId(validTo)) transformInfosClaimed(curPeriod)
+        else if (validTo >= curPeriod) {
           val curPid = phaseId(curPeriod)
           while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
           infos.info
@@ -2007,10 +2009,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *
      *  A node goes on the history with a compare-and-set of its head, then `_validTo` moves up with one, so a reader
      *  that sees the new `_validTo` sees the node. A thread between the two sees the node there, drops its result and
-     *  moves `_validTo` up itself. A history of an earlier run is left to the lock, as a whole.
+     *  moves `_validTo` up itself. A history of an earlier run is first replaced under the lock (`adaptInfoUnderLock`).
      */
     private def transformInfosClaimed(curPeriod: Period): Type = {
-      if (runId(_validTo) != runId(curPeriod)) return underCompletionLock(transformInfosHere(curPeriod))
+      adaptInfoUnderLock(curPeriod)
       val curPhase = phase
       val curPid = phaseId(curPeriod)
       try {
@@ -2064,41 +2066,40 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       while (v < p && !(SymbolFlagsHandle.validTo.compareAndSet(this, v, p): Boolean)) v = _validTo
     }
 
-    private def transformInfosHere(curPeriod: Period): Type = {
-      val curPhase = phase
-      try {
-        val curPid = phaseId(curPeriod)
-        var infos = this.infos
-        while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
-        // Completing elsewhere: a thread whose wait would have closed a wait-for cycle goes on with the provisional
-        // info (`awaitMarker`), as a nested read in a serial compiler would. It must not add to the history, which
-        // the completion's final info then replaces, and whose last write could otherwise be this one.
-        if (_validTo < curPeriod && !isCompletingElsewhere) {
-          if (runId(infos.validFrom) != currentRunId) {
-            adaptInfo(infos.oldest)
-            infos = this.infos
-          }
-          if (_validTo < curPeriod) infos = transformInfos(infos, curPhase, curPeriod)
+    /** Replace a history of an earlier run with its adapted oldest node, and wait for a thread that is doing so.
+     *
+     *  `adaptInfo` publishes `_validTo` in this run before it replaces the history, for the reads of this symbol that
+     *  adapting makes on this thread. Another thread between the two writes must not take the old history for this
+     *  run's: it would find the step it wants already there, move `_validTo` past that step, and the new history would
+     *  then lack it. So a history whose run is not that of `_validTo` goes to the lock too, and all that is transformed
+     *  in this run is transformed after this, at one step at a time.
+     *
+     *  Completing elsewhere: see `transformInfosClaimed`, which then goes on with what the history has.
+     */
+    private def adaptInfoUnderLock(curPeriod: Period): Unit = {
+      val validTo = _validTo
+      java.lang.invoke.VarHandle.loadLoadFence()
+      if (runId(validTo) != runId(curPeriod) || runId(this.infos.validFrom) != runId(curPeriod)) underCompletionLock {
+        if (_validTo < curPeriod && !isCompletingElsewhere && runId(this.infos.validFrom) != currentRunId) {
+          val curPhase = phase
+          try adaptInfo(this.infos.oldest)
+          finally phase = curPhase
         }
-        infos.info
-      } finally phase = curPhase
+      }
     }
 
     private def transformInfos(infos0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
       assertCorrectThread()
       var infos = infos0
       var itr = nextFrom(phaseId(_validTo))
-      if (!isConcurrentCompiler) infoTransformers = itr // caching optimization
+      infoTransformers = itr // caching optimization
       while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
         val info1 = itr.transform(this, infos.info)
         if (info1 ne infos.info) {
           infos = TypeHistory(currentPeriod + 1, info1, infos)
-          if (isConcurrentCompiler) java.lang.invoke.VarHandle.storeStoreFence()
           this.infos = infos
         }
-        // after the node: a reader that sees the new `_validTo` must see the node (`concurrentRawInfo`)
-        if (isConcurrentCompiler) java.lang.invoke.VarHandle.storeStoreFence()
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
         itr = itr.next
       }
@@ -2117,7 +2118,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       phase   = phaseWithId(pid)
 
       val info1 = adaptToNewRunMap(oldest.info)
-      if (info1 eq oldest.info) {
+      if (isConcurrentCompiler) {
+        // A new node rather than a change to one another thread may be reading, as in `info_=`.
+        val node = TypeHistory(validTo, info1, null)
+        java.lang.invoke.VarHandle.storeStoreFence()
+        this.infos = node
+      } else if (info1 eq oldest.info) {
         oldest.validFrom = validTo
         this.infos = oldest
       } else {
