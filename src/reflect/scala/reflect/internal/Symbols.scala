@@ -2126,7 +2126,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Initialize the symbol */
     final def initialize: this.type = {
-      if (!isInitialized) info
+      // `isInitialized` is true of a provisional info, which another thread's completion may have published. The
+      // caller must wait for that completion: a body typer that went on would type the right-hand side that the
+      // completer is typing to infer the result type, and the two would write to one tree.
+      if (!isInitialized || (isConcurrentCompiler && isCompletingElsewhere)) info
       this
     }
     def maybeInitialize = {
