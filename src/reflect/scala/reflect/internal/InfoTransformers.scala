@@ -28,9 +28,10 @@ trait InfoTransformers {
     val pid: Phase#Id
     val changesBaseClasses: Boolean
     def transform(sym: Symbol, tpe: Type): Type
-    /** In a concurrent compiler: does `transform(sym, _)` only compute, with no state shared beyond `sym` and what the
-     *  trees' transforms use on the pool as well? It then needs no completion lock, see `Symbol.transformInfosClaimed`. */
-    def isLocalFor(sym: Symbol): Boolean = false
+    /** In a concurrent compiler: `transform(sym, tpe)` if it only computes, with no state shared beyond what the trees'
+     *  transforms use on the pool as well, so that it needs no completion lock and may run on two threads at once; else
+     *  null, and the caller runs `transform` under the lock. See `Symbol.transformInfosClaimed`. */
+    def transformIfLocal(sym: Symbol, tpe: Type): Type = null
 
     @tailrec
     final def insert(that: InfoTransformer): Unit = {

@@ -73,7 +73,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   /** This phase changes base classes. */
   override def changesBaseClasses = true
   override def keepsTypeParams = true
-  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = transformInfo0(sym, tpe, onlyIfLocal = true)
 
   type TypeEnv = Map[Symbol, Type]
   def emptyEnv: TypeEnv = Map.empty[Symbol, Type]
@@ -592,7 +592,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *  `stps`, by specializing its members, and creating a new class for
    *  each combination of `stps`.
    */
-  def specializeClass(clazz: Symbol, outerEnv: TypeEnv): List[Symbol] = {
+  def specializeClass(clazz: Symbol, outerEnv: TypeEnv, nothingToDo: Boolean = false): List[Symbol] = {
     def toSpecializedClass(env0: TypeEnv, normMembers: List[Symbol]): Symbol = {
       /* It gets hard to follow all the clazz and cls, and specializedClass
        * was both already used for a map and mucho long.  So "sClass" is the
@@ -913,7 +913,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       exitingSpecialize(clazz.owner.info.decls enter spc) //!!! assumes fully specialized classes
     }
     if (subclasses.nonEmpty) clazz.resetFlag(FINAL)
-    cleanAnyRefSpecCache(clazz, decls1)
+    if (!nothingToDo) cleanAnyRefSpecCache(clazz, decls1)
     decls1
   }
 
@@ -1058,50 +1058,66 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
    *
    *  this method will return List('apply\$mcII\$sp')
    */
-  private def specialOverrides(clazz: Symbol) = logResultIf[List[Symbol]]("specialized overrides in " + clazz, _.nonEmpty) {
-    /* Return the overridden symbol in syms that needs a specialized overriding symbol,
-     * together with its specialization environment. The overridden symbol may not be
-     * the closest to 'overriding', in a given hierarchy.
-     *
-     * An method m needs a special override if
-     *   * m overrides a method whose type contains specialized type variables
-     *   * there is a valid specialization environment that maps the overridden method type to m's type.
-     */
-    @nowarn("cat=lint-nonlocal-return")
-    def needsSpecialOverride(overriding: Symbol): (Symbol, TypeEnv) = {
-      def checkOverriddenTParams(overridden: Symbol): Unit = {
-        foreach2(overridden.info.typeParams, overriding.info.typeParams) { (baseTvar, derivedTvar) =>
-          val missing = concreteTypes(baseTvar).toSet diff concreteTypes(derivedTvar).toSet
-          if (missing.nonEmpty) {
-            reporter.error(derivedTvar.pos,
-              "Type parameter has to be specialized at least for the same types as in the overridden method. Missing "
-              + "types: " + missing.mkString("", ", ", "")
-            )
-          }
+  /* Return the overridden symbol in syms that needs a specialized overriding symbol,
+   * together with its specialization environment. The overridden symbol may not be
+   * the closest to 'overriding', in a given hierarchy.
+   *
+   * An method m needs a special override if
+   *   * m overrides a method whose type contains specialized type variables
+   *   * there is a valid specialization environment that maps the overridden method type to m's type.
+   */
+  @nowarn("cat=lint-nonlocal-return")
+  def needsSpecialOverride(overriding: Symbol, report: Boolean = true): (Symbol, TypeEnv) = {
+    def checkOverriddenTParams(overridden: Symbol): Boolean = {
+      var ok = true
+      foreach2(overridden.info.typeParams, overriding.info.typeParams) { (baseTvar, derivedTvar) =>
+        val missing = concreteTypes(baseTvar).toSet diff concreteTypes(derivedTvar).toSet
+        if (missing.nonEmpty) {
+          ok = false
+          if (report) reporter.error(derivedTvar.pos,
+            "Type parameter has to be specialized at least for the same types as in the overridden method. Missing "
+            + "types: " + missing.mkString("", ", ", "")
+          )
         }
       }
-      if (!overriding.isParamAccessor) {
-        for (overridden <- overriding.allOverriddenSymbols) {
-          val stvars = specializedTypeVars(overridden.info)
-          if (stvars.nonEmpty) {
-            debuglog("specialized override of %s by %s%s".format(overridden.fullLocationString, overriding.fullLocationString,
-              if (stvars.isEmpty) "" else stvars.map(_.name).mkString("(", ", ", ")")))
-
-            if (currentRun compiles overriding)
-              checkOverriddenTParams(overridden)
-
-            val env    = unify(overridden.info, overriding.info, emptyEnv, tparams = true)
-            def atNext = exitingSpecialize(overridden.owner.info.decl(specializedName(overridden, env)))
-
-            if (TypeEnv.restrict(env, stvars).nonEmpty && TypeEnv.isValid(env, overridden) && atNext != NoSymbol) {
-              debuglog("  " + pp(env) + " found " + atNext)
-              return (overridden, env)
-            }
-          }
-        }
-      }
-      (NoSymbol, emptyEnv)
+      ok
     }
+    if (!overriding.isParamAccessor) {
+      for (overridden <- overriding.allOverriddenSymbols) {
+        val stvars = specializedTypeVars(overridden.info)
+        if (stvars.nonEmpty) {
+          debuglog("specialized override of %s by %s%s".format(overridden.fullLocationString, overriding.fullLocationString,
+            if (stvars.isEmpty) "" else stvars.map(_.name).mkString("(", ", ", ")")))
+
+          if (currentRun.compiles(overriding) && !checkOverriddenTParams(overridden) && !report)
+            return (overridden, emptyEnv) // the caller is only asking whether this symbol has anything to do
+
+          val env    = unify(overridden.info, overriding.info, emptyEnv, tparams = true)
+          def atNext = exitingSpecialize(overridden.owner.info.decl(specializedName(overridden, env)))
+
+          if (TypeEnv.restrict(env, stvars).nonEmpty && TypeEnv.isValid(env, overridden) && atNext != NoSymbol) {
+            debuglog("  " + pp(env) + " found " + atNext)
+            return (overridden, env)
+          }
+        }
+      }
+    }
+    (NoSymbol, emptyEnv)
+  }
+
+  /** Does the specialization of `clazz`'s info find nothing to do? Then it only computes: it makes no symbols and
+   *  changes no scope, and needs no lock (`transformInfoIfLocal`). So: no type parameters to specialize on, in the class or
+   *  a member, and no member that needs a specialized override. Read-only, with what `specializeClass`
+   *  and `specialOverrides` would read.
+   */
+  private def freeOfSpecialization(clazz: Symbol): Boolean =
+    typeEnv(clazz).isEmpty && !clazz.info.typeParams.exists(_.isSpecialized) && clazz.info.decls.forall { m =>
+      (!m.isMethod || m.isScala3Defined || enteringTyper(m.typeParams.isEmpty) || !m.info.typeParams.exists(_.isSpecialized)) &&
+      (needsSpecialOverride(m, report = false)._1 eq NoSymbol) &&
+      (!m.isSuperAccessor || (needsSpecialOverride(m.alias, report = false)._1 eq NoSymbol))
+    }
+
+  private def specialOverrides(clazz: Symbol) = logResultIf[List[Symbol]]("specialized overrides in " + clazz, _.nonEmpty) {
     (clazz.info.decls flatMap { overriding =>
       needsSpecialOverride(overriding) match {
         case (NoSymbol, _)     =>
@@ -1291,7 +1307,8 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   /** Type transformation. It is applied to all symbols, compiled or loaded.
    *  If it is a 'no-specialization' run, it is applied only to loaded symbols.
    */
-  override def transformInfo(sym: Symbol, tpe: Type): Type = {
+  override def transformInfo(sym: Symbol, tpe: Type): Type = transformInfo0(sym, tpe, onlyIfLocal = false)
+  private def transformInfo0(sym: Symbol, tpe: Type, onlyIfLocal: Boolean): Type = {
     if (settings.nospecialization.value && currentRun.compiles(sym)) {
       tpe
     } else tpe.resultType match {
@@ -1315,7 +1332,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
               if (tparams.nonEmpty) "(poly) " else "", clazz, parents1)
             )
           }
-          val newScope = newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
+          if (onlyIfLocal && !freeOfSpecialization(clazz)) return null
+          val newScope =
+            if (onlyIfLocal) newScopeWith(specializeClass(clazz, typeEnv(clazz), nothingToDo = true): _*)
+            else newScopeWith(specializeClass(clazz, typeEnv(clazz)) ++ specialOverrides(clazz): _*)
           // If tparams.isEmpty, this is just the ClassInfoType.
           GenPolyType(tparams, ClassInfoType(parents1, newScope, clazz))
         }
