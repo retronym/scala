@@ -1994,26 +1994,23 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         }
       }
 
-    /** Bring this symbol's history up to `curPeriod`.
+    /** Bring this symbol's history up to `curPeriod`, a transformer at a time.
      *
-     *  The transformers may enter members, create classes and fill per-run maps, so a class is transformed under the
-     *  completion lock. Those of a non-class symbol compute a type (`InfoTransformer.isLocalFor`), with the type maps
-     *  that the trees of every unit go through on the pool as well, so they run without a lock, see `transformInfosLocally`.
-     */
-    private def transformInfosClaimed(curPeriod: Period): Type =
-      if (runId(_validTo) == runId(curPeriod) && infoTransformsAreLocal(curPeriod)) transformInfosLocally(curPeriod)
-      else underCompletionLock(transformInfosHere(curPeriod))
-
-    /** `transformInfos` for transformers that only compute. Two threads may run one for the same symbol: the first
-     *  to publish its node wins, and the other's result is dropped. No thread waits for another here, which matters more
-     *  than the repeated work (rare): a claim per symbol would be held by a thread that needs the coarse root for an
-     *  unrelated class, and be wanted by the thread that holds the root, a cycle.
+     *  A transformer that only computes (`InfoTransformer.transformIfLocal`) runs without a lock, and two threads may
+     *  run it for the same symbol: the first to publish its node wins, and the other's result is dropped. That is
+     *  most of them, for most symbols. The others may enter members, create classes and fill per-run maps, so they run
+     *  under the completion lock, which is held for that step alone.
+     *
+     *  Nothing here holds anything across a transformer but that lock, and no thread waits for a thread transforming
+     *  one symbol. A claim per symbol would be held by a thread that needs the lock for an unrelated class, and be
+     *  wanted by the thread that holds the lock: a cycle.
      *
      *  A node goes on the history with a compare-and-set of its head, then `_validTo` moves up with one, so a reader
-     *  that sees the new `_validTo` sees the node, as in `transformInfos`. A thread between the two sees the node
-     *  already there, drops its result and moves `_validTo` up itself.
+     *  that sees the new `_validTo` sees the node. A thread between the two sees the node there, drops its result and
+     *  moves `_validTo` up itself. A history of an earlier run is left to the lock, as a whole.
      */
-    private def transformInfosLocally(curPeriod: Period): Type = {
+    private def transformInfosClaimed(curPeriod: Period): Type = {
+      if (runId(_validTo) != runId(curPeriod)) return underCompletionLock(transformInfosHere(curPeriod))
       val curPhase = phase
       val curPid = phaseId(curPeriod)
       try {
@@ -2024,16 +2021,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           else if (itr.pid >= curPid) advanceValidToAtLeast(period(currentRunId, itr.pid))
           else {
             phase = phaseWithId(itr.pid)
-            val stepEnd = currentPeriod + 1
-            java.lang.invoke.VarHandle.loadLoadFence()
-            val head = this.infos
-            var from = head
-            while (itr.pid < phaseId(from.validFrom) && from.prev != null) from = from.prev
-            val info1 = itr.transform(this, from.info)
-            val done =
-              (from ne head) || (info1 eq from.info) ||
-                SymbolFlagsHandle.infos.compareAndSet(this, head: AnyRef, TypeHistory(stepEnd, info1, head): AnyRef)
-            if (done) advanceValidToAtLeast(stepEnd)
+            val local = itr.transformIfLocal(this, infoAtStep(itr.pid))
+            if (local ne null) publishStep(itr.pid, local)
+            else underCompletionLock {
+              if (phaseId(_validTo) <= itr.pid) publishStep(itr.pid, itr.transform(this, infoAtStep(itr.pid)))
+            }
           }
           validTo = _validTo
         }
@@ -2045,19 +2037,31 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       } finally phase = curPhase
     }
 
+    /** The info that the transformer of phase `pid` starts from. */
+    private def infoAtStep(pid: Phase#Id): Type = {
+      java.lang.invoke.VarHandle.loadLoadFence()
+      var from = this.infos
+      while (pid < phaseId(from.validFrom) && from.prev != null) from = from.prev
+      from.info
+    }
+
+    /** Publish the result of the transformer of phase `pid`, at that phase, unless another thread has. */
+    private def publishStep(pid: Phase#Id, info1: Type): Unit = {
+      val stepEnd = currentPeriod + 1
+      var done = false
+      while (!done) {
+        val head = this.infos
+        var from = head
+        while (pid < phaseId(from.validFrom) && from.prev != null) from = from.prev
+        done = (from ne head) || (info1 eq from.info) ||
+          (SymbolFlagsHandle.infos.compareAndSet(this, head: AnyRef, TypeHistory(stepEnd, info1, head): AnyRef): Boolean)
+      }
+      advanceValidToAtLeast(stepEnd)
+    }
+
     private def advanceValidToAtLeast(p: Period): Unit = {
       var v = _validTo
       while (v < p && !(SymbolFlagsHandle.validTo.compareAndSet(this, v, p): Boolean)) v = _validTo
-    }
-
-    private def infoTransformsAreLocal(curPeriod: Period): Boolean = {
-      val curPid = phaseId(curPeriod)
-      var itr = nextFrom(phaseId(_validTo))
-      while (itr.pid != NoPhase.id && itr.pid < curPid) {
-        if (!itr.isLocalFor(this)) return false
-        itr = itr.next
-      }
-      true
     }
 
     private def transformInfosHere(curPeriod: Period): Type = {

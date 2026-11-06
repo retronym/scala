@@ -42,7 +42,7 @@ abstract class Erasure extends InfoTransform
     new ErasureTransformer(unit)
 
   override def keepsTypeParams = false
-  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = transformInfo(sym, tpe)
 
 // -------- erasure on types --------------------------------------------------------
 
