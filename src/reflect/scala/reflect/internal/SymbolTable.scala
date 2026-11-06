@@ -765,6 +765,8 @@ abstract class SymbolTable extends macros.Universe
         throw new IllegalStateException(s"the scratch state of $owner used on ${Thread.currentThread}")
     /** The frame of the completion in progress on this thread. */
     var frame: Frame = new Frame
+    /** In a concurrent compiler, `MethodSymbol.typeAsMemberOf`'s cache for this thread. */
+    val memberTypes = new java.util.HashMap[AnyRef, AnyRef]
     /** The current skolemization level, needed for the algorithms
      *  in isSameType, isSubType that do constraint solving under a prefix.
      */
