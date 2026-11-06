@@ -35,7 +35,10 @@ object Stress {
       assert(ok, rest)
       // a directory, not memory: a virtual directory makes the back end write in the order of the units
       val classesDir = Files.createTempDirectory(Paths.get(out), "c")
-      val classes = AbstractFile.getDirectory(classesDir.toFile)
+      // -Dstress.virtual: in memory, as the x-ray's compiles are
+      val classes: AbstractFile =
+        if (System.getProperty("stress.virtual") != null) new scala.reflect.io.VirtualDirectory("(memory)", None)
+        else AbstractFile.getDirectory(classesDir.toFile)
       if (full) s.outputDirs.setSingleOutput(classes)
       val reporter = new StoreReporter(s)
       val g = new Global(s, reporter)
