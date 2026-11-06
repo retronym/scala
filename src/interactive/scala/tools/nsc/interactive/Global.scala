@@ -26,7 +26,7 @@ import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.symtab.Flags.{ACCESSOR, PARAMACCESSOR}
 import scala.tools.nsc.symtab._
-import scala.tools.nsc.typechecker.{Analyzer, Typers}
+import scala.tools.nsc.typechecker.{AbstractAnalyzer, Typers}
 import scala.util.control.Breaks._
 import scala.util.control.ControlThrowable
 
@@ -40,12 +40,12 @@ import scala.util.control.ControlThrowable
  */
 
 trait CommentPreservingTypers extends Typers {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
-  override def resetDocComments() = global.cookedDocComments.clear()
+  override def resetDocComments() = global.docCommentsSupport.cookedDocComments.clear()
 }
 
-trait InteractiveAnalyzer extends Analyzer {
+trait InteractiveAnalyzer extends AbstractAnalyzer {
   val global : Global
   import global._
 
@@ -957,7 +957,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   private def forceDocComment(sym: Symbol, unit: RichCompilationUnit): Unit = {
     unit.body foreachPartial {
       case DocDef(comment, defn) if defn.symbol == sym =>
-        fillDocComment(defn.symbol, comment)
+        docCommentsSupport.fillDocComment(defn.symbol, comment)
         EmptyTree
       case _: ValOrDefDef =>
         EmptyTree
@@ -978,7 +978,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
         if (mirror eq NoSymbol)
           ("", "", NoPosition)
         else {
-          (expandedDocComment(mirror, site), rawDocComment(mirror), docCommentPos(mirror))
+          (docCommentsSupport.expandedDocComment(mirror, site), docCommentsSupport.rawDocComment(mirror), docCommentsSupport.docCommentPos(mirror))
         }
       }
     }

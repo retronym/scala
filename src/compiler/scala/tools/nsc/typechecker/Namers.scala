@@ -25,7 +25,7 @@ import scala.util.chaining._
  *  @author Martin Odersky
  */
 trait Namers extends MethodSynthesis {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -2159,7 +2159,7 @@ trait Namers extends MethodSynthesis {
 
     if (defnSym.isTerm) {
       // for polymorphic DefDefs, create type skolems and assign them to the tparam trees.
-      val skolems = deriveFreshSkolems(typeParams)
+      val skolems = existentialsAndSkolems.deriveFreshSkolems(typeParams)
       foreach2(tparams, skolems)(_ setSymbol _)
     }
 

@@ -83,7 +83,7 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
     producersForValueAt(insn, slot).flatMap[AbstractInsnNode](prod => {
       val outputNumber = outputValueSlots(prod).indexOf(slot)
       _consumersOfOutputsFrom.get(prod).map(v => {
-        v(outputNumber)
+        v.consumers(outputNumber)
       }).getOrElse(Set.empty)
     })
   }
@@ -100,7 +100,7 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
     case ParameterProducer(local)                           => consumersOfValueAt(methodNode.instructions.getFirst, local)
     case ExceptionProducer(handlerLabel, handlerStackTop)   => consumersOfValueAt(handlerLabel, handlerStackTop)
     case _ =>
-      _consumersOfOutputsFrom.get(insn).map(v => Set.from[AbstractInsnNode](v.indices.iterator.flatMap(v.apply))).getOrElse(Set.empty)
+      _consumersOfOutputsFrom.get(insn).map(v => Set.from[AbstractInsnNode](v.consumers.iterator.flatten)).getOrElse(Set.empty)
   }
 
   /**
@@ -407,18 +407,24 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
   }
 
   /** For each instruction, a set of potential consumers of the produced values. */
-  private lazy val _consumersOfOutputsFrom: Map[AbstractInsnNode, Vector[Set[AbstractInsnNode]]] = {
-    var res = Map.empty[AbstractInsnNode, Vector[Set[AbstractInsnNode]]]
+  /** The slots a producer writes, and the consumers of the value in each. */
+  private final class Outputs(val slots: Seq[Int]) {
+    val consumers: Array[Set[AbstractInsnNode]] = Array.fill(slots.size)(Set.empty)
+  }
+
+  // Built in place: updating an immutable map and vector for every value consumed was most of its cost, as was
+  // computing a producer's output slots again for each of its consumers.
+  private lazy val _consumersOfOutputsFrom: collection.Map[AbstractInsnNode, Outputs] = {
+    val res = mutable.HashMap.empty[AbstractInsnNode, Outputs]
     for {
       insn <- methodNode.instructions.iterator.asScala
       frame = frameAt(insn)
       i <- inputValueSlots(insn)
       producer <- frame.getValue(i).insns.asScala
     } {
-      val producedSlots = outputValueSlots(producer)
-      val currentConsumers = res.getOrElse(producer, Vector.fill(producedSlots.size)(Set.empty[AbstractInsnNode]))
-      val outputIndex = producedSlots.indexOf(i)
-      res = res.updated(producer, currentConsumers.updated(outputIndex, currentConsumers(outputIndex) + insn))
+      val outputs = res.getOrElseUpdate(producer, new Outputs(outputValueSlots(producer)))
+      val outputIndex = outputs.slots.indexOf(i)
+      outputs.consumers(outputIndex) += insn
     }
     res
   }
@@ -458,6 +464,19 @@ abstract class InitialProducer extends AbstractInsnNode(-1) {
 case class ParameterProducer(local: Int)                                                extends InitialProducer
 case class UninitializedLocalProducer(local: Int)                                       extends InitialProducer
 case class ExceptionProducer[V <: Value](handlerLabel: LabelNode, handlerStackTop: Int) extends InitialProducer
+
+/** A `ProdConsAnalyzer` of a method as it is now, for the method-local optimizations that need one: they share it
+ *  until one of them changes the method, rather than each analyzing the same instructions again.
+ */
+final class ProdConsCache(methodNode: MethodNode, classInternalName: InternalName) {
+  private[this] var analyzer: ProdConsAnalyzer = null
+  def get: ProdConsAnalyzer = {
+    if (analyzer == null) analyzer = new ProdConsAnalyzer(methodNode, classInternalName)
+    analyzer
+  }
+  /** The method changed: the next `get` analyzes it again. */
+  def invalidate(): Unit = analyzer = null
+}
 
 class InitialProducerSourceInterpreter extends SourceInterpreter(scala.tools.asm.Opcodes.ASM7) {
   override def newParameterValue(isInstanceMethod: Boolean, local: Int, tp: Type): SourceValue = {
