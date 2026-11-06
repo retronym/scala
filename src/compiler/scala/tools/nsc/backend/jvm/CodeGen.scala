@@ -32,6 +32,7 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
     */
   def genUnit(unit: CompilationUnit): Unit = {
     val generatedClasses = ListBuffer.empty[GeneratedClass]
+    val onPool = currentRun.onPool(genBCode.phaseName)
 
     def genClassDef(cd: ClassDef): Unit = try {
       val sym = cd.symbol
@@ -57,7 +58,7 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
     def genClassDefs(tree: Tree): Unit = tree match {
       case EmptyTree => ()
       case PackageDef(_, stats) => stats foreach genClassDefs
-      case cd: ClassDef => frontendAccess.frontendSynch(genClassDef(cd))
+      case cd: ClassDef => if (onPool) genClassDef(cd) else frontendAccess.frontendSynch(genClassDef(cd))
       case x            => throw new MatchError(x)
     }
 
@@ -78,7 +79,9 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
   }
 
   def genMirrorClass(classSym: Symbol, unit: CompilationUnit): ClassNode = {
-    mirrorCodeGen.get.genMirrorClass(classSym, unit)
+    // the builder keeps the unit in a field
+    if (currentRun.onPool(genBCode.phaseName)) (new CodeGenImpl.JMirrorBuilder()).genMirrorClass(classSym, unit)
+    else mirrorCodeGen.get.genMirrorClass(classSym, unit)
   }
 
 

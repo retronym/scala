@@ -1449,6 +1449,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       }
 
     /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
+    /** Is this phase to run on the pool? */
+    private[nsc] def onPool(phaseName: String): Boolean = latePhases(phaseName)
+
     private[nsc] def runOnPool(ph: GlobalPhase): Boolean =
       if (latePhases(ph.name)) {
         // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol
@@ -1917,7 +1920,7 @@ object Global {
   /** The phases that `-Dscalac.parallelTyper.parallelLatePhases` (with no list) runs on the pool. */
   private val latePhasesOnPool: Set[String] = Set(
     "refchecks", "patmat", "uncurry", "fields", "tailcalls", "specialize", "explicitouter", "erasure", "posterasure",
-    "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy")
+    "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy", "jvm")
 
   def apply(settings: Settings, reporter: Reporter): Global = new Global(settings, reporter)
 

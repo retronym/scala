@@ -26,7 +26,7 @@ JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed '
 SCALAC_CP="$SNAP/compiler:$SNAP/library:$SNAP/reflect:$JARS"
 
 FULL="${FULL:-}"
-ORDERED="${ORDERED:-}"; case "$(basename "$CORPUS")" in parser-*) ORDERED=1;; esac
+ORDERED="${ORDERED:-}"; case "$(basename "$CORPUS")" in parser-*|late-neg-*) ORDERED=1;; esac
 args="$OUT/args"
 # the sources of an in-repo corpus are copied too, so that editing them during a run does not change it
 SRC="$OUT/src-snapshot"

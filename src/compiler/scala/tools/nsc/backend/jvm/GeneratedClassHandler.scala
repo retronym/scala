@@ -78,23 +78,56 @@ private[jvm] object GeneratedClassHandler {
         new AsyncWritingClassHandler(postProcessor, javaExecutor)
     }
 
+    // The jvm phase on the pool (`Run.onPool`) calls `process` on its workers, in any order. Where the order matters,
+    // the units are held and handed over in their order at the end: an inliner's call graph, a jar's entries, a
+    // virtual directory (not safe for two writers). Otherwise each worker post-processes and writes its own unit.
+    val onPool = currentRun.onPool(genBCode.phaseName)
+    val unitIndex: Map[AbstractFile, Int] = if (onPool) currentRun.units.map(_.source.file).zipWithIndex.toMap else Map.empty
+    handler.unitIndex = unitIndex
+    val outputs = settings.outputDirs.getSingleOutput.toList ++ settings.outputDirs.outputs.map(_._2)
     if (settings.optInlinerEnabled || settings.optClosureInvocations)
-      new GlobalOptimisingGeneratedClassHandler(postProcessor, handler)
+      new GlobalOptimisingGeneratedClassHandler(postProcessor, handler, unitIndex)
+    else if (onPool && outputs.exists(o => o.hasExtension("jar") || o.isVirtual))
+      new UnitOrderGeneratedClassHandler(postProcessor, handler, unitIndex)
     else handler
+  }
+
+  private abstract class HoldingGeneratedClassHandler(unitIndex: Map[AbstractFile, Int]) extends GeneratedClassHandler {
+    private val generatedUnits = ListBuffer.empty[GeneratedCompilationUnit]
+
+    def process(unit: GeneratedCompilationUnit): Unit = generatedUnits.synchronized(generatedUnits += unit)
+
+    protected def takeUnits(): List[GeneratedCompilationUnit] = generatedUnits.synchronized {
+      val all = generatedUnits.result()
+      generatedUnits.clear()
+      if (unitIndex.isEmpty) all else all.sortBy(u => unitIndex.getOrElse(u.sourceFile, Int.MaxValue))
+    }
+  }
+
+  private final class UnitOrderGeneratedClassHandler(
+      val postProcessor: PostProcessor,
+      underlying: WritingClassHandler,
+      unitIndex: Map[AbstractFile, Int])
+    extends HoldingGeneratedClassHandler(unitIndex) {
+
+    def complete(): Unit = {
+      takeUnits().foreach(underlying.process)
+      underlying.complete()
+    }
+
+    override def close(): Unit = underlying.close()
+
+    override def toString: String = s"UnitOrder[$underlying]"
   }
 
   private class GlobalOptimisingGeneratedClassHandler(
       val postProcessor: PostProcessor,
-      underlying: WritingClassHandler)
-    extends GeneratedClassHandler {
-
-    private val generatedUnits = ListBuffer.empty[GeneratedCompilationUnit]
-
-    def process(unit: GeneratedCompilationUnit): Unit = generatedUnits += unit
+      underlying: WritingClassHandler,
+      unitIndex: Map[AbstractFile, Int])
+    extends HoldingGeneratedClassHandler(unitIndex) {
 
     def complete(): Unit = {
-      val allGeneratedUnits = generatedUnits.result()
-      generatedUnits.clear()
+      val allGeneratedUnits = takeUnits()
       postProcessor.runGlobalOptimizations(allGeneratedUnits)
       allGeneratedUnits.foreach(underlying.process)
       underlying.complete()
@@ -117,8 +150,11 @@ private[jvm] object GeneratedClassHandler {
     def process(unit: GeneratedCompilationUnit): Unit = {
       val unitInPostProcess = new CompilationUnitInPostProcess(unit.classes, unit.sourceFile)
       postProcessUnit(unitInPostProcess)
-      processingUnits += unitInPostProcess
+      processingUnits.synchronized(processingUnits += unitInPostProcess)
     }
+
+    /** With the jvm phase on the pool: the position of a source file among the units, for the order of the reports. */
+    var unitIndex: Map[AbstractFile, Int] = Map.empty
 
     protected implicit val executionContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(javaExecutor)
 
@@ -135,9 +171,12 @@ private[jvm] object GeneratedClassHandler {
     }
 
     protected def takeProcessingUnits(): List[CompilationUnitInPostProcess] = {
-      val result = processingUnits.result()
-      processingUnits.clear()
-      result
+      val result = processingUnits.synchronized {
+        val units = processingUnits.result()
+        processingUnits.clear()
+        units
+      }
+      if (unitIndex.isEmpty) result else result.sortBy(u => unitIndex.getOrElse(u.sourceFile, Int.MaxValue))
     }
 
     final def complete(): Unit = {

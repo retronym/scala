@@ -432,7 +432,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
      *  must-single-thread
      */
     def getAnnotPickle(@unused jclassName: String, sym: Symbol): Option[AnnotationInfo] = {
-      currentRun.symData get sym match {
+      lockedIfConcurrent(currentRun.symData)(currentRun.symData get sym) match {
         case Some(pickle) if !sym.isModuleClass => // pickles for module classes are in the companion / mirror class
           val scalaAnnot = {
             val sigBytes = new ScalaSigBytes(pickle.bytes.take(pickle.writeIndex))
@@ -445,8 +445,11 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
             }
             AnnotationInfo(annTp, Nil, (nme.bytes, arg) :: Nil)
           }
-          currentRun.symData -= sym
-          currentRun.symData -= sym.companionSymbol
+          val companion = sym.companionSymbol
+          lockedIfConcurrent(currentRun.symData) {
+            currentRun.symData -= sym
+            currentRun.symData -= companion
+          }
           Some(scalaAnnot)
         case _ =>
           None

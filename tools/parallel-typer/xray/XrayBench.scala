@@ -26,12 +26,15 @@ object XrayBench {
     case n        => List("-Yparallel-typer", "-Yparallel-typer-threads", n.toInt.toString)
   }
 
+  // -Dxray.full: every phase, to class files in a temporary directory
+  private val stopOptions = if (System.getProperty("xray.full") != null) Nil else List("-Ystop-after:pickler")
+
   /** One compilation; its wall time in ms and its error count. */
   private def compile(config: String, files: List[String]): (Double, Int) = {
     val s = new Settings(msg => sys.error(msg))
     s.usejavacp.value = true
     val out = Files.createTempDirectory("xray")
-    val (ok, rest) = s.processArguments(List("-Ystop-after:pickler", "-d", out.toString) ++ options(config) ++ files, processAll = true)
+    val (ok, rest) = s.processArguments(stopOptions ++ List("-d", out.toString) ++ options(config) ++ files, processAll = true)
     assert(ok, rest)
     val reporter = new StoreReporter(s)
     val g = new Global(s, reporter)
@@ -65,7 +68,7 @@ object XrayBench {
       tl.meta.put("corpus", corpus)
       tl.meta.put("config", c)
       tl.meta.put("threads", if (c == "serial") "0" else c)
-      tl.meta.put("flags", ("-Ystop-after:pickler" :: options(c) ++ files.filter(_.startsWith("-"))).mkString(" "))
+      tl.meta.put("flags", (stopOptions ++ options(c) ++ files.filter(_.startsWith("-"))).mkString(" "))
       tl.meta.put("sources", files.count(f => f.endsWith(".scala") || f.endsWith(".java")).toString)
       tl.meta.put("warmup", warmup.toString)
       ParallelTyperTimeline.current = tl
