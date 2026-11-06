@@ -40,7 +40,7 @@ class GlbLubsTest {
       val completer = new LazyType {
         override def complete(sym: Symbol): Unit = {
           lub(List(IntTpe, StringTpe))
-          assertTrue("a completer has its own tables", lubResults.isEmpty)
+          assertTrue("a completer has its own tables", glbLubs.lubResults.isEmpty)
           guardKept = Some(outerFrame.lubs.isInProgress((outerDepth(ts), ts)))
           sym.setInfo(NullaryMethodType(AnyTpe))
         }
@@ -48,7 +48,7 @@ class GlbLubsTest {
       ts = classes(AnyTpe, _ => completer, NullaryMethodType(_))
       outer(ts)
       assertEquals(Some(true), guardKept)
-      assertTrue(lubResults.isEmpty)
+      assertTrue(glbLubs.lubResults.isEmpty)
     }
     check(lub(_), lubDepth)
     check(lub(_, Depth(3)), _ => Depth(3))
