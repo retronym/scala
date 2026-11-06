@@ -1877,9 +1877,26 @@ trait Types
     false
   }
 
+  /** A base type computation in progress on this thread, and the period it began in. */
+  private final class BaseTypesInProgress(val tpe: AnyRef, val period: Period)
+  private def markBaseTypes(xs: List[AnyRef], tpe: AnyRef): List[AnyRef] = new BaseTypesInProgress(tpe, currentPeriod) :: xs
+  /** Is a re-entry for `tpe` a cycle? As in the serial protocol, which stamps the period before it computes: only if the
+   *  innermost computation of `tpe` is valid at this phase. An info transformer that runs inside the computation can ask
+   *  for the same type at an earlier phase, across a phase that changes base classes (`Fields.transformInfo`, through
+   *  `memberType` at uncurry): that is a computation of its own, not a cycle. */
+  private def baseTypesCycle(xs: List[AnyRef], tpe: AnyRef): Boolean = {
+    var ys = xs
+    while (ys ne Nil) {
+      val m = ys.head.asInstanceOf[BaseTypesInProgress]
+      if (m.tpe eq tpe) return isValidForBaseClasses(m.period)
+      ys = ys.tail
+    }
+    false
+  }
+
   private def concurrentBaseTypeSeqOfTypeRef(tpe: TypeRef): BaseTypeSeq = {
     val s = scratch
-    if (inProgress(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
+    if (baseTypesCycle(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
     val period = tpe.baseTypeSeqPeriod
     val cache = tpe.baseTypeSeqCache
     if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
@@ -1887,7 +1904,7 @@ trait Types
       cache
     } else {
       val saved = s.btsInProgress
-      s.btsInProgress = tpe :: saved
+      s.btsInProgress = markBaseTypes(saved, tpe)
       try {
         val bts = tpe.baseTypeSeqImpl
         tpe.baseTypeSeqCache = bts
@@ -1899,7 +1916,7 @@ trait Types
 
   private def concurrentParentsOfTypeRef(tpe: TypeRef): List[Type] = {
     val s = scratch
-    if (inProgress(s.parentsInProgress, tpe)) return tpe.parentsCache
+    if (baseTypesCycle(s.parentsInProgress, tpe)) return tpe.parentsCache
     val period = tpe.parentsPeriod
     val cache = tpe.parentsCache
     if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
@@ -1907,7 +1924,7 @@ trait Types
       cache
     } else {
       val saved = s.parentsInProgress
-      s.parentsInProgress = tpe :: saved
+      s.parentsInProgress = markBaseTypes(saved, tpe)
       try {
         val ps = tpe.parentsImpl
         tpe.parentsCache = ps
@@ -1919,7 +1936,7 @@ trait Types
 
   private def concurrentBaseTypeSeqOfCompoundType(tpe: CompoundType): BaseTypeSeq = {
     val s = scratch
-    if (inProgress(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    if (baseTypesCycle(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
     val period = tpe.baseTypeSeqPeriod
     val cache = tpe.baseTypeSeqCache
     if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
@@ -1927,7 +1944,7 @@ trait Types
       cache
     } else {
       val saved = s.btsInProgress
-      s.btsInProgress = tpe :: saved
+      s.btsInProgress = markBaseTypes(saved, tpe)
       try {
         val bts =
           if (tpe.parents exists typeContainsTypeVar) compoundBaseTypeSeqWithTypeVars(tpe)
@@ -1941,7 +1958,7 @@ trait Types
 
   private def concurrentBaseClassesOfCompoundType(tpe: CompoundType): List[Symbol] = {
     val s = scratch
-    if (inProgress(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+    if (baseTypesCycle(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
     val period = tpe.baseClassesPeriod
     val cache = tpe.baseClassesCache
     if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
@@ -1949,7 +1966,7 @@ trait Types
       cache
     } else {
       val saved = s.baseClassesInProgress
-      s.baseClassesInProgress = tpe :: saved
+      s.baseClassesInProgress = markBaseTypes(saved, tpe)
       try {
         val bcs = tpe.memo(computeBaseClasses(tpe))(tpe.typeSymbol :: _.baseClasses.tail)
         tpe.baseClassesCache = bcs
