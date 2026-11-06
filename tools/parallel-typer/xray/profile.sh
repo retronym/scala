@@ -52,7 +52,7 @@ case "$CORPUS" in
 esac
 
 BIN="$WORK/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
-java -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayProfile.scala"
+java -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala" "$HERE/XrayProfile.scala"
 
 JVM=(java -Xss64m -Xms6g -Xmx6g "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
   -Dscalac.parallelTyper.xray.completionSpans=true ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS")

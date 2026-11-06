@@ -29,8 +29,23 @@ object XrayBench {
   // -Dxray.full: every phase, to class files in a temporary directory
   private val stopOptions = if (System.getProperty("xray.full") != null) Nil else List("-Ystop-after:pickler")
 
+  // -Dxray.disk: the classpath and the sources from the file system and the output to it, as scalac from a shell.
+  // By default nothing is on disk during a compilation (XrayMemory.scala).
+  private val onDisk = System.getProperty("xray.disk") != null
+
   /** One compilation; its wall time in ms and its error count. */
-  def compile(config: String, files: List[String]): (Double, Int) = {
+  def compile(config: String, files: List[String]): (Double, Int) =
+    if (onDisk) compileOnDisk(config, files)
+    else {
+      val (g, reporter, sources) = scala.tools.nsc.xray.InMemory.compiler(stopOptions ++ options(config) ++ files)
+      val run = new g.Run
+      val t0 = System.nanoTime()
+      run.compileSources(sources)
+      val t1 = System.nanoTime()
+      ((t1 - t0) / 1e6, reporter.infos.count(_.severity == reporter.ERROR))
+    }
+
+  private def compileOnDisk(config: String, files: List[String]): (Double, Int) = {
     val s = new Settings(msg => sys.error(msg))
     s.usejavacp.value = true
     val out = Files.createTempDirectory("xray")

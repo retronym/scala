@@ -151,8 +151,12 @@ details summary { cursor: pointer; color: var(--dim); }
 <script id="xray-analysis">
 // The analysis: pure functions over a run's JSON (see README.md), shared with summary.js.
 var XR = (function () {
-  const STEPS = ['setup', 'parser', 'namer', 'packageobjects', 'signatures', 'annotations', 'lazy vals', 'typer', 'superaccessors', 'extmethods', 'pickler'];
-  const STEP_COLORS = { setup: '#9aa0a6', parser: '#8e6bd8', namer: '#b072d6', packageobjects: '#c995dc', signatures: '#f08b3a', annotations: '#e3b23c', 'lazy vals': '#a87742', typer: '#4c8bf5', superaccessors: '#2aa198', extmethods: '#5aa469', pickler: '#22a6c7', other: '#8d939a' };
+  const STEPS = ['setup', 'parser', 'namer', 'packageobjects', 'class headers', 'signatures', 'annotations', 'lazy vals', 'typer', 'superaccessors', 'extmethods', 'pickler', 'refchecks', 'patmat', 'uncurry', 'fields', 'tailcalls', 'specialize', 'explicitouter', 'erasure', 'posterasure', 'lambdalift', 'constructors', 'flatten', 'mixin', 'cleanup', 'delambdafy', 'jvm'];
+  const STEP_COLORS = { setup: '#9aa0a6', parser: '#8e6bd8', namer: '#b072d6', packageobjects: '#c995dc', signatures: '#f08b3a', annotations: '#e3b23c', 'lazy vals': '#a87742', typer: '#4c8bf5', superaccessors: '#2aa198', extmethods: '#5aa469', pickler: '#22a6c7', other: '#8d939a',
+    // the phases after the pickler, each its own hue, so that a worker's lane reads as a sequence of steps
+    'class headers': '#e67700', refchecks: '#d6336c', patmat: '#f783ac', uncurry: '#ae3ec9', fields: '#7048e8', tailcalls: '#4263eb',
+    specialize: '#1098ad', explicitouter: '#0ca678', erasure: '#e8590c', posterasure: '#f59f00', lambdalift: '#74b816',
+    constructors: '#37b24d', flatten: '#99582a', mixin: '#c2255c', cleanup: '#5f3dc4', delambdafy: '#1c7ed6', jvm: '#2b8a3e' };
   const STEP_NAMES = { typer: 'typer bodies', signatures: 'signatures pre-pass', annotations: 'annotation sub-pass', 'lazy vals': 'lazy-val forcing' };
   // causes of a stretch where at most one thread works
   const CAUSE_COLORS = { 'lock convoy': '#e03131', 'tail': '#868e96', 'GC': '#5c6168' };
@@ -180,7 +184,7 @@ var XR = (function () {
     const pop = (m) => { let n = 0; for (let b = 0; b < 53; b++) if (Math.floor(m / Math.pow(2, b)) % 2) n++; return n; };
     for (let i = 0; i < s.length; i += 8) r.sites.push({ site: S[s[i]], n: s[i + 1], holdT: ms(s[i + 2]), holdMax: ms(s[i + 3]), waits: s[i + 4], waitT: ms(s[i + 5]), waitMax: ms(s[i + 6]), waiters: pop(s[i + 7]) });
     const typer = r.phases.find((p) => p.name === 'typer');
-    r.workers = r.threads.map((n, i) => /^scalac-typer-\d+$/.test(n) ? i : -1).filter((i) => i >= 0);
+    r.workers = r.threads.map((n, i) => /^scalac-(typer|worker)-\d+$/.test(n) ? i : -1).filter((i) => i >= 0); // one pool for every step, or (older recordings) the typer's own
     r.N = r.workers.length;
     r.config = r.meta.config || (r.N ? String(r.N) : 'serial');
     r.corpus = r.meta.corpus || 'run';
@@ -192,13 +196,13 @@ var XR = (function () {
     const extra = [];
     if (r.phases.length && r.phases[0].t0 > 0) extra.push({ tid: main, step: 'setup', label: 'Global and Run, before the first phase', t0: 0, t1: r.phases[0].t0, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
     const isWorker = {}; for (const t of r.workers) isWorker[t] = true;
-    const bodySpans = r.spans.filter((x) => isWorker[x.tid]);
+    const bodySpans = r.spans.filter((x) => isWorker[x.tid] && x.step === 'typer');
     const wFirst = Math.min(...bodySpans.map((x) => x.t0), Infinity);
     const wLast = r.idle.length ? Math.max(...r.idle.map((x) => x.t0)) : Math.max(...bodySpans.map((x) => x.t1), -Infinity);
     r.window = r.N ? { t0: wFirst, t1: Math.max(wLast, wFirst) } : null;
     // the stretches in which a pool runs (the bodies, and each other step that runs a unit per task): the main thread waits
     const poolOf = {};
-    for (const x of r.spans) if (x.tid !== main && !isWorker[x.tid]) { const k = r.threads[x.tid].replace(/-\d+$/, ''); const p = poolOf[k] || (poolOf[k] = { t0: x.t0, t1: x.t1, step: x.step }); p.t0 = Math.min(p.t0, x.t0); p.t1 = Math.max(p.t1, x.t1); }
+    for (const x of r.spans) if (x.tid !== main && !(isWorker[x.tid] && x.step === 'typer')) { const k = x.step; const p = poolOf[k] || (poolOf[k] = { t0: x.t0, t1: x.t1, step: x.step }); p.t0 = Math.min(p.t0, x.t0); p.t1 = Math.max(p.t1, x.t1); }
     r.pools = Object.values(poolOf).concat(r.window ? [r.window] : []).sort((p, q) => p.t0 - q.t0);
     for (const p of r.phases) {
       let t = p.t0;
@@ -332,7 +336,7 @@ var XR = (function () {
   }
 
   // the ordered parts of the bar
-  const BAR_ORDER = ['setup', 'parser', 'namer', 'packageobjects', 'signatures', 'annotations', 'lazy vals', 'typer', 'work', 'hold, others waiting', 'descheduled or blocked', 'lock wait', 'idle worker', 'GC', 'superaccessors', 'extmethods', 'pickler'];
+  const BAR_ORDER = ['setup', 'parser', 'namer', 'packageobjects', 'class headers', 'signatures', 'annotations', 'lazy vals', 'typer', 'work', 'hold, others waiting', 'descheduled or blocked', 'lock wait', 'idle worker', 'GC'].concat(STEPS.slice(STEPS.indexOf('superaccessors')));
   const BAR_COLORS = { work: '#4c8bf5', 'hold, others waiting': '#17171a', 'descheduled or blocked': '#a9c4f7', 'lock wait': '#e03131', 'idle worker': '#d5d7db', GC: '#5c6168' };
   const barColor = (k) => BAR_COLORS[k] || stepColor(k);
   function barParts(r) { const b = analyse(r).bar; const ks = Object.keys(b).sort((p, q) => { const i = BAR_ORDER.indexOf(p), j = BAR_ORDER.indexOf(q); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); }); return ks.map((k) => ({ k, ms: b[k] })).filter((x) => x.ms > 0.05); }
@@ -597,7 +601,7 @@ if (typeof module !== 'undefined') module.exports = XR;
   function lanes() {
     const r = cur, out = [{ kind: 'phases', h: 16, name: 'phases' }];
     out.push({ kind: 'thread', tid: r.main, h: 22, name: 'main' });
-    for (const t of r.workers.slice().sort((p, q) => +r.threads[p].replace(/\D/g, '') - +r.threads[q].replace(/\D/g, ''))) out.push({ kind: 'thread', tid: t, h: 22, name: r.threads[t].replace('scalac-typer-', 'worker ') });
+    for (const t of r.workers.slice().sort((p, q) => +r.threads[p].replace(/\D/g, '') - +r.threads[q].replace(/\D/g, ''))) out.push({ kind: 'thread', tid: t, h: 22, name: r.threads[t].replace(/^scalac-(typer|worker)-/, 'worker ') });
     r.threads.forEach((n, t) => { if (t !== r.main && !r.workers.includes(t)) out.push({ kind: 'thread', tid: t, h: 22, name: n }); });
     out.push({ kind: 'gc', h: 12, name: 'GC' });
     let y = 18; for (const l of out) { l.y = y; y += l.h + 3; }
@@ -819,7 +823,7 @@ if (typeof module !== 'undefined') module.exports = XR;
       whats.map((e) => ({ e, cells: [esc(e.what || '—'), esc(e.site), fmt(e.caused), fmt(e.held), e.n, e.waiters] })),
       (row) => { const h = row.e.longest; zoomTo(h.t0 - (h.t1 - h.t0) * 2 - 0.5, h.t1 + (h.t1 - h.t0) * 2 + 0.5); });
     const bodies = r.spans.filter((x) => x.step === 'typer');
-    const name = (x) => r.threads[x.tid].replace('scalac-typer-', 'w');
+    const name = (x) => r.threads[x.tid].replace(/^scalac-(typer|worker)-/, 'w');
     const unitRow = (x) => ({ x, cells: [esc(x.label), name(x), fmt(x.t1 - x.t0), x.cpu >= 0 ? fmt(x.cpu) : '', fmt(x.lw), fmt(x.lh)] });
     const uh = [['unit', 'l'], ['thread', 'l'], ['wall'], ['CPU'], ['lock wait'], ['lock held']];
     const zoomSpan = (row) => { const x = row.x; zoomTo(x.t0 - (x.t1 - x.t0) * .2, x.t1 + (x.t1 - x.t0) * .2); };
@@ -842,13 +846,15 @@ if (typeof module !== 'undefined') module.exports = XR;
     const maxN = Math.max(...pts.map((q) => q.N), 2), W = 440, H = 240, Lp = 36, Rp = 34, Tp = 20, Bp = 30;
     const sp = (q) => base.wall / q.wall;
     const am = ref.one ? (n) => XR.amdahl(ref.one, n) : null;
-    const maxY = Math.max(2, ...pts.map(sp), Math.min(maxN, 4)) * 1.1;
+    // room for the Amdahl bound at the largest thread count as well as for the points
+    const maxY = Math.max(2, ...pts.map(sp), Math.min(maxN, 4), am ? am(maxN).bound * (ref.one ? base.wall / ref.one.wall : 1) : 0) * 1.1;
     const x = (n) => Lp + n / maxN * (W - Lp - Rp), y = (v) => H - Bp - v / maxY * (H - Tp - Bp);
     let g = '';
     for (let v = 0; v <= maxY; v += maxY > 6 ? 2 : 1) g += `<line x1="${Lp}" x2="${W - Rp}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${Lp - 4}" y="${y(v) + 4}" text-anchor="end">${v}×</text>`;
     for (let n = 0; n <= maxN; n++) g += `<text x="${x(n)}" y="${H - Bp + 14}" text-anchor="middle"${pts.some((q) => q.N === n) ? ' class="lab"' : ''}>${n}</text>`;
     g += `<text x="${(Lp + W - Rp) / 2}" y="${H - 4}" text-anchor="middle">typer threads</text><text x="4" y="11">speed-up vs ${ref.serial ? 'serial compiler' : '1 thread'}</text>`;
-    const curve = (f) => { let d = ''; for (let n = 1; n <= maxN; n += 0.25) d += `${d ? 'L' : 'M'}${x(n)},${y(Math.min(maxY, f(n)))}`; return d; };
+    // a curve ends where it leaves the plot: held at the top edge it read as a plateau
+    const curve = (f) => { let d = ''; for (let n = 1; n <= maxN && f(n) <= maxY; n += 0.25) d += `${d ? 'L' : 'M'}${x(n)},${y(f(n))}`; return d; };
     const k1 = ref.one ? base.wall / ref.one.wall : 1; // the one-thread run against the baseline
     // the curves are named in a legend under the plot, not on it, where their labels ran into each other and the points
     const key = [['measured', 'var(--active)', '']];
