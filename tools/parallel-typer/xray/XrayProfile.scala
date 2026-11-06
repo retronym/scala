@@ -14,8 +14,8 @@
 // onto it: from the span around it to the span of that step and unit, proportionally, on that span's thread. Filtering
 // by step, unit or span is then exact, and a window of time means the same work in every compilation.
 //
-// A config is `<threads>` (CPU profile), `<threads>-wall` (wall clock profile), or `serial`, which is recorded without
-// a profile as the baseline of the speed-ups. With --overhead, the same config in turn with nothing on, the timeline,
+// A config is `<threads>` (CPU profile), `<threads>-wall` (wall clock profile), `serial`, which is recorded without
+// a profile as the baseline of the speed-ups, or `serial-cpu`, the serial compiler with a CPU profile. With --overhead, the same config in turn with nothing on, the timeline,
 // and the timeline with each profile.
 import java.nio.file.{Files, Path, Paths}
 import java.nio.charset.StandardCharsets.UTF_8
@@ -39,13 +39,14 @@ object XrayProfile {
   def record(argsFile: String, out: Path, corpus: String, warmup: Int, repeats: Int, cpu: String, wall: String, configs: List[String]): Unit = {
     val files = XrayBench.fileArgs(argsFile)
     Files.createDirectories(out)
-    val compiled = configs.map(_.stripSuffix("-wall")).distinct
+    def compilerConfig(c: String) = c.stripSuffix("-wall").stripSuffix("-cpu")
+    val compiled = configs.map(compilerConfig).distinct
     XrayBench.warm(compiled, files, warmup)
     val jsons = for (c <- configs) yield {
       System.gc()
       val profiled = c != "serial"
       val isWall = c.endsWith("-wall")
-      val threads = c.stripSuffix("-wall")
+      val threads = compilerConfig(c)
       val jfr = out.resolve(s"run-$c.jfr")
       if (isWall) startProfiler("wall", wall, jfr)
       else if (profiled) startProfiler("cpu", cpu, jfr)
@@ -60,7 +61,7 @@ object XrayProfile {
       val (tl, ms, errors) = compilations.sortBy(_._2).apply(compilations.length / 2)
       tl.meta.put("corpus", corpus)
       tl.meta.put("config", c)
-      tl.meta.put("threads", if (c == "serial") "0" else threads)
+      tl.meta.put("threads", if (threads == "serial") "0" else threads)
       tl.meta.put("flags", ("-Ystop-after:pickler" :: XrayBench.options(threads) ++ files.filter(_.startsWith("-"))).mkString(" "))
       tl.meta.put("sources", files.count(f => f.endsWith(".scala") || f.endsWith(".java")).toString)
       tl.meta.put("warmup", warmup.toString)
