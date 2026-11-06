@@ -87,6 +87,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   val phaseName: String = "fields"
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer = new FieldsTransformer(unit)
+  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
   override def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tp
     else synthFieldsAndAccessors(tp)

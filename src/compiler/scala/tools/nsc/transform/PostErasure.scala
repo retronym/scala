@@ -26,6 +26,7 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new PostErasureTransformer(unit)
   override def changesBaseClasses = false
+  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
 
   class PostErasureTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     override def transform(tree: Tree) = {

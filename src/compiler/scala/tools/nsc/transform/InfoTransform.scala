@@ -35,6 +35,8 @@ trait InfoTransform extends Transform {
 
   protected def changesBaseClasses = true
   protected def keepsTypeParams = true
+  /** See `InfoTransformer.isLocalFor`. */
+  protected def infoTransformIsLocal(sym: Symbol): Boolean = false
 
   @nowarn("""cat=deprecation&origin=scala\.tools\.nsc\.transform\.InfoTransform\.Phase""")
   final type InfoPhase = Phase
@@ -50,6 +52,7 @@ trait InfoTransform extends Transform {
         val pid = id
         val changesBaseClasses = InfoTransform.this.changesBaseClasses
         def transform(sym: Symbol, tpe: Type): Type = transformInfo(sym, tpe)
+        override def isLocalFor(sym: Symbol): Boolean = infoTransformIsLocal(sym)
       }
       infoTransformers insert infoTransformer
     }
