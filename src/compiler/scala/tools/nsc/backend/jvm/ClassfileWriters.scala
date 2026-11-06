@@ -329,8 +329,10 @@ abstract class ClassfileWriters {
       finally out.close()
     }
 
+    // One lock for the tree of directories, which is not safe for two writers (`VirtualDirectory.files`): a worker
+    // of the jvm phase, or of `-Ybackend-parallelism`. The file's bytes are written outside it, into a file of its own.
     override def writeFile(relativePath: String, bytes: Array[Byte]): Unit = {
-      val outFile = getFile(base, relativePath)
+      val outFile = base.synchronized(getFile(base, relativePath))
       writeBytes(outFile, bytes)
     }
     override def close(): Unit = ()
