@@ -50,6 +50,7 @@ abstract class LambdaLift extends InfoTransform {
     mapFrom(allRefClasses.toList)(x => getMemberMethod(x.companionModule, nme.zero))
   }
 
+  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
   def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isCapturedVariable) capturedVariableType(sym, tpe = lifted(tp), erasedTypes = true)
     else lifted(tp)

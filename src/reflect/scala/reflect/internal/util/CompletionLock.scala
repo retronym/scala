@@ -191,8 +191,6 @@ object CompletionLock {
   lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.serialSignatures") == null
   /** The label of a completion's acquisition. */
   val completing: What = new What("completing a symbol", null)
-  /** The label of an info transform's claim on a symbol. */
-  val transforming: What = new What("transforming the info of a symbol", null)
   /** The label of a wait for another thread's completion. */
   val waiting: What = new What("waiting for a completion", null)
   /** The claim of everything that is not a source symbol's completion: the classpath (loaders, unpickler, classfile
