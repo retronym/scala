@@ -6,7 +6,9 @@ import org.junit.Test
 import scala.tools.testkit.BytecodeTesting
 
 class InferTest extends BytecodeTesting {
-  import compiler.global._, analyzer._, typer.infer._
+  import compiler.global._, analyzer._
+  private lazy val inferer = typer.infer
+  import inferer._
 
   class D[T]
   class A

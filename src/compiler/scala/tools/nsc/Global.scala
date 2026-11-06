@@ -197,7 +197,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with AstTreeGen {
     def mkAttributedCast(tree: Tree, pt: Type): Tree =
-      typer.typed(mkCast(tree, pt))
+      typerHere.typed(mkCast(tree, pt))
   }
 
   /** A spare instance of TreeBuilder left for backwards compatibility. */
@@ -744,9 +744,16 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with TreeCheckers
 
+  // A typer with no unit, for phases and tree generators that have none at hand. A stable path, since macros and plugins
+  // import from it. It has a context, which typing writes to, so the compiler itself asks for `typerHere`.
   object typer extends analyzer.Typer(
     analyzer.NoContext.make(EmptyTree, RootClass, newScope)
   )
+  private[this] lazy val typerPerThread = perThread[analyzer.Typer] {
+    new analyzer.Typer(analyzer.NoContext.make(EmptyTree, RootClass, newScope)) {}
+  }
+  /** `typer`, or under `-Yparallel-typer` this thread's own. */
+  def typerHere: analyzer.Typer = if (isConcurrentCompiler) typerPerThread.get else typer
 
   /** Add the internal compiler phases to the phases set.
    *  This implementation creates a description map at the same time.
@@ -1441,9 +1448,25 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       }
     private[this] var ranFused: Set[Phase] = Set.empty
 
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelLatePhases[=all|<phase>,<phase>,...]: the phases after the
+    // pickler a unit per task on the pool, each a pool step of its own. A list of names is for bisection.
+    private[this] val latePhases: Set[String] =
+      if (!settings.YparallelTyper.value) Set.empty
+      else System.getProperty("scalac.parallelTyper.parallelLatePhases") match {
+        case null | "false" => Set.empty
+        case "" | "all" | "true" => Global.latePhasesOnPool
+        case names => names.split(",").toSet
+      }
+
     /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
     private[nsc] def runOnPool(ph: GlobalPhase): Boolean =
-      if (postTyperGroups.isEmpty) false
+      if (latePhases(ph.name)) {
+        // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol
+        phaseDescriptors.find(_.phaseName == ph.name).foreach(analyzer.forceLazyValsOf)
+        analyzer.parallelPhase(ph, units.toList, ph.name, unitOrder = true)(ph.applyPhase(_))
+        true
+      }
+      else if (postTyperGroups.isEmpty) false
       else if (ranFused(ph)) true
       else postTyperGroups.find(_.head == ph.name) match {
         case Some(group) =>
@@ -1898,6 +1921,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 }
 
 object Global {
+  /** The phases that `-Dscalac.parallelTyper.parallelLatePhases` (with no list) runs on the pool. */
+  private val latePhasesOnPool: Set[String] = Set(
+    "refchecks", "patmat", "uncurry", "fields", "tailcalls", "specialize", "explicitouter", "erasure", "posterasure",
+    "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy")
+
   def apply(settings: Settings, reporter: Reporter): Global = new Global(settings, reporter)
 
   def apply(settings: Settings): Global = new Global(settings, Reporter(settings))

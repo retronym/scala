@@ -1441,9 +1441,11 @@ trait Types
 
     @volatile private[reflect] var underlyingCache: Type = NoType
     @volatile private[reflect] var underlyingPeriod = NoPeriod
+    private[reflect] var underlyingStamped: Stamped[Type] = null
     private[Types] def invalidateSingleTypeCaches(): Unit = {
       underlyingCache = NoType
       underlyingPeriod = NoPeriod
+      underlyingStamped = null
     }
     override def underlying: Type = {
       val cache = underlyingCache
@@ -1620,11 +1622,15 @@ trait Types
     private[reflect] var baseTypeSeqPeriod = NoPeriod
     private[reflect] var baseClassesCache: List[Symbol] = _
     private[reflect] var baseClassesPeriod = NoPeriod
+    private[reflect] var baseTypeSeqStamped: Stamped[BaseTypeSeq] = null
+    private[reflect] var baseClassesStamped: Stamped[List[Symbol]] = null
     private[Types] def invalidatedCompoundTypeCaches(): Unit = {
       baseTypeSeqCache = null
       baseTypeSeqPeriod = NoPeriod
       baseClassesCache = null
       baseClassesPeriod = NoPeriod
+      baseTypeSeqStamped = null
+      baseClassesStamped = null
     }
 
     override def baseTypeSeq: BaseTypeSeq = {
@@ -1828,135 +1834,141 @@ trait Types
   // sees a new stamp with the previous value reads a value that is valid for the same reason; one that sees no
   // value takes this slow path. A re-entry answers as the serial protocol would at that point: an error for the
   // base type sequences and base classes, the field as it is for `parents` and `underlying`.
-  // `-Dscalac.parallelTyper.lockedTypeCaches` puts the serial protocol back under the completion lock.
+  //
+  // A value and its period are one object (`Stamped`), read and written as one, and the serial fields stay empty, so
+  // that the serial fast paths fall through to here at no cost to a serial compiler. Past the pickler a stale pair is
+  // a wrong answer, not the same answer: a transformer changes base classes, and two threads at different phases
+  // (phase travel) write the same cache.
+  // `-Dscalac.parallelTyper.lockedTypeCaches` puts the serial protocol back under the completion lock; it does not
+  // support the phases after the pickler on the pool (`parallelLatePhases`), for that reason.
 
   private[this] lazy val lockedTypeCaches: Boolean = System.getProperty("scalac.parallelTyper.lockedTypeCaches") != null
   @inline final def lockFreeTypeCaches: Boolean = isConcurrentCompiler && !lockedTypeCaches
 
-  @inline private def inProgress(xs: List[AnyRef], x: AnyRef): Boolean = {
-    var ys = xs
-    while (ys ne Nil) { if (ys.head eq x) return true; ys = ys.tail }
-    false
-  }
+  /** A cached value and the period it was computed in: immutable, so that a reader gets the two as a pair. */
+  private[reflect] final class Stamped[+T](val value: T, val period: Period)
+  private final class StampedRelativeInfo(val value: Type, val period: Period, val symInfo: Type)
 
-  /** A base type computation in progress on this thread, and the period it began in. */
-  private final class BaseTypesInProgress(val tpe: AnyRef, val period: Period)
-  private def markBaseTypes(xs: List[AnyRef], tpe: AnyRef): List[AnyRef] = new BaseTypesInProgress(tpe, currentPeriod) :: xs
-  /** Is a re-entry for `tpe` a cycle? As in the serial protocol, which stamps the period before it computes: only if the
-   *  innermost computation of `tpe` is valid at this phase. An info transformer that runs inside the computation can ask
-   *  for the same type at an earlier phase, across a phase that changes base classes (`Fields.transformInfo`, through
-   *  `memberType` at uncurry): that is a computation of its own, not a cycle. */
-  private def baseTypesCycle(xs: List[AnyRef], tpe: AnyRef): Boolean = {
+  // The serial protocol's marker is in the cache, under the period that set it: a re-entry at a phase for which that
+  // period is valid sees the marker, a cycle. A re-entry at a phase past a change (an info transform that asks for
+  // the same type at its own phase, from within the computation of this one at a later phase) recomputes. So an entry
+  // here is a type with the period of the computation in progress, and the innermost entry for a type decides, since
+  // its stamp is the one the serial cache would hold.
+  private def inProgressForBaseClasses(xs: List[AnyRef], x: AnyRef): Boolean = {
     var ys = xs
     while (ys ne Nil) {
-      val m = ys.head.asInstanceOf[BaseTypesInProgress]
-      if (m.tpe eq tpe) return isValidForBaseClasses(m.period)
+      val y = ys.head.asInstanceOf[Stamped[AnyRef]]
+      if (y.value eq x) return y.period == currentPeriod || isValidForBaseClasses(y.period)
+      ys = ys.tail
+    }
+    false
+  }
+  private[reflect] def inProgressAtPeriod(xs: List[AnyRef], x: AnyRef): Boolean = {
+    var ys = xs
+    while (ys ne Nil) {
+      val y = ys.head.asInstanceOf[Stamped[AnyRef]]
+      if (y.value eq x) return y.period == currentPeriod || isValid(y.period)
       ys = ys.tail
     }
     false
   }
 
   private def concurrentBaseTypeSeqOfTypeRef(tpe: TypeRef): BaseTypeSeq = {
+    val cached = tpe.baseTypeSeqStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
     val s = scratch
-    if (baseTypesCycle(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
-    val period = tpe.baseTypeSeqPeriod
-    val cache = tpe.baseTypeSeqCache
-    if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
-      if (period != currentPeriod) tpe.baseTypeSeqPeriod = currentPeriod
-      cache
+    if (inProgressForBaseClasses(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseTypeSeqStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
     } else {
       val saved = s.btsInProgress
-      s.btsInProgress = markBaseTypes(saved, tpe)
+      s.btsInProgress = new Stamped(tpe, currentPeriod) :: saved
       try {
         val bts = tpe.baseTypeSeqImpl
-        tpe.baseTypeSeqCache = bts
-        tpe.baseTypeSeqPeriod = currentPeriod
+        tpe.baseTypeSeqStamped = new Stamped(bts, currentPeriod)
         bts
       } finally s.btsInProgress = saved
     }
   }
 
   private def concurrentParentsOfTypeRef(tpe: TypeRef): List[Type] = {
+    val cached = tpe.parentsStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
     val s = scratch
-    if (baseTypesCycle(s.parentsInProgress, tpe)) return tpe.parentsCache
-    val period = tpe.parentsPeriod
-    val cache = tpe.parentsCache
-    if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
-      if (period != currentPeriod) tpe.parentsPeriod = currentPeriod
-      cache
+    if (inProgressForBaseClasses(s.parentsInProgress, tpe)) return (if (cached ne null) cached.value else null)
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.parentsStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
     } else {
       val saved = s.parentsInProgress
-      s.parentsInProgress = markBaseTypes(saved, tpe)
+      s.parentsInProgress = new Stamped(tpe, currentPeriod) :: saved
       try {
         val ps = tpe.parentsImpl
-        tpe.parentsCache = ps
-        tpe.parentsPeriod = currentPeriod
+        tpe.parentsStamped = new Stamped(ps, currentPeriod)
         ps
       } finally s.parentsInProgress = saved
     }
   }
 
   private def concurrentBaseTypeSeqOfCompoundType(tpe: CompoundType): BaseTypeSeq = {
+    val cached = tpe.baseTypeSeqStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
     val s = scratch
-    if (baseTypesCycle(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
-    val period = tpe.baseTypeSeqPeriod
-    val cache = tpe.baseTypeSeqCache
-    if (period != NoPeriod && (cache ne null) && (cache ne undetBaseTypeSeq) && isValidForBaseClasses(period)) {
-      if (period != currentPeriod) tpe.baseTypeSeqPeriod = currentPeriod
-      cache
+    if (inProgressForBaseClasses(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseTypeSeqStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
     } else {
       val saved = s.btsInProgress
-      s.btsInProgress = markBaseTypes(saved, tpe)
+      s.btsInProgress = new Stamped(tpe, currentPeriod) :: saved
       try {
         val bts =
           if (tpe.parents exists typeContainsTypeVar) compoundBaseTypeSeqWithTypeVars(tpe)
           else compoundBaseTypeSeqWithoutTypeVars(tpe)
-        tpe.baseTypeSeqCache = bts
-        tpe.baseTypeSeqPeriod = currentPeriod
+        tpe.baseTypeSeqStamped = new Stamped(bts, currentPeriod)
         bts
       } finally s.btsInProgress = saved
     }
   }
 
   private def concurrentBaseClassesOfCompoundType(tpe: CompoundType): List[Symbol] = {
+    val cached = tpe.baseClassesStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
     val s = scratch
-    if (baseTypesCycle(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
-    val period = tpe.baseClassesPeriod
-    val cache = tpe.baseClassesCache
-    if (period != NoPeriod && (cache ne null) && isValidForBaseClasses(period)) {
-      if (period != currentPeriod) tpe.baseClassesPeriod = currentPeriod
-      cache
+    if (inProgressForBaseClasses(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseClassesStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
     } else {
       val saved = s.baseClassesInProgress
-      s.baseClassesInProgress = markBaseTypes(saved, tpe)
+      s.baseClassesInProgress = new Stamped(tpe, currentPeriod) :: saved
       try {
         val bcs = tpe.memo(computeBaseClasses(tpe))(tpe.typeSymbol :: _.baseClasses.tail)
-        tpe.baseClassesCache = bcs
-        tpe.baseClassesPeriod = currentPeriod
+        tpe.baseClassesStamped = new Stamped(bcs, currentPeriod)
         bcs
       } finally s.baseClassesInProgress = saved
     }
   }
 
   private def concurrentUnderlying(tpe: SingleType): Type = {
+    val cached = tpe.underlyingStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
     val s = scratch
-    if (inProgress(s.underlyingInProgress, tpe)) return tpe.underlyingCache
-    val period = tpe.underlyingPeriod
-    val cache = tpe.underlyingCache
-    if (period != NoPeriod && (cache ne null) && (cache ne NoType) && isValid(period)) {
-      if (period != currentPeriod) tpe.underlyingPeriod = currentPeriod
-      cache
+    if (inProgressAtPeriod(s.underlyingInProgress, tpe)) return (if (cached ne null) cached.value else NoType)
+    if ((cached ne null) && isValid(cached.period)) {
+      tpe.underlyingStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
     } else {
       val saved = s.underlyingInProgress
-      s.underlyingInProgress = tpe :: saved
+      s.underlyingInProgress = new Stamped(tpe, currentPeriod) :: saved
       try {
         val u = if (tpe.sym == NoSymbol) ThisType(rootMirror.RootClass) else {
           val result = tpe.pre.memberType(tpe.sym).resultType
           if (isScalaRepeatedParamType(result)) repeatedToSeq(result) else result
         }
         assert(u ne tpe, tpe)
-        tpe.underlyingCache = u
-        tpe.underlyingPeriod = currentPeriod
+        tpe.underlyingStamped = new Stamped(u, currentPeriod)
         u
       } finally s.underlyingInProgress = saved
     }
@@ -2374,11 +2386,29 @@ trait Types
       relativeInfoCache = NoType
       relativeInfoCacheValidForPeriod = NoPeriod
       relativeInfoCacheValidForSymInfo = null
+      relativeInfoStamped = null
     }
 
-    final override protected def relativeInfo = {
+    // In a concurrent compiler, the value with its period and the symbol's info as one object (see `Stamped`).
+    private[this] var relativeInfoStamped: StampedRelativeInfo = null
+    private def concurrentRelativeInfo(symInfo: Type): Type = {
+      val cached = relativeInfoStamped
+      if ((cached ne null) && (cached.symInfo eq symInfo) && cached.period == currentPeriod) cached.value
+      else {
+        val value = super.relativeInfo
+        value match {
+          case x: SubType if this.isInstanceOf[AbstractTypeRef] && (x.supertype eq this) => throw new RecoverableCyclicReference(sym)
+          case _ =>
+        }
+        relativeInfoStamped = new StampedRelativeInfo(value, currentPeriod, symInfo)
+        value
+      }
+    }
+
+    final override protected def relativeInfo: Type = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
+        if (lockFreeTypeCaches) return concurrentRelativeInfo(symInfo)
         relativeInfoCache = super.relativeInfo
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
@@ -2569,12 +2599,16 @@ trait Types
       parentsPeriod = NoPeriod
       baseTypeSeqCache = null
       baseTypeSeqPeriod = NoPeriod
+      parentsStamped = null
+      baseTypeSeqStamped = null
       normalized = null
     }
     private[reflect] var parentsCache: List[Type]      = _
     private[reflect] var parentsPeriod                 = NoPeriod
     private[reflect] var baseTypeSeqCache: BaseTypeSeq = _
     private[reflect] var baseTypeSeqPeriod             = NoPeriod
+    private[reflect] var parentsStamped: Stamped[List[Type]]     = null
+    private[reflect] var baseTypeSeqStamped: Stamped[BaseTypeSeq] = null
     @volatile private[this] var normalized: Type       = _
 
     //OPT specialize hashCode
