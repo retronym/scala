@@ -1463,7 +1463,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       if (latePhases(ph.name)) {
         // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol
         phaseDescriptors.find(_.phaseName == ph.name).foreach(analyzer.forceLazyValsOf)
+        val t0 = System.nanoTime()
         analyzer.parallelPhase(ph, units.toList, ph.name, unitOrder = true)(ph.applyPhase(_))
+        if (System.getProperty("scalac.parallelTyper.log") != null)
+          Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
         true
       }
       else if (postTyperGroups.isEmpty) false

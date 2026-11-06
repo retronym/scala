@@ -32,7 +32,11 @@ abstract class Erasure extends InfoTransform
 
   val phaseName: String = "erasure"
 
-  val requiredDirectInterfaces = perRunCaches.newMap[Symbol, mutable.Set[Symbol]]()
+  // the values are immutable: a reader in an info transform or in the back end gets a set no one is adding to
+  val requiredDirectInterfaces = perRunCaches.newConcurrentMap[Symbol, Set[Symbol]]()
+  def addRequiredDirectInterface(clazz: Symbol, iface: Symbol): Unit = lockedIfConcurrent(requiredDirectInterfaces) {
+    requiredDirectInterfaces(clazz) = requiredDirectInterfaces.getOrElse(clazz, Set.empty[Symbol]) + iface
+  }
 
   def newTransformer(unit: CompilationUnit): AstTransformer =
     new ErasureTransformer(unit)
@@ -1294,7 +1298,7 @@ abstract class Erasure extends InfoTransform
             }
 
             if (sym.isJavaDefined && qualSym.isTraitOrInterface)
-              requiredDirectInterfaces.getOrElseUpdate(context.enclClass.owner, mutable.Set.empty) += qualSym
+              addRequiredDirectInterface(context.enclClass.owner, qualSym)
 
             if (qualSym != owner)
               tree.updateAttachment(new QualTypeSymAttachment(qualSym))

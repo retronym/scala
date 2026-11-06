@@ -66,7 +66,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
   /** This map contains a binding (class -> info) if
    *  the class with this info at phase mixinPhase has been treated for mixin composition
    */
-  private val treatedClassInfos = perRunCaches.newMap[Symbol, Type]() withDefaultValue NoType
+  private val treatedClassInfos = perRunCaches.newConcurrentMap[Symbol, Type]() withDefaultValue NoType
 
 
 // --------- helper functions -----------------------------------------------
@@ -225,7 +225,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
     }
   }
 
-  def publicizeTraitMethods(clazz: Symbol): Unit = {
+  def publicizeTraitMethods(clazz: Symbol): Unit = underCompletionLock {
     if (treatedClassInfos(clazz) != clazz.info) {
       treatedClassInfos(clazz) = clazz.info
       assert(phase == currentRun.mixinPhase, phase)
@@ -250,7 +250,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
         val suggestedParent = exitingTyper(clazz.info.baseType(owner))
         reporter.error(clazz.pos, msg(suggestedParent))
       } else
-        erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
+        erasure.addRequiredDirectInterface(clazz, owner)
     }
   }
 
@@ -265,7 +265,12 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
    *      - for every super accessor in T, add an implementation of that accessor
    *      - for every module in T, add a module
    */
-  def addMixedinMembers(clazz: Symbol, unit: CompilationUnit): Unit = {
+  def addMixedinMembers(clazz: Symbol, unit: CompilationUnit): Unit =
+    // Under the completion lock on the pool: a class's superclass (and so the classes changed from here) may be in
+    // another unit, and so may a trait that `publicizeTraitMethods` changes.
+    underCompletionLock(addMixedinMembers0(clazz, unit))
+
+  private def addMixedinMembers0(clazz: Symbol, unit: CompilationUnit): Unit = {
     def cloneAndAddMixinMember(mixinClass: Symbol, mixinMember: Symbol): Symbol = (
       cloneAndAddMember(mixinClass, mixinMember, clazz)
            setPos clazz.pos
@@ -288,7 +293,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
               }
             } else {
               if (isJavaInterface)
-                erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
+                erasure.addRequiredDirectInterface(clazz, owner)
               cloneAndAddMixinMember(mixinClass, member).asInstanceOf[TermSymbol] setAlias member
             }
           }
