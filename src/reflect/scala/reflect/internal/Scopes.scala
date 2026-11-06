@@ -171,14 +171,18 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** enter a symbol
      */
-    def enter[T <: Symbol](sym: T): sym.type = writing {
-      enterEntry(newScopeEntry(sym, this))
+    def enter[T <: Symbol](sym: T): sym.type = {
+      if (isConcurrentCompiler) synchronized(enterEntry(newScopeEntry(sym, this)))
+      else enterEntry(newScopeEntry(sym, this))
       sym
     }
 
     /** In a concurrent compiler, the writes to a scope are under its monitor: the completers of two members of one
      *  class can enter into its scope on two threads (default getters, with parallel signatures). Readers take no
-     *  lock (entries are published after their fields). Nothing under the monitor completes a symbol. */
+     *  lock (entries are published after their fields). Nothing under the monitor completes a symbol.
+     *
+     *  The hot writers (`enter`, `enterIfNew`) take the monitor around a call rather than through a by-name `writing`:
+     *  that closure was 29 MB per compile of the compiler corpus. */
     @inline private def writing[T](body: => T): T = if (isConcurrentCompiler) synchronized(body) else body
 
     final def enterBefore(sym: Symbol, next: ScopeEntry): sym.type = writing {
@@ -205,7 +209,9 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       enter(sym)
     }
 
-    def enterIfNew[T <: Symbol](sym: T): T = writing {
+    def enterIfNew[T <: Symbol](sym: T): T =
+      if (isConcurrentCompiler) synchronized(enterIfNewHere(sym)) else enterIfNewHere(sym)
+    private def enterIfNewHere[T <: Symbol](sym: T): T = {
       val existing = lookupEntry(sym.name)
       if (existing == null) enter(sym)
       else existing.sym.asInstanceOf[T]
