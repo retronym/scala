@@ -54,17 +54,23 @@ esac
 BIN="$WORK/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
 java -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala" "$HERE/XrayProfile.scala"
 
-JVM=(java -Xss64m -Xms6g -Xmx6g "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
+JVM=(java -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
   -Dscalac.parallelTyper.xray.completionSpans=true ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS")
 if [ -n "${OVERHEAD:-}" ]; then
   exec "${JVM[@]}" XrayProfile --overhead "$args" "$THREADS" "$WARMUP" "$OVERHEAD" "$CPU_INTERVAL" "$WALL_INTERVAL" "$WORK"
 fi
-"${JVM[@]}" XrayProfile "$args" "$OUT" "$NAME" "$WARMUP" "$REPEATS" "$CPU_INTERVAL" "$WALL_INTERVAL" serial "$THREADS" "$THREADS-wall"
+# [threads] may be a list ("1 2 4 8"): each count is then recorded with a CPU profile and with a wall clock profile.
+# The raw JFR and the full flame graph pages are kept for the last count only (they are 50-180 MB each).
+configs=(serial); for t in $THREADS; do configs+=("$t" "$t-wall"); done
+LAST="${THREADS##* }"
+"${JVM[@]}" XrayProfile "$args" "$OUT" "$NAME" "$WARMUP" "$REPEATS" "$CPU_INTERVAL" "$WALL_INTERVAL" "${configs[@]}"
 JFRCONV=("$ASYNC/bin/jfrconv" --spans --threads --span-config "$HERE/span-config.json")
-"${JFRCONV[@]}" --cpu "$OUT/run-$THREADS.jfr" "$OUT/flame-$THREADS-cpu.html"
-"${JFRCONV[@]}" --wall "$OUT/run-$THREADS-wall.jfr" "$OUT/flame-$THREADS-wall.html"
+"${JFRCONV[@]}" --cpu "$OUT/run-$LAST.jfr" "$OUT/flame-$LAST-cpu.html"
+"${JFRCONV[@]}" --wall "$OUT/run-$LAST-wall.jfr" "$OUT/flame-$LAST-wall.html"
+for t in $THREADS; do [ "$t" = "$LAST" ] || rm -f "$OUT/run-$t.jfr" "$OUT/run-$t-wall.jfr"; done
 rm -rf "$WORK"
-cat "$HERE"/profiles/*/timeline.data.js > "$HERE/timeline.data.js"
-du -sh "$HERE/timeline.data.js" "$OUT"/*
+# for the page: a file of timelines per corpus and a file per profile, loaded when its run is shown (split.py)
+python3 -I "$HERE/split.py"
+du -sh "$HERE/data" "$OUT"/*
 node "$HERE/summary.js" "$OUT/timeline.data.js"
 echo "cd $HERE && python3 -m http.server, then open index.html"

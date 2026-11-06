@@ -35,7 +35,8 @@ header { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
 header { position: sticky; top: 0; z-index: 9; background: var(--bg); padding: 6px 0; border-bottom: 1px solid var(--line); }
 #status { flex-basis: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
 #status:empty { display: none; }
-header #runs { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; }
+header #runs { flex: 1; min-width: 0; flex-wrap: nowrap; overflow-x: auto; align-items: center; }
+header #runs select { flex: none; font-weight: 600; }
 header #runs button { white-space: nowrap; flex: none; }
 header .sp { display: none; }
 @media (max-width: 900px) { header h1 { display: none; } }
@@ -59,6 +60,13 @@ canvas { display: block; width: 100%; }
 .pgrid .scroll { max-height: 260px; overflow-y: auto; }
 .pgrid td.l { max-width: 340px; overflow: hidden; text-overflow: ellipsis; }
 .pfilter { display: inline-flex; gap: 5px; align-items: center; border: 1px solid var(--active); border-radius: 10px; padding: 0 8px; cursor: pointer; }
+.zoomctl { display: inline-flex; gap: 2px; }
+.zoomctl button { min-width: 26px; padding: 3px 7px; }
+button:disabled { opacity: .45; cursor: default; }
+#menu { position: fixed; z-index: 20; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r); padding: 4px 0; font-size: 12px; min-width: 200px; max-width: 420px; box-shadow: 0 6px 22px rgba(0,0,0,.25); }
+#menu .mi { padding: 4px 12px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#menu .mi:hover { background: var(--grid); }
+#menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
 #tip { position: fixed; pointer-events: none; z-index: 10; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; font-size: 12px; max-width: 520px; box-shadow: 0 4px 16px rgba(0,0,0,.18); white-space: pre-wrap; display: none; }
 .ctl { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
 .chip { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px 1px 6px; border: 1px solid var(--line); border-radius: 99px; cursor: pointer; user-select: none; font-size: 12px; }
@@ -147,6 +155,7 @@ details summary { cursor: pointer; color: var(--dim); }
 </div>
 </main>
 <div id="tip"></div>
+<div id="menu" hidden></div>
 
 <script id="xray-analysis">
 // The analysis: pure functions over a run's JSON (see README.md), shared with summary.js.
@@ -363,7 +372,7 @@ var XR = (function () {
   function profileOf(r) {
     if (r.prof !== undefined) return r.prof;
     const p = r.raw.profile;
-    if (!p) return r.prof = null;
+    if (!p) return r.raw.profileRef ? null : (r.prof = null); // with a `profileRef`, the page loads it when the run is shown
     const byTid = new Map();
     for (const x of r.spans) { if (!byTid.has(x.tid)) byTid.set(x.tid, []); byTid.get(x.tid).push(x); }
     for (const xs of byTid.values()) xs.sort((a, b) => a.t0 - b.t0);
@@ -442,6 +451,7 @@ var XR = (function () {
 if (typeof module !== 'undefined') module.exports = XR;
 </script>
 <script src="timeline.data.js" onerror="window.XRAY_RUNS = window.XRAY_RUNS || []"></script>
+<script src="data/manifest.js" onerror="window.XRAY_MANIFEST = window.XRAY_MANIFEST || []"></script>
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
@@ -467,8 +477,20 @@ if (typeof module !== 'undefined') module.exports = XR;
 
   function select(r) {
     cur = r; view.x0 = 0; view.x1 = r.wall; view.sel = null; view.site = '';
-    $('runs').innerHTML = runs.map((q, i) => isWallRun(q) ? '' : `<button data-i="${i}" class="${q === r || r.config === q.config + '-wall' && r.corpus === q.corpus ? 'on' : ''}">${esc(q.corpus)} · ${q.config === 'serial' ? 'serial' : q.config + (q.N === 1 ? ' thread' : ' threads')} · ${fmt(q.wall)}</button>`).join('');
+    // the header: a menu of the corpora, and for the one shown a button per configuration (a chip for every run of
+    // every corpus did not fit once there were a few of each)
+    const shownRuns = runs.filter((q) => !isWallRun(q));
+    const corpora = [...new Set(shownRuns.map((q) => q.corpus))];
+    const isCur = (q) => q === r || r.config === q.config + '-wall' && r.corpus === q.corpus;
+    $('runs').innerHTML = `<select id="corpusSel" title="corpus">${corpora.map((c) => `<option value="${esc(c)}"${c === r.corpus ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>` +
+      '<span class="dim">threads</span>' +
+      shownRuns.filter((q) => q.corpus === r.corpus).map((q) => `<button data-i="${runs.indexOf(q)}" class="${isCur(q) ? 'on' : ''}" title="${q.config === 'serial' ? 'the serial compiler' : q.config + (q.N === 1 ? ' thread' : ' threads')}">${q.config === 'serial' ? 'serial' : esc(q.config)} <span class="dim">${fmt(q.wall)}</span></button>`).join('');
     $('runs').querySelectorAll('button').forEach((b) => b.onclick = () => select(runs[+b.dataset.i]));
+    $('corpusSel').onchange = () => {
+      const there = shownRuns.filter((q) => q.corpus === $('corpusSel').value);
+      // the same configuration of the other corpus, else its largest thread count
+      select(there.find((q) => q.config === r.config.replace(/-wall$/, '')) || there.find((q) => q.N === Math.max(...there.map((x) => x.N))) || there[0]);
+    };
     XR.analyse(r);
     renderKpis(); renderStretches(); renderChips(); renderSites(); renderBar(); renderTables(); renderScaling(); renderMeta();
     Object.assign(prof, { span: null, step: null, label: null, sym: null, frame: null, root: null, lastCount: null });
@@ -905,6 +927,7 @@ if (typeof module !== 'undefined') module.exports = XR;
   function scheduleProfile() { clearTimeout(profTimer); profTimer = setTimeout(renderProfile, 60); }
   const shortMs = (t) => t < 10 ? t.toFixed(1) : t.toFixed(0);
   function renderProfile() {
+    if (cur && !cur.raw.profile && cur.raw.profileRef) loadProfile(cur);
     const P = cur && XR.profileOf(cur);
     $('profSec').hidden = !P;
     if (!P) { renderStatus(); return; }
@@ -924,6 +947,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('profCtl').innerHTML = ['cpu', 'wall'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${e === P.event ? 'this recording' : 'a recording of its own, so its times differ a little'}">${e === 'cpu' ? 'CPU' : 'wall clock'}</button>`).join('') +
       `<button id="nameSimple" class="${prof.simple ? 'on' : ''}" title="class and method, without packages and enclosing classes">simple names</button><button id="nameFull" class="${prof.simple ? '' : 'on'}" title="the frames as recorded">full names</button>` +
       `<button id="flipFlame" class="${prof.reversed ? 'on' : ''}" title="root at the frames where time is spent, with their callers below">reversed</button>` +
+      `<span class="zoomctl" title="zoom the flame graph: also pinch or ⌘/ctrl-scroll over a frame, and right-click for more"><button id="flameIn" title="zoom into the widest frame below the current root">+</button><button id="flameOut" title="zoom out one frame"${prof.root && prof.root.length ? '' : ' disabled'}>−</button><button id="flameReset" title="show every stack"${prof.root && prof.root.length ? '' : ' disabled'}>reset</button></span>` +
       pills.map(([k, t]) => `<span class="pfilter" data-k="${k}" title="remove this filter">${esc(t)} ×</span>`).join('') +
       `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
     $('profCtl').querySelectorAll('button[data-ev]').forEach((b) => b.onclick = () => { 
@@ -936,6 +960,9 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('nameSimple').onclick = () => { prof.simple = true; renderProfile(); };
     $('nameFull').onclick = () => { prof.simple = false; renderProfile(); };
     $('flipFlame').onclick = () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); };
+    $('flameIn').onclick = () => flameZoom(1);
+    $('flameOut').onclick = () => flameZoom(-1);
+    $('flameReset').onclick = () => { prof.root = null; renderProfile(); };
     $('profCtl').querySelectorAll('.pfilter').forEach((e) => e.onclick = () => { prof[e.dataset.k] = null; prof.root = null; renderProfile(); });
     $('profSteps').innerHTML = '<span class="dim">steps here</span> ' + A.steps.map(([s, n]) => `<span class="chip${prof.step === s ? '' : (prof.step ? ' off' : '')}" data-s="${esc(s)}"><span class="sw" style="background:${XR.stepColor(s)}"></span>${esc(XR.stepName(s))} <span class="dim">${n}</span></span>`).join(' ');
     $('profSteps').querySelectorAll('.chip').forEach((c) => c.onclick = () => { prof.step = prof.step === c.dataset.s ? null : c.dataset.s; prof.root = null; renderProfile(); });
@@ -1022,7 +1049,59 @@ if (typeof module !== 'undefined') module.exports = XR;
     c.onmouseleave = hideTip;
     c.onclick = (ev) => { const b = at(ev); if (!b) return; const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); prof.root = path; renderProfile(); };
     c.ondblclick = () => { prof.root = null; renderProfile(); };
+    const pathOf = (b) => { const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); return path; };
+    // pinch (a wheel event with ctrl) or ⌘/ctrl-scroll: in zooms to the frame under the pointer, out by one frame
+    let wheelAt = 0;
+    c.onwheel = (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      ev.preventDefault();
+      const now = Date.now(); if (now - wheelAt < 350 || Math.abs(ev.deltaY) < 2) return; wheelAt = now;
+      if (ev.deltaY < 0) { const b = at(ev); if (b) { prof.root = pathOf(b); renderProfile(); } else flameZoom(1); }
+      else flameZoom(-1);
+    };
+    flameWidest = () => { // the path of the widest frame under the current root
+      const kids = [...root.kids.values()]; if (!kids.length) return null;
+      const k = kids.reduce((m, x) => x.t > m.t ? x : m);
+      return (prof.root || []).concat([k.fr]);
+    };
+    c.oncontextmenu = (ev) => {
+      ev.preventDefault(); hideTip();
+      const b = at(ev), zoomed = prof.root && prof.root.length;
+      const items = [];
+      if (b) {
+        const name = P.frames[b.n.fr];
+        items.push([`Zoom to ${frameLabel(P, b.n.fr)}`, () => { prof.root = pathOf(b); renderProfile(); }]);
+        items.push(['Only stacks through this frame', () => { prof.frame = b.n.fr; prof.root = null; renderProfile(); }]);
+        items.push(['Copy the frame\'s name', () => { try { navigator.clipboard.writeText(name).catch(() => {}); } catch (e) {} }]);
+        items.push(null);
+      }
+      items.push(['Zoom in', () => flameZoom(1)]);
+      if (zoomed) items.push(['Zoom out', () => flameZoom(-1)], ['Reset zoom', () => { prof.root = null; renderProfile(); }]);
+      if (prof.frame != null) items.push(['Clear the frame filter', () => { prof.frame = null; prof.root = null; renderProfile(); }]);
+      items.push(null);
+      items.push([prof.reversed ? 'Root at the bottom of the stacks' : 'Reversed: root at the frames on CPU', () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); }]);
+      items.push([prof.simple ? 'Full names' : 'Simple names', () => { prof.simple = !prof.simple; renderProfile(); }]);
+      showMenu(ev, items);
+    };
   }
+  let flameWidest = () => null;
+  function flameZoom(dir) {
+    if (dir > 0) { const p = flameWidest(); if (p) { prof.root = p; renderProfile(); } }
+    else if (prof.root && prof.root.length) { prof.root = prof.root.slice(0, -1); if (!prof.root.length) prof.root = null; renderProfile(); }
+  }
+  // a context menu: [label, action] items, null for a rule
+  function showMenu(ev, items) {
+    const m = $('menu');
+    m.innerHTML = items.map((it, i) => it ? `<div class="mi" data-i="${i}">${esc(it[0])}</div>` : '<hr>').join('');
+    m.querySelectorAll('.mi').forEach((e) => e.onclick = () => { m.hidden = true; items[+e.dataset.i][1](); });
+    m.hidden = false;
+    const w = m.offsetWidth, h = m.offsetHeight;
+    m.style.left = Math.max(4, Math.min(ev.clientX, innerWidth - w - 6)) + 'px';
+    m.style.top = Math.max(4, Math.min(ev.clientY, innerHeight - h - 6)) + 'px';
+  }
+  window.addEventListener('mousedown', (ev) => { const m = $('menu'); if (!m.hidden && !m.contains(ev.target)) m.hidden = true; });
+  window.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') $('menu').hidden = true; });
+  window.addEventListener('scroll', () => { $('menu').hidden = true; }, true);
 
   // ---- the sticky header: what is being looked at
   function renderStatus() {
@@ -1037,7 +1116,7 @@ if (typeof module !== 'undefined') module.exports = XR;
       if (prof.lastCount != null) bits.push(`${prof.lastCount} samples selected`);
       const fs = [prof.step && `step ${XR.stepName(prof.step)}`, prof.span && `span ${prof.span.label}`, prof.label && `unit ${prof.label}`, prof.sym != null && `completing ${P.symbols[prof.sym]}`, prof.frame != null && `through ${frameLabel(P, prof.frame)}`, prof.reversed && 'reversed'].filter(Boolean);
       if (fs.length) bits.push(fs.map(esc).join(', '));
-    } else bits.push('no profile');
+    } else bits.push(cur.raw.profileRef ? 'loading the profile…' : 'no profile');
     if (cur.meta.errors && cur.meta.errors !== '0') bits.push(`<b>${esc(cur.meta.errors)} errors</b>`);
     $('status').innerHTML = bits.join(' <span class="dim">·</span> ');
   }
@@ -1048,14 +1127,41 @@ if (typeof module !== 'undefined') module.exports = XR;
   window.addEventListener('dragover', (ev) => { ev.preventDefault(); document.body.classList.add('dragging'); });
   window.addEventListener('dragleave', () => document.body.classList.remove('dragging'));
   window.addEventListener('drop', (ev) => { ev.preventDefault(); document.body.classList.remove('dragging'); readFiles(ev.dataTransfer.files); });
-  load(window.XRAY_RUNS || []);
-  if (!runs.length) $('drop').hidden = false;
-  // a link to a view: #run=<config>&from=<ms>&to=<ms>&theme=light|dark
-  const hp = new URLSearchParams(location.hash.slice(1));
-  if (hp.get('theme')) { document.documentElement.dataset.theme = hp.get('theme'); }
-  const hr = hp.get('run') && runs.find((q) => q.config === hp.get('run'));
-  if (hr) select(hr);
-  if (cur && hp.get('from')) zoomTo(+hp.get('from'), +(hp.get('to') || cur.wall)); else if (hp.get('theme')) draw();
+  // A run's profile is a file of its own (`split.py`), loaded when the run is first shown: with a thread sweep of
+  // several corpora, each count with a CPU and a wall clock profile, all of them at once is hundreds of MB.
+  function loadProfile(r) {
+    if (r.profLoading) return;
+    r.profLoading = true;
+    const el = document.createElement('script');
+    el.src = r.raw.profileRef;
+    el.onload = () => {
+      r.raw.profile = (window.XRAY_PROFILES || {})[r.raw.profileRef];
+      if (window.XRAY_PROFILES) delete window.XRAY_PROFILES[r.raw.profileRef];
+      if (!r.raw.profile) r.raw.profileRef = null;
+      if (cur === r) renderProfile();
+    };
+    el.onerror = () => { r.raw.profileRef = null; if (cur === r) renderProfile(); };
+    document.head.appendChild(el);
+  }
+  function boot() {
+    load(window.XRAY_RUNS || []);
+    if (!runs.length) $('drop').hidden = false;
+    // a link to a view: #run=<config>&from=<ms>&to=<ms>&theme=light|dark
+    const hp = new URLSearchParams(location.hash.slice(1));
+    if (hp.get('theme')) { document.documentElement.dataset.theme = hp.get('theme'); }
+    const hr = hp.get('run') && runs.find((q) => q.config === hp.get('run'));
+    if (hr) select(hr);
+    if (cur && hp.get('from')) zoomTo(+hp.get('from'), +(hp.get('to') || cur.wall)); else if (hp.get('theme')) draw();
+  }
+  // the timelines named by `data/manifest.js`, one file per corpus, then the page
+  const manifest = (window.XRAY_MANIFEST || []).slice();
+  (function next() {
+    if (!manifest.length) return boot();
+    const el = document.createElement('script');
+    el.src = manifest.shift();
+    el.onload = el.onerror = next;
+    document.head.appendChild(el);
+  })();
 })();
 </script>
 </body>

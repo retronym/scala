@@ -45,7 +45,7 @@ esac
 BIN="$OUT/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
 java -cp "$CP" -Dscala.usejavacp=true scala.tools.nsc.Main -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala"
 
-JVM=(java -Xss64m -Xms6g -Xmx6g ${JAVA_OPTS:-} -cp "$BIN:$CP")
+JVM=(java -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} ${JAVA_OPTS:-} -cp "$BIN:$CP")
 if [ -n "${OVERHEAD:-}" ]; then
   last="${THREADS##* }"
   exec "${JVM[@]}" XrayBench --overhead "$args" "$last" "$WARMUP" "$OVERHEAD"
