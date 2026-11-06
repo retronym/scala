@@ -635,6 +635,8 @@ re2s-x32     2868   3085   1654    915    619 ms    4.6x
 
 One thread is now 7-15% slower than serial (compiler 9%, library 13%, junit 15%), from 11-22%. The class-file oracle on the merge at 8 threads with every switch on: reflect 0 of 30 and 0 of 10, compiler 0 of 10, library 0 of 10 and pekko 0 of 10 differ from the one-thread run; against serial the one-thread run differs in the known fresh-name files (compiler 11, library 3) and in 5 of pekko's, not inspected.
 
+The pekko corpus's two longest units were `FanInShapeN.scala` and `FanOutShapeN.scala` (353 ms each in typer and 285 each in refchecks at 8 threads): twenty-one constructors each build a port list as a cons chain of `Inlet[T0] :: Inlet[T1] :: ... :: Nil`, whose element type is inferred as a lub at every `::`. The corpus now passes `List[Inlet[_]](in0, in1, ...)` instead (the originals are beside the files as `.orig.txt`). pekko serial 5255 to 4251 ms; at 8 threads 1430 to 1035 ms (3.7x to 4.1x), with typer 530 to 341 ms and refchecks 317 to 42, measured at load 13-29 from other sessions' file indexing and builds, so the serial figure is firmer than the parallel one. Typer's longest unit is now `UnzipWithApply.scala`, 144 ms.
+
 Specialize on the compiler corpus at 8 threads went from 125 ms of wall to 38. What limits each corpus now, from the per-phase tables (`phases.js` over the recording):
 
 - One thread against serial: 11-22% slower (compiler 11%, pekko 19%, junit 22%), spread over every phase. The one-thread-parity work has it at about 40% per-thread phase and period lookup, 15-30% GC from extra allocation, and the rest `Stamped` holders, a `SubstTypeMap` per call and class headers.
