@@ -34,6 +34,9 @@ sealed abstract class PostProcessorFrontendAccess {
   // With -Yparallel-typer the front end's lock: a task here completes symbols, and a class's info is computed on
   // this lock inside a completion or the other way round, so that two locks would be taken in both orders.
   protected def onCompletionLock[T](x: => T): T
+
+  /** May a `ClassBType` from a symbol be created without the front end's lock? See `ClassBType.pendingInfo`. */
+  def classBTypesOffLock: Boolean = false
   protected def frontendIsOnCompletionLock: Boolean
   @inline final def frontendSynch[T](x: => T): T =
     if (frontendIsOnCompletionLock) onCompletionLock(x) else frontendLock.synchronized(x)
@@ -184,6 +187,8 @@ object PostProcessorFrontendAccess {
 
     protected def onCompletionLock[T](x: => T): T = underCompletionLock(x)
     protected def frontendIsOnCompletionLock: Boolean = isConcurrentCompiler
+    // The inliner's `InlineInfo` of a class on the classpath goes through the byte code repository, not safe for two threads.
+    override lazy val classBTypesOffLock: Boolean = isConcurrentCompiler && !settings.optInlinerEnabled
 
     private[this] lazy val _compilerSettings: LazyVar[CompilerSettings] = perRunLazy(this)(buildCompilerSettings())
 
