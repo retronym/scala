@@ -48,6 +48,7 @@ object Stress {
     // the reference is the parallel path on one thread, as in the oracle: it differs from serial by order effects
     // (which occurrence of a feature warning carries the explanation)
     val serial = compile(Nil)
+    serial.filterNot(_.startsWith("class ")).take(5).foreach(l => println("serial: " + l))
     deleteAll(lastClasses)
     val expected = compile(List("-Yparallel-typer", "-Yparallel-typer-threads", "1"))
     if (full) println(s"the one-thread run's classes: $lastClasses")
