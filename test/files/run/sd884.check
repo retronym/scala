@@ -98,7 +98,7 @@ scala> val i3 = typeOf[C].member(TermName("m3")).annotations.head
 val i3: $r.intp.global.AnnotationInfo = ann(1, C.this.b)
 
 scala> i3.args.map(_.tpe)
-val res4: List[$r.intp.global.Type] = List(Int(1) @scala.annotation.meta.defaultArg, Int)
+val res4: List[$r.intp.global.Type] = List(Int @scala.annotation.meta.defaultArg, Int)
 
 scala> i3.args.map(i3.argIsDefault)
 val res5: List[Boolean] = List(true, false)
