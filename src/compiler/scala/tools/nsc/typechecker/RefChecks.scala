@@ -47,7 +47,7 @@ abstract class RefChecks extends Transform {
 
   import global._
   import definitions._
-  private def typed(tree: Tree): Tree = typer.typed(tree)
+  private def typed(tree: Tree): Tree = typerHere.typed(tree)
 
   /** the following two members override abstract members in Transform */
   val phaseName: String = "refchecks"
@@ -83,7 +83,7 @@ abstract class RefChecks extends Transform {
   class RefCheckTransformer(@unused unit: CompilationUnit) extends AstTransformer {
     private final val indent = "  "
 
-    var localTyper: analyzer.Typer = typer
+    var localTyper: analyzer.Typer = typerHere
     var currentApplication: Tree = EmptyTree
     var inAnnotation: Boolean = false
     var inPattern: Boolean = false
@@ -594,7 +594,7 @@ abstract class RefChecks extends Transform {
           }
           // check overriding (abstract type --> abstract type or abstract type --> concrete type member (a type alias))
           // making an abstract type member concrete is like passing a type argument
-          typer.infer.checkKindBounds(other :: Nil, lowType :: Nil, rootType, memberClass) match { // (1.7.2)
+          typerHere.infer.checkKindBounds(other :: Nil, lowType :: Nil, rootType, memberClass) match { // (1.7.2)
             case Nil        =>
             case kindErrors =>
               reporter.error(member.pos,
@@ -605,7 +605,7 @@ abstract class RefChecks extends Transform {
           // check a type alias's RHS corresponds to its declaration
           // this overlaps somewhat with validateVariance
           if (member.isAliasType) {
-            typer.infer.checkKindBounds(member :: Nil, lowType.normalize :: Nil, rootType, memberClass) match {
+            typerHere.infer.checkKindBounds(member :: Nil, lowType.normalize :: Nil, rootType, memberClass) match {
               case Nil        =>
               case kindErrors =>
                 reporter.error(member.pos,
@@ -1384,7 +1384,7 @@ abstract class RefChecks extends Transform {
 
     /* Check whether argument types conform to bounds of type parameters */
     private def checkBounds(tree0: Tree, pre: Type, owner: Symbol, tparams: List[Symbol], argtps: List[Type]): Unit =
-      try typer.infer.checkBounds(tree0, pre, owner, tparams, argtps, "")
+      try typerHere.infer.checkBounds(tree0, pre, owner, tparams, argtps, "")
       catch {
         case ex: TypeError =>
           reporter.error(tree0.pos, ex.getMessage())

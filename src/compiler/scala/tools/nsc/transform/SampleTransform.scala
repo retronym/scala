@@ -21,7 +21,7 @@ abstract class SampleTransform extends Transform {
   // inherits abstract value `global` and class `Phase` from Transform
 
   import global._       // the global environment
-  private def typed(tree: Tree) = typer.typed(tree)    // method to type trees
+  private def typed(tree: Tree) = typerHere.typed(tree)    // method to type trees
 
   /** the following two members override abstract members in Transform */
   val phaseName: String = "sample-phase"

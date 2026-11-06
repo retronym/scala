@@ -706,7 +706,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        * as a statement of the form "symbol = tree" to the beginning of the default
        * constructor. */
       case Template(parents, self, body) =>
-        localTyper = typer.atOwner(tree, currentClass)
+        localTyper = typerHere.atOwner(tree, currentClass)
         transformTemplate(tree)
 
       case Literal(c) if c.tag == ClazzTag =>

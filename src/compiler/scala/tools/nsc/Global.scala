@@ -201,7 +201,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with AstTreeGen {
     def mkAttributedCast(tree: Tree, pt: Type): Tree =
-      typer.typed(mkCast(tree, pt))
+      typerHere.typed(mkCast(tree, pt))
   }
 
   /** A spare instance of TreeBuilder left for backwards compatibility. */
@@ -793,12 +793,16 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with TreeCheckers
 
-  // A typer with no unit, for phases and tree generators that have none at hand. It has a context, which typing writes
-  // to, so one per thread under `-Yparallel-typer`.
+  // A typer with no unit, for phases and tree generators that have none at hand. A stable path, since macros and plugins
+  // import from it. It has a context, which typing writes to, so the compiler itself asks for `typerHere`.
+  object typer extends analyzer.Typer(
+    analyzer.NoContext.make(EmptyTree, RootClass, newScope)
+  )
   private[this] lazy val typerPerThread = perThread[analyzer.Typer] {
     new analyzer.Typer(analyzer.NoContext.make(EmptyTree, RootClass, newScope)) {}
   }
-  def typer: analyzer.Typer = typerPerThread.get
+  /** `typer`, or under `-Yparallel-typer` this thread's own. */
+  def typerHere: analyzer.Typer = if (isConcurrentCompiler) typerPerThread.get else typer
 
   /** Add the internal compiler phases to the phases set.
    *  This implementation creates a description map at the same time.
