@@ -520,7 +520,23 @@ What the profiles showed, largest first, and what became of each:
 
 Found on the way, in the late phases, and passed to that work: a hang (a completion mark left by a thread that has gone: the info transform marks under the coarse root, a completion under the symbol's own, and the two do not exclude each other), and an NPE (`TypeRef.normalize` reading its cache field twice while another thread clears it).
 
-Where it stands. Front end of the compiler corpus (through the pickler) at 8 threads, interleaved runs on a loaded machine: 777-1206 ms before the changes of 2 to 5, 674-934 ms after. A profile of it now has 4% more CPU samples than the serial compiler's, where it had 13%.
+7. Reading the sources. `Run.compile` read them one after the other before the first phase: 20 ms of the compiler corpus's 45-51 ms of setup. With the parallel parser they are read on a few threads (`Global.readSources`): 26-29 ms.
+
+The late phases' own answer to 1 came in with a merge of that work: an info transform of a symbol that is not a class runs without any claim and publishes its history with a compare-and-set, and mixin's changes to a class run under a claim on that class. (A claim per symbol for the transform, tried first, closed wait-for cycles with the coarse root.)
+
+After all of it, the same full compile, every step on the pool, load average 9-13:
+
+```
+            serial     1      2      4      6      8 threads
+library     4163    4530   2552   1359   1119   1051 ms    3.96x at 8 (was 2.40x)
+compiler    7229    7804   4137   2522   2026   1845 ms    3.92x at 8 (was 2.47x)
+```
+
+It no longer levels off at 6. One thread is 7-8% slower than the serial compiler (it was 11-12%). On the compiler corpus at 8 threads, by step, wall with the serial compiler's in brackets: typer 571 including 77 of class headers (2474), jvm 310 (953), erasure 200 (939), specialize 125 (148), refchecks 57 (309), mixin 42 (148). Specialize does not scale and jvm only 3x; they are the next in the late phases.
+
+The class-file oracle on this state with every switch on: 10 runs each of library, reflect and compiler and 20 each of late-phases and post-typer at 8 threads all agree with the one-thread run, without a crash or a hang. Against serial the one-thread run differs in the library's three files of O1 and in 11 class files of the compiler, in fresh-name numbers (`$$typecreator1$2`, `$$anonfun$3`).
+
+Where it stood before the merge. Front end of the compiler corpus (through the pickler) at 8 threads, interleaved runs on a loaded machine: 777-1206 ms before the changes of 2 to 5, 674-934 ms after. A profile of it now has 4% more CPU samples than the serial compiler's, where it had 13%.
 
 What still limits the front end at 8 threads, in order: the bodies' CPU, which is the machine's 34% and little else; the class headers, serial, 90-170 ms of about 700; class file loading, all of it under the coarse root (5% of CPU, and every other thread that needs the root waits for a load to finish); setup, 45-70 ms. Tried and dropped: no serial class headers at all (`lazySignatures`) fails with wait-for cycles through the coarse root, because what holds the root (lazy elements of a base type sequence, `cookJavaRawInfo`, a macro expansion) asks for the info of a class that another thread is completing while waiting for the root. The next step with a real return is class file loading under a claim of its own, per class, which also makes headers on the pool worth another look.
 
