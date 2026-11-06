@@ -31,7 +31,12 @@ sealed abstract class PostProcessorFrontendAccess {
   def initialize(): Unit
 
   final val frontendLock: AnyRef = new Object()
-  @inline final def frontendSynch[T](x: => T): T = frontendLock.synchronized(x)
+  // With -Yparallel-typer the front end's lock: a task here completes symbols, and a class's info is computed on
+  // this lock inside a completion or the other way round, so that two locks would be taken in both orders.
+  protected def onCompletionLock[T](x: => T): T
+  protected def frontendIsOnCompletionLock: Boolean
+  @inline final def frontendSynch[T](x: => T): T =
+    if (frontendIsOnCompletionLock) onCompletionLock(x) else frontendLock.synchronized(x)
 
   def compilerSettings: CompilerSettings
 
@@ -176,6 +181,9 @@ object PostProcessorFrontendAccess {
   class PostProcessorFrontendAccessImpl(val global: Global) extends PostProcessorFrontendAccess with PerRunInit {
     import global._
     import genBCode.bTypes.{LazyVar, perRunLazy}
+
+    protected def onCompletionLock[T](x: => T): T = underCompletionLock(x)
+    protected def frontendIsOnCompletionLock: Boolean = isConcurrentCompiler
 
     private[this] lazy val _compilerSettings: LazyVar[CompilerSettings] = perRunLazy(this)(buildCompilerSettings())
 

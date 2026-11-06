@@ -564,17 +564,16 @@ trait Erasure {
 
   trait BoxingErasure extends ErasureMap {
 
-    private[this] var boxPrimitives = true
-
     override def applyInArray(tp: Type): Type = {
-      val saved = boxPrimitives
-      boxPrimitives = false
+      val s = scratch // `boxPrimitives` is per thread: the back end and erasure's info transforms use the same map
+      val saved = s.boxPrimitives
+      s.boxPrimitives = false
       try super.applyInArray(tp)
-      finally boxPrimitives = saved
+      finally s.boxPrimitives = saved
     }
 
     override def eraseNormalClassRef(tref: TypeRef) =
-      if (boxPrimitives && isPrimitiveValueClass(tref.sym)) boxedClass(tref.sym).tpe
+      if (scratch.boxPrimitives && isPrimitiveValueClass(tref.sym)) boxedClass(tref.sym).tpe
       else super.eraseNormalClassRef(tref)
 
     override def eraseDerivedValueClassRef(tref: TypeRef) =
