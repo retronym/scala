@@ -785,6 +785,7 @@ abstract class SymbolTable extends macros.Universe
     var underlyingInProgress: List[AnyRef] = Nil
     /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
     var tpeInProgress: List[AnyRef] = Nil
+    var lazyBtsInProgress: BtsInProgress = null
     var boxPrimitives: Boolean = true
     /** Registers that the compiler writes on its hottest paths, here rather than in fields of the universe or of the
      *  analyzer: a field of an object that every thread reads, written by every thread at each tree it makes or
