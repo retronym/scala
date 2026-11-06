@@ -1640,7 +1640,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           catch {
             case util.CompletionLock.WaitCycle =>
               if (_validTo != NoPeriod) return
-              else throw CyclicReference(this, ErrorType)
+              else throw waitCycleError()
           }
           if (isCompletingElsewhere) java.util.concurrent.locks.LockSupport.parkNanos(parkNanos) // a local completion
         }
@@ -1652,6 +1652,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           parkNanos = math.min(parkNanos * 2, 1000000L)
         }
       }
+    }
+
+    /** The cyclic reference of a wait for this symbol's completion that would close a wait-for cycle, with no
+     *  provisional info to read. `-Dscalac.parallelTyper.debugCycles` prints where. */
+    private def waitCycleError(): Throwable = {
+      if (java.lang.Boolean.getBoolean("scalac.parallelTyper.debugCycles"))
+        Console.err.println(s"[parallel-typer] wait cycle on $this in ${owner.fullName} (${Thread.currentThread.getName}); holders: ${completionLock.holders}\n" +
+          new Throwable().getStackTrace.iterator.filter(f => f.getMethodName.matches("complete.*|typed[A-Z].*|.*Sig|isLockedHere|inferImplicit.*|typeParams|info")).take(40).mkString("    ", "\n    ", ""))
+      CyclicReference(this, ErrorType)
     }
 
     /** Is this symbol local to a body (owned, through classes, by a term)? Such a symbol is defined by the body that
@@ -1695,7 +1704,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           catch {
             case util.CompletionLock.WaitCycle =>
               if (_validTo != NoPeriod) false
-              else throw CyclicReference(this, ErrorType)
+              else throw waitCycleError()
           }
         if (claimed) {
           try completeInfoLoop()

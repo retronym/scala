@@ -45,8 +45,9 @@ trait ParallelTyper {
 
   import global._
 
-  /** -Dscalac.parallelTyper.parallelSignatures: member signatures a unit per task (an experiment). */
-  lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.parallelSignatures") != null
+  /** Member signatures a unit per task, after the class headers (serial), under a claim per symbol: the default.
+   *  `-Dscalac.parallelTyper.serialSignatures` restores the serial pre-pass under the one completion lock. */
+  lazy val parallelSignatures: Boolean = scala.reflect.internal.util.CompletionLock.parallelSignatures
 
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
@@ -101,8 +102,17 @@ trait ParallelTyper {
     val t0 = System.nanoTime()
     val signatures =
       if (flag("lazySignatures")) 0
+      else if (parallelSignatures && flag("foldSignatures")) {
+        // -Dscalac.parallelTyper.foldSignatures (an experiment): only the class headers serially; a member's signature
+        // is completed by the first body task that reaches it, under the symbol's claim, and its annotations by its
+        // own unit's task (`typedDefDef` and friends force them)
+        var n = 0
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
+        n
+      }
       else if (parallelSignatures) {
-        // -Dscalac.parallelTyper.parallelSignatures (an experiment): the class headers serially, then the members'
+        // the class headers serially, then the members'
         // signatures a unit per task, each unit's completions under the claim of its unit (`completionRoot`)
         var n = 0
         val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
