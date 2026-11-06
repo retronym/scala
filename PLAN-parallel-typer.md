@@ -637,6 +637,17 @@ One thread is now 7-15% slower than serial (compiler 9%, library 13%, junit 15%)
 
 The pekko corpus's two longest units were `FanInShapeN.scala` and `FanOutShapeN.scala` (353 ms each in typer and 285 each in refchecks at 8 threads): twenty-one constructors each build a port list as a cons chain of `Inlet[T0] :: Inlet[T1] :: ... :: Nil`, whose element type is inferred as a lub at every `::`. The corpus now passes `List[Inlet[_]](in0, in1, ...)` instead (the originals are beside the files as `.orig.txt`). pekko serial 5255 to 4251 ms; at 8 threads 1430 to 1035 ms (3.7x to 4.1x), with typer 530 to 341 ms and refchecks 317 to 42, measured at load 13-29 from other sessions' file indexing and builds, so the serial figure is firmer than the parallel one. Typer's longest unit is now `UnzipWithApply.scala`, 144 ms.
 
+A sweep on the build with the closure fixes below and pekko's shape files rewritten, same setup, load average 5-7, each corpus alone:
+
+```
+            serial     1      2      4      6      8 threads
+pekko        4191   4853   2540   1444   1115    985 ms    4.3x at 8
+compiler     5852   6542   3407   1888   1492   1354 ms    4.3x
+library      3575   4152   2105   1152    865    759 ms    4.7x
+```
+
+pekko at 8 threads by phase, wall with the serial compiler's in brackets: typer 316 (1406), erasure 106 (631), jvm 182 (432, with the GC pause's 102 ms span), refchecks 41 (240), specialize 38 (124). Typer's longest unit is `UnzipWithApply.scala`, 128 ms.
+
 ### The GC pause, and the allocation profile (7 Nov)
 
 A GC log of the compiler corpus at 8 threads (12 GB heap, ParallelGC, so a 3.3 GB eden): a compile allocates 3.5-4.3 GB, so one young collection lands in nearly every compile and copies what is live in the middle of it, 0.5-1.3 GB, at 30-100 ms (`3660M->846M 60 ms`, `4358M->1337M 102 ms`). The 444 MB survivor space overflows, so part of that is promoted and the old generation is later collected in full. The pause is the live set being copied, not a misconfiguration; the levers are a larger young generation (the benchmark could, a build less so), allocating less per compile, and retaining less mid-compile.
