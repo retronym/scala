@@ -464,6 +464,36 @@ Pre-pass, considered and not adopted as the first step: forcing every source sym
 5. Mixin, specialize.
 6. jvm.
 
+## Profiles in the x-ray
+
+The x-ray says when each thread worked and when it waited, but not on what. `tools/parallel-typer/xray/profile.sh <corpus> [threads]` adds async-profiler data, and the page's *Where the CPU went* section shows a flame graph, reversible, and top frames for any window, step, unit, span or completion. The README there has the format.
+
+Spans. Each x-ray span is also two nested async-profiler spans, the step and then the unit, opened in `ParallelTyperTimeline.begin` and `end`, which every x-ray span goes through. This is the nesting perflab's agent gives an unmodified compiler (phase, source path, definitions), so `jfrconv --spans` and its span panel work the same way. `ProfilerSpans.java` calls `one.profiler.Span` through `static final` method handles, so the compiler needs no jar, and a recording off costs nothing beyond the existing test of `current`. Tags are precomputed: steps are literals or a phase's name, and a unit's is `CompilationUnit.spanLabel`, its path, a field set when the unit is created. The annotation span's label used to be built from a count and is now the literal `all symbols`. Completions are a third level, tagged with the symbol's name and recorded only if a sample fell in them (`endIfProfiled`), which is off unless `-Dscalac.parallelTyper.xray.completionSpans=true`.
+
+The name table. Taking a name's string must allocate nothing for completion spans. retronym/scala#204's `string` store has that property, but I did not use it. Merging it conflicts in 16 places in `Names.scala` with the spike's lock-free reads, since it moves storage behind a `NameStore`, and its `string` store would need that thread-safety work again; it is also unbootstrapped, and it would change the default path the serial compiler takes. `Name` already has what is needed: `cachedString`, which `toString` returns when set. With the property above, `newTermName` fills it for every new name, at one test on the path that enters a new name. A check on the quick build: `toString` returns the same `String` object on term and type names with the property on, and a new one with it off. If #204 lands, this test goes away.
+
+CPU and wall clock are separate recordings. On macOS `event=cpu` is the wall clock engine sampling running threads, which async-profiler refuses to run beside `wall`. `event=itimer` can, but its signal arrives at the next kernel trap: 14% of its samples landed in `mach_msg2_trap`, under the x-ray's own `getCurrentThreadCpuTime`, and 10% in a bare `_sigtramp`. With `event=cpu` those disappear, and the samples per thread agree with `ThreadMXBean`.
+
+Repeats. One compilation gives about 90 samples in the library's class headers at 1 ms, too few to read. A profile is therefore 10 compilations under one recording, and each sample is projected onto the compilation of median length: from the span around it to the span of the same step and unit, proportionally, on that span's thread. Filters by step, unit and span are exact, and a window means the same work across compilations. Instantaneous overlap between threads is only true of the compilation shown. This gives 557 samples in the library's class headers and 1468 in the compiler's, and 11.6k and 24k in the bodies. The data is larger than planned, 13 MB for both corpora, against the few MB aimed for. The page stays responsive (a filter takes about 100 ms) and `REPEATS` trades it off.
+
+Overhead, 4 threads, medians of alternating compilations in one warm JVM with completion spans on, with other sessions' load on the machine (load average 15-30):
+
+```
+                   off       timeline   + CPU profile   + wall profile
+library, 12 rounds  806.5 ms  792.3 ms   853.4 ms        772.7 ms
+                              -1.8%      +5.8%           -4.2%
+compiler, 8 rounds  1118.0 ms 1130.2 ms  1156.9 ms       1130.4 ms
+                              +1.1%      +3.5%           +1.1%
+```
+
+Only the CPU profile's cost shows above the noise. The serial compiler with nothing enabled: on the library, its pickles and diagnostics are identical to the base commit's, and the one-thread run's three pickles that differ from serial (O1) are the same as there. Six alternating forks of 8 compilations each had medians of 1.7 to 4.5 s on either build, so that comparison would not resolve a small cost and I report no number from it. What it adds is a static read and a null test per completion, the one test above per new name, and a field per unit.
+
+The oracle at this commit, 5 parallel runs at 8 threads: compiler clean; on the library no parallel run differs from the one-thread run, which differs from serial by O1 alone, as at the base commit.
+
+First things the profiles show: the compiler's largest serial stretch, class headers, spends 23% of its CPU samples opening and statting files for classfiles (`__open`, `stat64`, under `ClassfileParser`'s input). In the bodies, `SymbolTable$PerThreadScratches.get`, the per-thread state the spike added, is the top self frame on the library (3.1%) and second on the compiler (3.5%), with `SymbolTable.scratch` beside it.
+
+A hang seen once, on the library at 4 threads under the abandoned `itimer` configuration and not again in about 150 compilations: a signatures worker had exited while another spun in `awaitMarker` on a `_completingThread` still naming it, with the others waiting on that worker's claim. `markCompleting` and `unmarkCompleting` save and restore the field non-atomically, which could leave such a marker if two threads' marks interleave. That is a hypothesis; I did not reproduce it.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
@@ -471,6 +501,7 @@ Pre-pass, considered and not adopted as the first step: forcing every source sym
 - Stage 1 loose ends (A): atomic flags; loaders under the lock with their roots marked (I6); scope entries published safely; the state map's work list accounted for (annotations.tsv, 656 → 324 fields, the rest lazy-val monitors forced up front); lazy-signatures mode measured; O1 explained; the compiler-benchmark corpora pass.
 - Stage 2a (B): type caches off the lock, local completions off the lock (I7 found on the way), `cookJavaRawInfo` and `exists` fast paths, the phase register in the worker thread, striped uniques, a leak of compilers through `ThreadLocal`s (I8).
 - Stage 2b, first steps: scala-sharing vendored (relocated to `scala.reflect.internal.sharing`, I12) and wired into the build, `restarrFull` included; the completion lock on its `CoarseLock`; `PerKeyClaims` behind `claims=perKey`; parallel member signatures behind `parallelSignatures`, with symbol roots and lending (I9 fixed; I11 open on stress-shared).
+- X-ray profiles: async-profiler spans for the x-ray's spans, `profile.sh`, and a flame graph per window, step, unit, span or completion on the page (section "Profiles in the x-ray").
 - Serial regressions: partest `--pos --neg --run` (5429 tests) and junit `scala.reflect.internal`, `nsc.typechecker`, `nsc.reporters`, `nsc.symtab` (378) pass without the flag (partest last run at 0a4b168aa9, with `JavaUniverseForce` updated after).
 
 ## TODO
