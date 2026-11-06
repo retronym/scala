@@ -267,6 +267,86 @@ Parser phase on the library, warm, wall time (the machine at load average 15-17 
 
 Recommendation, pending the benchmark and a soak of stress-shared for I13: make the parallel parser the default under `-Yparallel-typer` (it is exact in its diagnostics and takes about 50-60 ms off the serial path at 8 threads), and `loadPackages` with it (another 30-40 ms, by the driver's own timing); keep the index serial.
 
+## Parallel post-typer phases (superaccessors, extmethods, pickler)
+
+`-Dscalac.parallelTyper.parallelPostTyper` (under `-Yparallel-typer`): each of the three phases runs a unit per task on the pool, instead of serially over all units.
+
+### Steps, not fused
+
+Decision: each phase is its own pool step over all units (`=steps`, the default value). The alternatives are behind the same property for measurement only: `=fused` (superaccessors, extmethods and pickler of a unit back to back on one worker) and `=fusedTransforms` (the two transforms fused, the pickler its own step). Fusing with the typer's body step is not on the table: superaccessors reads `sym.alias` of parameter accessors, which `finishComputeParamAlias` sets after the last unit is typed; it looks members up in classes of other units whose typers would still be entering case class synthetics; and the run loop decides after the typer, on the whole run's errors, whether the later phases run at all.
+
+Why steps:
+
+- A step keeps the serial invariant "phase N has finished on every unit before phase N+1 starts on any". What is left to argue is only what two units do to each other within one phase, which is the order dependence the serial compiler already has (it runs the units in command-line order).
+- The pickler of unit A writes an external reference to a symbol of unit B as its name and owner. Superaccessors and extmethods rename symbols: `private[C]` members of a class get an expanded name (`expandName`, superaccessors' `ClassDef` case), and so do private members selected in an `@inline` method and the private parameter accessors of a value class (`makeNotPrivate`). Such a symbol can be named from another unit through a type: B has `class C { private[C] val x: Foo = ...; val y: x.T = ... }`, A has `class D extends C { val z = y }`, and A's pickle refers to `x` as `C$$x` or `x` depending on whether B's superaccessors has run. Fused, that is a race on the bytes of a pickle. The corpus `post-typer` has this case.
+- The run loop stops after a phase with errors. Fused, extmethods and the pickler would have run on some units (and written `.sig` files) before another unit's superaccessors reported an error.
+- `-Ystop-after`, `-Yskip`, `-Vprint:<phase>`, `-Yshow`, plugin phases that sit between two of the three: the phase list and the run loop are untouched, a phase is parallel or serial on its own, so they all behave as before. A fused group would have to detect each of these and fall back (the experiment only fuses phases that are adjacent in the phase list).
+- The cost of a step is its tail, set by its slowest unit. For the typer that is 200-285 ms (three units); for these phases the largest unit is a few ms (the whole of superaccessors on the library is about 55 ms serially over 574 units), so three joins cost little. Measured below.
+
+### Phase travel
+
+Each worker sets its own phase register to the step's phase. There is no info transformer between the typer and refchecks, so `info` at any of the three phases is the typer's `TypeHistory` entry: a read at a later phase only advances `_validTo` (the same value from every thread) and transforms nothing. Scopes are not versioned by phase: an entry made by superaccessors is seen by a reader at any phase, which is why the inter-phase order matters and steps keep it. Flags are masked by phase (`notPRIVATE` takes effect after superaccessors, per reader, from its own register). The stamped type caches (`baseTypeSeq`, `baseClasses`) are revalidated for the new period under their existing protocols; no base class changes.
+
+### Shared state, per phase
+
+Superaccessors:
+
+- Accessor symbols (`super$m`, `protected$m`, `protected$m_=`) are entered into the scope of `clazz`, which is always a class enclosing the tree (`Super`'s and `This`'s class; `hostForAccessorOf` walks the enclosing classes), and the definition is stored in `accDefs(clazz)`, which only has the templates open in this transformer. So a unit enters only into its own classes' scopes, in its own tree order: no ordering problem between units, and one writer per scope. Readers in other units (member lookups below) are covered by the scope publication argument of the typer.
+- `private[C]` expansion: `decls.unlink(s); s.expandName(C); decls.enter(s)` on the unit's own class. `unlink` bypasses the entry without touching its `tail`/`next`, so a reader standing on it goes on; `name_=` finds nothing left to rehash; `enter` prepends. A cached element list computed across the unlink is keyed by the old head and dropped by the enter.
+- `makeNotPrivate` (private member selected in an `@inline` method): atomic flags; `expandName` then rehashes the symbol's entry in place, rewriting the `tail` of an entry that another thread may be standing on, which diverts that reader into the other bucket and makes it miss the rest of its own (a lookup of an unrelated name in the same class answers "no member"). Fix: in a concurrent compiler `Scope.rehash` leaves the old entry as it is and links a fresh entry into the new bucket and in the old one's place in the element list.
+- Reads of other units' classes: `overridingSymbol` in intermediate classes (scala/bug#4989), `hasClassOverride`, `info.member(name).exists`, the ancestors' decls for `-Xlint:private-shadow`, `isSubClass`/`<:<` for protected accessors, Java-defined owners (classfile completion and `cookJavaRawInfo`, under the lock). These are lookups by name of members that are not being renamed, except a lookup of a `private[C]` member by its unexpanded name, whose answer in the serial compiler already depends on whether the defining unit comes first. Not made deterministic (it would take renaming in a pass of its own); not known to matter: such a member cannot be accessed from another unit, and an override with a qualified-private modifier is an error in refchecks.
+- Name freshness: accessor names are derived (`super$`, `protected$`), not fresh; fresh names made by the local typer come from the unit's creator (the current unit is per thread).
+- Per transformer, so per unit: `accDefs`, `typers`, `validCurrentOwner`, the local typer and its contexts (`rootContextPostTyper`, as the typer's workers build them), the tree copier. `restrictionError` and the lint warning go to the buffering reporter and `PerRunReporting`.
+
+Extmethods:
+
+- An extension method symbol is entered into the companion's scope (`newExtensionMethodSymbol`). The companion of a value class is in the class's unit (a synthesised one is made by the namer in that unit), so again one writer per scope, in tree order. `extensionDefs` is a field of the unit's transformer.
+- `makeNotPrivate` on the primary constructor and the parameter accessors (the rename above). `removeAnnotation(TailrecClass)` and `setAnnotations` on the unit's own symbols.
+- The forwarder and the extension method bodies are retyped by the unit's local typer; retyping stops at subtrees that have a type, so it does not redo lookups in other units.
+- Nothing here uses `markUsed`; `extensionMethod` (the lookup by erasure) is not called before erasure.
+
+Pickler:
+
+- `Run.symData` (a `HashMap`): read and written under its monitor in a concurrent compiler. `shouldPickle`'s test-then-store is not atomic across units, which is fine: a symbol has one defining unit (companions in two files are an error in the typer), so two units never pickle the same root. The back end only does `get` and `-=`, no iteration, so insertion order is not observable.
+- The reusable `_index` and `_entries` of `Pickler`: per thread.
+- `-Ypickle-write`: a directory is written by the workers as they go (`DirEntryWriter` is the back end's concurrent writer). A jar's entry order is its write order, so for a jar (or a virtual file) the workers keep each unit's files and the phase writes them in unit order after the join. The `sigWriter` lazy val is forced by the first worker to get there; its initialiser completes nothing.
+- `-Ypickle-java`: Java units are pickled like the others; their signatures were completed in the pre-pass.
+- What a `Pickle` forces: `info` of the symbols local to its root (complete after the typer; one that is still lazy is the unit's own and completes under the usual rules), `annotations` of those (a thunk that is still lazy is forced under the completion lock, lock before monitor), `children`, `companionSymbol` (a lookup in the owner's scope, which no one writes now). Of an external symbol it reads the name, the owner chain and `isModuleClass`, and completes nothing. `newTermName` for string constants takes the name lock. The traversers and the buffer are per `Pickle`.
+- Entry order in a pickle is the order of `decls`, each written by one unit before the pickler step starts: byte-identical by construction.
+
+Diagnostics go through the buffering reporter of the pool step, as for the typer. Units are queued largest first; nothing observable depends on the order.
+
+### Findings
+
+- The fused experiment fails as predicted. `=fused` on the `post-typer` corpus, 20 runs at 8 threads: 9 runs differ from the one-thread run and the one-thread run differs from serial, always in `Q<n>.sig` (the subclass of `Qualified`, which refers to `x` or `pt$Qualified$$x`); one run crashed in the pickler (`NoSuchElementException: key not found: pt$Qualified$$x` in `writeRef`: the name changed between the pickle's two passes). `=fusedTransforms` passed 20 runs on that corpus; it was not taken further.
+- P1, contention, not a race: the pickler step did not scale at first (48 ms serial, 53 ms on 8 threads; the units' wall times summed to 284 ms with 175 ms blocked on a monitor). JFR's monitor events put all of it on the name table's lock in `TypeName.toTermName`, called by `Pickle.isRootSym` for every owner of every symbol a pickle meets. Fixes: `isRootSym` compares the two names' position and length in the table (a type name and its term name share their characters) after the owner, and `TypeName.toTermName` reads its bucket without the lock first and looks again under it if it does not see the entry. After: 11 ms on 8 threads.
+- Not ours: `scalac -Ystop-after:pickler` (no `-Yparallel-typer`) throws a `NullPointerException` in superaccessors on a super call to a default method of a Java interface (`super[JGreeter].greet(..)`): `transformSuperSelect` asks erasure's `accessibleOwnerOrParentDefiningMember`, which runs `exitingErasure`, and with no erasure phase in the run that is `enteringPhase(NoPhase.next)`, and `NoPhase.next` is null. The corpus avoids it. A candidate for 2.13.x by itself.
+
+### Measurements
+
+Oracle, `=steps`, 8 threads, `-Dscalac.debug.checkScratchOwner=true`, 50 runs each, at the final commit of this work (and the same result on the commit before the name-lock fix): post-typer, annotations, annotations-neg, case-classes, reflect, compiler 50/50 agree with serial byte for byte; library 50/50 agree with the one-thread run, which differs from serial in the three O1 pickles (`Predef`, `WrappedString`, `StringBuilder`) as before; stress-shared 1/50 and 2/50 in the two batches, all the I11 self-type error (7/200 and 10/200 before). post-typer also 5/5 with `-Ypickle-java`. `-Ypickle-write` to a jar, 5 runs: the same entries in the same order with the same bytes as serial. A full compile of the corpus (no `-Ystop-after`) with the switch on gives the same 371 class files as serial. junit `scala.tools.nsc.typechecker.*`, `scala.reflect.internal.*`, `scala.tools.nsc.symtab.*`: 308 pass.
+
+X-ray, `src/library`, warm (12 warm-up compilations, one recorded per configuration; `timeline.data-off.js` and `timeline.data-on.js` in the scratchpad). The machine had a load average of 17-30 throughout from the other sessions' work, so totals from different JVMs are not comparable; the per-phase wall times are:
+
+| phase | serial compiler | 1 thread, off / on | 4 threads, off / on | 8 threads, off / on |
+|---|---:|---:|---:|---:|
+| superaccessors | 53-73 | 67 / 78 | 57 / 30 | 62 / 17 |
+| extmethods | 31-42 | 35 / 36 | 33 / 17 | 37 / 13 |
+| pickler | 42-59 | 52 / 45 | 47 / 19 | 48 / 11 |
+| the three | 126-174 | 154 / 159 | 137 / 66 | 147 / 41 |
+
+So about 105 ms of an 8-thread run of about 1100 ms on this loaded machine, and no cost on one thread beyond starting a worker three times. `bench.sh library` (8 warm-up, 9 measured, same JVM, medians, same load): 8 threads 1291 → 1171 ms and, repeated at the end of the same JVM, 1050 → 937 ms with the switch (serial 2402 and 2242 ms); 4 threads 1191 → 1185 ms and one thread 1843 → 2229 ms (minima 1790 and 1803), both inside the noise of this session. These need repeating on a quiet machine before they are quoted.
+
+The tail question: at 8 threads the largest unit of each step is 5-10 ms (`Vector.scala` and `FunctionWrappers.scala` in superaccessors, `FunctionWrappers.scala` and `ArrayOps.scala` in extmethods, `FunctionWrappers.scala` in the pickler), against 200-285 ms for the typer's. One recorded run each: steps 17 + 13 + 11 = 41 ms, `fusedTransforms` 19 + 10 = 29 ms, `fused` 29 ms. Fusing would save about 10 ms of 1100 and gives up byte-identical pickles, so steps stay.
+
+What serial time remains at 8 threads with the switch on (x-ray, ms): signatures pre-pass 361, tail of the bodies 161, parser 98, setup 89, namer 49, annotation sub-pass 24, superaccessors 17, extmethods 13, pickler 11, lazy-val forcing 6, packageobjects 2. The post-typer phases are no longer among the bounds; the pre-pass, the tail and the parser are (the siblings' work).
+
+### Recommendation
+
+Make it the default under `-Yparallel-typer` (keep the property as an off switch, `=false`): it has the same oracle record as the typer's own path on every corpus, it changes nothing in the phase list or the run loop's decisions, and the state it adds to the argument is small (one writer per class scope; `symData`; the pickler's reusable buffers; `Scope.rehash`). Before flipping it: a rerun of the timings on a quiet machine, and the two residues below looked at once.
+
+Residues: a lookup, from another unit, of a `private[C]` member by its unexpanded name while its unit's superaccessors renames it (order-dependent in the serial compiler too; not known to be reachable in a program that compiles); the remaining `toTermName` calls in the pickler (module class names of external references, `companionModule0`) now take the lock only when the lock-free read misses. The fused modes should be deleted with the experiment, they exist to show the race.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
@@ -282,7 +362,9 @@ Recommendation, pending the benchmark and a soak of stress-shared for I13: make 
 - Parallel signatures as the default: I11, then 50 clean runs per corpus.
 - I11 (open, parked): see the race log for the next step.
 - The tail: tasks finer than a unit.
-- The serial phases after the typer, a unit per task. The parser is done behind `-Dscalac.parallelTyper.parallelParser`; owed before it becomes the default: `bench.sh` at 1, 4 and 8 threads on a quiet machine, and a soak of stress-shared after I13's fence.
+- The parser a unit per task: done behind `-Dscalac.parallelTyper.parallelParser`; owed before it becomes the default: `bench.sh` at 1, 4 and 8 threads on a quiet machine, and a soak of stress-shared after I13's fence.
+- Superaccessors, extmethods and pickler a unit per task: done behind `-Dscalac.parallelTyper.parallelPostTyper` (see its section); make it the default after timings on a quiet machine.
+- `-Ystop-after:pickler` NPE on a super call to a Java default method (stock compiler; see the post-typer findings).
 - `elemsCache` residue: `unlink` in the middle of a scope while another thread reads it (serial phases only today).
 - `_annotations` read-modify-write on a symbol of another unit during body typing (not known to happen).
 - The state map's 91 "other" fields were annotated by reading, not by a test each.
