@@ -47,7 +47,7 @@ abstract class RefChecks extends Transform {
 
   import global._
   import definitions._
-  import typer.typed
+  private def typed(tree: Tree): Tree = typer.typed(tree)
 
   /** the following two members override abstract members in Transform */
   val phaseName: String = "refchecks"

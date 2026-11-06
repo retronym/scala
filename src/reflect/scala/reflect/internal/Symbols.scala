@@ -1787,7 +1787,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
-      if (infos ne null) {
+      if (isConcurrentCompiler) {
+        // A new node rather than `reset`, which changes the fields of a node another thread may be reading.
+        val node = TypeHistory(currentPeriod, info, null)
+        java.lang.invoke.VarHandle.storeStoreFence()
+        infos = node
+      }
+      else if (infos ne null) {
         infos.reset(currentPeriod, info)
       } else
         infos = TypeHistory(currentPeriod, info, null)
@@ -1854,6 +1860,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** `rawInfo`, once a completion on another thread has been waited for (`info` has done so). The classes that
      *  override `rawInfo` override `info` too. */
     private[this] final def rawInfoHere: Type = {
+      if (isConcurrentCompiler) return concurrentRawInfo
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
       //      likely to inline into hot callers of .info
       val outer = Symbols.this
@@ -1895,6 +1902,53 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       infos.info
     }
 
+    /** `rawInfoHere` in a concurrent compiler. A symbol's history is only ever added to, with its nodes published
+     *  before `infos` and `_validTo`, so a reader at a phase the history already covers takes no lock; `_validTo` is read
+     *  first, because a reader that read `infos` first could miss a node and then see the `_validTo` that covers it.
+     *  An info transform runs under the completion lock, with the symbol marked as completing: a transformer may
+     *  enter members, create classes and fill per-run maps, none of it for two threads at once, and it stores
+     *  intermediate infos, which only its own thread may see ("reads from same symbol during info-transform").
+     */
+    private def concurrentRawInfo: Type = {
+      val validTo = _validTo
+      java.lang.invoke.VarHandle.loadLoadFence()
+      var infos = this.infos
+      assert(infos != null, "infos must not be null")
+      if (validTo == NoPeriod) infos.info
+      else {
+        val curPeriod = currentPeriod
+        if (validTo >= curPeriod) {
+          val curPid = phaseId(curPeriod)
+          while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
+          infos.info
+        }
+        else transformInfosUnderLock(curPeriod)
+      }
+    }
+
+    private def transformInfosUnderLock(curPeriod: Period): Type = {
+      val curPhase = phase
+      underCompletionLock {
+        val saved = markCompleting()
+        try {
+          val curPid = phaseId(curPeriod)
+          var infos = this.infos
+          while (curPid < phaseId(infos.validFrom) && infos.prev != null) infos = infos.prev
+          if (_validTo < curPeriod) {
+            if (runId(infos.validFrom) != currentRunId) {
+              adaptInfo(infos.oldest)
+              infos = this.infos
+            }
+            if (_validTo < curPeriod) infos = transformInfos(infos, curPhase, curPeriod)
+          }
+          infos.info
+        } finally {
+          phase = curPhase
+          unmarkCompleting(saved)
+        }
+      }
+    }
+
     private def transformInfos(infos0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
       assertCorrectThread()
       var infos = infos0
@@ -1905,6 +1959,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         val info1 = itr.transform(this, infos.info)
         if (info1 ne infos.info) {
           infos = TypeHistory(currentPeriod + 1, info1, infos)
+          if (isConcurrentCompiler) java.lang.invoke.VarHandle.storeStoreFence()
           this.infos = infos
         }
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
@@ -3432,6 +3487,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[this] var tyconRunId = NoRunId
     private[this] var tpeCache: Type = _
     private[this] var tpePeriod = NoPeriod
+    private[this] var tpeStamped: Stamped[Type] = null
 
     override def isAbstractType          = this hasFlag DEFERRED
     override def isContravariant         = this hasFlag CONTRAVARIANT
@@ -3483,30 +3539,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  completion lock, and a reader that sees no value waits for it.
      */
     private def concurrentTpe: Type = {
-      val period = tpePeriod
-      val cache = tpeCache
-      if (period == currentPeriod && (cache ne null) && (cache ne NoType)) cache
-      else if (!lockFreeTypeCaches) underCompletionLock {
-        maybeUpdateTypeCache()
-        tpeCache
+      if (!lockFreeTypeCaches) {
+        val period = tpePeriod
+        val cache = tpeCache
+        if (period == currentPeriod && (cache ne null) && (cache ne NoType)) cache
+        else underCompletionLock {
+          maybeUpdateTypeCache()
+          tpeCache
+        }
       }
       else {
+        // read once: `info_=` on another thread clears the field
+        val cached = tpeStamped
+        if ((cached ne null) && cached.period == currentPeriod) return cached.value
         // Without the lock: the cycle marker is per thread, the value is stored before the period is stamped, and
         // two threads compute the same (interned) `TypeRef`. A re-entry answers as the serial update would: the
         // cycle marker `NoType` if the period was stamped (the symbol is initialized), else a cyclic reference.
         // A symbol another thread is completing (a class being loaded) has no type parameters yet: wait (I11).
         awaitCompletionElsewhere()
         val s = scratch
-        if (s.tpeInProgress.contains(this)) {
+        if (inProgressAtPeriod(s.tpeInProgress, this)) {
           if (isInitialized) NoType else throw CyclicReference(this, typeConstructor)
         }
-        else if (period != NoPeriod && (cache ne null) && (cache ne NoType) && isValid(period)) {
-          tpePeriod = currentPeriod
-          cache
+        else if ((cached ne null) && isValid(cached.period)) {
+          tpeStamped = new Stamped(cached.value, currentPeriod)
+          cached.value
         }
         else {
           val saved = s.tpeInProgress
-          s.tpeInProgress = this :: saved
+          s.tpeInProgress = new Stamped(this, currentPeriod) :: saved
           try {
             val stamp = isInitialized
             val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
@@ -3514,10 +3575,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
             if (noTypeParams && tyconCacheNeedsUpdate) setTyconCache(tp)
             // Only a value computed from a completed symbol is stored: one computed before (no type parameters yet,
             // from a loader's lazy type) would be stored after a correct one from another thread, under its stamp (I11).
-            if (stamp) {
-              tpeCache = tp
-              tpePeriod = currentPeriod
-            }
+            if (stamp) tpeStamped = new Stamped(tp, currentPeriod)
             tp
           } finally s.tpeInProgress = saved
         }
@@ -3571,6 +3629,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     override def info_=(tp: Type): Unit = {
       tpePeriod = NoPeriod
+      tpeStamped = null
       tyconCache = null
       super.info_=(tp)
     }
@@ -3583,6 +3642,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def reset(completer: Type): this.type = {
       super.reset(completer)
       tpePeriod = NoPeriod
+      tpeStamped = null
       tyconRunId = NoRunId
       this
     }
