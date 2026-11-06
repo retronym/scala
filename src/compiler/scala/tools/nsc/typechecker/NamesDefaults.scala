@@ -465,7 +465,13 @@ trait NamesDefaults { self: AbstractAnalyzer =>
             if (mode.in(Mode.ANNOTmode) && p.owner.isConstructor && p.enclClass.isNonBottomSubClass(AnnotationClass) && !p.enclClass.isNonBottomSubClass(ConstantAnnotationClass))
               p.getAnnotation(DefaultArgAttr).flatMap(_.args.headOption).map(dflt => atPos(pos) {
                 // The `arg.tpe` is tagged with the `@defaultArg` annotation, see AnnotationInfo.argIsDefault
-                val arg = dflt.duplicate.setType(dflt.tpe.withAnnotation(AnnotationInfo(DefaultArgAttr.tpe, Nil, Nil)))
+                // The pickler writes a literal of constant type as its value, which is unpickled with the widened type.
+                // Use that type for a `dflt` from source as well.
+                val tpe = dflt.tpe match {
+                  case ConstantType(value) => value.tpe
+                  case tp                  => tp
+                }
+                val arg = dflt.duplicate.setType(tpe.withAnnotation(AnnotationInfo(DefaultArgAttr.tpe, Nil, Nil)))
                 if (positional) arg
                 else NamedArg(Ident(p.name), arg)
               })
