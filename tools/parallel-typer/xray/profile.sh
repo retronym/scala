@@ -13,6 +13,7 @@
 # Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (1ms),
 # WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile).
 set -euo pipefail
+JAVA="${JAVA:-java}" # the JVM to record on, e.g. a patched JDK's bin/java
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 CORPUS="$1"
@@ -52,9 +53,9 @@ case "$CORPUS" in
 esac
 
 BIN="$WORK/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
-java -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala" "$HERE/XrayProfile.scala"
+"$JAVA" -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala" "$HERE/XrayProfile.scala"
 
-JVM=(java -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
+JVM=("$JAVA" -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
   -Dscalac.parallelTyper.xray.completionSpans=true ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS")
 if [ -n "${OVERHEAD:-}" ]; then
   exec "${JVM[@]}" XrayProfile --overhead "$args" "$THREADS" "$WARMUP" "$OVERHEAD" "$CPU_INTERVAL" "$WALL_INTERVAL" "$WORK"
