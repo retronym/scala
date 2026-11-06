@@ -1787,6 +1787,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         advancePhase()
       }
       profiler.finished()
+      analyzer.closeWorkers()
       ParallelTyperTimeline.runFinished(xray, { case s: Symbol => s.fullNameString; case x => String.valueOf(x) }) // xray
 
       runReporting.runFinished(hasErrors = reporter.hasErrors)
@@ -1972,6 +1973,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   final lazy val closeableRegistry: CloseableRegistry = new CloseableRegistry
 
   def close(): Unit = {
+    analyzer.closeWorkers()
     perRunCaches.clearAll()
     closeableRegistry.close()
   }
