@@ -544,6 +544,36 @@ What still limits the front end at 8 threads, in order: the bodies' CPU, which i
 
 Measuring. The machine was shared with other sessions' soak runs throughout (load average 10-18), and wall times of one compilation differ by 10% and more from run to run. The changes above were judged by CPU samples in the frames concerned, which do not depend on the load, and by interleaved before and after runs. None of the wall times here is fit to quote as a result; a quiet machine or perflab is owed.
 
+## Two races in the info protocol, and a quiet-machine recording (7 Nov)
+
+Two latent bugs, both a reader taking a state another thread had published half way for a finished one.
+
+1. `Symbol.initialize` tested `isInitialized`, which is true once another thread's completion has published a provisional info. `typedDefDef` calls `ddef.symbol.initialize` and went on to type the right-hand side that the completer was still typing, so two threads wrote one tree. Seen as an inferred `Any` with a cast in about 7% of compiles of reflect (`Types$TypeApiImpl.erasure`, `Symbols$TypeSymbol.resolveOverloadedFlag`), as a spurious "not found: value tparam", and as "Byte does not take parameters" in 13 of 700 compiles of small modules. `initialize` now also reads the info when the symbol is completing elsewhere, which waits. After it: 0 of 200 compiles of reflect differ, 0 of 700 small-module compiles fail.
+2. `adaptInfo`, which rebuilds a class path symbol's history at its first read in a new `Run`, writes `_validTo` in the new run before it replaces the history. A second thread between the two writes took the path without the lock, found a later node in the old history, took it for another thread's publication and moved `_validTo` past a step that the new history then lacked. Seen only on a `Global` kept across runs with the late phases on the pool: Mixin crashed with "head of empty list" on a forwarder whose alias had missed uncurry's transform (81 of 82 compiles of scalap). A history whose run is not that of `_validTo` now goes to the completion lock, and adapting happens alone under it. After it: 0 of 82.
+
+The lock around info transforms is now taken for one transformer at a time, and only by a transformer that needs it: a transformer answers `transformInfoIfLocal` when it can do a symbol without shared writes, which erasure, posterasure, lambdalift and explicitouter can for a class, and specialize can for a class with nothing to specialize. Before, every class's transforms ran under the coarse root, and at the start of specialize every worker queued about 45 ms behind them.
+
+A recording of the whole of it, full compile to class files in memory, every step on the pool, patched JDK 26, ParallelGC, each corpus alone on the machine (load average 5-7 from idle sessions), mean of 2 after 10 warm-up compiles:
+
+```
+            serial     1      2      4      8 threads
+compiler     5595   6218   3303   1904   1337 ms    4.2x at 8 (3.8x the night before)
+library      3402   3912   2063   1109    781 ms    4.4x
+pekko        5031   5999   3045   1861   1455 ms    3.5x (3.2x)
+junit        4091   4974   2491   1520   1232 ms    3.3x
+scalapb      2363   2654   1415    807    584 ms    4.0x
+re2s-x32     2866   3205   1689    921    647 ms    4.4x
+```
+
+Specialize on the compiler corpus at 8 threads went from 125 ms of wall to 38. What limits each corpus now, from the per-phase tables (`phases.js` over the recording):
+
+- One thread against serial: 11-22% slower (compiler 11%, pekko 19%, junit 22%), spread over every phase. The one-thread-parity work has it at about 40% per-thread phase and period lookup, 15-30% GC from extra allocation, and the rest `Stamped` holders, a `SubstTypeMap` per call and class headers.
+- The longest unit. pekko's refchecks takes 317 ms at 8 threads because one unit takes 301 (261 serially), and its typer has one of 366 ms in 530. Only tasks finer than a unit help.
+- jvm: 211 ms at 8 threads on the compiler corpus against 443 serially, with one span of 112 ms; pekko's delambdafy 107 ms with one span of 99 against 63 ms serially. Both are a pause of the whole JVM: every worker has a span of 98-112 ms there with 1-7 ms of CPU and no lock wait. With a 12 GB heap and ParallelGC that is a young collection copying the compiler's live graph, about 100 ms once in a compile, which is 2% of the serial compile and 7% of the one at 8 threads. Not looked at further: a GC log to say which collection it is, and whether a larger young generation or less retained per run shortens it.
+- Typer CPU summed over workers at 8 threads is 44% above serial on the compiler corpus (2818 against 1958 ms) and 39% on pekko, diffuse in the profile.
+
+Still open: the pickler's "bad type: <error>" crash (rare, pekko), a false "illegal cyclic reference involving value log" in about 1 of 160 small-module compiles (every dump read so far has a thread that holds the coarse root waiting on a source symbol's claim), and the two failures at very high load recorded in `cross-global-spike-failures.md`.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
