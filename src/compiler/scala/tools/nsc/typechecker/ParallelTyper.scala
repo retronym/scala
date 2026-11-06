@@ -102,6 +102,15 @@ trait ParallelTyper {
     val t0 = System.nanoTime()
     val signatures =
       if (flag("lazySignatures")) 0
+      else if (parallelSignatures && flag("foldSignatures")) {
+        // -Dscalac.parallelTyper.foldSignatures (an experiment): only the class headers serially; a member's signature
+        // is completed by the first body task that reaches it, under the symbol's claim, and its annotations by its
+        // own unit's task (`typedDefDef` and friends force them)
+        var n = 0
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
+        n
+      }
       else if (parallelSignatures) {
         // the class headers serially, then the members'
         // signatures a unit per task, each unit's completions under the claim of its unit (`completionRoot`)

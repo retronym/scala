@@ -65,6 +65,8 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
     acquisitions.increment()
   }
   def releaseKey(key: AnyRef): Unit = claims.release(key)
+  /** Who holds what, for a report of a wait-for cycle. */
+  def holders: String = if (claims eq null) owner else claims.holdersNow
 
   /** Wait until no other thread holds the claim on `key` (the coarse mode: the lock). A wait that would close a
    *  wait-for cycle calls `onCycle` (which throws). */
