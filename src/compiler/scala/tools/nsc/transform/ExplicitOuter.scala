@@ -40,7 +40,7 @@ abstract class ExplicitOuter extends InfoTransform
 
   /** This class does not change linearization */
   override def changesBaseClasses = false
-  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = transformInfo(sym, tpe)
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new ExplicitOuterTransformer(unit)
