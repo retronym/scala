@@ -493,7 +493,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     };
     XR.analyse(r);
     renderKpis(); renderStretches(); renderChips(); renderSites(); renderBar(); renderTables(); renderScaling(); renderMeta();
-    Object.assign(prof, { span: null, step: null, label: null, sym: null, frame: null, root: null, lastCount: null });
+    Object.assign(prof, { span: null, step: null, label: null, sym: null, frame: null, root: null, lastCount: null, zoom: 1, pan: 0 });
     draw();
   }
 
@@ -947,7 +947,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('profCtl').innerHTML = ['cpu', 'wall'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${e === P.event ? 'this recording' : 'a recording of its own, so its times differ a little'}">${e === 'cpu' ? 'CPU' : 'wall clock'}</button>`).join('') +
       `<button id="nameSimple" class="${prof.simple ? 'on' : ''}" title="class and method, without packages and enclosing classes">simple names</button><button id="nameFull" class="${prof.simple ? '' : 'on'}" title="the frames as recorded">full names</button>` +
       `<button id="flipFlame" class="${prof.reversed ? 'on' : ''}" title="root at the frames where time is spent, with their callers below">reversed</button>` +
-      `<span class="zoomctl" title="zoom the flame graph: also pinch or ⌘/ctrl-scroll over a frame, and right-click for more"><button id="flameIn" title="zoom into the widest frame below the current root">+</button><button id="flameOut" title="zoom out one frame"${prof.root && prof.root.length ? '' : ' disabled'}>−</button><button id="flameReset" title="show every stack"${prof.root && prof.root.length ? '' : ' disabled'}>reset</button></span>` +
+      `<span class="zoomctl" title="zoom the flame graph: also pinch or ⌘/ctrl-scroll (the point under the cursor stays put), scroll sideways to pan, click a frame to zoom into it, right-click for more"><button id="flameIn" title="widen the flame graph about its middle">+</button><button id="flameOut" title="narrow it"${(prof.zoom || 1) > 1 ? '' : ' disabled'}>−</button><span class="dim" style="min-width:3.2em;text-align:center">${Math.round((prof.zoom || 1) * 100)}%</span><button id="flameReset" title="back to every stack at its natural width"${(prof.zoom || 1) > 1 || (prof.root && prof.root.length) ? '' : ' disabled'}>1:1</button></span>` +
       pills.map(([k, t]) => `<span class="pfilter" data-k="${k}" title="remove this filter">${esc(t)} ×</span>`).join('') +
       `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
     $('profCtl').querySelectorAll('button[data-ev]').forEach((b) => b.onclick = () => { 
@@ -960,9 +960,9 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('nameSimple').onclick = () => { prof.simple = true; renderProfile(); };
     $('nameFull').onclick = () => { prof.simple = false; renderProfile(); };
     $('flipFlame').onclick = () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); };
-    $('flameIn').onclick = () => flameZoom(1);
-    $('flameOut').onclick = () => flameZoom(-1);
-    $('flameReset').onclick = () => { prof.root = null; renderProfile(); };
+    $('flameIn').onclick = () => flameZoomAt(1.25, flameWidth / 2);
+    $('flameOut').onclick = () => flameZoomAt(0.8, flameWidth / 2);
+    $('flameReset').onclick = () => { prof.root = null; prof.zoom = 1; prof.pan = 0; renderProfile(); };
     $('profCtl').querySelectorAll('.pfilter').forEach((e) => e.onclick = () => { prof[e.dataset.k] = null; prof.root = null; renderProfile(); });
     $('profSteps').innerHTML = '<span class="dim">steps here</span> ' + A.steps.map(([s, n]) => `<span class="chip${prof.step === s ? '' : (prof.step ? ' off' : '')}" data-s="${esc(s)}"><span class="sw" style="background:${XR.stepColor(s)}"></span>${esc(XR.stepName(s))} <span class="dim">${n}</span></span>`).join(' ');
     $('profSteps').querySelectorAll('.chip').forEach((c) => c.onclick = () => { prof.step = prof.step === c.dataset.s ? null : c.dataset.s; prof.root = null; renderProfile(); });
@@ -1018,7 +1018,11 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (prof.root) for (const fr of prof.root) root = (root && root.kids.get(fr)) || null;
     if (!root) { prof.root = null; root = tree; }
     flameBoxes = [];
-    const kx = root.t ? width / root.t : 0;
+    // The horizontal zoom of jfrconv's viewer: `prof.zoom` widens the graph about a point and `prof.pan` is the first
+    // sample shown, so that a frame too narrow to read is widened where it is, in its surroundings.
+    const zoom = Math.max(1, prof.zoom || 1);
+    prof.pan = zoom === 1 ? 0 : Math.max(0, Math.min(prof.pan || 0, root.t * (1 - 1 / zoom)));
+    const kx = root.t ? width * zoom / root.t : 0, xLeft = -prof.pan * kx;
     let depthMax = 0;
     const order = prof.reversed ? (p, q) => q.t - p.t : (p, q) => (P.frames[p.fr] < P.frames[q.fr] ? -1 : 1);
     const tails = [];
@@ -1026,19 +1030,23 @@ if (typeof module !== 'undefined') module.exports = XR;
       let narrow = 0;
       for (const k of [...n.kids.values()].sort(order)) {
         const w = k.t * kx;
-        if (w >= 0.5) { flameBoxes.push({ n: k, x, y: depth * ROW, w }); depthMax = Math.max(depthMax, depth); walk(k, x, depth + 1); x += w; }
+        if (w >= 0.5) {
+          if (x + w > 0 && x < width) { flameBoxes.push({ n: k, x, y: depth * ROW, w }); depthMax = Math.max(depthMax, depth); walk(k, x, depth + 1); }
+          x += w;
+        }
         else { narrow += w; }
       }
       // the frames too narrow to draw, together at the end of their parent
       if (narrow >= 0.5) { tails.push({ x, y: depth * ROW, w: narrow }); depthMax = Math.max(depthMax, depth); }
     };
-    if (root === tree) walk(root, 0, 0);
-    else { flameBoxes.push({ n: root, x: 0, y: 0, w: width }); depthMax = 0; walk(root, 0, 1); }
+    if (root === tree) walk(root, xLeft, 0);
+    else { flameBoxes.push({ n: root, x: xLeft, y: 0, w: width * zoom }); depthMax = 0; walk(root, xLeft, 1); }
     const { g } = setup(c, Math.max(ROW * 3, (depthMax + 1) * ROW));
     g.font = '11px ui-monospace, Menlo, monospace'; g.textBaseline = 'middle';
     for (const b of flameBoxes) {
       g.fillStyle = flameColor(P, b.n.fr); g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
-      if (b.w > 28) { g.save(); g.beginPath(); g.rect(b.x, b.y, b.w - 1, ROW); g.clip(); g.fillStyle = '#17171a'; g.fillText(frameLabel(P, b.n.fr), b.x + 3, b.y + ROW / 2); g.restore(); }
+      const lx = Math.max(b.x, 0), vis = Math.min(b.x + b.w, width) - lx; // the label starts where the frame comes into view
+      if (vis > 28) { g.save(); g.beginPath(); g.rect(lx, b.y, vis - 1, ROW); g.clip(); g.fillStyle = '#17171a'; g.fillText(frameLabel(P, b.n.fr), lx + 3, b.y + ROW / 2); g.restore(); }
     }
     g.fillStyle = css('--grid');
     for (const b of tails) g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
@@ -1047,22 +1055,24 @@ if (typeof module !== 'undefined') module.exports = XR;
     const relation = prof.reversed ? 'callers below it' : 'callees below it';
     c.onmousemove = (ev) => { const b = at(ev); if (!b) return hideTip(); showTip(ev, `${P.frames[b.n.fr]}\n${b.n.t} samples, ${(100 * b.n.t / (A.count || 1)).toFixed(2)}% (self ${b.n.s}), ${relation}\nclick to zoom, double-click to reset`); };
     c.onmouseleave = hideTip;
-    c.onclick = (ev) => { const b = at(ev); if (!b) return; const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); prof.root = path; renderProfile(); };
-    c.ondblclick = () => { prof.root = null; renderProfile(); };
+    c.onclick = (ev) => { const b = at(ev); if (!b) return; const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); prof.root = path; prof.zoom = 1; prof.pan = 0; renderProfile(); };
+    c.ondblclick = () => { prof.root = null; prof.zoom = 1; prof.pan = 0; renderProfile(); };
     const pathOf = (b) => { const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); return path; };
-    // pinch (a wheel event with ctrl) or ⌘/ctrl-scroll: in zooms to the frame under the pointer, out by one frame
-    let wheelAt = 0;
-    c.onwheel = (ev) => {
-      if (!(ev.ctrlKey || ev.metaKey)) return;
-      ev.preventDefault();
-      const now = Date.now(); if (now - wheelAt < 350 || Math.abs(ev.deltaY) < 2) return; wheelAt = now;
-      if (ev.deltaY < 0) { const b = at(ev); if (b) { prof.root = pathOf(b); renderProfile(); } else flameZoom(1); }
-      else flameZoom(-1);
+    // As jfrconv's viewer: ⌘/ctrl-scroll or a pinch (a wheel event with ctrl) widens or narrows the graph with the
+    // sample under the pointer staying put; when widened, a sideways scroll or shift-scroll pans.
+    flameZoomAt = (factor, x) => {
+      const sampleAtX = x / kx + prof.pan;
+      prof.zoom = Math.max(1, zoom * factor);
+      prof.pan = prof.zoom === 1 ? 0 : sampleAtX - x / (width * prof.zoom / root.t);
+      renderProfile();
     };
-    flameWidest = () => { // the path of the widest frame under the current root
-      const kids = [...root.kids.values()]; if (!kids.length) return null;
-      const k = kids.reduce((m, x) => x.t > m.t ? x : m);
-      return (prof.root || []).concat([k.fr]);
+    flameWidth = width;
+    c.onwheel = (ev) => {
+      if (ev.ctrlKey || ev.metaKey) { ev.preventDefault(); hideTip(); flameZoomAt(Math.exp(-ev.deltaY * 0.01), ev.offsetX); }
+      else if (zoom > 1) {
+        const d = Math.abs(ev.deltaX) > Math.abs(ev.deltaY) ? ev.deltaX : ev.shiftKey ? ev.deltaY : 0;
+        if (d) { ev.preventDefault(); hideTip(); prof.pan += d / kx; renderProfile(); }
+      }
     };
     c.oncontextmenu = (ev) => {
       ev.preventDefault(); hideTip();
@@ -1070,13 +1080,16 @@ if (typeof module !== 'undefined') module.exports = XR;
       const items = [];
       if (b) {
         const name = P.frames[b.n.fr];
-        items.push([`Zoom to ${frameLabel(P, b.n.fr)}`, () => { prof.root = pathOf(b); renderProfile(); }]);
+        items.push([`Zoom to ${frameLabel(P, b.n.fr)}`, () => { prof.root = pathOf(b); prof.zoom = 1; prof.pan = 0; renderProfile(); }]);
         items.push(['Only stacks through this frame', () => { prof.frame = b.n.fr; prof.root = null; renderProfile(); }]);
         items.push(['Copy the frame\'s name', () => { try { navigator.clipboard.writeText(name).catch(() => {}); } catch (e) {} }]);
         items.push(null);
       }
-      items.push(['Zoom in', () => flameZoom(1)]);
-      if (zoomed) items.push(['Zoom out', () => flameZoom(-1)], ['Reset zoom', () => { prof.root = null; renderProfile(); }]);
+      const mx = ev.offsetX;
+      items.push(['Zoom in here', () => flameZoomAt(1.5, mx)]);
+      if (zoom > 1) items.push(['Zoom out', () => flameZoomAt(1 / 1.5, mx)]);
+      if (zoomed) items.push(['Up one frame', () => { prof.root = prof.root.slice(0, -1); if (!prof.root.length) prof.root = null; prof.zoom = 1; prof.pan = 0; renderProfile(); }]);
+      if (zoomed || zoom > 1) items.push(['Reset zoom', () => { prof.root = null; prof.zoom = 1; prof.pan = 0; renderProfile(); }]);
       if (prof.frame != null) items.push(['Clear the frame filter', () => { prof.frame = null; prof.root = null; renderProfile(); }]);
       items.push(null);
       items.push([prof.reversed ? 'Root at the bottom of the stacks' : 'Reversed: root at the frames on CPU', () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); }]);
@@ -1084,11 +1097,7 @@ if (typeof module !== 'undefined') module.exports = XR;
       showMenu(ev, items);
     };
   }
-  let flameWidest = () => null;
-  function flameZoom(dir) {
-    if (dir > 0) { const p = flameWidest(); if (p) { prof.root = p; renderProfile(); } }
-    else if (prof.root && prof.root.length) { prof.root = prof.root.slice(0, -1); if (!prof.root.length) prof.root = null; renderProfile(); }
-  }
+  let flameZoomAt = () => {}, flameWidth = 0;
   // a context menu: [label, action] items, null for a rule
   function showMenu(ev, items) {
     const m = $('menu');
