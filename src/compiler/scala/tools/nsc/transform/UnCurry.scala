@@ -70,7 +70,7 @@ abstract class UnCurry extends InfoTransform
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new UnCurryTransformer(unit)
   override def changesBaseClasses = false
-  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = if (sym.isClass) null else transformInfo(sym, tpe)
 
 // ------ Type transformation --------------------------------------------------------
 
