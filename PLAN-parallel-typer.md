@@ -282,6 +282,7 @@ Fixed by treating the head as the end of the list unless the period is at `NoPha
 - Measure the cost to the serial compiler (no flag) with a paired A/B against fd95c5c1c1 (the profiling agent's perflab campaign); see "Hot-path costs".
 - The oracle: compare classfiles of a full compile as well as pickles, library included.
 - Stable messages for genuine cycles (see "Only the class headers serial", 2).
+- Parked precursor for 2.13.x: the serial compiler's classfiles depend on batch order through `freshNameCreatorFor`. `DeterminismTest` fails, with no parallel flag, for class-level vals using named arguments (`qual$`, `x$`), a `collect` partial function (parameter `x1`/`x2`) and `typeTag` (`$typecreator` class names), when another file demands the later val. A creator per member, made unconditional, cures all three, at the cost of changing stock numbering (`.check` files not yet looked at). O1 fails the same test through `ScalaSignature` and is not cured by it.
 - The 50-run oracle bar per corpus and a quiet-machine rerun of `bench.sh` and the x-ray are owed.
 - The tail: tasks finer than a unit.
 - The serial phases after the typer and the parser, a unit per task (a parser draft is behind `-Dscalac.parallelTyper.parallelParser`).
