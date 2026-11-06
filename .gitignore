@@ -70,3 +70,5 @@ project/**/metals.sbt
 .history
 
 .claude
+tools/parallel-typer/xray/timeline.data.js
+tools/parallel-typer/xray/profiles/

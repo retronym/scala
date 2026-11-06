@@ -141,7 +141,9 @@ trait Names extends api.Names {
           enterChars(cs, offset, len)
         }
         val next = termHashtable(h)
-        val termName = new TermName(startIndex, len, next, cachedString)
+        // xray: names carry their strings for the completions' profiler spans (off: only this name's cost)
+        val string = if ((cachedString eq null) && util.ParallelTyperTimeline.completionSpans) new String(cs, offset, len) else cachedString
+        val termName = new TermName(startIndex, len, next, string)
         // Add the new termName to the hashtable only after it's been fully constructed
         // (and, for `lookupTermName` on another thread, after its characters are in the table)
         if (synchronizeNames) java.lang.invoke.VarHandle.releaseFence()
