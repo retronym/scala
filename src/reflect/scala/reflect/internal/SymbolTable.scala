@@ -383,8 +383,9 @@ abstract class SymbolTable extends macros.Universe
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      val lo = if (phase.id > pid) pid else phase.id
-      val hi = if (phase.id > pid) phase.id else pid
+      val cur = phase.id
+      val lo = if (cur > pid) pid else cur
+      val hi = if (cur > pid) cur else pid
       val it = nextFrom(lo)
       it.pid >= hi || (lo != NoPhase.id && it.pid == NoPhase.id)
     }
@@ -397,8 +398,9 @@ abstract class SymbolTable extends macros.Universe
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      val lo = if (phase.id > pid) pid else phase.id
-      val hi = if (phase.id > pid) phase.id else pid
+      val cur = phase.id
+      val lo = if (cur > pid) pid else cur
+      val hi = if (cur > pid) cur else pid
       lo != NoPhase.id && noChangeInBaseClasses(nextFrom(lo), hi)
     }
   }

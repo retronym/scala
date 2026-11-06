@@ -1459,7 +1459,7 @@ trait Types
       val cache = underlyingCache
       // In a concurrent compiler, another thread may have stamped the period before it stored the value: the
       // initial `NoType` is then not an answer, and the slow path waits for the completion lock.
-      if (underlyingPeriod == currentPeriod && cache != null && ((cache ne NoType) || !isConcurrentCompiler)) cache
+      if (cache != null && ((cache ne NoType) || !isConcurrentCompiler) && underlyingPeriod == currentPeriod) cache
       else if (lockFreeTypeCaches) concurrentUnderlying(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineUnderlyingOfSingleType(this) // this line is synchronized in runtime reflection
@@ -1643,7 +1643,8 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cached = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
+      // the empty field first: it is what a concurrent compiler, whose caches are elsewhere, gets without asking for its period
+      if (cached != null && cached != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cached
       else if (lockFreeTypeCaches) concurrentBaseTypeSeqOfCompoundType(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
@@ -1659,7 +1660,7 @@ trait Types
 
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
-      if (baseClassesPeriod == currentPeriod && cached != null) cached
+      if (cached != null && baseClassesPeriod == currentPeriod) cached
       else if (lockFreeTypeCaches) concurrentBaseClassesOfCompoundType(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineBaseClassesOfCompoundType(this)
@@ -1850,7 +1851,7 @@ trait Types
   // `-Dscalac.parallelTyper.lockedTypeCaches` puts the serial protocol back under the completion lock; it does not
   // support the phases after the pickler on the pool (`parallelLatePhases`), for that reason.
 
-  private[this] lazy val lockedTypeCaches: Boolean = System.getProperty("scalac.parallelTyper.lockedTypeCaches") != null
+  private[this] val lockedTypeCaches: Boolean = System.getProperty("scalac.parallelTyper.lockedTypeCaches") != null
   @inline final def lockFreeTypeCaches: Boolean = isConcurrentCompiler && !lockedTypeCaches
 
   /** A cached value and the period it was computed in: immutable, so that a reader gets the two as a pair. */
@@ -2803,7 +2804,7 @@ trait Types
 
     override def parents: List[Type] = {
       val cache = parentsCache
-      if (parentsPeriod == currentPeriod && cache != null) cache
+      if (cache != null && parentsPeriod == currentPeriod) cache
       else if (lockFreeTypeCaches) concurrentParentsOfTypeRef(this)
       else underCompletionLock { // see `TypeRef.baseTypeSeq`
         defineParentsOfTypeRef(this)
@@ -2834,7 +2835,7 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cache = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
+      if (cache != null && cache != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cache
       // In a concurrent compiler, the slow path is under the completion lock, the read of the field after `define`
       // included: the definition stamps the period before it stores the value (and marks it in progress with
