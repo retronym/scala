@@ -1518,6 +1518,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     && originalClass(clazz).parentSymbolsIterator.exists(p => hasSpecializedParams(p) && !p.isTrait)
   )
 
+  // `overloads` of a member is filled by the info transform of its class. A serial run rewrites a call to the overload
+  // only if that has happened by then, which depends on the order of the units (a class defined in a later unit that
+  // nothing has forced yet). On the pool that is a race, so the class's info is forced first: the answer is then
+  // always the one the serial compiler gives when the defining unit comes first.
+  private def overloadsOf(sym: Symbol): List[Overload] = {
+    if (isConcurrentCompiler) sym.owner.info
+    overloads(sym)
+  }
+
   class SpecializationTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
     override def transformUnit(unit: CompilationUnit): Unit = if (!settings.nospecialization.value) {
@@ -1621,13 +1630,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR
-        if (ignoreEnv) overloads(symbol) find (_ matchesSym symbol) match {
+        if (ignoreEnv) overloadsOf(symbol) find (_ matchesSym symbol) match {
           case Some(Overload(member, _)) => typedOp(member)
           case _                         => copySelect
         }
         else {
           val env = unify(symbol.tpe, tree.tpe, emptyEnv, strict = false, tparams = false)
-          overloads(symbol) find (_ matchesEnv env) match {
+          overloadsOf(symbol) find (_ matchesEnv env) match {
             case Some(Overload(member, _)) => typedOp(member)
             case _ =>
               matchingSymbolInPrefix(qual1.tpe, symbol, env) match {
@@ -1713,7 +1722,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           val env = unify(symbol.tpe, tree.tpe, emptyEnv, strict = false, tparams = false)
           if (env.isEmpty) super.transform(tree)
           else {
-            overloads(symbol) find (_ matchesEnv env) match {
+            overloadsOf(symbol) find (_ matchesEnv env) match {
               case Some(Overload(specMember, _)) => computeResidualTypeVars(tree, specMember, Ident(specMember), targs, env)
               case _ => super.transform(tree)
             }

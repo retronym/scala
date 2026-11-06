@@ -27,6 +27,7 @@ object Stress {
       if (f.isDirectory) checksums(f)
       else { val c = new java.util.zip.CRC32; c.update(f.toByteArray); List(s"class ${f.path} ${c.getValue}") }
     }
+    var lastClasses: java.nio.file.Path = null
     def compile(extra: List[String]): List[String] = {
       val s = new Settings(msg => sys.error(msg))
       s.usejavacp.value = true
@@ -41,19 +42,23 @@ object Stress {
       try new g.Run().compile(rest)
       catch { case t: Throwable => return List("crash: " + t) ++ t.getStackTrace.take(30).map("  at " + _) }
       val sums = if (full) checksums(classes).map(_.replace(classesDir.toString, "")) else Nil
-      deleteAll(classesDir)
+      lastClasses = classesDir
       (reporter.infos.toList.map(i => s"${i.severity} ${i.pos.source.file.name}:${if (i.pos.isDefined) i.pos.line else 0} ${i.msg}") ++ sums).sorted
     }
     // the reference is the parallel path on one thread, as in the oracle: it differs from serial by order effects
     // (which occurrence of a feature warning carries the explanation)
     val serial = compile(Nil)
+    deleteAll(lastClasses)
     val expected = compile(List("-Yparallel-typer", "-Yparallel-typer-threads", "1"))
+    if (full) println(s"the one-thread run's classes: $lastClasses")
     println(s"serial: ${serial.length} diagnostics; the one-thread run ${if (serial == expected) "agrees" else "differs"}")
     var failures = 0
     val t0 = System.nanoTime()
     for (i <- 1 to iterations) {
       val got = compile(List("-Yparallel-typer", "-Yparallel-typer-threads", threads))
-      if (got != expected) {
+      if (got == expected) deleteAll(lastClasses)
+      else {
+        if (full) println(s"run $i's classes: $lastClasses")
         failures += 1
         println(s"run $i differs:")
         got.diff(expected).take(12).foreach(l => println("  + " + l))
