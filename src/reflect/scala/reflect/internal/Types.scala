@@ -2729,10 +2729,14 @@ trait Types
       if (pre eq WildcardType) WildcardType
       else if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) {
+        // read once: in a concurrent compiler another thread's `invalidateTypeRefCaches` may clear it again
+        var n = normalized
+        if (n eq null) {
           Types.this.defineNormalized(this)
+          n = normalized
+          if (n eq null) n = normalizeImpl
         }
-        normalized
+        n
       }
     }
 
