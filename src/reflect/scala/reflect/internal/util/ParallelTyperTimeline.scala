@@ -31,12 +31,17 @@ import scala.collection.mutable
  *
  *  Off unless `ParallelTyperTimeline.current` is set: the hooks test it for null. Each thread records its own lock
  *  events, after the release for a hold, so that recording does not lengthen the holds that others wait on.
+ *
+ *  Under a running async-profiler JFR recording, each span is also two nested profiler spans (`ProfilerSpans`), the
+ *  step and then the unit, which are precomputed strings; `completionSpans` adds the symbols being completed.
  */
 final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   import ParallelTyperTimeline._
 
   val startNanos: Long = System.nanoTime()
   val startEpochMillis: Long = System.currentTimeMillis()
+  /** The profiler's clock at `startNanos`, or 0 if no JFR recording is running: aligns its samples with the spans. */
+  val profilerStart: Long = ProfilerSpans.start()
   @volatile private[this] var endNanos = 0L
   val meta = new java.util.LinkedHashMap[String, String]()
   contentionMonitoring(true)
@@ -57,6 +62,7 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
     }
   }
   private[this] val threads = mutable.ArrayBuffer.empty[(String, PerThread)]
+  private[this] val threadTags = Array.tabulate(1024)(ThreadTagPrefix + _)
   private[this] val perThread = new ThreadLocal[PerThread]
   private def thread(): PerThread = {
     val t = perThread.get
@@ -65,26 +71,38 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       val n = new PerThread(threads.length)
       threads += ((Thread.currentThread.getName, n))
       perThread.set(n)
+      // tells the profile which of its threads this is (thread names repeat, one pool per step)
+      if (n.tid < threadTags.length) ProfilerSpans.end(ProfilerSpans.start(), threadTags(n.tid))
       n
     }
   }
   private def tid(): Int = thread().tid
+  /** The threads by their index in the recording. */
+  def threadNames: List[String] = threads.synchronized(threads.toList.map(_._1))
 
   // ---- spans
 
   private final class Span(val tid: Int, val step: String, val label: String, val t0: Long, val t1: Long, val cpu: Long,
                            val blockedMs: Long, val waitedMs: Long, val lockWait: Long, val lockHold: Long)
   private[this] val spans = new ConcurrentLinkedQueue[Span]()
+  /** The steps and the labels of the spans so far. */
+  def stepsAndLabels: (collection.immutable.Set[String], collection.immutable.Set[String]) = {
+    val all = spans.toArray(new Array[Span](0))
+    (all.iterator.map(_.step).toSet, all.iterator.map(_.label).toSet)
+  }
   private[this] val phases = new ConcurrentLinkedQueue[Array[Any]]()
   private[this] val idleFrom = new ConcurrentLinkedQueue[Array[Long]]()
 
   /** The start of a span on the current thread, for `end`. */
   def begin(): Start = {
+    val stepSpan = ProfilerSpans.start()
+    val unitSpan = ProfilerSpans.start()
     val ti = threadInfo()
     val times = PerThreadTimes.current
     new Start(System.nanoTime(), cpuNow(), if (ti eq null) -1 else ti.getBlockedTime, if (ti eq null) -1 else ti.getWaitedTime,
-      times.waitNanos, times.holdNanos)
+      times.waitNanos, times.holdNanos, stepSpan, unitSpan)
   }
+  /** `step` and `label` are precomputed strings: this is the one place a span is named. */
   def end(s: Start, step: String, label: String): Unit = {
     val t1 = System.nanoTime()
     val cpu = cpuNow() - s.cpu
@@ -94,6 +112,8 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       if ((ti eq null) || s.blocked < 0) -1 else ti.getBlockedTime - s.blocked,
       if ((ti eq null) || s.waited < 0) -1 else ti.getWaitedTime - s.waited,
       times.waitNanos - s.lockWait, times.holdNanos - s.lockHold))
+    ProfilerSpans.end(s.unitSpan, label)
+    ProfilerSpans.end(s.stepSpan, step)
   }
   def phase(name: String, t0: Long, t1: Long): Unit = phases.add(Array[Any](name, t0, t1))
   /** The current thread (a typer worker) found no more units. */
@@ -226,7 +246,7 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
     // spans: tid, step, label, t0, t1, cpu, blocked ms, waited ms, lock wait, lock hold
     val ss = spans.toArray(new Array[Span](0)).sortBy(_.t0)
     arr("spans")(a => ss.foreach { x =>
-      a(x.tid); a(s(x.step)); a(s(x.label)); a(us(x.t0)); a(us(x.t1)); a(dur(x.cpu)); a(x.blockedMs); a(x.waitedMs); a(dur(x.lockWait)); a(dur(x.lockHold))
+      a(x.tid); a(s(x.step)); a(s(fileName(x.label))); a(us(x.t0)); a(us(x.t1)); a(dur(x.cpu)); a(x.blockedMs); a(x.waitedMs); a(dur(x.lockWait)); a(dur(x.lockHold))
     })
     arr("phases")(a => phases.forEach { p => a(s(p(0).asInstanceOf[String])); a(us(p(1).asInstanceOf[Long])); a(us(p(2).asInstanceOf[Long])) })
     arr("idle")(a => idleFrom.forEach { p => a(p(0)); a(us(p(1))) })
@@ -265,9 +285,15 @@ object ParallelTyperTimeline {
   var current: ParallelTyperTimeline = null
   private var fromProperty: String = null
 
-  final class Start(val t0: Long, val cpu: Long, val blocked: Long, val waited: Long, val lockWait: Long, val lockHold: Long)
+  final class Start(val t0: Long, val cpu: Long, val blocked: Long, val waited: Long, val lockWait: Long, val lockHold: Long,
+                    val stepSpan: Long, val unitSpan: Long)
+
+  /** A span's label is the unit's path, which tells apart the library's `Map.scala`s in a profile; the page shows the file. */
+  private def fileName(label: String): String = label.substring(label.lastIndexOf('/') + 1)
 
   private final val SiteStride = 7
+  /** A zero-length profiler span tagged with this and a thread's index in the recording marks the thread. */
+  final val ThreadTagPrefix = "xray-thread-"
 
   def threshold: Long = java.lang.Long.getLong("scalac.parallelTyper.xray.holdMicros", 50L) * 1000L
   /** One outermost acquisition in this many has its call site walked (see `acquire`). */
@@ -290,8 +316,17 @@ object ParallelTyperTimeline {
     }
   }
 
-  /** `body` as a span of `step` on this thread, when recording. */
-  @inline def span[T](step: String, label: => String)(body: => T): T = {
+  /** Each symbol's completion as a profiler span under its unit's, tagged with the symbol's name, for a run under a
+   *  profiler that sets `-Dscalac.parallelTyper.xray.completionSpans=true`. Every name then carries its string
+   *  (`Names.newTermName`), so that taking a tag allocates nothing, and the span is only recorded if a sample fell in it.
+   */
+  val completionSpans: Boolean = java.lang.Boolean.getBoolean("scalac.parallelTyper.xray.completionSpans")
+
+  /** The start of a completion's span, 0 when none is being recorded, for `ProfilerSpans.endIfProfiled`. */
+  @inline def completionStart(): Long = if ((current ne null) && completionSpans) ProfilerSpans.start() else 0L
+
+  /** `body` as a span of `step` on this thread, when recording. Both names are precomputed strings. */
+  @inline def span[T](step: String, label: String)(body: => T): T = {
     val tl = current
     if (tl eq null) body
     else {

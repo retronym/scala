@@ -107,7 +107,7 @@ trait ParallelTyper {
         // is completed by the first body task that reaches it, under the symbol's claim, and its annotations by its
         // own unit's task (`typedDefDef` and friends force them)
         var n = 0
-        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u, null, classesOnly = true))) // xray
         logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
         n
       }
@@ -127,7 +127,7 @@ trait ParallelTyper {
           if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
           onPool(typerPhase, ordered, nThreads, "class headers")(u => count.addAndGet(completeSignatures(u, null, classesOnly = true)))
         }
-        else units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        else units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u, null, classesOnly = true))) // xray
         val headersOnly = System.nanoTime()
         if (needForceLazyVals && !headersOnPool) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val headersDone = System.nanoTime()
@@ -144,19 +144,19 @@ trait ParallelTyper {
           val byUnit = completed.asScala.toList.groupBy(_._1)
           onPool(typerPhase, ordered.filter(byUnit.contains), nThreads, "annotations")(u => forceAnnotations(byUnit(u)))
         }
-        else ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        else ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed.asScala.toList)) // xray
         logf(f"class headers ${if (headersOnPool) "on the pool" else "serially"} in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations ${if (annotationsOnPool) "on the pool" else "serially"} in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
         n + count.get
       }
       else {
         var n = 0
         val completed = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
-        units.foreach(u => n += ParallelTyperTimeline.span("signatures", u.source.file.name)(completeSignatures(u, completed))) // xray
+        units.foreach(u => n += ParallelTyperTimeline.span("signatures", u.spanLabel)(completeSignatures(u, completed))) // xray
         // Then their annotations, in a pass of their own: an annotation is lazy so that its arguments can refer to
         // symbols still being completed. A thunk types the annotation with its symbol's context, in place, so it
         // must not run on another unit's thread; and outside `info`, the lock would not cover it (it is taken
         // before the lazy val's monitor, `LazyAnnotationInfo.forcedInfo`, for the ones that are left).
-        ParallelTyperTimeline.span("annotations", s"${completed.length} symbols")(forceAnnotations(completed)) // xray
+        ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed)) // xray
         n
       }
     val t1 = System.nanoTime()
@@ -273,7 +273,7 @@ trait ParallelTyper {
           while (unit != null && failure.get == null) {
             val saved = currentRun.currentUnit
             currentRun.currentUnit = unit
-            try ParallelTyperTimeline.span(name, unit.source.file.name)(task(unit)) // xray
+            try ParallelTyperTimeline.span(name, unit.spanLabel)(task(unit)) // xray
             catch { case ast.parser.RetryInUnitOrder if unitOrder ne null => retry.add(unit) }
             finally { currentRun.currentUnit = saved; undoLog.clear() }
             unit = queue.poll()
@@ -304,7 +304,7 @@ trait ParallelTyper {
           if (again(unit)) {
             bufferingReporter.retrying(unit)
             currentRun.currentUnit = unit
-            ParallelTyperTimeline.span(name, unit.source.file.name)(task(unit)) // xray
+            ParallelTyperTimeline.span(name, unit.spanLabel)(task(unit)) // xray
           }
         } finally currentRun.currentUnit = saved
       }

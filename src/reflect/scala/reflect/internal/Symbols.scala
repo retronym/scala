@@ -1719,6 +1719,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     private def completeInfoLoop(): Unit = {
+      val xraySpan = util.ParallelTyperTimeline.completionStart() // xray
       var cnt = 0
       while (_validTo == NoPeriod) {
         completeInfo()
@@ -1728,6 +1729,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         def abortNoProgress() = abort(s"no progress in completing $this: ${infos.info}")
         if (cnt == 3) abortNoProgress()
       }
+      if (xraySpan != 0L) util.ProfilerSpans.endIfProfiled(xraySpan, rawname.toString) // xray
     }
 
     // In a concurrent compiler, the marker goes up before `LOCKED`: another thread that sees the flag sees whose
