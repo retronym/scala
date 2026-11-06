@@ -48,6 +48,9 @@ trait BaseTypeSeqs {
    *  This is necessary because when run from reflection every base type sequence needs to have a
    *  SynchronizedBaseTypeSeq as mixin.
    */
+  /** A lazy element of a base type sequence that this thread is evaluating. */
+  final class BtsInProgress(val bts: BaseTypeSeq, val index: Int, val outer: BtsInProgress)
+
   class BaseTypeSeq protected[reflect] (private[BaseTypeSeqs] val parents: List[Type], private[BaseTypeSeqs] val elems: Array[Type]) {
   self =>
     if (settings.areStatisticsEnabled) statistics.incCounter(baseTypeSeqCount)
@@ -73,36 +76,49 @@ trait BaseTypeSeqs {
 
     /** The type at i'th position in this sequence; lazy types are returned evaluated.
      *
-     *  In a concurrent compiler, a lazy element is evaluated under the completion lock, so that `pending` holds the
-     *  marks of one thread only: another thread's mark would read as a cycle (and its `clear()` would wipe them).
-     *  An element that is no longer lazy was stored after its mark was cleared.
+     *  In a concurrent compiler, the marks of the elements being evaluated are per thread (`Scratch.lazyBtsInProgress`):
+     *  another thread's mark would read as a cycle. Two threads may evaluate one element, to the same type.
      */
     def apply(i: Int): Type =
       if (isConcurrentCompiler) elems(i) match {
-        case _: RefinedType | ExistentialType(_, _: RefinedType) => underCompletionLock(applyNow(i))
+        case _: RefinedType | ExistentialType(_, _: RefinedType) => applyNow(i)
         case tp => tp
       }
       else applyNow(i)
 
+    private def isPending(i: Int): Boolean =
+      if (isConcurrentCompiler) {
+        var m = scratch.lazyBtsInProgress
+        while (m ne null) {
+          if ((m.bts eq this) && m.index == i) return true
+          m = m.outer
+        }
+        false
+      }
+      else pending contains i
+
     private def applyNow(i: Int): Type =
-      if(pending contains i) {
-        pending.clear()
+      if (isPending(i)) {
+        if (!isConcurrentCompiler) pending.clear()
         throw CyclicInheritance
       } else {
         def computeLazyType(rtp: RefinedType): Type = {
           devWarningIf(!isIntersectionTypeForLazyBaseType(rtp)) {
-            "unexpected RefinedType in base type seq, lazy BTS elements should be created via intersectionTypeForLazyBaseType: " + rtp
+            "unexpected RefinedType in base type seq, lazy BTS elements should be created via intersectionTypeForLazyBaseType"
           }
           val variants = rtp.parents
           // can't assert decls.isEmpty; see t0764
           //if (!decls.isEmpty) abort("computing closure of "+this+":"+this.isInstanceOf[RefinedType]+"/"+closureCache(j))
           //Console.println("compute closure of "+this+" => glb("+variants+")")
-          pending += i
+          val s = if (isConcurrentCompiler) scratch else null
+          val saved = if (s ne null) s.lazyBtsInProgress else null
+          if (s ne null) s.lazyBtsInProgress = new BtsInProgress(this, i, saved)
+          else pending += i
           try {
             mergePrefixAndArgs(variants, Variance.Contravariant, lubDepth(variants)) match {
               case NoType => typeError("no common type instance of base types " + (variants mkString ", and ") + " exists.")
               case tp0 =>
-                pending(i) = false
+                if (s eq null) pending(i) = false
                 elems(i) = tp0
                 tp0
             }
@@ -112,6 +128,7 @@ trait BaseTypeSeqs {
               typeError(
                 "computing the common type instance of base types " + (variants mkString ", and ") + " leads to a cycle.")
           }
+          finally if (s ne null) s.lazyBtsInProgress = saved
         }
         elems(i) match {
           case rtp@RefinedType(variants, decls) =>
