@@ -42,6 +42,8 @@ trait CompilationUnits { global: Global =>
   @nowarn("""cat=deprecation&origin=scala\.reflect\.macros\.Universe\.CompilationUnitContextApi""")
   class CompilationUnit(val source: SourceFile, freshNameCreator: FreshNameCreator) extends CompilationUnitContextApi { self =>
     def this(source: SourceFile) = this(source, new FreshNameCreator)
+    /** The x-ray's label of this unit, here so that opening its spans builds no string. */
+    val spanLabel: String = source.file.path
     /** the fresh name creator */
     implicit val fresh: FreshNameCreator = freshNameCreator
     def freshTermName(prefix: String = nme.FRESH_TERM_NAME_PREFIX) = global.freshTermName(prefix)

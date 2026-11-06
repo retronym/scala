@@ -18,10 +18,10 @@ object XrayBench {
     if (args(0) == "--overhead") overhead(args(1), args(2), args(3).toInt, args(4).toInt)
     else record(args(0), Paths.get(args(1)), args(2), args(3).toInt, args.drop(4).toList)
 
-  private def fileArgs(argsFile: String): List[String] =
+  def fileArgs(argsFile: String): List[String] =
     Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty).map(_.stripPrefix("\"").stripSuffix("\""))
 
-  private def options(config: String): List[String] = config match {
+  def options(config: String): List[String] = config match {
     case "serial" => Nil
     case n        => List("-Yparallel-typer", "-Yparallel-typer-threads", n.toInt.toString)
   }
@@ -30,7 +30,7 @@ object XrayBench {
   private val stopOptions = if (System.getProperty("xray.full") != null) Nil else List("-Ystop-after:pickler")
 
   /** One compilation; its wall time in ms and its error count. */
-  private def compile(config: String, files: List[String]): (Double, Int) = {
+  def compile(config: String, files: List[String]): (Double, Int) = {
     val s = new Settings(msg => sys.error(msg))
     s.usejavacp.value = true
     val out = Files.createTempDirectory("xray")
@@ -51,7 +51,7 @@ object XrayBench {
     Files.deleteIfExists(p)
   }
 
-  private def warm(configs: List[String], files: List[String], warmup: Int): Unit =
+  def warm(configs: List[String], files: List[String], warmup: Int): Unit =
     for (i <- 1 to warmup) {
       val c = configs((i - 1) % configs.length)
       val (ms, errors) = compile(c, files)
