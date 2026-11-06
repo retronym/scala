@@ -772,6 +772,14 @@ abstract class SymbolTable extends macros.Universe
     /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
     var tpeInProgress: List[AnyRef] = Nil
     var boxPrimitives: Boolean = true
+    /** Registers that the compiler writes on its hottest paths, here rather than in fields of the universe or of the
+     *  analyzer: a field of an object that every thread reads, written by every thread at each tree it makes or
+     *  types, keeps the cache line it is on, and the fields beside it, moving from core to core. */
+    /** The number of trees this thread has made; a tree's `id`. */
+    var nodeCount: Int = 0
+    /** The last tree handed to `Typer.typed` and the last typer context made, on this thread, for crash reports. */
+    var lastTreeToTyper: AnyRef = null
+    var lastSeenContext: AnyRef = null
     /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
     var ph: Phase = NoPhase
     var per: Period = NoPeriod
