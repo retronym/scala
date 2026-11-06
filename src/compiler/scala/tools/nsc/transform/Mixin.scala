@@ -225,7 +225,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
     }
   }
 
-  def publicizeTraitMethods(clazz: Symbol): Unit = underCompletionLock {
+  def publicizeTraitMethods(clazz: Symbol): Unit = mixinClaim(clazz) {
     if (treatedClassInfos(clazz) != clazz.info) {
       treatedClassInfos(clazz) = clazz.info
       assert(phase == currentRun.mixinPhase, phase)
@@ -266,9 +266,20 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
    *      - for every module in T, add a module
    */
   def addMixedinMembers(clazz: Symbol, unit: CompilationUnit): Unit =
-    // Under the completion lock on the pool: a class's superclass (and so the classes changed from here) may be in
-    // another unit, and so may a trait that `publicizeTraitMethods` changes.
-    underCompletionLock(addMixedinMembers0(clazz, unit))
+    mixinClaim(clazz)(addMixedinMembers0(clazz, unit))
+
+  /** A claim of this phase's own on a class, on the pool. A class's superclass, which is completed from
+   *  here, may be in another unit, and so may a trait that `publicizeTraitMethods` changes. A class only reads its base
+   *  classes, which are done by then: traits never get members added here, and a superclass comes first. So the waits
+   *  go up the inheritance graph. The key is not the symbol, whose claim a thread holding the coarse root may want (an
+   *  annotation of the class being forced), when a holder of this one may want the root (the class info of a member).
+   */
+  private final case class MixinClaim(clazz: Symbol)
+  private def mixinClaim(clazz: Symbol)(body: => Unit): Unit = {
+    val lock = completionLock
+    if ((lock eq null) || !lock.isPerKey) underCompletionLock(body)
+    else lock.claim(MixinClaim(clazz), scala.reflect.internal.util.CompletionLock.completing, clazz)(body)
+  }
 
   private def addMixedinMembers0(clazz: Symbol, unit: CompilationUnit): Unit = {
     def cloneAndAddMixinMember(mixinClass: Symbol, mixinMember: Symbol): Symbol = (
