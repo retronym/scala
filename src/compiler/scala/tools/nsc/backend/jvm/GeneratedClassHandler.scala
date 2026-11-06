@@ -79,15 +79,15 @@ private[jvm] object GeneratedClassHandler {
     }
 
     // The jvm phase on the pool (`Run.onPool`) calls `process` on its workers, in any order. Where the order matters,
-    // the units are held and handed over in their order at the end: an inliner's call graph, a jar's entries, a
-    // virtual directory (not safe for two writers). Otherwise each worker post-processes and writes its own unit.
+    // the units are held and handed over in their order at the end: an inliner's call graph, a jar's entries.
+    // Otherwise each worker post-processes and writes its own unit.
     val onPool = currentRun.onPool(genBCode.phaseName)
     val unitIndex: Map[AbstractFile, Int] = if (onPool) currentRun.units.map(_.source.file).zipWithIndex.toMap else Map.empty
     handler.unitIndex = unitIndex
     val outputs = settings.outputDirs.getSingleOutput.toList ++ settings.outputDirs.outputs.map(_._2)
     if (settings.optInlinerEnabled || settings.optClosureInvocations)
       new GlobalOptimisingGeneratedClassHandler(postProcessor, handler, unitIndex)
-    else if (onPool && outputs.exists(o => o.hasExtension("jar") || o.isVirtual))
+    else if (onPool && outputs.exists(o => o.hasExtension("jar")))
       new UnitOrderGeneratedClassHandler(postProcessor, handler, unitIndex)
     else handler
   }
