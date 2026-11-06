@@ -110,11 +110,19 @@ trait Types
   private object substTypeMapCache {
     private[this] var cached: SubstTypeMap = new SubstTypeMap(Nil, Nil)
 
-    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap = if (isCompilerUniverse && !isConcurrentCompiler) {
-      if ((cached.from ne from) || (cached.to ne to))
-        cached = new SubstTypeMap(from, to)
-      cached
-    } else new SubstTypeMap(from, to)
+    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap =
+      if (!isCompilerUniverse) new SubstTypeMap(from, to)
+      else if (isConcurrentCompiler) {
+        val s = scratch
+        val c = s.substTypeMap
+        if ((c ne null) && (c.from eq from) && (c.to eq to)) c
+        else { val m = new SubstTypeMap(from, to); s.substTypeMap = m; m }
+      }
+      else {
+        if ((cached.from ne from) || (cached.to ne to))
+          cached = new SubstTypeMap(from, to)
+        cached
+      }
   }
 
   /** The current skolemization level, see `Scratch.skolemizationLevel`. */
