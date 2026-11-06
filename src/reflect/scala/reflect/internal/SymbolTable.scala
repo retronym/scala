@@ -596,10 +596,25 @@ abstract class SymbolTable extends macros.Universe
     if (!isConcurrentCompiler) null
     else new util.CompletionLock(
       perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey" || util.CompletionLock.parallelSignatures,
-      cycle = {
-        case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
-        case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")
+      cycle = { subject =>
+        reportWaitCycle(subject)
+        subject match {
+          case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
+          case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")
+        }
       })
+
+  /** `-Dscalac.parallelTyper.debugCycles`: print a wait-for cycle that is about to be reported, with who holds what
+   *  and where the compiler's threads are. */
+  private[internal] def reportWaitCycle(subject: Any): Unit =
+    if (java.lang.Boolean.getBoolean("scalac.parallelTyper.debugCycles")) {
+      val relevant = "complete.*|typed[A-Z].*|.*Sig|isLockedHere|inferImplicit.*|typeParams|info|initialize|acquire|awaitKey|awaitCompletion.*|load.*"
+      def frames(stack: Array[StackTraceElement]) = stack.iterator.filter(_.getMethodName.matches(relevant)).take(40).mkString("    ", "\n    ", "")
+      val threads = Thread.getAllStackTraces.entrySet.toArray(new Array[java.util.Map.Entry[Thread, Array[StackTraceElement]]](0))
+      val others = threads.iterator.filter(e => (e.getKey ne Thread.currentThread) && e.getKey.getName.startsWith("scalac-"))
+        .map(e => s"  ${e.getKey.getName} ${e.getKey.getState}\n${frames(e.getValue)}").mkString("\n")
+      Console.err.println(s"[parallel-typer] wait cycle on $subject (${Thread.currentThread.getName}); holders: ${completionLock.holders}\n${frames(new Throwable().getStackTrace)}\n$others")
+    }
 
   /** The root whose claim a completion of `sym` takes when completions are claimed per root
    *  (`-Dscalac.parallelTyper.claims=perKey`): the coarse root here; the compiler gives a source symbol its own. */
