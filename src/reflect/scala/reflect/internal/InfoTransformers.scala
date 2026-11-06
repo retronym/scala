@@ -28,6 +28,9 @@ trait InfoTransformers {
     val pid: Phase#Id
     val changesBaseClasses: Boolean
     def transform(sym: Symbol, tpe: Type): Type
+    /** In a concurrent compiler: does `transform(sym, _)` only compute, with no state shared beyond `sym` and what the
+     *  trees' transforms use on the pool as well? It then needs no completion lock, see `Symbol.transformInfosClaimed`. */
+    def isLocalFor(sym: Symbol): Boolean = false
 
     @tailrec
     final def insert(that: InfoTransformer): Unit = {

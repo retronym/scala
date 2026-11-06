@@ -21,9 +21,9 @@ object Bench {
     val fileArgs = Files.readAllLines(Paths.get(argsFile)).asScala.toList.map(_.trim).filter(_.nonEmpty).map(_.stripPrefix("\"").stripSuffix("\""))
     for (config0 <- configs) {
       val config = config0
-      val late = config0.last == 'l'
+      val late = config0 != "serial" && config0.last == 'l'
       if (late) System.setProperty("scalac.parallelTyper.parallelLatePhases", "all") else System.clearProperty("scalac.parallelTyper.parallelLatePhases")
-      val postTyper = if (late) Some("steps") else Map('p' -> "steps", 't' -> "fusedTransforms", 'f' -> "fused").get(config0.last)
+      val postTyper = if (late) Some("steps") else if (config0 == "serial") None else Map('p' -> "steps", 't' -> "fusedTransforms", 'f' -> "fused").get(config0.last)
       postTyper match {
         case Some(mode) => System.setProperty("scalac.parallelTyper.parallelPostTyper", mode)
         case None       => System.clearProperty("scalac.parallelTyper.parallelPostTyper")
