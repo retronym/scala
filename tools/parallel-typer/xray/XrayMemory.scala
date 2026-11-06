@@ -98,6 +98,8 @@ object InMemory {
     // then the JVM's own classpath, as the recorder on disk has it (`-usejavacp`): the compiler's snapshot and its jars
     val entries = (if (s.classpath.isSetByUser) s.classpath.value.split(sep).toList else Nil) ::: sys.props("java.class.path").split(sep).toList
     val classes = entries.filter(_.nonEmpty).distinct.map(classRoot)
+    // macro implementations are loaded by a class loader, from URLs, which an in-memory classpath has none of
+    if (!s.YmacroClasspath.isSetByUser) s.YmacroClasspath.value = entries.filter(_.nonEmpty).distinct.mkString(sep)
     val sourcePath = if (s.sourcepath.isSetByUser) s.sourcepath.value.split(sep).toList.filter(_.nonEmpty).map(d => SourcePath(sourceRoot(d))) else Nil
     val cp = AggregateClassPath((jdk :: classes).map(VirtualDirectoryClassPath(_)) ::: sourcePath)
     val reporter = new StoreReporter(s)

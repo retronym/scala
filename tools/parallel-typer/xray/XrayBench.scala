@@ -42,8 +42,12 @@ object XrayBench {
       val t0 = System.nanoTime()
       run.compileSources(sources)
       val t1 = System.nanoTime()
-      ((t1 - t0) / 1e6, reporter.infos.count(_.severity == reporter.ERROR))
+      val errors = reporter.infos.filter(_.severity == reporter.ERROR)
+      // a corpus that does not compile is not a recording of a compilation: say why, once
+      if (errors.nonEmpty && !saidErrors) { saidErrors = true; errors.take(3).foreach(e => Console.err.println(s"error: ${e.pos.source.file.name}:${e.pos.line}: ${e.msg}")) }
+      ((t1 - t0) / 1e6, errors.size)
     }
+  private var saidErrors = false
 
   private def compileOnDisk(config: String, files: List[String]): (Double, Int) = {
     val s = new Settings(msg => sys.error(msg))
