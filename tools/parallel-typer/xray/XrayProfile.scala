@@ -23,7 +23,7 @@ import scala.collection.mutable
 import scala.reflect.internal.util.ParallelTyperTimeline
 import one.convert.{Arguments, JfrConverter}
 import one.jfr.JfrReader
-import one.jfr.event.{ExecutionSample, SpanEvent}
+import one.jfr.event.{AllocationSample, Event, ExecutionSample, SpanEvent}
 import one.profiler.AsyncProfiler
 
 object XrayProfile {
@@ -33,8 +33,12 @@ object XrayProfile {
     else record(args(0), Paths.get(args(1)), args(2), args(3).toInt, args(4).toInt, args(5), args(6), args.drop(7).toList)
 
   /** As perflab profiles: native frames through the VM, and a stack depth the typer's recursion does not exceed. */
-  private def startProfiler(event: String, interval: String, jfr: Path): Unit =
-    AsyncProfiler.getInstance().execute(s"start,jfr,event=$event,interval=$interval,jstackdepth=8192,cstack=vm,features=mixed+vtable+comptask,file=$jfr")
+  /** The CPU recording samples allocation too (`-Dxray.alloc=<bytes>`, default 256k; empty for none), in the same JFR. */
+  val allocInterval: String = System.getProperty("xray.alloc", "256k")
+  private def startProfiler(event: String, interval: String, jfr: Path): Unit = {
+    val alloc = if (event == "cpu" && allocInterval.nonEmpty) s",alloc=$allocInterval" else ""
+    AsyncProfiler.getInstance().execute(s"start,jfr,event=$event,interval=$interval$alloc,jstackdepth=8192,cstack=vm,features=mixed+vtable+comptask,file=$jfr")
+  }
   private def stopProfiler(): Unit = AsyncProfiler.getInstance().execute("stop")
 
   /** For a comparison by frame (`frames.py`): the configs in turn, `rounds` times, a CPU profile of `repeats` compilations
@@ -62,7 +66,7 @@ object XrayProfile {
     Files.createDirectories(out)
     val compiled = configs.map(_.stripSuffix("-wall")).distinct
     XrayBench.warm(compiled, files, warmup)
-    val jsons = for (c <- configs) yield {
+    val jsons = (for (c <- configs) yield {
       System.gc()
       val profiled = c != "serial"
       val isWall = c.endsWith("-wall")
@@ -91,17 +95,24 @@ object XrayProfile {
       }
       tl.meta.put("compileMs", f"$ms%.1f")
       tl.meta.put("errors", errors.toString)
-      val base = tl.toJson
-      val json =
-        if (!profiled) base
-        else {
-          val profile = ProfileData.read(jfr, compilations.map(_._1).toList, tl, corpus, c, if (isWall) wall else cpu)
-          base.substring(0, base.lastIndexOf('}')) + ",\n\"profile\":" + profile + "}\n"
-        }
-      Files.write(out.resolve(s"run-$c.json"), json.getBytes(UTF_8))
-      println(f"recorded $c%-6s $ms%8.1f ms${if (errors > 0) s"  $errors errors" else ""}  ${json.length >> 10} KB")
-      json
-    }
+      def withProfile(config: String, interval: String): String = {
+        val base = tl.toJson
+        val profile = ProfileData.read(jfr, compilations.map(_._1).toList, tl, corpus, config, interval)
+        base.substring(0, base.lastIndexOf('}')) + ",\n\"profile\":" + profile + "}\n"
+      }
+      def write(config: String, json: String): String = {
+        Files.write(out.resolve(s"run-$config.json"), json.getBytes(UTF_8))
+        println(f"recorded $config%-8s $ms%8.1f ms${if (errors > 0) s"  $errors errors" else ""}  ${json.length >> 10} KB")
+        json
+      }
+      val json = write(c, if (!profiled) tl.toJson else withProfile(c, if (isWall) wall else cpu))
+      // the allocation samples of the CPU recording: a run of their own for the page, on the same timeline
+      if (profiled && !isWall && allocInterval.nonEmpty) {
+        tl.meta.put("config", s"$c-alloc")
+        tl.meta.put("profiled", s"alloc $allocInterval")
+        List(json, write(s"$c-alloc", withProfile(s"$c-alloc", allocInterval)))
+      } else List(json)
+    }).flatten
     Files.write(out.resolve("timeline.data.js"), jsons.mkString("window.XRAY_RUNS = (window.XRAY_RUNS || []).concat([\n", ",\n", "]);\n").getBytes(UTF_8))
   }
 
@@ -254,6 +265,7 @@ object ProfileData {
       val trie = new Trie
       val isJvm = mutable.ArrayBuffer.empty[Boolean]
       val stackNodes = new java.util.HashMap[Integer, Integer]()
+      val event = if (config.endsWith("-wall")) "wall" else if (config.endsWith("-alloc")) "alloc" else "cpu"
       def stackNode(id: Int): Int = {
         val known = stackNodes.get(id)
         if (known ne null) return known.intValue
@@ -263,13 +275,20 @@ object ProfileData {
           // a recursive stack keeps a frame's outermost occurrence, and the real leaf (so that self time and each
           // frame's total stay right, and the depth is at most the number of distinct frames)
           val seen = new java.util.HashSet[Integer]()
+          // an allocation sample's leaf is the VM's own walk of the stack (`StackWalker::walkVM`, ...): its leaf is
+          // the first Java frame, so that the self counts say what allocated
+          var leaf = 0
+          if (event == "alloc") {
+            def vmName(i: Int) = { val n = names.getMethodName(st.methods(i), st.types(i)); jvmFrame.matcher(n).find() || !n.contains('.') && !n.contains('/') }
+            while (leaf < st.methods.length - 1 && vmName(leaf)) leaf += 1
+          }
           var i = st.methods.length - 1 // the stack is leaf first
-          while (i >= 0) {
+          while (i >= leaf) {
             val name = short(names.getMethodName(st.methods(i), st.types(i)))
-            if (i == 0 || !isNoise(name)) {
+            if (i == leaf || !isNoise(name)) {
               val f = trie.frameId(name)
               if (f == isJvm.length) isJvm += jvmFrame.matcher(name).find() || !name.contains('.')
-              if (seen.add(f) || i == 0) node = trie.child(node, f)
+              if (seen.add(f) || i == leaf) node = trie.child(node, f)
             }
             i -= 1
           }
@@ -318,34 +337,35 @@ object ProfileData {
         (to._1, math.min(at, to._5 - 1))
       }
 
-      // samples: thread, time (below 0: -1 - time, in no span), node, completion (-1: none), count
+      // samples: thread, time (below 0: -1 - time, in no span), node, completion (-1: none), count (alloc: KB)
       val samples = new StringBuilder
-      val states = jfr.enums.get("jdk.types.ThreadState")
-      var count = 0
+      var count = 0L
       def add(v: Long): Unit = { if (samples.nonEmpty) samples.append(','); samples.append(v) }
-      var e = jfr.readEvent(classOf[ExecutionSample])
+      val eventClass: Class[_ <: Event] = if (event == "alloc") classOf[AllocationSample] else classOf[ExecutionSample]
+      var e: Event = jfr.readEvent(eventClass)
       while (e ne null) {
         val cIndex = compilationAt(e.time)
         if (cIndex >= 0) {
           val t = us(cIndex, e.time)
           val th0 = threadId(cIndex, e.tid)
           // wall: only the threads of the recording; the JVM's own sit idle in their loops
-          if (!config.endsWith("-wall") || th0 >= 0) {
+          if (event != "wall" || th0 >= 0) {
             val (th, at) = project(cIndex, th0, t)
             val c = completions.get(e.tid)
-            add(th); add(at); add(if (th >= 0) stackNode(e.stackTraceId) else otherNode(th)); add(if (c eq null) -1 else c.at(e.time)); add(e.samples)
-            count += e.samples
+            // an allocation sample weighs the bytes allocated since the last one on its thread, in KB
+            val n = e match { case x: ExecutionSample => x.samples.toLong; case a: AllocationSample => (a.value() + 512) >> 10 }
+            add(th); add(at); add(if (th >= 0) stackNode(e.stackTraceId) else otherNode(th)); add(if (c eq null) -1 else c.at(e.time)); add(n)
+            count += n
           }
         }
-        e = jfr.readEvent(classOf[ExecutionSample])
+        e = jfr.readEvent(eventClass)
       }
       def strs(xs: Iterable[String]) = xs.iterator.map(quote).mkString("[", ",", "]")
       val parent = trie.parent.result(); val frame = trie.frame.result()
-      println(s"profile $config: $count samples, ${trie.nodes} nodes, ${trie.frames.length} frames, ${symbols.length} completions")
-      val event = if (config.endsWith("-wall")) "wall" else "cpu"
+      println(s"profile $config: $count ${if (event == "alloc") "KB" else "samples"}, ${trie.nodes} nodes, ${trie.frames.length} frames, ${symbols.length} completions")
       // a node's parent as its distance back: mostly the node before
       val parentBack = parent.indices.map(i => if (parent(i) < 0) -1 else i - parent(i) - 1)
-      s"""{"dir":${quote(s"profiles/$corpus")},"jfr":${quote(s"run-$config.jfr")},"event":${quote(event)},"interval":${quote(interval)},"repeats":${tls.length},
+      s"""{"dir":${quote(s"profiles/$corpus")},"jfr":${quote(s"run-${config.stripSuffix("-alloc")}.jfr")},"event":${quote(event)},"interval":${quote(interval)},"repeats":${tls.length},
          |"frames":${strs(trie.frames)},
          |"jvmFrames":[${trie.frames.indices.filter(isJvm).mkString(",")}],
          |"parent":[${parentBack.mkString(",")}],

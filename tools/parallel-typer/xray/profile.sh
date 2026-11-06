@@ -82,6 +82,7 @@ LAST="${THREADS##* }"
 JFRCONV=("$ASYNC/bin/jfrconv" --spans --threads --span-config "$HERE/span-config.json")
 "${JFRCONV[@]}" --cpu "$OUT/run-$LAST.jfr" "$OUT/flame-$LAST-cpu.html"
 "${JFRCONV[@]}" --wall "$OUT/run-$LAST-wall.jfr" "$OUT/flame-$LAST-wall.html"
+"${JFRCONV[@]}" --alloc --total "$OUT/run-$LAST.jfr" "$OUT/flame-$LAST-alloc.html"
 for t in $THREADS; do [ "$t" = "$LAST" ] || rm -f "$OUT/run-$t.jfr" "$OUT/run-$t-wall.jfr"; done
 rm -rf "$WORK"
 # for the page: a file of timelines per corpus and a file per profile, loaded when its run is shown (split.py)

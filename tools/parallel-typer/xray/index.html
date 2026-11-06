@@ -122,7 +122,7 @@ details summary { cursor: pointer; color: var(--dim); }
   <div class="legend"><span><span class="sw" style="background:var(--ink)"></span> lock held, someone waited</span><span><span class="sw" style="background:var(--ink);opacity:.45"></span> lock held &gt; threshold, uncontended</span><span><span class="sw hatch"></span> waiting for the lock</span><span><span class="sw" style="background:var(--gc)"></span> GC pause</span><span>span opacity: CPU / wall (pale: blocked or descheduled)</span><span>dotted: worker out of units</span></div>
 </section>
 <section id="profSec" hidden>
-  <h2>Where the CPU went <span class="dim">async-profiler samples of what the timeline shows: zoom or click a stretch to narrow the time, click a span for that span alone</span></h2>
+  <h2>Where the CPU went, and the allocation <span class="dim">async-profiler samples of what the timeline shows: zoom or click a stretch to narrow the time, click a span for that span alone</span></h2>
   <div class="ctl" id="profCtl"></div>
   <div class="ctl" id="profSteps"></div>
   <div class="dim" id="profInfo" style="margin-bottom:6px"></div>
@@ -462,7 +462,10 @@ if (typeof module !== 'undefined') module.exports = XR;
   const view = { x0: 0, x1: 1, sel: null, hiddenSteps: new Set(), site: '' };
 
   // a run's wall clock profile is a recording of its own, reached from the profile panel
-  const isWallRun = (r) => /-wall$/.test(r.config);
+  const isWallRun = (r) => /-(wall|alloc)$/.test(r.config);
+  const EVENT_NAME = { cpu: 'CPU', wall: 'wall clock', alloc: 'allocation' };
+  const evName = (P) => EVENT_NAME[P.event] || P.event;
+  const unitName = (P, n) => P.event === 'alloc' ? (n >= 10240 ? (n / 1024).toFixed(1) + ' MB' : n + ' KB') : n + ' samples';
   function load(raws) {
     for (const raw of raws) {
       const r = XR.decode(raw);
@@ -481,7 +484,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     // every corpus did not fit once there were a few of each)
     const shownRuns = runs.filter((q) => !isWallRun(q));
     const corpora = [...new Set(shownRuns.map((q) => q.corpus))];
-    const isCur = (q) => q === r || r.config === q.config + '-wall' && r.corpus === q.corpus;
+    const isCur = (q) => q === r || r.config.replace(/-(wall|alloc)$/, '') === q.config && r.corpus === q.corpus;
     $('runs').innerHTML = `<select id="corpusSel" title="corpus">${corpora.map((c) => `<option value="${esc(c)}"${c === r.corpus ? ' selected' : ''}>${esc(c)}</option>`).join('')}</select>` +
       '<span class="dim">threads</span>' +
       shownRuns.filter((q) => q.corpus === r.corpus).map((q) => `<button data-i="${runs.indexOf(q)}" class="${isCur(q) ? 'on' : ''}" title="${q.config === 'serial' ? 'the serial compiler' : q.config + (q.N === 1 ? ' thread' : ' threads')}">${q.config === 'serial' ? 'serial' : esc(q.config)} <span class="dim">${fmt(q.wall)}</span></button>`).join('');
@@ -489,7 +492,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     $('corpusSel').onchange = () => {
       const there = shownRuns.filter((q) => q.corpus === $('corpusSel').value);
       // the same configuration of the other corpus, else its largest thread count
-      select(there.find((q) => q.config === r.config.replace(/-wall$/, '')) || there.find((q) => q.N === Math.max(...there.map((x) => x.N))) || there[0]);
+      select(there.find((q) => q.config === r.config.replace(/-(wall|alloc)$/, '')) || there.find((q) => q.N === Math.max(...there.map((x) => x.N))) || there[0]);
     };
     XR.analyse(r);
     renderKpis(); renderStretches(); renderChips(); renderSites(); renderBar(); renderTables(); renderScaling(); renderMeta();
@@ -946,19 +949,21 @@ if (typeof module !== 'undefined') module.exports = XR;
     else if (!whole) { f.t0 = view.x0; f.t1 = view.x1; }
     const A = XR.profileSelect(cur, f);
     const pct = (n) => A.count ? (100 * n / A.count).toFixed(n * 1000 < A.count ? 2 : 1) + '%' : '';
+    const cnt = (n) => P.event === 'alloc' ? unitName(P, n) : n;
     const pills = [];
     if (prof.span) pills.push(['span', `span: ${prof.span.label} in ${prof.span.step}, ${cur.threads[prof.span.tid]}`]);
     if (prof.label != null) pills.push(['label', `unit: ${prof.label}`]);
     if (prof.sym != null) pills.push(['sym', `completing: ${P.symbols[prof.sym]}`]);
     if (prof.frame != null) pills.push(['frame', `through: ${frameLabel(P, prof.frame)}`]);
-    const dir = P.raw.dir, cfg = cur.config.replace(/-wall$/, '');
-    const sibling = (e) => runs.find((q) => q.corpus === cur.corpus && q.config === (e === 'cpu' ? cfg : cfg + '-wall'));
-    $('profCtl').innerHTML = ['cpu', 'wall'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${e === P.event ? 'this recording' : 'a recording of its own, so its times differ a little'}">${e === 'cpu' ? 'CPU' : 'wall clock'}</button>`).join('') +
+    const dir = P.raw.dir, cfg = cur.config.replace(/-(wall|alloc)$/, '');
+    const sibling = (e) => runs.find((q) => q.corpus === cur.corpus && q.config === (e === 'cpu' ? cfg : cfg + '-' + e));
+    const evTitle = (e) => e === P.event ? 'this recording' : e === 'alloc' || P.event === 'alloc' && e === 'cpu' ? 'the allocation samples of the CPU recording: each weighs the bytes allocated since the last one on its thread' : 'a recording of its own, so its times differ a little';
+    $('profCtl').innerHTML = ['cpu', 'wall', 'alloc'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${evTitle(e)}">${EVENT_NAME[e]}</button>`).join('') +
       `<button id="nameSimple" class="${prof.simple ? 'on' : ''}" title="class and method, without packages and enclosing classes">simple names</button><button id="nameFull" class="${prof.simple ? '' : 'on'}" title="the frames as recorded">full names</button>` +
       `<button id="flipFlame" class="${prof.reversed ? 'on' : ''}" title="root at the frames where time is spent, with their callers below">reversed</button>` +
       `<span class="zoomctl" title="zoom the flame graph: also pinch or ⌘/ctrl-scroll (the point under the cursor stays put), scroll sideways to pan, click a frame to zoom into it, right-click for more"><button id="flameIn" title="widen the flame graph about its middle">+</button><button id="flameOut" title="narrow it"${(prof.zoom || 1) > 1 ? '' : ' disabled'}>−</button><span class="dim" style="min-width:3.2em;text-align:center">${Math.round((prof.zoom || 1) * 100)}%</span><button id="flameReset" title="back to every stack at its natural width"${(prof.zoom || 1) > 1 || (prof.root && prof.root.length) ? '' : ' disabled'}>1:1</button></span>` +
       pills.map(([k, t]) => `<span class="pfilter" data-k="${k}" title="remove this filter">${esc(t)} ×</span>`).join('') +
-      `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
+      `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-alloc.html">allocation</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
     $('profCtl').querySelectorAll('button[data-ev]').forEach((b) => b.onclick = () => { 
       if (b.dataset.ev === P.event) return;
       const { x0, x1 } = view, { step, label } = prof, o = sibling(b.dataset.ev);
@@ -978,17 +983,17 @@ if (typeof module !== 'undefined') module.exports = XR;
     const interval = P.raw.interval;
     const range = prof.span ? `${shortMs(prof.span.t0)}–${shortMs(prof.span.t1)} ms` : whole ? 'the whole run' : `${shortMs(view.x0)}–${shortMs(view.x1)} ms`;
     const out = A.outside ? `; outside the recording's threads in the same time: ${A.others.map(([k, n]) => `${esc(k)} ${n}`).join(', ')}` : '';
-    const few = A.count && A.count < 50 ? ' <b>Few samples: read this as a hint.</b>' : '';
-    $('profInfo').innerHTML = `${A.count} ${P.event === 'cpu' ? 'CPU' : 'wall clock'} samples in ${esc(range)} (interval ${esc(interval)}, ${P.raw.repeats} compilation${P.raw.repeats > 1 ? 's' : ''} projected onto the one shown)${out}.${few}`;
+    const few = A.count && A.count < (P.event === 'alloc' ? 50 * 256 : 50) ? ' <b>Few samples: read this as a hint.</b>' : '';
+    $('profInfo').innerHTML = `${P.event === 'alloc' ? unitName(P, A.count) + ' allocated' : A.count + ' ' + evName(P) + ' samples'} in ${esc(range)} (${P.event === 'alloc' ? 'a sample every' : 'interval'} ${esc(interval)}, ${P.raw.repeats} compilation${P.raw.repeats > 1 ? 's' : ''} projected onto the one shown)${out}.${few}`;
     const table = (id, rows, cols, click) => {
       $(id).innerHTML = `<tbody>${rows.map((r, i) => `<tr data-i="${i}">${cols(r).map((c, j) => `<td${j === 0 ? ' class="l" title="' + esc(c) + '"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
       if (click) $(id).querySelectorAll('tr').forEach((tr) => tr.onclick = () => click(rows[+tr.dataset.i]));
     };
     const setFrame = (r) => { prof.frame = r.frame; prof.root = null; renderProfile(); };
-    table('pSelf', A.topSelf, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
-    table('pTotal', A.topTotal, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
-    table('pUnits', A.units, ([k, n]) => [k, n, pct(n)], ([k]) => { prof.label = k; prof.root = null; renderProfile(); });
-    table('pSyms', A.syms, ([k, n]) => [P.symbols[k], n, pct(n)], ([k]) => { prof.sym = k; prof.root = null; renderProfile(); });
+    table('pSelf', A.topSelf, (r) => [frameLabel(P, r.frame), cnt(r.n), pct(r.n)], setFrame);
+    table('pTotal', A.topTotal, (r) => [frameLabel(P, r.frame), cnt(r.n), pct(r.n)], setFrame);
+    table('pUnits', A.units, ([k, n]) => [k, cnt(n), pct(n)], ([k]) => { prof.label = k; prof.root = null; renderProfile(); });
+    table('pSyms', A.syms, ([k, n]) => [P.symbols[k], cnt(n), pct(n)], ([k]) => { prof.sym = k; prof.root = null; renderProfile(); });
     drawFlame(P, A);
     prof.lastCount = A.count;
     renderStatus();
@@ -1062,7 +1067,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (!flameBoxes.length) { g.fillStyle = css('--dim'); g.fillText('no samples here', 8, ROW); }
     const at = (ev) => { const q = c.getBoundingClientRect(), x = ev.clientX - q.left, y = ev.clientY - q.top; return flameBoxes.find((b) => x >= b.x && x < b.x + b.w && y >= b.y && y < b.y + ROW); };
     const relation = prof.reversed ? 'callers below it' : 'callees below it';
-    c.onmousemove = (ev) => { const b = at(ev); if (!b) return hideTip(); showTip(ev, `${P.frames[b.n.fr]}\n${b.n.t} samples, ${(100 * b.n.t / (A.count || 1)).toFixed(2)}% (self ${b.n.s}), ${relation}\nclick to zoom, double-click to reset`); };
+    c.onmousemove = (ev) => { const b = at(ev); if (!b) return hideTip(); showTip(ev, `${P.frames[b.n.fr]}\n${unitName(P, b.n.t)}, ${(100 * b.n.t / (A.count || 1)).toFixed(2)}% (self ${P.event === 'alloc' ? unitName(P, b.n.s) : b.n.s}), ${relation}\nclick to zoom, double-click to reset`); };
     c.onmouseleave = hideTip;
     c.onclick = (ev) => { const b = at(ev); if (!b) return; const path = []; for (let n = b.n; n.up; n = n.up) path.unshift(n.fr); prof.root = path; prof.zoom = 1; prof.pan = 0; renderProfile(); };
     c.ondblclick = () => { prof.root = null; prof.zoom = 1; prof.pan = 0; renderProfile(); };
@@ -1130,8 +1135,8 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (base && base !== cur) bits.push(`${(base.wall / cur.wall).toFixed(2)}× vs ${baseName(ref)}`);
     bits.push(whole ? 'whole run' : `viewing ${shortMs(view.x0)}–${shortMs(view.x1)} ms (${fmt(view.x1 - view.x0)})`);
     if (P) {
-      bits.push(`${P.event === 'cpu' ? 'CPU' : 'wall clock'} profile, ${P.raw.interval}, ${P.raw.repeats} compilations`);
-      if (prof.lastCount != null) bits.push(`${prof.lastCount} samples selected`);
+      bits.push(`${evName(P)} profile, ${P.raw.interval}, ${P.raw.repeats} compilations`);
+      if (prof.lastCount != null) bits.push(`${unitName(P, prof.lastCount)} selected`);
       const fs = [prof.step && `step ${XR.stepName(prof.step)}`, prof.span && `span ${prof.span.label}`, prof.label && `unit ${prof.label}`, prof.sym != null && `completing ${P.symbols[prof.sym]}`, prof.frame != null && `through ${frameLabel(P, prof.frame)}`, prof.reversed && 'reversed'].filter(Boolean);
       if (fs.length) bits.push(fs.map(esc).join(', '));
     } else bits.push(cur.raw.profileRef ? 'loading the profile…' : 'no profile');

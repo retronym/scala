@@ -11,12 +11,12 @@ os.makedirs(out, exist_ok=True)
 for f in os.listdir(out):
     if f.endswith('.js'): os.remove(os.path.join(out, f))
 def order(name):
-    m = re.match(r'run-(serial|\d+)(-wall)?\.json$', name)
-    return (0 if m.group(1) == 'serial' else int(m.group(1)), 1 if m.group(2) else 0)
+    m = re.match(r'run-(serial|\d+)(-wall|-alloc)?\.json$', name)
+    return (0 if m.group(1) == 'serial' else int(m.group(1)), 0 if not m.group(2) else 1 if m.group(2) == '-wall' else 2)
 manifest = []
 for corpus in sorted(os.listdir(src)):
     d = os.path.join(src, corpus)
-    runs = sorted((f for f in os.listdir(d) if re.match(r'run-(serial|\d+)(-wall)?\.json$', f)), key=order) if os.path.isdir(d) else []
+    runs = sorted((f for f in os.listdir(d) if re.match(r'run-(serial|\d+)(-wall|-alloc)?\.json$', f)), key=order) if os.path.isdir(d) else []
     if not runs: continue
     slug = re.sub(r'[^A-Za-z0-9_.-]', '_', corpus)
     with open(os.path.join(out, slug + '.js'), 'w') as tl:

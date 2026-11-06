@@ -7,6 +7,6 @@ const ctx = { module: { exports: null } };
 vm.runInNewContext(src, ctx);
 const XR = ctx.module.exports;
 const runs = process.argv.slice(2).flatMap((f) => XR.parseFile(fs.readFileSync(f, 'utf8'))).map(XR.decode);
-const shown = runs.filter((r) => !/-wall$/.test(r.config));
+const shown = runs.filter((r) => !/-(wall|alloc)$/.test(r.config));
 shown.sort((p, q) => p.corpus.localeCompare(q.corpus) || (p.N - q.N));
 console.log(XR.summary(shown));
