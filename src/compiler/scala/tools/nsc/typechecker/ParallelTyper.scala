@@ -182,6 +182,7 @@ trait ParallelTyper {
               unitWeights.put(unit, nodeCount - trees0)
               patternWeights.put(unit, patternsIn(unit.body))
               undoLog.clear()
+              scratch.memberTypes.clear() // only needed within a typing; keeps this from holding every method of the run
               timeline.foreach(_.add(unit.source.file.name, s0, System.nanoTime(), Timeline.cpuNow() - c0,
                 times.waitNanos - w0, times.holdNanos - h0))
             }

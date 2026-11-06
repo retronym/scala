@@ -1310,7 +1310,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** The decoded name of the symbol, e.g. `==` instead of `\$eq\$eq`.
      */
-    def decodedName: String = name.decode
+    def decodedName: String = {
+      val shown = shownNameHere
+      if (shown ne null) shown.decode else name.decode
+    }
+    /** The name this thread is showing for this symbol while it renders a message (`TypeDiagnostics.TypeDiag`), or null.
+     *  In a serial compiler that rendering renames the symbol, and this is always null. */
+    private[this] def shownNameHere: Name =
+      if (isConcurrentCompiler) { val shown = scratch.shownNames; if (shown.isEmpty) null else shown.get(this).asInstanceOf[Name] }
+      else null
 
     private def addModuleSuffix(n: Name): Name =
       if (needsModuleSuffix) n append nme.MODULE_SUFFIX_STRING else n
@@ -3200,7 +3208,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  If settings.Yshowsymkinds, adds abbreviated symbol kind.
      */
     def nameString: String = {
-      val name_s = if (settings.isDebug) "" + unexpandedName else unexpandedName.dropLocal.decode
+      val shown = shownNameHere
+      val name_s = if (shown ne null) shown.decode else if (settings.isDebug) "" + unexpandedName else unexpandedName.dropLocal.decode
       val kind_s = if (settings.Yshowsymkinds.value) "#" + abbreviatedKindString else ""
 
       name_s + idString + kind_s
@@ -3524,8 +3533,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       //
       // Out of caution, I've also disable caching if there are active type completers, which also
       // mutate symbol infos during val and def return type inference based the overridden member.
-      // In a concurrent compiler, the four fields of the cache are not written atomically: no cache.
-      if (!isCompilerUniverse || isPastTyper || lockedCount > 0 || isConcurrentCompiler) return pre.computeMemberType(this)
+      if (!isCompilerUniverse || isPastTyper || lockedCount > 0) return pre.computeMemberType(this)
+      if (isConcurrentCompiler) return concurrentTypeAsMemberOf(pre)
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
@@ -3535,6 +3544,22 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       mtpeInfo = info
       mtpeResult = res
       res
+    }
+
+    /** The cache of `typeAsMemberOf`, one entry per symbol as above but per thread. Whether a program compiles depends
+     *  on it: the member type of `c.apply` with `c: P[_ >: T]` skolemizes the existential afresh when it is computed, so
+     *  an argument typed twice by overload resolution would otherwise see two different skolems ("found: _$1, required:
+     *  (some other)_$1"). An entry shared between threads could be replaced by another thread's `pre` between the two. */
+    private def concurrentTypeAsMemberOf(pre: Type): Type = {
+      val cache = scratch.memberTypes
+      val entry = cache.get(this).asInstanceOf[MemberTypeEntry]
+      val tpInfo = info
+      if ((entry ne null) && entry.runId == currentRunId && (entry.pre eq pre) && (entry.info eq tpInfo)) entry.result
+      else {
+        val res = pre.computeMemberType(this)
+        cache.put(this, new MemberTypeEntry(currentRunId, pre, tpInfo, res))
+        res
+      }
     }
 
     override def isVarargs: Boolean = definitions.isVarArgsList(paramss.flatten)
@@ -4117,6 +4142,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def sourceModule_=(module: Symbol): Unit = { this.moduleSymbol = module }
   }
 
+  private final class MemberTypeEntry(val runId: RunId, val pre: Type, val info: Type, val result: Type)
   private final class ImplicitMembersCache(val tp: Type, val elems: ScopeEntry, val value: Scope)
 
   class PackageObjectClassSymbol protected[Symbols] (owner0: Symbol, pos0: Position)

@@ -7,7 +7,7 @@ import scala.tools.testkit.BytecodeTesting
 
 class InferTest extends BytecodeTesting {
   import compiler.global._, analyzer._
-  private val inferer = typer.infer
+  private lazy val inferer = typer.infer
   import inferer._
 
   class D[T]
