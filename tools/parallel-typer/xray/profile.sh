@@ -13,7 +13,7 @@
 # Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (1ms),
 # WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile),
 # FRAMES=<rounds> (instead: CPU profiles of serial and the thread count in turn, REPEATS compilations each, as collapsed
-# stacks under OUT, compared by frames.py), CLASSES=<dir> (the compiler to record, with compiler/ library/ reflect/).
+# stacks under OUT, compared by frames.py; with FRAMES_EVENT="--alloc --total" and -Dxray.frames.alloc in JAVA_OPTS, bytes allocated), CLASSES=<dir> (the compiler to record, with compiler/ library/ reflect/).
 set -euo pipefail
 JAVA="${JAVA:-java}" # the JVM to record on, e.g. a patched JDK's bin/java
 # GC: the collector's options (default -XX:+UseParallelGC: a batch compile wants throughput, and G1's concurrent
@@ -70,7 +70,7 @@ if [ -n "${FRAMES:-}" ]; then
   mkdir -p "$OUT"
   "${JVM[@]}" XrayProfile --frames "$args" "$OUT" "$WARMUP" "$FRAMES" "$REPEATS" "$CPU_INTERVAL" serial $THREADS
   for c in serial $THREADS; do
-    for j in "$OUT"/cmp-$c-*.jfr; do "$ASYNC/bin/jfrconv" -o collapsed --cpu --spans --threads "$j" "${j%.jfr}.collapsed"; rm -f "$j"; done
+    for j in "$OUT"/cmp-$c-*.jfr; do "$ASYNC/bin/jfrconv" -o collapsed ${FRAMES_EVENT:---cpu} --spans --threads "$j" "${j%.jfr}.collapsed"; rm -f "$j"; gzip -f "${j%.jfr}.collapsed"; done
   done
   exit 0
 fi

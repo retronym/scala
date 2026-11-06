@@ -45,7 +45,9 @@ object XrayProfile {
     XrayBench.warm(configs, files, warmup)
     for (r <- 1 to rounds; c <- configs) {
       System.gc()
-      startProfiler("cpu", interval, out.resolve(s"cmp-$c-$r.jfr"))
+      if (System.getProperty("xray.frames.alloc") != null)
+        AsyncProfiler.getInstance().execute(s"start,jfr,alloc=256k,jstackdepth=8192,file=${out.resolve(s"cmp-$c-$r.jfr")}")
+      else startProfiler("cpu", interval, out.resolve(s"cmp-$c-$r.jfr"))
       val mss = for (_ <- 1 to repeats) yield {
         ParallelTyperTimeline.current = new ParallelTyperTimeline(ParallelTyperTimeline.threshold)
         try XrayBench.compile(c, files)._1 finally ParallelTyperTimeline.current = null

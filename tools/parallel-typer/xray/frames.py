@@ -6,7 +6,7 @@
 # A line of the collapsed stacks is [thread];frames...;[step/unit...] n. The table has a frame's self (or, with --total,
 # inclusive, counted once per stack) samples per compilation in each configuration, sorted by the difference, the
 # column of each step's samples first with --steps.
-import argparse, collections, glob, os, re
+import argparse, collections, glob, gzip, os, re
 
 ap = argparse.ArgumentParser()
 ap.add_argument("dir"); ap.add_argument("repeats", type=int)
@@ -18,9 +18,9 @@ ap.add_argument("configs", nargs="*", default=["serial", "1"])
 a = ap.parse_args()
 
 def lines(d, c):
-    fs = sorted(glob.glob(os.path.join(d, "cmp-%s-*.collapsed" % c)))
+    fs = sorted(glob.glob(os.path.join(d, "cmp-%s-*.collapsed.gz" % c)))
     for f in fs:
-        for l in open(f, errors="replace"):
+        for l in gzip.open(f, "rt", errors="replace"):
             stack, _, n = l.rstrip("\n").rpartition(" ")
             yield stack.split(";"), int(n)
 
@@ -38,7 +38,7 @@ def isCompilerThread(t):
     return bool(re.search(r"main|scalac-", t))
 
 def collect(d, c):
-    n = len(glob.glob(os.path.join(d, "cmp-%s-*.collapsed" % c))) * a.repeats or 1
+    n = len(glob.glob(os.path.join(d, "cmp-%s-*.collapsed.gz" % c))) * a.repeats or 1
     res = collections.Counter()
     for stack, cnt in lines(d, c):
         thread, frames, tags = parse(stack)
