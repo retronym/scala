@@ -72,7 +72,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // under the scope's monitor).
   override def completionRoot(sym: Symbol): AnyRef = {
     val run = currentRun
-    if ((run ne null) && run.compiles(sym)) {
+    // An import comes from a source of this run, but one at the top of a file has no enclosing class for `compiles` to
+    // find. It must not fall to the coarse root: its completion types the qualifier, and waits for the completions of
+    // source symbols that may themselves wait for the coarse root, a false cycle.
+    if (sym.name eq nme.IMPORT) sym
+    else if ((run ne null) && run.compiles(sym)) {
       if (analyzer.parallelSignatures && System.getProperty("scalac.parallelTyper.parallelSignatures") == "unit") {
         val top0 = sym.originalEnclosingTopLevelClassOrDummy
         val top = if (top0.isModuleClass) top0.sourceModule else top0
