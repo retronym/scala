@@ -12,8 +12,10 @@ What the reading and measurements say:
 2. Reading a symbol table safely needs it frozen, and a Scala 2 table is not frozen after the pickler, because later phases rename symbols, set flags and enter scope members with no version attached. Measured: a kept `Global` emitted different bytes from a fresh one on real code, because a name expanded by a later phase in one run survived into the next (section 3). This is the same back-channel the spike's order effects come from, and the same one the Lean model's purity forbids.
 3. Keeping the symbol table across rounds is worth less than it looks, once the JVM is warm: 74% on a one-file round, 17-26% on rounds of 20 to 40 files (section 3). Rounds themselves are worth more: 12-53% of compile time on four real builds is spent in rounds that are not the last (section 3).
 4. On the incremental multi-project steps recorded, downstream is usually small next to upstream, or it uses macros. So speculative handoff of provisional signatures between projects saves little there (about 8-30% on the few steps recorded, and nothing on the macro-heavy build). Its payoff is on clean builds, where upstream's first round is already final.
+5. Seven subprojects of this repository compiled jointly in one `Global` gave 5174 class files byte-identical to compiling them separately, and took 25% less total work on one thread. That is the best evidence so far for one universe: compositionality held on this corpus, and most of the cost of separation is symbol loading (22-26% of the compiler's samples in a profile of a fresh round).
+6. Lowering, not signatures, is now the bound on the critical path. It is 60% of the work serially and about 80% once the front end is parallel, and one module's lowering (the compiler's, 7-10 s) is longer than the front ends of all modules together. Pipelining and every front-end handoff can only go as far as that, so the sibling work on parallel late phases matters more to a multi-project build than anything in this note until it lands.
 
-Recommendation, in order: (a) keep investing in purity, because the oracle that makes the parallel typer trustworthy (any completion order gives the same bytes) is the obligation every sharing design rests on; (b) take two steps that need no shared universe: run rounds through the front end to a fixed point before running the back end, and publish signatures from the spike's signature stage as a validated early output; (c) treat a build-wide front end, one universe with per-project visibility and lowering kept out of the shared table, as the destination, with IntelliJ's architecture as its reference, and test it first with the one experiment that costs almost nothing: compile several subprojects jointly in one `Global` with several output roots. Section 9 sets out that destination and section 10 ranks the options.
+Recommendation, in order: (a) keep investing in purity, because the oracle that makes the parallel typer trustworthy (any completion order gives the same bytes) is the obligation every sharing design rests on; (b) finish lowering on the pool; (c) take the steps that need no new universe: run rounds through the front end to a fixed point before running the back end, and compile groups of compatible subprojects jointly as one Zinc compile, which is already possible and has now passed a first byte-level check; (d) publish signatures from the spike's signature stage as a validated early output, once lowering no longer hides the gain; (e) treat a build-wide front end, one universe with per-project visibility and lowering kept out of the shared table, as the destination, with IntelliJ's architecture as its reference. Section 9 sets out that destination and section 10 ranks the options.
 
 ## 2. Vocabulary
 
@@ -54,6 +56,63 @@ The differing bytes are the important result. In `Erasure.class` and two anonymo
 
 A second experiment ran one edit as Zinc would: four files with inferred types rippling through (`A.f` changes type, `B.g = A.f`, `C.x = B.g`, a trait with a private member, a case class, a specialized class), rounds {A}, {B}, {C, D}, class files pruned before each round, compared with a clean build of the edited program. A fresh `Global` per round and a kept `Global` both gave bytes identical to clean. A kept `Global` with `invalidateClassPathEntries` on the output directory before each round, which is what a sound protocol would seem to want since class files changed under it, failed in the last round with "Symbol 'type scala.package.Serializable' is missing from the classpath. This symbol is required by 'class p.CC'". That was one deterministic-looking run and I did not investigate the cause, but it means the official invalidation path cannot be assumed to work.
 
+### Where a fresh round's time goes
+
+Async-profiler, `itimer`, in a warm JVM, inclusive shares of the samples inside the compiler (a sample counts in every row whose frames it has, so rows overlap). Ten runs of `transform/*.scala`, six of `scaladoc`.
+
+| bucket | fresh, `transform` | kept, `transform` | fresh, `scaladoc` |
+|---|---:|---:|---:|
+| symbol loading, all (`SymbolLoader.complete`) | 22.1% | 0% | 26.3% |
+| of which class files | 15.0% | 0% | 18.6% |
+| of which package listing and entering | 8.0% | 0% | 8.8% |
+| unpickler, eager and lazy | 6.9% | 0% | 6.7% |
+| class path listing | 7.6% | 0% | 8.9% |
+| `Definitions.init` | 1.7% | 0% | 1.6% |
+| `adaptToNewRunMap` | 0% | 1.0% | 0% |
+| `baseTypeSeq` | 7.0% | 5.3% | 7.9% |
+| `baseClasses` | 10.6% | 1.5% | 9.5% |
+| `findMember` | 18.7% | 11.1% | 14.5% |
+| `asSeenFrom` | 13.1% | 11.1% | 8.6% |
+
+So loading is about a quarter of a warm round on this class path. Within it, unpickling is the smaller part: parsing the class file (constant pool, annotations, finding the pickle) and listing packages together cost more. `adaptToNewRunMap`, the feared cost of a resident compiler (sbt/zinc#711), is about 1%. Note that `baseTypeSeq` hardly moves between fresh and kept, since its caches are stamped by run and recomputed: a layer that kept those across runs could save up to another 5-8%, and that requires the finer stamps of section 8. `baseClasses` and `findMember` fall because the rows include the loading they trigger. One discrepancy I have not resolved: the kept run has 56% fewer compiler samples than the fresh one, where wall time fell 16% in this run and 17% in section 3's table.
+
+Retained heap of a kept `Global` on `scaladoc`, after a full GC: 71 MB after run 1, then 82, 91, 100, 110, 119 MB. It grows by about 10 MB per run with the same sources, and that is a leak or an accumulation that a long-lived table would need to find, the same family as scala/scala3#27297. For scale, a whole-module class path table is modest, which is good news for layers.
+
+### Critical path and the joint compile
+
+Per-module phase times, warm JVM (three warm-up passes and three measured, medians), modules as in `build.sbt` (`interactive` and `repl` depend on `compiler`, and so on). `critpath.py` computes the models. *Traditional*: downstream starts after upstream's class files. *Pipelined*: after upstream's pickler. *Signature*: downstream parses at once, runs its signature stage after upstream's, its post-typer steps after upstream's. The signature stage is assumed to be 20% of the typer, in line with the plan's numbers. No Zinc or bridge phases are in these numbers. Serial phase times in ms:
+
+| module | parse | index | typer | superaccessors to pickler | lowering | total |
+|---|---:|---:|---:|---:|---:|---:|
+| library | 263 | 21 | 1612 | 123 | 3982 | 5623 |
+| reflect | 118 | 7 | 1666 | 73 | 3523 | 5459 |
+| compiler | 276 | 10 | 4288 | 141 | 6875 | 11893 |
+| interactive | 38 | 7 | 324 | 6 | 494 | 922 |
+| repl | 35 | 7 | 370 | 6 | 455 | 891 |
+| repl-frontend | 32 | 10 | 297 | 6 | 311 | 680 |
+| scaladoc | 46 | 8 | 591 | 19 | 931 | 1612 |
+| scalap | 31 | 5 | 248 | 8 | 407 | 735 |
+
+Critical path of the seven modules after `library` (which needs its own flags), in ms. "Work/6" is the bound from six cores, and it is well below these, so the graph's shape is the limit here.
+
+| front end | traditional | pipelined | signature | one `Global`, measured | work/6 |
+|---|---:|---:|---:|---:|---:|
+| serial per module | 19375 | 13453 | 11761 | 16694 on one thread | 3611 |
+| `-Yparallel-typer`, 6 threads, parser on the pool | 18011 | 11938 | 11362 | 13825 (10397 to 18196) | 3366 |
+| the same, with lowering assumed 4 times faster | 6932 | 4733 | 4157 | | 1312 |
+
+The third row is a what-if. It is there because the first two rows are dominated by the compiler's lowering, serial in all of them. With lowering sped up, pipelining saves 32% over traditional and a signature handoff 12% more over pipelining. A longer chain is where signature handoff matters: for a chain of L equal modules with these fractions and lowering on the pool, a signature handoff is 1.5 module-times at L=8 against pipelining's 4.2, and 2.1 at L=16 against 7.9. This graph is one hub with a chain in front of it, and real many-module builds have not been simulated, which is the next thing to do.
+
+The joint compile compiled `reflect`, `compiler`, `interactive`, `repl`, `repl-frontend`, `scaladoc` and `scalap` as one source list in one `Global`, one output directory, the same options, sharing's macros on the class path. Results:
+
+- 5174 class files, with the same names and the same bytes as the seven separate compiles, serially, and under `-Yparallel-typer` against the separate parallel compiles. No difference at all. The separate compiles read the build's class files for what they depend on, so this is a direct check of joint ≡ separate over this code. It is one codebase, with explicit types on most public members and few macros, so it says less about other styles.
+- On one thread: 16694 ms against 22192 ms for the sum of the separate compiles, 25% less work. Typer 5797 ms against 7784 ms, which matches the loading share in the profile. Lowering 10.2 s against 13.0 s, a difference I cannot explain by loading alone and which may be load on the machine.
+- With `-Yparallel-typer`: typer 1869 ms for all seven. Lowering is then 11 s of 13.8 s.
+
+So one thread on one `Global` is close to the pipelined critical path on unlimited cores, and a parallel typer with parallel lowering on one `Global` should beat pipelined builds outright on this graph, with no handoff protocol at all.
+
+Also found: with `parallelPostTyper` on, `src/library` crashed once in about 19 compilations with a `NullPointerException` (`tp2` null in `TypeComparers.isSubType2`, under `ExtensionMethods$Extender.transform` on a pool thread). The rerun without that property was clean, and all parallel numbers above are without it. Details are in the shared notes folder for the post-typer work.
+
 ### Rounds on real builds
 
 The IncBench campaigns (`~/code/.integration/campaigns`, `talks/zinc-incrementality/integration/anomalies`) record per-cycle compile times. From the released Zinc cell, the last repetition of each edit and revert, pipelining off:
@@ -81,7 +140,7 @@ The shape: round 1 is small (the edited file), the later rounds are the work, an
 
 ### What this says about the options
 
-The term to attack is Σ|R_n| and the number of rounds, before c_sig in the talk's cost model. Reloading signatures is a real but secondary term. Whole-file retyping and repeated back-end work dominate incremental builds. On clean builds, the critical path through subprojects is the term, which section 7 returns to.
+The term to attack in an incremental build is Σ|R_n| and the number of rounds, before c_sig in the talk's cost model. Reloading signatures is a real term, about a quarter of a round's compiler time, but it is secondary. On clean builds, the critical path through subprojects is the term, and at present lowering dominates it.
 
 ## 4. Zinc's rounds, precisely
 
@@ -145,7 +204,9 @@ Hence the question becomes what a reader needs of symbols in a *shared* universe
 | F. Build-wide front end: one universe for all projects up to the pickler, lowering in per-project universes or after everything | as E, and upstream lowering no longer blocks or mutates | a new driver, and a way to hand typed trees to lowering | as E, plus the handoff of trees (section 9) |
 | G. A compiler database: queries over content-hashed inputs, per-member traces, red-green reuse | rounds disappear as a concept | a rewrite in spirit; every implicit dependency must be a query | everything that is a back-channel today |
 
-Designs D and E need per-project visibility, and this is where the compiler's structure helps. *Visibility only differs at package level.* Once a reader holds a class symbol, members, parents and base types are the same for everyone, because they were resolved when that class was completed. So what must vary per project is package scope lookup (`Context.lookupSymbol`, `rootMirror`, `getPackage`, the unpickler's external references) and package object members opened into them (`openPackageModule`, `SymbolTable.scala:379`). IntelliJ passes a `GlobalSearchScope` explicitly to each lookup; a compiler with per-thread ambient state can read a current-project view at the same sites.
+Design E has a version that needs no compiler change: an sbt or Mill build merges a group of compatible subprojects into one Zinc compile. The joint experiment in section 3 is this version, and Zinc's `MultipleOutput` and `settings.outputDirs.add` already route classes to several outputs. What it gives up is enforcement of the dependency direction and any isolation of errors, and name resolution can then see symbols of a project that is not a dependency. That can be turned into a check rather than a filter: run strict-deps on the recorded dependencies, as Bazel does, and let the joint ≡ separate byte oracle catch resolution that differs. An implicit, a shadowing class or a package object member from a non-dependency are what it would find.
+
+Designs D and E need per-project visibility for real, and this is where the compiler's structure helps. *Visibility only differs at package level.* Once a reader holds a class symbol, members, parents and base types are the same for everyone, because they were resolved when that class was completed. So what must vary per project is package scope lookup (`Context.lookupSymbol`, `rootMirror`, `getPackage`, the unpickler's external references) and package object members opened into them (`openPackageModule`, `SymbolTable.scala:379`). IntelliJ passes a `GlobalSearchScope` explicitly to each lookup; a compiler with per-thread ambient state can read a current-project view at the same sites.
 
 Same fully-qualified class in two projects (shaded copies, a test class that shadows a main class, two versions) needs package scopes keyed by (name, project), and the same `Symbol` cannot serve both. A layer is sound for a reader only if everything it resolved would resolve the same on the reader's classpath. So the layer's key must cover the transitive closure of its entries. A library that references an optional dependency only some projects have sees a stub in the layer and a real class in the project: detect a stub created in a shared layer, and fall back. This is the one place the design falls back to a fresh `Global` per project, and it should be a first-class path that the oracle exercises.
 
@@ -286,40 +347,46 @@ What survives if this never gets built: all the steps that lead there are indepe
 Each entry: expected payoff against risk, on what's known so far.
 
 1. **Purity as a CI oracle, across order and history.** Payoff: enables everything, and fixes real bugs now (remote cache hit rates, spurious rounds). Risk: low. Partly done. Add: kept-`Global` byte comparison; the stability check over the community build.
-2. **Front-end convergence, then lowering once** (section 4 ladder, step 1). Payoff: the non-final fraction, 12-53%, less what must still lower (about half of a round's time is lowering; cats and pekko could lose perhaps 6-15% of compile time, more on upstream latency, since it also takes non-final back ends off downstream's wait). Risk: moderate. Touches Zinc and the bridge, no shared universe, no new soundness theory beyond early agreement. Macros and Java constants fall back.
-3. **Validated signature-stage early output for clean and full builds** (section 7). Payoff: to be simulated; critical path on chains goes from about L·F+B towards L·S+F+B, with F the front-end share and S the signature share. Risk: moderate. Needs the parallel typer's stage split, also useful serially. Downstream's byte stability depends on expanded names, which needs an answer.
-4. **Trace records at completion roots** (section 8). Payoff: a coverage check against real compiles, which finds undercompilation bugs regardless of anything else, and the foundation of red-green. Risk: low for the measurement, unknown overhead when on.
-5. **Resident `Global` pool for small rounds and `~compile`.** Payoff: real for very small rounds (74%), small otherwise, and Zinc's non-compile overhead in those rounds is similar in size. Risk: known bad history, and the byte difference. Do only after 1, and only for the first round of a body edit if at all. Fixing the mutations it needs is valuable in itself for 6.
-6. **Joint compile groups: one `Global`, several output roots, in one Zinc-visible unit** (design E). Payoff: to be measured with the cheap experiment. Removes c_sig and pipeline waits within a group, plus cross-project soundness gaps. Risk: moderate to high: macros, settings, diagnostics. Can start with groups of projects with same options and no macros between them.
-7. **Build-wide front end** (design F, section 9). Payoff: potentially large on real many-module builds; the upper bound is what 6 measures. Risk: high, multi-year, needs the lowering decision.
-8. **Provisional cross-project handoff.** Payoff: small on recorded steps. Risk: high. Not now.
-9. **Importer-based or in-memory handoff** (B). Payoff: IO only. Skip unless profiling says otherwise.
+2. **Lowering on the pool.** Not in this note's scope (the late-phases session has it), but listed because it sets the value of everything after it. Payoff: on section 3's graph, 11.9 s to about 4.7 s pipelined, if lowering gets 4 times faster. Risk: being measured there.
+3. **Front-end convergence, then lowering once** (section 4 ladder, step 1). Payoff: the non-final fraction, 12-53%, of which 60% is lowering, so perhaps 7-30% of compile time in incremental builds, plus the same off upstream's latency, since non-final back ends leave downstream's wait. Less where macros fall back, and shapeless is that case. Risk: moderate. Touches Zinc and the bridge, no shared universe, no new soundness theory beyond early agreement. Macros and Java constants fall back.
+4. **Joint compile groups: one `Global`, several output roots, one Zinc compile, no compiler change for the first version** (design E, section 6). Payoff: measured at 25% of total work on the seven modules, with byte-identical output, no handoff to get wrong, and the cross-project soundness gaps of `zinc-lean` §19 gone inside a group. The cost is that a change anywhere in the group can pull the group's API checks into one loop, and that errors and options are per group. Risk: moderate. It is reversible, a build setting. Macros between members and differing options or plugins exclude a project from a group. Should be tried on a real build next.
+5. **Trace records at completion roots** (section 8). Payoff: a coverage check against real compiles, which finds undercompilation bugs regardless of anything else, and the foundation of red-green. Risk: low for the measurement, unknown overhead when on.
+6. **Validated signature-stage early output for clean and full builds** (section 7). Payoff: small now on this graph (12%), large on long chains once lowering is fast (a chain of 8: 1.5 module-times against 4.2). Risk: moderate. Needs the parallel typer's stage split, also useful serially. Downstream's byte stability depends on expanded names, which needs an answer. Ranked below joint groups because within a group it is not needed, and because many real graphs may be wide rather than long: the simulation on real graphs decides.
+7. **Resident `Global` pool for small rounds and `~compile`.** Payoff: real for very small rounds (74%), 17-26% otherwise, and Zinc's non-compile overhead in those rounds is similar in size. Risk: known bad history, the byte difference, the heap growth, the broken invalidation path. Do only after 1, and if at all only for the first round of a body edit. Fixing the mutations it needs is valuable in itself for 8.
+8. **Build-wide front end** (design F, section 9). Payoff: potentially large on real many-module builds; joint groups measure the upper bound for free. Risk: high, multi-year, needs the lowering decision.
+9. **Provisional cross-project handoff.** Payoff: small on recorded steps. Risk: high. Not now.
+10. **Importer-based or in-memory handoff** (B). Payoff: IO only, and the profile shows reading is not where loading's time goes. Skip.
 
-Recommendation: do 1, 2, 3, 4 in that order as independently shippable work, run the experiment for 6 now as it costs an afternoon and decides whether 6 and 7 are worth holding in mind, and do not do 5 or 8 until those results are in.
+Recommendation: 1 and 2 are underway. Next, 3 and 4, independently: both can ship without a shared-universe protocol, and 4 can be tried tomorrow with a build setting on pekko, cats or a larger build. Keep 5 running as a measurement. Decide on 6 from the simulation on real graphs after lowering lands. Treat 8 as the direction that joint groups grow into, if they work: visibility as a check first, then a view, then lowering out of the table.
 
 ## 11. Cheapest experiments
 
 Each says what would confirm or kill the option.
 
-1. *Joint compile as upper bound* (options 6, 7). Compile `reflect`, `compiler`, `interactive`, `repl`, `scaladoc`, `scalap` in one `Global` with `settings.outputDirs.add`, serial and with `-Yparallel-typer`, against the sum and critical path of separate compiles. Kill: the joint compile is not much below the critical path of separate compiles with pipelining. Also shows whether output bytes match separate compilation.
-2. *Critical path simulation* (options 3, 6, 7, 8). Per-module phase times, a module graph, handoff models (traditional, pipelined at the pickler, signature-stage, lockstep one universe), bounded by core count. Sharpen with x-ray recordings of real builds. Run on scala/scala's graph first, and then pekko, cats and a many-module build, using `export-build` from the IncBench tooling. Kill option 3: if chains in real builds are short or the signature share is large.
+1. *Joint compile on a real build through Zinc* (option 4). Done without Zinc on this repository (section 3). Next: merge subprojects of pekko, cats (no macros between members) in the build definition, run IncBench's edits with `lockstep --verify`, and compare rounds, recompiled classes and wall time with the separate layout. Kill: a group's rounds grow enough to lose the gain, or joint ≠ separate bytes on code less regular than this repository. A strict-deps check for dependency direction is a small add-on.
+2. *Critical path simulation on real graphs* (options 2, 6, 8, 9). `critpath.py` exists and has run on scala/scala's graph. Sharpen with x-ray recordings, and run on pekko, cats and a many-module build using `export-build`, with the signature share taken from `-Dscalac.parallelTyper.log`. Kill option 6: if chains in real builds are short.
 3. *`PipelineMain` as it stands* on the same graph: `Traditional`, `Pipeline`, `OutlineTypePipeline`. Validates the simulator against something real.
 4. *Non-final lowering fraction and overlap* (option 2). Replay IncBench steps with `xsbt-dependency` timestamps, and from the invalidation log compute |R_n ∩ R_{n+1}| and the phase split per cycle. The current data has counts per cycle, not sets. Kill: if overlap is small and most non-final classes are never repeated, and suspended lowering's memory is too high.
 5. *Skip lowering in non-final rounds as a Zinc hack*: on a step, stop after the pickler in rounds where `continue` is true, reading pickles next round, then compile everything invalidated in a final round. Differential check against clean using the `lockstep --verify` harness.
 6. *Signature-stage pickle divergence* (option 3). With the spike, write pickles at the end of the signature stage and at the pickler, on all corpora. Count the classes whose π differs. Kill: if a typical unit differs, the validation would always fail.
 7. *What lowering writes to foreign symbols* (option 5, section 5). Instrument `name_=`, `setFlag`, `enter` during phases after the pickler, keyed by whether the symbol is from the current run's sources. Gives the actual list behind the byte difference and the size of a "freeze" or "undo". The state map tooling can help.
-8. *Profile of a fresh round*: the share of `ClassfileLoader`, `UnPickler`, `PackageLoader`, `baseTypeSeq`, `findMember`, against `adaptToNewRunMap` on a kept `Global`. Answers where the kept-`Global` saving comes from.
-9. *Retained heap* of a kept `Global` after each of several runs: growth implies a leak, and the size bounds a layer's memory.
-10. *Trace overhead* (option 4). Record queries at completion roots on the corpus, compare with Zinc's keys for coverage.
+8. *Trace overhead* (option 5). Record queries at completion roots on the corpus, compare with Zinc's keys for coverage.
+9. *What grows in a kept `Global`* (option 7): a heap diff between run 2 and run 6 on `scaladoc`. Cheap with `heap-paths`.
+10. *Why `invalidateClassPathEntries` fails on the ripple* (option 7, and reachable by anything that wants to reload): `tools/parallel-typer/cross-global/run.sh ripple` reproduces it.
 
 ## 12. What was run and what was only read
 
 Run for this note:
 
-- The fresh against kept `Global` table, including byte comparison, on this branch's quick build, loaded machine (section 3).
+All on this branch's quick build, on a loaded machine (load average 15 to 120). Harness and scripts are in `tools/parallel-typer/cross-global`; raw outputs are in the shared notes folder under `cross-global`.
+
+- The fresh against kept `Global` table, including byte comparison (section 3). Before a laptop restart, with the same harness as now committed.
 - The inspection with `javap` of the differing class files.
-- The four-file edit ripple on fresh, kept and kept with invalidation (section 3), once.
-- Aggregation of existing IncBench campaign JSON for the two tables in section 3. I did not re-run those campaigns, and I took the last repetition of each step.
+- The four-file edit ripple on fresh, kept and kept with invalidation, run twice with the same outcome.
+- Profiles of fresh and kept rounds, and the retained heap of a kept `Global`.
+- Per-module phase times, serial and under `-Yparallel-typer`; `critpath.py` over them. The critical paths are computed, not observed. The signature share (20%) and the factor of 4 for lowering are assumptions. The `lockstep` model in that script assumes all lowering runs on the pool, and I left it out of the tables.
+- The joint compile of seven modules with its byte comparison, on one thread and with six.
+- Aggregation of existing IncBench campaign JSON for two tables in section 3. I did not re-run those campaigns, and I took the last repetition of each step.
 
 Read from source, cited in the text: Zinc's loop and early output, the bridge's compiler lifetime and phase placement, sbt's pipelining tasks, `PipelineMain`, importers, `adaptInfo`, `openPackageModule`, Scala 3's suspension, IntelliJ's `GlobalSearchScope`, stubs, JPS exit codes and chunks, `BlockModificationTracker`.
 
@@ -330,11 +397,11 @@ Asserted from reading with the mechanism inferred and not confirmed by a run:
 - That validation of signature-stage pickles makes a downstream compile end in a correct state. Argued from T5.
 - That visibility varies only at package level. I know of no counterexample but searched only by reasoning about lookups. The likely weak spots are implicit search through imports and `companionSymbol`.
 - All statements about what a stage in a build-wide front end could do. Nothing has been built.
-- The lowering-share estimate in option 2's payoff; "about half" is read off a few phase tables.
+- Option 3's payoff range, from multiplying non-final fractions on some builds by the lowering share measured on another.
 
 From documentation or memory, not checked in source: Roslyn (`CompilationReference`, retargeting is from `source.dot.net`; immutability of symbols through lowering is memory), GHC's HPT and EPS (from source comments found by search), cargo's `.rmeta` pipelining (from the Rust internals thread and cargo#6883), Buck's source-only ABI (from Buck's documentation), Bazel's ijar and Turbine (from their documentation), Kotlin LL FIR (`docs/analysis-api/low-level-api-fir.md` and `fir-basics.md` at a mirror, an older revision), `try_mark_green` (memory).
 
-Not done: section 11's experiments 1 to 10.
+Not done: section 11's experiments, apart from the first steps of 1 and 2 as described. `PipelineMain` itself was not run, so the simulated pipelined column has no check against a real pipelined build.
 
 ## 13. Questions for Jason's judgment
 
@@ -344,3 +411,4 @@ Not done: section 11's experiments 1 to 10.
 4. Source symbols across rounds give a third view next to joint and separate. Is it better to embrace it (a kept joint view, dropping class-file rereads inside a project), or keep each round a separate compilation so that the existing obligations stay exactly what is tested?
 5. For validated signature-stage output: should a downstream run on a pickle that later fails validation be allowed to finish and be repaired by the next round, or cancelled? Cancellation needs Scala 3's session work ported.
 6. Is shapeless-style macro cascading in scope here, or does your macro fast-track work (rz#73) already take that row of the table out?
+7. Joint groups as a build setting: would you try it on a real build next, or does the loss of error isolation and dependency direction rule it out for real users even with a strict-deps check? If it survives, it changes what a virtual monorepo first means: a setting, with a compiler project behind it only when the setting hits a limit.
