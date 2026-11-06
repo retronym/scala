@@ -97,11 +97,13 @@ Data. The `profile` field of a run's JSON:
 | `others` | threads outside the recording, by name without their number; each is one frame here, jfrconv's graph has their stacks |
 | `samples` | stride 5: thread (below 0: `-1 - i` in `others`), time in µs (below 0: `-1 - time`, in no span), node, completion (-1: none), count |
 
-To keep the data small, a stack keeps only a frame's outermost occurrence, and its real leaf. A frame's self and total counts stay right, and the depth is at most the number of distinct frames, but the path through recursion is not the real one. Closures' forwarding frames are dropped.
+Both corpora at the defaults come to 13 MB in `timeline.data.js`; `REPEATS` trades that against samples. To keep the data small, a stack keeps only a frame's outermost occurrence, and its real leaf. A frame's self and total counts stay right, and the depth is at most the number of distinct frames, but the path through recursion is not the real one. Closures' forwarding frames are dropped.
 
 ## Cost
 
 Off: one static field read and a null test per lock acquisition and per unit and phase.
+
+A profile run adds to the timeline about 6% on the library and 3.5% on the compiler for CPU, and nothing above the noise for wall clock (`PLAN-parallel-typer.md`, "Profiles in the x-ray"). Completion spans and names' strings are off unless their property is set.
 
 On, measured with `OVERHEAD=14 run.sh library <threads>` (14 alternating pairs after 10 warm-up compilations, M5 Pro laptop shared with other work, so noisy): one thread, medians 1905 ms off and 1874 ms on (no measurable cost); 8 threads, 1655 ms off and 1789 ms on (+8%; minima 1256 and 1492). Two earlier designs show where the cost hides: a stack walk per outermost acquisition (about 3 µs, 130k per run) cost a fifth of a one-thread run, hence the sampled sites; and recording a contended hold before the unlock (walking its site under the lock) lengthened exactly the holds others queue on, +38% at 8 threads, hence the per-thread records written after the release. Thread contention monitoring is switched on only while recording.
 

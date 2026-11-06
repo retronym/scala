@@ -221,7 +221,7 @@ object ProfileData {
         if (t ne null) t.intValue
         else {
           // `[Java: C2 CompilerThread0 tid=27907]`, `[tid=43583]`
-          val n = String.valueOf(names.getThreadName(tid)).replaceAll("^\\[(Java: )?|\\s*tid=\\d+\\]$|[-# ]*\\d+$", "").replaceAll("\\d+$", "") match {
+          val n = String.valueOf(names.getThreadName(tid)).replaceAll("^\\[(Java: )?|\\s*tid=\\d+\\]$|[-# ]*\\d+$", "").replaceAll("[-# ]*\\d*$", "") match {
             case "" => "native"
             case x  => x
           }
