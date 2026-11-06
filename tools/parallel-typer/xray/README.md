@@ -16,6 +16,16 @@ open tools/parallel-typer/xray/index.html
 
 `run.sh <corpus> ["1 2 4 8"]` builds the corpus's arguments as `oracle.sh` does, compiles `XrayBench.scala` against a snapshot of `build/quick`, and runs one JVM (`-Xss64m -Xms6g -Xmx6g`, plus `JAVA_OPTS`) that compiles the corpus `WARMUP` times (default 14, cycling through the configurations, unrecorded), then once per configuration with the recording on: `serial` (no `-Yparallel-typer`, the baseline of the speed-ups) and each thread count; the default list is 1 2 4 8 and, on Apple silicon, the number of the fastest cores (`hw.perflevel0.physicalcpu`). It writes one JSON per run under `$OUT` (default `/tmp/parallel-typer-xray/<corpus>`), all of them as `timeline.data.js` beside the page, and prints a text summary (`summary.js`, which runs the page's own analysis under node). `OVERHEAD=<pairs> run.sh library 4` instead alternates compilations with the recording off and on and prints the medians.
 
+`profile.sh <corpus> [threads]` (default 4) adds profiles, for the *Where the CPU went* section. In one warm JVM under jvm-perf-lab's patched async-profiler (`PERFLAB`, default `~/code/retronym/jvm-perf-lab`) it records `serial` without a profile, as the baseline of the speed-ups, then the thread count with a CPU profile and again with a wall clock profile, each over `REPEATS` compilations (default 10). `CPU_INTERVAL` is 1ms and `WALL_INTERVAL` 2ms. Raw output and the data go to `profiles/<corpus>/`, and `timeline.data.js` is regenerated from every corpus there, so run it once per corpus and serve the page:
+
+```bash
+tools/parallel-typer/xray/profile.sh library
+tools/parallel-typer/xray/profile.sh compiler
+cd tools/parallel-typer/xray && python3 -m http.server   # then open index.html
+```
+
+`run.sh` overwrites `timeline.data.js` with its own recording; `cat profiles/*/timeline.data.js > timeline.data.js` brings the profiles back. `OVERHEAD=<rounds> profile.sh library 4` alternates nothing on, the timeline, and the timeline with each profile, and prints the medians.
+
 A single run from the command line: `-Dscalac.parallelTyper.xray=<file.json>` writes the recording of each `Run` to that file. The page loads `timeline.data.js` from beside it (it works from `file://`), and *Load…* or a drop on the page adds run JSON files or another `timeline.data.js`; a run replaces a loaded run of the same corpus and configuration.
 
 ## Reading the page
@@ -25,6 +35,8 @@ The buttons at the top pick the run; the numbers under them are its wall time, i
 **Parallelism over time** is the first thing to look at. The blue area is the number of threads doing CPU work at each instant: each span counts with the ratio of its thread's CPU time to its wall time (so a descheduled or monitor-blocked thread counts less), and a thread waiting for the completion lock counts as zero. Where at most one thread works, the background is shaded by the cause and labelled with its duration: a serial step (setup, parser, namer, packageobjects, the signatures pre-pass, the annotation sub-pass, lazy-val forcing, superaccessors, extmethods, pickler), a *lock convoy* (during the bodies, one thread working and the others waiting for the lock), the *tail* (the other workers are out of units), or GC. Stretches too narrow to shade show in the ribbon under the chart. The chips under it total each cause over the run; a click zooms to its longest stretch. The chart shares its zoom with the timeline.
 
 **Timeline**: a lane per thread (main, then the workers, then GC pauses), the phases above them. A span is a unit in a step, coloured by step; its opacity is its CPU time over its wall time. Over the spans, the lock: a dark band is a hold (solid when someone waited on it, faint when it only took longer than the threshold), red is waiting for the lock (hatched when wide enough). When serialisation sets in it looks like a staircase: one lane dark, the others red. Zoomed out, where a wait or hold is narrower than a pixel, each pixel column shows the share of its time spent waiting (red, by opacity) and holding (dark); zoomed in below 20 µs a pixel, each wait and hold is drawn. Hover shows the unit, the step, wall and CPU time, the lock time inside the span and the ThreadMXBean blocked/parked time; on a wait, the site, what it was completing and the holds it spanned (thread, site, symbol). Click a wait to outline it and the holds it waited on, joined by lines. Wheel or pinch zooms, horizontal scroll or shift-wheel or drag pans, double-click resets; the minimap under it shows the whole run. The step chips hide steps; *lock site* keeps one site's holds and waits (and draws them one by one at any zoom).
+
+**Where the CPU went** (runs from `profile.sh`): a flame graph and tables of the samples behind what the timeline shows. They follow the timeline's window, so zooming or clicking a stretch of *at most one thread working* narrows them to it. Clicking a span pins them to that span. The *steps here* chips narrow to a step, as does a row of *Units* to a unit and a row of *Completions* to the symbol being completed; a row of the top frames keeps only the stacks through that frame. Filters show as pills, and a click removes one. *CPU* and *wall clock* switch between the two recordings, keeping the window and filters; *simple names* and *full names* choose how frames read; *reversed* roots the graph at the frames where the samples landed, with their callers below. Click a frame to zoom, double-click to reset. The sticky header says which run, window and profile you are looking at and what filters are on. The links open jfrconv's own flame graphs, with its span panel, and the raw JFR. Those flame graphs show every stack in full, of all the compilations.
 
 **Where the time went**: the run's wall time as one bar. Outside the bodies, wall time by step. Inside the bodies (from the first worker span to the last worker running out of units), each worker's time divided by the number of workers: *work* (CPU in a unit), *hold, others waiting* (work while holding the lock with another thread queued), *descheduled or blocked* (in a unit, neither on CPU nor waiting for the lock), *lock wait*, *idle worker*, and GC. The note under it gives the serial fraction and the Amdahl bounds, and the measured speed-up.
 
@@ -65,6 +77,28 @@ One object per run; times are integer microseconds from the start of the recordi
 
 A library run at 4 threads is about 3 MB (50k holds, 20k waits).
 
+## Profiles
+
+Spans. Under a running JFR recording, `ParallelTyperTimeline.begin` and `end`, the one place spans are opened, also open two nested async-profiler spans (`ProfilerSpans`, which calls `one.profiler.Span` through method handles, so the compiler needs no jar): the step, then the unit. This is the nesting perflab's agent gives an unmodified compiler (`SpanCostListener`: phase, then source path, then definitions), so the same `jfrconv --spans` grouping applies (`span-config.json`). Tags are never built on the way to a span: steps are literals or a phase's name and a unit's is `CompilationUnit.spanLabel`, its path, computed when the unit is created. With `-Dscalac.parallelTyper.xray.completionSpans=true`, which `profile.sh` sets, each symbol's completion is a span too, tagged with the symbol's name and recorded only if a sample fell in it. That property also makes every name carry its string (`cachedString`, set in `Names.newTermName`), so taking the tag allocates nothing.
+
+Events. CPU is `event=cpu`, which on macOS is the wall clock engine sampling running threads, per thread. Its samples per thread agree with `ThreadMXBean`'s CPU times. `event=itimer` can run beside `wall` and would have needed one compilation fewer, but its signal arrives at the next kernel trap: 14% of its samples landed in `mach_msg2_trap`, under the x-ray's own `getCurrentThreadCpuTime`, and 10% in a bare `_sigtramp`. As with perflab's profiles, stacks go to depth 8192, with `cstack=vm`.
+
+Repeats. One compilation of the library at a 1 ms interval has 90 samples in class headers, and a few for a unit. A profile therefore covers `REPEATS` compilations under one JFR, of which the page shows the one of median length. Every other compilation's samples are projected onto it: from the span around the sample to the span of the same step and unit, proportionally, on that span's thread. So filtering by step, unit or span is exact, and a window of time means the same work in every compilation. A sample in no span moves by the fraction of the run it is at, and counts as no span. What a thread did at an exact instant, or how threads overlapped, is only true of the compilation shown.
+
+Data. The `profile` field of a run's JSON:
+
+| field | |
+|---|---|
+| `dir`, `jfr` | where the raw output and jfrconv's graphs are, relative to the page |
+| `event`, `interval`, `repeats` | |
+| `frames`, `jvmFrames` | frame names, without the compiler's package prefixes; the indices of native and VM frames |
+| `parent`, `frame` | the stacks as a tree: per node the distance back to its parent (-1: a root) and its frame |
+| `symbols` | completions' tags |
+| `others` | threads outside the recording, by name without their number; each is one frame here, jfrconv's graph has their stacks |
+| `samples` | stride 5: thread (below 0: `-1 - i` in `others`), time in µs (below 0: `-1 - time`, in no span), node, completion (-1: none), count |
+
+To keep the data small, a stack keeps only a frame's outermost occurrence, and its real leaf. A frame's self and total counts stay right, and the depth is at most the number of distinct frames, but the path through recursion is not the real one. Closures' forwarding frames are dropped.
+
 ## Cost
 
 Off: one static field read and a null test per lock acquisition and per unit and phase.
@@ -79,5 +113,6 @@ On, measured with `OVERHEAD=14 run.sh library <threads>` (14 alternating pairs a
 - The parallelism chart weights a span by its average CPU over wall time, so a thread descheduled for part of a span shows as a uniformly lower contribution over the whole span.
 - A wait's time that overlaps no other thread's hold is hand-over latency (the lock free, the next owner not yet running): the page counts it as lock wait and the *Waited on* table cannot attribute it.
 - The phases after the typer and the parser and namer are recorded per unit but are serial by design; the page labels them, it does not split them further.
-- `timeline.data.js` for six library runs is about 15 MB; it is not committed.
+- `timeline.data.js` for six library runs is about 15 MB; it and `profiles/` are not committed.
+- Per-key claims are not recorded as lock events, so a run with them shows no holds or waits. A wall clock profile shows where threads park instead: `PerKeyClaims.acquire` under `Symbol.awaitMarker`.
 - A link can open a view: `index.html#run=8&from=1100&to=1104&theme=dark`.

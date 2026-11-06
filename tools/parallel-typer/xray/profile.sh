@@ -5,12 +5,13 @@
 #
 # Records in one warm JVM, under the patched async-profiler of jvm-perf-lab (never a stock one: it lacks the spans):
 # `serial` (without a profile: the baseline of the speed-ups), the thread count with a CPU profile, and the thread
-# count again with a wall clock profile (the two engines cannot run together on macOS). Writes
+# count again with a wall clock profile (the two engines cannot run together on macOS). A profile covers REPEATS
+# compilations, projected onto the one of median length (XrayProfile.scala). Writes
 # tools/parallel-typer/xray/profiles/<corpus>/: the raw run-<config>.jfr, run-<config>.json with the page's profile
 # data, and flame-<threads>-{cpu,wall}.html from jfrconv --spans. Regenerates timeline.data.js from every corpus under
 # profiles/. Needs `sbt dist/mkQuick`.
 # Environment: PERFLAB (default ~/code/retronym/jvm-perf-lab), WARMUP (default 14 compilations), CPU_INTERVAL (1ms),
-# WALL_INTERVAL (2ms), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile).
+# WALL_INTERVAL (2ms), REPEATS (10), JAVA_OPTS, OVERHEAD=<rounds> (instead: nothing on, timeline, timeline with each profile).
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
@@ -18,6 +19,7 @@ CORPUS="$1"
 THREADS="${2:-4}"
 NAME="$(basename "$CORPUS")"
 WARMUP="${WARMUP:-14}"
+REPEATS="${REPEATS:-10}"
 CPU_INTERVAL="${CPU_INTERVAL:-1ms}"
 WALL_INTERVAL="${WALL_INTERVAL:-2ms}"
 ASYNC="${PERFLAB:-$HOME/code/retronym/jvm-perf-lab}/tools/build/async-profiler/build"
@@ -57,7 +59,7 @@ JVM=(java -Xss64m -Xms6g -Xmx6g "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions
 if [ -n "${OVERHEAD:-}" ]; then
   exec "${JVM[@]}" XrayProfile --overhead "$args" "$THREADS" "$WARMUP" "$OVERHEAD" "$CPU_INTERVAL" "$WALL_INTERVAL" "$WORK"
 fi
-"${JVM[@]}" XrayProfile "$args" "$OUT" "$NAME" "$WARMUP" "$CPU_INTERVAL" "$WALL_INTERVAL" serial "$THREADS" "$THREADS-wall"
+"${JVM[@]}" XrayProfile "$args" "$OUT" "$NAME" "$WARMUP" "$REPEATS" "$CPU_INTERVAL" "$WALL_INTERVAL" serial "$THREADS" "$THREADS-wall"
 JFRCONV=("$ASYNC/bin/jfrconv" --spans --threads --span-config "$HERE/span-config.json")
 "${JFRCONV[@]}" --cpu "$OUT/run-$THREADS.jfr" "$OUT/flame-$THREADS-cpu.html"
 "${JFRCONV[@]}" --wall "$OUT/run-$THREADS-wall.jfr" "$OUT/flame-$THREADS-wall.html"

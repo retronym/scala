@@ -369,8 +369,9 @@ var XR = (function () {
     const decodeSamples = (a) => {
       const out = [];
       for (let i = 0; i < a.length; i += 5) {
-        const t = a[i + 1] / 1000;
-        out.push({ tid: a[i], t, node: a[i + 2], sym: a[i + 3], n: a[i + 4], span: a[i] >= 0 ? spanAt(a[i], t) : null });
+        // a time below 0 is a sample in no recorded span, which on the main thread the page may have filled in
+        const inSpan = a[i + 1] >= 0, t = (inSpan ? a[i + 1] : -1 - a[i + 1]) / 1000;
+        out.push({ tid: a[i], t, node: a[i + 2], sym: a[i + 3], n: a[i + 4], span: a[i] >= 0 && (inSpan || a[i] === r.main) ? spanAt(a[i], t) : null });
       }
       return out;
     };
@@ -874,8 +875,23 @@ if (typeof module !== 'undefined') module.exports = XR;
 
   // ---- loading files
   // ---- where the CPU went
-  const prof = { span: null, step: null, label: null, sym: null, frame: null, root: null };
+  const prof = { simple: true, span: null, step: null, label: null, sym: null, frame: null, root: null };
   let profTimer = 0;
+  // `typechecker.Typers$Typer.typed` is `Typer.typed`; a closure's body and a local method are in the method they are named for
+  function simpleName(n) {
+    const dot = n.lastIndexOf('.');
+    if (dot < 0 || /[:(\[]/.test(n)) return n;
+    const parts = n.slice(0, dot).split(/[.$]/).filter((x) => x && !/^\d+$/.test(x) && !/^0x/.test(x));
+    const mparts = n.slice(dot + 1).split('$').filter((x) => x && x !== 'anonfun' && x !== 'adapted' && !/^\d+$/.test(x));
+    // a private member's expanded name ends with the member
+    const m = mparts.length ? mparts[mparts.length > 1 && n.includes('$$') ? mparts.length - 1 : 0] : n.slice(dot + 1);
+    return (parts.length ? parts[parts.length - 1] + '.' : '') + m;
+  }
+  function frameLabel(P, fr) {
+    if (!prof.simple) return P.frames[fr];
+    if (!P.simple) P.simple = P.frames.map(simpleName);
+    return P.simple[fr];
+  }
   function scheduleProfile() { clearTimeout(profTimer); profTimer = setTimeout(renderProfile, 60); }
   const shortMs = (t) => t < 10 ? t.toFixed(1) : t.toFixed(0);
   function renderProfile() {
@@ -892,10 +908,11 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (prof.span) pills.push(['span', `span: ${prof.span.label} in ${prof.span.step}, ${cur.threads[prof.span.tid]}`]);
     if (prof.label != null) pills.push(['label', `unit: ${prof.label}`]);
     if (prof.sym != null) pills.push(['sym', `completing: ${P.symbols[prof.sym]}`]);
-    if (prof.frame != null) pills.push(['frame', `through: ${P.frames[prof.frame]}`]);
+    if (prof.frame != null) pills.push(['frame', `through: ${frameLabel(P, prof.frame)}`]);
     const dir = P.raw.dir, cfg = cur.config.replace(/-wall$/, '');
     const sibling = (e) => runs.find((q) => q.corpus === cur.corpus && q.config === (e === 'cpu' ? cfg : cfg + '-wall'));
     $('profCtl').innerHTML = ['cpu', 'wall'].map((e) => `<button data-ev="${e}" class="${P.event === e ? 'on' : ''}"${sibling(e) ? '' : ' disabled'} title="${e === P.event ? 'this recording' : 'a recording of its own, so its times differ a little'}">${e === 'cpu' ? 'CPU' : 'wall clock'}</button>`).join('') +
+      `<button id="nameSimple" class="${prof.simple ? 'on' : ''}" title="class and method, without packages and enclosing classes">simple names</button><button id="nameFull" class="${prof.simple ? '' : 'on'}" title="the frames as recorded">full names</button>` +
       `<button id="flipFlame" class="${prof.reversed ? 'on' : ''}" title="root at the frames where time is spent, with their callers below">reversed</button>` +
       pills.map(([k, t]) => `<span class="pfilter" data-k="${k}" title="remove this filter">${esc(t)} ×</span>`).join('') +
       `<span class="dim" style="margin-left:auto">full flame graphs, with span panel: <a href="${esc(dir)}/flame-${esc(cfg)}-cpu.html">CPU</a> · <a href="${esc(dir)}/flame-${esc(cfg)}-wall.html">wall</a> · raw <a href="${esc(dir)}/${esc(P.raw.jfr)}">JFR</a></span>`;
@@ -906,6 +923,8 @@ if (typeof module !== 'undefined') module.exports = XR;
       Object.assign(prof, { step, label });
       zoomTo(Math.min(x0, o.wall), Math.min(x1, o.wall));
     });
+    $('nameSimple').onclick = () => { prof.simple = true; renderProfile(); };
+    $('nameFull').onclick = () => { prof.simple = false; renderProfile(); };
     $('flipFlame').onclick = () => { prof.reversed = !prof.reversed; prof.root = null; renderProfile(); };
     $('profCtl').querySelectorAll('.pfilter').forEach((e) => e.onclick = () => { prof[e.dataset.k] = null; prof.root = null; renderProfile(); });
     $('profSteps').innerHTML = '<span class="dim">steps here</span> ' + A.steps.map(([s, n]) => `<span class="chip${prof.step === s ? '' : (prof.step ? ' off' : '')}" data-s="${esc(s)}"><span class="sw" style="background:${XR.stepColor(s)}"></span>${esc(XR.stepName(s))} <span class="dim">${n}</span></span>`).join(' ');
@@ -914,14 +933,14 @@ if (typeof module !== 'undefined') module.exports = XR;
     const range = prof.span ? `${shortMs(prof.span.t0)}–${shortMs(prof.span.t1)} ms` : whole ? 'the whole run' : `${shortMs(view.x0)}–${shortMs(view.x1)} ms`;
     const out = A.outside ? `; outside the recording's threads in the same time: ${A.others.map(([k, n]) => `${esc(k)} ${n}`).join(', ')}` : '';
     const few = A.count && A.count < 50 ? ' <b>Few samples: read this as a hint.</b>' : '';
-    $('profInfo').innerHTML = `${A.count} ${P.event === 'cpu' ? 'CPU' : 'wall clock'} samples in ${esc(range)} (interval ${esc(interval)})${out}.${few}`;
+    $('profInfo').innerHTML = `${A.count} ${P.event === 'cpu' ? 'CPU' : 'wall clock'} samples in ${esc(range)} (interval ${esc(interval)}, ${P.raw.repeats} compilation${P.raw.repeats > 1 ? 's' : ''} projected onto the one shown)${out}.${few}`;
     const table = (id, rows, cols, click) => {
       $(id).innerHTML = `<tbody>${rows.map((r, i) => `<tr data-i="${i}">${cols(r).map((c, j) => `<td${j === 0 ? ' class="l" title="' + esc(c) + '"' : ''}>${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody>`;
       if (click) $(id).querySelectorAll('tr').forEach((tr) => tr.onclick = () => click(rows[+tr.dataset.i]));
     };
     const setFrame = (r) => { prof.frame = r.frame; prof.root = null; renderProfile(); };
-    table('pSelf', A.topSelf, (r) => [r.name, r.n, pct(r.n)], setFrame);
-    table('pTotal', A.topTotal, (r) => [r.name, r.n, pct(r.n)], setFrame);
+    table('pSelf', A.topSelf, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
+    table('pTotal', A.topTotal, (r) => [frameLabel(P, r.frame), r.n, pct(r.n)], setFrame);
     table('pUnits', A.units, ([k, n]) => [k, n, pct(n)], ([k]) => { prof.label = k; prof.root = null; renderProfile(); });
     table('pSyms', A.syms, ([k, n]) => [P.symbols[k], n, pct(n)], ([k]) => { prof.sym = k; prof.root = null; renderProfile(); });
     drawFlame(P, A);
@@ -982,7 +1001,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     g.font = '11px ui-monospace, Menlo, monospace'; g.textBaseline = 'middle';
     for (const b of flameBoxes) {
       g.fillStyle = flameColor(P, b.n.fr); g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
-      if (b.w > 28) { g.save(); g.beginPath(); g.rect(b.x, b.y, b.w - 1, ROW); g.clip(); g.fillStyle = '#17171a'; g.fillText(P.frames[b.n.fr], b.x + 3, b.y + ROW / 2); g.restore(); }
+      if (b.w > 28) { g.save(); g.beginPath(); g.rect(b.x, b.y, b.w - 1, ROW); g.clip(); g.fillStyle = '#17171a'; g.fillText(frameLabel(P, b.n.fr), b.x + 3, b.y + ROW / 2); g.restore(); }
     }
     g.fillStyle = css('--grid');
     for (const b of tails) g.fillRect(b.x, b.y, Math.max(b.w - 0.5, 0.5), ROW - 1);
@@ -1004,9 +1023,9 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (base && base !== cur) bits.push(`${(base.wall / cur.wall).toFixed(2)}× vs ${ref.serial ? 'serial' : '1 thread'}`);
     bits.push(whole ? 'whole run' : `viewing ${shortMs(view.x0)}–${shortMs(view.x1)} ms (${fmt(view.x1 - view.x0)})`);
     if (P) {
-      bits.push(`${P.event === 'cpu' ? 'CPU' : 'wall clock'} profile, ${P.raw.interval}`);
+      bits.push(`${P.event === 'cpu' ? 'CPU' : 'wall clock'} profile, ${P.raw.interval}, ${P.raw.repeats} compilations`);
       if (prof.lastCount != null) bits.push(`${prof.lastCount} samples selected`);
-      const fs = [prof.step && `step ${XR.stepName(prof.step)}`, prof.span && `span ${prof.span.label}`, prof.label && `unit ${prof.label}`, prof.sym != null && `completing ${P.symbols[prof.sym]}`, prof.frame != null && `through ${P.frames[prof.frame]}`, prof.reversed && 'reversed'].filter(Boolean);
+      const fs = [prof.step && `step ${XR.stepName(prof.step)}`, prof.span && `span ${prof.span.label}`, prof.label && `unit ${prof.label}`, prof.sym != null && `completing ${P.symbols[prof.sym]}`, prof.frame != null && `through ${frameLabel(P, prof.frame)}`, prof.reversed && 'reversed'].filter(Boolean);
       if (fs.length) bits.push(fs.map(esc).join(', '));
     } else bits.push('no profile');
     if (cur.meta.errors && cur.meta.errors !== '0') bits.push(`<b>${esc(cur.meta.errors)} errors</b>`);

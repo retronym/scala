@@ -85,13 +85,13 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   private final class Span(val tid: Int, val step: String, val label: String, val t0: Long, val t1: Long, val cpu: Long,
                            val blockedMs: Long, val waitedMs: Long, val lockWait: Long, val lockHold: Long)
   private[this] val spans = new ConcurrentLinkedQueue[Span]()
-  /** The steps and the labels of the spans so far. */
-  def stepsAndLabels: (collection.immutable.Set[String], collection.immutable.Set[String]) = {
-    val all = spans.toArray(new Array[Span](0))
-    (all.iterator.map(_.step).toSet, all.iterator.map(_.label).toSet)
-  }
   private[this] val phases = new ConcurrentLinkedQueue[Array[Any]]()
   private[this] val idleFrom = new ConcurrentLinkedQueue[Array[Long]]()
+  /** The spans so far as thread, step, label, start and end in microseconds from the start of the recording. */
+  def spanRecords: Array[(Int, String, String, Long, Long)] =
+    spans.toArray(new Array[Span](0)).map(x => (x.tid, x.step, x.label, (x.t0 - startNanos) / 1000, (x.t1 - startNanos) / 1000))
+  /** The recording's length so far in microseconds. */
+  def wallMicros: Long = ((if (endNanos == 0) System.nanoTime() else endNanos) - startNanos) / 1000
 
   /** The start of a span on the current thread, for `end`. */
   def begin(): Start = {
