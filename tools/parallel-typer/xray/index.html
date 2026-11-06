@@ -329,7 +329,8 @@ var XR = (function () {
   // a run file: one run's JSON, an array of them, or a timeline.data.js
   function parseFile(text) {
     const t = text.trim();
-    if (t.startsWith('window.XRAY_RUNS')) { const a = t.indexOf('concat('), b = t.lastIndexOf(')'); return JSON.parse(t.slice(a + 7, b)); }
+    // one or more recordings, one after the other (a file per corpus, concatenated)
+    if (t.startsWith('window.XRAY_RUNS')) return t.split(/window\.XRAY_RUNS = [^\n]*?concat\(/).filter((p) => p.trim()).flatMap((p) => JSON.parse(p.slice(0, p.lastIndexOf(')'))));
     const j = JSON.parse(t); return Array.isArray(j) ? j : [j];
   }
 
