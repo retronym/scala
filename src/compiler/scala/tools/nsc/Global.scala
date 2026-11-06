@@ -1514,7 +1514,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol
         phaseDescriptors.find(_.phaseName == ph.name).foreach(analyzer.forceLazyValsOf)
         val t0 = System.nanoTime()
-        analyzer.parallelPhase(ph, units.toList, ph.name, unitOrder = true)(ph.applyPhase(_))
+        // -Dscalac.parallelTyper.lateOrderSeed=<n>: the units of each step in a shuffled order. With `oneThread` this finds
+        // what a step's output owes to the order of its units deterministically, where the pool finds it by timing.
+        val us = System.getProperty("scalac.parallelTyper.lateOrderSeed") match {
+          case null => units.toList
+          case seed => new scala.util.Random(seed.toLong + ph.id).shuffle(units.toList)
+        }
+        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true)(ph.applyPhase(_))
         if (System.getProperty("scalac.parallelTyper.log") != null)
           Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
         true
