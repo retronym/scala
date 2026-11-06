@@ -18,7 +18,7 @@ JARS="$(grep '^TOOL_CLASSPATH=' "$ROOT/build/quick/bin/scalac" | head -1 | sed '
 CP="$QUICK/compiler:$QUICK/library:$QUICK/reflect:$JARS"
 mkdir -p "$OUT"; BIN="$OUT/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
 "$JAVA" -cp "$CP:$PROFILER_JARS" -Dscala.usejavacp=true scala.tools.nsc.Main -nowarn -d "$BIN" "$XRAY/XrayBench.scala" "$XRAY/XrayMemory.scala" "$XRAY/XrayProfile.scala"
-"$JAVA" -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS" \
+"$JAVA" -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} ${GC:--XX:+UseParallelGC} "-agentpath:$LIB" -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints ${JAVA_OPTS:-} -cp "$BIN:$CP:$PROFILER_JARS" \
   XrayProfile "$ARGS" "$OUT" "$(basename "$ARGS")" "${WARMUP:-14}" "${REPEATS:-10}" 1ms 2ms serial-cpu "$THREADS"
 for c in serial-cpu "$THREADS"; do
   "$ASYNC/bin/jfrconv" --cpu -o collapsed "$OUT/run-$c.jfr" "$OUT/run-$c.collapsed"
