@@ -125,7 +125,17 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
   def freshNameCreatorFor(context: Context) = {
-    val owner = context.outermostContextAtCurrentPos.enclClassOrMethod.owner
+    val encl = context.outermostContextAtCurrentPos.enclClassOrMethod.owner
+    // With -Yparallel-typer, the right-hand sides of a class's vals and vars are typed in an order that depends on the
+    // threads (an inferred type is computed by whoever asks first), and the numbers drawn here reach the classfiles.
+    // So each member has its creator: the names stay deterministic, and they are local to the right-hand side.
+    val owner =
+      if (isParallelCompiler && encl.isClass) {
+        var o = context.owner
+        while ((o ne NoSymbol) && (o.owner ne encl)) o = o.owner
+        if (o ne NoSymbol) o else encl
+      }
+      else encl
     lockedIfConcurrent(typerFreshNameCreators)(typerFreshNameCreators.getOrElseUpdate(owner, new FreshNameCreator))
   }
 

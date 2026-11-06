@@ -79,7 +79,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val file = run.symSource.getOrElse(top, null)
         if (file ne null) file else sym
       }
-      else if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym } else sym
+      else if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym }
+      // the field, getter and setter of one `val` or `var`: their completers type the same tree (`tpt`, the right-hand side)
+      else if (sym.isTerm && !sym.isModule && sym.owner.isClass && (sym.isAccessor || !sym.isMethod)) {
+        val getter = sym.getterIn(sym.owner)
+        if (getter ne NoSymbol) getter else sym
+      }
+      else sym
     } else scala.reflect.internal.util.CompletionLock.CoarseRoot
   }
 

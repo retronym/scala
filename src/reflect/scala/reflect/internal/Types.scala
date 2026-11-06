@@ -1852,12 +1852,13 @@ trait Types
   // The serial protocol's marker is in the cache, under the period that set it: a re-entry at a phase for which that
   // period is valid sees the marker, a cycle. A re-entry at a phase past a change (an info transform that asks for
   // the same type at its own phase, from within the computation of this one at a later phase) recomputes. So an entry
-  // here is a type with the period of the computation in progress.
+  // here is a type with the period of the computation in progress, and the innermost entry for a type decides, since
+  // its stamp is the one the serial cache would hold.
   private def inProgressForBaseClasses(xs: List[AnyRef], x: AnyRef): Boolean = {
     var ys = xs
     while (ys ne Nil) {
       val y = ys.head.asInstanceOf[Stamped[AnyRef]]
-      if ((y.value eq x) && (y.period == currentPeriod || isValidForBaseClasses(y.period))) return true
+      if (y.value eq x) return y.period == currentPeriod || isValidForBaseClasses(y.period)
       ys = ys.tail
     }
     false
@@ -1866,7 +1867,7 @@ trait Types
     var ys = xs
     while (ys ne Nil) {
       val y = ys.head.asInstanceOf[Stamped[AnyRef]]
-      if ((y.value eq x) && (y.period == currentPeriod || isValid(y.period))) return true
+      if (y.value eq x) return y.period == currentPeriod || isValid(y.period)
       ys = ys.tail
     }
     false

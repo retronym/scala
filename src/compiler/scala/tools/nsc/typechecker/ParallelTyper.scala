@@ -45,8 +45,9 @@ trait ParallelTyper {
 
   import global._
 
-  /** -Dscalac.parallelTyper.parallelSignatures: member signatures a unit per task (an experiment). */
-  lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.parallelSignatures") != null
+  /** Whether signatures are completed under a claim per symbol: the default, with only the class headers serial.
+   *  `-Dscalac.parallelTyper.serialSignatures` restores the serial pre-pass under the one completion lock. */
+  lazy val parallelSignatures: Boolean = scala.reflect.internal.util.CompletionLock.parallelSignatures
 
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
@@ -101,25 +102,27 @@ trait ParallelTyper {
     val t0 = System.nanoTime()
     val signatures =
       if (flag("lazySignatures")) 0
+      else if (parallelSignatures && !flag("poolSignatures")) {
+        // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
+        // the symbol's claim, and its annotations by its own unit's task (`typedTemplate`, `typedValDef`, `typedDefDef`
+        // and `typedTypeDef` force them), so the typer has one pool step and one tail.
+        var n = 0
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
+        n
+      }
       else if (parallelSignatures) {
-        // -Dscalac.parallelTyper.parallelSignatures (an experiment): the class headers serially, then the members'
-        // signatures a unit per task, each unit's completions under the claim of its unit (`completionRoot`)
+        // -Dscalac.parallelTyper.poolSignatures, for comparison: the class headers serially, then the members' signatures
+        // as a pool step of their own, then the annotations serially.
         var n = 0
         val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
         val count = new AtomicInteger
-        // The lazy vals of `definitions` before anything runs on several threads: one forced from a completion
-        // holds the object's monitor while it waits for a claim, and another thread holding that claim waits for the
-        // monitor (a deadlock the claims cannot see). They must also come after the headers of what they name (I3),
-        // so the headers can go to the pool (`-Dscalac.parallelTyper.parallelHeaders`, an experiment) only when no
-        // source defines anything in package `scala`: then `definitions` names nothing that is being compiled.
-        val headersOnPool = flag("parallelHeaders") && !units.exists(definesInScalaPackage)
-        if (headersOnPool) {
-          if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
-          onPool(typerPhase, ordered, nThreads, "class headers")(u => count.addAndGet(completeSignatures(u, null, classesOnly = true)))
-        }
-        else units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
+        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.source.file.name)(completeSignatures(u, null, classesOnly = true))) // xray
         val headersOnly = System.nanoTime()
-        if (needForceLazyVals && !headersOnPool) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
+        // The lazy vals of `definitions` before the members run on several threads: one forced from a completion holds
+        // the object's monitor while it waits for a claim, and another thread holding that claim waits for the monitor
+        // (a deadlock the claims cannot see). After the headers, so that what they name is ready (I3).
+        if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
         val headersDone = System.nanoTime()
         onPool(typerPhase, ordered, nThreads, "signatures") { u =>
           val buf = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
@@ -127,15 +130,8 @@ trait ParallelTyper {
           buf.foreach(completed.add)
         }
         val membersDone = System.nanoTime()
-        // -Dscalac.parallelTyper.parallelAnnotations (an experiment): the annotations a unit per task too, each forced
-        // under the claim of its symbol (`LazyAnnotationInfo.claimWith`)
-        val annotationsOnPool = flag("parallelAnnotations")
-        if (annotationsOnPool) {
-          val byUnit = completed.asScala.toList.groupBy(_._1)
-          onPool(typerPhase, ordered.filter(byUnit.contains), nThreads, "annotations")(u => forceAnnotations(byUnit(u)))
-        }
-        else ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
-        logf(f"class headers ${if (headersOnPool) "on the pool" else "serially"} in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations ${if (annotationsOnPool) "on the pool" else "serially"} in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
+        ParallelTyperTimeline.span("annotations", s"${completed.size} symbols")(forceAnnotations(completed.asScala.toList)) // xray
+        logf(f"class headers serially in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations serially in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
         n + count.get
       }
       else {
@@ -389,16 +385,6 @@ trait ParallelTyper {
       catch { case ex: TypeError => reporter.error(sym.pos, ex.getMessage) }
     }
     finally currentRun.currentUnit = savedUnit
-  }
-
-  /** Does `unit` define anything in package `scala` or below? */
-  private def definesInScalaPackage(unit: CompilationUnit): Boolean = {
-    def inScala(sym: Symbol) = (sym ne null) && (sym ne NoSymbol) && sym.ownerChain.exists(o => o == definitions.ScalaPackageClass || o == definitions.ScalaPackage)
-    def loop(tree: Tree): Boolean = tree match {
-      case PackageDef(pid, stats) => inScala(tree.symbol) || inScala(pid.symbol) || stats.exists(loop)
-      case _                      => false
-    }
-    loop(unit.body)
   }
 
   private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)], classesOnly: Boolean = false): Int = {
