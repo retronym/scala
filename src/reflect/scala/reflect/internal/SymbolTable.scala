@@ -320,23 +320,32 @@ abstract class SymbolTable extends macros.Universe
   def slowButSafeEnteringPhaseNotLaterThan[T](target: Phase)(op: => T): T =
     if (isCompilerUniverse) enteringPhaseNotLaterThan(target)(op) else op
 
+  // `nextFrom(pid)` is the list's head (`pid == NoPhase.id`) when no info transformer is installed at or after `pid`:
+  // always so in a run that stops before the first of them (`-Ystop-after:typer`, `:pickler`). Nothing can then have
+  // changed between the two phases. Reading the head as a transformer at phase 0 that changes base classes made every
+  // switch between the namer's phase (where a completer runs) and the typer's invalidate the infos and the base type
+  // sequences and base classes of every class, which were then computed again. A period at `NoPhase` itself does
+  // start at the head, with every transformer after it: that case stays as it was.
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) nextFrom(pid).pid >= phase.id
-      else nextFrom(phase.id).pid >= pid
+      val lo = if (phase.id > pid) pid else phase.id
+      val hi = if (phase.id > pid) phase.id else pid
+      val it = nextFrom(lo)
+      it.pid >= hi || (lo != NoPhase.id && it.pid == NoPhase.id)
     }
 
   final def isValidForBaseClasses(period: Period): Boolean = {
     @tailrec
     def noChangeInBaseClasses(it: InfoTransformer, limit: Phase#Id): Boolean = (
-      it.pid >= limit ||
+      it.pid >= limit || it.pid == NoPhase.id ||
       !it.changesBaseClasses && noChangeInBaseClasses(it.next, limit)
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) noChangeInBaseClasses(nextFrom(pid), phase.id)
-      else noChangeInBaseClasses(nextFrom(phase.id), pid)
+      val lo = if (phase.id > pid) pid else phase.id
+      val hi = if (phase.id > pid) phase.id else pid
+      lo == hi || lo != NoPhase.id && noChangeInBaseClasses(nextFrom(lo), hi)
     }
   }
 
