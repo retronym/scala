@@ -1621,12 +1621,28 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Overridden in runtime reflection to call `unsynchronizedInfo` under the GIL. */
     protected def synchronizedInfo: Type = unsynchronizedInfo
 
-    protected[reflect] final def unsynchronizedInfo: Type = {
-      if (_validTo == NoPeriod || isConcurrentCompiler && isCompletingElsewhere) {
+    protected[reflect] final def unsynchronizedInfo: Type =
+      if (isConcurrentCompiler) concurrentInfo
+      else {
+        if (_validTo == NoPeriod) {
+          if (isStub) return failStub()
+          completeInfoUnderLock()
+        }
+        rawInfoHere // not `unsynchronizedRawInfo`, which would look for a completion elsewhere a second time
+      }
+
+    /** `info` in a concurrent compiler. `isCompletingElsewhere` orders the load of `validTo` before its load of the
+     *  marker, and that load, being volatile, before the load of `infos` in `concurrentRawInfoAt`: the order that
+     *  `concurrentRawInfo` needs a fence for. Not `rawInfo`, which would look for a completion elsewhere a second time.
+     */
+    private[this] def concurrentInfo: Type = {
+      val validTo = _validTo
+      if (validTo == NoPeriod || isCompletingElsewhere) {
         if (isStub) return failStub()
         completeInfoUnderLock()
+        concurrentRawInfo
       }
-      rawInfoHere // not `unsynchronizedRawInfo`, which would look for a completion elsewhere a second time
+      else concurrentRawInfoAt(validTo)
     }
 
     /** In a concurrent compiler, the thread that is completing this symbol, or null.
@@ -1954,12 +1970,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     /** `rawInfo`, once a completion on another thread has been waited for (`info` has done so). */
     private[this] final def rawInfoHere: Type = {
+      if (_validTo == NoPeriod && isStub) return failStub()
       if (isConcurrentCompiler) return concurrentRawInfo
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
       //      likely to inline into hot callers of .info
       val outer = Symbols.this
-
-      if (_validTo == NoPeriod && isStub) return failStub()
 
       var infos = this.infos
       outer.assert(infos != null, "infos must not be null")
@@ -2007,6 +2022,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def concurrentRawInfo: Type = {
       val validTo = _validTo
       java.lang.invoke.VarHandle.loadLoadFence()
+      concurrentRawInfoAt(validTo)
+    }
+    /** @param validTo `_validTo`, loaded before this method's load of `infos` */
+    private[this] def concurrentRawInfoAt(validTo: Period): Type = {
       var infos = this.infos
       assert(infos != null, "infos must not be null")
       if (validTo == NoPeriod) infos.info
