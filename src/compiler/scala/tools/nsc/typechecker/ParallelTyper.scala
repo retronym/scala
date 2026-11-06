@@ -221,11 +221,13 @@ trait ParallelTyper {
    *  With `unitOrder`, the diagnostics are issued in the order of `units` and, within a unit, of arrival, which is
    *  the serial order of a phase whose task reports only while it works on its own unit; a task may then ask the
    *  reporter what the serial phase would have reported before it (`UnitOrderReporter`); the units are then also
-   *  started in that order. `meanwhile` runs on the calling thread while the workers run, and is given a test of
-   *  whether any of them still does.
+   *  started in that order, unless `largestFirst`: a phase whose tasks do not ask starts its largest units first
+   *  all the same, so that a large unit started late is not left running alone at the end (in the compiler's sources,
+   *  `Typers.scala` was, in every phase after the typer). `meanwhile` runs on the calling thread while the workers
+   *  run, and is given a test of whether any of them still does.
    */
   def parallelPhase(phase0: Phase, units: List[CompilationUnit], name: String, unitOrder: Boolean = false,
-                    meanwhile: (() => Boolean) => Unit = null)(task: CompilationUnit => Unit): Unit = {
+                    meanwhile: (() => Boolean) => Unit = null, largestFirst: Boolean = false)(task: CompilationUnit => Unit): Unit = {
     val n =
       if (flag("oneThread")) 1
       else prop("threads").map(_.toInt).getOrElse {
@@ -233,8 +235,9 @@ trait ParallelTyper {
         if (s > 0) s else math.min(Runtime.getRuntime.availableProcessors, 8)
       }
     val nThreads = math.max(1, math.min(n, units.length))
-    if (unitOrder) onPool(phase0, units, nThreads, name, units, meanwhile)(task)
-    else onPool(phase0, units.sortBy(u => -u.source.content.length), nThreads, name, null, meanwhile)(task)
+    def bySize = units.sortBy(u => -u.source.content.length)
+    if (unitOrder) onPool(phase0, if (largestFirst) bySize else units, nThreads, name, units, meanwhile)(task)
+    else onPool(phase0, bySize, nThreads, name, null, meanwhile)(task)
   }
 
   /** `task` on each of `units`, a unit per task on `nThreads` workers at `phase`, the diagnostics buffered and issued
