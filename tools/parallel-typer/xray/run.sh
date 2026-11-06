@@ -9,6 +9,7 @@
 # Environment: WARMUP (default 12 compilations), JAVA_OPTS, OVERHEAD=<pairs> (instead: timeline on vs off, at the
 # largest thread count).
 set -euo pipefail
+JAVA="${JAVA:-java}" # the JVM to record on, e.g. a patched JDK's bin/java
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$HERE/../../.." && pwd)"
 CORPUS="$1"
@@ -43,9 +44,9 @@ esac
 
 # the recorder, compiled against the snapshot
 BIN="$OUT/bench-classes"; rm -rf "$BIN"; mkdir -p "$BIN"
-java -cp "$CP" -Dscala.usejavacp=true scala.tools.nsc.Main -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala"
+"$JAVA" -cp "$CP" -Dscala.usejavacp=true scala.tools.nsc.Main -d "$BIN" "$HERE/XrayBench.scala" "$HERE/XrayMemory.scala"
 
-JVM=(java -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} ${JAVA_OPTS:-} -cp "$BIN:$CP")
+JVM=("$JAVA" -Xss64m -Xms${HEAP:-12g} -Xmx${HEAP:-12g} ${JAVA_OPTS:-} -cp "$BIN:$CP")
 if [ -n "${OVERHEAD:-}" ]; then
   last="${THREADS##* }"
   exec "${JVM[@]}" XrayBench --overhead "$args" "$last" "$WARMUP" "$OVERHEAD"
