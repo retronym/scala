@@ -137,6 +137,9 @@ var XR = (function () {
     const r = { raw, meta: raw.meta || {}, wall: ms(raw.wallUs), threads: raw.threads, thresholdMs: ms(raw.holdThresholdUs) };
     const a = raw.spans; r.spans = [];
     for (let i = 0; i < a.length; i += 10) r.spans.push({ tid: a[i], step: S[a[i + 1]], label: S[a[i + 2]], t0: ms(a[i + 3]), t1: ms(a[i + 4]), cpu: ms(a[i + 5]), bl: a[i + 6], wt: a[i + 7], lw: ms(a[i + 8]), lh: ms(a[i + 9]) });
+    // a unit that a phase's own hook and the pool's task both recorded: keep the outer span
+    { const last = {}; r.spans.sort((p, q) => p.t0 - q.t0 || q.t1 - p.t1);
+      r.spans = r.spans.filter((x) => { const o = last[x.tid]; if (o && o.step === x.step && o.label === x.label && x.t1 <= o.t1) return false; last[x.tid] = x; return true; }); }
     r.phases = []; for (let i = 0; i < raw.phases.length; i += 3) r.phases.push({ name: S[raw.phases[i]], t0: ms(raw.phases[i + 1]), t1: ms(raw.phases[i + 2]) });
     r.gc = []; for (let i = 0; i < raw.gc.length; i += 3) r.gc.push({ label: S[raw.gc[i]], t0: ms(raw.gc[i + 1]), t1: ms(raw.gc[i + 2]) });
     const h = raw.holds; r.holds = [];
@@ -157,21 +160,27 @@ var XR = (function () {
     for (let i = 0; i < raw.idle.length; i += 2) r.idle.push({ tid: raw.idle[i], t0: ms(raw.idle[i + 1]), t1: typer ? typer.t1 : r.wall });
     // the main thread's time not in a unit's span: before the first phase (Global, Run), and inside a phase outside
     // its units (a phase's own work), unless the workers run then (the main thread waits for them)
-    const main = 0, mainSpans = r.spans.filter((x) => x.tid === main).sort((p, q) => p.t0 - q.t0);
+    const main = r.main = Math.max(0, r.threads.indexOf('main')), mainSpans = r.spans.filter((x) => x.tid === main).sort((p, q) => p.t0 - q.t0);
     const extra = [];
     if (r.phases.length && r.phases[0].t0 > 0) extra.push({ tid: main, step: 'setup', label: 'Global and Run, before the first phase', t0: 0, t1: r.phases[0].t0, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
-    const wFirst = Math.min(...r.spans.filter((x) => x.tid !== main).map((x) => x.t0), Infinity);
-    const wLast = r.idle.length ? Math.max(...r.idle.map((x) => x.t0)) : Math.max(...r.spans.filter((x) => x.tid !== main).map((x) => x.t1), -Infinity);
+    const isWorker = {}; for (const t of r.workers) isWorker[t] = true;
+    const bodySpans = r.spans.filter((x) => isWorker[x.tid]);
+    const wFirst = Math.min(...bodySpans.map((x) => x.t0), Infinity);
+    const wLast = r.idle.length ? Math.max(...r.idle.map((x) => x.t0)) : Math.max(...bodySpans.map((x) => x.t1), -Infinity);
     r.window = r.N ? { t0: wFirst, t1: Math.max(wLast, wFirst) } : null;
+    // the stretches in which a pool runs (the bodies, and each other step that runs a unit per task): the main thread waits
+    const poolOf = {};
+    for (const x of r.spans) if (x.tid !== main && !isWorker[x.tid]) { const k = r.threads[x.tid].replace(/-\d+$/, ''); const p = poolOf[k] || (poolOf[k] = { t0: x.t0, t1: x.t1, step: x.step }); p.t0 = Math.min(p.t0, x.t0); p.t1 = Math.max(p.t1, x.t1); }
+    r.pools = Object.values(poolOf).concat(r.window ? [r.window] : []).sort((p, q) => p.t0 - q.t0);
     for (const p of r.phases) {
       let t = p.t0;
       const gap = (a, b) => {
-        if (b - a < 0.05) return;
-        if (r.window && a < r.window.t1 && b > r.window.t0) {
-          const wa = Math.max(a, r.window.t0), wb = Math.min(b, r.window.t1);
-          if (wa - a >= 0.05) extra.push({ tid: main, step: p.name, label: p.name + ': outside its units', t0: a, t1: wa, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
-          if (b - wb >= 0.05) extra.push({ tid: main, step: p.name, label: p.name + ': outside its units', t0: wb, t1: b, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
-        } else extra.push({ tid: main, step: p.name, label: p.name + ': outside its units', t0: a, t1: b, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
+        for (const w of r.pools) {
+          if (w.t1 <= a || w.t0 >= b) continue;
+          if (w.t0 - a >= 0.05) extra.push({ tid: main, step: p.name, label: p.name + ': outside its units', t0: a, t1: w.t0, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
+          a = Math.max(a, w.t1);
+        }
+        if (b - a >= 0.05) extra.push({ tid: main, step: p.name, label: p.name + ': outside its units', t0: a, t1: b, cpu: -1, bl: -1, wt: -1, lw: 0, lh: 0 });
       };
       for (const x of mainSpans) if (x.t1 > p.t0 && x.t0 < p.t1) { gap(t, Math.max(t, x.t0)); t = Math.max(t, x.t1); }
       gap(t, p.t1);
@@ -230,7 +239,9 @@ var XR = (function () {
     const stepList = [], stepIx = {}; const sid = (s) => stepIx[s] !== undefined ? stepIx[s] : (stepList.push(s), stepIx[s] = stepList.length - 1);
     const mainStep = new Int16Array(nb).fill(-1);
     // a bin that a span touches gets its step (the first one), so that the gaps between units do not split a stretch
-    for (const x of r.byThread[0].spans) { const id = sid(x.step); for (let i = Math.floor(x.t0 / bw); i < nb && i * bw < x.t1; i++) if (mainStep[i] < 0 || (i + 0.5) * bw >= x.t0) mainStep[i] = id; }
+    for (const x of r.byThread[r.main].spans) { const id = sid(x.step); for (let i = Math.floor(x.t0 / bw); i < nb && i * bw < x.t1; i++) if (mainStep[i] < 0 || (i + 0.5) * bw >= x.t0) mainStep[i] = id; }
+    // where the main thread has no span, the step of a pool that runs then
+    for (const w of r.pools) if (w.step) { const id = sid(w.step); for (let i = Math.floor(w.t0 / bw); i < nb && i * bw < w.t1; i++) if (mainStep[i] < 0) mainStep[i] = id; }
     const active = new Float32Array(nb), cls = new Array(nb);
     const win = r.window, N = r.N;
     const bar = {}; const add = (k, v) => { bar[k] = (bar[k] || 0) + v; };
@@ -247,12 +258,12 @@ var XR = (function () {
         if (N <= 1) c = 'par';
         else if (oc < 1.5) c = wn >= 0.5 ? 'lock convoy' : 'tail';
         else c = 'par';
-      } else c = mainStep[i] >= 0 ? stepList[mainStep[i]] : 'other';
+      } else c = oc >= 1.5 ? 'par' : mainStep[i] >= 0 ? stepList[mainStep[i]] : 'other';
       cls[i] = c;
       // the bar: the wall time outside the bodies by step; inside, each worker's share
       if (g > 0) add('GC', tb * g);
       const rest = tb * (1 - g);
-      if (!inWin) add(c === 'GC' ? (mainStep[i] >= 0 ? stepList[mainStep[i]] : 'other') : c, rest);
+      if (!inWin) add(c === 'GC' || c === 'par' ? (mainStep[i] >= 0 ? stepList[mainStep[i]] : 'other') : c, rest);
       else {
         for (const t of workers) {
           const o = Math.max(0, Math.min(1, occ[t][i])), b = Math.max(0, Math.min(o, busy[t][i])), wt = Math.max(0, Math.min(1, wait[t][i])), id = Math.max(0, Math.min(1, idle[t][i]));
@@ -275,8 +286,9 @@ var XR = (function () {
     }
     for (const s of stretches) { s.t0 = s.start * bw; s.t1 = Math.min(W, s.end * bw); s.ms = s.t1 - s.t0; }
     const winMs = win ? win.t1 - win.t0 : 0;
-    const serialMs = W - winMs; // outside the bodies: the steps that do not run on the workers
-    const bodies = r.spans.filter((x) => x.step === 'typer' && x.tid !== 0);
+    let pooled = 0, pe = 0; for (const w of r.pools || []) { const a0 = Math.max(w.t0, pe); if (w.t1 > a0) { pooled += w.t1 - a0; pe = w.t1; } }
+    const serialMs = W - pooled; // the steps that do not run on a pool
+    const bodies = r.spans.filter((x) => x.step === 'typer' && x.tid !== r.main);
     const holdInBodies = bodies.reduce((s, x) => s + x.lh, 0), waitInBodies = bodies.reduce((s, x) => s + x.lw, 0);
     const workerCpu = bodies.reduce((s, x) => s + Math.max(0, x.cpu), 0);
     const convoyMs = totals['lock convoy'] || 0, tailMs = totals['tail'] || 0;
@@ -287,7 +299,7 @@ var XR = (function () {
   // Amdahl from a reference run on one worker: S its wall outside the bodies, P its bodies window; with the time
   // under the lock in the bodies (H) counted as serial too
   function amdahl(ref, n) {
-    const a = analyse(ref), S = a.serialMs, P = a.winMs, H = a.holdInBodies;
+    const a = analyse(ref), S = a.serialMs, P = ref.wall - a.serialMs, H = a.holdInBodies;
     return { s: S / (S + P), bound: (S + P) / (S + P / n), sLock: (S + H) / (S + P), boundLock: (S + P) / (S + H + (P - H) / n) };
   }
 
@@ -309,7 +321,7 @@ var XR = (function () {
       const serial = Object.entries(a.totals).sort((p, q) => q[1] - p[1]).filter(([, v]) => v >= 1).map(([k, v]) => `${stepName(k)} ${v.toFixed(0)}`).join(', ');
       lines.push(`${r.corpus} ${r.config === 'serial' ? 'serial' : r.config + ' threads'}: total ${r.wall.toFixed(0)} ms` + (sp ? `, speed-up ${sp} vs ${ref.serial ? 'serial' : '1 thread'}` : '') + (am ? ` (Amdahl bound ${am.bound.toFixed(2)}x, with the lock ${am.boundLock.toFixed(2)}x)` : ''));
       lines.push(`  serial ms by cause: ${serial}`);
-      if (r.N) lines.push(`  bodies ${a.winMs.toFixed(0)} ms on ${r.N} threads; lock: ${r.sites.reduce((s, x) => s + x.n, 0)} acquisitions, held ${r.sites.reduce((s, x) => s + x.holdT, 0).toFixed(0)} ms, waited ${r.waits.reduce((s, w) => s + w.t1 - w.t0, 0).toFixed(0)} ms in ${r.waits.length} waits; convoy ${a.convoyMs.toFixed(0)} ms, tail ${a.tailMs.toFixed(0)} ms; GC ${r.gc.reduce((s, g) => s + g.t1 - g.t0, 0).toFixed(0)} ms`);
+      if (r.N) lines.push(`  bodies ${a.winMs.toFixed(0)} ms on ${r.N} threads; ${r.sites.length || r.N <= 1 ? '' : 'per-key claims, not recorded; '}lock: ${r.sites.reduce((s, x) => s + x.n, 0)} acquisitions, held ${r.sites.reduce((s, x) => s + x.holdT, 0).toFixed(0)} ms, waited ${r.waits.reduce((s, w) => s + w.t1 - w.t0, 0).toFixed(0)} ms in ${r.waits.length} waits; convoy ${a.convoyMs.toFixed(0)} ms, tail ${a.tailMs.toFixed(0)} ms; GC ${r.gc.reduce((s, g) => s + g.t1 - g.t0, 0).toFixed(0)} ms`);
     }
     return lines.join('\n');
   }
@@ -362,11 +374,12 @@ if (typeof module !== 'undefined') module.exports = XR;
     k.push([fmt(r.wall), `wall, ${r.config === 'serial' ? 'serial compiler' : r.N + ' typer thread' + (r.N > 1 ? 's' : '')}`]);
     if (base && base !== r) k.push([(base.wall / r.wall).toFixed(2) + '×', `speed-up vs ${ref.serial ? 'serial' : '1 thread'} (${fmt(base.wall)})`]);
     if (r.N) {
-      k.push([fmt(a.serialMs), `outside the bodies (${(100 * a.serialMs / r.wall).toFixed(0)}% of wall)`]);
+      k.push([fmt(a.serialMs), `on one thread by design (${(100 * a.serialMs / r.wall).toFixed(0)}% of wall)`]);
       k.push([fmt(a.winMs), 'bodies, on the workers']);
       const atMostOne = Object.entries(a.totals).reduce((s, [, v]) => s + v, 0);
       k.push([fmt(atMostOne), 'at most one thread working']);
-      k.push([fmt(r.waits.reduce((s, w) => s + w.t1 - w.t0, 0)), `lock wait, ${r.waits.length} waits`]);
+      if (r.sites.length || r.N <= 1) k.push([fmt(r.waits.reduce((s, w) => s + w.t1 - w.t0, 0)), `lock wait, ${r.waits.length} waits`]);
+      else k.push(['n/a', 'claim waits: per-key claims are not recorded']);
       if (ref.one && r.N > 1) { const am = XR.amdahl(ref.one, r.N); k.push([am.bound.toFixed(2) + '× / ' + am.boundLock.toFixed(2) + '×', `Amdahl at ${r.N}: phases / phases + lock`]); }
     }
     $('kpis').innerHTML = k.map(([v, l]) => `<div class="kpi"><b>${v}</b><span>${esc(l)}</span></div>`).join('');
