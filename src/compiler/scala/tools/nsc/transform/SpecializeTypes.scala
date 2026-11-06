@@ -73,6 +73,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   /** This phase changes base classes. */
   override def changesBaseClasses = true
   override def keepsTypeParams = true
+  override protected def infoTransformIsLocal(sym: Symbol): Boolean = !sym.isClass
 
   type TypeEnv = Map[Symbol, Type]
   def emptyEnv: TypeEnv = Map.empty[Symbol, Type]
