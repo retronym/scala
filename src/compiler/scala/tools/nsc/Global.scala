@@ -1523,6 +1523,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         analyzer.parallelPhase(ph, us, ph.name, unitOrder = true)(ph.applyPhase(_))
         if (System.getProperty("scalac.parallelTyper.log") != null)
           Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
+        if (ph.name == "jvm" && System.getProperty("scalac.parallelTyper.lockSites") != null)
+          Console.err.println(s"[parallel-typer] coarse claim by site, since the typer: ${completionLock.siteSummary}")
         true
       }
       else if (postTyperGroups.isEmpty) false

@@ -143,6 +143,12 @@ final class PerKeyClaims(currentClaimant: () => Claimant, cycles: CycleHandler, 
     null
   }
 
+  /** How many holds this thread's claimant has on `key`. */
+  def holdCount(key: AnyRef): Int = {
+    val c = claims.get(key)
+    if (c != null && (c.owner eq currentClaimant())) c.holds else 0
+  }
+
   /** The claims held now, for diagnostics. */
   def holdersNow: String =
     claims.values.asScala.map(c => s"${c.ownerName}: ${c.what.render}").mkString("; ")

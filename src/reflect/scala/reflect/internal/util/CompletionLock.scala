@@ -91,7 +91,10 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
 
   /** Acquire the lock (the coarse root's claim) to do `what` (a site label for the reports of waiting threads). */
   def acquire(what: What): Unit =
-    if (claims ne null) { claims.acquire(CompletionLock.CoarseRoot, what, () => cycle(CompletionLock.CoarseRoot)) }
+    if (claims ne null) {
+      claims.acquire(CompletionLock.CoarseRoot, what, () => cycle(CompletionLock.CoarseRoot))
+      if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1) { recordSite(); holdStart = System.nanoTime() }
+    }
     else acquireLock(what)
 
   private def acquireLock(what: What): Unit = {
@@ -119,21 +122,31 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
    *  plumbing (slow: a stack walk per acquisition). */
   private[this] val sites: java.util.concurrent.ConcurrentHashMap[String, LongAdder] =
     if (System.getProperty("scalac.parallelTyper.lockSites") != null) new java.util.concurrent.ConcurrentHashMap else null
+  private[this] val siteHolds = new java.util.concurrent.ConcurrentHashMap[String, LongAdder]
+  private[this] var holdSite: String = null
   private def recordSite(): Unit = {
     val frames = new Throwable().getStackTrace
     val plumbing = Set("acquire", "apply", "underCompletionLock", "completeInfoUnderLock", "await", "awaitCompletionElsewhere")
     val f = frames.find(f => !plumbing(f.getMethodName) && !f.getClassName.endsWith("CompletionLock")).getOrElse(frames.last)
-    sites.computeIfAbsent(s"${f.getClassName}.${f.getMethodName}", _ => new LongAdder).increment()
+    // the worker's name gives the phase, on the pool
+    val site = s"${Thread.currentThread.getName.replaceAll("-[0-9]+$", "")} ${f.getClassName}.${f.getMethodName}"
+    sites.computeIfAbsent(site, _ => new LongAdder).increment()
+    holdSite = site
   }
   def siteSummary: String =
     if (sites eq null) ""
     else {
       import scala.jdk.CollectionConverters._
-      sites.asScala.toList.map { case (k, v) => (k, v.sum) }.sortBy(-_._2).take(25).map { case (k, v) => f"$v%10d $k" }.mkString("\n", "\n", "")
+      sites.asScala.toList.map { case (k, v) => (k, v.sum, siteHolds.getOrDefault(k, new LongAdder).sum / 1000000) }.sortBy(-_._3).take(40)
+        .map { case (k, v, ms) => f"$v%10d $ms%6d ms $k" }.mkString("\n", "\n", "")
     }
 
   def release(): Unit =
-    if (claims ne null) claims.release(CompletionLock.CoarseRoot)
+    if (claims ne null) {
+      if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1 && (holdSite ne null))
+        siteHolds.computeIfAbsent(holdSite, _ => new LongAdder).add(System.nanoTime() - holdStart)
+      claims.release(CompletionLock.CoarseRoot)
+    }
     else releaseLock()
 
   private def releaseLock(): Unit = {
@@ -178,6 +191,8 @@ object CompletionLock {
   lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.serialSignatures") == null
   /** The label of a completion's acquisition. */
   val completing: What = new What("completing a symbol", null)
+  /** The label of an info transform's claim on a symbol. */
+  val transforming: What = new What("transforming the info of a symbol", null)
   /** The label of a wait for another thread's completion. */
   val waiting: What = new What("waiting for a completion", null)
   /** The claim of everything that is not a source symbol's completion: the classpath (loaders, unpickler, classfile
