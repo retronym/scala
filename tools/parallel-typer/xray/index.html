@@ -492,9 +492,9 @@ if (typeof module !== 'undefined') module.exports = XR;
   // lanes: phases, main, workers, GC
   function lanes() {
     const r = cur, out = [{ kind: 'phases', h: 16, name: 'phases' }];
-    out.push({ kind: 'thread', tid: 0, h: 22, name: 'main' });
+    out.push({ kind: 'thread', tid: r.main, h: 22, name: 'main' });
     for (const t of r.workers.slice().sort((p, q) => +r.threads[p].replace(/\D/g, '') - +r.threads[q].replace(/\D/g, ''))) out.push({ kind: 'thread', tid: t, h: 22, name: r.threads[t].replace('scalac-typer-', 'worker ') });
-    r.threads.forEach((n, t) => { if (t !== 0 && !r.workers.includes(t)) out.push({ kind: 'thread', tid: t, h: 22, name: n }); });
+    r.threads.forEach((n, t) => { if (t !== r.main && !r.workers.includes(t)) out.push({ kind: 'thread', tid: t, h: 22, name: n }); });
     out.push({ kind: 'gc', h: 12, name: 'GC' });
     let y = 18; for (const l of out) { l.y = y; y += l.h + 3; }
     return { lanes: out, height: y + 2 };
