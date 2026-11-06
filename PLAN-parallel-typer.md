@@ -544,6 +544,81 @@ What still limits the front end at 8 threads, in order: the bodies' CPU, which i
 
 Measuring. The machine was shared with other sessions' soak runs throughout (load average 10-18), and wall times of one compilation differ by 10% and more from run to run. The changes above were judged by CPU samples in the frames concerned, which do not depend on the load, and by interleaved before and after runs. None of the wall times here is fit to quote as a result; a quiet machine or perflab is owed.
 
+## The spike on the perf integration branch (7 Nov)
+
+The question: how much of the compiler's CPU, serial and at 8 threads, is interface dispatch and type checks, how much of that does `scala2-perf-integration-new` remove, and does the speed-up over serial change?
+
+The answer: on the compiler corpus dispatch and type checks are 17.1% of serial and 13.6% of 8-thread Java samples on the spike, 8.0% and 6.3% on the merge, and what remains is nearly all vtable stubs, which did not change. That removes 9% of serial wall and 6% of 8-thread wall, so the compiler is faster at every thread count. The speed-up over serial does not improve: 4.54x to 4.40x on compiler, 4.40x to 4.24x on library, 3.35x on both for pekko. Thread CPU falls about alike at both ends (compiler 9% serial, 10% at 8 threads; library 10% and 8%), while wall at 8 threads falls less than CPU does on compiler and library, which is why the speed-up slips slightly. I have not established what the rest of that wall is; GC pauses and the serial steps, which these changes do not shorten, are the obvious candidates. Dispatch was not what limits scaling.
+
+### The merge
+
+The perf branch is merged into the spike, so that the spike stays first parent and its history reads as before; the other direction has the same six textual conflicts. Nothing was left out. The conflicts were where the spike moved state into `Scratch` and the perf branch moved the same code out of the cake (`Types`, `CommonOwners`, `GlbLubs`, `TypeToStrings`, `SynchronizedTypes`, `SymbolTable`, `Analyzer`): the merge takes the extracted components, using `scratch` for their state. The auto-merge had brought back shared fields in `Types` that the spike had removed; these are gone again. New shared state to check after a merge like this: `ParallelTyper.forceLazyVals` sweeps lazy vals by name, and only `annotationCheckers`, `globalGlbLimit` and `printLubs` left the names it finds, none of which completes a symbol; the extracted components have no lazy val that does (by reading, not by a test). The perf branch's patmat state lives in per-match translators.
+
+### Correctness on the merge
+
+Same as the spike alone in every case below; no crash and no hang. `dist/mkQuick` and the bootstrap (`restarrFull`) succeed. Junit `scala.reflect.internal.*` and `scala.tools.nsc.typechecker.*` pass. Pickle oracle at 8 threads, 5 runs: library, reflect and compiler all agree with one thread; one library run differs from serial only in O1's three files (Predef, WrappedString, StringBuilder). `stress-shared` 0 of 40. Class-file oracle with every switch on, 5 runs: library and compiler 0 differ against one thread. Against serial, library differs in O1's 3 class files, compiler in 11, which I take to be the known fresh-name numbers as on the spike; I did not inspect the 11 file by file on the merge.
+
+### How it was measured
+
+Patched JDK 26 integration build, ParallelGC, 12 GB heap, sources and classpath in memory, every switch on, full compile to class files, warm (15 warm-up compilations), one JVM per variant, thread count and round. All variants compile one fixed corpus (the spike's sources and class path), so that the compiler changes and the job does not. Each corpus's variants ran interleaved in one sitting under the timing slot, 3 rounds with the order rotated, load 3 to 6 from other sessions; figures are medians. `tools/parallel-typer/perf/sweep.py` summarises the runs, counting only the outermost spans per thread.
+
+Four compilers: the spike and the merge, each built by STARR (quick) and then by itself after `restarrFull` (boot). Pekko was swept on the boot pair only, and profiled on neither.
+
+### Wall and speed-up
+
+Median wall in ms at serial, 1, 2, 4, 8 threads, and the speed-up at 8 over serial.
+
+- compiler, spike quick: 5527, 6040, 3187, 1806, 1235 (4.48x)
+- compiler, spike boot: 5664, 6089, 3194, 1845, 1248 (4.54x)
+- compiler, merge quick: 5110, 5466, 2894, 1636, 1171 (4.36x)
+- compiler, merge boot: 5146, 5439, 2855, 1644, 1169 (4.40x)
+- library, spike quick: 3461, 3876, 2047, 1125, 784 (4.42x)
+- library, spike boot: 3458, 3853, 2009, 1127, 785 (4.40x)
+- library, merge quick: 3121, 3470, 1835, 1029, 736 (4.24x)
+- library, merge boot: 3103, 3515, 1828, 1030, 731 (4.24x)
+- pekko, spike boot: 5261, 5962, 3161, 1882, 1570 (3.35x)
+- pekko, merge boot: 4608, 5185, 2770, 1653, 1376 (3.35x)
+
+Boot against spike boot: serial 9.1% faster on compiler, 10.3% on library, 12.4% on pekko; 8 threads 6.3%, 6.9%, 12.4%.
+
+The bootstrap adds nothing measurable. Merge boot and merge quick are within noise, as are spike boot and spike quick, the control. The change that matters is in the compiler's sources, so a compiler built by STARR already has it.
+
+Thread CPU in spans in ms, serial and 8 threads, spike boot to merge boot: compiler 5558 to 5041, 7746 to 6976; library 3428 to 3073, 4973 to 4569; pekko 5231 to 4579, 7158 to 6533. CPU at 8 threads over CPU at serial is 1.39x before and 1.38x after on compiler, 1.45x and 1.49x on library, 1.37x and 1.43x on pekko. That growth, the machine's own cost of 8 busy threads plus whatever contention remains, is not reduced by removing the stubs and the secondary supers checks.
+
+### Dispatch and type checks
+
+One CPU profile per variant and corpus, async-profiler at 1 ms over 10 recorded compiles, `features=vtable`, `cstack=vm`. `tools/parallel-typer/perf/dispatch.py` counts them. Percentages are of samples on stacks with a Java frame, leaving out GC workers and the JIT, which are 30-46% of all samples here. Spike boot to merge boot, compiler corpus:
+
+- serial: itable stubs 6369 (10.89%) to 737 (1.41%); vtable stubs 3347 (5.72%) to 3379 (6.48%); `lookup_secondary_supers_table_slow_path_stub` 290 (0.50%) to 30 (0.06%); other type check paths 20 to 26; together 17.14% to 8.00%; Java samples 58481 to 52180
+- 8 threads: itable 5321 (8.47%) to 658 (1.13%); vtable 2925 (4.66%) to 2952 (5.08%); secondary supers 264 (0.42%) to 32 (0.06%); other 14 to 23; together 13.57% to 6.31%; Java samples 62835 to 58074
+
+Library:
+
+- serial: itable 3030 (8.39%) to 649 (1.96%); vtable 2174 (6.02%) to 2344 (7.09%); secondary supers 616 (1.71%) to 28 (0.08%); together 16.15% to 9.20%; Java samples 36119 to 33039
+- 8 threads: itable 2742 (6.73%) to 651 (1.63%); vtable 1782 (4.38%) to 1993 (5.00%); secondary supers 476 (1.17%) to 30 (0.08%); together 12.34% to 6.79%; Java samples 40726 to 39828
+
+As a share of all samples, the spike's itable stubs at 8 threads on the compiler corpus are 4.6%, which agrees with the earlier reference profile (`Global$erasure$` and `Global$$anon$6` together 4.6% of 37393 samples).
+
+Where the itable samples were, on the spike, serial, compiler corpus: receiver `Global$erasure$` 3190 and `Global$$anon$6` 2496, that is 89% of them on the two analyzers; caller `Typers$Typer.typed` 2962, then `silent` 415, `typedSelect` 402, `checkAccessible` 321, `handleMonomorphicCall` 238. `Global$erasure$` is the erasure phase's own typing: 3100 of the itable samples in that phase. On the merge the largest is `Macros.macroState` on `Erasure$erasureAnalyzer$` at 86.
+
+Secondary supers on the spike's library: `Types.unique$` 203, `TypeComparers.isSubType1` 177, `Types.matchesType` 68.
+
+By phase, Java samples, serial, compiler corpus, spike boot to merge boot, with the change in itable samples in brackets: erasure 8033 to 5268 (-2982), patmat 5846 to 3568 (-860), typer 19432 to 18430 (-1190), everything else about -256 (-603). All phases together fall by 6301, of which the itable stubs and secondary supers are 5892. At 8 threads the same: a fall of 4761 against 4895 in the stubs and checks. In typer the itable samples fall by more than the phase does. So apart from patmat's own work, what the perf branch gives this corpus is the dispatch. These are two sampled runs, and stub samples may undercount or overcount the cost of a call (a stub's samples say nothing of a lost inlining), so 90% is the size, not a measurement to two figures. For library at 8 threads the Java fall (898) is much less than the fall in stubs and checks (2537), though thread CPU in spans in the sweep falls by about 4000 samples' worth; that recording is the noisy one and I would not read it further.
+
+### Which parts of the perf branch
+
+- "Self-type the analyzer with a class, keeping trait Analyzer" and the `erasureAnalyzer` that comes with it account for the itable stubs. On the spike, `Typers$Typer.typed` is `invokeinterface Analyzer.global` and friends, on the last interface of a long itable, and erasure's receiver has 39 interfaces; on the merge, even built by STARR, the method has no invokeinterface left, and `Global$erasure$` has 6. I read this from `javap` and the profile; I did not build the commit alone.
+- The cake diet accounts, I believe, for the secondary supers. `Global` goes from 70 interfaces to 52, under the 64 of the secondary supers table (JDK 23+, JDK-8180450), past which a check takes the slow path; the slow path samples fall to about a tenth, also when built by STARR. I infer this from the counts and did not test it separately.
+- "Cast a trait's this to its self type's class" is the part that needs a bootstrap. Across a sample of the cake's classes, invokeinterface goes 589 to 491 from merge quick to merge boot and invokevirtual up (the spike: 954 both). It takes itable samples from 934 to 737 serially, which the wall clock cannot see.
+- Patmat's own commits account for the rest of patmat's fall, some 1400 samples over the 10 compiles (`translateMatch` 4647 to 2674): `Substitution` (cached target types, fewer substitutions) and `exhaustive` 1035 to 98 (exhaustivity of a match with an irrefutable case skipped, and the indexing and solver commits). This shows on the compiler corpus, whose matches are large; less on library and pekko. "Create typing transformers' contexts lazily" adds to every typing transformer's phase; I have not separated it from the rest.
+
+### What could not be verified
+
+- Which single commit gives how much: this is attribution from profiles and bytecode, not from building each commit. `-Yeager-typing-transformer-contexts` would isolate the lazy contexts inside one JVM; I did not use it.
+- The numbers are of one machine with other sessions on it at load 3 to 6. Three rounds and medians, min-max about 2-5%; the differences reported in speed-up are within or close to that, the wall gains are not.
+- No soak: correctness on the merge is 5 oracle runs per corpus, except 40 for `stress-shared`. Another session is looking into about 7 in 100 full compiles of reflect differing between runs; 5 runs would not see that, on the spike or the merge. The class-file oracle ran on library and compiler, not reflect or pekko.
+- The bootstrap published the spike's build as `2.13.19-bin-unknown-SNAPSHOT` in the local Ivy repository. Another session's bootstrap in a worktree would use the same name, and I cannot tell whether one was overwritten.
+
 ## DONE
 
 - Stage 0: `-Yparallel-typer`, `-Yparallel-typer-threads`; `Global.isConcurrentUniverse` from the setting (and `isParallelCompiler`, so that a toolbox's `ReflectGlobal` stays serial, I10); per-thread phase, current unit, fresh name creator.
