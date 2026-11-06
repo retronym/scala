@@ -48,6 +48,8 @@ trait ParallelTyper {
   /** Whether signatures are completed under a claim per symbol: the default, with only the class headers serial.
    *  `-Dscalac.parallelTyper.serialSignatures` restores the serial pre-pass under the one completion lock. */
   lazy val parallelSignatures: Boolean = scala.reflect.internal.util.CompletionLock.parallelSignatures
+  /** `-Dscalac.parallelTyper.eagerImports`: complete every import with the class headers (see `completeSignatures`). */
+  private lazy val eagerImports: Boolean = System.getProperty("scalac.parallelTyper.eagerImports") != null
 
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
@@ -416,18 +418,29 @@ trait ParallelTyper {
           case ex: TypeError => reporter.error(sym.pos, ex.getMessage)
         }
       }
-    def traverse(tree: Tree): Unit = tree match {
-      case PackageDef(_, stats) => stats.foreach(traverse)
-      case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse)
-      case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
+    // The names of the modules among the unit's root imports (`Predef`): an import of one of them at the top level
+    // excludes it from the unit's root imports from the moment the import is completed (`Contexts.registerImport`).
+    lazy val rootModuleNames: Set[Name] = rootImports(unit).filterNot(_.hasPackageFlag).map(_.name: Name).toSet
+    // Could completing this import exclude a root import? Only one at the top level whose qualifier ends in the name
+    // of such a module, or is an identifier, which an earlier renaming import may have made a name for it.
+    def mayExcludeRootImport(imp: Import): Boolean = imp.expr match {
+      case Select(_, name) => rootModuleNames(name.toTermName)
+      case _               => true
+    }
+    def traverse(tree: Tree, topLevel: Boolean): Unit = tree match {
+      case PackageDef(_, stats) => stats.foreach(traverse(_, topLevel))
+      case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse(_, topLevel = false))
+      case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse(_, topLevel = false))
       case md: MemberDef        => if (!classesOnly) complete(md.symbol)
-      // in tree order, as the typer types them: an import of a root import module (`import scala.Predef.{...}`)
-      // excludes it from the unit's root imports (`Contexts.registerImport`) from then on
-      case imp: Import          => complete(imp.symbol)
+      // In tree order, as the typer types them, the imports that may exclude a root import. With `classesOnly` the
+      // others are left to the thread that first looks a name up through them, as in the serial compiler: completing
+      // an import loads the classes it names, and all of them up front was four fifths of the class headers step
+      // (`-Dscalac.parallelTyper.eagerImports` completes them all here, as before).
+      case imp: Import          => if (!classesOnly || eagerImports || (topLevel && mayExcludeRootImport(imp))) complete(imp.symbol)
       case _                    =>
     }
     try {
-      traverse(unit.body)
+      traverse(unit.body, topLevel = true)
       if (!classesOnly) unit.synthetics.keys.toList.foreach(complete)
     } finally currentRun.currentUnit = savedUnit
     n
