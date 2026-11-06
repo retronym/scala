@@ -257,7 +257,21 @@ abstract class SymbolTable extends macros.Universe
     case ps     => ps.reverseIterator.map("->" + _).mkString("(", " ", ")")
   }
 
+  /** Has any thread been at a phase with flat classes in this universe? Until one has, a symbol's name and owner
+   *  and a scope's entries need not ask which phase this thread is at, a lookup of the thread's scratch state in a
+   *  concurrent compiler, to learn that it is not such a phase. Never reset. Plain: a thread that moves to such a phase
+   *  writes it first, and a thread that has not moved to one need not see the write.
+   */
+  private[this] var _flatClassesSeen = false
+  final def flatClassesSeen: Boolean = _flatClassesSeen
+  /** Likewise: has any thread been at a phase whose flag mask is not the initial one? Until then `Symbol.flags`
+   *  masks with `InitialFlags` without asking for the phase. */
+  private[this] var _lateFlagsSeen = false
+  final def lateFlagsSeen: Boolean = _lateFlagsSeen
+
   final def phase_=(p: Phase): Unit = {
+    if (!_flatClassesSeen && p.flatClasses) _flatClassesSeen = true
+    if (!_lateFlagsSeen && p.flagMask != Flags.InitialFlags) _lateFlagsSeen = true
     if (phasePerThread) {
       val s = scratch
       s.checkOwner()
