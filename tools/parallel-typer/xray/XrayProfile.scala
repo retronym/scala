@@ -72,17 +72,20 @@ object XrayProfile {
       val isWall = c.endsWith("-wall")
       val threads = c.stripSuffix("-wall")
       val jfr = out.resolve(s"run-$c.jfr")
-      if (isWall) startProfiler("wall", wall, jfr)
-      else if (profiled) startProfiler("cpu", cpu, jfr)
-      // (timeline, ms, errors) of each compilation
-      val compilations = for (_ <- 1 to (if (profiled) repeats else 1)) yield {
+      def compilation() = {
         val tl = new ParallelTyperTimeline(ParallelTyperTimeline.threshold)
         ParallelTyperTimeline.current = tl
         val (ms, errors) = try XrayBench.compile(threads, files) finally ParallelTyperTimeline.current = null
         (tl, ms, errors)
       }
+      // The run shown, and its time, are a compilation without the profiler, as `serial` is recorded: the profiler
+      // costs 3-7% (more with allocation sampling), which would otherwise go into the speed-ups. The profiled
+      // compilations supply the samples, projected onto the shown one.
+      val (tl, ms, errors) = compilation()
+      if (isWall) startProfiler("wall", wall, jfr)
+      else if (profiled) startProfiler("cpu", cpu, jfr)
+      val compilations = if (profiled) for (_ <- 1 to repeats) yield compilation() else IndexedSeq.empty
       if (profiled) stopProfiler()
-      val (tl, ms, errors) = compilations.sortBy(_._2).apply(compilations.length / 2)
       tl.meta.put("corpus", corpus)
       tl.meta.put("config", c)
       tl.meta.put("threads", if (c == "serial") "0" else threads)
@@ -91,7 +94,7 @@ object XrayProfile {
       tl.meta.put("warmup", warmup.toString)
       if (profiled) {
         tl.meta.put("profiled", if (isWall) s"wall $wall" else s"cpu $cpu")
-        tl.meta.put("repeats", compilations.map(x => f"${x._2}%.0f").mkString("median of ", " ", " ms"))
+        tl.meta.put("repeats", compilations.map(x => f"${x._2}%.0f").mkString("samples of ", " ", " ms under the profiler"))
       }
       tl.meta.put("compileMs", f"$ms%.1f")
       tl.meta.put("errors", errors.toString)
