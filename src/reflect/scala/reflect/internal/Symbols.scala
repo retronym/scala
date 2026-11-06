@@ -1310,7 +1310,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** The decoded name of the symbol, e.g. `==` instead of `\$eq\$eq`.
      */
-    def decodedName: String = name.decode
+    def decodedName: String = {
+      val shown = shownNameHere
+      if (shown ne null) shown.decode else name.decode
+    }
+    /** The name this thread is showing for this symbol while it renders a message (`TypeDiagnostics.TypeDiag`), or null.
+     *  In a serial compiler that rendering renames the symbol, and this is always null. */
+    private[this] def shownNameHere: Name =
+      if (isConcurrentCompiler) { val shown = scratch.shownNames; if (shown.isEmpty) null else shown.get(this).asInstanceOf[Name] }
+      else null
 
     private def addModuleSuffix(n: Name): Name =
       if (needsModuleSuffix) n append nme.MODULE_SUFFIX_STRING else n
@@ -3200,7 +3208,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  If settings.Yshowsymkinds, adds abbreviated symbol kind.
      */
     def nameString: String = {
-      val name_s = if (settings.isDebug) "" + unexpandedName else unexpandedName.dropLocal.decode
+      val shown = shownNameHere
+      val name_s = if (shown ne null) shown.decode else if (settings.isDebug) "" + unexpandedName else unexpandedName.dropLocal.decode
       val kind_s = if (settings.Yshowsymkinds.value) "#" + abbreviatedKindString else ""
 
       name_s + idString + kind_s
