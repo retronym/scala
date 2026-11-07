@@ -124,6 +124,10 @@ trait StdAttachments {
    *  by `parentTypes`. This attachment coordinates `parentTypes` and `typedTemplate` and
    *  allows them to complete the synthesis.
    */
+  /** On an implicit val or def with no explicit type, under `-Yimplicit-eligibility-by-position`: what its completer's
+   *  tree says while it has one, for `ImplicitSearch.isValid` to read in any state of the symbol. */
+  case object InferredImplicitType extends PlainAttachment
+
   /** On a module class that `-Yparallel-typer` has made serializable before its companion is typed: the typer adds the
    *  parent's tree, and not the parent again. */
   case object SerializableCompanion extends PlainAttachment
