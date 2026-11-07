@@ -41,7 +41,7 @@ import scala.tools.nsc.reporters.FilteringReporter
  *   - `scalac.parallelTyper.watchdog=<seconds>`: dump the threads when the phase runs longer (default 120).
  */
 trait ParallelTyper {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
 
