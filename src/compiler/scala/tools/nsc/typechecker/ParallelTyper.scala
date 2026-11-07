@@ -92,8 +92,7 @@ trait ParallelTyper {
     // its extra allocation). `noForceLazyVals` skips it on any number, for experiments.
     val needForceLazyVals = nThreads > 1 && !flag("noForceLazyVals")
     // largest first, so that the last units to start are small
-    // (`-Dscalac.parallelTyper.order=source`: in source order, as the serial typer)
-    val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
+    val ordered = units.sortBy(u => -u.source.content.length)
 
     val t0 = System.nanoTime()
     // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
