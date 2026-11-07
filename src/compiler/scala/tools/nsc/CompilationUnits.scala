@@ -93,7 +93,7 @@ trait CompilationUnits { global: Global =>
       // recompilation will lead to another macro expansion. that another macro expansion might choose to create a fresh mock,
       // producing another virtual file, say, Virtee509a, which will again trick sbt into thinking that A needs a recompile,
       // which will lead to another macro expansion, which will produce another virtual file and so on
-      if (exists && !source.file.isVirtual) _depends += symbol
+      if (exists && !source.file.isVirtual) lockedIfConcurrent(_depends)(_depends += symbol) // a foreign completion writes this too
     }
 
     /** so we can relink
