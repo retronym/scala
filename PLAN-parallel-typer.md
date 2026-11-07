@@ -648,6 +648,10 @@ library      3575   4152   2105   1152    865    759 ms    4.7x
 
 pekko at 8 threads by phase, wall with the serial compiler's in brackets: typer 316 (1406), erasure 106 (631), jvm 182 (432, with the GC pause's 102 ms span), refchecks 41 (240), specialize 38 (124). Typer's longest unit is `UnzipWithApply.scala`, 128 ms.
 
+### The analyzer as a class, as a precursor (7 Nov)
+
+scala/scala#11367 ("Avoid megamorphic interface calls to the analyzer") is merged into the branch: the typechecker's parts are self-typed with the class `AbstractAnalyzer`, so the calls through `$outer` and every selection of `global` are `invokevirtual`, not `invokeinterface` through an itable stub that scans the analyzer's interfaces. The spike's `ParallelTyper` trait needed the same self type. Share of worker CPU samples whose stack goes through an itable stub, compiler corpus: one thread 8.0% to 1.4%, 8 threads 7.0% to 1.3% (the leaves were `Global$erasure$` and `Global$$anon$6`, the two analyzers); vtable stubs stay at 5-6%. Wall, same setup as the sweeps above: serial 5293 ms (5604-5934 before), 8 threads 1207 (1299-1354). The oracle is clean on reflect and compiler at 8 threads, and the PR's `AnalyzerShapeTest` passes. The speed-up over serial does not move, as the perf-integration session found; the profiles are the reason to have it underneath.
+
 ### The GC pause, and the allocation profile (7 Nov)
 
 A GC log of the compiler corpus at 8 threads (12 GB heap, ParallelGC, so a 3.3 GB eden): a compile allocates 3.5-4.3 GB, so one young collection lands in nearly every compile and copies what is live in the middle of it, 0.5-1.3 GB, at 30-100 ms (`3660M->846M 60 ms`, `4358M->1337M 102 ms`). The 444 MB survivor space overflows, so part of that is promoted and the old generation is later collected in full. The pause is the live set being copied, not a misconfiguration; the levers are a larger young generation (the benchmark could, a build less so), allocating less per compile, and retaining less mid-compile.
