@@ -64,7 +64,7 @@ object Rules {
     Rule("P.seam", "seam", "declared `IdCounter`, or initialised by an expression that tests `isConcurrentUniverse` or `synchronizeNames`: the universe picks a thread-safe implementation when it is concurrent"),
     Rule("P.lazy", "lazy-monitor", "a `lazy val`: its initialisation holds the owner's monitor; its publication is the lazy val's (a non-volatile bitmap read on the fast path)"),
     Rule("P.init-only", "init-only", "no write (assignment, setter call or mutating call on a collection) outside initialisation: the field is fixed once its owner is constructed, safe if the owner is published safely"),
-    Rule("P.access", "(per access)", "every access outside initialisation (constructors, field initialisers), each classified innermost-first: in `x.synchronized { … }` (or its receiver) → synchronized; in an argument of a method that runs that argument only under `synchronized` (found by a first pass, e.g. the name table's `lock`) → synchronized; in `gilSynchronized` → gil; in the else branch of `if (isConcurrentUniverse)` / `if (synchronizeNames)` → batch; in a private or local method, the one protection that every call of it has; else none. The field: the one protection of all non-batch accesses; `batch-only`; `partial:P` if some are P and some none; `mixed:P,Q`; `unknown` if no access outside initialisation is seen")
+    Rule("P.access", "(per access)", "every access outside initialisation (constructors, field initialisers), each classified innermost-first: in `x.synchronized { … }` (or its receiver) → synchronized; in an argument of a method that runs that argument only under `synchronized` (found by a first pass, e.g. the name table's `lock`) → synchronized; in `gilSynchronized` → gil; in the else branch of `if (isConcurrentUniverse)` / `if (isConcurrentCompiler)` / `if (synchronizeNames)` → batch (so the body of `lockedIfConcurrent(lock)(body)` is synchronized); in a private or local method, the one protection that every call of it has; else none. The field: the one protection of all non-batch accesses; `batch-only`; `partial:P` if some are P and some none; `mixed:P,Q`; `unknown` if no access outside initialisation is seen")
   )
 
   val reach: List[Rule] = List(
@@ -207,7 +207,7 @@ final class Extractor(val g: Global, repo: Path) {
     tp.dealiasWiden.baseClasses.exists(b => concurrentPrefixes.exists(b.fullName.startsWith))
 
   // ---- names
-  val seamNames = Set("isConcurrentUniverse", "synchronizeNames")
+  val seamNames = Set("isConcurrentUniverse", "isConcurrentCompiler", "phasePerThread", "synchronizeNames")
   val perRunMakers = Set("newMap", "newSet", "newWeakMap", "newAnyRefMap", "newGeneric", "newWeakSet", "recordCache")
   val mutators = Set("+=", "++=", "-=", "--=", "update", "put", "remove", "clear", "getOrElseUpdate", "addOne", "addAll",
     "subtractOne", "subtractAll", "append", "appendAll", "prepend", "prependAll", "insert", "insertAll", "+=:", "++=:",
@@ -288,7 +288,7 @@ final class Extractor(val g: Global, repo: Path) {
       val pkg = norm(cls.enclosingPackageClass).stripSuffix("$")
       classSyms(name) = cls
       classes(name) = ClassInfo(name, cls.name.decoded, pkg, relPath(tree.pos), if (tree.pos.isDefined) tree.pos.line else 0,
-        cls.baseClasses.filter(inSources).map(norm), cls.isModuleClass, cls.isTrait, cls.owner.isPackageClass)
+        cls.baseClasses.filter(b => inSources(b) || b == definitions.IteratorClass).map(norm), cls.isModuleClass, cls.isTrait, cls.owner.isPackageClass)
     }
 
     def recordField(vd: ValDef, cls: Symbol): Unit = if (collect) {
@@ -373,8 +373,10 @@ final class Extractor(val g: Global, repo: Path) {
       case dd: DefDef =>
         val (savedParams, savedUses) = (params, paramUses)
         if (!collect) {
+          // a by-name or function parameter runs under the protection of its uses; any other parameter counts only as
+          // the receiver of `synchronized` (the lock of `lockedIfConcurrent(lock)(body)`)
           val ps = dd.vparamss.flatten.zipWithIndex.collect {
-            case (p, i) if p.symbol != NoSymbol && (definitions.isByNameParamType(p.symbol.tpe) || definitions.isFunctionType(p.symbol.tpe)) => p.symbol -> i
+            case (p, i) if p.symbol != NoSymbol => p.symbol -> i
           }.toMap
           params = ps; paramUses = mutable.Map()
         }
@@ -393,7 +395,11 @@ final class Extractor(val g: Global, repo: Path) {
         } finally { methodStack = methodStack.tail; protStack = savedProt; initDepth = savedInit }
         if (!collect) {
           val prots = for ((p, i) <- params.toList; uses <- paramUses.get(p).toList) yield (i, uses)
-          val protected0 = prots.filter { case (_, us) => us.nonEmpty && us.exists(_ != "batch") && us.forall(u => u == "synchronized" || u == "batch") }
+          def deferred(i: Int) = { val t = dd.vparamss.flatten.apply(i).symbol.tpe; definitions.isByNameParamType(t) || definitions.isFunctionType(t) }
+          val protected0 = prots.filter { case (i, us) =>
+            if (deferred(i)) us.nonEmpty && us.exists(_ != "batch") && us.forall(u => u == "synchronized" || u == "batch")
+            else us.nonEmpty && us.forall(_ == "receiver")
+          }
           if (protected0.nonEmpty) protecting(dd.symbol) = ("synchronized", protected0.map(_._1).toSet)
           params = savedParams; paramUses = savedUses
         }
@@ -418,7 +424,11 @@ final class Extractor(val g: Global, repo: Path) {
           fn match { case Select(q, _) => traverse(q); case _ => }
           allArgs.foreach(traverse)
         } else if (fsym != null && isSynchronized(fsym)) {
-          fn match { case Select(q, _) => withProt("synchronized")(traverse(q)); case _ => }
+          fn match {
+            case Select(i: Ident, _) if !collect && params.contains(i.symbol) => paramUses(i.symbol) = "receiver" :: paramUses.getOrElse(i.symbol, Nil)
+            case Select(q, _) => withProt("synchronized")(traverse(q))
+            case _ =>
+          }
           allArgs.foreach(a => withProt("synchronized")(traverse(a)))
         } else if (fsym != null && (fsym.name.decoded == "gilSynchronized" || fsym.name.decoded == "gilSynchronizedIfNotThreadsafe")) {
           traverse(fn)
@@ -426,8 +436,8 @@ final class Extractor(val g: Global, repo: Path) {
         } else if (fsym != null && protecting.contains(fsym)) {
           val (p, idxs) = protecting(fsym)
           traverse(fn)
-          argss.headOption.getOrElse(Nil).zipWithIndex.foreach { case (a, i) => if (idxs(i)) withProt(p)(traverse(a)) else traverse(a) }
-          argss.drop(1).flatten.foreach(traverse)
+          // indices into the flattened parameter lists, as `protecting` was computed (`lockedIfConcurrent(lock)(body)`)
+          allArgs.zipWithIndex.foreach { case (a, i) => if (idxs(i)) withProt(p)(traverse(a)) else traverse(a) }
         } else {
           fn match {
             case Select(recv, n) if mutators(n.decoded) && recv.symbol != null && fieldKeyOf(recv.symbol).isDefined
@@ -848,8 +858,11 @@ final class Model(classes: Map[String, ClassInfo], fieldList: List[FieldInfo], a
   )
 
   lazy val worklistEntries: List[(String, Placed)] = {
-    val cands = placed.filter(p => p.reach == "typer" && ((p.protection == "none" || p.protection.startsWith("partial"))
-      || Set("lazy-monitor", "shared-singleton", "context-escape").exists(p.hazards.contains)))
+    // a protection declared in annotations.tsv is a reviewed decision: it keeps a field with a hazard off the list,
+    // unless the row declares it unprotected (an open item)
+    def unprotected(p: Placed) = p.protection == "none" || p.protection.startsWith("partial")
+    val cands = placed.filter(p => p.reach == "typer" && (unprotected(p)
+      || p.protectionSource != "annotated" && Set("lazy-monitor", "shared-singleton", "context-escape").exists(p.hazards.contains)))
     cands.map { p =>
       val t = tiers.map(_._1).find(t => t != "plain" && p.hazards.contains(t)).getOrElse("plain")
       (t, p)
@@ -888,7 +901,7 @@ final class Model(classes: Map[String, ClassInfo], fieldList: List[FieldInfo], a
     val sb = new StringBuilder
     sb ++= "# Work list: shared mutable state reachable from the typer\n\n"
     sb ++= s"Generated by `tools/state-map/StateMap.scala` at `${tip.take(10)}`; do not edit by hand (overrides go in `annotations.tsv`).\n\n"
-    sb ++= s"The fields below have reach `typer` (owned by code that runs in parser → namer → packageobjects → typer → superaccessors → extmethods → pickler) and no protection at some access (`none` or `partial:…`), plus lazy vals whose initialiser can force symbol completion and per-instance scratch reachable through a universe singleton. ${entries.size} fields in ${entries.map(_._2.f.owner).distinct.size} owners. Each field appears once, under its most severe hazard. Within a section, owners are ordered by their number of unprotected access sites.\n\n"
+    sb ++= s"The fields below have reach `typer` (owned by code that runs in parser → namer → packageobjects → typer → superaccessors → extmethods → pickler) and no protection at some access (`none` or `partial:…`), plus lazy vals whose initialiser can force symbol completion, per-instance scratch reachable through a universe singleton, and context fields written after construction, unless `annotations.tsv` declares their protection. ${entries.size} fields in ${entries.map(_._2.f.owner).distinct.size} owners. Each field appears once, under its most severe hazard. Within a section, owners are ordered by their number of unprotected access sites.\n\n"
     sb ++= "Line format: `field: Type` — `file:line` — kind/rule — instance — unprotected sites (writes) — hazards — suggested discipline.\n\n"
     sb ++= "| section | fields |\n|---|---:|\n"
     for ((t, (title, _)) <- tiers) { val n = entries.count(_._1 == t); if (n > 0) sb ++= s"| [$title](#${title.toLowerCase.replaceAll("[^a-z0-9 -]", "").replace(' ', '-')}) | $n |\n" }

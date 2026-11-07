@@ -29,7 +29,7 @@ Instance: `universe` for the cake slices of `Global` and `SymbolTable` (their ba
 
 Hazards: `ambient`, `shared-scratch` (kind A on a universe singleton), `shared-singleton` (kind A whose class also has a universe singleton instance), `context-escape` (a typer `Context` field written after construction: completers capture contexts and run on whichever thread forces the symbol), `black-hole` (kind B), `sentinel` (written in a method that throws a cyclic-reference error, or for B and C read in one), `rmw`, `stamp-pair` (a stamp, or a field sharing a stem with one: `parentsCache`/`parentsPeriod`), `collection` (an unsynchronised mutable collection with no protection), `lazy-monitor` (a lazy val on a shared instance whose initialiser can force completion).
 
-The work list: fields with reach `typer` and protection `none` or `partial`, plus fields with the `lazy-monitor`, `shared-singleton` or `context-escape` hazard, each once under its most severe hazard, in this order: ambient globals; scratch on a shared object; context state reachable from completers; per-instance state reached through a universe singleton; sentinels; black-hole protocols; read-modify-write; stamp pairs; collections; lazy-val monitors; the rest.
+The work list: fields with reach `typer` and protection `none` or `partial`, plus fields with the `lazy-monitor`, `shared-singleton` or `context-escape` hazard whose protection `annotations.tsv` does not declare, each once under its most severe hazard, in this order: ambient globals; scratch on a shared object; context state reachable from completers; per-instance state reached through a universe singleton; sentinels; black-hole protocols; read-modify-write; stamp pairs; collections; lazy-val monitors; the rest.
 
 ## Counts
 
