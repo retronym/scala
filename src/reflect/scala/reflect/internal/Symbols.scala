@@ -4046,12 +4046,23 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       clone
     }
 
-    override lazy val flipped: ClassSymbol = {
-      val clone = cloneSymbol(owner)
-      clone.rawInfo.typeParams.foreach { sym =>
-        if (sym.isContravariant) sym.resetFlag(Flag.CONTRAVARIANT).setFlag(Flag.COVARIANT)
+    // Not a lazy val: `cloneSymbol` completes the type parameters, and this symbol is shared, so that would be under
+    // its monitor, against a thread that holds the claim and wants the clone (-Yparallel-typer). Made under the
+    // completion lock, so that every thread gets the same clone, and published by the volatile write.
+    @volatile private[this] var flippedCache: ClassSymbol = null
+    override def flipped: ClassSymbol = {
+      val f = flippedCache
+      if (f ne null) f
+      else underCompletionLock {
+        if (flippedCache eq null) {
+          val clone = cloneSymbol(owner)
+          clone.rawInfo.typeParams.foreach { sym =>
+            if (sym.isContravariant) sym.resetFlag(Flag.CONTRAVARIANT).setFlag(Flag.COVARIANT)
+          }
+          flippedCache = clone
+        }
+        flippedCache
       }
-      clone
     }
 
     override def derivedValueClassUnbox =
