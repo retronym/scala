@@ -32,7 +32,7 @@ import PartialFunction.cond
  *  @author  Martin Odersky
  */
 trait Implicits extends splain.SplainData {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
