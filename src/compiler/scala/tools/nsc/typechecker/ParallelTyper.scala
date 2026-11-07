@@ -102,7 +102,7 @@ trait ParallelTyper {
 
     val t0 = System.nanoTime()
     val signatures =
-      if (parallelSignatures && !flag("poolSignatures")) {
+      if (parallelSignatures) {
         // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
         // the symbol's claim, and its annotations by its own unit's task (`typedTemplate`, `typedValDef`, `typedDefDef`
         // and `typedTypeDef` force them), so the typer has one pool step and one tail.
@@ -110,29 +110,6 @@ trait ParallelTyper {
         units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u, null, classesOnly = true))) // xray
         logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
         n
-      }
-      else if (parallelSignatures) {
-        // -Dscalac.parallelTyper.poolSignatures, for comparison: the class headers serially, then the members' signatures
-        // as a pool step of their own, then the annotations serially.
-        var n = 0
-        val completed = new ConcurrentLinkedQueue[(CompilationUnit, Symbol)]
-        val count = new AtomicInteger
-        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u, null, classesOnly = true))) // xray
-        val headersOnly = System.nanoTime()
-        // The lazy vals of `definitions` before the members run on several threads: one forced from a completion holds
-        // the object's monitor while it waits for a claim, and another thread holding that claim waits for the monitor
-        // (a deadlock the claims cannot see). After the headers, so that what they name is ready (I3).
-        if (needForceLazyVals) ParallelTyperTimeline.span("lazy vals", "definitions, runDefinitions, the cake")(forceLazyVals()) // xray
-        val headersDone = System.nanoTime()
-        onPool(typerPhase, ordered, nThreads, "signatures") { u =>
-          val buf = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
-          count.addAndGet(completeSignatures(u, buf))
-          buf.foreach(completed.add)
-        }
-        val membersDone = System.nanoTime()
-        ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed.asScala.toList)) // xray
-        logf(f"class headers serially in ${(headersOnly - t0) / 1e6}%.1f ms, lazy vals in ${(headersDone - headersOnly) / 1e6}%.1f ms, member signatures on $nThreads threads in ${(membersDone - headersDone) / 1e6}%.1f ms, annotations serially in ${(System.nanoTime() - membersDone) / 1e6}%.1f ms")
-        n + count.get
       }
       else {
         var n = 0

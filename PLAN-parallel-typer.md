@@ -8,7 +8,7 @@ A spike: port Scala 3's `-Yparallel-typer` (retronym/scala3#84) to the Scala 2 c
 
 Parser, namer and packageobjects run serially as before. The typer phase (`Analyzer.typerFactory.TyperPhase.run`) hands its units to `ParallelTyper.typeCheckInParallel`, which on the main thread:
 
-1. completes the class headers serially; a member's signature is then completed by the first thread that asks for it, under a claim per symbol, and its annotations by its own unit's task (the default; `-Dscalac.parallelTyper.serialSignatures` restores the wholly serial pre-pass under the one lock, `poolSignatures` the members' own pool step);
+1. completes the class headers serially; a member's signature is then completed by the first thread that asks for it, under a claim per symbol, and its annotations by its own unit's task (the default; `-Dscalac.parallelTyper.serialSignatures` restores the wholly serial pre-pass under the one lock);
 2. forces the lazy vals of `definitions`, `runDefinitions` and the private lazy vals of the cake (lock order, below);
 3. types the bodies on a pool of workers, a unit per task, largest first; each worker sets its own phase, current unit and scratch state, and clears its undo log after each unit;
 4. after the join, issues the buffered diagnostics in a fixed order; `finishComputeParamAlias` and `clearDelayed` then run on the main thread as before, and so do the phases after the typer.
@@ -197,7 +197,7 @@ Results, 3 runs each at 8 threads: reflect, library, compiler and case-classes a
 
 ## Parallel signatures, members on the pool
 
-With I11 fixed, member signatures run on the pool under `-Dscalac.parallelTyper.poolSignatures`, and with them a claim per completion root (`PerKeyClaims`) instead of the one lock. `-Dscalac.parallelTyper.serialSignatures` goes back to the serial pre-pass and the coarse lock (`claims=perKey` still selects per-key claims with it).
+With I11 fixed, member signatures ran on the pool as a step of their own (the experiment `poolSignatures`, removed: the folded mode below replaced it), and with them a claim per completion root (`PerKeyClaims`) instead of the one lock. `-Dscalac.parallelTyper.serialSignatures` goes back to the serial pre-pass and the coarse lock (`claims=perKey` still selects per-key claims with it).
 
 Evidence. Oracle at 8 threads with `checkScratchOwner`, pickles compared: 5 runs on each of the 15 corpora (library, reflect, compiler, annotations, annotations-neg, case-classes, stress-shared, better-files, re2s, scalap, induction, map-seq-inference, patmat-exhaust-huge, vector, re2j), no run differs from the one-thread run, and the library differs from serial by O1 only; 3 more runs on library, reflect and compiler with this mode as the default. The in-JVM harness (`stress.sh`, diagnostics and crashes only): 0 of 500 on each of the four small corpora, 0 of 100 on each of the eight benchmark corpora, 0 of 40 on library, reflect and compiler. stress-shared, cold, 500 runs at 8 threads: 0 differ with the coarse lock and 0 with per-key claims. A bar of 50 cold oracle runs per corpus was not run, in favour of integrating and measuring; what is left should show up there. JUnit `scala.tools.nsc.typechecker.*`, `scala.tools.nsc.symtab.*`, `scala.reflect.internal.*`: 308 pass.
 
@@ -211,7 +211,7 @@ The folded mode of the next section, which is the default, has neither the pool 
 
 ## Only the class headers serial (`foldSignatures`)
 
-The default (`foldSignatures`; `-Dscalac.parallelTyper.poolSignatures` keeps members on the pool for comparison): the class headers are completed serially and nothing else. A member's signature is completed by the first thread that asks for it, under the symbol's claim, and its annotations by the body typing of its own unit, so the typer has one pool step and one tail. The serial pre-pass does too much: of the pre-pass, 38% is typing right-hand sides for inferred types, 32% `methodSig`, 11% class headers.
+The default (`foldSignatures`): the class headers are completed serially and nothing else. A member's signature is completed by the first thread that asks for it, under the symbol's claim, and its annotations by the body typing of its own unit, so the typer has one pool step and one tail. The serial pre-pass does too much: of the pre-pass, 38% is typing right-hand sides for inferred types, 32% `methodSig`, 11% class headers.
 
 Serial time left in the typer phase, `src/library`, warm, 6 warm-up and 5 measured compilations, one sitting at load average 19-23, medians (ms):
 
