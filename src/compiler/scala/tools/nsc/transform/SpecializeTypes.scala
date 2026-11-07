@@ -1325,6 +1325,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           val tparams = tpe.typeParams
           if (tparams.isEmpty)
             exitingSpecialize(parents map (_.typeSymbol.info))
+          // A generic class too reads `specializedClass` for its parents just below, and that is filled by the parent's
+          // transform: `class G[U] extends Foo[Int]` has the parent `Foo$mcI$sp` if `Foo` has been transformed and `Foo`
+          // otherwise. A dependence on unit order in serial, a race on the pool (see `overloadsOf`).
+          else if (isConcurrentCompiler)
+            exitingSpecialize(parents foreach { p =>
+              if (p.typeArgs.nonEmpty && p.typeSymbol.typeParams.exists(_.isSpecialized)) p.typeSymbol.info
+            })
 
           val parents1 = parents mapConserve specializedType
           if (parents ne parents1) {
