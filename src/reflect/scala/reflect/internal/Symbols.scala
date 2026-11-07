@@ -4071,7 +4071,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (knownDirectSubclassesCalled && !childSet.contains(sym))
         observedBeforeRegistered(sym)
 
-      childSet = childSet + sym
+      // A local class of a unit is registered by the thread that completes it, which may be a foreign completion of a
+      // member with an inferred type, beside the unit's own thread adding another (-Yparallel-typer).
+      lockedIfConcurrent(this) { childSet = childSet + sym }
     }
 
     private def knownDirectSubclassesCalled = !isPastTyper && hasAttachment[KnownDirectSubclassesCalled.type]
