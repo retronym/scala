@@ -168,8 +168,6 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
   /** Wait until no other thread holds the lock: what another thread was completing is then done. */
   def await(): Unit = { acquire(); release() }
 
-  def isHeldHere: Boolean = if (claims ne null) claims.ownedHere(CompletionLock.CoarseRoot) else lock.isHeldByCurrentThread
-
   def reset(): Unit = { waitNanos.reset(); waits.reset(); holdNanos.reset(); acquisitions.reset() }
 
   def summary: String =

@@ -1532,10 +1532,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         case names => names.split(",").toSet
       }
 
-    /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
     /** Is this phase to run on the pool? */
     private[nsc] def onPool(phaseName: String): Boolean = latePhases(phaseName)
 
+    /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
     private[nsc] def runOnPool(ph: GlobalPhase): Boolean =
       if (latePhases(ph.name)) {
         // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol

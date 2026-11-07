@@ -454,9 +454,6 @@ object ParallelTyperTimeline {
     def add5(x0: Long, x1: Long, x2: Long, x3: Long, x4: Long): Unit = {
       room(5); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; a(n + 4) = x4; n += 5
     }
-    def add6(x0: Long, x1: Long, x2: Long, x3: Long, x4: Long, x5: Long): Unit = {
-      room(6); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; a(n + 4) = x4; a(n + 5) = x5; n += 6
-    }
     def foreach(stride: Int)(f: (Array[Long], Int) => Unit): Unit = { var i = 0; while (i < n) { f(a, i); i += stride } }
   }
 }
