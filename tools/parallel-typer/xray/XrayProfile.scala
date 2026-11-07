@@ -81,7 +81,9 @@ object XrayProfile {
       // The run shown, and its time, are a compilation without the profiler, as `serial` is recorded: the profiler
       // costs 3-7% (more with allocation sampling), which would otherwise go into the speed-ups. The profiled
       // compilations supply the samples, projected onto the shown one.
-      val (tl, ms, errors) = compilation()
+      val shownOf = (1 to 3).map(_ => compilation())
+      val (tl, ms, errors) = shownOf.sortBy(_._2).apply(1)
+      tl.meta.put("unprofiled", shownOf.map(x => f"${x._2}%.0f").mkString("median of ", " ", " ms"))
       if (isWall) startProfiler("wall", wall, jfr)
       else if (profiled) startProfiler("cpu", cpu, jfr)
       val compilations = if (profiled) for (_ <- 1 to repeats) yield compilation() else IndexedSeq.empty
