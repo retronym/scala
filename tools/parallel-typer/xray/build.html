@@ -239,7 +239,7 @@ li { margin-bottom: 3px; }
     const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
     // where a split's label goes, against its point: dx, dy, anchor
     const place = { '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [6, 18, 'start'], '16x1': [10, 4, 'start'] };
-    const named = { '16x1': 1, '1x8': 1, '4x4': 1 };
+    const named = { '16x1': 1, '2x8': 1, '4x4': 1 };
     const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && !(t.token === 'trad:8x1') ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
     const rect = (M, T, fill, op) => `<rect x="${px(0)}" y="${py(M)}" width="${T * U}" height="${M * U}" fill="var(${fill})" fill-opacity="${op}" stroke="var(${fill})" stroke-width="1.5"/>`;
     const curve = (a) => { let d = ''; for (let v = a / 16; v <= 16.001; v += 0.1) d += (d ? 'L' : 'M') + px(v).toFixed(1) + ',' + py(a / v).toFixed(1); return `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.2" stroke-dasharray="4 4"/>`; };
@@ -252,10 +252,10 @@ li { margin-bottom: 3px; }
       const tip = `${p.split.replace('x', '\u00d7')}: ${(p.t.wall / 1000).toFixed(1)} s (${(p.t.lo / 1000).toFixed(1)}\u2013${(p.t.hi / 1000).toFixed(1)}), ${p.t.speedup.toFixed(2)}\u00d7, ${Math.round(100 * share)}% of CPU in GC`;
       return `<g><title>${tip}</title><circle cx="${cx}" cy="${cy}" r="15" fill="transparent"/><circle cx="${cx}" cy="${cy}" r="6" fill="var(--panel)"/><circle cx="${cx}" cy="${cy}" r="5" fill="var(--warm)" fill-opacity="${(0.15 + 0.85 * (share - lo) / (hi - lo)).toFixed(2)}" stroke="var(--warm)"/><text x="${cx + dx}" y="${cy + dy}" text-anchor="${a}" style="${p.split === '4x4' ? 'font-weight:650' : ''}">${label}</text></g>`;
     }).join('');
-    $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. 4 by 4 reaches ${x('pipe:4x4')}, against ${x('pipe:16x1')} for 16 by 1 and ${x('pipe:1x8')} for 1 by 8.">
+    $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. With 16 threads, 4 by 4 reaches ${x('pipe:4x4')}, against ${x('pipe:16x1')} for 16 by 1 and ${x('pipe:2x8')} for 2 by 8.">
       <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
       ${grid}
-      ${rect(16, 1, '--warm', .1)}${rect(1, 8, '--teal', .1)}${rect(4, 4, '--active', .22)}
+      ${rect(16, 1, '--warm', .1)}${rect(2, 8, '--teal', .1)}${rect(4, 4, '--active', .22)}
       ${curve(8)}${curve(16)}
       <text class="d" x="${px(1.26) + 7}" y="${py(6.35) + 4}">8 threads</text>
       <text class="d" x="${px(11.5)}" y="${py(1.39) - 8}">16 threads</text>
@@ -282,7 +282,7 @@ li { margin-bottom: 3px; }
        <p>Compiles running side by side pay both in parallel.</p>
        <p><b>Returns:</b> ${x('pipe:1x2')}, ${x('pipe:1x4')} and ${x('pipe:1x8')} at 2, 4 and 8 threads.</p></section>
        <section><h3><i style="background:var(--active)"></i>Both: the same area, used better</h3>
-       <p>16 threads give ${x('pipe:16x1')} as 16\u00d71 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
+       <p>The three shaded rectangles are 16 threads each: ${x('pipe:16x1')} as 16\u00d71, ${x('pipe:2x8')} as 2\u00d78 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
     $('dimsCap').textContent = 'Measured speed-ups of pipelined ScalaTest builds against one serial compile. Every point on a dashed curve uses the same threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. One project, and the collector\u2019s threads are not counted in the area. 1\u00d716 was not run.';
   })();
 
