@@ -65,11 +65,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
   // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
-  // the coarse root.
-  // With -Dscalac.parallelTyper.parallelSignatures=unit, the root of a source symbol is its unit (its source file): the
-  // Namer's completers of one unit share its contexts, its per-unit maps and its classes' scopes. Otherwise, the
-  // symbol, with those made safe for two writers (per-thread implicits markers, concurrent unit maps, scope writes
-  // under the scope's monitor).
+  // the coarse root. What the Namer's completers of one unit share (its contexts, its per-unit maps and its classes'
+  // scopes) is made safe for two writers: per-thread implicits markers, concurrent unit maps, scope writes under the
+  // scope's monitor.
   override def completionRoot(sym: Symbol): AnyRef = {
     val run = currentRun
     // An import comes from a source of this run, but one at the top of a file has no enclosing class for `compiles` to
@@ -77,13 +75,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     // source symbols that may themselves wait for the coarse root, a false cycle.
     if (sym.name eq nme.IMPORT) sym
     else if ((run ne null) && run.compiles(sym)) {
-      if (analyzer.parallelSignatures && System.getProperty("scalac.parallelTyper.parallelSignatures") == "unit") {
-        val top0 = sym.originalEnclosingTopLevelClassOrDummy
-        val top = if (top0.isModuleClass) top0.sourceModule else top0
-        val file = run.symSource.getOrElse(top, null)
-        if (file ne null) file else sym
-      }
-      else if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym }
+      if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym }
       // the field, getter and setter of one `val` or `var`: their completers type the same tree (`tpt`, the right-hand side)
       else if (sym.isTerm && !sym.isModule && sym.owner.isClass && (sym.isAccessor || !sym.isMethod)) {
         val getter = sym.getterIn(sym.owner)
