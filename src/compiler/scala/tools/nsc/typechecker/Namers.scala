@@ -64,6 +64,13 @@ trait Namers extends MethodSynthesis {
     import NamerErrorGen._
     val typer = newTyper(context)
 
+    /** The typer of a completer that types a tree in this namer's own context (an import's qualifier, a self type).
+     *  Under -Yparallel-typer, a typer on a child context: the completer runs on whichever thread forces the symbol,
+     *  while another thread completes a member of this namer and makes its context from this one (`createNamer`),
+     *  copying the mode and reporter that typing sets for the duration of an operation (`withMode`, `inSilentMode`).
+     */
+    private def completerTyper: Typer = if (isConcurrentCompiler) newTyper(context.make()) else typer
+
     private lazy val innerNamer =
       if (isTemplateContext(context)) createInnerNamer() else this
 
@@ -1049,7 +1056,7 @@ trait Namers extends MethodSynthesis {
     def selfTypeCompleter(tree: Tree) = new SelfTypeCompleter(tree)
     class SelfTypeCompleter(tree: Tree) extends TypeCompleterBase(tree) {
       override def completeImpl(sym: Symbol): Unit = {
-        val selftpe = typer.typedType(tree).tpe
+        val selftpe = completerTyper.typedType(tree).tpe
         sym setInfo {
           if (selftpe.typeSymbol isNonBottomSubClass sym.owner) selftpe
           else intersectionType(List(sym.owner.tpe, selftpe))
@@ -1911,6 +1918,7 @@ trait Namers extends MethodSynthesis {
 
     private def importSig(imp: Import) = {
       val Import(expr, selectors) = imp
+      val typer = completerTyper
       val expr1 = typer.typedQualifier(expr)
 
       if (expr1.isErrorTyped)
