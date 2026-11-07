@@ -799,6 +799,8 @@ abstract class SymbolTable extends macros.Universe
     val shownNames = new java.util.HashMap[AnyRef, AnyRef]
     /** In a concurrent compiler, `MethodSymbol.typeAsMemberOf`'s cache for this thread. */
     val memberTypes = new java.util.HashMap[AnyRef, AnyRef]
+    /** The permitted class this thread is checking, by sealed Java class (`ClassSymbol.permittedChildren`). */
+    val permittedCompleting = new java.util.IdentityHashMap[AnyRef, AnyRef](2)
     /** The current skolemization level, needed for the algorithms
      *  in isSameType, isSubType that do constraint solving under a prefix.
      */
