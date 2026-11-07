@@ -6,7 +6,7 @@ A Scala compile is one thread walking one mutable symbol table. This is the case
 - [Pipelined build scaling](https://claude.ai/artifact/3WkxG4ro95NpnWyAmJ55Gv): how a clean build of ScalaTest should split its cores between compiles and threads.
 - [Scala 3, interactive: retronym/scala3#84](https://github.com/retronym/scala3/pull/84): the same discipline in dotc's presentation compiler, with the Lean model, the race catalogue and the state map.
 
-The Scala 2 work is in [retronym/scala#217](https://github.com/retronym/scala/pull/217), with `PLAN-parallel-typer.md` as its lab notebook. Scala 2 is in maintenance; it was chosen as the second compiler because the design had to transfer to be worth anything, and because scalac is small enough to put every phase on a pool and measure the whole compile in a week.
+The Scala 2 work is in [retronym/scala#217](https://github.com/retronym/scala/pull/217), with `PLAN-parallel-typer.md` as its lab notebook. Scala 2 is in maintenance; it was chosen as the second compiler because the design had to transfer to be worth anything, and because scalac is small enough to put every phase on a pool and measure the whole compile.
 
 ## The question
 
@@ -35,7 +35,7 @@ The rest of this page is what it took to make one compile use several threads, a
 
 Against the independent-compile ceiling in the same heap (4.6× and 4.9× for pekko and the compiler), the parallel compiler is at 4.3× and 4.5× on the same baseline, so it is within ten percent of what eight uncoordinated compilers get from this machine, with one live set instead of eight: it stops for about 100 ms per compile, what serial does. Where it falls short of the ceiling is CPU: it spends 24 to 29 percent more non-GC CPU than eight independent compiles, diffuse across the profile, and the one-thread run is 4 to 15 percent slower than the serial compiler. That is the room left, and the x-ray's profile comparison is the tool for finding it.
 
-The x-ray records a compile with async-profiler under a patched build that attributes samples to spans, and shows, per thread and per instant, which unit and phase it was in, what it waited on and who held it, where the CPU and the allocation went, and the Amdahl bound from what ran on one thread by design. Every claim above about why the compiler is not 8× was read off that page, and most of the fixes along the way (a convoy on the completion lock, 2.4× stuck at the class headers, a 100 ms pause mistaken for a lock) were found there rather than reasoned out.
+The x-ray records a compile with async-profiler under a patched build that attributes samples to spans, and shows, per thread and per instant, which unit and phase it was in, what it waited on and who held it, where the CPU and the allocation went, and the Amdahl bound from what ran on one thread by design. The claims above about why the compiler is not 8× come from that page, as did the causes behind most of the fixes (a convoy on the completion lock, a serial class-header step that held the speed-up at 2.4×, a 100 ms GC pause that looked like a lock wait).
 
 ## What it took
 
@@ -47,7 +47,7 @@ The design decisions below are the same in both compilers.
 
 **Signatures first, bodies on the pool.** The class headers are completed on one thread before the bodies are typed in parallel, so the bodies rarely wait on a completion. That one-thread prefix is 3 to 8 percent of the compile at 8 threads; Amdahl then allows about 7×, and the gap from there to 4.5× is CPU, not waiting.
 
-**The info protocol stays the serial one.** Type histories, phase travel, info transformers and `asSeenFrom` are unchanged; what changed is which thread may write an entry and when another may read it. The two races found in it on the last day were both a reader taking a state another thread had published half way for a finished one (`initialize` reading a provisional info, `adaptInfo` writing its run before its history), and both fixes are a few lines.
+**The info protocol stays the serial one.** Type histories, phase travel, info transformers and `asSeenFrom` are unchanged; what changed is which thread may write an entry and when another may read it. The races in it are a reader taking a state another thread has published half way for a finished one (`initialize` reading a provisional info, `adaptInfo` writing its run before its history), and the fixes are a few lines each.
 
 **Determinism by oracle.** Class files from an 8-thread compile are compared byte for byte with the one-thread compile, over hundreds of runs per corpus, and the one-thread compile with serial. The residue (fresh-name counters, and one import-order dependence the serial compiler also has) is catalogued, not hidden.
 
