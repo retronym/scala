@@ -1507,20 +1507,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** take note that a phase on a unit is completed
      *  (for progress reporting)
      */
-    // -Yparallel-typer with -Dscalac.parallelTyper.parallelPostTyper[=steps|fusedTransforms|fused]: superaccessors,
-    // extmethods and pickler run a unit per task on the parallel typer's pool. `steps` (the default): each phase is
-    // a pool step of its own, so that a phase has finished on every unit before the next starts on any, as in a
-    // serial run. The fused modes are experiments: the phases of a group run back to back on a unit, and the
-    // pickler of one unit can then meet symbols that another unit's superaccessors or extmethods is renaming.
-    private[this] val postTyperGroups: List[List[String]] =
-      if (!settings.YparallelTyper.value) Nil
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelPostTyper: superaccessors, extmethods and pickler run a unit
+    // per task on the parallel typer's pool, each phase a pool step of its own, so that a phase has finished on every
+    // unit before the next starts on any, as in a serial run.
+    private[this] val postTyperPhases: Set[String] =
+      if (!settings.YparallelTyper.value) Set.empty
       else System.getProperty("scalac.parallelTyper.parallelPostTyper") match {
-        case null | "false"    => Nil
-        case "fused"           => List(List("superaccessors", "extmethods", "pickler"))
-        case "fusedTransforms" => List(List("superaccessors", "extmethods"), List("pickler"))
-        case _                 => List(List("superaccessors"), List("extmethods"), List("pickler"))
+        case null | "false" => Set.empty
+        case _              => Set("superaccessors", "extmethods", "pickler")
       }
-    private[this] var ranFused: Set[Phase] = Set.empty
 
     // -Yparallel-typer with -Dscalac.parallelTyper.parallelLatePhases[=all|<phase>,<phase>,...]: the phases after the
     // pickler a unit per task on the pool, each a pool step of its own. A list of names is for bisection.
@@ -1554,20 +1549,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
           Console.err.println(s"[parallel-typer] coarse claim by site, since the typer: ${completionLock.siteSummary}")
         true
       }
-      else if (postTyperGroups.isEmpty) false
-      else if (ranFused(ph)) true
-      else postTyperGroups.find(_.head == ph.name) match {
-        case Some(group) =>
-          // a group is fused only if its phases follow each other in this run (-Yskip, -Ystop-after, plugin phases)
-          val chain = Iterator.iterate[Phase](ph)(_.next).take(group.length).toList
-          val phases = if (chain.map(_.name) == group) chain.map(_.asInstanceOf[GlobalPhase]) else ph :: Nil
-          ranFused ++= phases.tail
-          val us = units.toList
-          if (phases.tail.isEmpty) analyzer.parallelPhase(ph, us, ph.name)(ph.applyPhase(_))
-          else analyzer.parallelPhase(ph, us, "post-typer")(u => phases.foreach { p => phase = p; p.applyPhase(u) })
-          true
-        case None => postTyperGroups.exists(_.contains(ph.name)) && { analyzer.parallelPhase(ph, units.toList, ph.name)(ph.applyPhase(_)); true }
-      }
+      else if (postTyperPhases(ph.name)) { analyzer.parallelPhase(ph, units.toList, ph.name)(ph.applyPhase(_)); true }
+      else false
 
     def advanceUnit(): Unit = synchronized {
       unitc += 1

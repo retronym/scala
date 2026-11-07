@@ -66,7 +66,7 @@ Not fixed. Ranked by consequence and likelihood. "Tried" means a corpus was writ
 - **P16. `tpeStamped` after `info_=`.** A reader computing from the old info can store after `info_=` cleared it. It matters only for a symbol whose type parameters change, which is the class completions that readers wait for.
 - **P17. `Symbol.isLess` breaks ties by id**, and ids of class path classes follow load order. Two unrelated traits with base type sequences of one length, as parents of an inferred lub, could flip. Not constructed; the plan keeps top-level ids stable only.
 - **P18. `VirtualFileWriter`'s lock covers writers only.** Needs an output directory that is also on the class path.
-- **P19. `SuperAccessors`'s unlink and enter of a `private[C]` member** leaves it absent for a moment, and the fused mode can pickle either name. Noted in the plan as a residue.
+- **P19. `SuperAccessors`'s unlink and enter of a `private[C]` member** leaves it absent for a moment, and a pickler fused with superaccessors could pickle either name, which is why the post-typer phases are separate pool steps. Noted in the plan as a residue.
 - **P20. `ModuleTypeRef.narrow`** reads its cache twice around `invalidateTypeRefCaches`, the shape of the `normalize` fix. With R1 the only invalidations on the pool are local companions, whose types no other thread has.
 - **P21. `currentFreshNameCreator` is not reset after a macro** and is read by the TASTy reader (`ContextOps.scala:294`); `Enclosures.enclosingUnit` is the demanding thread's unit in a foreign completion. Timing-dependent names, only with `-Ytasty-reader` or a macro reading the deprecated API.
 - **P22. Each `Duplicator` takes per-thread slots for good.** Memory, not a race: growth by specialized body in a resident compiler.

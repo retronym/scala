@@ -346,7 +346,7 @@ Recommendation, pending the benchmark and a soak of stress-shared for I13: make 
 
 ### Steps, not fused
 
-Decision: each phase is its own pool step over all units (`=steps`, the default value). The alternatives are behind the same property for measurement only: `=fused` (superaccessors, extmethods and pickler of a unit back to back on one worker) and `=fusedTransforms` (the two transforms fused, the pickler its own step). Fusing with the typer's body step is not on the table: superaccessors reads `sym.alias` of parameter accessors, which `finishComputeParamAlias` sets after the last unit is typed; it looks members up in classes of other units whose typers would still be entering case class synthetics; and the run loop decides after the typer, on the whole run's errors, whether the later phases run at all.
+Decision: each phase is its own pool step over all units. The alternatives measured below, `fused` (superaccessors, extmethods and pickler of a unit back to back on one worker) and `fusedTransforms` (the two transforms fused, the pickler its own step), are gone: fusing races with the renames of superaccessors and extmethods (Findings). Fusing with the typer's body step is not on the table: superaccessors reads `sym.alias` of parameter accessors, which `finishComputeParamAlias` sets after the last unit is typed; it looks members up in classes of other units whose typers would still be entering case class synthetics; and the run loop decides after the typer, on the whole run's errors, whether the later phases run at all.
 
 Why steps:
 
@@ -418,7 +418,7 @@ What serial time remains at 8 threads with the switch on (x-ray, ms): signatures
 
 Make it the default under `-Yparallel-typer` (keep the property as an off switch, `=false`): it has the same oracle record as the typer's own path on every corpus, it changes nothing in the phase list or the run loop's decisions, and the state it adds to the argument is small (one writer per class scope; `symData`; the pickler's reusable buffers; `Scope.rehash`). Before flipping it: a rerun of the timings on a quiet machine, and the two residues below looked at once.
 
-Residues: a lookup, from another unit, of a `private[C]` member by its unexpanded name while its unit's superaccessors renames it (order-dependent in the serial compiler too; not known to be reachable in a program that compiles); the remaining `toTermName` calls in the pickler (module class names of external references, `companionModule0`) take the lock only when the lock-free read misses. The fused modes should be deleted with the experiment, they exist to show the race.
+Residues: a lookup, from another unit, of a `private[C]` member by its unexpanded name while its unit's superaccessors renames it (order-dependent in the serial compiler too; not known to be reachable in a program that compiles); the remaining `toTermName` calls in the pickler (module class names of external references, `companionModule0`) take the lock only when the lock-free read misses.
 
 ## Parallel late phases (refchecks to jvm)
 
