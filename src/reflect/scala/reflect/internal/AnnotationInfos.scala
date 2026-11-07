@@ -167,10 +167,12 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
     // annotations of different symbols can be typed at once; every thread takes the same one before the monitor.
     private def forcedInfo: AnnotationInfo =
       if (_forced || !isConcurrentCompiler) forcedInfo0
-      else {
-        val sym = claimSym
-        if (sym eq null) underCompletionLock(forcedInfo0) else withCompletionClaim(sym)(forcedInfo0)
-      }
+      else underForcingClaim(forcedInfo0)
+    /** `body`, a lazy val of this instance whose initialiser completes symbols, in the lock order above. */
+    protected final def underForcingClaim[T](body: => T): T = {
+      val sym = claimSym
+      if (sym eq null) underCompletionLock(body) else withCompletionClaim(sym)(body)
+    }
     @volatile private[this] var claimSym: Symbol = null
     /** The symbol whose completion root is claimed to force this annotation: the first it was attached to. */
     private[scala] final def claimWith(sym: Symbol): Unit = if (claimSym eq null) claimSym = sym
@@ -190,9 +192,14 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
   }
 
   final class ExtraLazyAnnotationInfo(sym: => Symbol, lazyInfo: => AnnotationInfo) extends LazyAnnotationInfo(lazyInfo) {
+    // Typing the constructor's type completes symbols, so its monitor comes after the claim, as `forcedInfo`'s
     private[this] lazy val typeSymbol = sym
+    @volatile private[this] var typeSymbolForced = false
+    private def forcedTypeSymbol: Symbol =
+      if (typeSymbolForced || !isConcurrentCompiler) typeSymbol
+      else underForcingClaim { val s = typeSymbol; typeSymbolForced = true; s }
     // If `forced` to UnmappableAnnotation, ensure to return NoSymbol, otherwise `ann.matches(annCls)` can be incorrect
-    override def symbol: Symbol = if (forced) super.symbol else typeSymbol
+    override def symbol: Symbol = if (forced) super.symbol else forcedTypeSymbol
   }
 
   /**
