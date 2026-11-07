@@ -25,7 +25,7 @@ import scala.util.chaining._
  *  @author Martin Odersky
  */
 trait Namers extends MethodSynthesis {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -1819,6 +1819,9 @@ trait Namers extends MethodSynthesis {
     private def safeNextOverriddenSymbol(sym: Symbol, schema: Type = ErrorType, immediate: Boolean = false): Symbol = {
       val savedInfo = sym.rawInfo
       val savedFlags = sym.rawflags
+      // In a concurrent compiler, `sym` need not be the symbol being completed (a field's completion asks this of its
+      // getter). The mark makes another thread wait instead of reading `schema` as the finished info of `sym`.
+      val savedMark = if (isConcurrentCompiler) sym.markCompleting() else null
       try {
         sym setInfo schema
         // pick the overridden symbol with narrowest type; dotty uses intersection
@@ -1838,6 +1841,7 @@ trait Namers extends MethodSynthesis {
       } finally {
         sym setInfo savedInfo // setInfo resets the LOCKED flag, so restore saved flags as well
         sym.rawflags = savedFlags
+        if (isConcurrentCompiler) sym.unmarkCompleting(savedMark)
       }
     }
 

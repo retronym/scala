@@ -114,6 +114,7 @@ abstract class Flatten extends InfoTransform {
     }
   }
 
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = if (sym.isClass) null else transformInfo(sym, tpe)
   def transformInfo(sym: Symbol, tp: Type): Type = flattened(tp)
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer = new Flattener

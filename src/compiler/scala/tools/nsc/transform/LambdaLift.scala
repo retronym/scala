@@ -50,6 +50,7 @@ abstract class LambdaLift extends InfoTransform {
     mapFrom(allRefClasses.toList)(x => getMemberMethod(x.companionModule, nme.zero))
   }
 
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = transformInfo(sym, tpe)
   def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isCapturedVariable) capturedVariableType(sym, tpe = lifted(tp), erasedTypes = true)
     else lifted(tp)
@@ -496,7 +497,7 @@ abstract class LambdaLift extends InfoTransform {
         case ValDef(mods, name, tpt, rhs) if sym.isCapturedVariable =>
           val tpt1 = TypeTree(sym.tpe) setPos tpt.pos
           val refTypeSym = sym.tpe.typeSymbol
-          val factoryCall = typer.typedPos(rhs.pos) {
+          val factoryCall = typerHere.typedPos(rhs.pos) {
             rhs match {
               case EmptyTree =>
                 val zeroMSym   = refZeroMethod(refTypeSym)
@@ -532,7 +533,7 @@ abstract class LambdaLift extends InfoTransform {
           if (sym.isCapturedVariable && !isBoxedRef)
             atPos(tree.pos) {
               val tp = tree.tpe
-              val elemTree = typer typed Select(tree1 setType sym.tpe, nme.elem)
+              val elemTree = typerHere typed Select(tree1 setType sym.tpe, nme.elem)
               if (elemTree.tpe.typeSymbol != tp.typeSymbol) gen.mkAttributedCast(elemTree, tp) else elemTree
             }
           else tree1

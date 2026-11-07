@@ -43,6 +43,9 @@ trait DirectoryLookup[FileEntryType <: ClassRepresentation] extends EfficientCla
   protected def getSubDir(dirName: String): Option[F]
   protected def listChildren(dir: F, filter: Option[F => Boolean] = None): Array[F]
   protected def hasChild(dir: F, name: String): Boolean
+  /** A test for a child of `dir` by name, given its listing by `listChildren` without a filter: by default, asks the
+   *  file system. */
+  protected def childTest(dir: F, children: Array[F]): String => Boolean = hasChild(dir, _)
   protected def getName(f: F): String
   protected def toAbstractFile(f: F): AbstractFile
   protected def isPackage(f: F): Boolean
@@ -75,11 +78,13 @@ trait DirectoryLookup[FileEntryType <: ClassRepresentation] extends EfficientCla
     val dirForPackage = getDirectory(inPackage)
     val files: Array[F] = dirForPackage match {
       case None => emptyFiles
-      case Some(directory) =>
-        val hasCh = hasChild(directory, _)
-        listChildren(directory, Some(f => isMatchingFile(f, hasCh)))
+      case Some(directory) => listChildren(directory)
     }
-    files.iterator.map(f => createFileEntry(toAbstractFile(f))).toSeq
+    if (files.length == 0) Nil
+    else {
+      val hasCh = childTest(dirForPackage.get, files)
+      files.iterator.filter(f => isMatchingFile(f, hasCh)).map(f => createFileEntry(toAbstractFile(f))).toSeq
+    }
   }
 
   override private[nsc] def list(inPackage: PackageName, onPackageEntry: PackageEntry => Unit, onClassesAndSources: ClassRepresentation => Unit): Unit = {
@@ -87,8 +92,9 @@ trait DirectoryLookup[FileEntryType <: ClassRepresentation] extends EfficientCla
     dirForPackage match {
       case None =>
       case Some(directory) =>
-        val hasCh = hasChild(directory, _)
-        for (file <- listChildren(directory)) {
+        val children = listChildren(directory)
+        val hasCh = childTest(directory, children)
+        for (file <- children) {
           if (isPackage(file))
             onPackageEntry(PackageEntryImpl(inPackage.entryName(getName(file))))
           else if (isMatchingFile(file, hasCh))
@@ -104,7 +110,7 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directo
   protected def emptyFiles: Array[File] = Array.empty
   protected def getSubDir(packageDirName: String): Option[File] = {
     val packageDir = new File(dir, packageDirName)
-    if (packageDir.exists && packageDir.isDirectory && packageDir.canRead) Some(packageDir)
+    if (packageDir.isDirectory && packageDir.canRead) Some(packageDir)
     else None
   }
   protected def listChildren(dir: File, filter: Option[File => Boolean]): Array[File] = {
@@ -127,6 +133,17 @@ trait JFileDirectoryLookup[FileEntryType <: ClassRepresentation] extends Directo
     listing
   }
   protected def hasChild(dir: File, name: String): Boolean = new File(dir, name).isFile
+  // `listChildren` sorts by name: a sibling (the `.tasty` beside a `.class`) is looked up in the listing, not with a
+  // `stat` for every class file
+  override protected def childTest(dir: File, children: Array[File]): String => Boolean = name => {
+    var lo = 0; var hi = children.length - 1; var found = false
+    while (!found && lo <= hi) {
+      val mid = (lo + hi) >>> 1
+      val c = children(mid).getName.compareTo(name)
+      if (c == 0) found = true else if (c < 0) lo = mid + 1 else hi = mid - 1
+    }
+    found
+  }
   protected def getName(f: File): String = f.getName
   protected def toAbstractFile(f: File): AbstractFile = new PlainFile(new scala.reflect.io.File(f))
   protected def isPackage(f: File): Boolean = f.isPackage
@@ -342,8 +359,12 @@ case class DirectoryClassPath(dir: File) extends JFileDirectoryLookup[ClassFileE
   }
 
   protected def createFileEntry(file: AbstractFile): ClassFileEntryImpl = ClassFileEntryImpl(file)
-  protected def isMatchingFile(f: File, siblingExists: String => Boolean): Boolean =
-    f.isClass && !(f.getName.endsWith(".class") && siblingExists(classNameToTasty(f.getName)))
+  // By its name alone: an entry of a listing named as a class file is taken to be a file, where `isClass` would
+  // `stat` each one. A directory with such a name is then listed as a class, and fails when it is read.
+  protected def isMatchingFile(f: File, siblingExists: String => Boolean): Boolean = {
+    val name = f.getName
+    endsClass(name) && !(name.endsWith(".class") && siblingExists(classNameToTasty(name)))
+  }
 
   private[nsc] def classes(inPackage: PackageName): Seq[ClassFileEntry] = files(inPackage)
 }

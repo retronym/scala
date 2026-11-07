@@ -157,9 +157,23 @@ trait AnnotationInfos extends api.Annotations { self: SymbolTable =>
    *  definitions) have to be lazy (#1782)
    */
   class LazyAnnotationInfo(lazyInfo: => AnnotationInfo) extends AnnotationInfo {
-    private[this] var _forced = false
+    @volatile private[this] var _forced = false
     protected def forced = _forced
-    private lazy val forcedInfo = try lazyInfo finally _forced = true
+    private lazy val forcedInfo0 = try lazyInfo finally _forced = true
+    // The info is typechecked by the namer, so it completes symbols: in a concurrent compiler the completion lock is
+    // taken before the monitor of the lazy val, never after it (that order would deadlock with a completion that
+    // forces this annotation).
+    // With a claim per completion root, the claim is that of the annotated symbol (`claimWith`), so that the
+    // annotations of different symbols can be typed at once; every thread takes the same one before the monitor.
+    private def forcedInfo: AnnotationInfo =
+      if (_forced || !isConcurrentCompiler) forcedInfo0
+      else {
+        val sym = claimSym
+        if (sym eq null) underCompletionLock(forcedInfo0) else withCompletionClaim(sym)(forcedInfo0)
+      }
+    @volatile private[this] var claimSym: Symbol = null
+    /** The symbol whose completion root is claimed to force this annotation: the first it was attached to. */
+    private[scala] final def claimWith(sym: Symbol): Unit = if (claimSym eq null) claimSym = sym
 
     def atp: Type                               = forcedInfo.atp
     def args: List[Tree]                        = forcedInfo.args

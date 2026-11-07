@@ -16,7 +16,6 @@ package internal
 
 import Variance._
 import scala.annotation.tailrec
-import scala.reflect.internal.util.ReusableInstance
 
 /** See comments at scala.reflect.internal.Variance.
  */
@@ -267,11 +266,9 @@ trait Variances {
 
   /** Compute variance of type parameter `tparam` in type `tp`. */
   final def varianceInType(tp: Type, considerUnchecked: Boolean = false)(tparam: Symbol): Variance =
-    varianceInTypeCache.using(_.apply(tp, tparam, considerUnchecked))
+    scratch.varianceInTypes.using(_.apply(tp, tparam, considerUnchecked))
 
-  private[this] val varianceInTypeCache = ReusableInstance[varianceInType](new varianceInType, enabled = isCompilerUniverse)
-
-  private final class varianceInType {
+  private[internal] final class varianceInType {
     private[this] var tp: Type = _
     private[this] var tparam: Symbol = _
     private[this] var considerUnchecked = false

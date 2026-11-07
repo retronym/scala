@@ -17,8 +17,18 @@ import scala.collection.mutable
 import scala.reflect.internal.util.JavaClearable
 
 /** Defines the sub-components for the namer, packageobjects, and typer phases.
+ *
+ *  The typechecker reaches its analyzer through self types (`self: AbstractAnalyzer =>` in `Typers`, `Namers`,
+ *  `Contexts` ...): through `$outer` from `Typer`, `Namer` and `Context`, and through `this` in the traits'
+ *  methods. When the self type was the trait `Analyzer`, each such call was an `invokeinterface` on the last
+ *  interface in the analyzer's itable, which HotSpot's itable stubs scan linearly once a call site sees more than
+ *  two receiver classes. A compile has `Global`'s analyzer and `Erasure`'s; `SpecializeTypes` adds a third when the
+ *  sources use `@specialized`, as do Scaladoc and the presentation compiler. With a class as the self type the calls
+ *  are `invokevirtual`.
+ *
+ *  Clients should keep using [[Analyzer]], which extends this class.
  */
-trait Analyzer extends AnyRef
+abstract class AbstractAnalyzer extends AnyRef
             with Contexts
             with Namers
             with Typers
@@ -35,12 +45,13 @@ trait Analyzer extends AnyRef
             with MacroAnnotationAttachments
             with AnalyzerPlugins
             with ImportTracking
+            with ParallelTyper
 {
   val global : Global
   import global._
 
   object namerFactory extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     val phaseName = "namer"
     val runsAfter = List[String]("parser")
@@ -51,10 +62,42 @@ trait Analyzer extends AnyRef
 
       def apply(unit: CompilationUnit): Unit = newNamer(rootContext(unit)).enterSym(unit.body)
     }
+
+    /** Load the packages that `unit` names, as `Namer.enterPackage` will: the same lookups in the same order, at the
+     *  namer's phase. Most of the namer's time is here (a package loader lists its class path and source path
+     *  entries and enters a symbol for each), and none of it needs the other units, so the parallel parser runs it
+     *  on the driver thread, unit by unit in the order of the units, while the workers parse. Nothing is created: a
+     *  package that does not exist yet is left for the namer, and nothing below it can exist.
+     */
+    def loadPackagesOf(unit: CompilationUnit): Unit = {
+      def existingPackage(owner: Symbol, pid: RefTree): Symbol = {
+        val pkgOwner = pid match {
+          case Ident(_)                 => if (owner.isEmptyPackageClass) rootMirror.RootClass else owner
+          case Select(qual: RefTree, _) => existingPackage(owner, qual).moduleClass
+          case _                        => NoSymbol
+        }
+        if (pkgOwner eq NoSymbol) NoSymbol
+        else {
+          val existing = pkgOwner.info.decls.lookup(pid.name)
+          if (existing.hasPackageFlag && pkgOwner == existing.owner) existing else NoSymbol
+        }
+      }
+      def load(owner: Symbol, tree: Tree): Unit = tree match {
+        case PackageDef(pid, stats) =>
+          val pkg = existingPackage(owner, pid)
+          if (pkg ne NoSymbol) {
+            pkg.info.decls
+            stats.foreach(load(pkg.moduleClass, _))
+          }
+        case DocDef(_, defn) => load(owner, defn)
+        case _               =>
+      }
+      enteringPhase(currentRun.namerPhase)(load(rootMirror.RootClass, unit.body))
+    }
   }
 
   object packageObjects extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     val deferredOpen: mutable.Set[Symbol] = {
       import scala.jdk.CollectionConverters._
@@ -103,7 +146,7 @@ trait Analyzer extends AnyRef
   }
 
   object typerFactory extends {
-    val global: Analyzer.this.global.type = Analyzer.this.global
+    val global: AbstractAnalyzer.this.global.type = AbstractAnalyzer.this.global
   } with SubComponent {
     import global.statistics
     val phaseName = "typer"
@@ -123,6 +166,8 @@ trait Analyzer extends AnyRef
         global.echoPhaseSummary(this)
         val units = currentRun.units
 
+        if (settings.YparallelTyper.value) typeCheckInParallel(this, units.toList, applyPhase(_))
+        else
         while (units.hasNext) {
           applyPhase(units.next())
           undoLog.clear()
@@ -138,7 +183,10 @@ trait Analyzer extends AnyRef
           unit.body = typer.typed(unit.body)
           // interactive typed may finish by throwing a `TyperResult`
           if (!settings.Youtline.value) {
-            while (unit.toCheck.nonEmpty) unit.toCheck.removeHead().apply()
+            // under the deque's monitor, as `addPostUnitCheck`: a completion of one of this unit's symbols on another thread adds to it
+            def nextToCheck(): CompilationUnit.ToCheck = unit.toCheck.synchronized(if (unit.toCheck.nonEmpty) unit.toCheck.removeHead() else null)
+            var check = nextToCheck()
+            while (check ne null) { check.apply(); check = nextToCheck() }
             if (!settings.isScaladoc && settings.warnUnusedImport)
               warnUnusedImports(unit)
             if (!settings.isScaladoc && settings.warnUnused.isSetByUser)
@@ -153,3 +201,28 @@ trait Analyzer extends AnyRef
     }
   }
 }
+
+/** The analyzer, as clients see it.
+ *
+ *  A trait, as it has always been, listing the same parts, so that code compiled against it keeps linking: it
+ *  stays an interface in bytecode with the same super-interfaces. It extends [[AbstractAnalyzer]], so that
+ *  `new { val global = g } with Analyzer` still compiles: the instance's superclass is `AbstractAnalyzer`,
+ *  which satisfies the self types of the parts.
+ */
+trait Analyzer extends AbstractAnalyzer
+            with Contexts
+            with Namers
+            with Typers
+            with Infer
+            with Implicits
+            with EtaExpansion
+            with SyntheticMethods
+            with Unapplies
+            with Macros
+            with NamesDefaults
+            with TypeDiagnostics
+            with ContextErrors
+            with StdAttachments
+            with MacroAnnotationAttachments
+            with AnalyzerPlugins
+            with ImportTracking

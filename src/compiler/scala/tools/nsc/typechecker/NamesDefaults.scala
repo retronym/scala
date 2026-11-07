@@ -21,7 +21,7 @@ import PartialFunction.cond
 /**
  *  @author Lukas Rytz
  */
-trait NamesDefaults { self: Analyzer =>
+trait NamesDefaults { self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -463,7 +463,9 @@ trait NamesDefaults { self: Analyzer =>
         val defaultArgs = missing flatMap { p =>
           val annDefault =
             if (mode.in(Mode.ANNOTmode) && p.owner.isConstructor && p.enclClass.isNonBottomSubClass(AnnotationClass) && !p.enclClass.isNonBottomSubClass(ConstantAnnotationClass))
-              p.getAnnotation(DefaultArgAttr).flatMap(_.args.headOption).map(dflt => atPos(pos) {
+              // `@defaultArg` is added when the annotation class's own body is typed (`typedValDef`). With -Yparallel-typer
+              // that may be happening now on another thread, so a class of this run always gets the default getter below.
+              (if (isParallelCompiler && currentRun.compiles(p)) None else p.getAnnotation(DefaultArgAttr)).flatMap(_.args.headOption).map(dflt => atPos(pos) {
                 // The `arg.tpe` is tagged with the `@defaultArg` annotation, see AnnotationInfo.argIsDefault
                 val arg = dflt.duplicate.setType(dflt.tpe.withAnnotation(AnnotationInfo(DefaultArgAttr.tpe, Nil, Nil)))
                 if (positional) arg

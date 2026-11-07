@@ -100,7 +100,12 @@ trait Erasure {
     assert(!phase.erasedTypes, "Types are erased")
     val clazz = tref.sym
     if (valueClassIsParametric(clazz)) {
-      val erasureMap = if (clazz.isScala3Defined) boxing3Erasure else boxingErasure
+      // The shared boxing erasures keep state in a field, so runtime reflection needs its own.
+      // They cannot live in `global.scratch`, which only knows the classes of `SymbolTable`.
+      val erasureMap =
+        if (global.isCompilerUniverse) { if (clazz.isScala3Defined) boxing3Erasure else boxingErasure }
+        else if (clazz.isScala3Defined) new Scala3ErasureMap with BoxingErasure
+        else new ScalaErasureMap with BoxingErasure
       erasureMap(tref.memberType(clazz.derivedValueClassUnbox).resultType)
     } else {
       val erasureMap = if (clazz.isScala3Defined) scala3Erasure else scalaErasure
@@ -559,17 +564,16 @@ trait Erasure {
 
   trait BoxingErasure extends ErasureMap {
 
-    private[this] var boxPrimitives = true
-
     override def applyInArray(tp: Type): Type = {
-      val saved = boxPrimitives
-      boxPrimitives = false
+      val s = scratch // `boxPrimitives` is per thread: the back end and erasure's info transforms use the same map
+      val saved = s.boxPrimitives
+      s.boxPrimitives = false
       try super.applyInArray(tp)
-      finally boxPrimitives = saved
+      finally s.boxPrimitives = saved
     }
 
     override def eraseNormalClassRef(tref: TypeRef) =
-      if (boxPrimitives && isPrimitiveValueClass(tref.sym)) boxedClass(tref.sym).tpe
+      if (scratch.boxPrimitives && isPrimitiveValueClass(tref.sym)) boxedClass(tref.sym).tpe
       else super.eraseNormalClassRef(tref)
 
     override def eraseDerivedValueClassRef(tref: TypeRef) =

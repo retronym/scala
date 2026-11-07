@@ -37,7 +37,17 @@ trait Names extends api.Names {
 
 
   /** Memory to store all names sequentially. */
+  // A plain field, read through `chrsTo` by a name's methods. When the table grows the old array is left as it was, and
+  // holds the same characters below its length as the new one, so a thread that reads a stale array (a name made on
+  // another thread after the table grew: -Yparallel-typer, runtime reflection) reads the right characters unless the
+  // name ends beyond it, which `chrsTo` checks, reading the field again under the lock that the table grows under.
   private[this] var _chrs: Array[Char] = new Array[Char](NAME_SIZE) // TODO this ought to be private
+  /** The characters of the name table, at least up to `end`. */
+  @inline private def chrsTo(end: Int): Array[Char] = {
+    val cs = _chrs
+    if (end <= cs.length) cs else chrsLocked
+  }
+  private def chrsLocked: Array[Char] = nameLock.synchronized(_chrs)
   @deprecated("Don't access name table contents directly.", "2.12.9")
   def chrs: Array[Char] = _chrs
   @deprecated("Don't access name table contents directly.", "2.12.9")
@@ -68,7 +78,7 @@ trait Names extends api.Names {
    */
   private def equals(index: Int, cs: Array[Char], offset: Int, len: Int): Boolean = {
     var i = 0
-    val chrs = _chrs
+    val chrs = chrsTo(index + len)
     while ((i < len) && (chrs(index + i) == cs(offset + i)))
       i += 1
     i == len
@@ -77,13 +87,16 @@ trait Names extends api.Names {
   /** Enter characters into chrs array. */
   private def enterChars(cs: Array[Char], offset: Int, len: Int): Unit = {
     var i = 0
+    var chrs = _chrs
     while (i < len) {
-      if (nc + i == _chrs.length) {
-        val newchrs = new Array[Char](_chrs.length * 2)
-        java.lang.System.arraycopy(_chrs, 0, newchrs, 0, _chrs.length)
+      if (nc + i == chrs.length) {
+        val newchrs = new Array[Char](chrs.length * 2)
+        java.lang.System.arraycopy(chrs, 0, newchrs, 0, chrs.length)
+        java.lang.invoke.VarHandle.releaseFence() // the copy before the array, for a reader on another thread
         _chrs = newchrs
+        chrs = newchrs
       }
-      _chrs(nc + i) = cs(offset + i)
+      chrs(nc + i) = cs(offset + i)
       i += 1
     }
     if (len == 0) nc += 1
@@ -128,14 +141,39 @@ trait Names extends api.Names {
           enterChars(cs, offset, len)
         }
         val next = termHashtable(h)
-        val termName = new TermName(startIndex, len, next, cachedString)
+        // xray: names carry their strings for the completions' profiler spans (off: only this name's cost)
+        val string = if ((cachedString eq null) && util.ParallelTyperTimeline.completionSpans) new String(cs, offset, len) else cachedString
+        val termName = new TermName(startIndex, len, next, string)
         // Add the new termName to the hashtable only after it's been fully constructed
+        // (and, for `lookupTermName` on another thread, after its characters are in the table)
+        if (synchronizeNames) java.lang.invoke.VarHandle.releaseFence()
         termHashtable(h) = termName
         termName
       }
     }
-    if (synchronizeNames) nameLock.synchronized(body) else body
+    if (synchronizeNames) {
+      val existing = lookupTermName(cs, offset, len0)
+      if (existing ne null) existing else nameLock.synchronized(body)
+    }
+    else body
   }
+
+  /** The term name with these characters if this thread can see it in the table, else null: the lookup of
+   *  `newTermName` without the lock, for a table shared by several threads, where almost every call is for a name
+   *  that exists (a parser makes one per identifier). Names are only ever added, at the head of a bucket, after
+   *  their characters and behind a release fence, and a name's fields are final: a chain read from a stale head is
+   *  a suffix of the current one, so that a miss here only means looking again under the lock.
+   */
+  private def lookupTermName(cs: Array[Char], offset: Int, len0: Int): TermName =
+    if (offset < 0) null
+    else {
+      val len = math.max(len0, 0)
+      var n = termHashtable(hashValue(cs, offset, len) & HASH_MASK)
+      java.lang.invoke.VarHandle.acquireFence() // the head before the characters of the names behind it
+      while ((n ne null) && (n.length != len || !equals(n.start, cs, offset, len)))
+        n = n.next
+      n
+    }
 
   final def newTypeName(cs: Array[Char], offset: Int, len: Int, cachedString: String): TypeName =
     newTermName(cs, offset, len, cachedString).toTypeName
@@ -236,7 +274,7 @@ trait Names extends api.Names {
 
     /** Copy bytes of this name to buffer cs, starting at position `offset`. */
     final def copyChars(cs: Array[Char], offset: Int) =
-      java.lang.System.arraycopy(_chrs, index, cs, offset, len)
+      java.lang.System.arraycopy(chrsTo(index + len), index, cs, offset, len)
 
     /** @return the ascii representation of this name */
     final def toChars: Array[Char] = {  // used by ide
@@ -282,7 +320,7 @@ trait Names extends api.Names {
     ****/
 
     /** @return the i'th Char of this name */
-    final def charAt(i: Int): Char = _chrs(index + i)
+    final def charAt(i: Int): Char = chrsTo(index + i + 1)(index + i)
 
     /** @return the index of first occurrence of char c in this name, length if not found */
     final def pos(c: Char): Int = pos(c, 0)
@@ -299,7 +337,7 @@ trait Names extends api.Names {
      */
     final def pos(c: Char, start: Int): Int = {
       var i = start
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i < len && chrs(index + i) != c) i += 1
       i
     }
@@ -315,7 +353,7 @@ trait Names extends api.Names {
       var i = pos(s.charAt(0), start)
       val sLen = s.length()
       if (sLen == 1) return i
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i + sLen <= len) {
         var j = 1
         while (s.charAt(j) == chrs(index + i + j)) {
@@ -344,7 +382,7 @@ trait Names extends api.Names {
      */
     final def lastPos(c: Char, start: Int): Int = {
       var i = start
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i >= 0 && chrs(index + i) != c) i -= 1
       i
     }
@@ -354,7 +392,7 @@ trait Names extends api.Names {
 
     /** Does this name start with prefix at given start index? */
     final def startsWith(prefix: Name, start: Int): Boolean = {
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       var i = 0
       while (i < prefix.length && start + i < len &&
              chrs(index + start + i) == chrs(prefix.start + i))
@@ -362,7 +400,7 @@ trait Names extends api.Names {
       i == prefix.length
     }
     final def startsWith(prefix: String, start: Int): Boolean = {
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       var i = 0
       while (i < prefix.length && start + i < len &&
              chrs(index + start + i) == prefix.charAt(i))
@@ -376,7 +414,7 @@ trait Names extends api.Names {
     /** Does this name end with suffix just before given end index? */
     final def endsWith(suffix: Name, end: Int): Boolean = {
       var i = 1
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == chrs(suffix.start + suffix.length - i))
         i += 1
@@ -384,7 +422,7 @@ trait Names extends api.Names {
     }
     final def endsWith(suffix: String, end: Int): Boolean = {
       var i = 1
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i <= suffix.length && i <= end &&
              chrs(index + end - i) == suffix.charAt(suffix.length - i))
         i += 1
@@ -401,7 +439,7 @@ trait Names extends api.Names {
     final def containsChar(ch: Char): Boolean = {
       var i = index
       val max = index + len
-      val chrs = _chrs
+      val chrs = chrsTo(index + len)
       while (i < max) {
         if (chrs(i) == ch)
           return true
@@ -414,7 +452,7 @@ trait Names extends api.Names {
       val slength   = s.length()
       val lastIndex = slength - 1
       val lastChar  = s.charAt(lastIndex)
-      val contents  = _chrs
+      val contents  = chrsTo(index + len)
       val base      = start
       val min       = base + lastIndex
       var end       = base + length - 1
@@ -542,11 +580,11 @@ trait Names extends api.Names {
       builder.toString
     }
 
-    override final def toString: String = if (cachedString == null) new String(_chrs, index, len) else cachedString
+    override final def toString: String = if (cachedString == null) new String(chrsTo(index + len), index, len) else cachedString
     final def appendTo(buffer: java.lang.StringBuffer, start: Int, length: Int): Unit =
-      buffer.append(_chrs, this.start + start, length)
+      buffer.append(chrsTo(this.start + start + length), this.start + start, length)
     final def appendTo(sb: StringBuilder, start: Int, length: Int): sb.type =
-      sb.appendAll(_chrs, this.start + start, length)
+      sb.appendAll(chrsTo(this.start + start + length), this.start + start, length)
   }
 
   implicit val NameTag: ClassTag[Name] = ClassTag[Name](classOf[Name])
@@ -574,13 +612,18 @@ trait Names extends api.Names {
     def isTypeName: Boolean = false
     def toTermName: TermName = this
     def toTypeName: TypeName = {
-      def body = {
-        // Re-computing the hash saves a field for storing it in the TermName
-        val h = hashValue(_chrs, index, len) & HASH_MASK
+      // Re-computing the hash saves a field for storing it in the TermName
+      def hash = hashValue(chrsTo(index + len), index, len) & HASH_MASK
+      // without the lock: the fields that the search reads are final, and a miss looks again under the lock
+      def existing(h: Int): TypeName = {
         var n = typeHashtable(h)
         while ((n ne null) && n.start != index)
           n = n.next
-
+        n
+      }
+      def body = {
+        val h = hash
+        val n = existing(h)
         if (n ne null) n
         else {
           val next = typeHashtable(h)
@@ -590,12 +633,16 @@ trait Names extends api.Names {
           typeName
         }
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      if (synchronizeNames) {
+        val n = existing(hash)
+        if (n ne null) n else nameLock.synchronized(body)
+      }
+      else body
     }
     def newName(str: String): TermName = newTermName(str)
     def companionName: TypeName = toTypeName
     def subName(from: Int, to: Int): TermName =
-      newTermName(_chrs, start + from, to - from)
+      newTermName(chrsTo(start + to), start + from, to - from)
 
     def nameKind = "term"
     private def createCompanionName(next: TypeName): TypeName = new TypeName(index, len, next, cachedString)
@@ -617,21 +664,23 @@ trait Names extends api.Names {
     def toTermName: TermName = {
       def body = {
         // Re-computing the hash saves a field for storing it in the TypeName
-        val h = hashValue(_chrs, index, len) & HASH_MASK
+        val h = hashValue(chrsTo(index + len), index, len) & HASH_MASK
         var n = termHashtable(h)
         while ((n ne null) && n.start != index)
           n = n.next
 
-        assert (n ne null, s"TypeName $this is missing its correspondent")
         n
       }
-      if (synchronizeNames) nameLock.synchronized(body) else body
+      // without the lock first, as in `toTypeName`
+      val n = if (synchronizeNames) { val n0 = body; if (n0 ne null) n0 else nameLock.synchronized(body) } else body
+      assert (n ne null, s"TypeName $this is missing its correspondent")
+      n
     }
     def toTypeName: TypeName = this
     def newName(str: String): TypeName = newTypeName(str)
     def companionName: TermName = toTermName
     def subName(from: Int, to: Int): TypeName =
-      newTypeName(_chrs, start + from, to - from)
+      newTypeName(chrsTo(start + to), start + from, to - from)
 
     def nameKind = "type"
     override def decode = if (nameDebug) super.decode + "!" else super.decode

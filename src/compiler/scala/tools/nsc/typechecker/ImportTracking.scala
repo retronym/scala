@@ -21,7 +21,7 @@ import scala.tools.nsc.Reporting.WarningCategory
 
 /** Track import clauses and usages for -Wunused:imports reporting.
  */
-trait ImportTracking { self: Analyzer =>
+trait ImportTracking { self: AbstractAnalyzer =>
   import global._
 
   // Associate info with info at import keyword, plus owner for warning filtering. `import a.x, b.x` -> `(b, a, owner)`
@@ -30,16 +30,19 @@ trait ImportTracking { self: Analyzer =>
   private val usedSelectors = mutable.Map.empty[ImportInfo, mutable.Set[ImportSelector]]
   private val importInfos   = mutable.Map.empty[CompilationUnit, List[TrackedInfo]].withDefaultValue(Nil)
 
-  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = usedSelectors.get(info) match {
-    case Some(sels) => sels.addOne(sel)
-    case None => usedSelectors.put(info, mutable.Set(sel))
+  // -Yparallel-typer: both maps are under the monitor of `usedSelectors`; nothing under it completes symbols.
+  def recordImportUsage(info: ImportInfo, sel: ImportSelector): Unit = lockedIfConcurrent(usedSelectors) {
+    usedSelectors.get(info) match {
+      case Some(sels) => sels.addOne(sel)
+      case None => usedSelectors.put(info, mutable.Set(sel))
+    }
   }
 
   def recordImportContext(ctx: Context): Unit = ctx.firstImport.foreach { info =>
     val keyword =
       if (info.pos.start != info.pos.point) info
       else ctx.imports.find(p => p.pos.isDefined && p.pos.start != p.pos.point).getOrElse(info)
-    importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn
+    lockedIfConcurrent(usedSelectors) { importInfos(ctx.unit) ::= (info, keyword, ctx.owner) : @nowarn }
   }
 
   def warnUnusedImports(unit: CompilationUnit): Unit = if (!unit.isJava) {
@@ -67,7 +70,7 @@ trait ImportTracking { self: Analyzer =>
       val unused: List[Culled] =
         infos.flatMap {
           case (tracked @ (info, _, _)) =>
-            val used = usedSelectors.remove(info).getOrElse(mutable.Set.empty)
+            val used = usedSelectors.synchronized(usedSelectors.remove(info)).getOrElse(mutable.Set.empty)
             info.tree.selectors.collect {
               case selector if !selector.isMask && !used(selector) => selector -> tracked
             }
@@ -187,6 +190,6 @@ trait ImportTracking { self: Analyzer =>
       if (settings.quickfix.isSetByUser && !settings.quickFixSilent) emitEdits()
       else unused.foreach(emit(_, actions = Nil))
     }
-    importInfos.remove(unit).foreach(warnUnusedSelections)
+    usedSelectors.synchronized(importInfos.remove(unit)).foreach(warnUnusedSelections)
   }
 }

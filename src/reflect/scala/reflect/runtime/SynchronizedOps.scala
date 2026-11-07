@@ -19,10 +19,6 @@ private[reflect] trait SynchronizedOps extends internal.SymbolTable
                          with SynchronizedSymbols
                          with SynchronizedTypes { self: SymbolTable =>
 
-// Names
-
-  override protected def synchronizeNames = true
-
 // BaseTypeSeqs
 
   override protected def newBaseTypeSeq(parents: List[Type], elems: Array[Type]) =

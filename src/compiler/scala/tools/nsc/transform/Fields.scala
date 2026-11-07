@@ -87,6 +87,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   val phaseName: String = "fields"
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer = new FieldsTransformer(unit)
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tpe else null
   override def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tp
     else synthFieldsAndAccessors(tp)
@@ -210,7 +211,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
 
   // can't use the referenced field since it already tracks the module's moduleClass
-  private[this] val moduleOrLazyVarOf = perRunCaches.newMap[Symbol, Symbol]()
+  private[this] val moduleOrLazyVarOf = perRunCaches.newConcurrentMap[Symbol, Symbol]()
 
   // TODO: can we drop FINAL? In any case, since these variables are MUTABLE, they cannot and will
   // not be emitted as ACC_FINAL. They are FINAL in the Scala sense, though: cannot be overridden.

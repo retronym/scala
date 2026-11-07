@@ -26,7 +26,7 @@ import scala.tools.nsc.util.stackTraceString
 import scala.util.control.{ControlThrowable, NonFatal}
 
 trait ContextErrors extends splain.SplainErrors {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -1558,7 +1558,7 @@ trait ContextErrors extends splain.SplainErrors {
   }
 
   object NamesDefaultsErrorsGen {
-    import typer.infer.setError
+    private def setError(t: Tree): Tree = typerHere.infer.setError(t)
 
     def NameClashError(sym: Symbol, arg: Tree)(implicit context: Context) = {
       setError(arg) // to distinguish it from ambiguous reference error

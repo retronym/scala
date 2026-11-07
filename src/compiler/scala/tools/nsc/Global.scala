@@ -22,7 +22,7 @@ import scala.annotation._
 import scala.collection.{immutable, mutable}
 import scala.reflect.ClassTag
 import scala.reflect.internal.pickling.PickleBuffer
-import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ScriptSourceFile, SourceFile}
+import scala.reflect.internal.util.{BatchSourceFile, FreshNameCreator, NoSourceFile, ParallelTyperTimeline, ScriptSourceFile, SourceFile}
 import scala.reflect.internal.{Reporter => InternalReporter}
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.tools.nsc.ast.parser._
@@ -58,6 +58,41 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // the mirror --------------------------------------------------
 
   override def isCompilerUniverse = true
+  /** `-Yparallel-typer`: the typer's units are typechecked on several threads (see `ParallelTyper`). Read while the
+   *  universe is constructed, from the constructor parameter `currentSettings`. */
+  override def isConcurrentUniverse = currentSettings.YparallelTyper.value
+  override def isParallelCompiler = currentSettings.YparallelTyper.value
+
+  // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
+  // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
+  // the coarse root.
+  // With -Dscalac.parallelTyper.parallelSignatures=unit, the root of a source symbol is its unit (its source file): the
+  // Namer's completers of one unit share its contexts, its per-unit maps and its classes' scopes. Otherwise, the
+  // symbol, with those made safe for two writers (per-thread implicits markers, concurrent unit maps, scope writes
+  // under the scope's monitor).
+  override def completionRoot(sym: Symbol): AnyRef = {
+    val run = currentRun
+    // An import comes from a source of this run, but one at the top of a file has no enclosing class for `compiles` to
+    // find. It must not fall to the coarse root: its completion types the qualifier, and waits for the completions of
+    // source symbols that may themselves wait for the coarse root, a false cycle.
+    if (sym.name eq nme.IMPORT) sym
+    else if ((run ne null) && run.compiles(sym)) {
+      if (analyzer.parallelSignatures && System.getProperty("scalac.parallelTyper.parallelSignatures") == "unit") {
+        val top0 = sym.originalEnclosingTopLevelClassOrDummy
+        val top = if (top0.isModuleClass) top0.sourceModule else top0
+        val file = run.symSource.getOrElse(top, null)
+        if (file ne null) file else sym
+      }
+      else if (sym.isModuleClass) { val m = sym.sourceModule; if (m ne NoSymbol) m else sym }
+      // the field, getter and setter of one `val` or `var`: their completers type the same tree (`tpt`, the right-hand side)
+      else if (sym.isTerm && !sym.isModule && sym.owner.isClass && (sym.isAccessor || !sym.isMethod)) {
+        val getter = sym.getterIn(sym.owner)
+        if (getter ne NoSymbol) getter else sym
+      }
+      else sym
+    } else scala.reflect.internal.util.CompletionLock.CoarseRoot
+  }
+
   override val useOffsetPositions = !currentSettings.Yrangepos.value
 
   type RuntimeClass = java.lang.Class[_]
@@ -166,7 +201,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with AstTreeGen {
     def mkAttributedCast(tree: Tree, pt: Type): Tree =
-      typer.typed(mkCast(tree, pt))
+      typerHere.typed(mkCast(tree, pt))
   }
 
   /** A spare instance of TreeBuilder left for backwards compatibility. */
@@ -262,18 +297,20 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     }
   }
 
-  private var propCnt = 0
+  // per thread under -Yparallel-typer: whether a cyclic reference propagates is a property of the thread's computation
+  private[this] lazy val propCnts = perThread(Array(0))
   @inline final def withPropagateCyclicReferences[T](t: => T): T = {
+    val propCnt = propCnts.get
     try {
-      propCnt = propCnt+1
+      propCnt(0) += 1
       t
     } finally {
-      propCnt = propCnt-1
-      assert(propCnt >= 0, "Bad propCnt")
+      propCnt(0) -= 1
+      assert(propCnt(0) >= 0, "Bad propCnt")
     }
   }
 
-  def propagateCyclicReferences: Boolean = propCnt > 0
+  def propagateCyclicReferences: Boolean = propCnts.get(0) > 0
 
   /** Representing ASTs as graphs */
   object treeBrowsers extends {
@@ -371,6 +408,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
 // ------------ File interface -----------------------------------------
 
+  // the charset of the sources, and whether `reader` is the stock one: `readSources` then makes more of them
+  private[this] var sourceCharset: Charset = null
+  private[this] var stockSourceReader = false
+
   private val reader: SourceReader = {
     val defaultEncoding = Properties.sourceEncoding
 
@@ -400,7 +441,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       }
     }
 
+    sourceCharset = charset
     settings.sourceReader.valueSetByUser flatMap loadReader getOrElse {
+      stockSourceReader = true
       new SourceReader(charset.newDecoder(), reporter)
     }
   }
@@ -412,6 +455,45 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     )
 
   def getSourceFile(f: AbstractFile): BatchSourceFile = new BatchSourceFile(f, reader read f)
+
+  /** The source files named, in order. With the parallel parser of `-Yparallel-typer`, read on several threads:
+   *  reading them one after the other was more than half of the time before the first phase (the compiler's 300
+   *  sources: 20 ms). A thread only opens, reads and decodes, with a reader of its own; a file it cannot find or
+   *  decode is left to `getSourceFile` on this thread, afterwards and in order, which reports it as it always has.
+   */
+  private def readSources(names: List[String]): List[SourceFile] = {
+    val n = names.length
+    val threads = math.min(8, math.min(Runtime.getRuntime.availableProcessors, n / 16))
+    if (threads < 2 || !stockSourceReader || !settings.YparallelTyper.value || System.getProperty("scalac.parallelTyper.parallelParser") == null)
+      names.map(getSourceFile)
+    else {
+      val in = names.toArray
+      val out = new Array[SourceFile](n)
+      val next = new java.util.concurrent.atomic.AtomicInteger
+      val workers = (1 to threads).map { i =>
+        val t = new Thread(() => {
+          val errors = new reporters.StoreReporter(settings)
+          val r = new SourceReader(sourceCharset.newDecoder(), errors)
+          var j = next.getAndIncrement()
+          while (j < n) {
+            try {
+              val file = settings.pathFactory.getFile(in(j))
+              if (file ne null) {
+                val chars = r.read(file)
+                if (errors.hasErrors) errors.reset() else out(j) = new BatchSourceFile(file, chars)
+              }
+            } catch { case _: Exception => } // read again below
+            j = next.getAndIncrement()
+          }
+        }, s"scalac-sources-$i")
+        t.setDaemon(true)
+        t.start()
+        t
+      }
+      workers.foreach(_.join())
+      List.tabulate(n)(j => if (out(j) ne null) out(j) else getSourceFile(in(j)))
+    }
+  }
 
   def getSourceFile(name: String): SourceFile = {
     val f = settings.pathFactory.getFile(name)
@@ -443,9 +525,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     def run(): Unit = {
       echoPhaseSummary(this)
-      val units = currentRun.units
-      while (units.hasNext)
-        applyPhase(units.next())
+      if (!currentRun.runOnPool(this)) {
+        val units = currentRun.units
+        while (units.hasNext)
+          applyPhase(units.next())
+      }
     }
 
     def apply(unit: CompilationUnit): Unit
@@ -498,8 +582,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val unit0 = currentUnit
         currentRun.currentUnit = unit
         currentRun.profiler.beforeUnit(phase, unit.source.file)
+        val xray = ParallelTyperTimeline.current; val xs = if (xray eq null) null else xray.begin() // xray
         try apply(unit)
         finally {
+          if (xs ne null) xray.end(xs, name, unit.spanLabel) // xray
           currentRun.profiler.afterUnit(phase, unit.source.file)
           currentRun.currentUnit = unit0
           currentRun.advanceUnit()
@@ -527,7 +613,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // I only changed analyzer.
   //
   // factory for phases: namer, packageobjects, typer
-  lazy val analyzer =
+  lazy val analyzer: Analyzer { val global: Global.this.type } =
     if (settings.YmacroAnnotations.value) new { val global: Global.this.type = Global.this } with Analyzer with MacroAnnotationNamers
     else new { val global: Global.this.type = Global.this } with Analyzer
 
@@ -707,9 +793,16 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     val global: Global.this.type = Global.this
   } with TreeCheckers
 
+  // A typer with no unit, for phases and tree generators that have none at hand. A stable path, since macros and plugins
+  // import from it. It has a context, which typing writes to, so the compiler itself asks for `typerHere`.
   object typer extends analyzer.Typer(
     analyzer.NoContext.make(EmptyTree, RootClass, newScope)
   )
+  private[this] lazy val typerPerThread = perThread[analyzer.Typer] {
+    new analyzer.Typer(analyzer.NoContext.make(EmptyTree, RootClass, newScope)) {}
+  }
+  /** `typer`, or under `-Yparallel-typer` this thread's own. */
+  def typerHere: analyzer.Typer = if (isConcurrentCompiler) typerPerThread.get else typer
 
   /** Add the internal compiler phases to the phases set.
    *  This implementation creates a description map at the same time.
@@ -1046,7 +1139,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** Let's share a lot more about why we crash all over the place.
    *  People will be very grateful.
    */
-  protected var lastSeenContext: analyzer.Context = analyzer.NoContext
+  // Per thread, in the scratch state: written at every context made.
+  protected def lastSeenContext: analyzer.Context = { val c = scratch.lastSeenContext; if (c eq null) analyzer.NoContext else c.asInstanceOf[analyzer.Context] }
+  protected def lastSeenContext_=(c: analyzer.Context): Unit = scratch.lastSeenContext = c
 
   /** The currently active run
    */
@@ -1054,9 +1149,14 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   def currentUnit: CompilationUnit  = if (currentRun eq null) NoCompilationUnit else currentRun.currentUnit
   def currentSource: SourceFile     = if (currentUnit.exists) currentUnit.source else lastSeenSourceFile
   def runReporting: PerRunReporting = currentRun.reporting
-  def currentFreshNameCreator       = if (curFreshNameCreator == null) currentUnit.fresh else curFreshNameCreator
+  def currentFreshNameCreator       = {
+    val c = if (curFreshNameCreatorPerThread eq null) curFreshNameCreator else curFreshNameCreatorPerThread.get
+    if (c == null) currentUnit.fresh else c
+  }
   private[this] var curFreshNameCreator: FreshNameCreator = null
-  private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit = curFreshNameCreator = fresh
+  private[this] val curFreshNameCreatorPerThread: ThreadLocal[FreshNameCreator] = if (isParallelCompiler) new ThreadLocal else null
+  private[scala] def currentFreshNameCreator_=(fresh: FreshNameCreator): Unit =
+    if (curFreshNameCreatorPerThread eq null) curFreshNameCreator = fresh else curFreshNameCreatorPerThread.set(fresh)
 
   def isGlobalInitialized = definitions.isDefinitionsInitialized && rootMirror.isMirrorInitialized
   private def isRunGlobalInitialized = (curRun ne null) && isGlobalInitialized
@@ -1185,8 +1285,14 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
      *  top of the file so at least they're not trivially null.
      */
     var isDefined = false
-    /** The currently compiled unit; set from GlobalPhase */
-    var currentUnit: CompilationUnit = NoCompilationUnit
+    /** The currently compiled unit; set from GlobalPhase. Per thread under `-Yparallel-typer`. */
+    private[this] var _currentUnit: CompilationUnit = NoCompilationUnit
+    // a `perThread` holder, not a `ThreadLocal` of the unit, which would keep this compiler alive from a long-lived thread
+    private[this] val currentUnitPerThread: PerThread[Array[CompilationUnit]] =
+      if (isParallelCompiler) perThread(Array[CompilationUnit](NoCompilationUnit)) else null
+    def currentUnit: CompilationUnit = if (currentUnitPerThread eq null) _currentUnit else currentUnitPerThread.get(0)
+    def currentUnit_=(unit: CompilationUnit): Unit =
+      if (currentUnitPerThread eq null) _currentUnit = unit else currentUnitPerThread.get(0) = unit
 
     val profiler: Profiler = Profiler(settings)
     keepPhaseStack = settings.log.isSetByUser
@@ -1239,8 +1345,13 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     val compiledFiles   = new mutable.HashSet[String]
 
-    /** A map from compiled top-level symbols to their source files */
-    val symSource = new mutable.HashMap[Symbol, AbstractFile]
+    /** For `compiles`, which the wrapper's `isDefinedAt` would allocate an `Option` for at each look. */
+    private[this] val concurrentSymSource = if (isConcurrentUniverse) new java.util.concurrent.ConcurrentHashMap[Symbol, AbstractFile]() else null
+    /** A map from compiled top-level symbols to their source files. Written by the typer: concurrent under
+     *  `-Yparallel-typer`. */
+    val symSource: mutable.Map[Symbol, AbstractFile] =
+      if (concurrentSymSource ne null) scala.jdk.CollectionConverters.ConcurrentMapHasAsScala(concurrentSymSource).asScala
+      else new mutable.HashMap[Symbol, AbstractFile]
 
     /** A map from compiled top-level symbols to their picklers */
     val symData = new mutable.HashMap[Symbol, PickleBuffer]
@@ -1375,7 +1486,69 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     /** take note that a phase on a unit is completed
      *  (for progress reporting)
      */
-    def advanceUnit(): Unit = {
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelPostTyper[=steps|fusedTransforms|fused]: superaccessors,
+    // extmethods and pickler run a unit per task on the parallel typer's pool. `steps` (the default): each phase is
+    // a pool step of its own, so that a phase has finished on every unit before the next starts on any, as in a
+    // serial run. The fused modes are experiments: the phases of a group run back to back on a unit, and the
+    // pickler of one unit can then meet symbols that another unit's superaccessors or extmethods is renaming.
+    private[this] val postTyperGroups: List[List[String]] =
+      if (!settings.YparallelTyper.value) Nil
+      else System.getProperty("scalac.parallelTyper.parallelPostTyper") match {
+        case null | "false"    => Nil
+        case "fused"           => List(List("superaccessors", "extmethods", "pickler"))
+        case "fusedTransforms" => List(List("superaccessors", "extmethods"), List("pickler"))
+        case _                 => List(List("superaccessors"), List("extmethods"), List("pickler"))
+      }
+    private[this] var ranFused: Set[Phase] = Set.empty
+
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelLatePhases[=all|<phase>,<phase>,...]: the phases after the
+    // pickler a unit per task on the pool, each a pool step of its own. A list of names is for bisection.
+    private[this] val latePhases: Set[String] =
+      if (!settings.YparallelTyper.value) Set.empty
+      else System.getProperty("scalac.parallelTyper.parallelLatePhases") match {
+        case null | "false" => Set.empty
+        case "" | "all" | "true" => Global.latePhasesOnPool
+        case names => names.split(",").toSet
+      }
+
+    /** Run `ph` on the pool if it is one of the parallel post-typer phases; false if it is to run serially. */
+    /** Is this phase to run on the pool? */
+    private[nsc] def onPool(phaseName: String): Boolean = latePhases(phaseName)
+
+    private[nsc] def runOnPool(ph: GlobalPhase): Boolean =
+      if (latePhases(ph.name)) {
+        // the lazy vals of the phase's component: a monitor held while its initialiser completes a symbol
+        phaseDescriptors.find(_.phaseName == ph.name).foreach(analyzer.forceLazyValsOf)
+        val t0 = System.nanoTime()
+        // -Dscalac.parallelTyper.lateOrderSeed=<n>: the units of each step in a shuffled order. With `oneThread` this finds
+        // what a step's output owes to the order of its units deterministically, where the pool finds it by timing.
+        val us = System.getProperty("scalac.parallelTyper.lateOrderSeed") match {
+          case null => units.toList
+          case seed => new scala.util.Random(seed.toLong + ph.id).shuffle(units.toList)
+        }
+        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true, largestFirst = System.getProperty("scalac.parallelTyper.lateOrderSeed") == null)(ph.applyPhase(_))
+        if (System.getProperty("scalac.parallelTyper.log") != null)
+          Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
+        if (ph.name == "jvm" && System.getProperty("scalac.parallelTyper.lockSites") != null)
+          Console.err.println(s"[parallel-typer] coarse claim by site, since the typer: ${completionLock.siteSummary}")
+        true
+      }
+      else if (postTyperGroups.isEmpty) false
+      else if (ranFused(ph)) true
+      else postTyperGroups.find(_.head == ph.name) match {
+        case Some(group) =>
+          // a group is fused only if its phases follow each other in this run (-Yskip, -Ystop-after, plugin phases)
+          val chain = Iterator.iterate[Phase](ph)(_.next).take(group.length).toList
+          val phases = if (chain.map(_.name) == group) chain.map(_.asInstanceOf[GlobalPhase]) else ph :: Nil
+          ranFused ++= phases.tail
+          val us = units.toList
+          if (phases.tail.isEmpty) analyzer.parallelPhase(ph, us, ph.name)(ph.applyPhase(_))
+          else analyzer.parallelPhase(ph, us, "post-typer")(u => phases.foreach { p => phase = p; p.applyPhase(u) })
+          true
+        case None => postTyperGroups.exists(_.contains(ph.name)) && { analyzer.parallelPhase(ph, units.toList, ph.name)(ph.applyPhase(_)); true }
+      }
+
+    def advanceUnit(): Unit = synchronized {
       unitc += 1
       refreshProgress()
     }
@@ -1456,7 +1629,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     @tailrec
     final def compiles(sym: Symbol): Boolean =
       if (sym == NoSymbol) false
-      else if (symSource.isDefinedAt(sym)) true
+      else if (if (concurrentSymSource ne null) concurrentSymSource.containsKey(sym) else symSource.isDefinedAt(sym)) true
       else if (!sym.isTopLevel) compiles(sym.originalEnclosingTopLevelClassOrDummy)
       else if (sym.isModuleClass) compiles(sym.sourceModule)
       else false
@@ -1564,6 +1737,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       reporter.reset()
       warnDeprecatedAndConflictingSettings()
       globalPhase = fromPhase
+      val xray = ParallelTyperTimeline.runStarting() // xray
 
       val timePhases = settings.areStatisticsEnabled
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
@@ -1574,9 +1748,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
 
         val profileBefore=profiler.beforePhase(phase)
+        val xrayStart = System.nanoTime() // xray
         try globalPhase.run()
         catch { case _: InterruptedException => reporter.cancelled = true }
         finally if (timePhases) statistics.stopTimer(phaseTimer, startPhase) else ()
+        if (xray ne null) xray.phase(globalPhase.name, xrayStart, System.nanoTime()) // xray
         profiler.afterPhase(phase, profileBefore)
 
         if (timePhases)
@@ -1621,6 +1797,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         advancePhase()
       }
       profiler.finished()
+      analyzer.closeWorkers()
+      ParallelTyperTimeline.runFinished(xray, { case s: Symbol => s.fullNameString; case x => String.valueOf(x) }) // xray
 
       runReporting.runFinished(hasErrors = reporter.hasErrors)
 
@@ -1684,7 +1862,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
             globalError("can only compile one script at a time")
             Nil
           }
-          else filenames.map(getSourceFile)
+          else readSources(filenames)
 
         profiler.afterPhase(Global.InitPhase, snap)
         compileSources(sources)
@@ -1711,6 +1889,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
     /** Compile the unit until `globalPhase`, but at least to phase "typer". */
     def compileLate(unit: CompilationUnit): Unit = {
+      if (analyzer.parallelTyperActive)
+        throw new FatalError(s"-Yparallel-typer does not support compiling a source file late: $unit")
       addUnit(unit)
 
       if (firstPhase ne null) { // we might get here during initialization, is a source is newer than the binary
@@ -1803,12 +1983,18 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   final lazy val closeableRegistry: CloseableRegistry = new CloseableRegistry
 
   def close(): Unit = {
+    analyzer.closeWorkers()
     perRunCaches.clearAll()
     closeableRegistry.close()
   }
 }
 
 object Global {
+  /** The phases that `-Dscalac.parallelTyper.parallelLatePhases` (with no list) runs on the pool. */
+  private val latePhasesOnPool: Set[String] = Set(
+    "refchecks", "patmat", "uncurry", "fields", "tailcalls", "specialize", "explicitouter", "erasure", "posterasure",
+    "lambdalift", "constructors", "flatten", "mixin", "cleanup", "delambdafy", "jvm")
+
   def apply(settings: Settings, reporter: Reporter): Global = new Global(settings, reporter)
 
   def apply(settings: Settings): Global = new Global(settings, Reporter(settings))

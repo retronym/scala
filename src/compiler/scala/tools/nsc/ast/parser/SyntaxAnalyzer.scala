@@ -15,6 +15,20 @@ package ast.parser
 
 import javac._
 
+/** The reporter of a phase that runs its units at the same time and issues their diagnostics in the order of the
+ *  units (`-Yparallel-typer`, `ParallelTyper.parallelPhase`).
+ */
+trait UnitOrderReporter {
+  /** Has the phase reported an error in a unit before the current one, or in the current one so far? Thrown as
+   *  `RetryInUnitOrder` while the units before it may still be running: the unit is then processed again, from the
+   *  start, after them.
+   */
+  def hasErrorsInUnitOrder: Boolean
+  /** Is the current unit being processed again? */
+  def isRetryInUnitOrder: Boolean
+}
+object RetryInUnitOrder extends scala.util.control.ControlThrowable
+
 /** The compiler sub-component that defines the parser phase, which converts source code into Trees.
  */
 abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParsers with Scanners with JavaParsers with JavaScanners {
@@ -98,12 +112,104 @@ abstract class SyntaxAnalyzer extends SubComponent with Parsers with MarkupParse
     override val checkable = false
     override val keepsTypeParams = false
 
+    // -Yparallel-typer with -Dscalac.parallelTyper.parallelParser: a unit per task on the parallel typer's pool.
+    // What a parser writes is its own or its unit's: the scanner, the tree builder, the unit's fresh names, its
+    // suspended warnings. Shared: the name table (its own lock), the positions (assigned per thread), the reporter
+    // (buffered, issued in the order of the units, which is the serial order), the symbols of `definitions` that the
+    // parsers ask for (below).
+    private def inParallel: Boolean =
+      settings.YparallelTyper.value && System.getProperty("scalac.parallelTyper.parallelParser") != null &&
+        global.analyzer.parallelPhasesSupported &&
+        !settings.Ymemberpos.isSetByUser &&      // prints as it goes
+        !currentRun.parsing.incompleteHandled    // the REPL's handler
+
+    override def run(): Unit = {
+      val units = currentRun.units.toList
+      if (units.lengthCompare(1) > 0 && inParallel) {
+        global.echoPhaseSummary(this)
+        val t0 = System.nanoTime()
+        forceParserDefinitions()
+        runReporting.suspendInOrderOf(units.map(_.source)) {
+          if (System.getProperty("scalac.parallelTyper.loadPackages") == null)
+            global.analyzer.parallelPhase(this, units, "parser", unitOrder = true)(applyPhase(_))
+          else parseAndLoadPackages(units)
+        }
+        if (System.getProperty("scalac.parallelTyper.log") != null)
+          Console.err.println(f"[parallel-typer] parser: ${units.length} units in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
+      }
+      else super.run()
+    }
+
+    /** -Dscalac.parallelTyper.loadPackages: while the workers parse, this thread loads the packages that the units
+     *  name, each unit's once it is parsed and the units before it are done, so in the order in which the namer
+     *  would load them (`namerFactory.loadPackagesOf`). What is not loaded when the workers are done is left to the
+     *  namer.
+     */
+    private def parseAndLoadPackages(units: List[CompilationUnit]): Unit = {
+      import java.util.concurrent.locks.LockSupport
+      val Parsed = 1; val NotParsed = 2
+      val state = new java.util.concurrent.atomic.AtomicIntegerArray(units.length)
+      val index = new java.util.IdentityHashMap[CompilationUnit, Integer]
+      units.foreach(u => index.put(u, index.size))
+      val driver = Thread.currentThread
+      var failure: Throwable = null
+      var loadNanos = 0L; var loaded = 0
+      def loadInOrder(running: () => Boolean): Unit = {
+        val us = units.toArray
+        var next = 0
+        while (next < us.length && failure == null) state.get(next) match {
+          case Parsed =>
+            val t0 = System.nanoTime()
+            try global.analyzer.namerFactory.loadPackagesOf(us(next))
+            catch { case ex: Throwable => failure = ex }
+            loadNanos += System.nanoTime() - t0; loaded += 1
+            next += 1
+          case NotParsed => return // parsed again after the workers: the namer takes over from here
+          case _         => if (running()) LockSupport.parkNanos(100000L) else if (state.get(next) == 0) return
+        }
+      }
+      global.analyzer.parallelPhase(this, units, "parser", unitOrder = true, meanwhile = loadInOrder) { unit =>
+        var parsed = false
+        try { applyPhase(unit); parsed = true }
+        finally {
+          val i = index.get(unit)
+          if (state.get(i) == 0) { state.set(i, if (parsed) Parsed else NotParsed); LockSupport.unpark(driver) }
+        }
+      }
+      if (System.getProperty("scalac.parallelTyper.log") != null)
+        Console.err.println(f"[parallel-typer] parser: the packages of $loaded of ${units.length} units loaded meanwhile in ${loadNanos / 1e6}%.1f ms")
+      if (failure != null) throw failure
+    }
+
+    /** The lazy vals of `definitions` that every parser reads, forced before the workers start: a lazy val is
+     *  initialised under the monitor of `definitions`, and one whose initialiser completes a symbol would take the
+     *  completion lock inside it, the reverse of the order of a completion that reads a lazy val. These are symbols
+     *  of the root classes, which `definitions.init` has completed, so that forcing them here changes nothing a
+     *  serial run would see. The few that can complete a class of the classpath or of the source path (`Predef`,
+     *  `Nil`, `String`, the Java annotations) are read under the completion lock where the parsers use them.
+     */
+    private def forceParserDefinitions(): Unit = {
+      import definitions._
+      def force(sym: => Any): Unit = try sym catch { case _: FatalError => () } // missing: reported where it is used
+      force(AnyTpe); force(ObjectClass); force(TupleClass)
+      force(UnitTpe); force(BooleanTpe); force(ByteTpe); force(ShortTpe); force(CharTpe); force(IntTpe); force(LongTpe)
+      force(FloatTpe); force(DoubleTpe)
+    }
+
     def apply(unit: CompilationUnit): Unit = {
       informProgress("parsing " + unit)
       // if the body is already filled in, don't overwrite it
       // otherwise compileLate is going to overwrite bodies of synthetic source files
-      if (unit.body == EmptyTree)
+      if (unit.body == EmptyTree) {
+        reporter match {
+          case r: UnitOrderReporter if r.isRetryInUnitOrder =>
+            // parsed again after the units before it (`RetryInUnitOrder`): nothing of the first attempt remains
+            unit.fresh.reset()
+            runReporting.clearSuspendedMessages(unit.source)
+          case _ =>
+        }
         unit.body = initialUnitBody(unit)
+      }
 
       if (settings.Ymemberpos.isSetByUser)
         new MemberPosReporter(unit).show(style = settings.Ymemberpos.value)

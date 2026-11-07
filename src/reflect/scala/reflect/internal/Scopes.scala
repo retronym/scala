@@ -55,9 +55,18 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   private def newScopeEntry(sym: Symbol, owner: Scope): ScopeEntry = {
     val e = new ScopeEntry(sym, owner)
     e.next = owner.elems
+    publishEntry()
     owner.elems = e
     e
   }
+
+  /** In a concurrent compiler a class's scope can be read on one thread while its unit's thread enters into it
+   *  (`addSyntheticMethods` during the typing of a case class). An entry is prepended to the list and to its bucket,
+   *  and published after its fields are written, so that a reader that finds it finds the rest of the chain behind it
+   *  (it can miss the new entry, as a serial compiler that typed the units in another order would). The reader's
+   *  loads are ordered by their dependency on the reference it followed. */
+  @inline private def publishEntry(): Unit =
+    if (isConcurrentCompiler) java.lang.invoke.VarHandle.releaseFence()
 
   object Scope {
     def unapplySeq(decls: Scope): Some[Seq[Symbol]] = Some(decls.toList)
@@ -95,11 +104,14 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** a cache for all elements, to be used by symbol iterator.
      */
-    private[this] var elemsCache: List[Symbol] = null
-    private[this] var cachedSize = -1
+    /** The elements as a list and their number, valid while `elems` is still `head`: one holder, so that a
+     *  thread reads both together, and keyed by the head, so that a list computed by another thread before an entry
+     *  was prepended and stored after the flush is not taken for the current one. */
+    private final class ElemsCache(val head: ScopeEntry, val list: List[Symbol] /* null: not yet */, val size: Int)
+    private[this] var elemsCache: ElemsCache = null
+    private def validElemsCache: ElemsCache = { val c = elemsCache; if ((c ne null) && (c.head eq elems)) c else null }
     private def flushElemsCache(): Unit = {
       elemsCache = null
-      cachedSize = -1
     }
 
     /** size and mask of hash tables
@@ -120,14 +132,18 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
     /** the number of entries in this scope */
     override def size: Int = {
-      if (cachedSize < 0)
-        cachedSize = directSize
-
-      cachedSize
+      val c = validElemsCache
+      if (c ne null) c.size
+      else {
+        val head = elems
+        val n = directSize(head)
+        elemsCache = new ElemsCache(head, null, n) // the size alone
+        n
+      }
     }
-    private def directSize: Int = {
+    private def directSize(head: ScopeEntry): Int = {
       var s = 0
-      var e = elems
+      var e = head
       while (e ne null) {
         s += 1
         e = e.next
@@ -145,20 +161,31 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
         createHash()
     }
 
-    private def enterInHash(e: ScopeEntry): Unit = {
+    private def enterInHash(e: ScopeEntry): Unit = enterInHash(hashtable, e)
+    private def enterInHash(table: Array[ScopeEntry], e: ScopeEntry): Unit = {
       val i = e.sym.name.start & HASHMASK
-      e.tail = hashtable(i)
-      hashtable(i) = e
+      e.tail = table(i)
+      publishEntry()
+      table(i) = e
     }
 
     /** enter a symbol
      */
     def enter[T <: Symbol](sym: T): sym.type = {
-      enterEntry(newScopeEntry(sym, this))
+      if (isConcurrentCompiler) synchronized(enterEntry(newScopeEntry(sym, this)))
+      else enterEntry(newScopeEntry(sym, this))
       sym
     }
 
-    final def enterBefore(sym: Symbol, next: ScopeEntry): sym.type = {
+    /** In a concurrent compiler, the writes to a scope are under its monitor: the completers of two members of one
+     *  class can enter into its scope on two threads (default getters, with parallel signatures). Readers take no
+     *  lock (entries are published after their fields). Nothing under the monitor completes a symbol.
+     *
+     *  The hot writers (`enter`, `enterIfNew`) take the monitor around a call rather than through a by-name `writing`:
+     *  that closure was 29 MB per compile of the compiler corpus. */
+    @inline private def writing[T](body: => T): T = if (isConcurrentCompiler) synchronized(body) else body
+
+    final def enterBefore(sym: Symbol, next: ScopeEntry): sym.type = writing {
       assert(this != EmptyScope, sym)
       require(sym.name.hashCode() == next.sym.name.hashCode(), (sym, next.sym))
       require(sym != next.sym, (sym, next.sym))
@@ -182,22 +209,27 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       enter(sym)
     }
 
-    def enterIfNew[T <: Symbol](sym: T): T = {
+    def enterIfNew[T <: Symbol](sym: T): T =
+      if (isConcurrentCompiler) synchronized(enterIfNewHere(sym)) else enterIfNewHere(sym)
+    private def enterIfNewHere[T <: Symbol](sym: T): T = {
       val existing = lookupEntry(sym.name)
       if (existing == null) enter(sym)
       else existing.sym.asInstanceOf[T]
     }
 
+    // The table is filled before it is published: a reader on another thread (-Yparallel-typer) that finds the
+    // table finds every entry that was in the scope when it was made.
     private def createHash(): Unit = {
-      hashtable = new Array[ScopeEntry](HASHSIZE)
-      enterAllInHash(elems)
+      val table = new Array[ScopeEntry](HASHSIZE)
+      enterAllInHash(table, elems)
+      hashtable = table
     }
 
-    private def enterAllInHash(e: ScopeEntry, n: Int = 0): Unit = {
+    private def enterAllInHash(table: Array[ScopeEntry], e: ScopeEntry, n: Int = 0): Unit = {
       if (e ne null) {
         if (n < maxRecursions) {
-          enterAllInHash(e.next, n + 1)
-          enterInHash(e)
+          enterAllInHash(table, e.next, n + 1)
+          enterInHash(table, e)
         } else {
           var entries: List[ScopeEntry] = List()
           var ee = e
@@ -205,13 +237,14 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
             entries = ee :: entries
             ee = ee.next
           }
-          entries foreach enterInHash
+          entries.foreach(enterInHash(table, _))
         }
       }
     }
 
-    def rehash(sym: Symbol, newname: Name): Unit = {
-      if (hashtable ne null) {
+    def rehash(sym: Symbol, newname: Name): Unit = writing {
+      if (isConcurrentCompiler) rehashForReaders(sym, newname)
+      else if (hashtable ne null) {
         val index = sym.name.start & HASHMASK
         var e1 = hashtable(index)
         var e: ScopeEntry = null
@@ -235,9 +268,33 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
       }
     }
 
+    /** `rehash` while another thread may be reading this scope (the phases after the typer rename private members,
+     *  `makeNotPrivate`, a unit per thread, while other units look members up in its classes): the entry is not
+     *  moved, since a reader standing on it would follow its new `tail` into the other bucket and miss the rest of
+     *  its own. It is bypassed in its bucket and left as it is, and a fresh entry takes its place in the element
+     *  list and goes to the head of the new bucket. */
+    private def rehashForReaders(sym: Symbol, newname: Name): Unit = if (hashtable ne null) {
+      val index = sym.name.start & HASHMASK
+      val newindex = newname.start & HASHMASK
+      var e = hashtable(index)
+      while ((e ne null) && (e.sym ne sym)) e = e.tail
+      if ((e ne null) && index != newindex) {
+        val e2 = new ScopeEntry(sym, this)
+        e2.next = e.next
+        e2.tail = hashtable(newindex)
+        publishEntry()
+        if (hashtable(index) eq e) hashtable(index) = e.tail
+        else { var e1 = hashtable(index); while (e1.tail ne e) e1 = e1.tail; e1.tail = e.tail }
+        if (elems eq e) elems = e2
+        else { var e1 = elems; while (e1.next ne e) e1 = e1.next; e1.next = e2 }
+        hashtable(newindex) = e2
+        flushElemsCache()
+      }
+    }
+
     /** remove entry
      */
-    def unlink(e: ScopeEntry): Unit = {
+    def unlink(e: ScopeEntry): Unit = writing {
       if (elems == e) {
         elems = e.next
       } else {
@@ -259,7 +316,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     }
 
     /** remove symbol */
-    def unlink(sym: Symbol): Unit = {
+    def unlink(sym: Symbol): Unit = writing {
       var e = lookupEntry(sym.name)
       while (e ne null) {
         if (e.sym == sym) unlink(e)
@@ -348,7 +405,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def lookupEntry(name: Name): ScopeEntry = {
       var e: ScopeEntry = null
-      val flat = phase.flatClasses
+      val flat = flatClassesSeen && phase.flatClasses
       if (hashtable ne null) {
         e = hashtable(name.start & HASHMASK)
         while ((e ne null) && (e.name(flat) ne name)) {
@@ -370,7 +427,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
      */
     def lookupNextEntry(entry: ScopeEntry): ScopeEntry = {
       var e = entry
-      val flat = phase.flatClasses
+      val flat = flatClassesSeen && phase.flatClasses
       val entryName = entry.name(flat)
       if (hashtable ne null)
         do { e = e.tail } while ((e ne null) && e.name(flat) != entryName)
@@ -419,19 +476,21 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
     /** Return all symbols as a list in the order they were entered in this scope.
      */
     override def toList: List[Symbol] = {
-      if (elemsCache eq null) {
+      val c = validElemsCache
+      if ((c ne null) && (c.list ne null)) c.list
+      else {
+        val head = elems
         var symbols: List[Symbol] = Nil
         var count = 0
-        var e = elems
+        var e = head
         while ((e ne null) && e.owner == this) {
           count += 1
           symbols ::= e.sym
           e = e.next
         }
-        elemsCache = symbols
-        cachedSize = count
+        elemsCache = new ElemsCache(head, symbols, count)
+        symbols
       }
-      elemsCache
     }
 
     /** Vanilla scope - symbols are stored in declaration order.
