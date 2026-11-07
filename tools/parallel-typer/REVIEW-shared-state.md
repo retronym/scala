@@ -4,31 +4,19 @@ A review by reading of what the worker threads share, at 1c5b25c1e6 on `claude/p
 
 ## Summary
 
-Nine findings are confirmed by a run, and eight of them are fixed here. Four more are fixed on the argument alone. Twenty-three are plausible and unreproduced, or have a window too narrow to show, and are left as they are. The rest of what the workers reach was examined and is protected or confined; the table at the end has every field.
+Nine findings are confirmed by a run, and all are fixed here. Four more are fixed on the argument alone. Twenty-three are plausible and unreproduced, or have a window too narrow to show, and are left as they are. The rest of what the workers reach was examined and is protected or confined; the table at the end has every field.
 
 Most confirmed findings are of one kind, which the race log did not have as a family. The serial compiler has an order dependence between units: a fact about a symbol changes when its own unit reaches some step, and another unit may read it before or after. Serially the answer is stable for a given command line. On the pool it varies between runs. The value is written safely, so this is a race on the order of the program's facts, not on memory. These are `Serializable` on companions, the parents of a generic class, the annotations of a getter, the accessor an `unapply` selects, and implicit eligibility. O3 was the first of this family. The harnesses did not see them because they depend on rare shapes of program that the corpora did not contain: each corpus here fails in most runs once the shape is present.
 
 The fixes for that family follow O3: under the flag, the answer is the one serial gives when the defining unit comes first. So a parallel compile can differ from a serial one whose command line has the user first, and the one-thread run now differs from serial on some of these corpora. Making that same choice in the serial compiler would remove the difference and is a change to stock behaviour.
 
-## Decision needed
-
-### R8. Implicit eligibility depends on whether another thread has completed the implicit. Confirmed, not fixed.
-
-`ImplicitSearch.isValid` (`Implicits.scala:1098`) keeps an implicit without an explicit type that is defined later in the same file out of the search, unless it has been completed. Both of its tests read the completion state: `sym.isInitialized`, and `hasExplicitResultType`, which answers true once `rawInfo` is no longer a completer. So in `object O { def a: Foo = implicitly[Foo]; implicit val foo = new Foo }`, `a` compiles if a thread typing another file has already completed `foo` through `import O._`, and fails with "could not find implicit value" if not. A different, lower priority implicit could be chosen instead of an error.
-
-Corpus `open-findings/implicit-later-neg` (outside `corpus/`, as it fails): 60 of 60 runs differ from the one-thread run, in whether `F*.scala` reports its error.
-
-Dropping the two peeks does not work as it stands, since the tree that says whether the type is explicit is gone after completion, so the rule would have to be recorded on the symbol when it is entered. Beyond that, the options are:
-
-- A rule by position only: such an implicit is never eligible before its definition in the same file. It rejects a program that serial accepts because an earlier statement forced the implicit (`val y = foo; def a = implicitly[Foo]; implicit val foo = new Foo`).
-- Always eligible: completes the implicit where serial would not, and accepts more programs, some with a new cycle error or a different choice of implicit.
-- Complete every implicit without an explicit type in the class headers step: the same result as always eligible with no new cycles at the search, for the cost of typing those right-hand sides serially.
-
-Recommendation: the rule by position. It is the rule's stated intent, such a definition already gets the warning "Implicit definition should have explicit type", and it fails at compile time in a way that is the same in every run. It is a language-level choice, so it is Jason's.
-
 ## Confirmed and fixed, by consequence and likelihood
 
 Each has its own commit. Rates are runs that differ from the one-thread run, with `tools/parallel-typer/stress.sh`, 8 threads, every pool switch, class files compared.
+
+**R8. Implicit eligibility depended on whether another thread had completed the implicit.** `ImplicitSearch.isValid` (`Implicits.scala:1098`) keeps an implicit with no explicit type that is defined later in the same file out of the search unless it has been completed. Both of its tests read the completion state: `sym.isInitialized`, and `hasExplicitResultType`, which answers true once `rawInfo` is no longer a completer. So in `object O { def a: Foo = implicitly[Foo]; implicit val foo = new Foo }`, `a` compiled if a thread typing another file had already completed `foo` through `import O._`, and failed with "could not find implicit value" if not. Corpus `implicit-later-neg`: 60 of 60 before. After the fix, one run in the first 300 differed, its output not kept, and none of 5000 since in fresh JVMs, on slow cores and at one long stretch; what that run was is not known.
+
+Fix: `-Yimplicit-eligibility-by-position`, implied by `-Yparallel-typer` and off otherwise. Such an implicit is not eligible before its definition in its own file, whatever its state. The namer records at enter that the type is inferred, as the completer's tree is gone once the symbol completes. Local symbols keep the old test: only their own unit's typing reaches them, in tree order, and that test is what makes one eligible after its definition in a block. This rejects a program that serial accepts because an earlier statement forced the implicit (`val y = foo; def a = implicitly[Foo]; implicit val foo = new Foo`); `-Yimplicit-eligibility-by-position:false` restores the old test, with its dependence on timing under the flag. No such program is in library, reflect, compiler, pekko, junit, scalapb, re2s, re2s-x32, re2j, scalap, better-files, induction, map-seq-inference or vector: each compiles under the rule, with the same pickles as before relative to serial. The test is `ImplicitEligibilityByPositionTest`.
 
 **R1. A companion's `Serializable` changes when the module is typed.** `typedModuleDef` calls `clazz.makeSerializable()` on the companion of a serializable class, which is every case class's. So `List(A, B)` of two case class companions is inferred as `List[AbstractFunction1[Int, Product with Serializable] with Serializable]` or without the last part, according to whether they have been typed. Output: the pickle and generic signature of the use. The `setInfo` also ran under readers on the pool. Corpus `serializable-companion`: 100 of 100, then 0 of 100; `-neg`: 200 of 200, then 0 of 200. Fix: `serializableCompanions` after the class headers, on the driver, driven from the `ClassDef`, because a synthetic companion is not in the tree yet.
 
@@ -226,7 +214,7 @@ Every mutable field, collection and lazy val with a non-trivial initialiser that
 | reflect | sharing/Stamped, PerKeyClaims | callers in scope | OK | only `AnnotationInfos` (`withCompletionClaim`) calls in this scope, 's note aside; `Stamped` is used from `Symbols`/`Types` only |
 | typer | `SyntheticMethods.scala:61` | `renamedCaseAccessors` | monitor | fixed, R9 |
 | typer | `reflect/macros/contexts/Parsers.scala:29` | write to `global.reporter` | per thread | fixed, R4 |
-| typer | `Implicits.scala:1098` | peek at `isInitialized` | unprotected (peek) | open, R8 |
+| typer | `Implicits.scala:1098` | peek at `isInitialized` | setting | fixed, R8 |
 | typer | `Implicits.scala:312, 343` | `isErroneousCache`; `isLockedHere` outside `try` | unprotected | P1 |
 | typer | `Macros.scala:818`, `SyntheticMethods.scala:81, 438` | global error count | unprotected (diagnostics) | P10 |
 | typer | `Unapplies.scala:88` | foreign read of a tree being typed | unprotected | P11 |

@@ -145,6 +145,7 @@ trait MethodSynthesis {
 
       val getter = Getter(tree)
       val getterSym = getter.createSym
+      noteInferredImplicit(getterSym, tree)
 
       // only one symbol can have `tree.pos`, the others must focus their position
       // normally the field gets the range position, but if there is none, give it to the getter
