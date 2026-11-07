@@ -23,10 +23,10 @@ import scala.collection.mutable
  *  - A span per unit per step (each phase's `applyPhase`, the typer's signatures pre-pass, annotation sub-pass and
  *    lazy-val forcing) with its wall time, the thread's CPU time, the time the thread was blocked on a monitor and
  *    parked (`ThreadMXBean`, milliseconds), and its time waiting for and holding the completion lock.
- *  - Every wait for the completion lock (request to acquisition), with its call site and, where the caller says,
- *    what was being completed; every outermost hold that someone waited on or that took longer than a threshold
- *    (`scalac.parallelTyper.xray.holdMicros`, default 50); per call site, the count and totals of all of them. These
- *    were recorded for the one coarse lock, which per-key claims replaced: nothing records them now.
+ *  - Every wait for a completion claim that parked (request to acquisition), with its key, its call site and, where
+ *    the caller says, what was being completed; every outermost hold of a key that someone was parked on at its
+ *    release or that took longer than a threshold (`scalac.parallelTyper.xray.holdMicros`, default 50); per call
+ *    site, the count and totals of all of them.
  *  - The phases on the main thread, GC pauses, and the moment each typer worker ran out of units.
  *
  *  Off unless `ParallelTyperTimeline.current` is set: the hooks test it for null. Each thread records its own lock
@@ -50,12 +50,30 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
   // events can be recorded after its release, without lengthening the hold)
   private final class PerThread(val tid: Int) {
     var acquisitions = 0
-    val holds = new LongBuf // site, what, t0, t1, contended
-    val waits = new LongBuf // site, what, t0, t1
+    val holds = new LongBuf // site, what, t0, t1, contended, key
+    val waits = new LongBuf // site, what, t0, t1, key
     val whats = mutable.ArrayBuffer.empty[AnyRef]
+    val keys = mutable.ArrayBuffer.empty[AnyRef]
     var sampled = new Array[Long](64 * 3) // per site: count, total, max of the sampled short holds
     def what(w: AnyRef): Long = if (w eq null) -1 else { whats += w; whats.length - 1L }
+    def key(k: AnyRef): Long = { keys += k; keys.length - 1L }
     var whatsRendered: collection.Seq[Int] = Nil
+    var keyIds: Array[Int] = null
+    // the outermost holds open on this thread, innermost last: key, what, start, and the call site if sampled
+    var depth = 0
+    var openKeys = new Array[AnyRef](8)
+    var openWhats = new Array[AnyRef](8)
+    var openSites = new Array[String](8)
+    var openT0 = new Array[Long](8)
+    def open(k: AnyRef, w: AnyRef, site: String, t0: Long): Unit = {
+      if (depth == openKeys.length) {
+        val n = depth * 2
+        openKeys = java.util.Arrays.copyOf(openKeys, n); openWhats = java.util.Arrays.copyOf(openWhats, n)
+        openSites = java.util.Arrays.copyOf(openSites, n); openT0 = java.util.Arrays.copyOf(openT0, n)
+      }
+      openKeys(depth) = k; openWhats(depth) = w; openSites(depth) = site; openT0(depth) = t0
+      depth += 1
+    }
     def sample(site: Int, held: Long): Unit = {
       if ((site + 1) * 3 > sampled.length) sampled = java.util.Arrays.copyOf(sampled, math.max(sampled.length * 2, (site + 1) * 3))
       sampled(site * 3) += 1; sampled(site * 3 + 1) += held; if (held > sampled(site * 3 + 2)) sampled(site * 3 + 2) = held
@@ -121,7 +139,53 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
 
   // ---- the completion lock
 
+  private[this] val sites = new java.util.concurrent.ConcurrentHashMap[String, Integer]()
   private[this] val siteNames = mutable.ArrayBuffer.empty[String]
+  private def siteId(label: String): Int = {
+    val i = sites.get(label)
+    if (i ne null) i.intValue
+    else siteNames.synchronized {
+      val j = sites.get(label)
+      if (j ne null) j.intValue
+      else { siteNames += label; sites.put(label, siteNames.length - 1); siteNames.length - 1 }
+    }
+  }
+
+  /** `CompletionLock` took an outermost claim on `key` on this thread, to complete `what` (or null). The call site
+   *  costs a stack walk (a few microseconds), so it is taken for one outermost acquisition in `siteSample`, and at
+   *  the release of every hold that is recorded and was not walked yet; never while the claim is held.
+   */
+  def holdStart(key: AnyRef, what: AnyRef): Unit = {
+    val me = thread()
+    me.acquisitions += 1
+    val site = if (me.acquisitions % siteSample == 0) callSite() else null
+    me.open(key, what, site, System.nanoTime())
+  }
+
+  /** The claim of `holdStart` is released. `contended`: another thread was parked on a claim of this thread's. A hold
+   *  is recorded if it was contended or took longer than the threshold; a short one that was sampled counts towards its
+   *  site's totals. The stack still has the frames of the acquisition. */
+  def holdEnd(key: AnyRef, contended: Boolean): Unit = {
+    val t1 = System.nanoTime()
+    val me = thread()
+    val d = me.depth - 1
+    if (d >= 0 && (me.openKeys(d) eq key)) { // else the recording started inside this hold
+      me.depth = d
+      val t0 = me.openT0(d); val what = me.openWhats(d); val site = me.openSites(d)
+      me.openKeys(d) = null; me.openWhats(d) = null; me.openSites(d) = null
+      val held = t1 - t0
+      PerThreadTimes.addHold(held)
+      if (contended || held >= holdThresholdNanos)
+        me.holds.add6(siteId(if (site ne null) site else callSite()), me.what(what), t0, t1, if (contended) 1 else 0, me.key(key))
+      else if (site ne null) me.sample(siteId(site), held)
+    }
+  }
+
+  /** This thread waited for the claim on `key` from `t0` to `t1`, to complete `what` (or null). */
+  def waited(key: AnyRef, what: AnyRef, t0: Long, t1: Long): Unit = {
+    val me = thread()
+    me.waits.add5(siteId(callSite()), me.what(what), t0, t1, me.key(key))
+  }
 
   // ---- GC pauses, from the collectors' notifications
 
@@ -175,7 +239,7 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
       body { v => if (first) first = false else sb.append(','); sb.append(v) }
       sb.append(']')
     }
-    sb.append("{\"version\":1,\"startEpochMillis\":").append(startEpochMillis).append(",\"wallUs\":").append(dur(end - startNanos))
+    sb.append("{\"version\":1,\"lockKeys\":1,\"startEpochMillis\":").append(startEpochMillis).append(",\"wallUs\":").append(dur(end - startNanos))
       .append(",\"holdThresholdUs\":").append(dur(holdThresholdNanos)).append(",\"siteSample\":").append(siteSample)
     sb.append(",\n\"meta\":{")
     val m = new java.util.LinkedHashMap[String, String](environment); m.putAll(meta)
@@ -195,19 +259,29 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
     val nSites = siteNames.synchronized(siteNames.length)
     val siteStr = siteNames.synchronized(siteNames.toList).map(s).toArray
     val st = new Array[Long](nSites * SiteStride) // count, hold total, hold max, waits, wait total, wait max, waiters
+    // a key's id is its identity across the threads: a wait is on the holds of its own key
+    val keyIds = new java.util.IdentityHashMap[AnyRef, Integer]()
+    val keyNames = mutable.ArrayBuffer.empty[Int]
+    def renderOrString(x: AnyRef): String = try render(x) catch { case _: Throwable => String.valueOf(x) }
     for ((_, t) <- ts) {
-      val whatStr = t.whats.map(w => s(try render(w) catch { case _: Throwable => String.valueOf(w) }))
-      def what(i: Long): Int = if (i < 0) -1 else whatStr(i.toInt)
-      t.holds.foreach(5) { (b, i) => val o = b(i).toInt * SiteStride; val h = b(i + 3) - b(i + 2); st(o) += 1; st(o + 1) += h; if (h > st(o + 2)) st(o + 2) = h }
-      t.waits.foreach(4) { (b, i) => val o = b(i).toInt * SiteStride; val w = b(i + 3) - b(i + 2); st(o + 3) += 1; st(o + 4) += w; if (w > st(o + 5)) st(o + 5) = w; st(o + 6) |= 1L << (t.tid & 63) }
+      val whatStr = t.whats.map(w => s(renderOrString(w)))
+      t.keyIds = t.keys.iterator.map { k =>
+        val i = keyIds.get(k)
+        if (i ne null) i.intValue
+        else { keyIds.put(k, keyNames.length); keyNames += s(renderOrString(k)); keyNames.length - 1 }
+      }.toArray
+      t.holds.foreach(6) { (b, i) => val o = b(i).toInt * SiteStride; val h = b(i + 3) - b(i + 2); st(o) += 1; st(o + 1) += h; if (h > st(o + 2)) st(o + 2) = h }
+      t.waits.foreach(5) { (b, i) => val o = b(i).toInt * SiteStride; val w = b(i + 3) - b(i + 2); st(o + 3) += 1; st(o + 4) += w; if (w > st(o + 5)) st(o + 5) = w; st(o + 6) |= 1L << (t.tid & 63) }
       for (i <- 0 until math.min(nSites, t.sampled.length / 3)) {
         val o = i * SiteStride
         st(o) += siteSample * t.sampled(i * 3); st(o + 1) += siteSample * t.sampled(i * 3 + 1); if (t.sampled(i * 3 + 2) > st(o + 2)) st(o + 2) = t.sampled(i * 3 + 2)
       }
       t.whatsRendered = whatStr
     }
-    arr("holds")(a => ts.foreach { case (_, t) => t.holds.foreach(5) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))); a(b(i + 4)) } })
-    arr("waits")(a => ts.foreach { case (_, t) => t.waits.foreach(4) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))) } })
+    arr("holds")(a => ts.foreach { case (_, t) => t.holds.foreach(6) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))); a(b(i + 4)); a(t.keyIds(b(i + 5).toInt)) } })
+    arr("waits")(a => ts.foreach { case (_, t) => t.waits.foreach(5) { (b, i) => a(t.tid); a(siteStr(b(i).toInt)); a(if (b(i + 1) < 0) -1 else t.whatsRendered(b(i + 1).toInt)); a(us(b(i + 2))); a(us(b(i + 3))); a(t.keyIds(b(i + 4).toInt)) } })
+    // keys: the name of each key, by id
+    arr("keys")(a => keyNames.foreach(a(_)))
     // sites: name, acquisitions, hold total, hold max, waits, wait total, wait max, waiters (bits by thread index)
     arr("sites")(a => (0 until nSites).foreach { i =>
       val o = i * SiteStride
@@ -288,9 +362,9 @@ object ParallelTyperTimeline {
   // so that this compiles for Java 8; a stack trace there)
 
   private[this] val plumbing = Set("acquire", "release", "apply", "underCompletionLock", "completeInfoUnderLock", "await",
-    "awaitCompletionElsewhere", "callSite", "walk")
+    "awaitCompletionElsewhere", "awaitMarker", "withCompletionClaim", "mixinClaim", "callSite", "walk")
   private def isPlumbing(cls: String, method: String): Boolean =
-    plumbing(method) || cls.startsWith("jdk.") || cls.endsWith("CompletionLock") || cls.endsWith("ParallelTyperTimeline") || cls.endsWith("ParallelTyperTimeline$") ||
+    plumbing(method) || cls.startsWith("jdk.") || cls.contains("CompletionLock") || cls.startsWith("scala.reflect.internal.sharing.") || cls.endsWith("ParallelTyperTimeline") || cls.endsWith("ParallelTyperTimeline$") ||
       cls == "scala.reflect.internal.SymbolTable" || cls.startsWith("java.")
   private[util] def label(cls: String, method: String): String = {
     val simple = cls.substring(cls.lastIndexOf('.') + 1).split('$').filter(p => p.nonEmpty && !p.forall(_.isDigit) && p != "class")
@@ -387,11 +461,11 @@ object ParallelTyperTimeline {
     private[this] var a = new Array[Long](1024)
     private[this] var n = 0
     private def room(k: Int): Unit = if (n + k > a.length) a = java.util.Arrays.copyOf(a, a.length * 2)
-    def add4(x0: Long, x1: Long, x2: Long, x3: Long): Unit = {
-      room(4); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; n += 4
-    }
     def add5(x0: Long, x1: Long, x2: Long, x3: Long, x4: Long): Unit = {
       room(5); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; a(n + 4) = x4; n += 5
+    }
+    def add6(x0: Long, x1: Long, x2: Long, x3: Long, x4: Long, x5: Long): Unit = {
+      room(6); a(n) = x0; a(n + 1) = x1; a(n + 2) = x2; a(n + 3) = x3; a(n + 4) = x4; a(n + 5) = x5; n += 6
     }
     def foreach(stride: Int)(f: (Array[Long], Int) => Unit): Unit = { var i = 0; while (i < n) { f(a, i); i += stride } }
   }
