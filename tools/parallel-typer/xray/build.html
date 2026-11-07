@@ -57,6 +57,7 @@ li { margin-bottom: 3px; }
 .dims h3 i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
 .dims section + section { margin-top: 12px; }
 .dims p { font-size: 13px; margin-bottom: 5px; }
+.dims ul { font-size: 13px; margin-bottom: 5px; padding-left: 18px; }
 </style>
 
 <main>
@@ -273,6 +274,12 @@ li { margin-bottom: 3px; }
        <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
        <p><b>Stresses coordination.</b> Threads share one compile's symbols and types, and wait on its completion lock. GC stays at ${gcPct('pipe:1x8')}\u2013${gcPct('pipe:1x2')}% of CPU, but non-GC CPU grows ${Math.round(100 * (nonGc('pipe:1x8') / nonGc('trad:1x1') - 1))}% by 1\u00d78.</p>
        <p><b>Cause, in part inferred:</b> the 8-thread counter runs put about two-thirds of the added CPU in cycles per instruction and one-third in instructions. Cache-line sharing fits that, but no coherence counter was recorded. Parks and serial phases show up on the x-ray.</p>
+       <p><b>Runs into Amdahl.</b></p>
+       <ul>
+         <li>Class headers are named on one thread before the bodies start: 3 to 8% of an 8-thread compile, a cap near 7×.</li>
+         <li>Each phase is a barrier, so it ends with a tail waiting for its longest unit: a 300 ms unit in refchecks is that phase's floor at any thread count.</li>
+       </ul>
+       <p>Compiles running side by side pay both in parallel.</p>
        <p><b>Returns:</b> ${x('pipe:1x2')}, ${x('pipe:1x4')} and ${x('pipe:1x8')} at 2, 4 and 8 threads.</p></section>
        <section><h3><i style="background:var(--active)"></i>Both: the same area, used better</h3>
        <p>16 threads give ${x('pipe:16x1')} as 16\u00d71 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
