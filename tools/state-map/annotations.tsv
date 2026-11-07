@@ -88,7 +88,6 @@ internal.AnnotationInfos.LazyAnnotationInfo	_forced		completion-lock	Forced in t
 internal.AnnotationInfos.AnnotationInfo	rawpos		pre-pass	Set when the annotation is made (namer or typer of its unit).
 internal.AnnotationInfos.CompleteAnnotationInfo	orig		pre-pass	As `rawpos`.
 internal.StdAttachments.PermittedSubclassSymbols	children		completion-lock	Java sealed classes: written by the classfile parser and the Java namer inside a completion.
-internal.StdAttachments.PermittedSubclassSymbols	completing		completion-lock	As `children`.
 internal.SymbolPairs.Cursor	lowSymbol		thread-confined	A cursor per traversal (refchecks, and override checks in the typer of one unit).
 internal.SymbolPairs.Cursor	highSymbol		thread-confined	As `lowSymbol`.
 internal.SymbolPairs.Cursor	lowMemberTypeCache		thread-confined	As `lowSymbol`.
@@ -116,8 +115,7 @@ internal.pickling.PickleBuffer	readIndex		completion-lock	Unpickling runs inside
 internal.Phase	nx		driver	Linked when the phases are made.
 internal.InfoTransformers.InfoTransformer	next		driver	Linked before the typer.
 internal.InfoTransformers.InfoTransformer	prev		driver	Linked before the typer.
-nsc.Global	lastSeenContext		benign-race	For crash messages only: a racy store of a reference may name another thread's context.
-nsc.Global	lastSeenSourceFile		benign-race	As `lastSeenContext`.
+nsc.Global	lastSeenSourceFile		benign-race	For crash messages only: a racy store of a reference may name another thread's source file.
 nsc.Global	curFreshNameCreator		thread-confined	A ThreadLocal under -Yparallel-typer.
 nsc.Global	printTypings		rejected-option	-Ytyper-debug, rejected.
 nsc.Global	globalPhase		driver	Written by the driver between phases.
@@ -151,8 +149,6 @@ nsc.Reporting.PerRunReporting	seenMacroExpansionsFallingBack		completion-lock	Se
 nsc.Reporting.Suppression	_used		synchronized	Marked under `PerRunReporting`'s monitor.
 nsc.reporters.Reporter	_cancelled		benign-race	A flag set by a build tool.
 nsc.typechecker.Contexts	rootImportsCached		synchronized	Read and stored under the map's monitor, computed outside it.
-nsc.typechecker.Contexts	excludedRootImportsCached		synchronized	Under the map's monitor.
-nsc.typechecker.TypersTracking	lastTreeToTyper		benign-race	For crash messages only.
 nsc.typechecker.TypersTracking.typingStack$	depth		rejected-option	-Ytyper-debug.
 nsc.typechecker.TypersTracking.typingStack$	trees		rejected-option	-Ytyper-debug.
 nsc.typechecker.TypeDiagnostics	addendums		synchronized	Under the map's monitor.
@@ -232,10 +228,6 @@ nsc.symtab.classfile.Pickler.Pickle	ep		driver	Written by a phase that runs seri
 nsc.symtab.classfile.Pickler.Pickle	index		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
 nsc.symtab.classfile.Pickler.Pickle	entries		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
 nsc.symtab.classfile.Pickler.Pickle	reserved		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
-nsc.symtab.classfile.Pickler	_entries		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
-nsc.symtab.classfile.Pickler	_index		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
-nsc.Global.Run.SyncedCompilationBuffer.$anon@1242	used		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
-nsc.typechecker.Analyzer.packageObjects$	deferredOpen		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
 nsc.CompilationUnits.CompilationUnit	icode		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
 internal.Symbols.Symbol	_rawname		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
 internal.Symbols.Symbol	_privateWithin		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
@@ -294,13 +286,8 @@ internal.Printers.RawTreePrinter	printTypesInFootnotes		thread-confined	Per call
 internal.Printers.Footnotes	counters		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 internal.Printers.Footnotes	footnotes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 internal.Printers.Footnotes	index		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
-internal.Scopes.Scope.$anon@337	e		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
-internal.Scopes.Scope.$anon@343	e		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
-internal.Symbols.Symbol.$anon@1283	current		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
-nsc.ast.Trees.ResetAttrs	locals		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 nsc.ast.Trees.ResetAttrs	orderedLocals		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 internal.SymbolPairs.Cursor	decls		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
-internal.SymbolPairs.Cursor	visited		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 reflect.api.Printers.TreePrinter	printPositions		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 reflect.api.Printers.TreePrinter	printTypes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
 reflect.api.Printers.TreePrinter	printIds		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
@@ -332,5 +319,58 @@ nsc.Global.Run	_currentUnit		batch-only	The serial alternative; a ThreadLocal un
 internal.Symbols.ModuleClassSymbol	implicitMembersCache		thread-safe-holder	One immutable holder; two threads may both compute it.
 nsc.typechecker.Implicits.ImplicitsCaches	hasMemberCache		thread-confined	A field of the per-thread `ImplicitsCaches`.
 reflect.macros.compiler.Validators.Validator.SigGenerator$	cache		thread-confined	An object inside a Validator, made per macro definition being checked.
-internal.transform.Erasure.BoxingErasure	boxPrimitives		post-pickler	Erasure: not reached by the typer.
 nsc.javac.JavaScanners.JavaScannerConfiguration$	kwOffset		driver	The Java parser (serial).
+# Reviewed from the work list at b31cfcb304 (-Yparallel-typer): disciplines the rules cannot see.
+internal.util.ParallelTyperTimeline$	current		driver	The x-ray recording: set by `runStarting` and cleared by `runFinished` on the driver, before and after the run; the hooks on the workers only read it.
+internal.util.ParallelTyperTimeline$	fromProperty		driver	As `current`.
+internal.util.ParallelTyperTimeline	holdStart		completion-lock	The current hold of the single completion lock: written by its outermost holder after it acquires the lock (`acquire`) and read by the same holder before it releases it (`release`). X-ray only.
+internal.util.ParallelTyperTimeline	holdSite		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline	holdWhat		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline	holdSampled		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline.PerThread	acquisitions		thread-confined	One `PerThread` per recording thread (a `ThreadLocal`), written only by that thread; `toJson` reads it on the driver after the run, once the pool's steps have joined.
+internal.util.ParallelTyperTimeline.PerThread	sampled		thread-confined	As `acquisitions`.
+internal.util.ParallelTyperTimeline.PerThread	whats		thread-confined	As `acquisitions`.
+internal.util.ParallelTyperTimeline.PerThread	whatsRendered		driver	Written and read by `toJson` on the driver after the run.
+internal.util.ParallelTyperTimeline.LongBuf	a		thread-confined	The buffers of a `PerThread`: written only by its thread, read by `toJson` after the run.
+internal.util.ParallelTyperTimeline.LongBuf	n		thread-confined	As `a`.
+internal.util.CompletionLock	holdSite		completion-lock	Written by the outermost holder of the single lock (`recordSite`, with `-Dscalac.parallelTyper.lockSites`) and read by the holder at its release; never written with per-key claims.
+internal.util.ScratchThread	scratchOwner		thread-confined	Written only by the thread itself (`PerThreadScratches.getSlow` and `phase_=` act on `Thread.currentThread`), and read only by it.
+internal.util.ScratchThread	scratch		thread-confined	As `scratchOwner`.
+internal.util.ScratchThread	ph		thread-confined	As `scratchOwner`.
+internal.util.ScratchThread	per		thread-confined	As `scratchOwner`.
+internal.SymbolTable	oneScratch		batch-only	Made (under the universe's monitor) only in a universe used from one thread at a time; null in a concurrent one.
+internal.SymbolTable	perThreadScratches		publication	Set once under the universe's monitor, read without it: published through its final fields (`scratches`, `scratchRef`, `firstThread`).
+internal.SymbolTable.PerThreadScratches	firstThreadScratch		thread-confined	Written and read only by `firstThread`.
+internal.SymbolTable	_flatClassesSeen		benign-race	Monotone, false to true. A thread writes it before it moves to a phase with flat classes, so a thread at such a phase has seen its own write; a thread elsewhere gets the same answer from either value.
+internal.Symbols.TypeSymbol	tpeStamped		publication	One immutable `Stamped` (value and period, final fields) stored with a plain write: a reader gets the pair, and the value as of the store, by the final-field guarantee. Two threads store the same interned `TypeRef`. The cycle marker is per thread (`Scratch.tpeInProgress`), not in the field.
+internal.Types.NonClassTypeRef	relativeInfoStamped		publication	As `TypeSymbol#tpeStamped`, with the symbol's info in the holder; a re-entry is detected from the value (`RecoverableCyclicReference`), not from a marker in the field.
+internal.Types.CompoundType	baseTypeSeqStamped		publication	As `TypeSymbol#tpeStamped`; the in-progress marker is per thread (`Types.scala`, the lock-free type caches).
+internal.Types.CompoundType	baseClassesStamped		publication	As `baseTypeSeqStamped`.
+internal.Types.TypeRef	baseTypeSeqStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Types.TypeRef	parentsStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Types.SingleType	underlyingStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Symbols.ClassSymbol	thisTypeStamped		publication	As `TypeSymbol#tpeStamped`: an interned `ThisType`.
+internal.Symbols.ModuleClassSymbol	typeOfThisStamped		publication	As `TypeSymbol#tpeStamped`: an interned `SingleType`.
+internal.BaseTypeSeqs.BaseTypeSeq	maxDepthCache		benign-race	An `Int` (a `Depth`) that only goes from `AnyDepth` to the depth, which two threads compute the same; read once into a local.
+internal.Types.OverloadedArgProto	sameTypesFolded		thread-confined	A proto type made by the typer for one argument of one overloaded application (`doTypedApply`'s `handleOverloaded`), not interned: its monitor is never contended.
+internal.Types.OverloadedArgProto	sameTypesFoldedSam		thread-confined	As `sameTypesFolded`.
+internal.Types.OverloadedArgProto	protoTp		thread-confined	As `sameTypesFolded`.
+nsc.Global.Run	stopPhaseSetting		driver	Forced by the `Run`'s constructor (`firstPhase`), on the driver.
+nsc.Global.Run	ranFused		driver	Read and written by `runOnPool`, on the driver between phases.
+nsc.symtab.classfile.Pickler.PickleState	index		thread-confined	One `PickleState` per thread (`perThread`).
+nsc.symtab.classfile.Pickler.PickleState	entries		thread-confined	As `index`.
+nsc.typechecker.AbstractAnalyzer.packageObjects$	deferredOpen		driver	Added to by `openPackageModule` only before the namer is past and drained by packageobjects' `run`, both serial. In the typer the set is empty: `Contexts`' `remove` (a completer at a phase before the typer) only reads it.
+# A `Context` is confined to the typing that made it. Completers capture namer contexts and run on whichever thread forces the symbol, but every completer types on a context of its own (`createNamer`'s `makeNewScope`, `Namer.completerTyper`, `makeNonSilent`/`makeSilent` for annotations), so a namer context is only read once the namer is done: `make` copies its fields. Exceptions, benign: `savingEnclClass`, and the implicits cache below.
+nsc.typechecker.Contexts.Context	scope		thread-confined	The field is a val; the writes are entries into the `Scope`, whose own protection is the scope's (a namer scope is filled by the serial namer, a local scope by its typing).
+nsc.typechecker.Contexts.Context	enclClass		thread-confined	Set by `make`; `savingEnclClass` saves and restores it on a shared context, which is benign (see REVIEW-shared-state.md).
+nsc.typechecker.Contexts.Context	contextMode		thread-confined	Set by `make` and saved and restored around an operation by the typing that owns the context (`withMode`, `inSilentMode`). A completer types on a child context, so a transient mode is never copied into another thread's child.
+nsc.typechecker.Contexts.Context	openImplicits		thread-confined	As `contextMode`; pushed and popped by `typedImplicit` on the search's own context.
+nsc.typechecker.Contexts.Context	implicitDictionary		thread-confined	As `contextMode`: written in the implicit search's context.
+nsc.typechecker.Contexts.Context	savedTypeBounds		thread-confined	As `contextMode`.
+nsc.typechecker.Contexts.Context	pendingStabilizers		thread-confined	As `contextMode`: `typed` saves, clears and restores it on the context it types on.
+nsc.typechecker.Contexts.Context	prefix		thread-confined	Set by `make`.
+nsc.typechecker.Contexts.Context	enclMethod		thread-confined	Set by `make`, and by a synthesised method's own typer (`synthesizePartialFunction`).
+nsc.typechecker.Contexts.Context	_reporter		thread-confined	As `contextMode`: `inSilentMode` swaps it on the context it types on.
+nsc.typechecker.Contexts.Context	_undetparams		thread-confined	As `contextMode`.
+nsc.typechecker.Contexts.Context	implicitsCache		benign-race	Shared through a namer context: in a concurrent compiler the cache is stored before its run id and the in-progress marker is per thread (`implicitsInProgress`); a lost update recomputes the same list.
+nsc.typechecker.Contexts.Context	implicitsRunId		benign-race	As `implicitsCache`.
