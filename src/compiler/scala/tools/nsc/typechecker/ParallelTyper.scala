@@ -34,7 +34,6 @@ import scala.tools.nsc.reporters.FilteringReporter
  *  arrival). The phases after the typer run on the main thread as before.
  *
  *  System properties, for measurement:
- *   - `scalac.parallelTyper.lazySignatures`: no signatures-first pre-pass (completers run where they are reached).
  *   - `scalac.parallelTyper.oneThread`: the parallel path on one worker, to tell order effects from concurrency.
  *   - `scalac.parallelTyper.threads=N`: the number of workers (else `-Yparallel-typer-threads`, else the processors).
  *   - `scalac.parallelTyper.log`: a summary on stderr. `scalac.parallelTyper.timeline=<file>`: a JSON timeline.
@@ -103,8 +102,7 @@ trait ParallelTyper {
 
     val t0 = System.nanoTime()
     val signatures =
-      if (flag("lazySignatures")) 0
-      else if (parallelSignatures && !flag("poolSignatures")) {
+      if (parallelSignatures && !flag("poolSignatures")) {
         // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
         // the symbol's claim, and its annotations by its own unit's task (`typedTemplate`, `typedValDef`, `typedDefDef`
         // and `typedTypeDef` force them), so the typer has one pool step and one tail.
@@ -147,7 +145,7 @@ trait ParallelTyper {
         ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed)) // xray
         n
       }
-    if (!flag("lazySignatures")) ParallelTyperTimeline.span("class headers", "serializable companions")(units.foreach(u => serializableCompanions(u.body))) // xray
+    ParallelTyperTimeline.span("class headers", "serializable companions")(units.foreach(u => serializableCompanions(u.body))) // xray
     val t1 = System.nanoTime()
     logf(f"$signatures signatures completed serially in ${(t1 - t0) / 1e6}%.1f ms")
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
