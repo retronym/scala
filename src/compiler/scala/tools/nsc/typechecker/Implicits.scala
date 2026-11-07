@@ -1095,7 +1095,18 @@ trait Implicits extends splain.SplainData {
           } else !(owner hasTransOwner sym)) // faster than owner.ownerChain contains sym
       }
 
-      sym.isInitialized || {
+      // `isInitialized`, and `hasExplicitResultType` once there is no completer left to ask, depend on whether anything has
+      // completed the symbol so far: another unit, which on the pool is a matter of timing. By position, they do not.
+      // Not for a local symbol, which only its own unit's typing reaches, in the order of the tree: that is what makes one
+      // eligible after its definition in a block, where `comesBefore`, which compares with the owner, says no.
+      if (settings.YimplicitEligibilityByPosition.value && !sym.isLocalToBlock) {
+        val sourceFile = sym.sourceFile
+        sourceFile == null ||
+        (sourceFile ne context.unit.source.file) ||
+        !sym.hasAttachment[InferredImplicitType.type] ||
+        comesBefore(sym, context.owner)
+      }
+      else sym.isInitialized || {
         val sourceFile = sym.sourceFile
         sourceFile == null ||
         (sourceFile ne context.unit.source.file) ||
