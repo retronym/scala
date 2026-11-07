@@ -195,11 +195,16 @@ trait BaseTypeSeqs {
 
     // Not a lazy val: `typeDepth` can complete a symbol (the bound of a class path existential), and this sequence is
     // shared, so that would be under its monitor, against a thread that holds the claim and wants the depth
-    // (-Yparallel-typer). Two threads compute the same depth.
+    // (-Yparallel-typer). Two threads compute the same depth; the field is read once, as another thread may store it.
     private[this] var maxDepthCache: Depth = Depth.AnyDepth
     def maxDepth: Depth = {
-      if (maxDepthCache.isAnyDepth) maxDepthCache = maxDepthOfElems
-      maxDepthCache
+      val d = maxDepthCache
+      if (!d.isAnyDepth) d
+      else {
+        val d1 = maxDepthOfElems
+        maxDepthCache = d1
+        d1
+      }
     }
 
     protected def maxDepthOfElems: Depth = {
