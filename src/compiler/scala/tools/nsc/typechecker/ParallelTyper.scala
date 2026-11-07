@@ -23,13 +23,13 @@ import scala.tools.nsc.reporters.FilteringReporter
 
 /** `-Yparallel-typer`: the typer phase typechecks its units on several threads over one `Global`.
  *
- *  Parser, namer and packageobjects run serially as before. Then, on the main thread: the lazy vals of `definitions`
- *  and `runDefinitions` are forced (their initialisers complete symbols under the lazy val's monitor, a deadlock
- *  against the completion lock), and by default the signature of every member defined in the sources is completed
- *  ("signatures first"): a Namer completer types trees of its own unit with its own unit's contexts and per-unit
- *  maps, so it must not run on another unit's thread while that unit's thread types the same state. Then the bodies
- *  are typed with a unit per task, largest first, on a pool of workers, each with its own phase, current unit and
- *  scratch state. Every completion that still happens runs under the completion lock (`SymbolTable.completionLock`).
+ *  Parser, namer and packageobjects run serially as before. Then, on the main thread: the class headers defined in the
+ *  sources are completed (classes and objects with their type parameters), and the lazy vals of `definitions` and
+ *  `runDefinitions` are forced (their initialisers complete symbols under the lazy val's monitor, a deadlock against
+ *  the completion claims). Then the bodies are typed with a unit per task, largest first, on a pool of workers, each
+ *  with its own phase, current unit and scratch state. A member's signature is completed by the first thread that asks
+ *  for it, under the claim of its completion root (`SymbolTable.completionLock`, `Global.completionRoot`), and its
+ *  annotations by its own unit's task.
  *  The diagnostics are buffered and issued after the last unit in a fixed order (by file, then position, then
  *  arrival). The phases after the typer run on the main thread as before.
  *
@@ -44,9 +44,6 @@ trait ParallelTyper {
 
   import global._
 
-  /** Whether signatures are completed under a claim per symbol: the default, with only the class headers serial.
-   *  `-Dscalac.parallelTyper.serialSignatures` restores the serial pre-pass under the one completion lock. */
-  lazy val parallelSignatures: Boolean = scala.reflect.internal.util.CompletionLock.parallelSignatures
   /** `-Dscalac.parallelTyper.eagerImports`: complete every import with the class headers (see `completeSignatures`). */
   private lazy val eagerImports: Boolean = System.getProperty("scalac.parallelTyper.eagerImports") != null
 
@@ -101,30 +98,14 @@ trait ParallelTyper {
     val ordered = if (prop("order").contains("source")) units else units.sortBy(u => -u.source.content.length)
 
     val t0 = System.nanoTime()
-    val signatures =
-      if (parallelSignatures) {
-        // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
-        // the symbol's claim, and its annotations by its own unit's task (`typedTemplate`, `typedValDef`, `typedDefDef`
-        // and `typedTypeDef` force them), so the typer has one pool step and one tail.
-        var n = 0
-        units.foreach(u => n += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u, null, classesOnly = true))) // xray
-        logf(f"class headers serially in ${(System.nanoTime() - t0) / 1e6}%.1f ms; members and annotations left to the body tasks")
-        n
-      }
-      else {
-        var n = 0
-        val completed = mutable.ArrayBuffer.empty[(CompilationUnit, Symbol)]
-        units.foreach(u => n += ParallelTyperTimeline.span("signatures", u.spanLabel)(completeSignatures(u, completed))) // xray
-        // Then their annotations, in a pass of their own: an annotation is lazy so that its arguments can refer to
-        // symbols still being completed. A thunk types the annotation with its symbol's context, in place, so it
-        // must not run on another unit's thread; and outside `info`, the lock would not cover it (it is taken
-        // before the lazy val's monitor, `LazyAnnotationInfo.forcedInfo`, for the ones that are left).
-        ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed)) // xray
-        n
-      }
+    // Only the class headers serially. A member's signature is completed by the first thread that asks for it, under
+    // the symbol's claim, and its annotations by its own unit's task (`typedTemplate`, `typedValDef`, `typedDefDef`
+    // and `typedTypeDef` force them), so the typer has one pool step and one tail.
+    var signatures = 0
+    units.foreach(u => signatures += ParallelTyperTimeline.span("class headers", u.spanLabel)(completeSignatures(u))) // xray
     ParallelTyperTimeline.span("class headers", "serializable companions")(units.foreach(u => serializableCompanions(u.body))) // xray
     val t1 = System.nanoTime()
-    logf(f"$signatures signatures completed serially in ${(t1 - t0) / 1e6}%.1f ms")
+    logf(f"$signatures class headers completed serially in ${(t1 - t0) / 1e6}%.1f ms")
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
     // library), and forcing it before that symbol's unit is ready meets a cycle, which leaves a cache stamped in
     // progress (`CompoundType.baseClasses`) for the rest of the run.
@@ -426,22 +407,11 @@ trait ParallelTyper {
     case _                    =>
   }
 
-  /** Complete the signature of every member that `unit` defines, outside method bodies: the classes, objects, their
-   *  type parameters, members (those of the trees and the synthetic ones in their scopes), self types and
-   *  annotations. Returns the number of symbols completed. A type error that escapes a completion is reported here,
-   *  at the symbol, where the serial typer would report it at the tree that first needed the symbol.
+  /** Complete the class headers that `unit` defines: its classes and objects with their type parameters, in tree order.
+   *  Returns the number of symbols completed. A type error that escapes a completion is reported here, at the symbol,
+   *  where the serial typer would report it at the tree that first needed the symbol.
    */
-  private def forceAnnotations(syms: Iterable[(CompilationUnit, Symbol)]): Unit = {
-    val savedUnit = currentRun.currentUnit
-    try syms.foreach { case (unit, sym) =>
-      currentRun.currentUnit = unit
-      try sym.annotations.foreach(_.completeInfo())
-      catch { case ex: TypeError => reporter.error(sym.pos, ex.getMessage) }
-    }
-    finally currentRun.currentUnit = savedUnit
-  }
-
-  private def completeSignatures(unit: CompilationUnit, completed: mutable.ArrayBuffer[(CompilationUnit, Symbol)], classesOnly: Boolean = false): Int = {
+  private def completeSignatures(unit: CompilationUnit): Int = {
     var n = 0
     val seen = mutable.HashSet[Symbol]()
     val savedUnit = currentRun.currentUnit
@@ -452,20 +422,7 @@ trait ParallelTyper {
         try {
           sym.initialize
           sym.typeParams.foreach(complete)
-          if (sym.isMethod) sym.paramss.foreach(_.foreach(complete))
-          if (completed ne null) completed += ((unit, sym))
           if (sym.isModule) complete(sym.moduleClass)
-          if (sym.isClass && !classesOnly) {
-            sym.typeOfThis
-            var decls = Set.empty[Symbol]
-            var more = true
-            while (more) { // completing a member can enter more (default getters, case class methods)
-              val ds = sym.info.decls.toList.filterNot(decls)
-              decls ++= ds
-              ds.foreach(complete)
-              more = ds.nonEmpty
-            }
-          }
         } catch {
           case ex: TypeError => reporter.error(sym.pos, ex.getMessage)
         }
@@ -474,19 +431,15 @@ trait ParallelTyper {
       case PackageDef(_, stats) => stats.foreach(traverse)
       case cd: ClassDef         => complete(cd.symbol); cd.impl.body.foreach(traverse)
       case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
-      case md: MemberDef        => if (!classesOnly) complete(md.symbol)
-      // In tree order, as the typer types them. With `classesOnly` an import is left to the thread that first looks a
-      // name up through it, as in the serial compiler: completing an import loads the classes it names, and all of them
-      // up front was four fifths of the class headers step (`-Dscalac.parallelTyper.eagerImports` completes them all
-      // here). The root import mask needs none of them up front, as `Contexts.isMaskedRootImport` completes the
-      // imports it depends on.
-      case imp: Import          => if (!classesOnly || eagerImports) complete(imp.symbol)
+      // In tree order, as the typer types them. An import is left to the thread that first looks a name up through it,
+      // as in the serial compiler: completing an import loads the classes it names, and all of them up front was four
+      // fifths of the class headers step (`-Dscalac.parallelTyper.eagerImports` completes them all here). The root
+      // import mask needs none of them up front, as `Contexts.isMaskedRootImport` completes the imports it depends on.
+      case imp: Import          => if (eagerImports) complete(imp.symbol)
       case _                    =>
     }
-    try {
-      traverse(unit.body)
-      if (!classesOnly) unit.synthetics.keys.toList.foreach(complete)
-    } finally currentRun.currentUnit = savedUnit
+    try traverse(unit.body)
+    finally currentRun.currentUnit = savedUnit
     n
   }
 

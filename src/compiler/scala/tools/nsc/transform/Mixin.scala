@@ -277,7 +277,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
   private final case class MixinClaim(clazz: Symbol)
   private def mixinClaim(clazz: Symbol)(body: => Unit): Unit = {
     val lock = completionLock
-    if ((lock eq null) || !lock.isPerKey) underCompletionLock(body)
+    if (lock eq null) body
     else lock.claim(MixinClaim(clazz), scala.reflect.internal.util.CompletionLock.completing, clazz)(body)
   }
 

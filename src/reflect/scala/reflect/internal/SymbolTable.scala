@@ -595,7 +595,6 @@ abstract class SymbolTable extends macros.Universe
   final lazy val completionLock: util.CompletionLock =
     if (!isConcurrentCompiler) null
     else new util.CompletionLock(
-      perKey = System.getProperty("scalac.parallelTyper.claims") == "perKey" || util.CompletionLock.parallelSignatures,
       cycle = { subject =>
         reportWaitCycle(subject)
         subject match {
@@ -616,20 +615,14 @@ abstract class SymbolTable extends macros.Universe
       Console.err.println(s"[parallel-typer] wait cycle on $subject (${Thread.currentThread.getName}); holders: ${completionLock.holders}\n${frames(new Throwable().getStackTrace)}\n$others")
     }
 
-  /** The root whose claim a completion of `sym` takes when completions are claimed per root
-   *  (`-Dscalac.parallelTyper.claims=perKey`): the coarse root here; the compiler gives a source symbol its own. */
+  /** The root whose claim a completion of `sym` takes: the coarse root here; the compiler gives a source symbol its own. */
   def completionRoot(sym: Symbol): AnyRef = util.CompletionLock.CoarseRoot
 
-  /** `body` holding the claim on `sym`'s completion root (or the lock), in a concurrent compiler. */
+  /** `body` holding the claim on `sym`'s completion root, in a concurrent compiler. */
   @inline final def withCompletionClaim[T](sym: Symbol)(body: => T): T = {
     val lock = completionLock
     if (lock eq null) body
-    else if (lock.isPerKey) lock.claim(completionRoot(sym), util.CompletionLock.completing, sym)(body)
-    else {
-      lock.acquire()
-      try body
-      finally lock.release()
-    }
+    else lock.claim(completionRoot(sym), util.CompletionLock.completing, sym)(body)
   }
 
   /** A value of each thread in a concurrent compiler, else one value: for the scratch state of the typer

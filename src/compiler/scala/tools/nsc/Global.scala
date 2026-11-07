@@ -63,9 +63,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   override def isConcurrentUniverse = currentSettings.YparallelTyper.value
   override def isParallelCompiler = currentSettings.YparallelTyper.value
 
-  // -Yparallel-typer with -Dscalac.parallelTyper.claims=perKey: a symbol defined in this run's sources is a root of its
-  // own (a module and its module class one root: `moduleSig` completes both); anything else (the classpath) is
-  // the coarse root. What the Namer's completers of one unit share (its contexts, its per-unit maps and its classes'
+  // -Yparallel-typer: the completion root of a symbol defined in this run's sources is the symbol (a module and its
+  // module class one root: `moduleSig` completes both); anything else (the classpath) is the coarse root. What the Namer's completers of one unit share (its contexts, its per-unit maps and its classes'
   // scopes) is made safe for two writers: per-thread implicits markers, concurrent unit maps, scope writes under the
   // scope's monitor.
   override def completionRoot(sym: Symbol): AnyRef = {

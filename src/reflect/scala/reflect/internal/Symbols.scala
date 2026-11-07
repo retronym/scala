@@ -1680,31 +1680,21 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[scala] final def awaitCompletionElsewhere(): Unit =
       if (isConcurrentCompiler && isCompletingElsewhere) awaitMarker()
 
-    /** Wait until no other thread is completing this symbol: for the completion lock if a completion holds it, else
-     *  (a local completion, which takes no lock, see `completeLocally`) by parking briefly and looking again. */
+    /** Wait until no other thread is completing this symbol: for the claim of its completion root, then (a local
+     *  completion, which takes no claim, see `completeLocally`) by parking briefly and looking again. */
     private def awaitMarker(): Unit = {
       val lock = completionLock
-      var parkNanos = 10000L
       while (isCompletingElsewhere) {
-        if (lock.isPerKey) {
-          // A wait that would close a wait-for cycle (with parallel signatures): on one thread, this completion would
-          // have nested in the other, and read the provisional info it had published (an inherited result type,
-          // `classSig`'s early class info), if any; without one it is the cycle a serial nesting meets.
-          try lock.awaitKey(completionRoot(this), this, () => throw util.CompletionLock.WaitCycle)
-          catch {
-            case util.CompletionLock.WaitCycle =>
-              if (_validTo != NoPeriod) return
-              else throw waitCycleError()
-          }
-          if (isCompletingElsewhere) java.util.concurrent.locks.LockSupport.parkNanos(parkNanos) // a local completion
+        // A wait that would close a wait-for cycle: on one thread, this completion would have nested in the other, and
+        // read the provisional info it had published (an inherited result type, `classSig`'s early class info), if
+        // any; without one it is the cycle a serial nesting meets.
+        try lock.awaitKey(completionRoot(this), this, () => throw util.CompletionLock.WaitCycle)
+        catch {
+          case util.CompletionLock.WaitCycle =>
+            if (_validTo != NoPeriod) return
+            else throw waitCycleError()
         }
-        else if (lock.isLocked) lock.await()
-        else {
-          val t0 = System.nanoTime()
-          java.util.concurrent.locks.LockSupport.parkNanos(parkNanos)
-          util.PerThreadTimes.addWait(System.nanoTime() - t0)
-          parkNanos = math.min(parkNanos * 2, 1000000L)
-        }
+        if (isCompletingElsewhere) java.util.concurrent.locks.LockSupport.parkNanos(10000L) // a local completion
       }
     }
 
@@ -1750,7 +1740,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       // a local symbol of a source being compiled: one from the classpath (an unpickled existential owned by a
       // method, say) is completed with the unpickler's shared state, under the lock
       else if (localCompletions && isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
-      else if (lock.isPerKey) {
+      else {
         val root = completionRoot(this)
         // see `awaitMarker`: a claim that would close a wait-for cycle reads a provisional info if there is one
         val claimed =
@@ -1764,11 +1754,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           try completeInfoLoop()
           finally lock.releaseKey(root)
         }
-      }
-      else {
-        lock.acquire(this) // xray: names the symbol
-        try completeInfoLoop()
-        finally lock.release()
       }
     }
 
@@ -2385,7 +2370,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
 
     def setAnnotations(annots: List[AnnotationInfo]): this.type = {
-      if (isConcurrentCompiler && completionLock.isPerKey)
+      if (isConcurrentCompiler)
         annots.foreach { case lzy: LazyAnnotationInfo => lzy.claimWith(this) case _ => }
       _annotations = annots
       this
