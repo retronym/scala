@@ -59,6 +59,17 @@ The steps are `floor` (the smallest heap for N=8 with no full collection), `shar
 
 `sim/` estimates what those curves mean for a clean multi-module build with pipelining: a fluid simulation of fixed splits of the cores against adaptive scheduling, which gives workers to the modules others wait on. `sim/curves.sh` measures its curves, `sim/graphs.py` reads real module graphs, and `sim/run.py` and `sim/choke.py` compare the schedules.
 
+`XrayBuild.scala` checks those estimates on real builds: a clean build of a multi-module project in one JVM with nothing on disk and no incremental compiler, traditional or pipelined, on any split of the cores. `bloop_modules.py` reads a project's Bloop export, with sbt's own source lists where a directory holds more than the build compiles. `build_report.py` writes `build.data.js` for `build.html`, and `sim/calibrate.py` and `sim/fit.py` compare the simulator with the builds. `sim/curves/` holds the ScalaTest run they read.
+
+```bash
+sbt 'project/Test/bloopGenerate' ...   # in the project, with sbt-bloop added
+sbt 'show project/Test/sources' ... > sources.txt
+tools/parallel-typer/xray/bloop_modules.py .bloop project.modules --sbt-sources sources.txt
+java -Xms31g -Xmx31g -Xmn20g -XX:+UseParallelGC -Dxray.full=true -cp <compiler snapshot, its jars, XrayBuild's classes> scala.tools.nsc.xray.XrayBuild project.modules pipe:8x1 3 3 trad:1x1 pipe:8x1 pipe:4x4
+```
+
+Keep ParallelGC's adaptive sizing on: with it off, the old generation fills and a build's time doubles. Set `-Dxray.jdk.home` to compile against another JDK's API, which ScalaTest needs on a JDK that has removed `Thread.stop`.
+
 ## What is recorded
 
 `scala.reflect.internal.util.ParallelTyperTimeline`, installed in `ParallelTyperTimeline.current` (null otherwise; every hook tests it and does nothing else). The hooks are lines marked `// xray`: `CompletionLock.acquire`/`release` (and `acquire(what)`, called with the symbol by `Symbol.completeInfoUnderLock`), `Global.applyPhase`, the phase loop of `Run.compileUnitsInternal`, and in `ParallelTyper` the pre-pass per unit, the annotation sub-pass, lazy-val forcing and a worker finding the queue empty.

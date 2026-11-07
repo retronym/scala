@@ -57,15 +57,20 @@ object InMemory {
   private def isSource(rel: String) = rel.endsWith(".scala") || rel.endsWith(".java")
 
   /** Every module of the running JDK, in one directory. */
-  private lazy val jdk: VirtualDirectory = {
+  private[xray] lazy val jdk: VirtualDirectory = {
     val root = new VirtualDirectory("memory-jdk", None)
-    val modules = FileSystems.getFileSystem(URI.create("jrt:/")).getPath("/modules")
+    // -Dxray.jdk.home: compile against another JDK's API than the one running the compiler
+    val fs = Option(System.getProperty("xray.jdk.home")) match {
+      case Some(home) => FileSystems.newFileSystem(URI.create("jrt:/"), java.util.Collections.singletonMap("java.home", home))
+      case None       => FileSystems.getFileSystem(URI.create("jrt:/"))
+    }
+    val modules = fs.getPath("/modules")
     val ms = Files.list(modules)
     try ms.iterator.asScala.foreach(m => readTree(root, m, isClass)) finally ms.close()
     root
   }
   private val roots = new ConcurrentHashMap[String, VirtualDirectory]
-  private def classRoot(entry: String): VirtualDirectory = roots.computeIfAbsent(entry, _ => {
+  private[xray] def classRoot(entry: String): VirtualDirectory = roots.computeIfAbsent(entry, _ => {
     val p = Paths.get(entry)
     val root = new VirtualDirectory(s"memory-${p.getFileName}", None)
     if (Files.isDirectory(p)) readTree(root, p, isClass)
@@ -85,7 +90,7 @@ object InMemory {
     root
   })
   private val sources = new ConcurrentHashMap[String, SourceFile]
-  private def source(path: String): SourceFile = sources.computeIfAbsent(path, _ =>
+  private[xray] def source(path: String): SourceFile = sources.computeIfAbsent(path, _ =>
     new BatchSourceFile(AbstractFile.getFile(path), new String(Files.readAllBytes(Paths.get(path)), java.nio.charset.StandardCharsets.UTF_8).toCharArray))
 
   /** A compiler for `args` (options and source files), its reporter and its sources, all in memory. */

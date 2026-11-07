@@ -55,8 +55,9 @@ class Curves:
 
 
 class Graph:
-    def __init__(self, work, deps, hard=None):
+    def __init__(self, work, deps, hard=None, f=None):
         self.n = len(work); self.work = work; self.deps = deps
+        self.f = f # each module's measured share of its work before its pickles; else the curve's
         self.hard = hard or [set() for _ in deps] # edges that need the dependency's class files, for macros
         self.rdeps = [[] for _ in work]
         for m, ds in enumerate(deps):
@@ -73,12 +74,17 @@ class Graph:
 
 
 def priorities(g, f, pipelined):
+    fs = g.f or [f] * g.n
+    return _priorities(g, fs, pipelined)
+
+
+def _priorities(g, fs, pipelined):
     """Longest serial time from this module's start to the end of the build along what waits on it."""
     rem = [0.0] * g.n
     for m in reversed(g.order()):
         w = g.work[m]; best = w
         for r in g.rdeps[m]:
-            wait = w if (not pipelined or m in g.hard[r]) else f * w
+            wait = w if (not pipelined or m in g.hard[r]) else fs[m] * w
             best = max(best, wait + rem[r])
         rem[m] = best
     return rem
@@ -86,10 +92,10 @@ def priorities(g, f, pipelined):
 
 def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
     """policy: ('fixed', M, T) or ('adaptive',). Returns the makespan in ms."""
-    f = c.f
-    pri = priorities(g, f, pipelined)
+    fs = g.f or [c.f] * g.n
+    pri = priorities(g, c.f, pipelined)
     n = g.n
-    pre_left = [w * f for w in g.work]; post_left = [w * (1 - f) for w in g.work]
+    pre_left = [w * f for w, f in zip(g.work, fs)]; post_left = [w * (1 - f) for w, f in zip(g.work, fs)]
     wait = [0] * n # dependencies still to reach what this module needs
     for m in range(n):
         wait[m] = len(g.deps[m])
@@ -99,6 +105,8 @@ def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
     running = {} # module -> workers (for fixed), reassigned for adaptive
     now = 0.0; done = 0
     fixed = policy[0] == 'fixed'
+    static = policy[0] == 'static'
+    balanced = policy[0] == 'balanced'
     M = policy[1] if fixed else None; T = policy[2] if fixed else None
 
     def release(m, full):
@@ -110,6 +118,27 @@ def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
 
     def assign():
         order = sorted(ready, key=lambda m: -pri[m])
+        if static:
+            # as XrayBuild's adapt<C>: a module takes its workers when it starts and keeps them until it ends
+            for m in order:
+                free = budget - sum(running.values())
+                if free <= 0: break
+                top = max(pri[x] for x in range(n) if state[x] != 4)
+                t = min(tmax, free) if pri[m] >= 0.9 * top or len(ready) == 1 else 1
+                ready.discard(m); state[m] = 2; running[m] = t
+            return
+        if balanced:
+            # as XrayBuild's bal<C>
+            for m in order:
+                free = budget - sum(running.values())
+                if free <= 0: break
+                left = sum(g.work[x] for x in range(n) if state[x] != 4)
+                target = left / (budget * 0.65)
+                t = next((t for t, sp in ((1, 1.0), (2, 1.75), (3, 2.4), (4, 3.0), (6, 3.6), (8, 4.0)) if g.work[m] / sp <= target), 8)
+                if len(ready) == 1: t = tmax
+                t = min(t, free)
+                ready.discard(m); state[m] = 2; running[m] = t
+            return
         if fixed:
             free = M - len(running)
             for m in order[:max(0, free)]:
@@ -117,8 +146,9 @@ def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
             return
         # every running compile keeps a worker; new ones start while a worker is free; the rest go where each adds the most
         left = budget - len(running)
+        cap = policy[1] if len(policy) > 1 else budget # at most so many compiles at once
         for m in order:
-            if left <= 0: break
+            if left <= 0 or len(running) >= cap: break
             ready.discard(m); state[m] = 2; running[m] = 1; left -= 1
         for m in running: running[m] = 1
         while left > 0:
@@ -128,7 +158,9 @@ def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
                 ph = 0 if state[m] == 2 else 1
                 base = 0 if t == 1 and not penalty else t
                 weight = pri[m] if ph == 0 else 1.0 # the back end only when nothing else can use the worker
-                gain = weight * (c.intrinsic(ph, t + 1) - c.intrinsic(ph, base))
+                speed = (lambda w: c.intrinsic(ph, w, m)) if hasattr(c, 'by_module') else (lambda w: c.intrinsic(ph, w))
+                # in proportion to the work waiting: a module with twice the work gets the same gain from twice the speed
+                gain = weight * (math.log(speed(t + 1)) - math.log(speed(base)))
                 if gain > bestv: bestm, bestv = m, gain
             if bestm is None: break
             running[bestm] += 1; left -= 1
@@ -137,13 +169,13 @@ def simulate(g, c, budget, policy, pipelined=True, penalty=False, tmax=8):
         assign()
         if not running: raise RuntimeError('deadlock')
         busy = sum(running.values())
-        load = c.load(busy)
+        load = c.load_at(busy, len(running)) if hasattr(c, 'load_at') else c.load(busy)
         dt = math.inf; rates = {}
         for m, t in running.items():
             ph = 0 if state[m] == 2 else 1
             # one worker is the serial compiler, unless the compile is in parallel mode and pays for it (`penalty`)
             w = 0 if t == 1 and not penalty else t
-            rate = c.intrinsic(ph, w) / load
+            rate = c.intrinsic(ph, w, m) / load if hasattr(c, 'by_module') else c.intrinsic(ph, w) / load
             rates[m] = rate
             left = pre_left[m] if ph == 0 else post_left[m]
             dt = min(dt, left / rate)
