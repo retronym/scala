@@ -44,8 +44,6 @@ trait ParallelTyper {
 
   import global._
 
-  /** `-Dscalac.parallelTyper.eagerImports`: complete every import with the class headers (see `completeSignatures`). */
-  private lazy val eagerImports: Boolean = System.getProperty("scalac.parallelTyper.eagerImports") != null
 
   /** Is the typer phase running its workers? (`compileLate` is not supported then.) */
   @volatile var parallelTyperActive = false
@@ -433,9 +431,8 @@ trait ParallelTyper {
       case md: ModuleDef        => complete(md.symbol); md.impl.body.foreach(traverse)
       // In tree order, as the typer types them. An import is left to the thread that first looks a name up through it,
       // as in the serial compiler: completing an import loads the classes it names, and all of them up front was four
-      // fifths of the class headers step (`-Dscalac.parallelTyper.eagerImports` completes them all here). The root
-      // import mask needs none of them up front, as `Contexts.isMaskedRootImport` completes the imports it depends on.
-      case imp: Import          => if (eagerImports) complete(imp.symbol)
+      // fifths of the class headers step. The root import mask needs none of them up front, as
+      // `Contexts.isMaskedRootImport` completes the imports it depends on.
       case _                    =>
     }
     try traverse(unit.body)
