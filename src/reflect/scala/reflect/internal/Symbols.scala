@@ -4083,25 +4083,31 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     // that is not yet registered.
     private def permittedChildren(permitted: PermittedSubclassSymbols): Set[Symbol] =
       if (permitted.children != null) permitted.children
-      else if (permitted.completing != null) {
-        if (knownDirectSubclassesCalled) observedBeforeRegistered(permitted.completing)
-        Set.empty
-      }
       else {
-        var complete = true
-        val children = permitted.symbols.filter { sym =>
-          permitted.completing = sym
-          // a stub is a permitted class that no longer exists
-          try !sym.isInstanceOf[StubSymbol] && sym.parentSymbols.contains(this)
-          catch { case _: CyclicReference =>
-            // `sym` is being completed: assume it is a child (javac checked it) unless a macro asked, and don't cache
-            complete = false
-            if (knownDirectSubclassesCalled) { observedBeforeRegistered(sym); false } else true
-          }
-          finally permitted.completing = null
-        }.toSet
-        if (complete) permitted.children = children
-        children
+        // Per thread: while this thread checks a permitted class, its own re-entry sees that the children are unknown.
+        // Another thread's check says nothing about this one's answer: it computes the same set for itself.
+        val inProgress = scratch.permittedCompleting
+        val completing = inProgress.get(permitted)
+        if (completing ne null) {
+          if (knownDirectSubclassesCalled) observedBeforeRegistered(completing.asInstanceOf[Symbol])
+          Set.empty
+        }
+        else {
+          var complete = true
+          val children = permitted.symbols.filter { sym =>
+            inProgress.put(permitted, sym)
+            // a stub is a permitted class that no longer exists
+            try !sym.isInstanceOf[StubSymbol] && sym.parentSymbols.contains(this)
+            catch { case _: CyclicReference =>
+              // `sym` is being completed: assume it is a child (javac checked it) unless a macro asked, and don't cache
+              complete = false
+              if (knownDirectSubclassesCalled) { observedBeforeRegistered(sym); false } else true
+            }
+            finally inProgress.remove(permitted)
+          }.toSet
+          if (complete) permitted.children = children
+          children
+        }
       }
 
     def anonOrRefinementString = {
