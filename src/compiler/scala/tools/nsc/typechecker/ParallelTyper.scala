@@ -147,6 +147,7 @@ trait ParallelTyper {
         ParallelTyperTimeline.span("annotations", "all symbols")(forceAnnotations(completed)) // xray
         n
       }
+    if (!flag("lazySignatures")) ParallelTyperTimeline.span("class headers", "serializable companions")(units.foreach(u => serializableCompanions(u.body))) // xray
     val t1 = System.nanoTime()
     logf(f"$signatures signatures completed serially in ${(t1 - t0) / 1e6}%.1f ms")
     // After the signatures: a lazy val of `definitions` can name a symbol defined in the sources (compiling the
@@ -427,6 +428,28 @@ trait ParallelTyper {
         cls = cls.getSuperclass
       }
     }
+
+  /** The companion of a serializable class is made serializable when it is typed (`typedModuleDef`), which changes its
+   *  parents and so what a lub of it with something else is: `List(A, B)` of two case class companions is inferred with
+   *  `Serializable` or without, according to whether they have been typed yet. The serial compiler has that order too,
+   *  in the order of its units; on the pool the inferred type would differ from run to run, and an info would change
+   *  under a thread that is reading it. So it is done here, before any body is typed, with the class headers complete.
+   *  What the typer does for a local companion stays with the typer: no other thread sees it.
+   */
+  private def serializableCompanions(tree: Tree): Unit = tree match {
+    case PackageDef(_, stats) => stats.foreach(serializableCompanions)
+    case cd: ClassDef         =>
+      // from the class, since a case class's synthetic companion is not in the tree yet
+      val clazz = cd.symbol.companionModule.moduleClass
+      // a type error here is reported where it is met, by the typer
+      try if ((clazz ne NoSymbol) && !cd.symbol.isErroneous && cd.symbol.isSerializable && !clazz.isSerializable) {
+        clazz.makeSerializable()
+        clazz.updateAttachment(SerializableCompanion)
+      } catch { case _: TypeError => }
+      cd.impl.body.foreach(serializableCompanions)
+    case md: ModuleDef        => md.impl.body.foreach(serializableCompanions)
+    case _                    =>
+  }
 
   /** Complete the signature of every member that `unit` defines, outside method bodies: the classes, objects, their
    *  type parameters, members (those of the trees and the synthetic ones in their scopes), self types and
