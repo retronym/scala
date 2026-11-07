@@ -1,16 +1,26 @@
 #!/usr/bin/env python3
 # N independent compilations at once against one alone (XrayScale.scala), with each round's collections read from the
-# JVM's log. Appends one JSON line per round to --results and prints a line per configuration.
+# JVM's log. Appends one JSON line per round to RESULTS; scale_report.py turns them into the page's data. scale.sh runs
+# the whole sweep.
 #
-#   scale.py shared --args A --heap 12g --tokens k1,k2,k4,k6,k8 [--rounds 5] [--warmup 12]    one JVM
-#   scale.py fork   --args A --heap 4g --n 8 [--rounds 5] [--warmup 12]                       N JVMs, started together
+#   scale.py shared --args A --heap 12g --tokens k1,k2,k4,k6,k8 [--rounds 3] [--warmup 8]    one JVM
+#   scale.py fork   --args A --heap 4g --n 8 [--rounds 3] [--warmup 8]                       N JVMs, started together
+#   scale.py hw     --args A --heap 12g --tokens k1,k8 --setup "12 GB"                       shared, with hardware counters
+#   scale.py spin                                                                            no compiler: 1 to 18 threads
 #
-# Environment: JAVA, SNAP (the classpath: compiler snapshot, its jars and XrayScale's classes), JAVA_OPTS, RESULTS, TAG.
+# Environment: JAVA, SNAP (the classpath: compiler snapshot, its jars, XrayScale's classes and, for hw, async-profiler's
+# jar), JAVA_OPTS, RESULTS, TAG, COMMIT, LOGDIR, PERFLAB (default ~/code/retronym/jvm-perf-lab), KPERF_SOCK.
 # A round is void if the machine slept in it: the wall clock moved and the monotonic clock did not.
-import argparse, json, os, re, shlex, statistics, subprocess, sys, tempfile, time
+import argparse, collections, json, os, re, shlex, statistics, subprocess, sys, tempfile, time
 
 GC = re.compile(r'^\[(\d+)ms\]\[gc\s*\] GC\(\d+\) Pause (Young|Full) \((.*?)\) (\d+)M->(\d+)M\((\d+)M\) ([\d.]+)ms')
 SP = re.compile(r'^\[(\d+)ms\]\[safepoint\s*\] Safepoint "([^"]+)".*Total: (\d+) ns')
+HERE = os.path.dirname(os.path.abspath(__file__))
+RUN = int(time.time())
+
+
+def results_path():
+    return os.environ.get('RESULTS', os.path.join(HERE, 'scaling-results.jsonl'))
 
 
 def read_log(path):
@@ -50,11 +60,15 @@ def parse(line):
     return json.loads(line[2:]) if line.startswith('R ') else None
 
 
+def append(rec):
+    with open(results_path(), 'a') as f:
+        f.write(json.dumps(rec, separators=(',', ':')) + '\n')
+
+
 def emit(a, rec):
-    rec.update(tag=os.environ.get('TAG', ''), corpus=os.path.basename(a.args), heap=a.heap)
+    rec.update(tag=os.environ.get('TAG', ''), corpus=os.path.basename(a.args), heap=a.heap, run=RUN, commit=os.environ.get('COMMIT', ''))
     rec['void'] = abs((rec['t1'] - rec['t0']) - rec['nanoMs']) > 500
-    with open(os.environ['RESULTS'], 'a') as f:
-        f.write(json.dumps(rec) + '\n')
+    append(rec)
 
 
 def shared(a):
@@ -76,6 +90,7 @@ def shared(a):
         base = [x['after'] for x in l[0] if x['kind'] == 'Full' and x['cause'] == 'System.gc()']
         print(f'exit {status}; retained after System.gc: {base[-1] if base else "?"} MB', flush=True)
         if status: sys.exit(status)
+        return rs
 
 
 def fork(a):
@@ -119,14 +134,58 @@ def fork(a):
             emit(a, rec)
 
 
+def hw(a):
+    """Rounds of `shared` under the kperf helper, each recorded; a row of counters per N, per compile on the compile threads."""
+    lab = os.path.expanduser(os.environ.get('PERFLAB', '~/code/retronym/jvm-perf-lab')) + '/tools/build/async-profiler/build'
+    sock = os.environ.get('KPERF_SOCK', '/tmp/asprof-kperf.sock')
+    with tempfile.TemporaryDirectory(dir=os.environ.get('LOGDIR')) as d:
+        os.environ['JAVA_OPTS'] = ' '.join([os.environ.get('JAVA_OPTS', ''), f'-agentpath:{lab}/lib/libasyncProfiler.dylib',
+            '-XX:+UnlockDiagnosticVMOptions', '-XX:+DebugNonSafepoints', '-XX:+PreserveFramePointer',
+            f'-Dxray.asprof={d},event=cycles@2000000+instructions@2000000+cache-misses@50000,kperf={sock},jstackdepth=8192'])
+        rs = shared(a)
+
+        def total(jfr, event):
+            out = jfr + '.collapsed'
+            subprocess.run([f'{lab}/bin/jfrconv', '--hw', event, '-t', '--total', '-o', 'collapsed', jfr, out], check=True, capture_output=True)
+            n = 0
+            with open(out) as f:
+                for line in f:
+                    if 'indep-' in line.split(';', 1)[0]: n += int(line.rsplit(' ', 1)[1])
+            os.remove(out)
+            return n
+
+        med = statistics.median
+        for token in a.tokens.split(','):
+            k = int(token[1:])
+            rows = [r for r in rs if r['token'] == token]
+            cs = [[total(f"{d}/{token}-{r['round']}.jfr", e) / k for r in rows] for e in ('cycles', 'instructions', 'cache-misses')]
+            append(dict(kind='hw', corpus=os.path.basename(a.args), setup=a.setup, n=k, batch=med(r['batch'] for r in rows),
+                        cpu=med(x for r in rows for x in r['cpus']), cycG=round(med(cs[0]) / 1e9, 2), insG=round(med(cs[1]) / 1e9, 1),
+                        missM=round(med(cs[2]) / 1e6), commit=os.environ.get('COMMIT', ''), run=RUN))
+
+
+def spin(a):
+    cmd = [os.environ.get('JAVA', 'java'), '-Xmx12g', '-XX:+UseParallelGC', '-cp', os.environ['SNAP'], 'XrayScale',
+           '--spin', '3000', '3', '1', '2', '4', '6', '8', '10', '12', '18']
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, text=True, check=True).stdout
+    by = collections.defaultdict(list)
+    for line in out.splitlines():
+        r = parse(line)
+        if r: by[(r['kind'], r['k'])].append(r['rates'])
+    for (name, k), v in sorted(by.items()):
+        flat = [x for rates in v for x in rates]
+        append(dict(kind='spin', name=name, k=k, total=round(statistics.median(sum(x) for x in v)), lo=round(min(flat)), hi=round(max(flat)), run=RUN))
+
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('mode', choices=['shared', 'fork'])
-    ap.add_argument('--args', required=True); ap.add_argument('--heap', required=True)
+    ap.add_argument('mode', choices=['shared', 'fork', 'hw', 'spin'])
+    ap.add_argument('--args'); ap.add_argument('--heap')
     ap.add_argument('--tokens', default='k1,k2,k4,k6,k8'); ap.add_argument('--n', type=int, default=1)
-    ap.add_argument('--rounds', type=int, default=5); ap.add_argument('--warmup', type=int, default=12)
+    ap.add_argument('--rounds', type=int, default=3); ap.add_argument('--warmup', type=int, default=8)
+    ap.add_argument('--setup', default='')
     a = ap.parse_args()
-    (shared if a.mode == 'shared' else fork)(a)
+    dict(shared=shared, fork=fork, hw=hw, spin=spin)[a.mode](a)
 
 
 if __name__ == '__main__':

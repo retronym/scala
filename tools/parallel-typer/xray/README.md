@@ -46,6 +46,17 @@ The Amdahl bounds come from the one-thread run: `S` is its time outside the bodi
 
 **Thread scaling**: every loaded run of the corpus as a bar on one time scale (so the bars shrink as the run gets faster), a speed-up plot against the serial compiler with the ideal line and the two Amdahl curves, and a table of the components per run.
 
+## N independent compilations
+
+The discussion at the top of the page and the section "N independent compilations" show what this machine gives this code with no coordination: N serial compilers at once, each with its own `Global`, in one JVM or one per JVM. They read `indep-scaling.data.js`, which is committed, unlike the recordings.
+
+```bash
+JAVA=<patched JDK 26>/bin/java tools/parallel-typer/xray/scale.sh                 # everything, about 40 minutes per corpus
+JAVA=<patched JDK 26>/bin/java tools/parallel-typer/xray/scale.sh heap par        # some of it
+```
+
+The steps are `floor` (the smallest heap for N=8 with no full collection), `shared` (N=1 to 8 in one JVM, at 12 GB and the floor), `fork` (one JVM per compile), `heap` (other young generation sizes), `par` (the parallel compiler in the same JVM), `hw` (hardware counters, through the kperf helper) and `spin` (the cores with no compiler). `scale.py` appends the rounds to `scaling-results.jsonl`, and `scale_report.py` writes the data file from the latest run of each configuration, so a re-run replaces what it measures and keeps the rest. Every figure in the discussion comes from that file. The reasoning around the figures was written for one run, named in `WRITTEN_FOR` in the page: after a newer run the page shows a note asking whether it still holds, until the text is reviewed and `WRITTEN_FOR` updated. Republish the page with `indep-scaling.data.js`.
+
 ## What is recorded
 
 `scala.reflect.internal.util.ParallelTyperTimeline`, installed in `ParallelTyperTimeline.current` (null otherwise; every hook tests it and does nothing else). The hooks are lines marked `// xray`: `CompletionLock.acquire`/`release` (and `acquire(what)`, called with the symbol by `Symbol.completeInfoUnderLock`), `Global.applyPhase`, the phase loop of `Run.compileUnitsInternal`, and in `ParallelTyper` the pre-pass per unit, the annotation sub-pass, lazy-val forcing and a worker finding the queue empty.

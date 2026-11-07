@@ -9,19 +9,20 @@
   --bg: #f7f6f3; --panel: #ffffff; --fg: #1d1d1f; --dim: #6b6b72; --line: #e2e0da; --grid: #ecebe6;
   --ink: #17171a; --wait: #e03131; --waitbg: rgba(224, 49, 49, .16); --active: #2f6fdb; --activebg: rgba(47, 111, 219, .18);
   --gc: #5c6168; --sel: #f59f00; --r: 6px;
+  --s1: #2f6fdb; --s2: #c2570c; --s3: #0d8a78;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #141518; --panel: #1c1d21; --fg: #e8e8ea; --dim: #9b9ba3; --line: #2d2f35; --grid: #24262b;
     --ink: #f3f3f5; --wait: #ff6b6b; --waitbg: rgba(255, 107, 107, .2); --active: #6ea0ff; --activebg: rgba(110, 160, 255, .2);
-    --gc: #a3a8b0; --sel: #ffc94d; color-scheme: dark;
+    --gc: #a3a8b0; --sel: #ffc94d; --s1: #588cf0; --s2: #cf7a1e; --s3: #2aab98; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #141518; --panel: #1c1d21; --fg: #e8e8ea; --dim: #9b9ba3; --line: #2d2f35; --grid: #24262b;
   --ink: #f3f3f5; --wait: #ff6b6b; --waitbg: rgba(255, 107, 107, .2); --active: #6ea0ff; --activebg: rgba(110, 160, 255, .2);
-  --gc: #a3a8b0; --sel: #ffc94d; color-scheme: dark;
+  --gc: #a3a8b0; --sel: #ffc94d; --s1: #588cf0; --s2: #cf7a1e; --s3: #2aab98; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
@@ -94,6 +95,34 @@ body.dragging #drop { border-color: var(--active); color: var(--fg); }
 #scaling .mult { display: grid; grid-template-columns: 110px 1fr 360px; gap: 4px 10px; align-items: center; font-size: 12px; }
 @media (max-width: 760px) { #scaling .mult { grid-template-columns: 70px 1fr; } #scaling .mult .num { grid-column: 1 / -1; } .grid2 { grid-template-columns: 1fr; } }
 details summary { cursor: pointer; color: var(--dim); }
+section { scroll-margin-top: 48px; }
+#discuss > details > summary { color: var(--fg); font-size: 14px; font-weight: 650; }
+#discuss > details > summary .dim { font-size: 13px; }
+.dgrid { display: grid; grid-template-columns: minmax(0, 72ch) minmax(0, 1fr); gap: 12px 28px; margin-top: 8px; }
+@media (max-width: 960px) { .dgrid { grid-template-columns: minmax(0, 1fr); } }
+.dgrid p { margin: 0 0 8px; }
+.dgrid h3, #indep h3 { font-size: 12px; font-weight: 650; margin: 0 0 3px; }
+#dlinks { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 0 0 8px; padding: 0; list-style: none; }
+#dlinks a, .go { color: var(--active); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.lad { display: grid; grid-template-columns: minmax(96px, auto) minmax(40px, 1fr) auto; gap: 3px 8px; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.lad .tr { height: 10px; border-radius: 0 4px 4px 0; background: var(--grid); }
+.lad .fl { height: 10px; border-radius: 0 4px 4px 0; background: var(--gc); opacity: .55; }
+.lad .fl.par { background: var(--active); opacity: 1; }
+.lad .num b { font-weight: 650; }
+#dstale { border: 1px solid var(--sel); border-radius: var(--r); padding: 4px 8px; margin: 6px 0 0; }
+.ix { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr)); gap: 16px 22px; margin-top: 8px; }
+.ix > div { min-width: 0; }
+.stk { display: grid; grid-template-columns: 28px minmax(0, 1fr) 62px; gap: 3px 8px; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+.stk .bar { display: flex; gap: 2px; height: 12px; }
+.stk .bar i { display: block; height: 100%; min-width: 1px; }
+.stk .bar i:last-child { border-radius: 0 4px 4px 0; }
+.stk .num { text-align: right; }
+#indep tbody tr { cursor: default; }
+#indep .scroll { max-height: none; }
+#indep .wide { margin-top: 12px; }
+#indep td.fl { font-weight: 650; }
+#indep p.body { max-width: 86ch; margin: 4px 0 8px; }
+#indepCmd { user-select: all; }
 </style>
 </head>
 <body>
@@ -105,6 +134,15 @@ details summary { cursor: pointer; color: var(--dim); }
   <label class="dim"><input type="file" id="file" accept=".json,.js" multiple hidden><button id="fileBtn" title="load run JSON files or a timeline.data.js (or drop them on the page)">Load…</button></label>
   <div id="status"></div>
 </header>
+<section id="discuss" hidden>
+  <details id="discussD" open>
+    <summary>Discussion <span class="dim">why the parallel compiler is not 8× at 8 threads, and how much of that can be recovered</span></summary>
+    <div class="dgrid">
+      <div id="dtext"></div>
+      <div id="dside"></div>
+    </div>
+  </details>
+</section>
 <div id="drop" hidden>No recording loaded. Run <code>tools/parallel-typer/xray/run.sh library</code>, which writes <code>timeline.data.js</code> beside this page, or drop run JSON files (from <code>-Dscalac.parallelTyper.xray=&lt;file&gt;</code>) here.</div>
 <div id="app" hidden>
 <section id="parSec">
@@ -113,7 +151,7 @@ details summary { cursor: pointer; color: var(--dim); }
   <canvas id="parCanvas"></canvas>
   <div class="stretches" id="stretches"></div>
 </section>
-<section>
+<section id="tlSec">
   <h2>Timeline <span class="dim">a lane per thread; wheel or pinch to zoom, drag to pan, double-click to reset; click a red wait to see the hold it waited on</span></h2>
   <div class="ctl" id="stepChips"></div>
   <div class="ctl"><label class="dim">lock site <select id="siteSel"><option value="">all sites</option></select></label><label class="dim"><input type="checkbox" id="showHolds" checked> holds</label><label class="dim"><input type="checkbox" id="showWaits" checked> waits</label><span class="dim" id="viewInfo"></span></div>
@@ -148,6 +186,10 @@ details summary { cursor: pointer; color: var(--dim); }
   <h2>Thread scaling <span class="dim">every loaded run of this corpus, on one scale; speed-ups against</span> <button id="baseSerial" title="the serial compiler: what switching the parallel typer on gains">serial</button> <button id="baseOne" title="the same compiler on one thread: how it scales, apart from what it costs to switch on">1 thread</button></h2>
   <div class="mult" id="mult"></div>
   <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-top:10px"><div id="speedup" style="flex:0 1 460px;min-width:300px"></div><div style="flex:1 1 420px;overflow:auto"><table id="scaleT"></table></div></div>
+</section>
+<section id="indep" hidden>
+  <h2>N independent compilations <span class="dim">N serial compilers at once, each with its own Global: what the machine gives this code with no coordination between them</span></h2>
+  <div id="indepBody"></div>
 </section>
 <section>
   <details><summary>Run metadata</summary><table id="metaT"></table></details>
@@ -1185,6 +1227,183 @@ if (typeof module !== 'undefined') module.exports = XR;
     el.onload = el.onerror = next;
     document.head.appendChild(el);
   })();
+})();
+</script>
+<script src="indep-scaling.data.js" onerror="window.XRAY_INDEP = null"></script>
+<script id="xray-indep">
+// The discussion at the top and the "N independent compilations" section. Every figure comes from indep-scaling.data.js
+// (scale.sh, scale_report.py). The reasoning around the figures was written for the run below: a newer run updates the
+// figures and shows a note asking whether the reasoning still holds.
+(function () {
+  const WRITTEN_FOR = '3bfa674358';
+  const D = window.XRAY_INDEP;
+  if (!D) return;
+  const $ = (id) => document.getElementById(id);
+  const names = Object.keys(D.corpora), C = D.corpora;
+  const x2 = (v) => v.toFixed(2) + '×';
+  const ms = (v) => Math.round(v) + ' ms';
+  const num = (v) => String(Math.round(v));
+  // the same figure for each corpus: "847 ms and 1 109 ms"
+  const each = (f) => { const vs = names.map((c) => f(C[c])); return vs.length < 2 ? vs.join('') : vs.slice(0, -1).join(', ') + ' and ' + vs[vs.length - 1]; };
+  const label = (c) => c === 'compiler' ? 'compiler corpus' : c;
+  const withPar = names.every((c) => C[c].par);
+
+  // ---- the discussion
+  const go = (id, text) => `<a data-go="${id}">${text}</a>`;
+  const P = [];
+  P.push(`<p><b>The question.</b> <code>-Yparallel-typer</code> runs every phase of scalac on a pool of worker threads.` + (withPar ? ` At 8 threads it compiles ${names.map(label).join(' and the ')} in ${each((v) => ms(v.par.wall))}, with classpath, sources and output in memory.` : '') + ` This page asks why that is not 8× and how much of the difference can be recovered.</p>`);
+  P.push(`<p><b>The ceiling.</b> Eight serial compilers running at once, each with its own <code>Global</code>, need no coordination, so they show what this machine gives this code. In the best heap measured they take ${each((v) => ms(v.ceiling.perCompile))} per compile: ${each((v) => x2(v.ceiling.ratioBest))} over the fastest serial compile (${each((v) => ms(v.bestSerial))}).` + (withPar ? ` The parallel compiler is at ${each((v) => x2(v.par.ratioBest))} on the same baseline.` : '') + `</p>`);
+  P.push(`<p><b>What sets the ceiling.</b> In a 12 GB heap with the default young generation the eight reach only ${each((v) => x2(v.default.ratioBest))}. Stop-the-world collection is ${each((v) => v.gap.stopPct + '%')} of the wall time they add over one compile alone. The young generation does not grow with N, so on ${names[0]} a batch has ${C[names[0]].gap.collectionsTo} collections where one compile has ${C[names[0]].gap.collectionsFrom}, each copying about ${Math.round(C[names[0]].gap.liveTo / C[names[0]].gap.liveFrom)} times the live data. A 16 GB young generation removes most of that. What remains is the hardware: ${each((v) => v.ceiling.cpuPct + '%')} more CPU per compile, for the same instructions at a lower IPC and clock.</p>`);
+  if (withPar) P.push(`<p><b>What that says about the parallel compiler.</b> It has one live set, so it stops for only ${each((v) => ms(v.par.stopped))} per compile, about what serial does, and the collector is not what holds it back. Its CPU and stopped time fill ${each((v) => v.par.busyPct + '%')} of 8 cores for the whole compile, so idle workers are a small part of it too. It spends ${each((v) => v.par.extraCpuPct + '%')} more non-GC CPU than eight independent compiles, and takes ${each((v) => v.par.overCeilingPct + '%')} longer than the ceiling allows. That extra CPU is the room left. These runs do not say which code spends it; comparing serial with 8 threads in ${go('profSec', 'Where the CPU went')} is the next step.</p>`);
+  P.push(`<p><b>Reading the page.</b> Pick a corpus and a run in the bar above; the sections up to Thread scaling follow it, and the ceiling figures are the same for every run. The runs in the bar were recorded separately, so their times differ a little from the ones in this text.</p>`);
+  P.push(`<ul id="dlinks"><li>${go('parSec', 'Parallelism over time')}: when the workers run</li><li>${go('tlSec', 'Timeline')}: who waited on what</li><li>${go('profSec', 'Where the CPU went')}: which code spends it</li><li>${go('scaling', 'Thread scaling')}: this compiler by thread count</li><li>${go('indep', 'N independent compilations')}: the ceiling, with its tables</li></ul>`);
+  P.push(`<p class="note">Measured ${D.measuredFrom === D.measuredTo ? D.measuredTo : D.measuredFrom + ' to ' + D.measuredTo} on compiler ${D.commits.map((h) => `<code>${h}</code>`).join(', ')}. Apple M5 Pro, 18 cores (6 + 12), 48 GB, patched JDK 26, ParallelGC. The numbers in this text come from the same data as the tables and update with a re-run.</p>`);
+  if (D.commits.join() !== WRITTEN_FOR) P.push(`<p class="note" id="dstale">These figures are from a newer run than the reasoning was written for (<code>${WRITTEN_FOR}</code>). Check that the argument still holds.</p>`);
+  $('dtext').innerHTML = P.join('');
+
+  $('dside').innerHTML = names.map((c) => {
+    const v = C[c], top = 8;
+    const rows = [['Ideal', 8, v.bestSerial / 8, ''], ['8 independent, best heap', v.ceiling.ratioBest, v.ceiling.perCompile, ''], ['8 independent, 12 GB', v.default.ratioBest, v.default.perCompile, '']];
+    if (v.par) rows.push(['Parallel, 8 threads', v.par.ratioBest, v.par.wall, 'par']);
+    return `<h3>${label(c)} <span class="dim">speed-up over the fastest serial compile, ${ms(v.bestSerial)}</span></h3><div class="lad">` +
+      rows.map(([t, r, w, k]) => `<span>${t}</span><div class="tr"><div class="fl ${k}" style="width:${100 * r / top}%"></div></div><span class="num"><b>${x2(r)}</b> <span class="dim">${ms(w)}</span></span>`).join('') + `</div>` +
+      (v.par ? `<p class="note" style="margin-bottom:12px">Against serial in its own JVM, ${ms(v.par.serialWall)}, the parallel compiler is ${x2(v.par.ratioOwn)}.</p>` : '');
+  }).join('');
+  $('discuss').hidden = false;
+  try {
+    if (localStorage.getItem('xray.discuss') === 'closed') $('discussD').open = false;
+    $('discussD').addEventListener('toggle', () => { try { localStorage.setItem('xray.discuss', $('discussD').open ? 'open' : 'closed'); } catch (e) {} });
+  } catch (e) {}
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest && e.target.closest('a[data-go]');
+    if (a) { const t = $(a.dataset.go); if (t) t.scrollIntoView({ behavior: 'auto', block: 'start' }); }
+  });
+
+  // ---- the section
+  const SERIES = [['shared12', 'one JVM, 12 GB', 'var(--s1)', 'circle'], ['sharedfloor', 'one JVM, floor heap', 'var(--s2)', 'square'], ['fork4', 'N JVMs, 4 GB each', 'var(--s3)', 'tri']];
+  function mark(shape, x, y, fill, tip, stroke) {
+    const common = `fill="${fill}" stroke="${stroke || 'var(--panel)'}" stroke-width="2"`;
+    const s = shape === 'circle' ? `<circle cx="${x}" cy="${y}" r="4.5" ${common}/>`
+      : shape === 'square' ? `<rect x="${x - 4.5}" y="${y - 4.5}" width="9" height="9" rx="1.5" ${common}/>`
+      : shape === 'tri' ? `<path d="M${x},${y - 6} L${x + 5.5},${y + 4} L${x - 5.5},${y + 4} Z" ${common}/>`
+      : `<path d="M${x},${y - 6.5} L${x + 6},${y} L${x},${y + 6.5} L${x - 6},${y} Z" ${common}/>`;
+    return s + `<circle cx="${x}" cy="${y}" r="12" fill="transparent" data-tip="${tip}"/>`;
+  }
+  function chart(v) {
+    const W = 460, H = 250, L = 34, R = 14, T = 12, B = 34, ymax = 8;
+    const X = (n) => L + (n - 1) / 7 * (W - L - R), Y = (r) => H - B - r / ymax * (H - T - B);
+    let g = '';
+    for (let r = 0; r <= ymax; r += 2) g += `<line x1="${L}" x2="${W - R}" y1="${Y(r)}" y2="${Y(r)}" stroke="var(--grid)"/><text x="${L - 5}" y="${Y(r) + 4}" text-anchor="end">${r}×</text>`;
+    for (const n of [1, 2, 4, 6, 8]) g += `<text x="${X(n)}" y="${H - B + 15}" text-anchor="middle">${n}</text>`;
+    g += `<text x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">compilations at once</text>`;
+    g += `<line x1="${X(1)}" y1="${Y(1)}" x2="${X(8)}" y2="${Y(8)}" stroke="var(--dim)" stroke-dasharray="4 3"/>`;
+    const key = [];
+    for (const [tag, name, col, shape] of SERIES) {
+      const pts = v.curves[tag]; if (!pts || !pts.length) continue;
+      const one = pts[0].wall;
+      const heap = tag === 'sharedfloor' ? `one JVM, ${pts[0].heap.replace('g', ' GB')} floor` : name;
+      g += `<polyline points="${pts.map((p) => `${X(p.n)},${Y(p.n * one / p.wall)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2"/>`;
+      pts.forEach((p) => { g += mark(shape, X(p.n), Y(p.n * one / p.wall), col, `${heap}, N=${p.n}: ${ms(p.wall)}, ${x2(p.n * one / p.wall)}; CPU per compile ${ms(p.cpu)}; stopped in batch ${ms(p.stopped)}`); });
+      const last = pts[pts.length - 1];
+      key.push([shape, col, `${heap}, ${x2(last.n * one / last.wall)}`]);
+    }
+    const ceil = v.setups.find((s) => s.tag === v.ceiling.tag);
+    if (ceil) {
+      g += mark('circle', X(8), Y(ceil.ratioOwn), 'var(--panel)', `${ceil.label}, N=8: ${ms(ceil.k8.wall)}, ${x2(ceil.ratioOwn)} over its own N=1, ${ms(ceil.k1.wall)}`, 'var(--s1)');
+      key.push(['hollow', 'var(--s1)', `${ceil.label.replace('one JVM, ', '')}, ${x2(ceil.ratioOwn)}`]);
+    }
+    if (v.par) {
+      g += mark('diamond', X(8), Y(v.par.ratioOwn), 'var(--ink)', `parallel, 8 threads: ${ms(v.par.wall)}, ${x2(v.par.ratioOwn)} over serial in its own JVM`);
+      key.push(['diamond', 'var(--ink)', `parallel, 8 threads, ${x2(v.par.ratioOwn)}`]);
+    }
+    const sw = (shape, col) => {
+      const m = shape === 'hollow' ? `<circle cx="7" cy="6" r="4" fill="none" stroke="${col}" stroke-width="2"/>`
+        : shape === 'circle' ? `<circle cx="7" cy="6" r="4.5" fill="${col}"/>` : shape === 'square' ? `<rect x="2.5" y="1.5" width="9" height="9" rx="1.5" fill="${col}"/>`
+        : shape === 'tri' ? `<path d="M7,0.5 L12.5,10.5 L1.5,10.5 Z" fill="${col}"/>` : `<path d="M7,0 L13,6 L7,12 L1,6 Z" fill="${col}"/>`;
+      return `<svg width="14" height="12" style="vertical-align:-1px" aria-hidden="true">${m}</svg>`;
+    };
+    return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;max-width:560px" role="img" aria-label="Speed-up against N for each setup; the tables below hold the same figures">${g}</svg>` +
+      `<div class="legend">${key.map(([s, c, t]) => `<span>${sw(s, c)} ${t}</span>`).join('')}<span><span style="display:inline-block;width:16px;border-top:2px dashed var(--dim);vertical-align:3px"></span> ideal</span></div>`;
+  }
+  function stack(v) {
+    const pts = v.curves.shared12, top = Math.max(...pts.map((p) => p.wall));
+    return `<div class="stk">` + pts.map((p) => {
+      const rest = Math.max(0, p.wall - p.cpu - p.stopped);
+      const seg = (w, col, t) => w > 0 ? `<i style="flex:0 0 calc(${100 * w / top}% - 2px);background:${col}" data-tip="N=${p.n}: ${t} ${ms(w)}"></i>` : '';
+      return `<span class="dim">${p.n}</span><div class="bar">${seg(p.cpu, 'var(--s1)', 'a compile’s CPU')}${seg(p.stopped, 'var(--gc)', 'stopped for GC')}${seg(rest, 'var(--line)', 'neither')}</div><span class="num">${ms(p.wall)}</span>`;
+    }).join('') + `</div><div class="legend"><span><span class="sw" style="background:var(--s1)"></span> a compile’s CPU</span><span><span class="sw" style="background:var(--gc)"></span> stopped for GC</span><span><span class="sw" style="background:var(--line)"></span> neither</span></div>`;
+  }
+  const row = (cells) => '<tr>' + cells.map((c, i) => `<td${i === 0 ? ' class="l"' : ''}>${c}</td>`).join('') + '</tr>';
+  const head = (cells) => '<thead><tr>' + cells.map((c, i) => `<th${i === 0 ? ' class="l"' : ''}>${c}</th>`).join('') + '</tr></thead>';
+  const wallS = (p) => `${num(p.wall)} <span class="dim">${num(p.lo)}–${num(p.hi)}</span>`;
+  function perN(v) {
+    const a = v.curves.shared12, f = v.curves.sharedfloor, j = v.curves.fork4;
+    const g = (arr, n) => arr && arr.find((p) => p.n === n);
+    const ratio = (arr, p) => p ? x2(p.n * arr[0].wall / p.wall) : '';
+    const floorName = f && f[0] ? f[0].heap.replace('g', ' GB') : 'floor';
+    return `<div class="scroll"><table>` + head(['N', 'one JVM, 12 GB', '×', `one JVM, ${floorName}`, '×', 'N JVMs, 4 GB', '×', 'CPU per compile<br>12 GB / floor / JVMs', 'collections per compile<br>12 GB / JVMs', 'stopped per compile<br>12 GB / JVMs', 'largest pause<br>12 GB / JVMs', 'heap after collection, median, max MB<br>12 GB / per JVM']) + '<tbody>' +
+      a.map((p) => {
+        const q = g(f, p.n), r = g(j, p.n);
+        const coll = (s) => s ? ((s.young + s.full) / s.n).toFixed(1) : '';
+        return row([p.n, wallS(p), ratio(a, p), q ? wallS(q) : '', ratio(f, q), r ? wallS(r) : '', ratio(j, r),
+          `${num(p.cpu)} / ${q ? num(q.cpu) : ''} / ${r ? num(r.cpu) : ''}`, `${coll(p)} / ${coll(r)}`, `${num(p.stopped / p.n)} / ${r ? num(r.stopped / r.n) : ''}`, `${num(p.largest)} / ${r ? num(r.largest) : ''}`,
+          `${num(p.afterMed)}, ${num(p.afterMax)} / ${r ? num(r.afterMed) + ', ' + num(r.afterMax) : ''}`]);
+      }).join('') + '</tbody></table></div>';
+  }
+  function byHeap(v) {
+    const fl = v.floor.map((f) => row([`one JVM, ${f.gb} GB${f.gb === v.floorGb ? ' <b>(floor)</b>' : ''}`, '', wallS(f), '', `${num(f.cpu)}`, num(f.stopped), num(f.largest), `${f.young} young, ${f.maxFull} full (worst round)`, f.errors ? `${f.errors} errors` : '']));
+    const st = v.setups.filter((s) => s.tag !== 'sharedfloor').map((s) => row([s.label + (s.tag === v.ceiling.tag ? ' <b>(best)</b>' : ''), num(s.k1.wall), wallS(s.k8), x2(s.ratioOwn), `${num(s.k1.cpu)} → ${num(s.k8.cpu)}`, num(s.k8.stopped), num(s.k8.largest), `${s.k8.young} young, ${s.k8.full} full`, '']));
+    return `<div class="scroll"><table>` + head(['setup', 'wall N=1', 'wall N=8', '× own N=1', 'CPU per compile', 'stopped in batch', 'largest pause', 'collections in batch', '']) + '<tbody>' + fl.concat(st).join('') + '</tbody></table></div>';
+  }
+  function parT() {
+    return `<div class="scroll"><table>` + head(['same JVM, same 12 GB heap', 'wall per compile', '× serial', 'non-GC process CPU', 'stopped per compile', 'CPU and stopped, share of 8 cores']) + '<tbody>' + names.filter((c) => C[c].par).map((c) => {
+      const p = C[c].par;
+      return row([`${label(c)}, serial`, ms(p.serialWall), '', ms(p.nonGcSerial), ms(p.stoppedSerial), '']) +
+        row([`${label(c)}, 8 independent`, ms(p.indepWall), x2(p.indepRatio), ms(p.nonGcIndep), ms(p.stoppedIndep), '']) +
+        row([`${label(c)}, parallel, 8 threads`, `${ms(p.wall)} <span class="dim">${num(p.lo)}–${num(p.hi)}</span>`, x2(p.ratioOwn), ms(p.nonGc), ms(p.stopped), p.busyPct + '%']);
+    }).join('') + '</tbody></table></div>';
+  }
+  function hwT() {
+    return `<div class="scroll"><table>` + head(['pekko, per compile, compile threads', 'instructions', 'cycles', 'IPC', 'GHz', 'L1D load misses per 1000 instructions', 'wall of the recorded batch']) + '<tbody>' +
+      D.hw.map((h) => row([`N=${h.n}, ${h.setup}`, h.insG.toFixed(1) + ' G', h.cycG.toFixed(2) + ' G', h.ipc.toFixed(2), h.ghz.toFixed(2), h.mpki.toFixed(2), ms(h.batch)])).join('') + '</tbody></table></div>';
+  }
+  function spinT() {
+    const kinds = [['core', 'register-only xorshift loop'], ['walk', 'walk over a random 256 MB cycle per thread']].filter(([k]) => D.spin[k]);
+    if (!kinds.length) return '';
+    const ks = D.spin[kinds[0][0]].map((x) => x.k);
+    return `<div class="scroll"><table>` + head(['no compiler, total rate over one thread', ...ks.map((k) => k + ' threads')]) + '<tbody>' +
+      kinds.map(([k, t]) => row([t, ...D.spin[k].map((x) => x.ratio.toFixed(1) + '×')])).join('') + '</tbody></table></div>';
+  }
+  const inflated = names.some((c) => (C[c].curves.fork4 || []).some((p) => p.systemGcCounted));
+  $('indepBody').innerHTML =
+    `<p class="body">Each N is N <code>Global</code>s on N threads, in one JVM or one per JVM, compiling the whole corpus with classpath, sources and output in memory. Wall is the median of the rounds, with min–max beside it, in ms. × is N × (wall at N=1) / (wall at N) in the same setup, so a setup that slows one compile flatters its own ratio; the discussion above uses the fastest serial compile for all of them. Allocation does not change with N: ${each((v) => v.allocGB.toFixed(2) + ' GB')} per compile. ${D.void ? D.void + ' of ' + D.rounds + ' rounds spanned a sleep and are left out.' : 'No round spanned a sleep.'}</p>` +
+    `<div class="ix">` + names.map((c) => `<div><h3>${label(c)}: speed-up by N</h3>${chart(C[c])}</div>`).join('') + `</div>` +
+    `<div class="ix">` + names.map((c) => `<div><h3>${label(c)}: a batch’s wall by N, one JVM, 12 GB</h3>${stack(C[c])}</div>`).join('') + `</div>` +
+    `<p class="body" style="margin-top:12px">At N=8 in 12 GB, stop-the-world time adds ${each((v) => ms(v.gap.stop))} of the ${each((v) => ms(v.gap.added))} added over one compile (${each((v) => v.gap.stopPct + '%')}), and CPU adds ${each((v) => ms(v.gap.cpu))}. Stopped time grows ${each((v) => v.gap.stoppedTimes + ' times')} for 8 times the work, because the collections and the live data they copy both grow with N. GC CPU goes from ${each((v) => ms(v.gap.gcCpuFrom))} to ${each((v) => ms(v.gap.gcCpuTo))} per compile.</p>` +
+    names.map((c) => `<div class="wide"><h3>${label(c)}: by N</h3>${perN(C[c])}</div>`).join('') +
+    (inflated ? `<p class="note">N JVM pause totals may each include one <code>System.gc</code> pause of 35–80 ms from before the round, which matters at N=1. A re-run of <code>scale.sh fork</code> removes it.</p>` : '') +
+    names.map((c) => `<div class="wide"><h3>${label(c)}: N=8 by heap</h3>${byHeap(C[c])}</div>`).join('') +
+    `<p class="body" style="margin-top:8px">The floor is the smallest heap with no full collection in any round${names.every((c) => C[c].floorGb) ? `: ${each((v) => v.floorGb + ' GB')}` : ''}. A 38 GB heap would turn compressed oops off and allocate 40% more, so the no-collection setup stays at 31 GB. With no collections at all the survivors are never compacted and IPC falls further, which is why it loses to a 16 GB young generation. Separate JVMs with a 3 GB young generation about double their CPU per compile at N=8; these runs do not isolate the cause.</p>` +
+    (withPar ? `<div class="wide"><h3>Against the parallel compiler</h3>${parT()}</div><p class="body" style="margin-top:8px">The same heap charges the independent compiles for copying eight live sets and the parallel compiler for one, so its share of the gap here (independent compiles ${each((v) => v.par.machineShare + '%')} of the gap to 8×) overstates the machine’s. Serial in this JVM is slower than in one that never ran the parallel compiler; against that faster serial the parallel compiler is ${each((v) => x2(v.par.ratioUnmixed))}.</p>` : '') +
+    (D.hw.length ? `<div class="wide"><h3>Hardware counters</h3>${hwT()}</div><p class="note">async-profiler kperf events, through the jvm-perf-lab helper. The instruction count does not move, so added CPU is cycles per instruction and clock. Recording slows the no-collection runs by 8–15% and the 12 GB runs by 1%.</p>` : '') +
+    (spinT() ? `<div class="wide"><h3>The cores alone</h3>${spinT()}</div>` : '') +
+    `<p class="note" style="margin-top:10px">To update this section and the figures in the discussion: <code id="indepCmd">tools/parallel-typer/xray/scale.sh [floor shared fork heap par hw spin]</code>, then republish this page with <code>indep-scaling.data.js</code>. A run replaces only the configurations it measures.</p>`;
+  $('indep').hidden = false;
+
+  // ---- hover
+  const tip = $('tip');
+  const root = [$('indep')];
+  root.forEach((el) => {
+    el.addEventListener('mousemove', (e) => {
+      const t = e.target.closest && e.target.closest('[data-tip]');
+      if (!t) { tip.style.display = 'none'; return; }
+      tip.textContent = t.dataset.tip; tip.style.display = 'block';
+      const w = tip.offsetWidth, h = tip.offsetHeight;
+      tip.style.left = Math.max(4, Math.min(innerWidth - w - 8, e.clientX + 12)) + 'px';
+      tip.style.top = Math.max(4, Math.min(innerHeight - h - 8, e.clientY + 12)) + 'px';
+    });
+    el.addEventListener('mouseleave', () => { tip.style.display = 'none'; });
+  });
 })();
 </script>
 </body>
