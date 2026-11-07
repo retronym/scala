@@ -194,7 +194,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   //  because the latter won't be created until the trait is mixed into a class)
   // TODO do bean getters need special treatment to suppress field-targeting annotations in traits?
   def dropFieldAnnotationsFromGetter(sym: Symbol): Unit =
-    sym.setAnnotations(sym.annotations.filter(AnnotationInfo.mkFilter(GetterTargetClass, defaultRetention = false)))
+    sym.setAnnotations(getterAnnotations(sym))
+  def getterAnnotations(sym: Symbol): List[AnnotationInfo] =
+    sym.annotations.filter(AnnotationInfo.mkFilter(GetterTargetClass, defaultRetention = false))
 
   def symbolAnnotationsTargetFieldAndGetter(sym: Symbol): Boolean = sym.isGetter && (sym.isLazy || sym.owner.isTrait)
 
