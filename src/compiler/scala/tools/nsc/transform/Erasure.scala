@@ -599,7 +599,12 @@ abstract class Erasure extends InfoTransform
         // end up with two module symbols with the same name in the same scope, which is surprising
         // when implementing later phases.
         if (member.isModule) newFlags = (newFlags | METHOD) & ~(MODULE | STABLE)
-        val bridge = other.cloneSymbolImpl(root, newFlags).setPos(root.pos).setAnnotations(member.annotations)
+        // A getter keeps its field's annotations until its own unit reaches it in this phase, and `member` can be in another
+        // unit: read what they will be, so that the bridge's do not depend on which comes first (-Yparallel-typer).
+        val memberAnnotations =
+          if (isConcurrentCompiler && fields.symbolAnnotationsTargetFieldAndGetter(member)) fields.getterAnnotations(member)
+          else member.annotations
+        val bridge = other.cloneSymbolImpl(root, newFlags).setPos(root.pos).setAnnotations(memberAnnotations)
 
         debuglog(s"generating bridge from $other (${flagsToString(newFlags)}): ${otpe}${other.locationString} to $member: ${specialErasure(root)(member.tpe)}${member.locationString}")
 

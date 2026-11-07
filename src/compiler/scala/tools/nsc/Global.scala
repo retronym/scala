@@ -132,11 +132,32 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   private[this] var currentReporter: FilteringReporter = null
   locally { reporter = reporter0 }
 
-  def reporter: FilteringReporter = currentReporter
+  def reporter: FilteringReporter =
+    if (isConcurrentCompiler) {
+      val here = scratch.threadReporter
+      if (here ne null) here.asInstanceOf[FilteringReporter] else currentReporter
+    }
+    else currentReporter
   def reporter_=(newReporter: Reporter): Unit =
-    currentReporter = newReporter match {
-      case f: FilteringReporter => f
-      case r                    => new MakeFilteringForwardingReporter(r, settings) // for sbt
+    currentReporter = filteringReporter(newReporter)
+  private def filteringReporter(r: Reporter): FilteringReporter = r match {
+    case f: FilteringReporter => f
+    case r                    => new MakeFilteringForwardingReporter(r, settings) // for sbt
+  }
+
+  /** `body` with its reports going to `r`. In a concurrent compiler only those of this thread: another thread's must not
+   *  be taken for this one's, or dropped with them. */
+  def withReporter[T](r: Reporter)(body: => T): T =
+    if (isConcurrentCompiler) {
+      val s = scratch
+      val saved = s.threadReporter
+      s.threadReporter = filteringReporter(r)
+      try body finally s.threadReporter = saved
+    }
+    else {
+      val saved = currentReporter
+      reporter = r
+      try body finally reporter = saved
     }
 
   /** Switch to turn on detailed type logs */

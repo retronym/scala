@@ -305,7 +305,15 @@ trait Namers extends MethodSynthesis {
       val sym = enterInScope(assignMemberSymbol(tree))
       sym setInfo completerOf(tree)
       // log("[+info] " + sym.fullLocationString)
+      noteInferredImplicit(sym, tree)
       sym
+    }
+
+    /** See `ImplicitSearch.isValid`. */
+    def noteInferredImplicit(sym: Symbol, tree: MemberDef): Unit = tree match {
+      case vd: ValOrDefDef if vd.mods.isImplicit && vd.tpt.isEmpty && settings.YimplicitEligibilityByPosition.value =>
+        sym.updateAttachment(InferredImplicitType)
+      case _ =>
     }
 
     def createMethod(accessQual: MemberDef, name: TermName, pos: Position, flags: Long): MethodSymbol = {
@@ -749,6 +757,7 @@ trait Namers extends MethodSynthesis {
             } else completerOf(tree)
 
           sym setInfo completer
+          noteInferredImplicit(sym, tree)
       }
       if (mexists(tree.vparamss)(_.mods.hasDefault))
         enterDefaultGetters(tree.symbol, tree, tree.vparamss, tree.tparams)
