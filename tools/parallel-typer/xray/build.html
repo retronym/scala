@@ -61,8 +61,8 @@ li { margin-bottom: 3px; }
 <div id="found"></div>
 
 <h2>Premise</h2>
-<p>A multi-module build has two ways to use 8 cores. It can run 8 modules at once, each on the serial compiler. Or it can give each module several typer threads with <code>-Yparallel-typer</code>. Pipelining adds a third lever: a module can start as soon as its dependencies have written their pickles, without waiting for their class files.</p>
-<p>A simulator built from single-corpus scaling curves made three claims. Real module graphs put 23&#x2013;43% of their code in one module, so 8 serial compiles at once reach only 1.7&#x2013;2.9&#xd7;, while one parallel compile at a time reaches 4.6&#x2013;4.8&#xd7;. Mixed splits such as 2&#xd7;4 do at least as well on some graphs. And moving workers to the modules others wait on adds 5&#x2013;21% where chokepoints hold 10% or more of the work.</p>
+<p>A multi-module build can spend its cores in two ways. It can run as many modules at once as it has cores, each on the serial compiler. Or it can run fewer modules and give each several typer threads with <code>-Yparallel-typer</code>. Pipelining adds a third lever: a module can start as soon as its dependencies have written their pickles, without waiting for their class files.</p>
+<p>A simulator built from single-corpus scaling curves made three claims about 8 cores. Real module graphs put 23&#x2013;43% of their code in one module, so 8 serial compiles at once reach only 1.7&#x2013;2.9&#xd7;, while one parallel compile at a time reaches 4.6&#x2013;4.8&#xd7;. Mixed splits such as 2&#xd7;4 do at least as well on some graphs. And moving workers to the modules others wait on adds 5&#x2013;21% where chokepoints hold 10% or more of the work.</p>
 <p>Those are estimates: warm JITs, workers that move instantly, module times taken from line counts. This experiment runs the real thing and measures how far off the simulator is.</p>
 
 <h2>Experiment design</h2>
@@ -126,6 +126,7 @@ li { margin-bottom: 3px; }
 </figure>
 
 <h3>What varies</h3>
+<p>The splits cover three budgets. One thread is the serial baseline that speed-ups are measured against. Eight threads tests the simulator's claims, and sixteen shows what happens with twice as many; 3&#xd7;5 uses 15, the closest three compiles can get to 16 with equal threads. A budget caps the compiler's threads. It does not pin them to cores: this machine has 18, and ParallelGC's 14 threads run on top of the budget.</p>
 <div class="wide"><table>
   <thead><tr><th class="l">Token</th><th class="l">Starts a module when</th><th class="l">Workers</th></tr></thead>
   <tbody>
