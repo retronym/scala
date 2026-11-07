@@ -74,9 +74,9 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
   def lastAccessCheckDetails: String = lastAccessCheckDetailsHolder.get(0)
   def lastAccessCheckDetails_=(s: String): Unit = lastAccessCheckDetailsHolder.get(0) = s
 
-  val rootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
+  val rootImportsCached = perRunCaches.newConcurrentMap[CompilationUnit, List[Symbol]]()
 
-  private val maskingImportCandidatesCached = perRunCaches.newMap[CompilationUnit, List[Import]]()
+  private val maskingImportCandidatesCached = perRunCaches.newConcurrentMap[CompilationUnit, List[Import]]()
 
   /** The top-level imports of a unit that may have a root import module as their qualifier: those whose qualifier
    *  is a path ending in the name of such a module, or in a name that a preceding top-level import renames it to.
@@ -85,8 +85,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
    *  Completing them all would type qualifiers that a lookup does not depend on, which can be cyclic.
    */
   private def maskingImportCandidates(unit: CompilationUnit): List[Import] =
-    lockedIfConcurrent(maskingImportCandidatesCached)(maskingImportCandidatesCached.get(unit)).getOrElse {
-      // computed outside the monitor (-Yparallel-typer): `rootImports` can complete symbols
+    maskingImportCandidatesCached.getOrElseUpdate(unit, {
       var names = rootImports(unit).collect[Name] { case sym if !sym.hasPackageFlag => sym.name }.toSet
       val candidates = List.newBuilder[Import]
       def traverse(stats: List[Tree]): Unit = stats.foreach {
@@ -100,9 +99,8 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         case _ =>
       }
       if (names.nonEmpty) traverse(unit.body :: Nil)
-      val result = candidates.result()
-      lockedIfConcurrent(maskingImportCandidatesCached)(maskingImportCandidatesCached.getOrElseUpdate(unit, result))
-    }
+      candidates.result()
+    })
 
   /** Is `sym` the qualifier of a top-level import in `unit`, which masks the root import of that module in the
    *  whole unit? The candidates are completed first, so that the answer does not depend on what has been typed so
@@ -129,10 +127,9 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     assert(definitions.isDefinitionsInitialized, "definitions uninitialized")
 
     if (unit.isJava) RootImports.javaList
-    else lockedIfConcurrent(rootImportsCached)(rootImportsCached.get(unit)).getOrElse {
-      // computed outside the monitor: it can complete symbols, and so wait for the completion lock
+    else rootImportsCached.get(unit).getOrElse {
       val calculated = defaultRootImports
-      lockedIfConcurrent(rootImportsCached)(rootImportsCached += unit -> calculated)
+      rootImportsCached += unit -> calculated
       calculated
     }
   }
