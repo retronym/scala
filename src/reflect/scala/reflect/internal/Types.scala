@@ -1457,11 +1457,11 @@ trait Types
     }
     override def underlying: Type = {
       val cache = underlyingCache
-      // In a concurrent compiler, another thread may have stamped the period before it stored the value: the
-      // initial `NoType` is then not an answer, and the slow path waits for the completion lock.
+      // In a concurrent compiler the field stays `NoType` (the stamped cache is elsewhere): not an answer, and the
+      // slow path is taken without asking for the period.
       if (cache != null && ((cache ne NoType) || !isConcurrentCompiler) && underlyingPeriod == currentPeriod) cache
-      else if (lockFreeTypeCaches) concurrentUnderlying(this)
-      else underCompletionLock { // see `TypeRef.baseTypeSeq`
+      else if (isConcurrentCompiler) concurrentUnderlying(this)
+      else {
         defineUnderlyingOfSingleType(this) // this line is synchronized in runtime reflection
         underlyingCache
       }
@@ -1646,8 +1646,8 @@ trait Types
       // the empty field first: it is what a concurrent compiler, whose caches are elsewhere, gets without asking for its period
       if (cached != null && cached != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cached
-      else if (lockFreeTypeCaches) concurrentBaseTypeSeqOfCompoundType(this)
-      else underCompletionLock { // see `TypeRef.baseTypeSeq`
+      else if (isConcurrentCompiler) concurrentBaseTypeSeqOfCompoundType(this)
+      else {
         defineBaseTypeSeqOfCompoundType(this)
         if (baseTypeSeqCache eq undetBaseTypeSeq)
           throw new RecoverableCyclicReference(typeSymbol)
@@ -1661,8 +1661,8 @@ trait Types
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
       if (cached != null && baseClassesPeriod == currentPeriod) cached
-      else if (lockFreeTypeCaches) concurrentBaseClassesOfCompoundType(this)
-      else underCompletionLock { // see `TypeRef.baseTypeSeq`
+      else if (isConcurrentCompiler) concurrentBaseClassesOfCompoundType(this)
+      else {
         defineBaseClassesOfCompoundType(this)
         if (baseClassesCache eq null)
           throw new RecoverableCyclicReference(typeSymbol)
@@ -1848,11 +1848,6 @@ trait Types
   // that the serial fast paths fall through to here at no cost to a serial compiler. Past the pickler a stale pair is
   // a wrong answer, not the same answer: a transformer changes base classes, and two threads at different phases
   // (phase travel) write the same cache.
-  // `-Dscalac.parallelTyper.lockedTypeCaches` puts the serial protocol back under the completion lock; it does not
-  // support the phases after the pickler on the pool (`parallelLatePhases`), for that reason.
-
-  private[this] val lockedTypeCaches: Boolean = System.getProperty("scalac.parallelTyper.lockedTypeCaches") != null
-  @inline final def lockFreeTypeCaches: Boolean = isConcurrentCompiler && !lockedTypeCaches
 
   /** A cached value and the period it was computed in: immutable, so that a reader gets the two as a pair. */
   private[reflect] final class Stamped[+T](val value: T, val period: Period)
@@ -2417,7 +2412,7 @@ trait Types
     final override protected def relativeInfo: Type = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
-        if (lockFreeTypeCaches) return concurrentRelativeInfo(symInfo)
+        if (isConcurrentCompiler) return concurrentRelativeInfo(symInfo)
         relativeInfoCache = super.relativeInfo
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
@@ -2805,8 +2800,8 @@ trait Types
     override def parents: List[Type] = {
       val cache = parentsCache
       if (cache != null && parentsPeriod == currentPeriod) cache
-      else if (lockFreeTypeCaches) concurrentParentsOfTypeRef(this)
-      else underCompletionLock { // see `TypeRef.baseTypeSeq`
+      else if (isConcurrentCompiler) concurrentParentsOfTypeRef(this)
+      else {
         defineParentsOfTypeRef(this)
         parentsCache
       }
@@ -2837,12 +2832,8 @@ trait Types
       val cache = baseTypeSeqCache
       if (cache != null && cache != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cache
-      // In a concurrent compiler, the slow path is under the completion lock, the read of the field after `define`
-      // included: the definition stamps the period before it stores the value (and marks it in progress with
-      // `undetBaseTypeSeq`, or null), so a thread at another phase that redefined it between the two would show this
-      // one its marker, a cycle. Under the lock, a marker is only seen by the thread that set it.
-      else if (lockFreeTypeCaches) concurrentBaseTypeSeqOfTypeRef(this)
-      else underCompletionLock {
+      else if (isConcurrentCompiler) concurrentBaseTypeSeqOfTypeRef(this)
+      else {
         defineBaseTypeSeqOfTypeRef(this)
         if (baseTypeSeqCache == undetBaseTypeSeq)
           throw new RecoverableCyclicReference(sym)

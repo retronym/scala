@@ -808,7 +808,7 @@ abstract class SymbolTable extends macros.Universe
     var recursionTable = Map.empty[Symbol, Int]
     /** The number of Namer completers in progress, see `Symbols.lockedCount` */
     var lockedCount: Int = 0
-    /** The types whose stamped caches this thread is computing, in a concurrent compiler (`Types.lockFreeTypeCaches`):
+    /** The types whose stamped caches this thread is computing, in a concurrent compiler (`Types`' stamped caches):
      *  the in-progress markers that the serial protocol keeps in the shared fields. */
     var btsInProgress: List[AnyRef] = Nil
     var parentsInProgress: List[AnyRef] = Nil

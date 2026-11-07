@@ -3713,50 +3713,39 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       }
     }
     /** `updateTypeCache` stamps the period and stores `NoType` as a cycle marker before the value: in a
-     *  concurrent compiler another thread must not take either for the answer. The update runs under the
-     *  completion lock, and a reader that sees no value waits for it.
+     *  concurrent compiler another thread must not take either for the answer, so the value and its period are one
+     *  `Stamped` and the marker is per thread.
      */
     private def concurrentTpe: Type = {
-      if (!lockFreeTypeCaches) {
-        val period = tpePeriod
-        val cache = tpeCache
-        if (period == currentPeriod && (cache ne null) && (cache ne NoType)) cache
-        else underCompletionLock {
-          maybeUpdateTypeCache()
-          tpeCache
-        }
+      // read once: `info_=` on another thread clears the field
+      val cached = tpeStamped
+      if ((cached ne null) && cached.period == currentPeriod) return cached.value
+      // Without the lock: the cycle marker is per thread, the value is stored before the period is stamped, and
+      // two threads compute the same (interned) `TypeRef`. A re-entry answers as the serial update would: the
+      // cycle marker `NoType` if the period was stamped (the symbol is initialized), else a cyclic reference.
+      // A symbol another thread is completing (a class being loaded) has no type parameters yet: wait (I11).
+      awaitCompletionElsewhere()
+      val s = scratch
+      if (inProgressAtPeriod(s.tpeInProgress, this)) {
+        if (isInitialized) NoType else throw CyclicReference(this, typeConstructor)
+      }
+      else if ((cached ne null) && isValid(cached.period)) {
+        tpeStamped = new Stamped(cached.value, currentPeriod)
+        cached.value
       }
       else {
-        // read once: `info_=` on another thread clears the field
-        val cached = tpeStamped
-        if ((cached ne null) && cached.period == currentPeriod) return cached.value
-        // Without the lock: the cycle marker is per thread, the value is stored before the period is stamped, and
-        // two threads compute the same (interned) `TypeRef`. A re-entry answers as the serial update would: the
-        // cycle marker `NoType` if the period was stamped (the symbol is initialized), else a cyclic reference.
-        // A symbol another thread is completing (a class being loaded) has no type parameters yet: wait (I11).
-        awaitCompletionElsewhere()
-        val s = scratch
-        if (inProgressAtPeriod(s.tpeInProgress, this)) {
-          if (isInitialized) NoType else throw CyclicReference(this, typeConstructor)
-        }
-        else if ((cached ne null) && isValid(cached.period)) {
-          tpeStamped = new Stamped(cached.value, currentPeriod)
-          cached.value
-        }
-        else {
-          val saved = s.tpeInProgress
-          s.tpeInProgress = new Stamped(this, currentPeriod) :: saved
-          try {
-            val stamp = isInitialized
-            val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
-            val tp = newTypeRef(if (noTypeParams) Nil else unsafeTypeParams map (_.typeConstructor))
-            if (noTypeParams && tyconCacheNeedsUpdate) setTyconCache(tp)
-            // Only a value computed from a completed symbol is stored: one computed before (no type parameters yet,
-            // from a loader's lazy type) would be stored after a correct one from another thread, under its stamp (I11).
-            if (stamp) tpeStamped = new Stamped(tp, currentPeriod)
-            tp
-          } finally s.tpeInProgress = saved
-        }
+        val saved = s.tpeInProgress
+        s.tpeInProgress = new Stamped(this, currentPeriod) :: saved
+        try {
+          val stamp = isInitialized
+          val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
+          val tp = newTypeRef(if (noTypeParams) Nil else unsafeTypeParams map (_.typeConstructor))
+          if (noTypeParams && tyconCacheNeedsUpdate) setTyconCache(tp)
+          // Only a value computed from a completed symbol is stored: one computed before (no type parameters yet,
+          // from a loader's lazy type) would be stored after a correct one from another thread, under its stamp (I11).
+          if (stamp) tpeStamped = new Stamped(tp, currentPeriod)
+          tp
+        } finally s.tpeInProgress = saved
       }
     }
     override def typeConstructor: Type = {
