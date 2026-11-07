@@ -1,0 +1,8 @@
+{
+  "groups": [
+    {"label": "innermost span", "by": "innermost"},
+    {"label": "completion, with owners", "by": "path", "from": 2},
+    {"label": "step", "by": "level", "level": 0},
+    {"label": "unit", "by": "level", "level": 1}
+  ]
+}
