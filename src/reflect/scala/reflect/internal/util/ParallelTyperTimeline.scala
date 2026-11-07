@@ -14,7 +14,6 @@ package scala.reflect.internal.util
 
 import java.lang.management.ManagementFactory
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.locks.ReentrantLock
 
 import scala.collection.mutable
 
@@ -26,7 +25,8 @@ import scala.collection.mutable
  *    parked (`ThreadMXBean`, milliseconds), and its time waiting for and holding the completion lock.
  *  - Every wait for the completion lock (request to acquisition), with its call site and, where the caller says,
  *    what was being completed; every outermost hold that someone waited on or that took longer than a threshold
- *    (`scalac.parallelTyper.xray.holdMicros`, default 50); per call site, the count and totals of all of them.
+ *    (`scalac.parallelTyper.xray.holdMicros`, default 50); per call site, the count and totals of all of them. These
+ *    were recorded for the one coarse lock, which per-key claims replaced: nothing records them now.
  *  - The phases on the main thread, GC pauses, and the moment each typer worker ran out of units.
  *
  *  Off unless `ParallelTyperTimeline.current` is set: the hooks test it for null. Each thread records its own lock
@@ -121,68 +121,7 @@ final class ParallelTyperTimeline(val holdThresholdNanos: Long) {
 
   // ---- the completion lock
 
-  private[this] val sites = new java.util.concurrent.ConcurrentHashMap[String, Integer]()
   private[this] val siteNames = mutable.ArrayBuffer.empty[String]
-  private def siteId(label: String): Int = {
-    val i = sites.get(label)
-    if (i ne null) i.intValue
-    else siteNames.synchronized {
-      val j = sites.get(label)
-      if (j ne null) j.intValue
-      else { siteNames += label; sites.put(label, siteNames.length - 1); siteNames.length - 1 }
-    }
-  }
-  // the current hold: written by its holder, read by it at the release
-  private[this] var holdStart = 0L
-  private[this] var holdSite: String = null
-  private[this] var holdWhat: AnyRef = null
-  private[this] var holdSampled = false
-
-  /** `CompletionLock.acquire` while recording: as there, and the wait with its site and what it was for.
-   *
-   *  The call site costs a stack walk (a few microseconds), so it is taken for one outermost acquisition in
-   *  `siteSample` (a sample), for every one that has to wait (before it waits), and after the release of every hold
-   *  that is recorded (someone waited, or it took longer than the threshold) and was not walked yet. A site's
-   *  totals are then exact for the recorded holds and estimated from the sample for the others (each sampled short
-   *  hold counts `siteSample` times). Nothing is walked or recorded while the lock is held.
-   */
-  def acquire(cl: CompletionLock, lock: ReentrantLock, what: AnyRef): Unit = {
-    val outermost = !lock.isHeldByCurrentThread
-    val me = thread()
-    val sampled = outermost && { me.acquisitions += 1; me.acquisitions % siteSample == 0 }
-    var site = if (sampled) callSite() else null
-    if (!lock.tryLock()) {
-      if (site eq null) site = callSite()
-      val t0 = System.nanoTime()
-      lock.lock()
-      val t1 = System.nanoTime()
-      cl.waitNanos.add(t1 - t0); cl.waits.increment(); PerThreadTimes.addWait(t1 - t0)
-      me.waits.add4(siteId(site), me.what(what), t0, t1)
-    }
-    if (lock.getHoldCount == 1) {
-      cl.acquisitions.increment()
-      holdSite = site; holdSampled = sampled; holdWhat = what
-      holdStart = System.nanoTime()
-    }
-  }
-
-  def release(cl: CompletionLock, lock: ReentrantLock): Unit =
-    if (lock.getHoldCount != 1) lock.unlock()
-    else {
-      val t1 = System.nanoTime()
-      val t0 = holdStart
-      val held = t1 - t0
-      cl.holdNanos.add(held); PerThreadTimes.addHold(held)
-      // a thread queued now arrived during this hold (it cannot leave the queue before this release)
-      val contended = lock.hasQueuedThreads
-      val site = holdSite; val sampled = holdSampled; val what = holdWhat
-      lock.unlock()
-      if (contended || held >= holdThresholdNanos) {
-        val me = thread()
-        // after the release, the stack still has the frames of the acquisition
-        me.holds.add5(siteId(if (site ne null) site else callSite()), me.what(what), t0, t1, if (contended) 1 else 0)
-      } else if (sampled) thread().sample(siteId(site), held)
-    }
 
   // ---- GC pauses, from the collectors' notifications
 

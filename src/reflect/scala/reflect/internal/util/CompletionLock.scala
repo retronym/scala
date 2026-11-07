@@ -13,24 +13,17 @@
 package scala.reflect.internal.util
 
 import java.util.concurrent.atomic.LongAdder
-import scala.reflect.internal.sharing.{Claimant, CoarseLock, CycleHandler, PerKeyClaims, What}
+import scala.reflect.internal.sharing.{Claimant, CycleHandler, PerKeyClaims, What}
 
-/** The lock under which every completion of a compiler used from several threads runs (`-Yparallel-typer`):
- *  one reentrant lock, the "serialised" mode of the parallel typer. It is the facade over the concurrency
- *  primitive, so that a claim per completion root can replace it.
+/** The claims under which every completion of a compiler used from several threads runs (`-Yparallel-typer`): a
+ *  claim per completion root (scala-sharing's `PerKeyClaims`), the coarse root (`CompletionLock.CoarseRoot`, every
+ *  acquisition without a key) or a source symbol's. It is the facade over the concurrency primitive.
  *
- *  It counts what it costs: the time threads waited for it, and the time it was held from the outermost
- *  acquisition. The holder's start time needs no synchronisation: only the holder writes it.
+ *  It counts what it costs: the time threads waited for a claim, and the outermost acquisitions.
  */
-final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s => throw new IllegalStateException(s"wait-for cycle on $s")) {
-  // scala-sharing's coarse registry: one reentrant lock that keeps what its holder is doing, for the reports of the
-  // threads that wait (`scala.reflect.internal.sharing.CoarseLock`).
-  private[this] val lock = new CoarseLock((_, _, _, _) => ())
-
-  // With `perKey` (`-Dscalac.parallelTyper.claims=perKey`), a claim per completion root (`PerKeyClaims`): the coarse
-  // root (`CompletionLock.CoarseRoot`, every acquisition without a key) and a source symbol's. A claimant per thread,
-  // which cannot abort (a batch completion cannot be retried); a wait-for cycle is reported to `cycle`.
-  // Kept in a map of this lock rather than a `ThreadLocal`: the claimant refers to this lock, and so to its `Global`,
+final class CompletionLock(cycle: AnyRef => Nothing = s => throw new IllegalStateException(s"wait-for cycle on $s")) {
+  // A claimant per thread, which cannot abort (a batch completion cannot be retried); a wait-for cycle is reported to
+  // `cycle`. Kept in a map of this lock rather than a `ThreadLocal`: the claimant refers to this lock, and so to its `Global`,
   // and a `ThreadLocal`'s value is held strongly by a thread that outlives the compiler (I8).
   private[this] val claimants = new java.util.concurrent.ConcurrentHashMap[Thread, Claimant]
   private[this] val newClaimant: java.util.function.Function[Thread, Claimant] = t =>
@@ -46,36 +39,30 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
     if (c ne null) c else claimants.computeIfAbsent(t, newClaimant)
   }
   private[this] val claims: PerKeyClaims =
-    if (perKey) new PerKeyClaims(() => claimant, new CycleHandler { def waitCycle(s: AnyRef): Nothing = cycle(s) }) else null
-  def isPerKey: Boolean = claims ne null
+    new PerKeyClaims(() => claimant, new CycleHandler { def waitCycle(s: AnyRef): Nothing = cycle(s) })
 
-  /** `body` holding the claim on `key` (in the coarse mode, the lock), to do `what`; a wait-for cycle on the way is
-   *  reported against `subject`. */
-  def claim[T](key: AnyRef, what: What, subject: AnyRef)(body: => T): T =
-    if (claims eq null) { acquire(what); try body finally release() }
-    else {
-      claims.acquire(key, what, () => cycle(subject))
-      if (claims.ownedHere(key)) acquisitions.increment()
-      try body finally claims.release(key)
-    }
+  /** `body` holding the claim on `key`, to do `what`; a wait-for cycle on the way is reported against `subject`. */
+  def claim[T](key: AnyRef, what: What, subject: AnyRef)(body: => T): T = {
+    claims.acquire(key, what, () => cycle(subject))
+    if (claims.ownedHere(key)) acquisitions.increment()
+    try body finally claims.release(key)
+  }
 
-  /** Claim `key` (per-key mode only); a wait that would close a wait-for cycle calls `onCycle`. */
+  /** Claim `key`; a wait that would close a wait-for cycle calls `onCycle`. */
   def acquireKey(key: AnyRef, what: What, onCycle: () => Nothing): Unit = {
     claims.acquire(key, what, onCycle)
     acquisitions.increment()
   }
   def releaseKey(key: AnyRef): Unit = claims.release(key)
   /** Who holds what, for a report of a wait-for cycle. */
-  def holders: String = if (claims eq null) owner else claims.holdersNow
+  def holders: String = claims.holdersNow
 
-  /** Wait until no other thread holds the claim on `key` (the coarse mode: the lock). A wait that would close a
-   *  wait-for cycle calls `onCycle` (which throws). */
-  def awaitKey(key: AnyRef, subject: AnyRef, onCycle: () => Nothing = null): Unit =
-    if (claims eq null) await()
-    else {
-      claims.acquire(key, CompletionLock.waiting, if (onCycle ne null) onCycle else () => cycle(subject))
-      claims.release(key)
-    }
+  /** Wait until no other thread holds the claim on `key`. A wait that would close a wait-for cycle calls `onCycle`
+   *  (which throws). */
+  def awaitKey(key: AnyRef, subject: AnyRef, onCycle: () => Nothing = null): Unit = {
+    claims.acquire(key, CompletionLock.waiting, if (onCycle ne null) onCycle else () => cycle(subject))
+    claims.release(key)
+  }
   private[this] var holdStart = 0L
 
   val waitNanos = new LongAdder
@@ -83,40 +70,13 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
   val holdNanos = new LongAdder
   val acquisitions = new LongAdder
 
-  def isHeldByCurrentThread: Boolean = lock.isHeldByCurrentThread
-  def isLocked: Boolean = lock.isLocked
-  def owner: String = lock.toString
-
   def acquire(): Unit = acquire(CompletionLock.completing)
 
-  /** Acquire the lock (the coarse root's claim) to do `what` (a site label for the reports of waiting threads). */
-  def acquire(what: What): Unit =
-    if (claims ne null) {
-      claims.acquire(CompletionLock.CoarseRoot, what, () => cycle(CompletionLock.CoarseRoot))
-      if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1) { recordSite(); holdStart = System.nanoTime() }
-    }
-    else acquireLock(what)
-
-  private def acquireLock(what: What): Unit = {
-    val xray = ParallelTyperTimeline.current; if (xray ne null) { xray.acquire(this, lock, what); return } // xray
-    val contended = lock.isLocked && !lock.isHeldByCurrentThread
-    val t0 = if (contended) System.nanoTime() else 0L
-    lock.lockFor(what)
-    if (contended) {
-      val waited = System.nanoTime() - t0
-      waitNanos.add(waited)
-      waits.increment()
-      PerThreadTimes.addWait(waited)
-    }
-    if (lock.getHoldCount == 1) {
-      holdStart = System.nanoTime()
-      acquisitions.increment()
-      if (sites ne null) recordSite()
-    }
+  /** Claim the coarse root to do `what` (a site label for the reports of waiting threads). */
+  def acquire(what: What): Unit = {
+    claims.acquire(CompletionLock.CoarseRoot, what, () => cycle(CompletionLock.CoarseRoot))
+    if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1) { recordSite(); holdStart = System.nanoTime() }
   }
-
-  /** `acquire`, naming what is completed for the x-ray (`ParallelTyperTimeline`). */
-  def acquire(what: AnyRef): Unit = { val xray = ParallelTyperTimeline.current; if (xray ne null) xray.acquire(this, lock, what) else acquire() } // xray
 
   /** `-Dscalac.parallelTyper.lockSites`: count the outermost acquisitions by the first caller outside the lock's
    *  plumbing (slow: a stack walk per acquisition). */
@@ -141,22 +101,10 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
         .map { case (k, v, ms) => f"$v%10d $ms%6d ms $k" }.mkString("\n", "\n", "")
     }
 
-  def release(): Unit =
-    if (claims ne null) {
-      if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1 && (holdSite ne null))
-        siteHolds.computeIfAbsent(holdSite, _ => new LongAdder).add(System.nanoTime() - holdStart)
-      claims.release(CompletionLock.CoarseRoot)
-    }
-    else releaseLock()
-
-  private def releaseLock(): Unit = {
-    val xray = ParallelTyperTimeline.current; if (xray ne null) { xray.release(this, lock); return } // xray
-    if (lock.getHoldCount == 1) {
-      val held = System.nanoTime() - holdStart
-      holdNanos.add(held)
-      PerThreadTimes.addHold(held)
-    }
-    lock.unlockFor()
+  def release(): Unit = {
+    if ((sites ne null) && claims.holdCount(CompletionLock.CoarseRoot) == 1 && (holdSite ne null))
+      siteHolds.computeIfAbsent(holdSite, _ => new LongAdder).add(System.nanoTime() - holdStart)
+    claims.release(CompletionLock.CoarseRoot)
   }
 
   @inline def apply[T](body: => T): T = {
@@ -165,7 +113,7 @@ final class CompletionLock(perKey: Boolean = false, cycle: AnyRef => Nothing = s
     finally release()
   }
 
-  /** Wait until no other thread holds the lock: what another thread was completing is then done. */
+  /** Wait until no other thread holds the coarse root: what another thread was completing under it is then done. */
   def await(): Unit = { acquire(); release() }
 
   def reset(): Unit = { waitNanos.reset(); waits.reset(); holdNanos.reset(); acquisitions.reset() }
@@ -184,9 +132,6 @@ object PerThreadTimes {
 }
 
 object CompletionLock {
-  /** Whether the parallel typer completes member signatures on its pool, with a claim per completion root: unless
-   *  `-Dscalac.parallelTyper.serialSignatures` is set. */
-  lazy val parallelSignatures: Boolean = System.getProperty("scalac.parallelTyper.serialSignatures") == null
   /** The label of a completion's acquisition. */
   val completing: What = new What("completing a symbol", null)
   /** The label of a wait for another thread's completion. */
