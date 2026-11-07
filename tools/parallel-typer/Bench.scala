@@ -4,7 +4,7 @@
 //   Bench <args file> <warmup> <runs> <config>...
 //
 // A config is `serial`, `one` (the parallel path on one worker) or a number of threads, the last two with an optional
-// suffix for the phases after the typer: `p` (a pool step each), `t` (the transforms fused), `f` (all fused), e.g.
+// suffix for the phases after the typer: `p` (a pool step each), e.g.
 // `onep`, `8p`, and `l` for the phases after the pickler a pool step each (with a full compile, -Dbench.full, which
 // goes to class files in a temporary directory, deleted after each run): `4l` has the post-typer phases on the pool as well. The args file is the one
 // the oracle writes (options and sources). Run with the quick compiler on the classpath, -Xss64m and enough heap.
@@ -23,7 +23,7 @@ object Bench {
       val config = config0
       val late = config0 != "serial" && config0.last == 'l'
       if (late) System.setProperty("scalac.parallelTyper.parallelLatePhases", "all") else System.clearProperty("scalac.parallelTyper.parallelLatePhases")
-      val postTyper = if (late) Some("steps") else if (config0 == "serial") None else Map('p' -> "steps", 't' -> "fusedTransforms", 'f' -> "fused").get(config0.last)
+      val postTyper = if (late) Some("steps") else if (config0 == "serial") None else Map('p' -> "steps").get(config0.last)
       postTyper match {
         case Some(mode) => System.setProperty("scalac.parallelTyper.parallelPostTyper", mode)
         case None       => System.clearProperty("scalac.parallelTyper.parallelPostTyper")
