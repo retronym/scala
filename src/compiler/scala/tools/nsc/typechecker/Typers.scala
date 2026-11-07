@@ -2004,7 +2004,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         val typedMods = typedModifiers(mdef.mods)
         assert(clazz != NoSymbol, mdef)
-        val noSerializable = (
+        // -Yparallel-typer: the class headers step has already added it, for every thread to see (`serializableCompanions`)
+        val madeSerializable = isConcurrentCompiler && clazz.hasAttachment[SerializableCompanion.type]
+        val noSerializable = !madeSerializable && (
           (linkedClass eq NoSymbol)
             || linkedClass.isErroneous
             || !linkedClass.isSerializable
@@ -2014,7 +2016,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           typedParentTypes(mdef.impl) ++ (
             if (noSerializable) Nil
             else {
-              clazz.makeSerializable()
+              if (!madeSerializable) clazz.makeSerializable()
               TypeTree(SerializableTpe).setPos(clazz.pos.focus) :: Nil
             }
             )

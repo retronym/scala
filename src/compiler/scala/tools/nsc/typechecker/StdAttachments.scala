@@ -124,6 +124,10 @@ trait StdAttachments {
    *  by `parentTypes`. This attachment coordinates `parentTypes` and `typedTemplate` and
    *  allows them to complete the synthesis.
    */
+  /** On a module class that `-Yparallel-typer` has made serializable before its companion is typed: the typer adds the
+   *  parent's tree, and not the parent again. */
+  case object SerializableCompanion extends PlainAttachment
+
   case class SuperArgsAttachment(argss: List[List[Tree]])
 
   /** Type tests involving classes compiled in this run, checked once the children of sealed classes are known. */
