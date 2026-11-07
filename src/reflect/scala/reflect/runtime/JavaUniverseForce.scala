@@ -48,7 +48,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.traceSymbols
     this.perRunCaches
     this.completionLock
-    this.localCompletions
     this.compat
     this.treeBuild
     this.FreshNameExtractor

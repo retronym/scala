@@ -1717,7 +1717,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       false
     }
 
-    /** Complete a symbol local to a body without the completion lock (`-Dscalac.parallelTyper.localCompletions`):
+    /** Complete a symbol local to a body without the completion lock:
      *  the marker is claimed with a compare-and-set, so that a thread that reaches the symbol anyway waits for it
      *  (`awaitMarker`) rather than complete it a second time. */
     private def completeLocally(): Unit = {
@@ -1739,7 +1739,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (lock eq null) completeInfoLoop()
       // a local symbol of a source being compiled: one from the classpath (an unpickled existential owned by a
       // method, say) is completed with the unpickler's shared state, under the lock
-      else if (localCompletions && isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
+      else if (isLocalToBody && (completionRoot(this) ne util.CompletionLock.CoarseRoot)) completeLocally()
       else {
         val root = completionRoot(this)
         // see `awaitMarker`: a claim that would close a wait-for cycle reads a provisional info if there is one

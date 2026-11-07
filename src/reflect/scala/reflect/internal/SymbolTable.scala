@@ -638,9 +638,6 @@ abstract class SymbolTable extends macros.Universe
   private[this] val perThreadSlots = new java.util.concurrent.atomic.AtomicInteger
   final def perThread[T <: AnyRef](init: => T): PerThread[T] = new PerThread(() => init)
 
-  /** Whether symbols local to a body complete without the completion lock (`Symbol.completeLocally`). */
-  final lazy val localCompletions: Boolean = isConcurrentCompiler && (System.getProperty("scalac.parallelTyper.lockedLocalCompletions") == null)
-
   /** `body` holding `lock`'s monitor in a concurrent compiler, else `body`: for the monitors that `-Yparallel-typer`
    *  puts on the typer's shared maps, which a serial compiler need not pay for. */
   @inline final def lockedIfConcurrent[T](lock: AnyRef)(body: => T): T =

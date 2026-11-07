@@ -172,7 +172,7 @@ Every mutable field, collection and lazy val with a non-trivial initialiser that
 | reflect | SymbolTable.scala:229,230 | `ph`, `per` | immutable after a point | markers once `phasePerThread` |
 | reflect | SymbolTable.scala:269 | `_flatClassesSeen` | benign race | a thread that needs it true wrote it |
 | reflect | SymbolTable.scala:473 | `perRunCaches.caches` | claim or monitor | `recordCache` under monitor; `clearAll` between runs |
-| reflect | SymbolTable.scala:595,649 | `completionLock`, `localCompletions` | immutable after a point | trivial lazy |
+| reflect | SymbolTable.scala:595,649 | `completionLock` | immutable after a point | trivial lazy |
 | reflect | SymbolTable.scala:640 | `PerThread`, `perThreadSlots` | per thread | atomic slot |
 | reflect | SymbolTable.scala:659-776 | `Frame` | per thread | hung off `Scratch.frame` |
 | reflect | SymbolTable.scala:781-880 | `Scratch` | per thread | fetched into locals; I saw no store in a field in this scope |
