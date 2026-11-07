@@ -249,11 +249,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
     }
 
   private lazy val noReporter = new NoReporter(settings)
-  @inline private def withoutReporting[T](fn : => T) = {
-    val currentReporter = reporter
-    reporter = noReporter
-    try fn finally reporter = currentReporter
-  }
+  @inline private def withoutReporting[T](fn : => T) = withReporter(noReporter)(fn)
 
   /*
    * must-single-thread
