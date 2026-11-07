@@ -50,6 +50,13 @@ button:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
 .cols figure { margin: 0; min-width: 0; }
 ul { margin: 0 0 9px; padding-left: 20px; max-width: 74ch; }
 li { margin-bottom: 3px; }
+.dims { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px; align-items: start; }
+.dims > * { min-width: 0; }
+.dims svg text { font-size: 13px; }
+.dims h3 { margin-top: 0; }
+.dims h3 i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+.dims section + section { margin-top: 12px; }
+.dims p { font-size: 13px; margin-bottom: 5px; }
 </style>
 
 <main>
@@ -59,6 +66,16 @@ li { margin-bottom: 3px; }
 
 <h2>What was found</h2>
 <div id="found"></div>
+
+<h2>Two directions to scale</h2>
+<p>A split M&#xd7;T runs up to M compiles at once on T threads each. Those are the sides of a rectangle whose area is the threads it uses. Each direction hits its own limit, so a long thin rectangle wastes much of its area, and the same threads get further as a square.</p>
+<figure>
+  <div class="dims">
+    <div class="wide"><div id="dims" style="min-width:440px"></div></div>
+    <div id="dimsNotes"></div>
+  </div>
+  <figcaption id="dimsCap"></figcaption>
+</figure>
 
 <h2>Premise</h2>
 <p>A multi-module build can spend its cores in two ways. It can run as many modules at once as it has cores, each on the serial compiler. Or it can run fewer modules and give each several typer threads with <code>-Yparallel-typer</code>. Pipelining adds a third lever: a module can start as soon as its dependencies have written their pickles, without waiting for their class files.</p>
@@ -209,6 +226,57 @@ li { margin-bottom: 3px; }
       `<p><b>The cost model works once it charges for live sets.</b> Fitted on four configurations plus each module's single-width scaling, it predicts the others with a mean error of ${F.heldMeanPct}%. The worst is 8\u00d72 at ${F.heldWorstPct}%, the noisiest configuration.</p>`,
       `<p><b>GC settings matter as much as the split.</b> With adaptive sizing off and the same heap, 4\u00d74 took 64 s against ${w('pipe:4x4')} and 8\u00d71 took 121\u2013170 s, with single full collections of up to 33 s. Configurations with many compiles also vary most: 8\u00d72 ranges ${s1(by('pipe:8x2').lo)}\u2013${s1(by('pipe:8x2').hi)}, while 4\u00d74 ranges ${s1(by('pipe:4x4').lo)}\u2013${s1(by('pipe:4x4').hi)}.</p>`,
     ].join('');
+  })();
+
+  // ---- the two directions: threads along, compiles up, so that a split's rectangle has the threads as its area
+  (function () {
+    const by = (t) => D.tokens.find((x) => x.token === t);
+    const gcPct = (t) => Math.round(100 * by(t).gc / by(t).cpu);
+    const nonGc = (t) => by(t).cpu - by(t).gc;
+    const x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
+    const X0 = 56, Y0 = 490, U = 28, W = 540, H = 540;
+    const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
+    // where a split's label goes, against its point: dx, dy, anchor
+    const place = { '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [6, 18, 'start'], '16x1': [10, 4, 'start'] };
+    const named = { '16x1': 1, '1x8': 1, '4x4': 1 };
+    const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && !(t.token === 'trad:8x1') ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
+    const rect = (M, T, fill, op) => `<rect x="${px(0)}" y="${py(M)}" width="${T * U}" height="${M * U}" fill="var(${fill})" fill-opacity="${op}" stroke="var(${fill})" stroke-width="1.5"/>`;
+    const curve = (a) => { let d = ''; for (let v = a / 16; v <= 16.001; v += 0.1) d += (d ? 'L' : 'M') + px(v).toFixed(1) + ',' + py(a / v).toFixed(1); return `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.2" stroke-dasharray="4 4"/>`; };
+    const ticks = [1, 2, 4, 8, 16];
+    const grid = ticks.map((v) => `<line x1="${px(v)}" y1="${py(0)}" x2="${px(v)}" y2="${py(16)}" stroke="var(--grid)"/><line x1="${px(0)}" y1="${py(v)}" x2="${px(16)}" y2="${py(v)}" stroke="var(--grid)"/><text class="d" x="${px(v)}" y="${Y0 + 17}" text-anchor="middle">${v}</text><text class="d" x="${X0 - 8}" y="${py(v) + 4}" text-anchor="end">${v}</text>`).join('');
+    const gcs = pts.map((p) => p.t.gc / p.t.cpu), lo = Math.min(...gcs), hi = Math.max(...gcs);
+    const marks = pts.map((p) => {
+      const [dx, dy, a] = place[p.split] || [10, 4, 'start'], cx = px(p.T), cy = py(p.M), share = p.t.gc / p.t.cpu;
+      const label = p.split === '1x1' ? '1\u00d7' : (named[p.split] ? p.split.replace('x', '\u00d7') + ' ' : '') + p.t.speedup.toFixed(2) + '\u00d7';
+      const tip = `${p.split.replace('x', '\u00d7')}: ${(p.t.wall / 1000).toFixed(1)} s (${(p.t.lo / 1000).toFixed(1)}\u2013${(p.t.hi / 1000).toFixed(1)}), ${p.t.speedup.toFixed(2)}\u00d7, ${Math.round(100 * share)}% of CPU in GC`;
+      return `<g><title>${tip}</title><circle cx="${cx}" cy="${cy}" r="15" fill="transparent"/><circle cx="${cx}" cy="${cy}" r="6" fill="var(--panel)"/><circle cx="${cx}" cy="${cy}" r="5" fill="var(--warm)" fill-opacity="${(0.15 + 0.85 * (share - lo) / (hi - lo)).toFixed(2)}" stroke="var(--warm)"/><text x="${cx + dx}" y="${cy + dy}" text-anchor="${a}" style="${p.split === '4x4' ? 'font-weight:650' : ''}">${label}</text></g>`;
+    }).join('');
+    $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. 4 by 4 reaches ${x('pipe:4x4')}, against ${x('pipe:16x1')} for 16 by 1 and ${x('pipe:1x8')} for 1 by 8.">
+      <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+      ${grid}
+      ${rect(16, 1, '--warm', .1)}${rect(1, 8, '--teal', .1)}${rect(4, 4, '--active', .22)}
+      ${curve(8)}${curve(16)}
+      <text class="d" x="${px(1.26) + 7}" y="${py(6.35) + 4}">8 threads</text>
+      <text class="d" x="${px(11.5)}" y="${py(1.39) - 8}">16 threads</text>
+      <line x1="${px(0)}" y1="${py(0)}" x2="${px(16.6)}" y2="${py(0)}" stroke="var(--teal)" stroke-width="2" marker-end="url(#a3)" style="color:var(--teal)"/>
+      <line x1="${px(0)}" y1="${py(0)}" x2="${px(0)}" y2="${py(16.9)}" stroke="var(--warm)" stroke-width="2" marker-end="url(#a3)" style="color:var(--warm)"/>
+      <text x="${px(16)}" y="${Y0 + 38}" text-anchor="end" style="font-weight:600">threads per compile</text>
+      <text transform="translate(16 ${py(16)}) rotate(-90)" text-anchor="end" style="font-weight:600">compiles at once</text>
+      ${marks}
+    </svg>`;
+    const biggest = D.graph.filter((m) => m.ms != null).sort((a, b) => b.ms - a.ms)[0];
+    const s = (ms) => Math.round(ms / 1000) + ' s';
+    $('dimsNotes').innerHTML =
+      `<section><h3><i style="background:var(--warm)"></i>Up: more compiles at once</h3>
+       <p><b>Stresses the collector.</b> Each compile adds a live set, so collections copy more and come more often. GC goes from ${gcPct('trad:1x1')}% of CPU when serial to ${gcPct('pipe:8x1')}% at 8\u00d71 and ${gcPct('pipe:16x1')}% at 16\u00d71, and from ${s(by('trad:1x1').gc)} of GC CPU to ${s(by('pipe:16x1').gc)}.</p>
+       <p><b>Returns:</b> ${x('pipe:8x1')} at 8\u00d71, then down to ${x('pipe:16x1')} at 16\u00d71. A serial compile also cannot go below its own time, and the largest module takes ${s(biggest.ms)}, but that floor is the same for both, so it does not explain the drop.</p></section>
+       <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
+       <p><b>Stresses coordination.</b> Threads share one compile's symbols and types, and wait on its completion lock. GC stays at ${gcPct('pipe:1x8')}\u2013${gcPct('pipe:1x2')}% of CPU, but non-GC CPU grows ${Math.round(100 * (nonGc('pipe:1x8') / nonGc('trad:1x1') - 1))}% by 1\u00d78.</p>
+       <p><b>Cause, in part inferred:</b> the 8-thread counter runs put about two-thirds of the added CPU in cycles per instruction and one-third in instructions. Cache-line sharing fits that, but no coherence counter was recorded. Parks and serial phases show up on the x-ray.</p>
+       <p><b>Returns:</b> ${x('pipe:1x2')}, ${x('pipe:1x4')} and ${x('pipe:1x8')} at 2, 4 and 8 threads.</p></section>
+       <section><h3><i style="background:var(--active)"></i>Both: the same area, used better</h3>
+       <p>16 threads give ${x('pipe:16x1')} as 16\u00d71 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
+    $('dimsCap').textContent = 'Measured speed-ups of pipelined ScalaTest builds against one serial compile. Every point on a dashed curve uses the same threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. One project, and the collector\u2019s threads are not counted in the area. 1\u00d716 was not run.';
   })();
 
   // ---- the module graph: a row per depth, width by lines
