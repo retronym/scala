@@ -1,0 +1,963 @@
+{
+"pekko": {
+"actor": {
+"lines": 53006,
+"deps": [],
+"macroDeps": []
+},
+"benchJmh": {
+"lines": 11806,
+"deps": [
+"actorTyped",
+"stream",
+"streamTestkit",
+"persistence",
+"distributedData",
+"jackson"
+],
+"macroDeps": []
+},
+"cluster": {
+"lines": 10713,
+"deps": [
+"remote",
+"coordination"
+],
+"macroDeps": []
+},
+"clusterMetrics": {
+"lines": 2335,
+"deps": [
+"cluster",
+"slf4j"
+],
+"macroDeps": []
+},
+"clusterSharding": {
+"lines": 11232,
+"deps": [
+"cluster",
+"distributedData",
+"persistence",
+"clusterTools"
+],
+"macroDeps": []
+},
+"clusterTools": {
+"lines": 4166,
+"deps": [
+"cluster",
+"coordination"
+],
+"macroDeps": []
+},
+"distributedData": {
+"lines": 9129,
+"deps": [
+"cluster"
+],
+"macroDeps": []
+},
+"docs": {
+"lines": 71,
+"deps": [
+"actor",
+"cluster",
+"clusterMetrics",
+"slf4j",
+"osgi",
+"persistenceTck",
+"persistenceQuery",
+"distributedData",
+"stream",
+"actorTyped",
+"clusterTools",
+"clusterSharding",
+"discovery",
+"testkit",
+"remote",
+"persistence",
+"actorTyped",
+"persistenceTyped",
+"clusterTyped",
+"clusterShardingTyped",
+"streamTestkit",
+"persistenceTestkit"
+],
+"macroDeps": []
+},
+"jackson": {
+"lines": 1995,
+"deps": [
+"actor",
+"actorTyped",
+"stream"
+],
+"macroDeps": []
+},
+"jackson3": {
+"lines": 2157,
+"deps": [
+"actor",
+"actorTyped",
+"stream"
+],
+"macroDeps": []
+},
+"multiNodeTestkit": {
+"lines": 2221,
+"deps": [
+"remote",
+"testkit"
+],
+"macroDeps": []
+},
+"osgi": {
+"lines": 443,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"persistence": {
+"lines": 9796,
+"deps": [
+"actor",
+"stream"
+],
+"macroDeps": []
+},
+"persistenceQuery": {
+"lines": 5067,
+"deps": [
+"stream",
+"persistence",
+"streamTestkit"
+],
+"macroDeps": []
+},
+"persistenceTck": {
+"lines": 1765,
+"deps": [
+"persistence",
+"testkit"
+],
+"macroDeps": []
+},
+"persistenceTestkit": {
+"lines": 6705,
+"deps": [
+"persistenceTyped",
+"testkit",
+"actorTestkitTyped",
+"persistenceTck"
+],
+"macroDeps": []
+},
+"pki": {
+"lines": 227,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"remote": {
+"lines": 24586,
+"deps": [
+"actor",
+"stream",
+"pki",
+"streamTestkit"
+],
+"macroDeps": []
+},
+"slf4j": {
+"lines": 210,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"stream": {
+"lines": 69426,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"streamTestkit": {
+"lines": 1716,
+"deps": [
+"stream",
+"testkit"
+],
+"macroDeps": []
+},
+"testkit": {
+"lines": 3968,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"actorTyped": {
+"lines": 16826,
+"deps": [
+"actor",
+"slf4j"
+],
+"macroDeps": []
+},
+"persistenceTyped": {
+"lines": 12984,
+"deps": [
+"actorTyped",
+"streamTyped",
+"remote",
+"persistence",
+"persistenceQuery"
+],
+"macroDeps": []
+},
+"clusterTyped": {
+"lines": 3925,
+"deps": [
+"actorTyped",
+"cluster",
+"clusterTools",
+"distributedData"
+],
+"macroDeps": []
+},
+"clusterShardingTyped": {
+"lines": 6486,
+"deps": [
+"clusterTyped",
+"clusterSharding",
+"persistenceTyped"
+],
+"macroDeps": []
+},
+"streamTyped": {
+"lines": 1016,
+"deps": [
+"actorTyped",
+"stream"
+],
+"macroDeps": []
+},
+"actorTestkitTyped": {
+"lines": 6689,
+"deps": [
+"actorTyped",
+"slf4j",
+"testkit"
+],
+"macroDeps": []
+},
+"discovery": {
+"lines": 851,
+"deps": [
+"actor"
+],
+"macroDeps": []
+},
+"coordination": {
+"lines": 636,
+"deps": [
+"actor"
+],
+"macroDeps": []
+}
+},
+"optimus": {
+"optimus.gsf.gsf_breadcrumbs": {
+"lines": 22,
+"deps": [],
+"macroDeps": []
+},
+"optimus.silverking.silverking": {
+"lines": 22,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.spray_json": {
+"lines": 3401,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.stagingplugin": {
+"lines": 3630,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.entityplugin": {
+"lines": 17245,
+"deps": [
+"optimus.platform.alarms",
+"optimus.platform.spray_json",
+"optimus.platform.stagingplugin"
+],
+"macroDeps": []
+},
+"optimus.platform.scala_compat": {
+"lines": 2795,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.bitbucket-utils": {
+"lines": 1118,
+"deps": [
+"optimus.platform.rest-utils",
+"optimus.platform.security_akka_http-client"
+],
+"macroDeps": []
+},
+"optimus.platform.security_akka_http-client": {
+"lines": 130,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.core_config": {
+"lines": 240,
+"deps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.stagingplugin"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs"
+]
+},
+"optimus.platform.dal_environment": {
+"lines": 2753,
+"deps": [
+"optimus.platform.core_config",
+"optimus.platform.stagingplugin"
+],
+"macroDeps": []
+},
+"optimus.platform.core": {
+"lines": 76534,
+"deps": [
+"optimus.gsf.gsf_breadcrumbs",
+"optimus.platform.breadcrumbs",
+"optimus.platform.core_config",
+"optimus.platform.core_macro",
+"optimus.platform.debugger",
+"optimus.platform.instrumentation",
+"optimus.platform.stagingplugin",
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.core_macro",
+"optimus.platform.instrumentation",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.core_macro": {
+"lines": 1008,
+"deps": [
+"optimus.platform.alarms"
+],
+"macroDeps": []
+},
+"optimus.platform.alarms": {
+"lines": 3261,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.platform": {
+"lines": 19892,
+"deps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.collections",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_client",
+"optimus.platform.dal_core",
+"optimus.platform.entityplugin",
+"optimus.platform.priql",
+"optimus.platform.priql_dal",
+"optimus.platform.priql_dal_persistence",
+"optimus.platform.utils",
+"optimus.platform.versioning_runtime"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_core",
+"optimus.platform.priql",
+"optimus.platform.priql_dal",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.talks": {
+"lines": 327,
+"deps": [
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.entityplugin",
+"optimus.platform.platform",
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.platform",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.versioning_runtime": {
+"lines": 802,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.dal_core": {
+"lines": 35430,
+"deps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.collections",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_environment",
+"optimus.platform.tls",
+"optimus.platform.utils",
+"optimus.silverking.silverking"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.utils": {
+"lines": 6959,
+"deps": [
+"optimus.platform.alarms",
+"optimus.platform.annotations",
+"optimus.platform.core_macro",
+"optimus.platform.scala_compat",
+"optimus.platform.spray_json",
+"optimus.platform.stagingplugin"
+],
+"macroDeps": [
+"optimus.platform.core_macro"
+]
+},
+"optimus.platform.rest-utils": {
+"lines": 27,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.priql_dal": {
+"lines": 11891,
+"deps": [
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_client",
+"optimus.platform.dal_core",
+"optimus.platform.entityplugin",
+"optimus.platform.priql",
+"optimus.platform.utils",
+"optimus.platform.versioning_runtime"
+],
+"macroDeps": [
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_core",
+"optimus.platform.priql",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.instrumentation": {
+"lines": 8586,
+"deps": [
+"optimus.platform.alarms",
+"optimus.platform.annotations",
+"optimus.platform.breadcrumbs",
+"optimus.platform.scala_compat",
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.annotations": {
+"lines": 260,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.tls": {
+"lines": 701,
+"deps": [
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.utils"
+]
+},
+"optimus.platform.priql": {
+"lines": 34209,
+"deps": [
+"optimus.platform.collections",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.entityplugin",
+"optimus.platform.spray_json",
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.debugger": {
+"lines": 93,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.priql_dal_persistence": {
+"lines": 60,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.dal_client": {
+"lines": 30267,
+"deps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_core",
+"optimus.platform.entityplugin",
+"optimus.platform.utils",
+"optimus.platform.versioning_runtime"
+],
+"macroDeps": [
+"optimus.platform.breadcrumbs",
+"optimus.platform.core",
+"optimus.platform.core_macro",
+"optimus.platform.dal_core",
+"optimus.platform.utils"
+]
+},
+"optimus.platform.platform_profiler": {
+"lines": 24172,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.collections": {
+"lines": 7088,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.git-utils": {
+"lines": 356,
+"deps": [],
+"macroDeps": []
+},
+"optimus.platform.breadcrumbs": {
+"lines": 6308,
+"deps": [
+"optimus.platform.core_macro",
+"optimus.platform.utils"
+],
+"macroDeps": [
+"optimus.platform.core_macro",
+"optimus.platform.utils"
+]
+},
+"optimus.stratosphere.common": {
+"lines": 8961,
+"deps": [
+"optimus.platform.bitbucket-utils",
+"optimus.platform.utils",
+"optimus.stratosphere.common-macros"
+],
+"macroDeps": [
+"optimus.platform.utils",
+"optimus.stratosphere.common-macros"
+]
+},
+"optimus.stratosphere.common-macros": {
+"lines": 39,
+"deps": [],
+"macroDeps": []
+},
+"optimus.buildtool.core": {
+"lines": 1802,
+"deps": [],
+"macroDeps": []
+},
+"optimus.buildtool.runconf": {
+"lines": 4110,
+"deps": [],
+"macroDeps": []
+},
+"optimus.buildtool.format": {
+"lines": 14057,
+"deps": [
+"optimus.buildtool.core",
+"optimus.platform.annotations"
+],
+"macroDeps": []
+},
+"optimus.buildtool.rest": {
+"lines": 125,
+"deps": [
+"optimus.platform.platform"
+],
+"macroDeps": [
+"optimus.platform.platform"
+]
+}
+},
+"scala": {
+"library": {
+"lines": 94570,
+"deps": [],
+"macroDeps": []
+},
+"reflect": {
+"lines": 56686,
+"deps": [
+"library"
+],
+"macroDeps": []
+},
+"compiler": {
+"lines": 112371,
+"deps": [
+"reflect"
+],
+"macroDeps": []
+},
+"interactive": {
+"lines": 4647,
+"deps": [
+"compiler"
+],
+"macroDeps": []
+},
+"repl": {
+"lines": 3845,
+"deps": [
+"compiler"
+],
+"macroDeps": []
+},
+"scaladoc": {
+"lines": 9770,
+"deps": [
+"compiler"
+],
+"macroDeps": []
+},
+"scalap": {
+"lines": 3228,
+"deps": [
+"compiler"
+],
+"macroDeps": []
+},
+"testkit": {
+"lines": 1754,
+"deps": [
+"compiler"
+],
+"macroDeps": []
+},
+"partest": {
+"lines": 4831,
+"deps": [
+"testkit"
+],
+"macroDeps": []
+},
+"repl-frontend": {
+"lines": 4021,
+"deps": [
+"repl"
+],
+"macroDeps": []
+}
+},
+"scalatest": {
+"commonTest": {
+"lines": 2676,
+"deps": [
+"scalacticMacro",
+"scalatest"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalacticMacro": {
+"lines": 6467,
+"deps": [],
+"macroDeps": []
+},
+"scalactic": {
+"lines": 19539,
+"deps": [
+"scalacticMacro"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalacticTest": {
+"lines": 42842,
+"deps": [
+"commonTest",
+"scalactic",
+"scalatest"
+],
+"macroDeps": []
+},
+"scalatestTest": {
+"lines": 273219,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestDiagramsTest": {
+"lines": 20034,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestExpectationsTest": {
+"lines": 5919,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestFeatureSpecTest": {
+"lines": 18584,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestFlatSpecTest": {
+"lines": 10371,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestFreeSpecTest": {
+"lines": 11229,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestFunSpecTest": {
+"lines": 12477,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestFunSuiteTest": {
+"lines": 9938,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestPropSpecTest": {
+"lines": 6480,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestWordSpecTest": {
+"lines": 17400,
+"deps": [
+"commonTest"
+],
+"macroDeps": []
+},
+"scalatestCompatible": {
+"lines": 0,
+"deps": [],
+"macroDeps": []
+},
+"scalatestCore": {
+"lines": 86840,
+"deps": [
+"scalactic",
+"scalacticMacro",
+"scalatestCompatible"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestFeatureSpec": {
+"lines": 6569,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestFlatSpec": {
+"lines": 14042,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestFreeSpec": {
+"lines": 8963,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestFunSuite": {
+"lines": 5686,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestFunSpec": {
+"lines": 8450,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestPropSpec": {
+"lines": 2484,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestRefSpec": {
+"lines": 1767,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestWordSpec": {
+"lines": 11479,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestDiagrams": {
+"lines": 1180,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestExpectations": {
+"lines": 849,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestMatchersCore": {
+"lines": 15188,
+"deps": [
+"scalacticMacro",
+"scalatestCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestShouldMatchers": {
+"lines": 8405,
+"deps": [
+"scalacticMacro",
+"scalatestMatchersCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatestMustMatchers": {
+"lines": 0,
+"deps": [
+"scalacticMacro",
+"scalatestMatchersCore"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+},
+"scalatest": {
+"lines": 0,
+"deps": [
+"scalacticMacro",
+"scalatestCore",
+"scalatestDiagrams",
+"scalatestExpectations",
+"scalatestFeatureSpec",
+"scalatestFlatSpec",
+"scalatestFreeSpec",
+"scalatestFunSpec",
+"scalatestFunSuite",
+"scalatestMatchersCore",
+"scalatestMustMatchers",
+"scalatestPropSpec",
+"scalatestRefSpec",
+"scalatestShouldMatchers",
+"scalatestWordSpec"
+],
+"macroDeps": [
+"scalacticMacro"
+]
+}
+}
+}
