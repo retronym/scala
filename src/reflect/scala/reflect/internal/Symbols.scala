@@ -1744,7 +1744,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         val root = completionRoot(this)
         // see `awaitMarker`: a claim that would close a wait-for cycle reads a provisional info if there is one
         val claimed =
-          try { lock.acquireKey(root, util.CompletionLock.completing, () => throw util.CompletionLock.WaitCycle); true }
+          try { lock.acquireKey(root, util.CompletionLock.completing, this, () => throw util.CompletionLock.WaitCycle); true }
           catch {
             case util.CompletionLock.WaitCycle =>
               if (_validTo != NoPeriod) false

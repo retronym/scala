@@ -225,11 +225,15 @@ var XR = (function () {
       r.spans = r.spans.filter((x) => { const o = last[x.tid]; if (o && o.step === x.step && o.label === x.label && x.t1 <= o.t1) return false; last[x.tid] = x; return true; }); }
     r.phases = []; for (let i = 0; i < raw.phases.length; i += 3) r.phases.push({ name: S[raw.phases[i]], t0: ms(raw.phases[i + 1]), t1: ms(raw.phases[i + 2]) });
     r.gc = []; for (let i = 0; i < raw.gc.length; i += 3) r.gc.push({ label: S[raw.gc[i]], t0: ms(raw.gc[i + 1]), t1: ms(raw.gc[i + 2]) });
+    // with `lockKeys` (per-key claims) a hold and a wait end with the id of the claim's key; older recordings have one lock
+    const K = raw.lockKeys ? 1 : 0, keyName = (k) => (raw.keys && k < raw.keys.length ? S[raw.keys[k]] : null);
     const h = raw.holds; r.holds = [];
-    for (let i = 0; i < h.length; i += 6) r.holds.push({ tid: h[i], site: S[h[i + 1]], what: h[i + 2] < 0 ? null : S[h[i + 2]], t0: ms(h[i + 3]), t1: ms(h[i + 4]), cont: h[i + 5] === 1, caused: 0, waiters: 0 });
+    for (let i = 0; i < h.length; i += 6 + K) r.holds.push({ tid: h[i], site: S[h[i + 1]], what: h[i + 2] < 0 ? null : S[h[i + 2]], t0: ms(h[i + 3]), t1: ms(h[i + 4]), cont: h[i + 5] === 1, key: K ? h[i + 6] : 0, keyName: K ? keyName(h[i + 6]) : null, caused: 0, waiters: 0 });
     r.holds.sort((p, q) => p.t0 - q.t0);
+    // the holds of one key are disjoint: a wait is matched against its own key's
+    r.holdsByKey = new Map(); for (const x of r.holds) { let l = r.holdsByKey.get(x.key); if (!l) r.holdsByKey.set(x.key, l = []); l.push(x); }
     const w = raw.waits; r.waits = [];
-    for (let i = 0; i < w.length; i += 5) r.waits.push({ tid: w[i], site: S[w[i + 1]], what: w[i + 2] < 0 ? null : S[w[i + 2]], t0: ms(w[i + 3]), t1: ms(w[i + 4]) });
+    for (let i = 0; i < w.length; i += 5 + K) r.waits.push({ tid: w[i], site: S[w[i + 1]], what: w[i + 2] < 0 ? null : S[w[i + 2]], t0: ms(w[i + 3]), t1: ms(w[i + 4]), key: K ? w[i + 5] : 0, keyName: K ? keyName(w[i + 5]) : null });
     r.waits.sort((p, q) => p.t0 - q.t0);
     const s = raw.sites; r.sites = [];
     const pop = (m) => { let n = 0; for (let b = 0; b < 53; b++) if (Math.floor(m / Math.pow(2, b)) % 2) n++; return n; };
@@ -276,10 +280,10 @@ var XR = (function () {
 
   // first index in `xs` (sorted by t0, disjoint) whose t1 > t
   function firstEndingAfter(xs, t) { let lo = 0, hi = xs.length; while (lo < hi) { const m = (lo + hi) >> 1; if (xs[m].t1 > t) hi = m; else lo = m + 1; } return lo; }
-  // the holds a wait spanned (the lock's holds are disjoint): each gets the overlap as wait it caused
+  // the holds of the wait's key that it spanned (a key's holds are disjoint): each gets the overlap as wait it caused
   function holdsDuring(r, w) {
-    const out = [];
-    for (let i = firstEndingAfter(r.holds, w.t0); i < r.holds.length && r.holds[i].t0 < w.t1; i++) if (r.holds[i].tid !== w.tid) out.push(r.holds[i]);
+    const out = [], hs = r.holdsByKey.get(w.key) || [];
+    for (let i = firstEndingAfter(hs, w.t0); i < hs.length && hs[i].t0 < w.t1; i++) if (hs[i].tid !== w.tid) out.push(hs[i]);
     return out;
   }
   function attribute(r) {
@@ -813,10 +817,10 @@ if (typeof module !== 'undefined') module.exports = XR;
       case 'gc': return `GC pause ${fmt(x.t1 - x.t0)}\n${x.label}`;
       case 'idle': return `${th(x.tid)}: out of units for ${fmt(x.t1 - x.t0)}, until the typer phase ended`;
       case 'span': return `${XR.stepName(x.step)}: ${x.label}\n${th(x.tid)}, ${fmt(x.t0)} to ${fmt(x.t1)}\nwall ${fmt(x.t1 - x.t0)}` + (x.cpu >= 0 ? `, CPU ${fmt(x.cpu)} (${(100 * x.cpu / Math.max(1e-6, x.t1 - x.t0)).toFixed(0)}%)` : '') + (x.lw || x.lh ? `\ncompletion lock: waited ${fmt(x.lw)}, held ${fmt(x.lh)}` : '') + (x.bl >= 0 ? `\nblocked on monitors ${x.bl} ms, parked ${x.wt} ms (ThreadMXBean)` : '');
-      case 'hold': return `lock held ${fmt(x.t1 - x.t0)} by ${th(x.tid)}\nsite ${x.site}` + (x.what ? `\ncompleting ${x.what}` : '') + (x.cont ? `\n${x.waiters} wait${x.waiters === 1 ? '' : 's'} spanned it, ${fmt(x.caused)} of waiting` : '\nnobody waited');
+      case 'hold': return `lock held ${fmt(x.t1 - x.t0)} by ${th(x.tid)}\nsite ${x.site}` + (x.keyName ? `\nclaim on ${x.keyName}` : '') + (x.what ? `\ncompleting ${x.what}` : '') + (x.cont ? `\n${x.waiters} wait${x.waiters === 1 ? '' : 's'} spanned it, ${fmt(x.caused)} of waiting` : '\nnobody waited');
       case 'wait': {
         const hs = XR.holdsDuring(cur, x);
-        return `waited ${fmt(x.t1 - x.t0)} for the lock on ${th(x.tid)}\nsite ${x.site}` + (x.what ? `\nto complete ${x.what}` : '') + `\nheld meanwhile by: ` + (hs.length ? hs.slice(0, 4).map((q) => `${th(q.tid)} at ${q.site}${q.what ? ' (' + q.what + ')' : ''} for ${fmt(q.t1 - q.t0)}`).join('; ') + (hs.length > 4 ? `; and ${hs.length - 4} more` : '') : 'no recorded hold (hand-over latency)') + '\nclick to show';
+        return `waited ${fmt(x.t1 - x.t0)} for the lock on ${th(x.tid)}\nsite ${x.site}` + (x.keyName ? `\nclaim on ${x.keyName}` : '') + (x.what ? `\nto complete ${x.what}` : '') + `\nheld meanwhile by: ` + (hs.length ? hs.slice(0, 4).map((q) => `${th(q.tid)} at ${q.site}${q.what ? ' (' + q.what + ')' : ''} for ${fmt(q.t1 - q.t0)}`).join('; ') + (hs.length > 4 ? `; and ${hs.length - 4} more` : '') : 'no recorded hold (hand-over latency)') + '\nclick to show';
       }
     }
     return '';
@@ -835,7 +839,7 @@ if (typeof module !== 'undefined') module.exports = XR;
     if (!moved && ev.target === tl) {
       const h = hit(ev);
       if (h && h.kind === 'wait') view.sel = { wait: h.x, holds: XR.holdsDuring(cur, h.x) };
-      else if (h && h.kind === 'hold') { const ws = cur.waits.filter((w) => w.t0 < h.x.t1 && w.t1 > h.x.t0 && w.tid !== h.x.tid); view.sel = ws.length ? { wait: ws[0], holds: [h.x] } : null; }
+      else if (h && h.kind === 'hold') { const ws = cur.waits.filter((w) => w.key === h.x.key && w.t0 < h.x.t1 && w.t1 > h.x.t0 && w.tid !== h.x.tid); view.sel = ws.length ? { wait: ws[0], holds: [h.x] } : null; }
       else view.sel = null;
       if (h && h.kind === 'span') { prof.span = h.x; prof.root = null; scheduleProfile(); }
       drawTl();
