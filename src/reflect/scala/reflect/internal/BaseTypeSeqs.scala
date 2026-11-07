@@ -193,7 +193,14 @@ trait BaseTypeSeqs {
 
     def exists(p: Type => Boolean): Boolean = elems exists p
 
-    lazy val maxDepth = maxDepthOfElems
+    // Not a lazy val: `typeDepth` can complete a symbol (the bound of a class path existential), and this sequence is
+    // shared, so that would be under its monitor, against a thread that holds the claim and wants the depth
+    // (-Yparallel-typer). Two threads compute the same depth.
+    private[this] var maxDepthCache: Depth = Depth.AnyDepth
+    def maxDepth: Depth = {
+      if (maxDepthCache.isAnyDepth) maxDepthCache = maxDepthOfElems
+      maxDepthCache
+    }
 
     protected def maxDepthOfElems: Depth = {
       var d = Depth.Zero
