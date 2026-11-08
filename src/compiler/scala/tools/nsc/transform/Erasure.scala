@@ -58,8 +58,12 @@ abstract class Erasure extends InfoTransform
   private object NeedsSigCollector {
     private val NeedsSigCollector_true = new NeedsSigCollector(isClassConstructor = true)
     private val NeedsSigCollector_false = new NeedsSigCollector(isClassConstructor = false)
+    // it keeps its result in a field: a pair per thread in a concurrent compiler
+    private val perThreadCollectors =
+      if (isConcurrentCompiler) perThread((new NeedsSigCollector(isClassConstructor = true), new NeedsSigCollector(isClassConstructor = false)))
+      else null
     def apply(isClassConstructor: Boolean) =
-      if (isConcurrentCompiler) new NeedsSigCollector(isClassConstructor) // it keeps its result in a field
+      if (isConcurrentCompiler) { val p = perThreadCollectors.get; if (isClassConstructor) p._1 else p._2 }
       else if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
   }
   private class NeedsSigCollector(isClassConstructor: Boolean) extends TypeCollector(initial = false) {
