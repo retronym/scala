@@ -175,7 +175,7 @@ li { margin-bottom: 3px; }
   <li data-only="scalatest"><code>bal</code> is static: a module keeps its workers until it ends, because a compile cannot yet change its thread count. The largest module depends on many test modules, so it starts when every worker is busy and gets one thread.</li>
   <li data-only="synth">Every module is the same <span id="synthModule"></span>, so the number of modules per compile slot quantises the schedule: K modules on M slots take ceil(K/M) waves.</li>
   <li data-only="synth" id="synthGcLimit"></li>
-  <li>Warm JVM. A real clean build starts cold, and the first build of a JVM here takes about 75 s against about 65 s warm, at 8&#xd7;1.</li>
+  <li>Warm JVM. A real clean build starts cold, and the first build of a JVM here takes about 86 s against about 58 s warm, at 8&#xd7;1.</li>
   <li data-only="scalatest">One project on one machine. ScalaTest's largest module and its short chain of production modules shape these results.</li>
 </ul>
 
@@ -211,15 +211,13 @@ li { margin-bottom: 3px; }
 </ul>
 </main>
 <script src="build.data.js"></script>
-<script src="build-synth-scalap-16.data.js"></script>
-<script src="build-synth-scalap-64.data.js"></script>
 <script src="build-synth-pekko-16.data.js"></script>
 <script src="build-synth-pekko-24.data.js"></script>
 <script>
 (function () {
   // the datasets: ScalaTest's build, and synthetic builds of K independent copies of one corpus
   const B = window.XRAY_BUILDS || {};
-  const SETS = [['scalatest', 'ScalaTest', window.XRAY_BUILD], ['synth-scalap-16', 'synthetic scalap, K=16', B['synth-scalap-16']], ['synth-scalap-64', 'synthetic scalap, K=64', B['synth-scalap-64']], ['synth-pekko-16', 'synthetic pekko-stream, K=16', B['synth-pekko-16']], ['synth-pekko-24', 'synthetic pekko-stream, K=24', B['synth-pekko-24']]].filter((x) => x[2]);
+  const SETS = [['scalatest', 'ScalaTest', window.XRAY_BUILD], ['synth-pekko-16', 'synthetic pekko-stream, K=16', B['synth-pekko-16']], ['synth-pekko-24', 'synthetic pekko-stream, K=24', B['synth-pekko-24']]].filter((x) => x[2]);
   if (!SETS.length) return;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -237,24 +235,24 @@ li { margin-bottom: 3px; }
   const modMs = (t) => med(t.mods.map((m) => m.e - m.s));
   const gcPct = (t) => (100 * t.gc / t.cpu).toFixed(1) + '%';
   const X = (t) => t.speedup.toFixed(2) + '×';
+  const pow = (e) => e === 1 ? '' : '^' + e;
+  const load = (F) => `load = 1 + ${F.a} (busy − 1)${pow(F.p)} + ${F.c} (compiles − 1)${pow(F.q)}`;
+  // ScalaTest's largest module, one at a time on 8 threads
+  const bigScale = () => { const B = window.XRAY_BUILD; return B && B.scale.slice().sort((a, b) => b.ms - a.ms)[0]; };
   const corpusName = (k) => ({ pekko: 'pekko-stream' }[k.split('-')[1]] || k.split('-')[1]);
   function synthFound(D, tok) {
     const t = tok, w = (sp) => `${sp.replace('x', '×')} ${s1(t(sp).wall)} (${X(t(sp))})`;
     const ratio = (a, b) => (t(a).wall / t(b).wall).toFixed(2);
     const share = (sp) => t(sp).gc / t(sp).cpu, pct = (sp) => Math.round(100 * share(sp)) + '%';
-    const corpus = corpusName(key), small = t('1x8').speedup < 3;
     const full = (b) => ['16x1', '8x2', '4x4', '2x8', '1x16', '8x1', '4x2', '2x4', '1x8'].filter((sp) => t(sp) && sp.split('x')[0] * sp.split('x')[1] === b);
     const best = (b) => full(b).sort((p, q) => t(p).wall - t(q).wall)[0], lbl = (sp) => sp.replace('x', '×');
     const b16 = best(16), wide = b16 === '16x1';
     const out = [];
     out.push(`<p><b>${wide ? 'With nothing to wait for, compiles at once win.' : `With nothing to wait for, ${lbl(b16)} is fastest at 16 threads, ahead of 16×1.`}</b> At 16 threads: ${['16x1', '8x2', '4x4', '2x8', '1x16'].map(w).join(', ')}. At 8 threads: ${['8x1', '4x2', '2x4', '1x8'].map(w).join(', ')}. 16×1 takes ${ratio('16x1', '4x4')} of 4×4's time, and 1×16 takes ${ratio('1x16', '4x4')} times as long.</p>`);
-    out.push(`<p><b>${small ? 'A compile this small gains little from threads.' : 'A compile this size uses its threads.'}</b> One module at a time: ${['1x2', '1x4', '1x8', '1x16'].map((sp) => `${X(t(sp))} on ${sp.slice(2)}`).join(', ')}. A copy takes ${s1(modMs(t('1x1')))} serial and ${s1(modMs(t('1x8')))} on 8 threads${small ? ', so the serial steps and each phase’s tail are most of it. ScalaTest’s largest module reaches about 5× on 8 threads' : ', close to the 5× of ScalaTest’s largest module'}.</p>`);
-    const gcMax = Math.max(...D.tokens.map((x) => x.gc / x.cpu));
-    out.push(t('16x1').gc === 0
-      ? `<p><b>Compiles at once slow each other only through busy cores.</b> A copy takes ${s1(modMs(t('1x1')))} alone, ${s1(modMs(t('8x1')))} beside 7 others and ${s1(modMs(t('16x1')))} beside 15. GC stays under ${Math.ceil(100 * gcMax)}% of CPU in every split, and is zero whenever every compile is serial: 16 serial compiles of ${corpus} allocate about 4 GB, which the 20 GB young generation holds until the next build, so the live sets that made 16×1 lose on ScalaTest never get copied. The same compiles under <code>-Yparallel-typer</code> allocated no more (3.3 GB against 3.1 GB by <code>ThreadMXBean</code>) but consumed 17–25 GB of eden: each pooled phase started a watchdog thread whose one allocation took a TLAB sized from eden and died with it, enough for one young collection per build. The compiler no longer starts a thread per phase; this data predates that change.</p>`
-      : `<p><b>Compiles at once pay for their live sets.</b> A copy takes ${s1(modMs(t('1x1')))} alone, ${s1(modMs(t('8x1')))} beside 7 others and ${s1(modMs(t('16x1')))} beside 15. GC is ${pct('1x1')} of CPU serial, ${pct('8x1')} at 8×1 and ${pct('16x1')} at 16×1, against ${pct('8x2')} at 8×2, ${pct('4x4')} at 4×4 and ${pct('1x16')} at 1×16: the collector copies the live set of every compile in flight, so its share follows the number of compiles, not the threads.</p>`);
+    out.push(`<p><b>A compile this size uses its threads.</b> One module at a time: ${['1x2', '1x4', '1x8', '1x16'].map((sp) => `${X(t(sp))} on ${sp.slice(2)}`).join(', ')}. A copy takes ${s1(modMs(t('1x1')))} serial and ${s1(modMs(t('1x8')))} on 8 threads${bigScale() ? `, against ${bigScale().s8.toFixed(1)}× for ScalaTest’s largest module` : ''}.</p>`);
+    out.push(`<p><b>Compiles at once pay for their live sets.</b> A copy takes ${s1(modMs(t('1x1')))} alone, ${s1(modMs(t('8x1')))} beside 7 others and ${s1(modMs(t('16x1')))} beside 15. GC is ${pct('1x1')} of CPU serial, ${pct('8x1')} at 8×1 and ${pct('16x1')} at 16×1, against ${pct('8x2')} at 8×2, ${pct('4x4')} at 4×4 and ${pct('1x16')} at 1×16: the collector copies the live set of every compile in flight, so its share follows the number of compiles, not the threads.</p>`);
     const F = D.fit, FX = D.fitFixed, fx16 = FX && FX.predicted['trad:16x1'] / t('16x1').wall;
-    out.push(`<p><b>The refit's two terms fit, with no graph term.</b> ${F ? `Refitted here, load = 1 + ${F.a} (busy − 1) + ${F.c} (compiles − 1)${F.q === 1 ? '' : '^' + F.q}, within ${F.heldWorstPct}% on the splits it was not fitted to (mean ${F.heldMeanPct}%).` : ''} ${fx16 ? `ScalaTest's terms (${FX.a} busy, ${FX.c} compiles squared) predict 16×1 at ${fx16.toFixed(1)} times its measured time: their compiles term charges for more than this build's live sets cost.` : ''}</p>`);
+    out.push(`<p><b>The refit's two terms fit, with no graph term.</b> ${F ? `Refitted here, ${load(F)}, within ${F.heldWorstPct}% on the splits it was not fitted to (mean ${F.heldMeanPct}%).` : ''} ${FX ? `ScalaTest's terms (${load(FX)}), applied unchanged, predict this build within ${FX.heldWorstPct}% (mean ${FX.heldMeanPct}%)${fx16 > 1.25 ? `, and 16×1 at ${fx16.toFixed(1)} times its measured time: their compiles term charges for more than this build's live sets cost` : ''}.` : ''}</p>`);
     // quantisation: the same corpus at another K
     const ks = SETS.filter(([k]) => k.startsWith(`synth-${key.split('-')[1]}-`) && k !== key).map((x) => x[2]);
     const uneven = full(16).concat(full(8)).filter((sp) => D.modules % +sp.split('x')[0]);
@@ -282,7 +280,7 @@ li { margin-bottom: 3px; }
   function synthCal(D) {
     const F = D.fit;
     if (!F) return 'The original model takes each module’s serial and pickle times from the baseline, then one curve from a single corpus.';
-    return `The refit charges for busy threads and for compiles: load = 1 + ${F.a} (busy − 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles − 1)^${F.q}, with each module's own speed-up from the one-at-a-time builds. ${F.train.length ? 'Fitted to this build on ' + F.train.map((x) => x.split(':')[1].replace('x', '×')).join(', ') + '.' : 'These are the terms fitted to ScalaTest, applied unchanged.'} Mean error on the other splits ${F.heldMeanPct}%, worst ${F.heldWorstPct}%.`;
+    return `The refit charges for busy threads and for compiles: ${load(F)}, with each module's own speed-up from the one-at-a-time builds. ${F.train.length ? 'Fitted to this build on ' + F.train.map((x) => x.split(':')[1].replace('x', '×')).join(', ') + '.' : 'These are the terms fitted to ScalaTest, applied unchanged.'} Mean error on the other splits ${F.heldMeanPct}%, worst ${F.heldWorstPct}%.`;
   }
 
   function render() {
@@ -306,15 +304,18 @@ li { margin-bottom: 3px; }
   else (function () {
     const by = (t) => D.tokens.find((x) => x.token === t);
     const w = (t) => s1(by(t).wall), x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
-    const F = D.fit, E = F.estimates;
+    const F = D.fit, E = F.estimates, lbl = (t) => t.split(':')[1].replace('x', '\u00d7');
+    const held = D.tokens.filter((t) => F.predicted[t.token] && !F.train.includes(t.token) && !/:1x\d+$/.test(t.token));
+    const worst = held.sort((a, b) => Math.abs(F.predicted[b.token] / b.wall - 1) - Math.abs(F.predicted[a.token] / a.wall - 1))[0].token;
+    const noisiest = D.tokens.slice().sort((a, b) => (b.hi - b.lo) / b.wall - (a.hi - a.lo) / a.wall)[0].token;
     $('found').innerHTML = [
       `<p><b>Split cores between compiles and threads.</b> With 16 cores, 4\u00d74 takes ${w('pipe:4x4')} (${x('pipe:4x4')}), while 16 serial compiles take ${w('pipe:16x1')} (${x('pipe:16x1')}). With 8 cores, 4\u00d72 takes ${w('pipe:4x2')} (${x('pipe:4x2')}), 2\u00d74 ${w('pipe:2x4')}, 1\u00d78 ${w('pipe:1x8')} and 8\u00d71 ${w('pipe:8x1')}.</p>`,
       `<p><b>More compiles can slow a build down.</b> 16 serial compiles are slower than 8, and with 16 workers 8\u00d72 takes ${w('pipe:8x2')} against ${w('pipe:4x4')} for 4\u00d74. Each compile adds a live set for the collector to copy. Threads add CPU but no live set.</p>`,
       `<p><b>Tasks = threads = \u221acores fits so far.</b> It picks the winner at 16 cores, and the two nearest splits at 8 are the two fastest. This is one project at two core counts.</p>`,
       `<p><b>Pipelining barely helps ScalaTest.</b> ${w('trad:8x1')} traditional against ${w('pipe:8x1')} pipelined. The fitted model puts removing every macro wait at under 5% more, so macros are not the main reason. Most of the work is in test modules at the leaves of the graph, with little upstream work for pipelining to overlap.</p>`,
       `<p><b>My scheduling policy lost to fixed splits.</b> <code>bal8</code> took ${w('pipe:bal8')} because a compile cannot gain threads once running. The model estimates that even workers that move would only match the best fixed split here: ${s1(E.dynamic8cap4)} against ${w('pipe:4x2')} at 8 cores and ${s1(E.dynamic16cap4)} against ${w('pipe:4x4')} at 16. So this contradicts the simulator's earlier gain of 5\u201321% for this graph, which it reached with no cost for live sets.</p>`,
-      `<p><b>The cost model works once it charges for live sets.</b> Fitted on four configurations plus each module's single-width scaling, it predicts the others with a mean error of ${F.heldMeanPct}%. The worst is 8\u00d72 at ${F.heldWorstPct}%, the noisiest configuration.</p>`,
-      `<p><b>GC settings matter as much as the split.</b> With adaptive sizing off and the same heap, 4\u00d74 took 64 s against ${w('pipe:4x4')} and 8\u00d71 took 121\u2013170 s, with single full collections of up to 33 s. Configurations with many compiles also vary most: 8\u00d72 ranges ${s1(by('pipe:8x2').lo)}\u2013${s1(by('pipe:8x2').hi)}, while 4\u00d74 ranges ${s1(by('pipe:4x4').lo)}\u2013${s1(by('pipe:4x4').hi)}.</p>`,
+      `<p><b>The cost model works once it charges for live sets.</b> Fitted on four configurations plus each module's single-width scaling, it predicts the others with a mean error of ${F.heldMeanPct}%. The worst is ${lbl(worst)} at ${F.heldWorstPct}%${worst === noisiest ? ', the noisiest configuration' : `; the noisiest configuration is ${lbl(noisiest)}, ${s1(by(noisiest).lo)}\u2013${s1(by(noisiest).hi)}`}.</p>`,
+      `<p><b>GC settings matter as much as the split.</b> With adaptive sizing off and the same heap, 4\u00d74 took 64 s against ${w('pipe:4x4')} and 8\u00d71 took 121\u2013170 s, with single full collections of up to 33 s. Round to round, 8\u00d72 ranges ${s1(by('pipe:8x2').lo)}\u2013${s1(by('pipe:8x2').hi)} and 4\u00d74 ${s1(by('pipe:4x4').lo)}\u2013${s1(by('pipe:4x4').hi)}.</p>`,
     ].join('');
   })();
 
@@ -469,7 +470,7 @@ li { margin-bottom: 3px; }
     g += `<text class="d" x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">the module's serial time</text>`;
     P.forEach((m) => { g += `<circle cx="${xs(m.ms)}" cy="${ys(Math.min(m.s8, 6))}" r="4.5" fill="var(--active)" stroke="var(--panel)" stroke-width="1.5"><title>${esc(m.n)}: ${s1(m.ms)} serial, ${m.s8.toFixed(2)}\u00d7 at 8 threads</title></circle>`; });
     $('scale').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="max-width:720px" role="img" aria-label="Speed-up at 8 threads rises with a module's serial time">${g}</svg>`;
-    $('scaleCap').textContent = synth ? 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Every module is a copy of the same code, so the spread is noise.' : 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Small modules gain little from threads, and even the largest stay near 5\u00d7. Hover a point for its module.';
+    $('scaleCap').textContent = synth ? 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Every module is a copy of the same code, so the spread is noise.' : `Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Small modules gain little from threads, and the largest reaches ${bigScale().s8.toFixed(1)}\u00d7. Hover a point for its module.`;
   })();
 
   // ---- the models
@@ -479,7 +480,7 @@ li { margin-bottom: 3px; }
   const e = (t, p) => `${p > t.wall ? '+' : ''}${(100 * (p / t.wall - 1)).toFixed(0)}%`;
   $('cal').innerHTML = `<table><thead><tr><th class="l">Cores</th><th class="l">Configuration</th><th>Measured</th><th>Original model, compiler curve</th><th>Original model, pekko curve</th><th>Refit</th><th class="l">Refit used it as</th></tr></thead><tbody>` +
     withSim.map((t) => `<tr><td class="l">${workers(t)}</td><td class="l"><code>${esc(label(t))}</code></td><td>${s1(t.wall)}</td><td>${s1(t.predicted.compiler)} ${e(t, t.predicted.compiler)}</td><td>${s1(t.predicted.pekko)} ${e(t, t.predicted.pekko)}</td><td>${t.fit ? s1(t.fit) + ' ' + e(t, t.fit) : ''}</td><td class="l dim">${role(t)}</td></tr>`).join('') + '</tbody></table>';
-  $('calNote').textContent = synth ? synthCal(D) : `The original model takes each module's serial and pickle times from the baseline, then one curve from a single corpus. The refit uses each module's own speed-up from the one-at-a-time builds and charges for compiles as well as threads: load = 1 + ${F.a} (busy \u2212 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles \u2212 1)^${F.q}.`;
+  $('calNote').textContent = synth ? synthCal(D) : `The original model takes each module's serial and pickle times from the baseline, then one curve from a single corpus. The refit uses each module's own speed-up from the one-at-a-time builds and charges for compiles as well as threads: ${load(F)}.`;
   }
   render();
 })();

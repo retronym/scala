@@ -34,8 +34,9 @@ for k in $KS; do
   MAX_LOAD="$MAX_LOAD" $SLOT bash -c "$gate" _ "$JAVA" -Xss64m -Xms31g -Xmx31g -Xmn20g -XX:+UseParallelGC $PAR -cp "$WORK/bin:$CP" \
     scala.tools.nsc.xray.XrayBuild "$D/modules" trad:8x1 "${WARMUP:-3}" "${ROUNDS:-3}" $TOKENS | tee "$OUT" | grep -v '^R '
   if grep -q 'errors [1-9]' "$OUT"; then echo "compile errors in $OUT: no report" >&2; exit 1; fi
-  # the cost model refitted to this build, and ScalaTest's terms applied unchanged
+  # the cost model refitted to this build, and ScalaTest's terms (sim/fit.json) applied unchanged
+  FIXED="$(python3 -c 'import json, sys; f = json.load(open(sys.argv[1])); print(*(f[k] for k in "apcq"), sep=",")' "$HERE/sim/fit.json")"
   (cd "$HERE/sim" && FIT_STRATEGY=trad FIT_OUT="$WORK/fit-$CORPUS-$k.json" python3 fit.py "$D/modules" "$OUT" &&
-    FIT_STRATEGY=trad FIT_FIXED=0.05,1,0.01,2 FIT_OUT="$WORK/fit-scalatest-$CORPUS-$k.json" python3 fit.py "$D/modules" "$OUT") | grep -v '^pipe:'
+    FIT_STRATEGY=trad FIT_FIXED="$FIXED" FIT_OUT="$WORK/fit-scalatest-$CORPUS-$k.json" python3 fit.py "$D/modules" "$OUT") | grep -v '^pipe:'
   FIT="$WORK/fit-$CORPUS-$k.json" FIT_FIXED="$WORK/fit-scalatest-$CORPUS-$k.json" BUILD_KEY="synth-$CORPUS-$k" BUILD_DATA="$HERE/build-synth-$CORPUS-$k.data.js" python3 "$HERE/build_report.py" "$D/modules" "$OUT"
 done
