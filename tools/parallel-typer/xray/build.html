@@ -72,7 +72,7 @@ li { margin-bottom: 3px; }
 <p>A split M&#xd7;T runs up to M compiles at once on T threads each. Those are the sides of a rectangle whose area is the threads it uses. Each direction hits its own limit, so a long thin rectangle wastes much of its area, and the same threads get further as a square.</p>
 <figure>
   <div class="dims">
-    <div class="wide"><div id="dims" style="min-width:440px"></div></div>
+    <div><div class="ctl" id="dimsCtl"></div><div class="wide"><div id="dims" style="min-width:440px"></div></div></div>
     <div id="dimsNotes"></div>
   </div>
   <figcaption id="dimsCap"></figcaption>
@@ -235,36 +235,46 @@ li { margin-bottom: 3px; }
     const gcPct = (t) => Math.round(100 * by(t).gc / by(t).cpu);
     const nonGc = (t) => by(t).cpu - by(t).gc;
     const x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
-    const X0 = 56, Y0 = 490, U = 28, W = 540, H = 540;
-    const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
-    // where a split's label goes, against its point: dx, dy, anchor
-    const place = { '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [6, 18, 'start'], '16x1': [10, 4, 'start'] };
-    const named = { '16x1': 1, '2x8': 1, '4x4': 1 };
     const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && !(t.token === 'trad:8x1') ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
-    const rect = (M, T, fill, op) => `<rect x="${px(0)}" y="${py(M)}" width="${T * U}" height="${M * U}" fill="var(${fill})" fill-opacity="${op}" stroke="var(${fill})" stroke-width="1.5"/>`;
-    const curve = (a) => { let d = ''; for (let v = a / 16; v <= 16.001; v += 0.1) d += (d ? 'L' : 'M') + px(v).toFixed(1) + ',' + py(a / v).toFixed(1); return `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.2" stroke-dasharray="4 4"/>`; };
-    const ticks = [1, 2, 4, 8, 16];
-    const grid = ticks.map((v) => `<line x1="${px(v)}" y1="${py(0)}" x2="${px(v)}" y2="${py(16)}" stroke="var(--grid)"/><line x1="${px(0)}" y1="${py(v)}" x2="${px(16)}" y2="${py(v)}" stroke="var(--grid)"/><text class="d" x="${px(v)}" y="${Y0 + 17}" text-anchor="middle">${v}</text><text class="d" x="${X0 - 8}" y="${py(v) + 4}" text-anchor="end">${v}</text>`).join('');
     const gcs = pts.map((p) => p.t.gc / p.t.cpu), lo = Math.min(...gcs), hi = Math.max(...gcs);
-    const marks = pts.map((p) => {
-      const [dx, dy, a] = place[p.split] || [10, 4, 'start'], cx = px(p.T), cy = py(p.M), share = p.t.gc / p.t.cpu;
-      const label = p.split === '1x1' ? '1\u00d7' : (named[p.split] ? p.split.replace('x', '\u00d7') + ' ' : '') + p.t.speedup.toFixed(2) + '\u00d7';
-      const tip = `${p.split.replace('x', '\u00d7')}: ${(p.t.wall / 1000).toFixed(1)} s (${(p.t.lo / 1000).toFixed(1)}\u2013${(p.t.hi / 1000).toFixed(1)}), ${p.t.speedup.toFixed(2)}\u00d7, ${Math.round(100 * share)}% of CPU in GC`;
-      return `<g><title>${tip}</title><circle cx="${cx}" cy="${cy}" r="15" fill="transparent"/><circle cx="${cx}" cy="${cy}" r="6" fill="var(--panel)"/><circle cx="${cx}" cy="${cy}" r="5" fill="var(--warm)" fill-opacity="${(0.15 + 0.85 * (share - lo) / (hi - lo)).toFixed(2)}" stroke="var(--warm)"/><text x="${cx + dx}" y="${cy + dy}" text-anchor="${a}" style="${p.split === '4x4' ? 'font-weight:650' : ''}">${label}</text></g>`;
-    }).join('');
-    $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. With 16 threads, 4 by 4 reaches ${x('pipe:4x4')}, against ${x('pipe:16x1')} for 16 by 1 and ${x('pipe:2x8')} for 2 by 8.">
-      <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
-      ${grid}
-      ${rect(16, 1, '--warm', .1)}${rect(2, 8, '--teal', .1)}${rect(4, 4, '--active', .22)}
-      ${curve(8)}${curve(16)}
-      <text class="d" x="${px(1.26) + 7}" y="${py(6.35) + 4}">8 threads</text>
-      <text class="d" x="${px(11.5)}" y="${py(1.39) - 8}">16 threads</text>
-      <line x1="${px(0)}" y1="${py(0)}" x2="${px(16.6)}" y2="${py(0)}" stroke="var(--teal)" stroke-width="2" marker-end="url(#a3)" style="color:var(--teal)"/>
-      <line x1="${px(0)}" y1="${py(0)}" x2="${px(0)}" y2="${py(16.9)}" stroke="var(--warm)" stroke-width="2" marker-end="url(#a3)" style="color:var(--warm)"/>
-      <text x="${px(16)}" y="${Y0 + 38}" text-anchor="end" style="font-weight:600">threads per compile</text>
-      <text transform="translate(16 ${py(16)}) rotate(-90)" text-anchor="end" style="font-weight:600">compiles at once</text>
-      ${marks}
-    </svg>`;
+    // one budget at a time: the splits that use it, with the tall, the wide and the square one shaded
+    const shaded = { 8: [[8, 1, '--warm'], [1, 8, '--teal'], [4, 2, '--active']], 16: [[16, 1, '--warm'], [2, 8, '--teal'], [4, 4, '--active']] };
+    // where a split's label goes, against its point: dx, dy, anchor
+    const place = { '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [10, 4, 'start'], '16x1': [10, 4, 'start'] };
+    let budget = 16;
+    function draw() {
+      const X0 = 56, Y0 = 490, W = 540, H = 540, U = 440 / budget;
+      const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
+      const named = Object.fromEntries(shaded[budget].map(([M, T]) => [M + 'x' + T, 1]));
+      const rect = (M, T, fill, op) => `<rect x="${px(0)}" y="${py(M)}" width="${T * U}" height="${M * U}" fill="var(${fill})" fill-opacity="${op}" stroke="var(${fill})" stroke-width="1.5"/>`;
+      let d = ''; for (let v = 1; v <= budget + 0.001; v += 0.05) d += (d ? 'L' : 'M') + px(v).toFixed(1) + ',' + py(budget / v).toFixed(1);
+      const curve = `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+      const ticks = [1, 2, 4, 8, 16].filter((v) => v <= budget);
+      const grid = ticks.map((v) => `<line x1="${px(v)}" y1="${py(0)}" x2="${px(v)}" y2="${py(budget)}" stroke="var(--grid)"/><line x1="${px(0)}" y1="${py(v)}" x2="${px(budget)}" y2="${py(v)}" stroke="var(--grid)"/><text class="d" x="${px(v)}" y="${Y0 + 17}" text-anchor="middle">${v}</text><text class="d" x="${X0 - 8}" y="${py(v) + 4}" text-anchor="end">${v}</text>`).join('');
+      const shown = pts.filter((p) => p.M * p.T <= budget);
+      const marks = shown.map((p) => {
+        const [dx, dy, a] = place[p.split] || [10, 4, 'start'], cx = px(p.T), cy = py(p.M), share = p.t.gc / p.t.cpu, full = p.M * p.T === budget;
+        const label = p.split === '1x1' ? '1\u00d7' : (named[p.split] ? p.split.replace('x', '\u00d7') + ' ' : '') + p.t.speedup.toFixed(2) + '\u00d7';
+        const tip = `${p.split.replace('x', '\u00d7')}: ${(p.t.wall / 1000).toFixed(1)} s (${(p.t.lo / 1000).toFixed(1)}\u2013${(p.t.hi / 1000).toFixed(1)}), ${p.t.speedup.toFixed(2)}\u00d7, ${Math.round(100 * share)}% of CPU in GC`;
+        return `<g opacity="${full || p.split === '1x1' ? 1 : .45}"><title>${tip}</title><circle cx="${cx}" cy="${cy}" r="15" fill="transparent"/><circle cx="${cx}" cy="${cy}" r="6" fill="var(--panel)"/><circle cx="${cx}" cy="${cy}" r="5" fill="var(--warm)" fill-opacity="${(0.15 + 0.85 * (share - lo) / (hi - lo)).toFixed(2)}" stroke="var(--warm)"/><text x="${cx + dx}" y="${cy + dy}" text-anchor="${a}" style="${named[p.split] && shaded[budget][2][0] === p.M && shaded[budget][2][1] === p.T ? 'font-weight:650' : ''}">${label}</text></g>`;
+      }).join('');
+      const best = shown.filter((p) => p.M * p.T === budget).sort((a, b) => b.t.speedup - a.t.speedup)[0];
+      $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits of ${budget} threads plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. ${best.split.replace('x', ' by ')} reaches ${best.t.speedup.toFixed(2)}\u00d7.">
+        <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+        ${grid}
+        ${shaded[budget].map(([M, T, f]) => rect(M, T, f, f === '--active' ? .22 : .1)).join('')}
+        ${curve}
+        <text class="d" x="${px(budget * 0.7)}" y="${py(1 / 0.7) - 8}">${budget} threads</text>
+        <line x1="${px(0)}" y1="${py(0)}" x2="${px(budget * 1.04)}" y2="${py(0)}" stroke="var(--teal)" stroke-width="2" marker-end="url(#a3)" style="color:var(--teal)"/>
+        <line x1="${px(0)}" y1="${py(0)}" x2="${px(0)}" y2="${py(budget * 1.06)}" stroke="var(--warm)" stroke-width="2" marker-end="url(#a3)" style="color:var(--warm)"/>
+        <text x="${px(budget)}" y="${Y0 + 38}" text-anchor="end" style="font-weight:600">threads per compile</text>
+        <text transform="translate(16 ${py(budget)}) rotate(-90)" text-anchor="end" style="font-weight:600">compiles at once</text>
+        ${marks}
+      </svg>`;
+      $('dimsCtl').innerHTML = [8, 16].map((b) => `<button class="${b === budget ? 'on' : ''}" data-b="${b}">${b} threads</button>`).join('');
+      $('dimsCtl').querySelectorAll('button').forEach((el) => { el.onclick = () => { budget = +el.dataset.b; draw(); }; });
+    }
+    draw();
     const biggest = D.graph.filter((m) => m.ms != null).sort((a, b) => b.ms - a.ms)[0];
     const s = (ms) => Math.round(ms / 1000) + ' s';
     // the critical path of a pipelined build of serial compiles: a module starts at its dependencies' pickles, or their end for a macro provider
@@ -288,7 +298,7 @@ li { margin-bottom: 3px; }
        <p><b>Returns:</b> ${x('pipe:1x2')}, ${x('pipe:1x4')} and ${x('pipe:1x8')} at 2, 4 and 8 threads.</p></section>
        <section><h3><i style="background:var(--active)"></i>Both: the same area, used better</h3>
        <p>The three shaded rectangles are 16 threads each: ${x('pipe:16x1')} as 16\u00d71, ${x('pipe:2x8')} as 2\u00d78 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
-    $('dimsCap').textContent = 'Measured speed-ups of pipelined ScalaTest builds against one serial compile. Every point on a dashed curve uses the same threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. One project, and the collector\u2019s threads are not counted in the area. 1\u00d716 was not run.';
+    $('dimsCap').textContent = 'Measured speed-ups of pipelined ScalaTest builds against one serial compile, for one thread budget at a time. The points on the dashed curve use the whole budget, the dimmer ones fewer threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. One project, and the collector\u2019s threads are not counted in the area. 1\u00d716 was not run.';
   })();
 
   // ---- the module graph: a row per depth, width by lines
