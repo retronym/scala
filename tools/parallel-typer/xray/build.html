@@ -18,6 +18,7 @@
   --active: #6ea0ff; --gc: #a3a8b0; --warm: #e0893a; --teal: #2aab98; --sel: #ffc94d; --pale: rgba(110, 160, 255, .3); color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
 main { max-width: 1080px; margin: 0 auto; padding-block: 18px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; text-wrap: balance; }
@@ -63,13 +64,14 @@ li { margin-bottom: 3px; }
 <main>
 <h1>Pipelined Build Scaling</h1>
 <p class="sub">How should a clean build of a multi-module Scala project spend its cores, now that a compile can use more than one? Real builds of ScalaTest, compiled in one JVM, checking a simulator's predictions.</p>
+<div class="ctl" id="dataCtl"></div>
 <span class="stamp" id="stamp"></span>
 
 <h2>What was found</h2>
 <div id="found"></div>
 
 <h2>Two directions to scale</h2>
-<p>A split M&#xd7;T runs up to M compiles at once on T threads each. Those are the sides of a rectangle whose area is the threads it uses. Each direction hits its own limit, so a long thin rectangle wastes much of its area, and the same threads get further as a square.</p>
+<p>A split M&#xd7;T runs up to M compiles at once on T threads each. Those are the sides of a rectangle whose area is the threads it uses. <span data-only="scalatest">Each direction hits its own limit, so a long thin rectangle wastes much of its area, and the same threads get further as a square.</span><span data-only="synth">With no module graph, each direction meets only its own costs.</span></p>
 <figure>
   <div class="dims">
     <div><div class="ctl" id="dimsCtl"></div><div class="wide"><div id="dims" style="min-width:440px"></div></div></div>
@@ -84,7 +86,8 @@ li { margin-bottom: 3px; }
 <p>Those are estimates: warm JITs, workers that move instantly, module times taken from line counts. This experiment runs the real thing and measures how far off the simulator is.</p>
 
 <h2>Experiment design</h2>
-<p>The subject is ScalaTest, chosen because it is real code, macro-heavy, and large once its generated tests are counted: <b id="size"></b>. Each measurement is a complete clean build in one warm JVM with no incremental compiler.</p>
+<p data-only="synth">The subject is a synthetic build: <b id="synthSize"></b>, each a copy of the scalap corpus in packages of its own (<code>synth_modules.py</code>), with no dependencies between them. Every module is ready at the start, so there is no critical path and no pipelining, and a split M&#xd7;T is a pure trade of threads per compile against compiles at once. With no dependencies <code>trad</code> and <code>pipe</code> coincide, so only <code>trad</code> runs.</p>
+<p data-only="scalatest">The subject is ScalaTest, chosen because it is real code, macro-heavy, and large once its generated tests are counted: <b id="size"></b>. Each measurement is a complete clean build in one warm JVM with no incremental compiler.</p>
 
 <figure>
   <div class="wide"><svg viewBox="0 0 960 300" role="img" aria-label="The same two modules under traditional and pipelined builds: pipelined, the downstream module starts when the upstream module writes pickles, unless the upstream module provides macros.">
@@ -144,8 +147,9 @@ li { margin-bottom: 3px; }
 </figure>
 
 <h3>What varies</h3>
-<p>The splits cover three budgets. One thread is the serial baseline that speed-ups are measured against. Eight threads tests the simulator's claims, and sixteen shows what happens with twice as many; 3&#xd7;5 uses 15, the closest three compiles can get to 16 with equal threads. A budget caps the compiler's threads. It does not pin them to cores: this machine has 18, and ParallelGC's 14 threads run on top of the budget.</p>
-<div class="wide"><table>
+<p data-only="synth">The splits are every M&#xd7;T with M&#xb7;T equal to 8 or 16, the serial baseline, and one compile at a time on 2 and 4 threads, which gives each module's own speed-up for the cost model.</p>
+<p data-only="scalatest">The splits cover three budgets. One thread is the serial baseline that speed-ups are measured against. Eight threads tests the simulator's claims, and sixteen shows what happens with twice as many; 3&#xd7;5 uses 15, the closest three compiles can get to 16 with equal threads. A budget caps the compiler's threads. It does not pin them to cores: this machine has 18, and ParallelGC's 14 threads run on top of the budget.</p>
+<div class="wide" data-only="scalatest"><table>
   <thead><tr><th class="l">Token</th><th class="l">Starts a module when</th><th class="l">Workers</th></tr></thead>
   <tbody>
     <tr><td class="l"><code>trad:1x1</code></td><td class="l">dependencies have class files</td><td class="l">one serial compile at a time: the baseline</td></tr>
@@ -161,20 +165,22 @@ li { margin-bottom: 3px; }
   <li>Patched JDK 26, ParallelGC, 31 GB heap with a 20 GB young generation and ParallelGC's adaptive survivor sizing, compressed oops on. All parallel phases on.</li>
   <li>Three warm-up builds, then every token in a different order each round, three rounds, in one JVM. The collector's sizing carries over between tokens, and it made one token 60% slower in an earlier run, so shuffling spreads that effect across tokens and the ranges show it. Turning adaptive sizing off is worse: the old generation fills and a single full collection takes up to 33 s.</li>
   <li>Each measurement takes the machine alone once the one-minute load is under 8.</li>
-  <li>Compiled against JDK 21's API, since this JDK removed <code>Thread.stop</code>, which ScalaTest calls.</li>
+  <li data-only="scalatest">Compiled against JDK 21's API, since this JDK removed <code>Thread.stop</code>, which ScalaTest calls.</li>
 </ul>
 
 <h3>Known limits</h3>
 <ul>
   <li>javac does not run. Java sources reach downstream modules as signatures, so Java compile time is missing.</li>
-  <li>A Bloop project lists directories, and two modules' directories hold about 70k lines that sbt does not compile, three files of which do not compile at all. The build uses sbt's own source lists for test modules, so it compiles what the real build does.</li>
-  <li><code>bal</code> is static: a module keeps its workers until it ends, because a compile cannot yet change its thread count. The largest module depends on many test modules, so it starts when every worker is busy and gets one thread.</li>
+  <li data-only="scalatest">A Bloop project lists directories, and two modules' directories hold about 70k lines that sbt does not compile, three files of which do not compile at all. The build uses sbt's own source lists for test modules, so it compiles what the real build does.</li>
+  <li data-only="scalatest"><code>bal</code> is static: a module keeps its workers until it ends, because a compile cannot yet change its thread count. The largest module depends on many test modules, so it starts when every worker is busy and gets one thread.</li>
+  <li data-only="synth">Every module is the same 3k lines, about 0.3 s serial, so a build is short and the number of modules per compile slot quantises the schedule: K modules on M slots take ceil(K/M) waves.</li>
+  <li data-only="synth">A 20 GB young generation holds several small builds' allocation, so many builds see no collection at all, and the GC share depends on where the collector's cycle falls.</li>
   <li>Warm JVM. A real clean build starts cold, and the first build of a JVM here takes about 75 s against about 65 s warm, at 8&#xd7;1.</li>
-  <li>One project on one machine. ScalaTest's largest module and its short chain of production modules shape these results.</li>
+  <li data-only="scalatest">One project on one machine. ScalaTest's largest module and its short chain of production modules shape these results.</li>
 </ul>
 
-<h2>The module graph</h2>
-<figure>
+<h2 data-only="graph">The module graph</h2>
+<figure data-only="graph">
   <div class="wide" id="graph"></div>
   <figcaption id="graphCap"></figcaption>
 </figure>
@@ -197,24 +203,78 @@ li { margin-bottom: 3px; }
 <div class="wide" id="cal"></div>
 <p class="sub" id="calNote" style="margin-top:6px"></p>
 
-<h2>Still open</h2>
-<ul>
+<h2 data-only="scalatest">Still open</h2>
+<ul data-only="scalatest">
   <li>A real test of workers that move. It needs a compile that can change its thread count, and the model says it would gain little on ScalaTest, though a project with mid-graph chokepoints could differ.</li>
   <li>A scheduler that reacts to GC load, for its robustness when the heap is badly sized.</li>
   <li>The square-root heuristic at other core counts and on other projects.</li>
 </ul>
 </main>
 <script src="build.data.js"></script>
+<script src="build-synth-scalap-16.data.js"></script>
+<script src="build-synth-scalap-64.data.js"></script>
 <script>
 (function () {
-  const D = window.XRAY_BUILD; if (!D) return;
+  // the datasets: ScalaTest's build, and synthetic builds of K independent copies of one corpus
+  const B = window.XRAY_BUILDS || {};
+  const SETS = [['scalatest', 'ScalaTest', window.XRAY_BUILD], ['synth-scalap-16', 'synthetic scalap, K=16', B['synth-scalap-16']], ['synth-scalap-64', 'synthetic scalap, K=64', B['synth-scalap-64']]].filter((x) => x[2]);
+  if (!SETS.length) return;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const s1 = (ms) => (ms / 1000).toFixed(1) + ' s';
+  const s1 = (ms) => ms >= 10000 ? (ms / 1000).toFixed(1) + ' s' : (ms / 1000).toFixed(2) + ' s';
   const kl = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n / 1000) + 'k';
+  let key = (/data=([\w-]+)/.exec(location.hash) || [])[1];
+  if (!SETS.some((x) => x[0] === key)) key = SETS[0][0];
+  let budget = 16;
+  const switcher = (id) => {
+    $(id).innerHTML = SETS.map(([k, name]) => `<button class="${k === key ? 'on' : ''}" data-k="${k}">${esc(name)}</button>`).join('');
+    $(id).querySelectorAll('button').forEach((el) => { el.onclick = () => { key = el.dataset.k; history.replaceState(null, '', '#data=' + key); render(); }; });
+  };
+  // ---- the synthetic datasets' own text, from their numbers
+  const med = (xs) => { const a = xs.slice().sort((p, q) => p - q); return a[a.length >> 1]; };
+  const modMs = (t) => med(t.mods.map((m) => m.e - m.s));
+  const gcPct = (t) => (100 * t.gc / t.cpu).toFixed(1) + '%';
+  const X = (t) => t.speedup.toFixed(2) + '×';
+  function synthFound(D, tok) {
+    const t = tok, w = (sp) => `${sp.replace('x', '×')} ${s1(t(sp).wall)} (${X(t(sp))})`;
+    const ratio = (a, b) => (t(a).wall / t(b).wall).toFixed(2);
+    const gcs = D.tokens.map((x) => x.gc / x.cpu), gcMax = Math.max(...gcs);
+    return [
+      `<p><b>With nothing to wait for, compiles at once win.</b> At 16 threads: ${['16x1', '8x2', '4x4', '2x8', '1x16'].map(w).join(', ')}. At 8 threads: ${['8x1', '4x2', '2x4', '1x8'].map(w).join(', ')}. 16×1 takes ${ratio('16x1', '4x4')} of 4×4's time, and 1×16 takes ${ratio('1x16', '4x4')} times as long.</p>`,
+      `<p><b>A compile this small gains little from threads.</b> One module at a time: ${['1x2', '1x4', '1x8', '1x16'].map((sp) => `${X(t(sp))} on ${sp.slice(2)}`).join(', ')}. A copy takes ${Math.round(modMs(t('1x1')))} ms serial and ${Math.round(modMs(t('1x8')))} ms on 8 threads, so the serial steps and each phase's tail are most of it. The result is about small modules: ScalaTest's largest module reaches about 5× on 8 threads.</p>`,
+      `<p><b>Compiles at once slow each other only through busy cores.</b> A copy takes ${Math.round(modMs(t('1x1')))} ms alone, ${Math.round(modMs(t('8x1')))} ms beside 7 others and ${Math.round(modMs(t('16x1')))} ms beside 15. GC stays under ${Math.ceil(100 * gcMax)}% of CPU in every split, and is zero whenever every compile is serial: 16 serial compiles of scalap allocate about 4 GB, which the 20 GB young generation holds until the next build, so the live sets that made 16×1 lose on ScalaTest never get copied. The same compiles in parallel mode allocate about four times as much (17–25 GB in a <code>-Xlog:gc</code> check of K=16), enough for one young collection per build.</p>`,
+      `<p><b>The refit's two terms fit, with the compiles term near zero.</b> ${D.fit ? `Refitted here, load = 1 + ${D.fit.a} (busy − 1) + ${D.fit.c} (compiles − 1)${D.fit.q === 1 ? '' : '^' + D.fit.q}, within ${D.fit.heldWorstPct}% on the splits it was not fitted to.` : ''} ScalaTest's terms (0.05 busy, 0.01 compiles squared) predict 16×1 at 2.4–2.5 times its measured time: their compiles term charges for live sets this build does not have.</p>`,
+      `<p><b>Quantisation is small here.</b> K is a power of two, so every M divides it and no round of compiles runs part empty. ${D.modules === 16 ? 'With 16 modules, 16×1 is a single round, so the build waits for the slowest copy.' : 'With 64 modules each slot runs 64 / M copies in turn, so the slowest copy of a round matters less.'} The two K agree within 8% on every split. A K that some M do not divide is the test of quantisation.</p>`,
+    ].join('');
+  }
+  function synthDims(D, tok) {
+    const t = tok, nonGc = (sp) => t(sp).cpu - t(sp).gc;
+    return `<section><h3><i style="background:var(--warm)"></i>Up: more compiles at once</h3>
+       <p>No module waits for another, so there is no critical path, and ${D.modules} modules on M slots take ${D.modules} / M rounds of compiles. GC is ${gcPct(t('1x1'))} of CPU serial, ${gcPct(t('8x1'))} at 8×1 and ${gcPct(t('16x1'))} at 16×1. <b>Returns:</b> ${X(t('8x1'))} at 8×1, ${X(t('16x1'))} at 16×1.</p></section>
+       <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
+       <p>Non-GC CPU grows ${Math.round(100 * (nonGc('1x8') / nonGc('1x1') - 1))}% by 1×8 and ${Math.round(100 * (nonGc('1x16') / nonGc('1x1') - 1))}% by 1×16. <b>Returns:</b> ${['1x2', '1x4', '1x8', '1x16'].map((sp) => X(t(sp))).join(', ')} at 2, 4, 8 and 16 threads.</p></section>
+       <section><h3><i style="background:var(--active)"></i>Both</h3>
+       <p>At 16 threads the shaded rectangles give ${X(t('16x1'))} as 16×1, ${X(t('1x16'))} as 1×16 and ${X(t('4x4'))} as 4×4. With no graph, the tall rectangle wins.</p></section>`;
+  }
+  function synthCal(D) {
+    const F = D.fit;
+    if (!F) return 'The original model takes each module’s serial and pickle times from the baseline, then one curve from a single corpus.';
+    return `The refit charges for busy threads and for compiles: load = 1 + ${F.a} (busy − 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles − 1)^${F.q}, with each module's own speed-up from the one-at-a-time builds. ${F.train.length ? 'Fitted to this build on ' + F.train.map((x) => x.split(':')[1].replace('x', '×')).join(', ') + '.' : 'These are the terms fitted to ScalaTest, applied unchanged.'} Mean error on the other splits ${F.heldMeanPct}%, worst ${F.heldWorstPct}%.`;
+  }
+
+  function render() {
+  const D = SETS.find((x) => x[0] === key)[2];
+  const synth = key !== 'scalatest';
+  const hasGraph = D.graph.some((m) => m.deps.length);
+  document.querySelectorAll('[data-only]').forEach((el) => { const o = el.dataset.only; el.hidden = o === 'graph' ? !hasGraph : (o === 'synth') !== synth; });
+  switcher('dataCtl');
+  // a split's token: pipelined where both ran
+  const tok = (split) => D.tokens.find((t) => t.token === 'pipe:' + split) || D.tokens.find((t) => t.token === 'trad:' + split);
+  if (synth) $('synthSize').textContent = `${D.modules} modules of ${kl(D.totalLines / D.modules)} lines each, ${kl(D.totalLines)} in all`;
   $('size').textContent = `${kl(D.totalLines)} lines of Scala in ${D.modules} modules with sources`;
   $('stamp').textContent = `Data of ${D.generated}: every configuration has ${Math.min(...D.tokens.map((t) => t.rounds))} rounds, ${Math.max(...D.tokens.map((t) => t.errors))} errors`;
-  (function () {
+  if (synth) $('found').innerHTML = synthFound(D, tok);
+  else (function () {
     const by = (t) => D.tokens.find((x) => x.token === t);
     const w = (t) => s1(by(t).wall), x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
     const F = D.fit, E = F.estimates;
@@ -235,13 +295,12 @@ li { margin-bottom: 3px; }
     const gcPct = (t) => Math.round(100 * by(t).gc / by(t).cpu);
     const nonGc = (t) => by(t).cpu - by(t).gc;
     const x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
-    const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && !(t.token === 'trad:8x1') ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
+    const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && tok(m[1] + 'x' + m[2]) === t ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
     const gcs = pts.map((p) => p.t.gc / p.t.cpu), lo = Math.min(...gcs), hi = Math.max(...gcs);
     // one budget at a time: the splits that use it, with the tall, the wide and the square one shaded
-    const shaded = { 8: [[8, 1, '--warm'], [1, 8, '--teal'], [4, 2, '--active']], 16: [[16, 1, '--warm'], [2, 8, '--teal'], [4, 4, '--active']] };
+    const shaded = { 8: [[8, 1, '--warm'], [1, 8, '--teal'], [4, 2, '--active']], 16: [[16, 1, '--warm'], tok('1x16') ? [1, 16, '--teal'] : [2, 8, '--teal'], [4, 4, '--active']] };
     // where a split's label goes, against its point: dx, dy, anchor
-    const place = { '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [10, 4, 'start'], '16x1': [10, 4, 'start'] };
-    let budget = 16;
+    const place = { '1x16': [-4, 18, 'end'], '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [10, 4, 'start'], '16x1': [10, 4, 'start'] };
     function draw() {
       const X0 = 56, Y0 = 490, W = 540, H = 540, U = 440 / budget;
       const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
@@ -271,10 +330,12 @@ li { margin-bottom: 3px; }
         <text transform="translate(16 ${py(budget)}) rotate(-90)" text-anchor="end" style="font-weight:600">compiles at once</text>
         ${marks}
       </svg>`;
-      $('dimsCtl').innerHTML = [8, 16].map((b) => `<button class="${b === budget ? 'on' : ''}" data-b="${b}">${b} threads</button>`).join('');
+      $('dimsCtl').innerHTML = [8, 16].map((b) => `<button class="${b === budget ? 'on' : ''}" data-b="${b}">${b} threads</button>`).join('') + '<span style="width:12px"></span><span id="dimsData" style="display:contents"></span>';
       $('dimsCtl').querySelectorAll('button').forEach((el) => { el.onclick = () => { budget = +el.dataset.b; draw(); }; });
+      switcher('dimsData');
     }
     draw();
+    if (synth) { $('dimsNotes').innerHTML = synthDims(D, tok); $('dimsCap').textContent = `Measured speed-ups of the synthetic build of ${D.modules} independent copies of scalap against one serial compile at a time, for one thread budget at a time. The points on the dashed curve use the whole budget, the dimmer ones fewer threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. The collector\u2019s threads are not counted in the area.`; return; }
     const biggest = D.graph.filter((m) => m.ms != null).sort((a, b) => b.ms - a.ms)[0];
     const s = (ms) => Math.round(ms / 1000) + ' s';
     // the critical path of a pipelined build of serial compiles: a module starts at its dependencies' pickles, or their end for a macro provider
@@ -302,7 +363,7 @@ li { margin-bottom: 3px; }
   })();
 
   // ---- the module graph: a row per depth, width by lines
-  (function () {
+  if (hasGraph) (function () {
     const G = D.graph, W = 960, rowH = 42, pad = 4, top = 16;
     const maxDepth = Math.max(...G.map((m) => m.depth));
     const rows = []; for (let i = 0; i <= maxDepth; i++) rows.push(G.filter((m) => m.depth === i).sort((a, b) => b.lines - a.lines));
@@ -329,7 +390,7 @@ li { margin-bottom: 3px; }
   const T = D.tokens.slice();
   $('resultNote').textContent = `The baseline is ${s1(D.serial)} for one serial compile at a time. Times are the median of three rounds, in a different order each round.`;
   // the cores a token gives compilation: M x T, or the C of a shared budget
-  const label = (t) => t.token === 'trad:1x1' ? 'serial' : /^pipe:1x/.test(t.token) ? t.token.slice(5) : t.token;
+  const label = (t) => t.token === 'trad:1x1' ? 'serial' : /^pipe:1x/.test(t.token) || !hasGraph ? t.token.split(':')[1] : t.token;
   const workers = (t) => { const p = t.token.split(':')[1], m = /^(\d+)x(\d+)$/.exec(p); return m ? m[1] * m[2] : +p.replace(/\D/g, ''); };
   const budgets = [...new Set(T.map(workers))].sort((a, b) => a - b);
   const inBudget = (b) => T.filter((t) => workers(t) === b).sort((x, y) => x.wall - y.wall);
@@ -355,7 +416,7 @@ li { margin-bottom: 3px; }
     const laneH = 16, top = 22, H = top + slots.length * laneH + 22;
     const X = (t) => L + t / end * (W - L - R);
     let g = '';
-    const step = end > 100000 ? 20000 : 10000;
+    const step = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].find((v) => end / v <= 12);
     for (let t = 0; t <= end; t += step) g += `<line x1="${X(t)}" x2="${X(t)}" y1="${top - 4}" y2="${H - 18}" stroke="var(--grid)"/><text class="d" x="${X(t)}" y="${H - 4}" text-anchor="middle">${t / 1000} s</text>`;
     ms.forEach((m) => {
       const y = top + m._lane * laneH, h = Math.max(4, Math.min(13, 4 + m.t * 1.2));
@@ -379,16 +440,18 @@ li { margin-bottom: 3px; }
     g += `<text class="d" x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">the module's serial time</text>`;
     P.forEach((m) => { g += `<circle cx="${xs(m.ms)}" cy="${ys(Math.min(m.s8, 6))}" r="4.5" fill="var(--active)" stroke="var(--panel)" stroke-width="1.5"><title>${esc(m.n)}: ${s1(m.ms)} serial, ${m.s8.toFixed(2)}\u00d7 at 8 threads</title></circle>`; });
     $('scale').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="max-width:720px" role="img" aria-label="Speed-up at 8 threads rises with a module's serial time">${g}</svg>`;
-    $('scaleCap').textContent = 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Small modules gain little from threads, and even the largest stay near 5\u00d7. Hover a point for its module.';
+    $('scaleCap').textContent = synth ? 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Every module is a copy of the same code, so the spread is noise.' : 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Small modules gain little from threads, and even the largest stay near 5\u00d7. Hover a point for its module.';
   })();
 
   // ---- the models
   const withSim = order.filter((t) => t.predicted);
   const F = D.fit || { train: [] };
-  const role = (t) => F.train.includes(t.token) ? 'fitted' : /^pipe:1x|^trad:1x1/.test(t.token) ? 'input' : 'held out';
+  const role = (t) => F.train.includes(t.token) ? 'fitted' : /^pipe:1x|^trad:1x1/.test(t.token) || (!hasGraph && /^trad:1x/.test(t.token)) ? 'input' : 'held out';
   const e = (t, p) => `${p > t.wall ? '+' : ''}${(100 * (p / t.wall - 1)).toFixed(0)}%`;
   $('cal').innerHTML = `<table><thead><tr><th class="l">Cores</th><th class="l">Configuration</th><th>Measured</th><th>Original model, compiler curve</th><th>Original model, pekko curve</th><th>Refit</th><th class="l">Refit used it as</th></tr></thead><tbody>` +
     withSim.map((t) => `<tr><td class="l">${workers(t)}</td><td class="l"><code>${esc(label(t))}</code></td><td>${s1(t.wall)}</td><td>${s1(t.predicted.compiler)} ${e(t, t.predicted.compiler)}</td><td>${s1(t.predicted.pekko)} ${e(t, t.predicted.pekko)}</td><td>${t.fit ? s1(t.fit) + ' ' + e(t, t.fit) : ''}</td><td class="l dim">${role(t)}</td></tr>`).join('') + '</tbody></table>';
-  $('calNote').textContent = `The original model takes each module's serial and pickle times from the baseline, then one curve from a single corpus. The refit uses each module's own speed-up from the one-at-a-time builds and charges for compiles as well as threads: load = 1 + ${F.a} (busy \u2212 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles \u2212 1)^${F.q}.`;
+  $('calNote').textContent = synth ? synthCal(D) : `The original model takes each module's serial and pickle times from the baseline, then one curve from a single corpus. The refit uses each module's own speed-up from the one-at-a-time builds and charges for compiles as well as threads: load = 1 + ${F.a} (busy \u2212 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles \u2212 1)^${F.q}.`;
+  }
+  render();
 })();
 </script>
