@@ -154,12 +154,11 @@ trait ParallelTyper {
     parallelTyperActive = true
     currentRun.reporting.deferFeatureExplanations = true
     try {
-      watchdog.start()
       workers.start(nThreads, body).await()
     } finally {
       parallelTyperActive = false
       currentRun.reporting.deferFeatureExplanations = false
-      watchdog.interrupt()
+      watchdog.cancel(false)
       reporter = savedReporter
       bufferingReporter.issueBuffered()
     }
@@ -231,7 +230,6 @@ trait ParallelTyper {
     parallelTyperActive = true
     currentRun.reporting.deferFeatureExplanations = true
     try {
-      watchdog.start()
       val running = workers.start(nThreads, body)
       if (meanwhile ne null) meanwhile(() => running.getCount > 0)
       running.await()
@@ -251,7 +249,7 @@ trait ParallelTyper {
     } finally {
       parallelTyperActive = false
       currentRun.reporting.deferFeatureExplanations = false
-      watchdog.interrupt()
+      watchdog.cancel(false)
       reporter = savedReporter
       bufferingReporter.issueBuffered()
     }
@@ -316,25 +314,17 @@ trait ParallelTyper {
     if (w ne null) w.intValue else unit.source.content.length
   }
 
-  /** The thread dump of a phase that runs longer than `seconds`, and again every `seconds`. */
-  private def newWatchdog(seconds: Int): Thread = {
-    val t = new Thread(() => {
-      try {
-        while (true) {
-          Thread.sleep(seconds * 1000L)
-          val infos = java.lang.management.ManagementFactory.getThreadMXBean.dumpAllThreads(true, true)
-          val sb = new StringBuilder(s"[parallel-typer] still running after $seconds s; ${completionLock.summary}\n")
-          infos.foreach { ti =>
-            sb.append(ti.toString.linesIterator.take(1).mkString).append('\n')
-            ti.getStackTrace.take(60).foreach(f => sb.append("\tat ").append(f).append('\n'))
-          }
-          Console.err.println(sb)
-        }
-      } catch { case _: InterruptedException => () }
-    }, "scalac-typer-watchdog")
-    t.setDaemon(true)
-    t
-  }
+  /** The thread dump of a phase that runs longer than `seconds`, and again every `seconds`, until it is cancelled. */
+  private def newWatchdog(seconds: Int): java.util.concurrent.ScheduledFuture[_] =
+    ParallelTyper.watchdogs.scheduleAtFixedRate(() => {
+      val infos = java.lang.management.ManagementFactory.getThreadMXBean.dumpAllThreads(true, true)
+      val sb = new StringBuilder(s"[parallel-typer] still running after $seconds s; ${completionLock.summary}\n")
+      infos.foreach { ti =>
+        sb.append(ti.toString.linesIterator.take(1).mkString).append('\n')
+        ti.getStackTrace.take(60).foreach(f => sb.append("\tat ").append(f).append('\n'))
+      }
+      Console.err.println(sb)
+    }, seconds.toLong, seconds.toLong, java.util.concurrent.TimeUnit.SECONDS)
 
   /** Force the lazy vals of `definitions`, `runDefinitions` and the analyzer (and their nested objects) on this thread: their
    *  initialisers complete symbols while they hold the monitor of the enclosing object, and a worker that held the
@@ -532,5 +522,25 @@ trait ParallelTyper {
   }
   private implicit class AsScala[T](q: ConcurrentLinkedQueue[T]) {
     def asScala: Iterator[T] = { val it = q.iterator; Iterator.continually(it).takeWhile(_.hasNext).map(_.next()) }
+  }
+}
+
+object ParallelTyper {
+  /** The thread of every compiler's watchdogs (`newWatchdog`). One thread kept across phases and compiles, rather than
+   *  one per phase: a new thread's first allocation (here, the `InterruptedException` that stopped it) takes a fresh
+   *  TLAB, which the JVM sizes for the threads already running and which is lost when the thread ends. With a large
+   *  young generation that was hundreds of megabytes of eden per phase. It ends after a minute without a phase, so
+   *  that it does not keep this class loader. */
+  private[typechecker] lazy val watchdogs: java.util.concurrent.ScheduledThreadPoolExecutor = {
+    val e = new java.util.concurrent.ScheduledThreadPoolExecutor(1, { (r: Runnable) =>
+      val t = new Thread(r, "scalac-typer-watchdog")
+      t.setDaemon(true)
+      t.setContextClassLoader(null)
+      t
+    })
+    e.setRemoveOnCancelPolicy(true)
+    e.setKeepAliveTime(60, java.util.concurrent.TimeUnit.SECONDS)
+    e.allowCoreThreadTimeOut(true)
+    e
   }
 }
