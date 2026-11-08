@@ -28,7 +28,7 @@ import Mode._
  *  @author  Martin Odersky
  */
 trait Typers extends Adaptations with Tags with TypersTracking with PatternTypers {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -39,10 +39,16 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
   final val shortenImports = false
 
-  // All typechecked RHS of ValDefs for right-associative operator desugaring
-  private val rightAssocValDefs = new mutable.HashMap[Symbol, Tree]
-  // Symbols of ValDefs for right-associative operator desugaring which are passed by name and have been inlined
-  private val inlinedRightAssocValDefs = new mutable.HashSet[Symbol]
+  // Produced and consumed while typing one block, so on one thread: per thread under -Yparallel-typer.
+  private final class RightAssocState {
+    // All typechecked RHS of ValDefs for right-associative operator desugaring
+    val rightAssocValDefs = new mutable.HashMap[Symbol, Tree]
+    // Symbols of ValDefs for right-associative operator desugaring which are passed by name and have been inlined
+    val inlinedRightAssocValDefs = new mutable.HashSet[Symbol]
+  }
+  private[this] lazy val rightAssocStates = perThread(new RightAssocState)
+  private def rightAssocValDefs = rightAssocStates.get.rightAssocValDefs
+  private def inlinedRightAssocValDefs = rightAssocStates.get.inlinedRightAssocValDefs
 
   // For each class, we collect a mapping from constructor param accessors that are aliases of their superclass
   // param accessors. At the end of the typer phase, when this information is available all the way up the superclass
@@ -118,7 +124,20 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val InterpolatorIdentRegex = """\$[\w]+""".r // note that \w doesn't include $
 
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
-  def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
+  def freshNameCreatorFor(context: Context) = {
+    val encl = context.outermostContextAtCurrentPos.enclClassOrMethod.owner
+    // With -Yparallel-typer, the right-hand sides of a class's vals and vars are typed in an order that depends on the
+    // threads (an inferred type is computed by whoever asks first), and the numbers drawn here reach the classfiles.
+    // So each member has its creator: the names stay deterministic, and they are local to the right-hand side.
+    val owner =
+      if (isParallelCompiler && encl.isClass) {
+        var o = context.owner
+        while ((o ne NoSymbol) && (o.owner ne encl)) o = o.owner
+        if (o ne NoSymbol) o else encl
+      }
+      else encl
+    lockedIfConcurrent(typerFreshNameCreators)(typerFreshNameCreators.getOrElseUpdate(owner, new FreshNameCreator))
+  }
 
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit
@@ -1677,7 +1696,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           //         in this source file. See `ImplicitSearch#isValid` and `ImplicitInfo#isCyclicOrErroneous`.
           val dummy = context.outer.owner.newLocalDummy(context.owner.pos)
           val cscope = context.outer.makeNewScope(ctor, dummy)
-          if (dummy.isTopLevel) currentRun.symSource(dummy) = currentUnit.source.file
+          if (dummy.isTopLevel) currentRun.symSource(dummy) = context.unit.source.file
           val cbody2 = { // called both during completion AND typing.
             val typer1 = newTyper(cscope)
             // XXX: see about using the class's symbol....
@@ -1926,7 +1945,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         val typedMods = typedModifiers(mdef.mods)
         assert(clazz != NoSymbol, mdef)
-        val noSerializable = (
+        // -Yparallel-typer: the class headers step has already added it, for every thread to see (`serializableCompanions`)
+        val madeSerializable = isConcurrentCompiler && clazz.hasAttachment[SerializableCompanion.type]
+        val noSerializable = !madeSerializable && (
           (linkedClass eq NoSymbol)
             || linkedClass.isErroneous
             || !linkedClass.isSerializable
@@ -1936,7 +1957,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           typedParentTypes(mdef.impl) ++ (
             if (noSerializable) Nil
             else {
-              clazz.makeSerializable()
+              if (!madeSerializable) clazz.makeSerializable()
               TypeTree(SerializableTpe).setPos(clazz.pos.focus) :: Nil
             }
             )
@@ -2114,6 +2135,38 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
+    /** The expected type of the default argument of parameter `sym` of type `tpe`. */
+    private def defaultArgPt(sym: Symbol, tpe: Type): Type = {
+      // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
+      // This allows defining "def foo[T](a: T = 1)"
+      val tparams = sym.owner.skipConstructor.info.typeParams
+      val subst = new SubstTypeMap(tparams, WildcardType.fillList(tparams.length)) {
+        @tailrec
+        override def matches(sym: Symbol, sym1: Symbol) =
+          if (sym.isSkolem) matches(sym.deSkolemize, sym1)
+          else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
+          else super.matches(sym, sym1)
+      }
+      // allow defaults on by-name parameters
+      if (sym hasFlag BYNAMEPARAM)
+        if (tpe.typeArgs.isEmpty) WildcardType // during erasure tpt1 is Function0
+        else subst(tpe.typeArgs.head)
+      else subst(tpe)
+    }
+
+    /** The `@defaultArg` annotation of `vparam`, a parameter with a default of a constructor of an annotation class.
+     *  The typed default is also left in `unit.transformed`, where `typedValDef` finds it.
+     *
+     *  This typer must be the constructor's, the one that `typedValDef` creates a parameter's typer from.
+     */
+    def defaultArgAnnotation(vparam: ValDef): AnnotationInfo = {
+      val sym  = vparam.symbol
+      val rhs1 = newTyper(context.makeConstructorContext.makeNonSilent(vparam).makeNewScope(vparam, sym))
+        .typed(vparam.rhs, EXPRmode | BYVALmode, defaultArgPt(sym, sym.tpe))
+      transformed(vparam.rhs) = rhs1
+      AnnotationInfo(DefaultArgAttr.tpe, List(duplicateAndResetPos.transform(rhs1)), Nil)
+    }
+
     // use typedValDef instead. this version is called after creating a new context for the ValDef
     private def typedValDefImpl(vdef: ValDef): ValDef = {
       val sym = vdef.symbol.initialize
@@ -2141,27 +2194,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             LocalVarUninitializedError(vdef)
           vdef.rhs
         } else {
-          val tpt2 = if (sym.hasDefault) {
-            // When typechecking default parameter, replace all type parameters in the expected type by Wildcard.
-            // This allows defining "def foo[T](a: T = 1)"
-            val tparams = sym.owner.skipConstructor.info.typeParams
-            val subst = new SubstTypeMap(tparams, WildcardType.fillList(tparams.length)) {
-              @tailrec
-              override def matches(sym: Symbol, sym1: Symbol) =
-                if (sym.isSkolem) matches(sym.deSkolemize, sym1)
-                else if (sym1.isSkolem) matches(sym, sym1.deSkolemize)
-                else super.matches(sym, sym1)
-            }
-            // allow defaults on by-name parameters
-            if (sym hasFlag BYNAMEPARAM)
-              if (tpt1.tpe.typeArgs.isEmpty) WildcardType // during erasure tpt1 is Function0
-              else subst(tpt1.tpe.typeArgs.head)
-            else subst(tpt1.tpe)
-          } else tpt1.tpe
-          transformedOrTyped(vdef.rhs, EXPRmode | BYVALmode, tpt2)
+          transformedOrTyped(vdef.rhs, EXPRmode | BYVALmode, if (sym.hasDefault) defaultArgPt(sym, tpt1.tpe) else tpt1.tpe)
         }
-      if (!isPastTyper && sym.hasDefault && sym.owner.isConstructor && sym.enclClass.isNonBottomSubClass(AnnotationClass))
-        sym.addAnnotation(AnnotationInfo(DefaultArgAttr.tpe, List(duplicateAndResetPos.transform(rhs1)), Nil))
       val vdef1 = treeCopy.ValDef(vdef, typedMods, sym.name, tpt1, checkDead(context, rhs1)) setType NoType
       if (sym.isSynthetic && sym.name.startsWith(nme.RIGHT_ASSOC_OP_PREFIX))
         rightAssocValDefs += ((sym, vdef1.rhs))
@@ -2233,7 +2267,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               }
             }
             if (!accToSuperAcc.isEmpty) {
-              superConstructorCalls(clazz) = accToSuperAcc
+              superConstructorCalls.synchronized(superConstructorCalls(clazz) = accToSuperAcc)
             }
           }
         }
@@ -3055,7 +3089,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                     =>
               val sam = samOf(pt)
               if (sam.exists && sam.info.params.lengthCompare(numVparams) == 0)
-                wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
+                scratch.wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
               else pt // allow type slack (pos/6221)
           }
 

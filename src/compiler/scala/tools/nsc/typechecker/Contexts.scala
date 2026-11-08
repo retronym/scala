@@ -22,7 +22,7 @@ import scala.util.chaining._
 /**
  *  @author  Martin Odersky
  */
-trait Contexts { self: Analyzer with ImportTracking =>
+trait Contexts { self: AbstractAnalyzer with ImportTracking =>
   import global._
   import definitions.{JavaLangPackage, ScalaPackage, PredefModule, ScalaXmlTopScope, ScalaXmlPackage}
   import ContextMode._
@@ -50,34 +50,74 @@ trait Contexts { self: Analyzer with ImportTracking =>
   }
   private lazy val NoJavaMemberFound = (NoType, NoSymbol)
 
-  private lazy val startContext = NoContext.make(
+  // One per thread under -Yparallel-typer: the root of every context chain has mutable state of its own (the
+  // in-progress marker of `implicitss`, a cycle to any other thread).
+  private lazy val startContexts = perThread(NoContext.make(
     Template(List(), noSelfType, List()) setSymbol global.NoSymbol setType global.NoType,
     rootMirror.RootClass,
     rootMirror.RootClass.info.decls
-  )
+  ))
+  private def startContext = startContexts.get
 
-  var lastAccessCheckDetails: String = ""
-
-  val rootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
-
-  val excludedRootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
-
-  // register an import for the narrow purpose of excluding root imports of predef modules
-  def registerImport(ctx: Context, imp: Import): Unit = {
-    val sym = imp.expr.symbol
-    if (sym != null && !sym.hasPackageFlag && ctx.enclosingNonImportContext.owner.hasPackageFlag && rootImports(ctx.unit).contains(sym)) {
-      var current = excludedRootImportsCached.get(ctx.unit).getOrElse(Nil)
-      current = sym :: current
-      excludedRootImportsCached += ctx.unit -> current
-    }
+  /** The contexts whose implicits this thread is collecting (-Yparallel-typer): `Context.implicitssImpl`'s cycle
+   *  marker. */
+  private[typechecker] lazy val implicitsInProgress = perThread(new ContextSet)
+  private[typechecker] final class ContextSet {
+    private[this] val set = new java.util.IdentityHashMap[AnyRef, AnyRef]()
+    def contains(c: AnyRef): Boolean = set.containsKey(c)
+    def +=(c: AnyRef): Unit = set.put(c, c)
+    def -=(c: AnyRef): Unit = set.remove(c)
   }
+
+  /** A side channel from `isAccessible` to the error message: per thread under -Yparallel-typer. */
+  private[this] lazy val lastAccessCheckDetailsHolder = perThread(Array(""))
+  def lastAccessCheckDetails: String = lastAccessCheckDetailsHolder.get(0)
+  def lastAccessCheckDetails_=(s: String): Unit = lastAccessCheckDetailsHolder.get(0) = s
+
+  val rootImportsCached = perRunCaches.newConcurrentMap[CompilationUnit, List[Symbol]]()
+
+  private val maskingImportCandidatesCached = perRunCaches.newConcurrentMap[CompilationUnit, List[Import]]()
+
+  /** The top-level imports of a unit that may have a root import module as their qualifier: those whose qualifier
+   *  is a path ending in the name of such a module, or in a name that a preceding top-level import renames it to.
+   *
+   *  This is decided from the syntax so that a name lookup need not complete any other import of the unit.
+   *  Completing them all would type qualifiers that a lookup does not depend on, which can be cyclic.
+   */
+  private def maskingImportCandidates(unit: CompilationUnit): List[Import] =
+    maskingImportCandidatesCached.getOrElseUpdate(unit, {
+      var names = rootImports(unit).collect[Name] { case sym if !sym.hasPackageFlag => sym.name }.toSet
+      val candidates = List.newBuilder[Import]
+      def traverse(stats: List[Tree]): Unit = stats.foreach {
+        case PackageDef(_, stats1) => traverse(stats1)
+        case imp @ Import(expr, selectors) =>
+          expr match {
+            case ref: RefTree if names(ref.name) => candidates += imp
+            case _ =>
+          }
+          selectors.foreach(sel => if (sel.isRename && names(sel.name)) names += sel.rename)
+        case _ =>
+      }
+      if (names.nonEmpty) traverse(unit.body :: Nil)
+      candidates.result()
+    })
+
+  /** Is `sym` the qualifier of a top-level import in `unit`, which masks the root import of that module in the
+   *  whole unit? The candidates are completed first, so that the answer does not depend on what has been typed so
+   *  far. While one of them is being completed, the lookups for its own qualifier see no mask from it.
+   */
+  private def isMaskedRootImport(unit: CompilationUnit, sym: Symbol): Boolean =
+    maskingImportCandidates(unit).exists { imp =>
+      val impSym = imp.symbol
+      if (impSym != NoSymbol && !impSym.isLockedHere) impSym.initialize
+      imp.expr.symbol eq sym
+    }
 
   /** List of symbols to import from in a root context.  By default, that
    *  is `java.lang`, `scala`, and [[scala.Predef]], in that order.
    *
    *  - if option `-Yimports` is supplied, then that specifies the preamble imports
-   *  - if the unit body has an import of Predef
-   *    among its leading imports, or if the tree is [[scala.Predef]], `Predef` is not imported.
+   *  - if the unit body has a top-level import of Predef, or if the tree is [[scala.Predef]], `Predef` is not imported.
    *    Similarly for any module among the preamble imports.
    *  - if the unit is java defined, only `java.lang` is imported
    *
@@ -1096,7 +1136,29 @@ trait Contexts { self: Analyzer with ImportTracking =>
         }
 
         val CycleMarker = NoRunId - 1
-        if (implicitsRunId == CycleMarker) {
+        if (isConcurrentCompiler) {
+          // -Yparallel-typer: a context of the namer is shared by the completers of its members, which may run on
+          // several threads (parallel signatures). The in-progress marker is per thread, and the cache is stored
+          // before its run id.
+          val inProgress = implicitsInProgress.get
+          if (inProgress.contains(this)) withOuter(Nil)
+          else {
+            val cache = implicitsCache
+            if (implicitsRunId == currentRunId && (cache ne null)) withOuter(cache)
+            else {
+              inProgress += this
+              val is = try implicits finally inProgress -= this
+              is match {
+                case None => withOuter(Nil)
+                case Some(is) =>
+                  implicitsCache = is
+                  implicitsRunId = currentRunId
+                  withOuter(is)
+              }
+            }
+          }
+        }
+        else if (implicitsRunId == CycleMarker) {
           debuglog(s"cycle while collecting implicits at owner ${owner}, probably due to an implicit without an explicit return type. Continuing with implicits from enclosing contexts.")
           withOuter(Nil)
         } else if (implicitsRunId != currentRunId) {
@@ -1210,7 +1272,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
       else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
-      imp.isRootImport && excludedRootImportsCached.get(unit).exists(_.contains(imp.qual.symbol))
+      imp.isRootImport && isMaskedRootImport(unit, imp.qual.symbol)
 
     private[Contexts] def requiresQualifier(s: Symbol): Boolean = (
           s.owner.isClass
@@ -1230,7 +1292,7 @@ trait Contexts { self: Analyzer with ImportTracking =>
     def isNameInScope(name: Name) = lookupSymbol(name, _ => true).isSuccess
 
     def lookupSymbol(name: Name, qualifies: Symbol => Boolean): NameLookup =
-      symbolLookupCache.using(_(this, name)(qualifies))
+      symbolLookupCaches.get.using(_(this, name)(qualifies))
 
     final def lookupCompanionInIncompleteOwner(original: Symbol): Symbol = {
       // Must have both a class and module symbol, so that `{ class C; def C }` or `{ type T; object T }` are not companions.
@@ -1317,7 +1379,8 @@ trait Contexts { self: Analyzer with ImportTracking =>
    *  the search continuing as long as no qualifying name is found.
    */
   // OPT: moved this into a (cached) object to avoid costly and non-eliminated {Object,Int}Ref allocations
-  private[Contexts] final val symbolLookupCache = ReusableInstance[SymbolLookup](new SymbolLookup, enabled = isCompilerUniverse)
+  // per thread under -Yparallel-typer: `ReusableInstance` is not thread safe
+  private[Contexts] final lazy val symbolLookupCaches = perThread(ReusableInstance[SymbolLookup](new SymbolLookup, enabled = isCompilerUniverse))
   private[Contexts] final class SymbolLookup {
     private[this] var lookupError: NameLookup  = _ // set to non-null if a definite error is encountered
     private[this] var inaccessible: NameLookup = _ // records inaccessible symbol for error reporting in case none is found

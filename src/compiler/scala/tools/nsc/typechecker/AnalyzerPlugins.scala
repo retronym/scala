@@ -16,7 +16,7 @@ package typechecker
 /**
  *  @author Lukas Rytz
  */
-trait AnalyzerPlugins { self: Analyzer with splain.SplainData =>
+trait AnalyzerPlugins { self: AbstractAnalyzer with splain.SplainData =>
   import global._
 
   trait AnalyzerPlugin {
@@ -411,6 +411,9 @@ trait AnalyzerPlugins { self: Analyzer with splain.SplainData =>
   /** A list of registered macro plugins */
   private var macroPlugins: List[MacroPlugin] = Nil
 
+  /** Are any analyzer or macro plugins registered? (`-Yparallel-typer` does not support them.) */
+  def hasAnalyzerOrMacroPlugins: Boolean = analyzerPlugins.nonEmpty || macroPlugins.nonEmpty
+
   /** Registers a new macro plugin */
   def addMacroPlugin(plugin: MacroPlugin): Unit = {
     if (!macroPlugins.contains(plugin))
@@ -437,7 +440,7 @@ trait AnalyzerPlugins { self: Analyzer with splain.SplainData =>
             case None =>
             case s @ Some(_) =>
               if (result.isDefined) {
-                typer.context.error(op.position, s"both $resultPlugin and $plugin want to ${op.description}")
+                typerHere.context.error(op.position, s"both $resultPlugin and $plugin want to ${op.description}")
                 op.default
               } else {
                 result = s

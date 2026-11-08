@@ -21,7 +21,7 @@ import mutable.{LinkedHashSet, ListBuffer}
 import Flags._
 import scala.util.control.ControlThrowable
 import scala.annotation.{tailrec, unused}
-import util.{ReusableInstance, Statistics}
+import util.Statistics
 import util.ThreeValues._
 import Variance._
 import Depth._
@@ -110,25 +110,32 @@ trait Types
   private object substTypeMapCache {
     private[this] var cached: SubstTypeMap = new SubstTypeMap(Nil, Nil)
 
-    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap = if (isCompilerUniverse) {
-      if ((cached.from ne from) || (cached.to ne to))
-        cached = new SubstTypeMap(from, to)
-      cached
-    } else new SubstTypeMap(from, to)
+    def apply(from: List[Symbol], to: List[Type]): SubstTypeMap =
+      if (!isCompilerUniverse) new SubstTypeMap(from, to)
+      else if (isConcurrentCompiler) {
+        val s = scratch
+        val c = s.substTypeMap
+        if ((c ne null) && (c.from eq from) && (c.to eq to)) c
+        else { val m = new SubstTypeMap(from, to); s.substTypeMap = m; m }
+      }
+      else {
+        if ((cached.from ne from) || (cached.to ne to))
+          cached = new SubstTypeMap(from, to)
+        cached
+      }
   }
 
-  /** The current skolemization level, needed for the algorithms
-   *  in isSameType, isSubType that do constraint solving under a prefix.
-   */
-  private[this] var _skolemizationLevel = 0
-  def skolemizationLevel = _skolemizationLevel
-  def skolemizationLevel_=(value: Int) = _skolemizationLevel = value
+  /** The current skolemization level, see `Scratch.skolemizationLevel`. */
+  def skolemizationLevel: Int = scratch.skolemizationLevel
+  def skolemizationLevel_=(value: Int): Unit = scratch.skolemizationLevel = value
 
   /** A map from lists to compound types that have the given list as parents.
    *  This is used to avoid duplication in the computation of base type sequences and baseClasses.
    *  It makes use of the fact that these two operations depend only on the parents,
    *  not on the refinement.
    */
+  // Read and written only by `CompoundType.memo`, from `defineBaseTypeSeqOfCompoundType` and
+  // `defineBaseClassesOfCompoundType`, which runtime reflection runs under the GIL.
   private[this] val _intersectionWitness = perRunCaches.newWeakMap[List[Type], WeakReference[Type]]()
   def intersectionWitness = _intersectionWitness
 
@@ -294,7 +301,7 @@ trait Types
     def isError: Boolean = typeSymbol.isError || termSymbol.isError
 
     /** Is this type produced as a repair for an error? */
-    def isErroneous: Boolean = erroneousCollectorInstance.using(_.collect(this))
+    def isErroneous: Boolean = scratch.erroneousCollector.collect(this)
 
     /** Can this type only be subtyped by bottom types?
      *  This is assessed to be the case if the class is final,
@@ -1030,9 +1037,15 @@ trait Types
      *  @param stableOnly     If set, return only members that are types or stable values
      */
     def findMember(name: Name, excludedFlags: Long, requiredFlags: Long, stableOnly: Boolean): Symbol = {
-      def findMemberInternal = findMemberInstance.using { findMember =>
-        findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
-        findMember()
+      def findMemberInternal = {
+        // `take`/`release` rather than `using`: the closure would be allocated whenever C2 does not
+        // inline `using` here, and `findMember` is among the hottest calls of the typer.
+        val findMembers = scratch.findMembers
+        val findMember = findMembers.take()
+        try {
+          findMember.init(this, name, excludedFlags, requiredFlags, stableOnly)
+          findMember()
+        } finally findMembers.release()
       }
 
       if (this.isGround) findMemberInternal
@@ -1436,13 +1449,18 @@ trait Types
 
     @volatile private[reflect] var underlyingCache: Type = NoType
     @volatile private[reflect] var underlyingPeriod = NoPeriod
+    private[reflect] var underlyingStamped: Stamped[Type] = null
     private[Types] def invalidateSingleTypeCaches(): Unit = {
       underlyingCache = NoType
       underlyingPeriod = NoPeriod
+      underlyingStamped = null
     }
     override def underlying: Type = {
       val cache = underlyingCache
-      if (underlyingPeriod == currentPeriod && cache != null) cache
+      // In a concurrent compiler the field stays `NoType` (the stamped cache is elsewhere): not an answer, and the
+      // slow path is taken without asking for the period.
+      if (cache != null && ((cache ne NoType) || !isConcurrentCompiler) && underlyingPeriod == currentPeriod) cache
+      else if (isConcurrentCompiler) concurrentUnderlying(this)
       else {
         defineUnderlyingOfSingleType(this) // this line is synchronized in runtime reflection
         underlyingCache
@@ -1612,17 +1630,23 @@ trait Types
     private[reflect] var baseTypeSeqPeriod = NoPeriod
     private[reflect] var baseClassesCache: List[Symbol] = _
     private[reflect] var baseClassesPeriod = NoPeriod
+    private[reflect] var baseTypeSeqStamped: Stamped[BaseTypeSeq] = null
+    private[reflect] var baseClassesStamped: Stamped[List[Symbol]] = null
     private[Types] def invalidatedCompoundTypeCaches(): Unit = {
       baseTypeSeqCache = null
       baseTypeSeqPeriod = NoPeriod
       baseClassesCache = null
       baseClassesPeriod = NoPeriod
+      baseTypeSeqStamped = null
+      baseClassesStamped = null
     }
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cached = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cached != null && cached != undetBaseTypeSeq)
+      // the empty field first: it is what a concurrent compiler, whose caches are elsewhere, gets without asking for its period
+      if (cached != null && cached != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cached
+      else if (isConcurrentCompiler) concurrentBaseTypeSeqOfCompoundType(this)
       else {
         defineBaseTypeSeqOfCompoundType(this)
         if (baseTypeSeqCache eq undetBaseTypeSeq)
@@ -1636,7 +1660,8 @@ trait Types
 
     override def baseClasses: List[Symbol] = {
       val cached = baseClassesCache
-      if (baseClassesPeriod == currentPeriod && cached != null) cached
+      if (cached != null && baseClassesPeriod == currentPeriod) cached
+      else if (isConcurrentCompiler) concurrentBaseClassesOfCompoundType(this)
       else {
         defineBaseClassesOfCompoundType(this)
         if (baseClassesCache eq null)
@@ -1654,11 +1679,15 @@ trait Types
      */
     def memo[A](op1: => A)(op2: Type => A): A = {
       def updateCache(): A = {
-        intersectionWitness(parents) = new WeakReference(this)
+        if (isConcurrentCompiler) intersectionWitness.synchronized(intersectionWitness(parents) = new WeakReference(this))
+        else intersectionWitness(parents) = new WeakReference(this)
         op1
       }
 
-      intersectionWitness get parents match {
+      val witness =
+        if (isConcurrentCompiler) intersectionWitness.synchronized(intersectionWitness get parents)
+        else intersectionWitness get parents
+      witness match {
         case Some(ref) =>
           ref.get match {
             case Some(w) => if (w eq this) op1 else op2(w)
@@ -1721,13 +1750,32 @@ trait Types
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
       if (!isValidForBaseClasses(period)) {
-        // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
-        // after BTS, map them back.
-        // TODO: rework BTS to deal with TypeVars in the same way on the fly
-        if (tpe.parents exists typeContainsTypeVar) {
-          val tvarFor = mutable.Map.empty[Type, TypeVar]
-          // After this TypeMap, it's safe to recurse (`tpe.parents exists typeContainsTypeVar` above is `false`)
-          val varToParam = new TypeMap {
+        if (tpe.parents exists typeContainsTypeVar) tpe.baseTypeSeqCache = compoundBaseTypeSeqWithTypeVars(tpe)
+        else {
+          if (settings.areStatisticsEnabled) statistics.incCounter(compoundBaseTypeSeqCount)
+          val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
+          try {
+            tpe.baseTypeSeqCache = undetBaseTypeSeq
+            tpe.baseTypeSeqCache = compoundBaseTypeSeqWithoutTypeVars(tpe)
+          } finally {
+            if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
+          }
+        }
+      }
+    }
+    //Console.println(s"baseTypeSeq(${tpe.typeSymbol}) = ${tpe.baseTypeSeqCache.toList}") //DEBUG
+    if (tpe.baseTypeSeqCache eq undetBaseTypeSeq)
+      throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+  }
+
+  /** The base type sequence of a compound type whose parents contain type variables. */
+  private def compoundBaseTypeSeqWithTypeVars(tpe: CompoundType): BaseTypeSeq = {
+    // If the BTS contains TypeVars, replace those with typerefs to the original type params before taking BTS,
+    // after BTS, map them back.
+    // TODO: rework BTS to deal with TypeVars in the same way on the fly
+    val tvarFor = mutable.Map.empty[Type, TypeVar]
+    // After this TypeMap, it's safe to recurse (`tpe.parents exists typeContainsTypeVar` above is `false`)
+    val varToParam = new TypeMap {
             def apply(tp: Type) = tp match {
               case tv: TypeVar => // Applying a type constructor variable to arguments results in a new instance of AppliedTypeVar each time
                 val toOrigin = appliedType(tv.origin.typeSymbol.typeConstructor, tv.typeArgs.mapConserve(this))
@@ -1736,10 +1784,10 @@ trait Types
               case _ => tp.mapOver(this)
             }
           }
-          // computes tvarFor
-          val tpWithoutTypeVars = copyRefinedType(tpe.asInstanceOf[RefinedType], tpe.parents map varToParam, varToParam mapOver tpe.decls)
+    // computes tvarFor
+    val tpWithoutTypeVars = copyRefinedType(tpe.asInstanceOf[RefinedType], tpe.parents map varToParam, varToParam mapOver tpe.decls)
 
-          val paramToVar = new TypeMap {
+    val paramToVar = new TypeMap {
             val paramToVarMap = tvarFor.toMap // capture the map so we can undo the rewrite when the BTS is queried later
             def apply(tp: Type): Type = tp match {
               case tr: TypeRef => paramToVarMap.getOrElse(tr, mapOver(tp))
@@ -1747,34 +1795,23 @@ trait Types
             }
           }
 
-          tpe.baseTypeSeqCache = tpWithoutTypeVars.baseTypeSeq lateMap paramToVar
-        } else {
-          if (settings.areStatisticsEnabled) statistics.incCounter(compoundBaseTypeSeqCount)
-          val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, baseTypeSeqNanos) else null
-          try {
-            tpe.baseTypeSeqCache = undetBaseTypeSeq
-            tpe.baseTypeSeqCache =
-              if (tpe.typeSymbol.isRefinementClass)
-                tpe.memo(compoundBaseTypeSeq(tpe))(_.baseTypeSeq updateHead tpe.typeSymbol.tpe_*)
-              else
-                compoundBaseTypeSeq(tpe)
-          } finally {
-            if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
-          }
-          // [Martin] suppressing memoization solves the problem with "same type after erasure" errors
-          // when compiling with
-          // scalac scala.collection.IterableViewLike.scala scala.collection.IterableLike.scala
-          // I have not yet figured out precisely why this is the case.
-          // My current assumption is that taking memos forces baseTypeSeqs to be computed
-          // at stale types (i.e. the underlying typeSymbol has already another type).
-          // I do not yet see precisely why this would cause a problem, but it looks
-          // fishy in any case.
-        }
-      }
-    }
-    //Console.println(s"baseTypeSeq(${tpe.typeSymbol}) = ${tpe.baseTypeSeqCache.toList}") //DEBUG
-    if (tpe.baseTypeSeqCache eq undetBaseTypeSeq)
-      throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    tpWithoutTypeVars.baseTypeSeq lateMap paramToVar
+  }
+
+  /** The base type sequence of a compound type whose parents contain no type variables. */
+  private def compoundBaseTypeSeqWithoutTypeVars(tpe: CompoundType): BaseTypeSeq = {
+    if (tpe.typeSymbol.isRefinementClass)
+      tpe.memo(compoundBaseTypeSeq(tpe))(_.baseTypeSeq updateHead tpe.typeSymbol.tpe_*)
+    else
+      compoundBaseTypeSeq(tpe)
+    // [Martin] suppressing memoization solves the problem with "same type after erasure" errors
+    // when compiling with
+    // scalac scala.collection.IterableViewLike.scala scala.collection.IterableLike.scala
+    // I have not yet figured out precisely why this is the case.
+    // My current assumption is that taking memos forces baseTypeSeqs to be computed
+    // at stale types (i.e. the underlying typeSymbol has already another type).
+    // I do not yet see precisely why this would cause a problem, but it looks
+    // fishy in any case.
   }
 
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
@@ -1794,6 +1831,151 @@ trait Types
     }
     if (tpe.baseClassesCache eq null)
       throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+  }
+
+  // ---- The stamped caches of shared types in a concurrent compiler, without a lock (-Yparallel-typer) -----------
+  //
+  // The serial protocol stamps the period, stores an in-progress marker (`undetBaseTypeSeq`, null) and then the
+  // value, so that a re-entry on the same thread sees the marker as a cycle. Here the marker is per thread (the
+  // `Scratch`'s lists of types in progress), the value is computed into a local, stored, and the period stamped
+  // after it. Two threads may both compute a value: they compute the same one (from the same symbol infos, within
+  // the typer's phases where no info transformer changes base classes), and either store will do. A reader that
+  // sees a new stamp with the previous value reads a value that is valid for the same reason; one that sees no
+  // value takes this slow path. A re-entry answers as the serial protocol would at that point: an error for the
+  // base type sequences and base classes, the field as it is for `parents` and `underlying`.
+  //
+  // A value and its period are one object (`Stamped`), read and written as one, and the serial fields stay empty, so
+  // that the serial fast paths fall through to here at no cost to a serial compiler. Past the pickler a stale pair is
+  // a wrong answer, not the same answer: a transformer changes base classes, and two threads at different phases
+  // (phase travel) write the same cache.
+
+  /** A cached value and the period it was computed in: immutable, so that a reader gets the two as a pair. */
+  private[reflect] final class Stamped[+T](val value: T, val period: Period)
+  private final class StampedRelativeInfo(val value: Type, val period: Period, val symInfo: Type)
+
+  // The serial protocol's marker is in the cache, under the period that set it: a re-entry at a phase for which that
+  // period is valid sees the marker, a cycle. A re-entry at a phase past a change (an info transform that asks for
+  // the same type at its own phase, from within the computation of this one at a later phase) recomputes. So an entry
+  // here is a type with the period of the computation in progress, and the innermost entry for a type decides, since
+  // its stamp is the one the serial cache would hold.
+  private def inProgressForBaseClasses(xs: List[AnyRef], x: AnyRef): Boolean = {
+    var ys = xs
+    while (ys ne Nil) {
+      val y = ys.head.asInstanceOf[Stamped[AnyRef]]
+      if (y.value eq x) return y.period == currentPeriod || isValidForBaseClasses(y.period)
+      ys = ys.tail
+    }
+    false
+  }
+  private[reflect] def inProgressAtPeriod(xs: List[AnyRef], x: AnyRef): Boolean = {
+    var ys = xs
+    while (ys ne Nil) {
+      val y = ys.head.asInstanceOf[Stamped[AnyRef]]
+      if (y.value eq x) return y.period == currentPeriod || isValid(y.period)
+      ys = ys.tail
+    }
+    false
+  }
+
+  private def concurrentBaseTypeSeqOfTypeRef(tpe: TypeRef): BaseTypeSeq = {
+    val cached = tpe.baseTypeSeqStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
+    val s = scratch
+    if (inProgressForBaseClasses(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.sym}")
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseTypeSeqStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
+    } else {
+      val saved = s.btsInProgress
+      s.btsInProgress = new Stamped(tpe, currentPeriod) :: saved
+      try {
+        val bts = tpe.baseTypeSeqImpl
+        tpe.baseTypeSeqStamped = new Stamped(bts, currentPeriod)
+        bts
+      } finally s.btsInProgress = saved
+    }
+  }
+
+  private def concurrentParentsOfTypeRef(tpe: TypeRef): List[Type] = {
+    val cached = tpe.parentsStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
+    val s = scratch
+    if (inProgressForBaseClasses(s.parentsInProgress, tpe)) return (if (cached ne null) cached.value else null)
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.parentsStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
+    } else {
+      val saved = s.parentsInProgress
+      s.parentsInProgress = new Stamped(tpe, currentPeriod) :: saved
+      try {
+        val ps = tpe.parentsImpl
+        tpe.parentsStamped = new Stamped(ps, currentPeriod)
+        ps
+      } finally s.parentsInProgress = saved
+    }
+  }
+
+  private def concurrentBaseTypeSeqOfCompoundType(tpe: CompoundType): BaseTypeSeq = {
+    val cached = tpe.baseTypeSeqStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
+    val s = scratch
+    if (inProgressForBaseClasses(s.btsInProgress, tpe)) throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseTypeSeqStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
+    } else {
+      val saved = s.btsInProgress
+      s.btsInProgress = new Stamped(tpe, currentPeriod) :: saved
+      try {
+        val bts =
+          if (tpe.parents exists typeContainsTypeVar) compoundBaseTypeSeqWithTypeVars(tpe)
+          else compoundBaseTypeSeqWithoutTypeVars(tpe)
+        tpe.baseTypeSeqStamped = new Stamped(bts, currentPeriod)
+        bts
+      } finally s.btsInProgress = saved
+    }
+  }
+
+  private def concurrentBaseClassesOfCompoundType(tpe: CompoundType): List[Symbol] = {
+    val cached = tpe.baseClassesStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
+    val s = scratch
+    if (inProgressForBaseClasses(s.baseClassesInProgress, tpe)) throw new TypeError("illegal cyclic reference involving " + tpe.typeSymbol)
+    if ((cached ne null) && isValidForBaseClasses(cached.period)) {
+      tpe.baseClassesStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
+    } else {
+      val saved = s.baseClassesInProgress
+      s.baseClassesInProgress = new Stamped(tpe, currentPeriod) :: saved
+      try {
+        val bcs = tpe.memo(computeBaseClasses(tpe))(tpe.typeSymbol :: _.baseClasses.tail)
+        tpe.baseClassesStamped = new Stamped(bcs, currentPeriod)
+        bcs
+      } finally s.baseClassesInProgress = saved
+    }
+  }
+
+  private def concurrentUnderlying(tpe: SingleType): Type = {
+    val cached = tpe.underlyingStamped
+    if ((cached ne null) && cached.period == currentPeriod) return cached.value
+    val s = scratch
+    if (inProgressAtPeriod(s.underlyingInProgress, tpe)) return (if (cached ne null) cached.value else NoType)
+    if ((cached ne null) && isValid(cached.period)) {
+      tpe.underlyingStamped = new Stamped(cached.value, currentPeriod)
+      cached.value
+    } else {
+      val saved = s.underlyingInProgress
+      s.underlyingInProgress = new Stamped(tpe, currentPeriod) :: saved
+      try {
+        val u = if (tpe.sym == NoSymbol) ThisType(rootMirror.RootClass) else {
+          val result = tpe.pre.memberType(tpe.sym).resultType
+          if (isScalaRepeatedParamType(result)) repeatedToSeq(result) else result
+        }
+        assert(u ne tpe, tpe)
+        tpe.underlyingStamped = new Stamped(u, currentPeriod)
+        u
+      } finally s.underlyingInProgress = saved
+    }
   }
 
   /** A class representing intersection types with refinements of the form
@@ -1909,6 +2091,12 @@ trait Types
      *  @See Kennedy, Pierce: On Decidability of Nominal Subtyping with Variance
      */
     private[scala] def expansiveRefs(tparam: Symbol) = {
+      // In a concurrent compiler under the completion lock: the computation propagates through the states of other
+      // classes' infos, and `refs` is reassigned while it runs.
+      if (isConcurrentCompiler) underCompletionLock(expansiveRefs0(tparam))
+      else expansiveRefs0(tparam)
+    }
+    private def expansiveRefs0(tparam: Symbol) = {
       if (state == UnInitialized) {
         computeRefs()
         while (state != Initialized) propagate()
@@ -2202,11 +2390,29 @@ trait Types
       relativeInfoCache = NoType
       relativeInfoCacheValidForPeriod = NoPeriod
       relativeInfoCacheValidForSymInfo = null
+      relativeInfoStamped = null
     }
 
-    final override protected def relativeInfo = {
+    // In a concurrent compiler, the value with its period and the symbol's info as one object (see `Stamped`).
+    private[this] var relativeInfoStamped: StampedRelativeInfo = null
+    private def concurrentRelativeInfo(symInfo: Type): Type = {
+      val cached = relativeInfoStamped
+      if ((cached ne null) && (cached.symInfo eq symInfo) && cached.period == currentPeriod) cached.value
+      else {
+        val value = super.relativeInfo
+        value match {
+          case x: SubType if this.isInstanceOf[AbstractTypeRef] && (x.supertype eq this) => throw new RecoverableCyclicReference(sym)
+          case _ =>
+        }
+        relativeInfoStamped = new StampedRelativeInfo(value, currentPeriod, symInfo)
+        value
+      }
+    }
+
+    final override protected def relativeInfo: Type = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
+        if (isConcurrentCompiler) return concurrentRelativeInfo(symInfo)
         relativeInfoCache = super.relativeInfo
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
@@ -2397,12 +2603,16 @@ trait Types
       parentsPeriod = NoPeriod
       baseTypeSeqCache = null
       baseTypeSeqPeriod = NoPeriod
+      parentsStamped = null
+      baseTypeSeqStamped = null
       normalized = null
     }
     private[reflect] var parentsCache: List[Type]      = _
     private[reflect] var parentsPeriod                 = NoPeriod
     private[reflect] var baseTypeSeqCache: BaseTypeSeq = _
     private[reflect] var baseTypeSeqPeriod             = NoPeriod
+    private[reflect] var parentsStamped: Stamped[List[Type]]     = null
+    private[reflect] var baseTypeSeqStamped: Stamped[BaseTypeSeq] = null
     @volatile private[this] var normalized: Type       = _
 
     //OPT specialize hashCode
@@ -2506,20 +2716,15 @@ trait Types
     // two differences with class type basetype:
     // (1) first relativize the type, then go to the requested base type
     // (2) cache for cycle robustness
-    private def baseTypeOfNonClassTypeRef(clazz: Symbol) =
-      try {
-        basetypeRecursions += 1
-        if (basetypeRecursions >= LogPendingBaseTypesThreshold) baseTypeOfNonClassTypeRefLogged(clazz)
-        else relativeInfo.baseType(clazz)
-      } finally basetypeRecursions -= 1
-
-    private def baseTypeOfNonClassTypeRefLogged(clazz: Symbol) =
-      if (pendingBaseTypes add this) try relativeInfo.baseType(clazz) finally { pendingBaseTypes remove this }
+    private def baseTypeOfNonClassTypeRef(clazz: Symbol) = {
+      val guard = scratch.frame.baseTypes
+      if (guard.enter(this)) try relativeInfo.baseType(clazz) finally guard.exit(this)
       // TODO: is this optimization for AnyClass worth it? (or is it playing last-ditch cycle defense?)
       // NOTE: for correctness, it only applies for non-class types
       // (e.g., a package class should not get AnyTpe as its supertype, ever)
       else if (clazz eq AnyClass) AnyTpe
       else NoType
+    }
 
     // eta-expand, subtyping relies on eta-expansion of higher-kinded types
     protected def normalizeImpl: Type = if (isHigherKinded) etaExpand else super.normalize
@@ -2529,10 +2734,14 @@ trait Types
       if (pre eq WildcardType) WildcardType
       else if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) {
+        // read once: in a concurrent compiler another thread's `invalidateTypeRefCaches` may clear it again
+        var n = normalized
+        if (n eq null) {
           Types.this.defineNormalized(this)
+          n = normalized
+          if (n eq null) n = normalizeImpl
         }
-        normalized
+        n
       }
     }
 
@@ -2590,7 +2799,8 @@ trait Types
 
     override def parents: List[Type] = {
       val cache = parentsCache
-      if (parentsPeriod == currentPeriod && cache != null) cache
+      if (cache != null && parentsPeriod == currentPeriod) cache
+      else if (isConcurrentCompiler) concurrentParentsOfTypeRef(this)
       else {
         defineParentsOfTypeRef(this)
         parentsCache
@@ -2620,8 +2830,9 @@ trait Types
 
     override def baseTypeSeq: BaseTypeSeq = {
       val cache = baseTypeSeqCache
-      if (baseTypeSeqPeriod == currentPeriod && cache != null && cache != undetBaseTypeSeq)
+      if (cache != null && cache != undetBaseTypeSeq && baseTypeSeqPeriod == currentPeriod)
         cache
+      else if (isConcurrentCompiler) concurrentBaseTypeSeqOfTypeRef(this)
       else {
         defineBaseTypeSeqOfTypeRef(this)
         if (baseTypeSeqCache == undetBaseTypeSeq)
@@ -2894,11 +3105,7 @@ trait Types
 
     private[this] var isdepmeth: ThreeValue = UNKNOWN
     override def isDependentMethodType: Boolean = {
-      if (isdepmeth == UNKNOWN) {
-        // bound first: the inliner cannot inline `using` (which has a handler) with `fromBoolean`'s receiver on the stack
-        val isDependent = isDependentCollectorInstance.using(_.collect(resultType.dealias))
-        isdepmeth = fromBoolean(isDependent)
-      }
+      if (isdepmeth == UNKNOWN) isdepmeth = fromBoolean(scratch.isDependentCollector.collect(resultType.dealias))
       toBoolean(isdepmeth)
     }
 
@@ -3727,22 +3934,14 @@ trait Types
       registerBound(HasTypeMember(sym.name.toTypeName, tp), isLowerBound = false)
     }
 
-    private def unrelatable(tp: Type): List[TypeSkolem] =
-      unrelatableCollectorInstance.using { collector =>
-        collector.barLevel = level
-        collector.collect(tp)
-      }
+    private def unrelatable(tp: Type): List[TypeSkolem] = scratch.unrelatableCollector.collect(tp, level)
 
 
     /** Can this variable be related in a constraint to type `tp`?
       *  This is not the case if `tp` contains type skolems whose
       *  skolemization level is higher than the level of this variable.
       */
-    def isRelatable(tp: Type): Boolean =
-      isRelatableCollectorInstance.using { collector =>
-        collector.barLevel = level
-        collector.collect(tp)
-      }
+    def isRelatable(tp: Type): Boolean = scratch.isRelatableCollector.collect(tp, level)
 
     override def normalize: Type = (
       if (instValid) inst
@@ -4043,9 +4242,6 @@ trait Types
   def refinedType(parents: List[Type], owner: Symbol): Type =
     refinedType(parents, owner, newScope, owner.pos)
 
-  private[this] val copyRefinedTypeSSM: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
-
   def copyRefinedType(original: RefinedType, parents: List[Type], decls: Scope, owner: Symbol = null) =
     if ((parents eq original.parents) && (decls eq original.decls) && (owner eq null)) original
     else {
@@ -4060,7 +4256,7 @@ trait Types
         val syms2 = result.decls.toList
         val resultThis = result.typeSymbol.thisType
         val substThisMap = new SubstThisMap(original.typeSymbol, resultThis)
-        copyRefinedTypeSSM.using { (msm: SubstSymMap) =>
+        scratch.substSymMaps.using { (msm: SubstSymMap) =>
           msm.reset(syms1, syms2)
           syms2.foreach(_.modifyInfo(info => msm.apply(substThisMap.apply(info))))
         }
@@ -4081,7 +4277,7 @@ trait Types
     val sym1 = if (sym.isAbstractType) rebind(pre, sym) else sym
     // don't expand cyclical type alias
     // we require that object is initialized, thus info.typeParams instead of typeParams.
-    if (sym1.isAliasType && sameLength(sym1.info.typeParams, args) && !sym1.lockOK)
+    if (sym1.isAliasType && sameLength(sym1.info.typeParams, args) && !sym1.lockOK && sym1.isLockedHere)
       throw new RecoverableCyclicReference(sym1)
 
     val pre1 = pre match {
@@ -4097,7 +4293,7 @@ trait Types
   // Optimization to avoid creating unnecessary new typerefs.
   def copyTypeRef(tp: Type, pre: Type, sym: Symbol, args: List[Type]): Type = tp match {
     case TypeRef(pre0, sym0, _) if pre == pre0 && sym0.name == sym.name =>
-      if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
+      if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK && sym.isLockedHere)
         throw new RecoverableCyclicReference(sym)
 
       if ((args eq Nil) && (pre eq NoPrefix))
@@ -4337,23 +4533,86 @@ trait Types
 
 // Hash consing --------------------------------------------------------------
 
-  private[this] val initialUniquesCapacity = 4096
-  private[this] var uniques: util.WeakHashSet[Type] = _
-  private[this] var uniqueRunId = NoRunId
-
-  final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
-
-  protected def unique[T <: Type](tp: T): T =  {
-    if (uniqueRunId != currentRunId) {
-      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
-      uniqueRunId = currentRunId
+  /** The table that makes structurally equal types identical. A compiler universe has runs and
+   *  discards the table at the start of each; runtime reflection has none, so its table is weak
+   *  in the entries, which go when nobody refers to their types. A concurrent universe locks it;
+   *  that includes a toolbox's `ReflectGlobal`, which is a compiler universe.
+   */
+  private[this] val uniques: Uniques =
+    if (!isCompilerUniverse) new SynchronizedWeakUniques
+    else if (isConcurrentUniverse) {
+      // a power of two
+      val stripes = Integer.highestOneBit(math.max(1, Integer.getInteger("scalac.uniques.stripes", 64).intValue))
+      if (stripes == 1) new SynchronizedPerRunUniques else new StripedPerRunUniques(stripes)
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    else new PerRunUniques
+
+  final def howManyUniqueTypes: Int = uniques.size
+
+  protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
+
+  private[internal] abstract class Uniques {
+    def unique[T <: Type](tp: T): T
+    def size: Int
+  }
+
+  /** Discarded at the start of each run, and weak within it. */
+  private class PerRunUniques(initialUniquesCapacity: Int = 4096) extends Uniques {
+    private[this] var uniques: util.WeakHashSet[Type] = _
+    private[this] var uniqueRunId = NoRunId
+
+    def size: Int = if (uniques == null) 0 else uniques.size
+
+    def unique[T <: Type](tp: T): T = {
+      if (uniqueRunId != currentRunId) {
+        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
+        // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
+        // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
+        // I've removed the registration for now. I don't think it's particularly harmful anymore
+        // as a) this is now a weak set, and b) it is discarded completely before the next run.
+        uniqueRunId = currentRunId
+      }
+      (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    }
+  }
+
+  private final class SynchronizedPerRunUniques(initialUniquesCapacity: Int = 4096) extends PerRunUniques(initialUniquesCapacity) {
+    override def size: Int = synchronized(super.size)
+    override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
+  }
+
+  /** Per run and weak, as `PerRunUniques`, in stripes for a compiler used from several threads (-Yparallel-typer):
+   *  a type is interned in the stripe of its hash (the high bits of a multiplicative mix, independent of the bucket
+   *  index within the stripe), each stripe under its own monitor, so that equal types meet in one stripe and interning
+   *  stays unique, while threads interning different types rarely contend. `-Dscalac.uniques.stripes=1` for one.
+   *  The stripes share the one table's initial capacity, and grow as it would. */
+  private final class StripedPerRunUniques(stripes: Int) extends Uniques {
+    private[this] val shift = 32 - Integer.numberOfTrailingZeros(stripes)
+    private[this] val sets = Array.fill(stripes)(new SynchronizedPerRunUniques(math.max(16, 4096 / stripes)))
+    def size: Int = sets.iterator.map(_.size).sum
+    def unique[T <: Type](tp: T): T =
+      if (stripes == 1) sets(0).unique(tp)
+      else sets((tp.hashCode * 0x9E3779B9) >>> shift).unique(tp)
+  }
+
+  /** Weak and synchronized, for runtime reflection. The lock can be fine-grained: computing a
+   *  type's hash code and equality does not call any reflection API, so this cannot deadlock.
+   */
+  private final class SynchronizedWeakUniques extends Uniques {
+    private[this] val uniques = mutable.WeakHashMap[Type, java.lang.ref.WeakReference[Type]]()
+
+    def size: Int = synchronized(uniques.size)
+
+    def unique[T <: Type](tp: T): T = synchronized {
+      val inCache = uniques get tp
+      val result = if (inCache.isDefined) inCache.get.get else null
+      if (result ne null) result.asInstanceOf[T]
+      else {
+        uniques(tp) = new java.lang.ref.WeakReference(tp)
+        tp
+      }
+    }
   }
 
 // Helper Classes ---------------------------------------------------------
@@ -4620,12 +4879,9 @@ trait Types
     i.isEmpty && j.isEmpty
   }
 
-  private[this] var _basetypeRecursions: Int = 0
-  def basetypeRecursions = _basetypeRecursions
-  def basetypeRecursions_=(value: Int) = _basetypeRecursions = value
+  def basetypeRecursions: Int = scratch.frame.baseTypes.depth
 
-  private[this] val _pendingBaseTypes = new mutable.HashSet[Type]
-  def pendingBaseTypes = _pendingBaseTypes
+  def pendingBaseTypes: mutable.HashSet[Type] = scratch.frame.baseTypes.pending
 
   /** Does this type have a prefix that begins with a type variable,
    *  or is it a refinement type? For type prefixes that fulfil this condition,
@@ -5195,8 +5451,10 @@ trait Types
     def this(msg: String) = this(NoPosition, msg)
 
     final override def fillInStackTrace() =
-      if (settings.isDebug) super.fillInStackTrace() else this
+      if (settings.isDebug || TypeErrorStacks) super.fillInStackTrace() else this
   }
+  /** `-Dscalac.debug.typeErrorStacks`: type errors keep their stack, without the rest of `-Ydebug`. */
+  private[this] final val TypeErrorStacks = java.lang.Boolean.getBoolean("scalac.debug.typeErrorStacks")
 
   // TODO: RecoverableCyclicReference should be separated from TypeError,
   // but that would be a big change. Left for further refactoring.
@@ -5214,10 +5472,8 @@ trait Types
     def this(pre: Type, tp: String) = this("malformed type: " + pre + "#" + tp)
   }
 
-  /** The current indentation string for traces */
-  private[this] var _indent: String = ""
-  protected def indent = _indent
-  protected def indent_=(value: String) = _indent = value
+  protected def indent: String = scratch.indent
+  protected def indent_=(value: String): Unit = scratch.indent = value
 
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
@@ -5355,9 +5611,7 @@ trait Types
     "scala.collection.Iterable",
     "scala.collection.Iterator")
 
-  private[this] val typeContainsTypeVarCollectorInstance: ReusableInstance[FindTypeCollector] =
-    ReusableInstance(new FindTypeCollector(_.isInstanceOf[TypeVar]), enabled = isCompilerUniverse)
-  private[scala] val typeContainsTypeVar = (tp: Type) => typeContainsTypeVarCollectorInstance.using(_.collect(tp).isDefined)
+  private[scala] val typeContainsTypeVar = (tp: Type) => scratch.typeContainsTypeVarCollector.collect(tp).isDefined
   private[scala] val typeIsSubTypeOfSerializable = (tp: Type) => tp <:< SerializableTpe
 
   @tailrec

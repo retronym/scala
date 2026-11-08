@@ -17,7 +17,6 @@ package tpe
 
 import scala.collection.mutable, mutable.ListBuffer
 import scala.annotation.tailrec
-import util.ReusableInstance
 import Variance._
 
 private[internal] trait GlbLubs {
@@ -192,14 +191,6 @@ private[internal] trait GlbLubs {
         rest filter (t => !first.typeSymbol.isSubClass(t.typeSymbol)))
   }
 
-  // OPT: hoist allocation of the collector and lambda out of the loop in partition
-  private[this] val isWildCardOrNonGroundTypeVar: Type => Boolean = {
-    case tv: TypeVar => !tv.isGround
-    case t => t.isWildcard
-  }
-  private[this] val isWildCardOrNonGroundTypeVarCollectorInstance: ReusableInstance[FindTypeCollector] =
-    ReusableInstance(new FindTypeCollector(isWildCardOrNonGroundTypeVar), enabled = isCompilerUniverse)
-
   /** From a list of types, retain only maximal types as determined by the partial order `po`. */
   private def maxTypes(ts: List[Type])(po: (Type, Type) => Boolean): List[Type] = {
     def stacked(ts: List[Type]): List[Type] = ts match {
@@ -230,9 +221,8 @@ private[internal] trait GlbLubs {
 
     // The order here matters because type variables and wildcards can act both as subtypes and supertypes.
     val sorted = {
-      val (wilds, ts1) = isWildCardOrNonGroundTypeVarCollectorInstance.using { collector =>
-        partitionConserve(ts)(collector.collect(_).isDefined)
-      }
+      val collector = scratch.isWildCardOrNonGroundTypeVarCollector
+      val (wilds, ts1) = partitionConserve(ts)(collector.collect(_).isDefined)
       ts1 ::: wilds
     }
     if (sorted.lengthCompare(5) > 0) loop(sorted, Nil)
@@ -294,81 +284,30 @@ private[internal] trait GlbLubs {
       else if (isNumericSubType(t2, t1)) t1.dealiasWiden
       else IntTpe)
 
-  /** Memo tables and recursion guards for one outermost `lub` or `glb`. Entries are only
-   *  valid within that call: they may be in-progress placeholders (`Any` / `Nothing`) and
-   *  were computed at the current phase.
-   */
-  final class LubGlbCaches(val outer: LubGlbCaches) {
-    val lubResults = new mutable.HashMap[(Depth, List[Type]), Type]
-    val glbResults = new mutable.HashMap[(Depth, List[Type]), Type]
-    var inUse = false
-    /** The arguments of the top-level `lub` (`ownerIsLub`) or `glb` that claimed these caches,
-     *  `null` if a call with explicit depth claimed them.
-     */
-    var ownerTs: List[Type] = null
-    var ownerIsLub = false
-    def clear(): Unit = { lubResults.clear(); glbResults.clear() }
-    /** How many enclosing top-level calls, including the owner, compute this `lub` or `glb`. */
-    def inProgress(isLub: Boolean, ts: List[Type]): Int = {
-      val here = if (ownerIsLub == isLub && ownerTs == ts) 1 else 0
-      if (outer eq null) here else here + outer.inProgress(isLub, ts)
-    }
-  }
-  private[this] var _lubGlbCaches = new LubGlbCaches(null)
-  def lubGlbCaches: LubGlbCaches = _lubGlbCaches
-  def lubGlbCaches_=(caches: LubGlbCaches): Unit = _lubGlbCaches = caches
+  def lubResults = scratch.frame.lubs.results
+  def glbResults = scratch.frame.glbs.results
 
-  def lubResults = lubGlbCaches.lubResults
-  def glbResults = lubGlbCaches.glbResults
-
-  /** Run a top-level `lub` or `glb` with caches private to it.
+  /** Run a `lub` or `glb` in the tables of the enclosing call in this frame, whose entries are only
+   *  valid within that call: they may be in progress and were computed at the current phase.
+   *  A nested call shares them, so that their guards stop it if it is a cycle. A completer forced
+   *  during the call runs in the next `Frame`, which has its own. Without an enclosing call, this
+   *  one is outermost and must claim the tables, so that no entries outlive it (scala/bug#6437).
    *
-   *  A top-level `lub`/`glb` can be re-entered while another one is in progress, e.g. when
-   *  forcing the info of a member runs a lazy type completer that typechecks code. The nested
-   *  call must neither observe the outer call's recursion guards (it would return `Any` or
-   *  `Nothing`) nor discard them when it finishes, so it gets fresh caches.
-   *
-   *  A call already in progress twice is taken to be a cycle, e.g. through `solve`, and shares
-   *  the current caches so that their recursion guards stop it.
+   *  `body` gets the frame so that it need not look it up again, which in runtime reflection costs
+   *  a thread-local access.
    */
-  private def withLubGlbCaches[T](isLub: Boolean, ts: List[Type])(body: => T): T = {
-    // Single-threaded only: `inUse` and the maps are plain fields, so a holder must never be
-    // visible to two threads. The compiler universe is single-threaded; runtime reflection
-    // (`SynchronizedTypes`) overrides `lubGlbCaches` with thread-local storage, so each thread
-    // gets, replaces and restores only its own holder. A universe used concurrently must do
-    // the same; making `inUse` volatile would not help, as the maps would still be shared.
-    val saved = lubGlbCaches
-    if (!saved.inUse) {
-      saved.ownerTs = ts
-      saved.ownerIsLub = isLub
-      try claimLubGlbCaches(saved, body) finally saved.ownerTs = null
-    } else if (saved.inProgress(isLub, ts) >= 2) body
+  private def withLubGlbTables[T](body: Frame => T): T = {
+    val s = scratch.frame
+    if (s.inLubOrGlb) body(s)
     else {
-      val fresh = new LubGlbCaches(saved)
-      fresh.inUse = true
-      fresh.ownerTs = ts
-      fresh.ownerIsLub = isLub
-      lubGlbCaches = fresh
-      try body finally lubGlbCaches = saved
+      s.inLubOrGlb = true
+      try body(s)
+      finally {
+        s.inLubOrGlb = false
+        s.lubs.results.clear()
+        s.glbs.results.clear()
+      }
     }
-  }
-
-  /** Run a `lub` or `glb` with explicit depth in the caches of the enclosing call. Without one,
-   *  it is outermost and must claim the caches, so a nested top-level call gets fresh ones and
-   *  no entries outlive it (scala/bug#6437).
-   *
-   *  `body` gets the caches so that it need not look them up again, which in runtime reflection
-   *  costs a thread-local access. They stay current for the whole call: a nested top-level call
-   *  that installs fresh ones restores them when it finishes.
-   */
-  private def withEnclosingLubGlbCaches[T](body: LubGlbCaches => T): T = {
-    val caches = lubGlbCaches
-    if (caches.inUse) body(caches) else claimLubGlbCaches(caches, body(caches))
-  }
-
-  private def claimLubGlbCaches[T](caches: LubGlbCaches, body: => T): T = {
-    caches.inUse = true
-    try body finally { caches.inUse = false; caches.clear() }
   }
 
   def lub(ts: List[Type]): Type = ts match {
@@ -377,7 +316,7 @@ private[internal] trait GlbLubs {
     case _        =>
       if (settings.areStatisticsEnabled) statistics.incCounter(lubCount)
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, lubNanos) else null
-      try withLubGlbCaches(isLub = true, ts) {
+      try withLubGlbTables { _ =>
         val res = lub(ts, lubDepth(ts))
         // If the number of unapplied type parameters in all incoming
         // types is consistent, and the lub does not match that, return
@@ -475,8 +414,8 @@ private[internal] trait GlbLubs {
   }
 
   /** The least upper bound wrt <:< of a list of types */
-  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = withEnclosingLubGlbCaches { caches =>
-    val lubResults = caches.lubResults
+  protected[internal] def lub(ts0: List[Type], depth: Depth): Type = withLubGlbTables { s =>
+    val lubs = s.lubs
     def lub0(ts0: List[Type]): Type = elimSub(ts0, depth) match {
       case List() => NothingTpe
       case List(t) => t
@@ -491,14 +430,14 @@ private[internal] trait GlbLubs {
       case ts @ AnnotatedType(annots, tpe) :: rest =>
         annotationsLub(lub0(ts map (_.withoutAnnotations)), ts)
       case ts =>
-        lubResults get ((depth, ts)) match {
-          case Some(lubType) =>
-            lubType
-          case None =>
-            lubResults((depth, ts)) = AnyTpe
-            val res = if (depth.isNegative) AnyTpe else lub1(ts)
-            lubResults((depth, ts)) = res
-            res
+        val key = (depth, ts)
+        val memo = lubs.lookup(key, onCycle = AnyTpe)
+        if (memo ne null) memo
+        else {
+          lubs.begin(key)
+          val res = if (depth.isNegative) AnyTpe else lub1(ts)
+          lubs.end(key, res)
+          res
         }
     }
     def lub1(ts0: List[Type]): Type = {
@@ -612,15 +551,12 @@ private[internal] trait GlbLubs {
 
   val GlbFailure = new Throwable
 
-  /** A global counter for glb calls in the `specializes` query connected to the `addMembers`
-    *  call in `glb`. There's a possible infinite recursion when `specializes` calls
-    *  memberType, which calls baseTypeSeq, which calls mergePrefixAndArgs, which calls glb.
-    *  The counter breaks this recursion after two calls.
+  /** The limit of `Frame.globalGlbDepth`, a counter for glb calls in the `specializes` query
+    *  connected to the `addMembers` call in `glb`. There's a possible infinite recursion when
+    *  `specializes` calls memberType, which calls baseTypeSeq, which calls mergePrefixAndArgs,
+    *  which calls glb. The counter breaks this recursion after two calls.
     *  If the recursion is broken, no member is added to the glb.
     */
-  private[this] var _globalGlbDepth = Depth.Zero
-  def globalGlbDepth: Depth = _globalGlbDepth
-  def globalGlbDepth_=(value: Depth): Unit = _globalGlbDepth = value
   private final val globalGlbLimit = Depth(2)
 
   /** The greatest lower bound of a list of types (as determined by `<:<`). */
@@ -629,7 +565,7 @@ private[internal] trait GlbLubs {
     case t :: Nil => t
     case _        =>
       // `elimSuper` runs subtype checks, which must not see the caches of an enclosing call either.
-      withLubGlbCaches(isLub = false, ts) {
+      withLubGlbTables { _ =>
         elimSuper(ts) match {
           case List() => AnyTpe
           case List(t) => t
@@ -644,7 +580,7 @@ private[internal] trait GlbLubs {
       }
   }
 
-  protected[internal] def glb(ts: List[Type], depth: Depth): Type = withEnclosingLubGlbCaches { _ =>
+  protected[internal] def glb(ts: List[Type], depth: Depth): Type = withLubGlbTables { _ =>
     elimSuper(ts) match {
       case List() => AnyTpe
       case List(t) => t
@@ -654,8 +590,8 @@ private[internal] trait GlbLubs {
 
   /** The greatest lower bound of a list of types (as determined by `<:<`), which have been normalized
     *  with regard to `elimSuper`. */
-  protected def glbNorm(ts0: List[Type], depth: Depth): Type = withEnclosingLubGlbCaches { caches =>
-    val glbResults = caches.glbResults
+  protected def glbNorm(ts0: List[Type], depth: Depth): Type = withLubGlbTables { s =>
+    val glbs = s.glbs
     def glb0(ts0: List[Type]): Type = ts0 match {
       case List() => AnyTpe
       case List(t) => t
@@ -668,14 +604,14 @@ private[internal] trait GlbLubs {
       case ts @ TypeBounds(_, _) :: rest =>
         TypeBounds(lub(ts map (_.lowerBound), depth), glb(ts map (_.upperBound), depth))
       case ts =>
-        glbResults get ((depth, ts)) match {
-          case Some(glbType) =>
-            glbType
-          case _ =>
-            glbResults((depth, ts)) = NothingTpe
-            val res = if (depth.isNegative) NothingTpe else glb1(ts)
-            glbResults((depth, ts)) = res
-            res
+        val key = (depth, ts)
+        val memo = glbs.lookup(key, onCycle = NothingTpe)
+        if (memo ne null) memo
+        else {
+          glbs.begin(key)
+          val res = if (depth.isNegative) NothingTpe else glb1(ts)
+          glbs.end(key, res)
+          res
         }
     }
     def glb1(ts0: List[Type]): Type = {
@@ -735,15 +671,15 @@ private[internal] trait GlbLubs {
                   result
                 })
             }
-            if (globalGlbDepth < globalGlbLimit)
+            if (s.globalGlbDepth < globalGlbLimit)
               try {
-                globalGlbDepth = globalGlbDepth.incr
+                s.globalGlbDepth = s.globalGlbDepth.incr
                 def foreachRefinedDecls(ty: Type): Unit = ty match {
                   case RefinedType(ps, decls) =>
                     ps foreach foreachRefinedDecls
                     if (! decls.isEmpty)
                       decls.iterator.foreach { sym =>
-                        if (globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
+                        if (s.globalGlbDepth < globalGlbLimit && !specializesSym(glbThisType, sym, depth))
                           try {
                             addMember(glbThisType, glbRefined, glbsym(sym), depth)
                           } catch {
@@ -754,7 +690,7 @@ private[internal] trait GlbLubs {
                 }
                 ts foreach foreachRefinedDecls
               } finally {
-                globalGlbDepth = globalGlbDepth.decr
+                s.globalGlbDepth = s.globalGlbDepth.decr
               }
             if (glbRefined.decls.isEmpty) intersectionType(ts1, glbOwner) else glbRefined
           }

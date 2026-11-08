@@ -22,7 +22,6 @@ import scala.reflect.internal.Mode._
 
 abstract class Erasure extends InfoTransform
                           with scala.reflect.internal.transform.Erasure
-                          with typechecker.Analyzer
                           with TypingTransformers
                           with ast.TreeDSL
                           with TypeAdaptingTransformer
@@ -33,12 +32,17 @@ abstract class Erasure extends InfoTransform
 
   val phaseName: String = "erasure"
 
-  val requiredDirectInterfaces = perRunCaches.newMap[Symbol, mutable.Set[Symbol]]()
+  // the values are immutable: a reader in an info transform or in the back end gets a set no one is adding to
+  val requiredDirectInterfaces = perRunCaches.newConcurrentMap[Symbol, Set[Symbol]]()
+  def addRequiredDirectInterface(clazz: Symbol, iface: Symbol): Unit = lockedIfConcurrent(requiredDirectInterfaces) {
+    requiredDirectInterfaces(clazz) = requiredDirectInterfaces.getOrElse(clazz, Set.empty[Symbol]) + iface
+  }
 
   def newTransformer(unit: CompilationUnit): AstTransformer =
     new ErasureTransformer(unit)
 
   override def keepsTypeParams = false
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = transformInfo(sym, tpe)
 
 // -------- erasure on types --------------------------------------------------------
 
@@ -54,7 +58,13 @@ abstract class Erasure extends InfoTransform
   private object NeedsSigCollector {
     private val NeedsSigCollector_true = new NeedsSigCollector(isClassConstructor = true)
     private val NeedsSigCollector_false = new NeedsSigCollector(isClassConstructor = false)
-    def apply(isClassConstructor: Boolean) = if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
+    // it keeps its result in a field: a pair per thread in a concurrent compiler
+    private val perThreadCollectors =
+      if (isConcurrentCompiler) perThread((new NeedsSigCollector(isClassConstructor = true), new NeedsSigCollector(isClassConstructor = false)))
+      else null
+    def apply(isClassConstructor: Boolean) =
+      if (isConcurrentCompiler) { val p = perThreadCollectors.get; if (isClassConstructor) p._1 else p._2 }
+      else if (isClassConstructor) NeedsSigCollector_true else NeedsSigCollector_false
   }
   private class NeedsSigCollector(isClassConstructor: Boolean) extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
@@ -481,7 +491,13 @@ abstract class Erasure extends InfoTransform
 
 // -------- erasure on trees ------------------------------------------
 
-  override def newTyper(context: Context) = new Eraser(context)
+  /** Re-typechecks trees after erasure, using `Eraser` as its typer. */
+  object erasureAnalyzer extends {
+    val global: Erasure.this.global.type = Erasure.this.global
+  } with typechecker.AbstractAnalyzer {
+    override def newTyper(context: Context): Typer = new Eraser(context)
+  }
+  import erasureAnalyzer.{Context, OriginalTreeAttachment, Typer, newTyper, rootContextPostTyper}
 
   class EnterBridges(@unused unit: CompilationUnit, root: Symbol) {
     val site         = root.thisType
@@ -587,7 +603,12 @@ abstract class Erasure extends InfoTransform
         // end up with two module symbols with the same name in the same scope, which is surprising
         // when implementing later phases.
         if (member.isModule) newFlags = (newFlags | METHOD) & ~(MODULE | STABLE)
-        val bridge = other.cloneSymbolImpl(root, newFlags).setPos(root.pos).setAnnotations(member.annotations)
+        // A getter keeps its field's annotations until its own unit reaches it in this phase, and `member` can be in another
+        // unit: read what they will be, so that the bridge's do not depend on which comes first (-Yparallel-typer).
+        val memberAnnotations =
+          if (isConcurrentCompiler && fields.symbolAnnotationsTargetFieldAndGetter(member)) fields.getterAnnotations(member)
+          else member.annotations
+        val bridge = other.cloneSymbolImpl(root, newFlags).setPos(root.pos).setAnnotations(memberAnnotations)
 
         debuglog(s"generating bridge from $other (${flagsToString(newFlags)}): ${otpe}${other.locationString} to $member: ${specialErasure(root)(member.tpe)}${member.locationString}")
 
@@ -1133,7 +1154,7 @@ abstract class Erasure extends InfoTransform
             def isArrayTest(arg: Tree) =
               gen.mkRuntimeCall(nme.isArray, List(arg, Literal(Constant(level))))
 
-            global.typer.typedPos(tree.pos) {
+            global.typerHere.typedPos(tree.pos) {
               if (level == 1) isArrayTest(qual)
               else gen.evalOnce(qual, currentOwner, localTyper.fresh) { qual1 =>
                 gen.mkAnd(
@@ -1154,7 +1175,7 @@ abstract class Erasure extends InfoTransform
               if (unboundedGenericArrayLevel(qual.tpe.widen) == 1 || qual.tpe.typeSymbol.isAbstractType) {
                 // convert calls to apply/update/length on generic arrays to
                 // calls of ScalaRunTime.array_xxx method calls
-                global.typer.typedPos(tree.pos) {
+                global.typerHere.typedPos(tree.pos) {
                   val arrayMethodName = name match {
                     case nme.apply  => nme.array_apply
                     case nme.length => nme.array_length
@@ -1183,7 +1204,7 @@ abstract class Erasure extends InfoTransform
                 // far I don't know what.  For null we now define null.## == 0.
                 def staticsCall(methodName: TermName): Tree = {
                   val newTree = gen.mkMethodCall(RuntimeStaticsModule, methodName, qual :: Nil)
-                  global.typer.typed(newTree)
+                  global.typerHere.typed(newTree)
                 }
 
                 qual.tpe.typeSymbol match {
@@ -1197,7 +1218,7 @@ abstract class Erasure extends InfoTransform
                 }
               } else if (isPrimitiveValueClass(qual.tpe.typeSymbol)) {
                 // Rewrite 5.getClass to ScalaRunTime.anyValClass(5)
-                global.typer.typed(gen.mkRuntimeCall(nme.anyValClass, List(qual, typer.resolveClassTag(tree.pos, qual.tpe.widen))))
+                global.typerHere.typed(gen.mkRuntimeCall(nme.anyValClass, List(qual, typerHere.resolveClassTag(tree.pos, qual.tpe.widen))))
               } else if (primitiveGetClassMethods.contains(fn.symbol)) {
                 // if we got here then we're trying to send a primitive getClass method to either
                 // a) an Any, in which case Object_getClass works because Any erases to object. Or
@@ -1289,7 +1310,7 @@ abstract class Erasure extends InfoTransform
             }
 
             if (sym.isJavaDefined && qualSym.isTraitOrInterface)
-              requiredDirectInterfaces.getOrElseUpdate(context.enclClass.owner, mutable.Set.empty) += qualSym
+              addRequiredDirectInterface(context.enclClass.owner, qualSym)
 
             if (qualSym != owner)
               tree.updateAttachment(new QualTypeSymAttachment(qualSym))

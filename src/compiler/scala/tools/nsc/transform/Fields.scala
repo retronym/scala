@@ -87,6 +87,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   val phaseName: String = "fields"
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer = new FieldsTransformer(unit)
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tpe else null
   override def transformInfo(sym: Symbol, tp: Type): Type =
     if (sym.isJavaDefined || sym.isPackageClass || !sym.isClass) tp
     else synthFieldsAndAccessors(tp)
@@ -193,7 +194,9 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   //  because the latter won't be created until the trait is mixed into a class)
   // TODO do bean getters need special treatment to suppress field-targeting annotations in traits?
   def dropFieldAnnotationsFromGetter(sym: Symbol): Unit =
-    sym.setAnnotations(sym.annotations.filter(AnnotationInfo.mkFilter(GetterTargetClass, defaultRetention = false)))
+    sym.setAnnotations(getterAnnotations(sym))
+  def getterAnnotations(sym: Symbol): List[AnnotationInfo] =
+    sym.annotations.filter(AnnotationInfo.mkFilter(GetterTargetClass, defaultRetention = false))
 
   def symbolAnnotationsTargetFieldAndGetter(sym: Symbol): Boolean = sym.isGetter && (sym.isLazy || sym.owner.isTrait)
 
@@ -210,7 +213,7 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
 
 
   // can't use the referenced field since it already tracks the module's moduleClass
-  private[this] val moduleOrLazyVarOf = perRunCaches.newMap[Symbol, Symbol]()
+  private[this] val moduleOrLazyVarOf = perRunCaches.newConcurrentMap[Symbol, Symbol]()
 
   // TODO: can we drop FINAL? In any case, since these variables are MUTABLE, they cannot and will
   // not be emitted as ACC_FINAL. They are FINAL in the Scala sense, though: cannot be overridden.

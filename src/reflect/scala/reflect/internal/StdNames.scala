@@ -74,8 +74,9 @@ trait StdNames {
 
       val cs = s.toArray
       val bytes = Codec.toUTF8(new scala.runtime.ArrayCharSequence(cs, 0, cs.length))
-      md5 update bytes
-      val md5chars = (md5.digest() map (b => (b & 0xFF).toHexString)).mkString
+      // one digest, and a flat name is first read on any thread of a phase on the pool (-Yparallel-typer)
+      val digest = md5.synchronized { md5 update bytes; md5.digest() }
+      val md5chars = (digest map (b => (b & 0xFF).toHexString)).mkString
 
       prefix + marker + md5chars + marker + suffix
     }

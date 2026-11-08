@@ -40,7 +40,7 @@ import PartialFunction.{cond, condOpt}
  *  @author Paul Phillips
  */
 trait TypeDiagnostics extends splain.SplainDiagnostics {
-  _: Analyzer with StdAttachments =>
+  _: AbstractAnalyzer with StdAttachments =>
 
   import global._
   import definitions._
@@ -56,8 +56,11 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
   /** A map of Positions to addendums - if an error involves a position in
    *  the map, the addendum should also be printed.
    */
-  private val addendums = perRunCaches.newMap[Position, () => String]()
-  private var isTyperInPattern = false
+  private val addendums = perRunCaches.newConcurrentMap[Position, () => String]()
+  // per thread under -Yparallel-typer
+  private[this] lazy val typerInPattern = perThread(Array(false))
+  private def isTyperInPattern: Boolean = typerInPattern.get(0)
+  private def isTyperInPattern_=(b: Boolean): Unit = typerInPattern.get(0) = b
 
   /** Devising new ways of communicating error info out of
    *  desperation to work on error messages.  This is used
@@ -357,10 +360,21 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
   case class TypeDiag(tp: Type, sym: Symbol) extends Ordered[TypeDiag] {
     // save the name because it will be mutated until it has been
     // distinguished from the other types in the same error message
-    private val savedName = sym.name
+    //
+    // With -Yparallel-typer the symbol is not renamed, only shown under another name on this thread: `name_=` moves the
+    // symbol to another bucket of its owner's scope, and any symbol can be in a message, so another thread would not
+    // find `scala.Long` while this one renders a mismatch with `java.lang.Long`, even a silent one.
+    private def currentName: Name =
+      if (isConcurrentCompiler) { val shown = scratch.shownNames.get(sym).asInstanceOf[Name]; if (shown ne null) shown else sym.name }
+      else sym.name
+    private def setName(name: Name): Unit =
+      if (!isConcurrentCompiler) sym.name = name
+      else if (name eq sym.name) scratch.shownNames.remove(sym)
+      else scratch.shownNames.put(sym, name)
+    private val savedName = currentName
     private var postQualifiedWith: List[Symbol] = Nil
-    def restoreName()     = sym.name = savedName
-    def modifyName(f: String => String): Unit = sym setName newTypeName(f(sym.name.toString))
+    def restoreName()     = setName(savedName)
+    def modifyName(f: String => String): Unit = setName(newTypeName(f(currentName.toString)))
 
     // functions to manipulate the name
     def preQualify()   = modifyName(trueOwner.fullName + "." + _)

@@ -1,0 +1,457 @@
+<title>Pipelined Build Scaling</title>
+<meta charset="utf-8">
+<style>
+/* A lab write-up in the x-ray's language: its tokens and its compact panels, with a reading column for the argument and wide panels for the figures. */
+:root {
+  --bg: #f7f6f3; --panel: #ffffff; --fg: #1d1d1f; --dim: #6b6b72; --line: #e2e0da; --grid: #ecebe6;
+  --active: #2f6fdb; --gc: #5c6168; --warm: #c2570c; --teal: #0d8a78; --sel: #f59f00; --pale: rgba(47, 111, 219, .28); --r: 6px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141518; --panel: #1c1d21; --fg: #e8e8ea; --dim: #9b9ba3; --line: #2d2f35; --grid: #24262b;
+    --active: #6ea0ff; --gc: #a3a8b0; --warm: #e0893a; --teal: #2aab98; --sel: #ffc94d; --pale: rgba(110, 160, 255, .3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141518; --panel: #1c1d21; --fg: #e8e8ea; --dim: #9b9ba3; --line: #2d2f35; --grid: #24262b;
+  --active: #6ea0ff; --gc: #a3a8b0; --warm: #e0893a; --teal: #2aab98; --sel: #ffc94d; --pale: rgba(110, 160, 255, .3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+main { max-width: 1080px; margin: 0 auto; padding-block: 18px 48px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 22px; margin: 0 0 2px; font-weight: 650; text-wrap: balance; }
+h2 { font-size: 16px; margin: 26px 0 6px; font-weight: 650; text-wrap: balance; }
+h3 { font-size: 13px; margin: 14px 0 4px; font-weight: 650; }
+p { margin: 0 0 9px; max-width: 74ch; }
+code { font: 12.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.dim { color: var(--dim); }
+.sub { color: var(--dim); margin-bottom: 10px; max-width: 74ch; }
+.stamp { display: inline-block; border: 1px solid var(--sel); border-radius: 99px; padding: 0 9px; font-size: 12px; margin-bottom: 8px; }
+figure { margin: 10px 0 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; }
+figcaption { color: var(--dim); font-size: 12.5px; margin-top: 6px; max-width: 86ch; }
+figure svg { display: block; width: 100%; height: auto; }
+svg text { fill: var(--fg); font-size: 11.5px; }
+svg text.d { fill: var(--dim); }
+.wide { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+th, td { padding: 3px 7px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+th { color: var(--dim); font-weight: 500; }
+td.l, th.l { text-align: left; }
+.bars { display: grid; grid-template-columns: minmax(90px, auto) minmax(60px, 1fr) auto; gap: 4px 10px; align-items: center; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.tr { height: 12px; background: var(--grid); border-radius: 0 4px 4px 0; }
+.fl { height: 12px; background: var(--gc); opacity: .6; border-radius: 0 4px 4px 0; }
+.fl.best { background: var(--active); opacity: 1; }
+.ctl { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+button { font: inherit; font-size: 12.5px; color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 2px 9px; cursor: pointer; }
+button.on { border-color: var(--active); box-shadow: inset 0 0 0 1px var(--active); font-weight: 600; }
+button:focus-visible { outline: 2px solid var(--active); outline-offset: 1px; }
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 12px; }
+.cols figure { margin: 0; min-width: 0; }
+ul { margin: 0 0 9px; padding-left: 20px; max-width: 74ch; }
+li { margin-bottom: 3px; }
+.dims { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 16px; align-items: start; }
+.dims > * { min-width: 0; }
+.dims svg text { font-size: 13px; }
+.dims h3 { margin-top: 0; }
+.dims h3 i { display: inline-block; width: 18px; height: 3px; vertical-align: middle; margin-right: 6px; }
+.dims section + section { margin-top: 12px; }
+.dims p { font-size: 13px; margin-bottom: 5px; }
+.dims ul { font-size: 13px; margin-bottom: 5px; padding-left: 18px; }
+</style>
+
+<main>
+<h1>Pipelined Build Scaling</h1>
+<p class="sub">How should a clean build of a multi-module Scala project spend its cores, now that a compile can use more than one? Real builds of ScalaTest, compiled in one JVM, checking a simulator's predictions.</p>
+<div class="ctl" id="dataCtl"></div>
+<span class="stamp" id="stamp"></span>
+
+<h2>What was found</h2>
+<div id="found"></div>
+
+<h2>Two directions to scale</h2>
+<p>A split M&#xd7;T runs up to M compiles at once on T threads each. Those are the sides of a rectangle whose area is the threads it uses. <span data-only="scalatest">Each direction hits its own limit, so a long thin rectangle wastes much of its area, and the same threads get further as a square.</span><span data-only="synth">With no module graph, each direction meets only its own costs.</span></p>
+<figure>
+  <div class="dims">
+    <div><div class="ctl" id="dimsCtl"></div><div class="wide"><div id="dims" style="min-width:440px"></div></div></div>
+    <div id="dimsNotes"></div>
+  </div>
+  <figcaption id="dimsCap"></figcaption>
+</figure>
+
+<h2>Premise</h2>
+<p>A multi-module build can spend its cores in two ways. It can run as many modules at once as it has cores, each on the serial compiler. Or it can run fewer modules and give each several typer threads with <code>-Yparallel-typer</code>. Pipelining adds a third lever: a module can start as soon as its dependencies have written their pickles, without waiting for their class files.</p>
+<p>A simulator built from single-corpus scaling curves made three claims about 8 cores. Real module graphs put 23&#x2013;43% of their code in one module, so 8 serial compiles at once reach only 1.7&#x2013;2.9&#xd7;, while one parallel compile at a time reaches 4.6&#x2013;4.8&#xd7;. Mixed splits such as 2&#xd7;4 do at least as well on some graphs. And moving workers to the modules others wait on adds 5&#x2013;21% where chokepoints hold 10% or more of the work.</p>
+<p>Those are estimates: warm JITs, workers that move instantly, module times taken from line counts. This experiment runs the real thing and measures how far off the simulator is.</p>
+
+<h2>Experiment design</h2>
+<p data-only="synth">The subject is a synthetic build: <b id="synthSize"></b>, each a copy of the scalap corpus in packages of its own (<code>synth_modules.py</code>), with no dependencies between them. Every module is ready at the start, so there is no critical path and no pipelining, and a split M&#xd7;T is a pure trade of threads per compile against compiles at once. With no dependencies <code>trad</code> and <code>pipe</code> coincide, so only <code>trad</code> runs.</p>
+<p data-only="scalatest">The subject is ScalaTest, chosen because it is real code, macro-heavy, and large once its generated tests are counted: <b id="size"></b>. Each measurement is a complete clean build in one warm JVM with no incremental compiler.</p>
+
+<figure>
+  <div class="wide"><svg viewBox="0 0 960 300" role="img" aria-label="The same two modules under traditional and pipelined builds: pipelined, the downstream module starts when the upstream module writes pickles, unless the upstream module provides macros.">
+    <defs><marker id="a1" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+    <g style="color:var(--gc)">
+    <text x="0" y="16" style="font-weight:650">Traditional</text>
+    <text class="d" x="0" y="46">upstream</text><rect x="90" y="32" width="150" height="20" fill="var(--active)"/><rect x="242" y="32" width="210" height="20" fill="var(--pale)"/>
+    <text class="d" x="0" y="82">downstream</text><rect x="452" y="68" width="150" height="20" fill="var(--active)"/><rect x="604" y="68" width="210" height="20" fill="var(--pale)"/>
+    <path d="M452,54 L452,66" stroke="currentColor" fill="none" marker-end="url(#a1)"/><text x="460" y="62" class="d">waits for class files</text>
+
+    <text x="0" y="122" style="font-weight:650">Pipelined</text>
+    <text class="d" x="0" y="152">upstream</text><rect x="90" y="138" width="150" height="20" fill="var(--active)"/><rect x="242" y="138" width="210" height="20" fill="var(--pale)"/>
+    <text class="d" x="0" y="188">downstream</text><rect x="242" y="174" width="150" height="20" fill="var(--active)"/><rect x="394" y="174" width="210" height="20" fill="var(--pale)"/>
+    <path d="M242,160 L242,172" stroke="currentColor" fill="none" marker-end="url(#a1)"/><text x="250" y="170" class="d">reads pickles</text>
+
+    <text x="0" y="228" style="font-weight:650">Pipelined, upstream provides macros</text>
+    <text class="d" x="0" y="258">provider</text><rect x="90" y="244" width="150" height="20" fill="var(--warm)"/><rect x="242" y="244" width="210" height="20" fill="var(--pale)"/>
+    <text class="d" x="0" y="294">downstream</text><rect x="452" y="280" width="150" height="20" fill="var(--active)"/><rect x="604" y="280" width="210" height="16" fill="var(--pale)"/>
+    <path d="M452,266 L452,278" stroke="currentColor" fill="none" marker-end="url(#a1)"/><text x="460" y="274" class="d">macro implementation runs at its typer</text>
+    <rect x="690" y="4" width="14" height="10" fill="var(--active)"/><text class="d" x="710" y="13">up to the pickler</text>
+    <rect x="820" y="4" width="14" height="10" fill="var(--pale)"/><text class="d" x="840" y="13">after it, back end</text>
+    </g>
+  </svg></div>
+  <figcaption>Pipelining shortens the wait to the pickler's end. A macro provider gets none of that, and neither does anything its macro implementation needs at run time.</figcaption>
+</figure>
+
+<figure>
+  <div class="wide"><svg viewBox="0 0 960 224" role="img" aria-label="The harness: Bloop export to module file, read by XrayBuild, which runs one Global per module with in-memory outputs and publishes pickles to downstream classpaths; results feed the calibration against the simulator.">
+    <defs><marker id="a2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+    <g style="color:var(--gc)" fill="none" stroke="currentColor">
+      <rect x="0" y="24" width="130" height="44" rx="4"/><rect x="170" y="24" width="130" height="44" rx="4"/>
+      <rect x="340" y="4" width="360" height="176" rx="4"/>
+      <rect x="360" y="40" width="150" height="40" rx="3"/><rect x="530" y="40" width="150" height="40" rx="3"/>
+      <rect x="360" y="124" width="150" height="40" rx="3"/><rect x="530" y="124" width="150" height="40" rx="3"/>
+      <rect x="760" y="24" width="190" height="44" rx="4"/><rect x="760" y="124" width="190" height="44" rx="4"/>
+      <rect x="170" y="124" width="130" height="44" rx="4"/>
+      <path d="M130,46 L168,46" marker-end="url(#a2)"/><path d="M300,46 L338,46" marker-end="url(#a2)"/>
+      <path d="M510,60 L528,60" marker-end="url(#a2)"/>
+      <path d="M435,80 L435,122" marker-end="url(#a2)"/><path d="M605,80 L605,122" marker-end="url(#a2)"/>
+      <path d="M700,46 L758,46" marker-end="url(#a2)"/><path d="M855,68 L855,122" marker-end="url(#a2)"/>
+      <path d="M300,146 L338,146" marker-end="url(#a2)"/>
+    </g>
+    <text x="65" y="44" text-anchor="middle">.bloop export</text><text class="d" x="65" y="59" text-anchor="middle">sbt bloopGenerate</text>
+    <text x="235" y="44" text-anchor="middle">module file</text><text class="d" x="235" y="59" text-anchor="middle">bloop_modules.py</text>
+    <text x="350" y="24" style="font-weight:650">XrayBuild: one JVM, nothing on disk</text>
+    <text x="435" y="57" text-anchor="middle">upstream Global</text><text class="d" x="435" y="72" text-anchor="middle">typer to pickler</text>
+    <text x="605" y="57" text-anchor="middle">upstream back end</text><text class="d" x="605" y="72" text-anchor="middle">class files in memory</text>
+    <text x="435" y="141" text-anchor="middle">.sig in memory</text><text class="d" x="435" y="156" text-anchor="middle">downstream classpath</text>
+    <text x="605" y="141" text-anchor="middle">classes in memory</text><text class="d" x="605" y="156" text-anchor="middle">macro class loader</text>
+    <text class="d" x="443" y="106">at pickler's end</text><text class="d" x="613" y="106">at the end</text>
+    <text x="855" y="44" text-anchor="middle">each module's times</text><text class="d" x="855" y="59" text-anchor="middle">start, pickles, end, GC</text>
+    <text x="855" y="141" text-anchor="middle">calibrate.py</text><text class="d" x="855" y="156" text-anchor="middle">predicted against measured</text>
+    <text x="235" y="141" text-anchor="middle">budget of workers</text><text class="d" x="235" y="156" text-anchor="middle">ready by priority</text>
+    <text class="d" x="0" y="214">Serial times from the same run feed the simulator, so its only other inputs are its scaling curves and the module graph.</text>
+  </svg></div>
+  <figcaption>The harness bypasses Zinc and the file system. Pickles and class files stay in memory, so slow disk I/O on this machine plays no part.</figcaption>
+</figure>
+
+<h3>What varies</h3>
+<p data-only="synth">The splits are every M&#xd7;T with M&#xb7;T equal to 8 or 16, the serial baseline, and one compile at a time on 2 and 4 threads, which gives each module's own speed-up for the cost model.</p>
+<p data-only="scalatest">The splits cover three budgets. One thread is the serial baseline that speed-ups are measured against. Eight threads tests the simulator's claims, and sixteen shows what happens with twice as many; 3&#xd7;5 uses 15, the closest three compiles can get to 16 with equal threads. A budget caps the compiler's threads. It does not pin them to cores: this machine has 18, and ParallelGC's 14 threads run on top of the budget.</p>
+<div class="wide" data-only="scalatest"><table>
+  <thead><tr><th class="l">Token</th><th class="l">Starts a module when</th><th class="l">Workers</th></tr></thead>
+  <tbody>
+    <tr><td class="l"><code>trad:1x1</code></td><td class="l">dependencies have class files</td><td class="l">one serial compile at a time: the baseline</td></tr>
+    <tr><td class="l"><code>trad:8x1</code></td><td class="l">dependencies have class files</td><td class="l">up to 8 serial compiles</td></tr>
+    <tr><td class="l"><code>pipe:MxT</code></td><td class="l">dependencies have pickles; macro providers have class files</td><td class="l">up to M compiles on T threads each (8&#xd7;1, 4&#xd7;2, 2&#xd7;4, 16&#xd7;1, 8&#xd7;2, 4&#xd7;4, 3&#xd7;5, 2&#xd7;8)</td></tr>
+    <tr><td class="l"><code>1xT</code></td><td class="l">the previous module has finished, so pipelining cannot matter</td><td class="l">one compile on T threads: each module's own speed-up, with nothing else running</td></tr>
+    <tr><td class="l"><code>pipe:balC</code></td><td class="l">as above</td><td class="l">C workers. A module takes the fewest threads that finish it by the time the remaining work, shared over C, would be done. Held until it ends.</td></tr>
+  </tbody>
+</table></div>
+
+<h3>What stays fixed</h3>
+<ul>
+  <li>Patched JDK 26, ParallelGC, 31 GB heap with a 20 GB young generation and ParallelGC's adaptive survivor sizing, compressed oops on. All parallel phases on.</li>
+  <li>Three warm-up builds, then every token in a different order each round, three rounds, in one JVM. The collector's sizing carries over between tokens, and it made one token 60% slower in an earlier run, so shuffling spreads that effect across tokens and the ranges show it. Turning adaptive sizing off is worse: the old generation fills and a single full collection takes up to 33 s.</li>
+  <li>Each measurement takes the machine alone once the one-minute load is under 8.</li>
+  <li data-only="scalatest">Compiled against JDK 21's API, since this JDK removed <code>Thread.stop</code>, which ScalaTest calls.</li>
+</ul>
+
+<h3>Known limits</h3>
+<ul>
+  <li>javac does not run. Java sources reach downstream modules as signatures, so Java compile time is missing.</li>
+  <li data-only="scalatest">A Bloop project lists directories, and two modules' directories hold about 70k lines that sbt does not compile, three files of which do not compile at all. The build uses sbt's own source lists for test modules, so it compiles what the real build does.</li>
+  <li data-only="scalatest"><code>bal</code> is static: a module keeps its workers until it ends, because a compile cannot yet change its thread count. The largest module depends on many test modules, so it starts when every worker is busy and gets one thread.</li>
+  <li data-only="synth">Every module is the same 3k lines, about 0.3 s serial, so a build is short and the number of modules per compile slot quantises the schedule: K modules on M slots take ceil(K/M) waves.</li>
+  <li data-only="synth">A 20 GB young generation holds several small builds' allocation, so many builds see no collection at all, and the GC share depends on where the collector's cycle falls.</li>
+  <li>Warm JVM. A real clean build starts cold, and the first build of a JVM here takes about 75 s against about 65 s warm, at 8&#xd7;1.</li>
+  <li data-only="scalatest">One project on one machine. ScalaTest's largest module and its short chain of production modules shape these results.</li>
+</ul>
+
+<h2 data-only="graph">The module graph</h2>
+<figure data-only="graph">
+  <div class="wide" id="graph"></div>
+  <figcaption id="graphCap"></figcaption>
+</figure>
+
+<h2>Results so far</h2>
+<p id="resultNote" class="sub"></p>
+<figure><div class="bars" id="bars"></div><figcaption id="barsCap"></figcaption></figure>
+
+<h3>What a build looks like</h3>
+<figure>
+  <div class="ctl" id="ganttCtl"></div>
+  <div class="wide" id="gantt"></div>
+  <figcaption>Each row is a worker slot, each bar a module. Solid to the pickler's end, pale after it, and height shows the module's thread count. Modules under 30 ms are left out. Hover a bar for its times.</figcaption>
+</figure>
+
+<h3>How each module scales</h3>
+<figure><div class="wide" id="scale"></div><figcaption id="scaleCap"></figcaption></figure>
+
+<h3>Models against measured</h3>
+<div class="wide" id="cal"></div>
+<p class="sub" id="calNote" style="margin-top:6px"></p>
+
+<h2 data-only="scalatest">Still open</h2>
+<ul data-only="scalatest">
+  <li>A real test of workers that move. It needs a compile that can change its thread count, and the model says it would gain little on ScalaTest, though a project with mid-graph chokepoints could differ.</li>
+  <li>A scheduler that reacts to GC load, for its robustness when the heap is badly sized.</li>
+  <li>The square-root heuristic at other core counts and on other projects.</li>
+</ul>
+</main>
+<script src="build.data.js"></script>
+<script src="build-synth-scalap-16.data.js"></script>
+<script src="build-synth-scalap-64.data.js"></script>
+<script>
+(function () {
+  // the datasets: ScalaTest's build, and synthetic builds of K independent copies of one corpus
+  const B = window.XRAY_BUILDS || {};
+  const SETS = [['scalatest', 'ScalaTest', window.XRAY_BUILD], ['synth-scalap-16', 'synthetic scalap, K=16', B['synth-scalap-16']], ['synth-scalap-64', 'synthetic scalap, K=64', B['synth-scalap-64']]].filter((x) => x[2]);
+  if (!SETS.length) return;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const s1 = (ms) => ms >= 10000 ? (ms / 1000).toFixed(1) + ' s' : (ms / 1000).toFixed(2) + ' s';
+  const kl = (n) => n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : Math.round(n / 1000) + 'k';
+  let key = (/data=([\w-]+)/.exec(location.hash) || [])[1];
+  if (!SETS.some((x) => x[0] === key)) key = SETS[0][0];
+  let budget = 16;
+  const switcher = (id) => {
+    $(id).innerHTML = SETS.map(([k, name]) => `<button class="${k === key ? 'on' : ''}" data-k="${k}">${esc(name)}</button>`).join('');
+    $(id).querySelectorAll('button').forEach((el) => { el.onclick = () => { key = el.dataset.k; history.replaceState(null, '', '#data=' + key); render(); }; });
+  };
+  // ---- the synthetic datasets' own text, from their numbers
+  const med = (xs) => { const a = xs.slice().sort((p, q) => p - q); return a[a.length >> 1]; };
+  const modMs = (t) => med(t.mods.map((m) => m.e - m.s));
+  const gcPct = (t) => (100 * t.gc / t.cpu).toFixed(1) + '%';
+  const X = (t) => t.speedup.toFixed(2) + '×';
+  function synthFound(D, tok) {
+    const t = tok, w = (sp) => `${sp.replace('x', '×')} ${s1(t(sp).wall)} (${X(t(sp))})`;
+    const ratio = (a, b) => (t(a).wall / t(b).wall).toFixed(2);
+    const gcs = D.tokens.map((x) => x.gc / x.cpu), gcMax = Math.max(...gcs);
+    return [
+      `<p><b>With nothing to wait for, compiles at once win.</b> At 16 threads: ${['16x1', '8x2', '4x4', '2x8', '1x16'].map(w).join(', ')}. At 8 threads: ${['8x1', '4x2', '2x4', '1x8'].map(w).join(', ')}. 16×1 takes ${ratio('16x1', '4x4')} of 4×4's time, and 1×16 takes ${ratio('1x16', '4x4')} times as long.</p>`,
+      `<p><b>A compile this small gains little from threads.</b> One module at a time: ${['1x2', '1x4', '1x8', '1x16'].map((sp) => `${X(t(sp))} on ${sp.slice(2)}`).join(', ')}. A copy takes ${Math.round(modMs(t('1x1')))} ms serial and ${Math.round(modMs(t('1x8')))} ms on 8 threads, so the serial steps and each phase's tail are most of it. The result is about small modules: ScalaTest's largest module reaches about 5× on 8 threads.</p>`,
+      `<p><b>Compiles at once slow each other only through busy cores.</b> A copy takes ${Math.round(modMs(t('1x1')))} ms alone, ${Math.round(modMs(t('8x1')))} ms beside 7 others and ${Math.round(modMs(t('16x1')))} ms beside 15. GC stays under ${Math.ceil(100 * gcMax)}% of CPU in every split, and is zero whenever every compile is serial: 16 serial compiles of scalap allocate about 4 GB, which the 20 GB young generation holds until the next build, so the live sets that made 16×1 lose on ScalaTest never get copied. The same compiles in parallel mode allocate about four times as much (17–25 GB in a <code>-Xlog:gc</code> check of K=16), enough for one young collection per build.</p>`,
+      `<p><b>The refit's two terms fit, with the compiles term near zero.</b> ${D.fit ? `Refitted here, load = 1 + ${D.fit.a} (busy − 1) + ${D.fit.c} (compiles − 1)${D.fit.q === 1 ? '' : '^' + D.fit.q}, within ${D.fit.heldWorstPct}% on the splits it was not fitted to.` : ''} ScalaTest's terms (0.05 busy, 0.01 compiles squared) predict 16×1 at 2.4–2.5 times its measured time: their compiles term charges for live sets this build does not have.</p>`,
+      `<p><b>Quantisation is small here.</b> K is a power of two, so every M divides it and no round of compiles runs part empty. ${D.modules === 16 ? 'With 16 modules, 16×1 is a single round, so the build waits for the slowest copy.' : 'With 64 modules each slot runs 64 / M copies in turn, so the slowest copy of a round matters less.'} The two K agree within 8% on every split. A K that some M do not divide is the test of quantisation.</p>`,
+    ].join('');
+  }
+  function synthDims(D, tok) {
+    const t = tok, nonGc = (sp) => t(sp).cpu - t(sp).gc;
+    return `<section><h3><i style="background:var(--warm)"></i>Up: more compiles at once</h3>
+       <p>No module waits for another, so there is no critical path, and ${D.modules} modules on M slots take ${D.modules} / M rounds of compiles. GC is ${gcPct(t('1x1'))} of CPU serial, ${gcPct(t('8x1'))} at 8×1 and ${gcPct(t('16x1'))} at 16×1. <b>Returns:</b> ${X(t('8x1'))} at 8×1, ${X(t('16x1'))} at 16×1.</p></section>
+       <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
+       <p>Non-GC CPU grows ${Math.round(100 * (nonGc('1x8') / nonGc('1x1') - 1))}% by 1×8 and ${Math.round(100 * (nonGc('1x16') / nonGc('1x1') - 1))}% by 1×16. <b>Returns:</b> ${['1x2', '1x4', '1x8', '1x16'].map((sp) => X(t(sp))).join(', ')} at 2, 4, 8 and 16 threads.</p></section>
+       <section><h3><i style="background:var(--active)"></i>Both</h3>
+       <p>At 16 threads the shaded rectangles give ${X(t('16x1'))} as 16×1, ${X(t('1x16'))} as 1×16 and ${X(t('4x4'))} as 4×4. With no graph, the tall rectangle wins.</p></section>`;
+  }
+  function synthCal(D) {
+    const F = D.fit;
+    if (!F) return 'The original model takes each module’s serial and pickle times from the baseline, then one curve from a single corpus.';
+    return `The refit charges for busy threads and for compiles: load = 1 + ${F.a} (busy − 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles − 1)^${F.q}, with each module's own speed-up from the one-at-a-time builds. ${F.train.length ? 'Fitted to this build on ' + F.train.map((x) => x.split(':')[1].replace('x', '×')).join(', ') + '.' : 'These are the terms fitted to ScalaTest, applied unchanged.'} Mean error on the other splits ${F.heldMeanPct}%, worst ${F.heldWorstPct}%.`;
+  }
+
+  function render() {
+  const D = SETS.find((x) => x[0] === key)[2];
+  const synth = key !== 'scalatest';
+  const hasGraph = D.graph.some((m) => m.deps.length);
+  document.querySelectorAll('[data-only]').forEach((el) => { const o = el.dataset.only; el.hidden = o === 'graph' ? !hasGraph : (o === 'synth') !== synth; });
+  switcher('dataCtl');
+  // a split's token: pipelined where both ran
+  const tok = (split) => D.tokens.find((t) => t.token === 'pipe:' + split) || D.tokens.find((t) => t.token === 'trad:' + split);
+  if (synth) $('synthSize').textContent = `${D.modules} modules of ${kl(D.totalLines / D.modules)} lines each, ${kl(D.totalLines)} in all`;
+  $('size').textContent = `${kl(D.totalLines)} lines of Scala in ${D.modules} modules with sources`;
+  $('stamp').textContent = `Data of ${D.generated}: every configuration has ${Math.min(...D.tokens.map((t) => t.rounds))} rounds, ${Math.max(...D.tokens.map((t) => t.errors))} errors`;
+  if (synth) $('found').innerHTML = synthFound(D, tok);
+  else (function () {
+    const by = (t) => D.tokens.find((x) => x.token === t);
+    const w = (t) => s1(by(t).wall), x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
+    const F = D.fit, E = F.estimates;
+    $('found').innerHTML = [
+      `<p><b>Split cores between compiles and threads.</b> With 16 cores, 4\u00d74 takes ${w('pipe:4x4')} (${x('pipe:4x4')}), while 16 serial compiles take ${w('pipe:16x1')} (${x('pipe:16x1')}). With 8 cores, 4\u00d72 takes ${w('pipe:4x2')} (${x('pipe:4x2')}), 2\u00d74 ${w('pipe:2x4')}, 1\u00d78 ${w('pipe:1x8')} and 8\u00d71 ${w('pipe:8x1')}.</p>`,
+      `<p><b>More compiles can slow a build down.</b> 16 serial compiles are slower than 8, and with 16 workers 8\u00d72 takes ${w('pipe:8x2')} against ${w('pipe:4x4')} for 4\u00d74. Each compile adds a live set for the collector to copy. Threads add CPU but no live set.</p>`,
+      `<p><b>Tasks = threads = \u221acores fits so far.</b> It picks the winner at 16 cores, and the two nearest splits at 8 are the two fastest. This is one project at two core counts.</p>`,
+      `<p><b>Pipelining barely helps ScalaTest.</b> ${w('trad:8x1')} traditional against ${w('pipe:8x1')} pipelined. The fitted model puts removing every macro wait at under 5% more, so macros are not the main reason. Most of the work is in test modules at the leaves of the graph, with little upstream work for pipelining to overlap.</p>`,
+      `<p><b>My scheduling policy lost to fixed splits.</b> <code>bal8</code> took ${w('pipe:bal8')} because a compile cannot gain threads once running. The model estimates that even workers that move would only match the best fixed split here: ${s1(E.dynamic8cap4)} against ${w('pipe:4x2')} at 8 cores and ${s1(E.dynamic16cap4)} against ${w('pipe:4x4')} at 16. So this contradicts the simulator's earlier gain of 5\u201321% for this graph, which it reached with no cost for live sets.</p>`,
+      `<p><b>The cost model works once it charges for live sets.</b> Fitted on four configurations plus each module's single-width scaling, it predicts the others with a mean error of ${F.heldMeanPct}%. The worst is 8\u00d72 at ${F.heldWorstPct}%, the noisiest configuration.</p>`,
+      `<p><b>GC settings matter as much as the split.</b> With adaptive sizing off and the same heap, 4\u00d74 took 64 s against ${w('pipe:4x4')} and 8\u00d71 took 121\u2013170 s, with single full collections of up to 33 s. Configurations with many compiles also vary most: 8\u00d72 ranges ${s1(by('pipe:8x2').lo)}\u2013${s1(by('pipe:8x2').hi)}, while 4\u00d74 ranges ${s1(by('pipe:4x4').lo)}\u2013${s1(by('pipe:4x4').hi)}.</p>`,
+    ].join('');
+  })();
+
+  // ---- the two directions: threads along, compiles up, so that a split's rectangle has the threads as its area
+  (function () {
+    const by = (t) => D.tokens.find((x) => x.token === t);
+    const gcPct = (t) => Math.round(100 * by(t).gc / by(t).cpu);
+    const nonGc = (t) => by(t).cpu - by(t).gc;
+    const x = (t) => by(t).speedup.toFixed(2) + '\u00d7';
+    const pts = D.tokens.map((t) => { const m = /^(?:pipe|trad):(\d+)x(\d+)$/.exec(t.token); return m && tok(m[1] + 'x' + m[2]) === t ? { t, split: m[1] + 'x' + m[2], M: +m[1], T: +m[2] } : null; }).filter(Boolean);
+    const gcs = pts.map((p) => p.t.gc / p.t.cpu), lo = Math.min(...gcs), hi = Math.max(...gcs);
+    // one budget at a time: the splits that use it, with the tall, the wide and the square one shaded
+    const shaded = { 8: [[8, 1, '--warm'], [1, 8, '--teal'], [4, 2, '--active']], 16: [[16, 1, '--warm'], tok('1x16') ? [1, 16, '--teal'] : [2, 8, '--teal'], [4, 4, '--active']] };
+    // where a split's label goes, against its point: dx, dy, anchor
+    const place = { '1x16': [-4, 18, 'end'], '1x1': [0, 18, 'middle'], '1x2': [0, 18, 'middle'], '1x4': [0, 18, 'middle'], '1x8': [0, 18, 'middle'], '8x1': [4, -11, 'start'], '4x2': [10, 4, 'start'], '16x1': [10, 4, 'start'] };
+    function draw() {
+      const X0 = 56, Y0 = 490, W = 540, H = 540, U = 440 / budget;
+      const px = (v) => X0 + v * U, py = (v) => Y0 - v * U;
+      const named = Object.fromEntries(shaded[budget].map(([M, T]) => [M + 'x' + T, 1]));
+      const rect = (M, T, fill, op) => `<rect x="${px(0)}" y="${py(M)}" width="${T * U}" height="${M * U}" fill="var(${fill})" fill-opacity="${op}" stroke="var(${fill})" stroke-width="1.5"/>`;
+      let d = ''; for (let v = 1; v <= budget + 0.001; v += 0.05) d += (d ? 'L' : 'M') + px(v).toFixed(1) + ',' + py(budget / v).toFixed(1);
+      const curve = `<path d="${d}" fill="none" stroke="var(--gc)" stroke-width="1.2" stroke-dasharray="4 4"/>`;
+      const ticks = [1, 2, 4, 8, 16].filter((v) => v <= budget);
+      const grid = ticks.map((v) => `<line x1="${px(v)}" y1="${py(0)}" x2="${px(v)}" y2="${py(budget)}" stroke="var(--grid)"/><line x1="${px(0)}" y1="${py(v)}" x2="${px(budget)}" y2="${py(v)}" stroke="var(--grid)"/><text class="d" x="${px(v)}" y="${Y0 + 17}" text-anchor="middle">${v}</text><text class="d" x="${X0 - 8}" y="${py(v) + 4}" text-anchor="end">${v}</text>`).join('');
+      const shown = pts.filter((p) => p.M * p.T <= budget);
+      const marks = shown.map((p) => {
+        const [dx, dy, a] = place[p.split] || [10, 4, 'start'], cx = px(p.T), cy = py(p.M), share = p.t.gc / p.t.cpu, full = p.M * p.T === budget;
+        const label = p.split === '1x1' ? '1\u00d7' : (named[p.split] ? p.split.replace('x', '\u00d7') + ' ' : '') + p.t.speedup.toFixed(2) + '\u00d7';
+        const tip = `${p.split.replace('x', '\u00d7')}: ${(p.t.wall / 1000).toFixed(1)} s (${(p.t.lo / 1000).toFixed(1)}\u2013${(p.t.hi / 1000).toFixed(1)}), ${p.t.speedup.toFixed(2)}\u00d7, ${Math.round(100 * share)}% of CPU in GC`;
+        return `<g opacity="${full || p.split === '1x1' ? 1 : .45}"><title>${tip}</title><circle cx="${cx}" cy="${cy}" r="15" fill="transparent"/><circle cx="${cx}" cy="${cy}" r="6" fill="var(--panel)"/><circle cx="${cx}" cy="${cy}" r="5" fill="var(--warm)" fill-opacity="${(0.15 + 0.85 * (share - lo) / (hi - lo)).toFixed(2)}" stroke="var(--warm)"/><text x="${cx + dx}" y="${cy + dy}" text-anchor="${a}" style="${named[p.split] && shaded[budget][2][0] === p.M && shaded[budget][2][1] === p.T ? 'font-weight:650' : ''}">${label}</text></g>`;
+      }).join('');
+      const best = shown.filter((p) => p.M * p.T === budget).sort((a, b) => b.t.speedup - a.t.speedup)[0];
+      $('dims').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Splits of ${budget} threads plotted by threads per compile and compiles at once. A split's rectangle has the threads as its area. ${best.split.replace('x', ' by ')} reaches ${best.t.speedup.toFixed(2)}\u00d7.">
+        <defs><marker id="a3" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="currentColor"/></marker></defs>
+        ${grid}
+        ${shaded[budget].map(([M, T, f]) => rect(M, T, f, f === '--active' ? .22 : .1)).join('')}
+        ${curve}
+        <text class="d" x="${px(budget * 0.7)}" y="${py(1 / 0.7) - 8}">${budget} threads</text>
+        <line x1="${px(0)}" y1="${py(0)}" x2="${px(budget * 1.04)}" y2="${py(0)}" stroke="var(--teal)" stroke-width="2" marker-end="url(#a3)" style="color:var(--teal)"/>
+        <line x1="${px(0)}" y1="${py(0)}" x2="${px(0)}" y2="${py(budget * 1.06)}" stroke="var(--warm)" stroke-width="2" marker-end="url(#a3)" style="color:var(--warm)"/>
+        <text x="${px(budget)}" y="${Y0 + 38}" text-anchor="end" style="font-weight:600">threads per compile</text>
+        <text transform="translate(16 ${py(budget)}) rotate(-90)" text-anchor="end" style="font-weight:600">compiles at once</text>
+        ${marks}
+      </svg>`;
+      $('dimsCtl').innerHTML = [8, 16].map((b) => `<button class="${b === budget ? 'on' : ''}" data-b="${b}">${b} threads</button>`).join('') + '<span style="width:12px"></span><span id="dimsData" style="display:contents"></span>';
+      $('dimsCtl').querySelectorAll('button').forEach((el) => { el.onclick = () => { budget = +el.dataset.b; draw(); }; });
+      switcher('dimsData');
+    }
+    draw();
+    if (synth) { $('dimsNotes').innerHTML = synthDims(D, tok); $('dimsCap').textContent = `Measured speed-ups of the synthetic build of ${D.modules} independent copies of scalap against one serial compile at a time, for one thread budget at a time. The points on the dashed curve use the whole budget, the dimmer ones fewer threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. The collector\u2019s threads are not counted in the area.`; return; }
+    const biggest = D.graph.filter((m) => m.ms != null).sort((a, b) => b.ms - a.ms)[0];
+    const s = (ms) => Math.round(ms / 1000) + ' s';
+    // the critical path of a pipelined build of serial compiles: a module starts at its dependencies' pickles, or their end for a macro provider
+    const G = new Map(D.graph.map((m) => [m.n, m])), done = new Map();
+    const finish = (n) => { if (done.has(n)) return done.get(n); const m = G.get(n); const start = Math.max(0, ...m.deps.map((d) => { const x = G.get(d); return x ? finish(d) - (x.macros || x.pre == null ? 0 : x.ms - x.pre) : 0; })); const f = start + (m.ms || 0); done.set(n, f); return f; };
+    const critical = Math.max(...D.graph.map((m) => finish(m.n)));
+    $('dimsNotes').innerHTML =
+      `<section><h3><i style="background:var(--warm)"></i>Up: more compiles at once</h3>
+       <p><b>Stresses the collector.</b> Each compile adds a live set, so collections copy more and come more often. GC goes from ${gcPct('trad:1x1')}% of CPU when serial to ${gcPct('pipe:8x1')}% at 8\u00d71 and ${gcPct('pipe:16x1')}% at 16\u00d71, and from ${s(by('trad:1x1').gc)} of GC CPU to ${s(by('pipe:16x1').gc)}.</p>
+       <p><b>Cannot shorten the critical path.</b> Each compile runs at serial speed, so a chain of dependent modules takes its serial time however many cores are free. In ScalaTest that chain is ${s(critical)}, most of it the largest module at ${s(biggest.ms)}, against ${s(by('pipe:8x1').wall)} for the whole build at 8\u00d71.</p>
+       <p><b>Returns:</b> ${x('pipe:8x1')} at 8\u00d71, then down to ${x('pipe:16x1')} at 16\u00d71. The critical path is the same for both, so it does not explain the drop.</p></section>
+       <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
+       <p><b>Stresses coordination.</b> Threads share one compile's symbols and types, and wait on its completion lock. GC stays at ${gcPct('pipe:1x8')}\u2013${gcPct('pipe:1x2')}% of CPU, but non-GC CPU grows ${Math.round(100 * (nonGc('pipe:1x8') / nonGc('trad:1x1') - 1))}% by 1\u00d78.</p>
+       <p><b>Cause, in part inferred:</b> the 8-thread counter runs put about two-thirds of the added CPU in cycles per instruction and one-third in instructions. Cache-line sharing fits that, but no coherence counter was recorded. Parks and serial phases show up on the x-ray.</p>
+       <p><b>Runs into Amdahl.</b></p>
+       <ul>
+         <li>Class headers are named on one thread before the bodies start: 3 to 8% of an 8-thread compile, a cap near 7×.</li>
+         <li>Each phase is a barrier, so it ends with a tail waiting for its longest unit: a 300 ms unit in refchecks is that phase's floor at any thread count.</li>
+       </ul>
+       <p>Compiles running side by side pay both in parallel.</p>
+       <p><b>Returns:</b> ${x('pipe:1x2')}, ${x('pipe:1x4')} and ${x('pipe:1x8')} at 2, 4 and 8 threads.</p></section>
+       <section><h3><i style="background:var(--active)"></i>Both: the same area, used better</h3>
+       <p>The three shaded rectangles are 16 threads each: ${x('pipe:16x1')} as 16\u00d71, ${x('pipe:2x8')} as 2\u00d78 and ${x('pipe:4x4')} as 4\u00d74. The curve is not symmetric: ${x('pipe:2x8')} at 2\u00d78 against ${x('pipe:8x2')} at 8\u00d72, so on this project too many compiles cost more than too many threads.</p></section>`;
+    $('dimsCap').textContent = 'Measured speed-ups of pipelined ScalaTest builds against one serial compile, for one thread budget at a time. The points on the dashed curve use the whole budget, the dimmer ones fewer threads, and a point marks the far corner of its rectangle. A darker point spent more of its CPU in GC. One project, and the collector\u2019s threads are not counted in the area. 1\u00d716 was not run.';
+  })();
+
+  // ---- the module graph: a row per depth, width by lines
+  if (hasGraph) (function () {
+    const G = D.graph, W = 960, rowH = 42, pad = 4, top = 16;
+    const maxDepth = Math.max(...G.map((m) => m.depth));
+    const rows = []; for (let i = 0; i <= maxDepth; i++) rows.push(G.filter((m) => m.depth === i).sort((a, b) => b.lines - a.lines));
+    const scale = (W - 4) / Math.max(...rows.map((r) => r.reduce((t, m) => t + Math.max(m.lines, 1), 0) + r.length * 900));
+    const pos = {};
+    rows.forEach((r, i) => { let x = 2; r.forEach((m) => { const w = Math.max(3, m.lines * scale); pos[m.n] = { x, w, y: top + i * rowH }; x += w + pad; }); });
+    let edges = '', nodes = '';
+    G.forEach((m) => m.deps.forEach((d) => {
+      const a = pos[m.n], b = pos[d]; if (!b) return;
+      edges += `<line x1="${a.x + a.w / 2}" y1="${a.y}" x2="${b.x + b.w / 2}" y2="${b.y + 16}" stroke="var(--gc)" stroke-opacity=".22"/>`;
+    }));
+    G.forEach((m) => {
+      const p = pos[m.n], name = m.n.replace(/-test$/, ' test').replace(/^scalatest/, '').replace(/^gen/, 'gen ');
+      nodes += `<rect x="${p.x}" y="${p.y}" width="${p.w}" height="16" fill="${m.macros ? 'var(--warm)' : 'var(--active)'}" opacity=".85"><title>${esc(m.n)}: ${m.lines} lines${m.ms != null ? ', ' + s1(m.ms) + ' serial, pickles at ' + s1(m.pre) : ''}${m.macros ? ', provides macros' : ''}</title></rect>`;
+      if (p.w > name.length * 6.2) nodes += `<text x="${p.x + 3}" y="${p.y + 12}" style="fill:var(--panel);font-size:10.5px">${esc(name)}</text>`;
+    });
+    const H = top + rows.length * rowH;
+    $('graph').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="ScalaTest's modules by depth: a chain of production modules above a wide layer of generated and hand-written tests."><text class="d" x="2" y="10">deepest dependency at the top; width is lines of Scala; a row is a depth</text>${edges}${nodes}</svg>`;
+    const biggest = G.slice().sort((a, b) => b.lines - a.lines);
+    $('graphCap').textContent = `Orange modules provide macros, or are needed by a macro implementation at run time, so everything above their dependants waits for their class files. The largest are ${biggest.slice(0, 3).map((m) => `${m.n} (${kl(m.lines)})`).join(', ')}. Hover a module for its size.`;
+  })();
+
+  // ---- results
+  const T = D.tokens.slice();
+  $('resultNote').textContent = `The baseline is ${s1(D.serial)} for one serial compile at a time. Times are the median of three rounds, in a different order each round.`;
+  // the cores a token gives compilation: M x T, or the C of a shared budget
+  const label = (t) => t.token === 'trad:1x1' ? 'serial' : /^pipe:1x/.test(t.token) || !hasGraph ? t.token.split(':')[1] : t.token;
+  const workers = (t) => { const p = t.token.split(':')[1], m = /^(\d+)x(\d+)$/.exec(p); return m ? m[1] * m[2] : +p.replace(/\D/g, ''); };
+  const budgets = [...new Set(T.map(workers))].sort((a, b) => a - b);
+  const inBudget = (b) => T.filter((t) => workers(t) === b).sort((x, y) => x.wall - y.wall);
+  const coreLabel = (b) => `${b} core${b > 1 ? 's' : ''}`;
+  const top = Math.max(...T.map((t) => t.wall));
+  $('bars').innerHTML = budgets.map((b) => {
+    const ts = inBudget(b);
+    return `<h3 style="grid-column:1/-1;margin:${b === budgets[0] ? 0 : 8}px 0 0">${coreLabel(b)}</h3>` + ts.map((t) => `<span><code>${esc(label(t))}</code></span><div class="tr"><div class="fl ${t === ts[0] && ts.length > 1 ? 'best' : ''}" style="width:${100 * t.wall / top}%"></div></div><span>${s1(t.wall)}${t.rounds > 1 ? ` <span class="dim">${s1(t.lo)}\u2013${s1(t.hi)}</span>` : ''}${t.speedup ? ` <b>${t.speedup.toFixed(2)}\u00d7</b>` : ''}</span>`).join('');
+  }).join('');
+  $('barsCap').textContent = 'Wall time of a whole clean build, median of its rounds, by the cores given to compilation. Blue is the fastest with that many cores. All on one scale; shorter is better.';
+
+  // ---- a build drawn
+  const order = budgets.flatMap(inBudget);
+  let cur = order.slice().sort((a, b) => a.wall - b.wall)[0];
+  function gantt() {
+    $('ganttCtl').innerHTML = budgets.map((b) => `<div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center;flex-basis:100%"><span class="dim" style="min-width:58px;font-size:12.5px">${coreLabel(b)}</span>` + inBudget(b).map((t) => `<button id="gt${order.indexOf(t)}" class="${t === cur ? 'on' : ''}">${esc(label(t))}</button>`).join('') + '</div>').join('');
+    order.forEach((t, i) => { $(`gt${i}`).onclick = () => { cur = t; gantt(); }; });
+    const ms = cur.mods.slice().sort((a, b) => a.s - b.s);
+    // one scale across the builds with the same cores, so that they compare
+    const W = 960, L = 8, R = 8, end = Math.max(...inBudget(workers(cur)).map((t) => t.wall));
+    const slots = [];
+    ms.forEach((m) => { let i = slots.findIndex((e) => e <= m.s); if (i < 0) { i = slots.length; slots.push(0); } slots[i] = m.e; m._lane = i; });
+    const laneH = 16, top = 22, H = top + slots.length * laneH + 22;
+    const X = (t) => L + t / end * (W - L - R);
+    let g = '';
+    const step = [100, 200, 500, 1000, 2000, 5000, 10000, 20000, 50000].find((v) => end / v <= 12);
+    for (let t = 0; t <= end; t += step) g += `<line x1="${X(t)}" x2="${X(t)}" y1="${top - 4}" y2="${H - 18}" stroke="var(--grid)"/><text class="d" x="${X(t)}" y="${H - 4}" text-anchor="middle">${t / 1000} s</text>`;
+    ms.forEach((m) => {
+      const y = top + m._lane * laneH, h = Math.max(4, Math.min(13, 4 + m.t * 1.2));
+      const tip = `<title>${esc(m.n)}, ${m.t} thread${m.t > 1 ? 's' : ''}: start ${s1(m.s)}, pickles ${s1(m.p)}, end ${s1(m.e)}</title>`;
+      g += `<rect x="${X(m.s)}" y="${y}" width="${Math.max(1, X(m.p) - X(m.s))}" height="${h}" fill="var(--active)">${tip}</rect>`;
+      g += `<rect x="${X(m.p)}" y="${y}" width="${Math.max(0.5, X(m.e) - X(m.p))}" height="${h}" fill="var(--pale)">${tip}</rect>`;
+      if (X(m.e) - X(m.s) > m.n.length * 5.6 + 6) g += `<text x="${X(m.s) + 3}" y="${y + Math.min(h, 11) - 1}" style="fill:var(--bg);font-size:9.5px" pointer-events="none">${esc(m.n)}</text>`;
+    });
+    g += `<line x1="${X(cur.wall)}" x2="${X(cur.wall)}" y1="${top - 8}" y2="${H - 18}" stroke="var(--warm)" stroke-width="2"/><text x="${Math.min(X(cur.wall) + 4, W - 50)}" y="${top - 10}" style="fill:var(--warm)">${s1(cur.wall)}</text>`;
+    $('gantt').innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Timeline of the ${esc(cur.token)} build">${g}</svg>`;
+  }
+  gantt();
+
+  // ---- each module's scaling
+  (function () {
+    const P = D.scale, W = 640, H = 240, L = 40, R = 12, T = 10, B = 34;
+    const xs = (ms) => L + (Math.log10(ms) - 2) / 2.8 * (W - L - R), ys = (v) => H - B - v / 6 * (H - T - B);
+    let g = '';
+    for (let v = 0; v <= 6; v += 2) g += `<line x1="${L}" x2="${W - R}" y1="${ys(v)}" y2="${ys(v)}" stroke="var(--grid)"/><text class="d" x="${L - 5}" y="${ys(v) + 4}" text-anchor="end">${v}\u00d7</text>`;
+    for (const ms of [100, 1000, 10000, 50000]) g += `<text class="d" x="${xs(ms)}" y="${H - B + 15}" text-anchor="middle">${ms / 1000} s</text>`;
+    g += `<text class="d" x="${(L + W - R) / 2}" y="${H - 4}" text-anchor="middle">the module's serial time</text>`;
+    P.forEach((m) => { g += `<circle cx="${xs(m.ms)}" cy="${ys(Math.min(m.s8, 6))}" r="4.5" fill="var(--active)" stroke="var(--panel)" stroke-width="1.5"><title>${esc(m.n)}: ${s1(m.ms)} serial, ${m.s8.toFixed(2)}\u00d7 at 8 threads</title></circle>`; });
+    $('scale').innerHTML = `<svg viewBox="0 0 ${W} ${H}" style="max-width:720px" role="img" aria-label="Speed-up at 8 threads rises with a module's serial time">${g}</svg>`;
+    $('scaleCap').textContent = synth ? 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Every module is a copy of the same code, so the spread is noise.' : 'Speed-up at 8 threads, one module at a time, against each module\u2019s serial time. Small modules gain little from threads, and even the largest stay near 5\u00d7. Hover a point for its module.';
+  })();
+
+  // ---- the models
+  const withSim = order.filter((t) => t.predicted);
+  const F = D.fit || { train: [] };
+  const role = (t) => F.train.includes(t.token) ? 'fitted' : /^pipe:1x|^trad:1x1/.test(t.token) || (!hasGraph && /^trad:1x/.test(t.token)) ? 'input' : 'held out';
+  const e = (t, p) => `${p > t.wall ? '+' : ''}${(100 * (p / t.wall - 1)).toFixed(0)}%`;
+  $('cal').innerHTML = `<table><thead><tr><th class="l">Cores</th><th class="l">Configuration</th><th>Measured</th><th>Original model, compiler curve</th><th>Original model, pekko curve</th><th>Refit</th><th class="l">Refit used it as</th></tr></thead><tbody>` +
+    withSim.map((t) => `<tr><td class="l">${workers(t)}</td><td class="l"><code>${esc(label(t))}</code></td><td>${s1(t.wall)}</td><td>${s1(t.predicted.compiler)} ${e(t, t.predicted.compiler)}</td><td>${s1(t.predicted.pekko)} ${e(t, t.predicted.pekko)}</td><td>${t.fit ? s1(t.fit) + ' ' + e(t, t.fit) : ''}</td><td class="l dim">${role(t)}</td></tr>`).join('') + '</tbody></table>';
+  $('calNote').textContent = synth ? synthCal(D) : `The original model takes each module's serial and pickle times from the baseline, then one curve from a single corpus. The refit uses each module's own speed-up from the one-at-a-time builds and charges for compiles as well as threads: load = 1 + ${F.a} (busy \u2212 1)${F.p === 1 ? '' : '^' + F.p} + ${F.c} (compiles \u2212 1)^${F.q}.`;
+  }
+  render();
+})();
+</script>

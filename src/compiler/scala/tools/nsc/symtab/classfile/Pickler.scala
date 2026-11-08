@@ -76,14 +76,17 @@ abstract class Pickler extends SubComponent {
             stats foreach pickle
           case ClassDef(_, _, _, _) | ModuleDef(_, _, _) =>
             val sym = tree.symbol
-            def shouldPickle(sym: Symbol) = currentRun.compiles(sym) && !currentRun.symData.contains(sym)
+            val symData = currentRun.symData // under its monitor with -Yparallel-typer: a unit per thread
+            def shouldPickle(sym: Symbol) = currentRun.compiles(sym) && !lockedIfConcurrent(symData)(symData.contains(sym))
             if (shouldPickle(sym)) {
               def pickle(noPrivates: Boolean, writeToSymData: Boolean, writeToSigFile: Boolean): Unit = {
                 val companion = sym.companionSymbol.filter(_.owner == sym.owner).filter(shouldPickle) // exclude companionship between package- and package object-owned symbols.
                 val pickle = Pickler.this.pickle(sym, companion, noPrivates)
                 if (writeToSymData) {
-                  currentRun.symData(sym) = pickle
-                  companion.andAlso(sym => currentRun.symData(sym) = pickle)
+                  lockedIfConcurrent(symData) {
+                    symData(sym) = pickle
+                    companion.andAlso(sym => symData(sym) = pickle)
+                  }
                   currentRun registerPickle sym
                 }
                 if (writeToSigFile)
@@ -122,13 +125,27 @@ abstract class Pickler extends SubComponent {
     }
 
     override def run(): Unit = {
-      try super.run()
+      try {
+        super.run()
+        if (pendingSigFiles ne null) // in unit order, as a serial run writes them
+          for (unit <- currentRun.units; files <- Option(pendingSigFiles.remove(unit)); (path, data) <- files)
+            sigWriter.foreach(_.writeFile(path, data))
+      }
       finally {
         closeSigWriter()
-        _index = null
-        _entries = null
+        val state = pickleState.get
+        state.index = null
+        state.entries = null
       }
     }
+
+    // With -Yparallel-typer the units may be pickled on several threads. A directory is written as they go (its
+    // writer is the back end's, made for that). A jar's entries are in the order they are written, so there each
+    // unit's files are kept and written by `run` in unit order.
+    private lazy val pendingSigFiles: java.util.concurrent.ConcurrentHashMap[CompilationUnit, mutable.ArrayBuffer[(String, Array[Byte])]] =
+      if (isParallelCompiler && sigWriter.isDefined && { val f = settings.pathFactory.getFile(settings.YpickleWrite.value); f.hasExtension("jar") || f.isVirtual })
+        new java.util.concurrent.ConcurrentHashMap
+      else null
 
     private def writeSigFile(sym: Symbol, pickle: PickleBuffer): Unit = {
       sigWriter.foreach { writer =>
@@ -136,7 +153,8 @@ abstract class Pickler extends SubComponent {
         val binaryClassName = if (sym.isModule) binaryName.stripSuffix(nme.MODULE_SUFFIX_STRING) else binaryName
         val relativePath = binaryClassName + ".sig"
         val data = pickle.bytes.take(pickle.writeIndex)
-        writer.writeFile(relativePath, data)
+        if (pendingSigFiles eq null) writer.writeFile(relativePath, data)
+        else pendingSigFiles.computeIfAbsent(currentUnit, _ => mutable.ArrayBuffer.empty) += ((relativePath, data))
       }
     }
     private def closeSigWriter(): Unit = {
@@ -154,14 +172,16 @@ abstract class Pickler extends SubComponent {
   type Entries = Array[AnyRef]
 
   final val InitEntriesSize = 256
-  private[this] var _index: Index = _
-  private[this] var _entries: Entries = _
+  // the index and the entries are reused from one pickle to the next: one pair per thread (-Yparallel-typer)
+  private final class PickleState { var index: Index = _; var entries: Entries = _ }
+  private[this] val pickleState = perThread(new PickleState)
 
   final def initPickle(root: Symbol, noPrivates: Boolean)(f: Pickle => Unit): Pickle = {
-    if (_index eq null)   { _index   = new Index(InitEntriesSize, mutable.HashMap.defaultLoadFactor) }
-    if (_entries eq null) { _entries = new Entries(InitEntriesSize) }
-    val pickle = new Pickle(root, _index, _entries, noPrivates)
-    try f(pickle) finally { pickle.close(); _index.clear(); fill(_entries, null) }
+    val state = pickleState.get
+    if (state.index eq null)   { state.index   = new Index(InitEntriesSize, mutable.HashMap.defaultLoadFactor) }
+    if (state.entries eq null) { state.entries = new Entries(InitEntriesSize) }
+    val pickle = new Pickle(root, state.index, state.entries, noPrivates)
+    try f(pickle) finally { pickle.close(); state.index.clear(); fill(state.entries, null) }
     pickle
   }
 
@@ -175,8 +195,11 @@ abstract class Pickler extends SubComponent {
 
     def close(): Unit = { index = null; entries = null }
 
+    // A type name and its term name share their characters in the name table, so this compares them where they are,
+    // not `sym.name.toTermName == rootName`: the conversion looks the term name up in the table, and this test runs
+    // for every owner of every symbol that a pickle meets (on several threads with -Yparallel-typer).
     private def isRootSym(sym: Symbol) =
-      sym.name.toTermName == rootName && sym.owner == rootOwner
+      sym.owner == rootOwner && { val n = sym.name; n.start == rootName.start && n.length == rootName.length }
 
     /** Usually `sym.owner`, except when `sym` is pickle-local, while `sym.owner` is not.
       *

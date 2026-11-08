@@ -17,7 +17,7 @@ import Mode._
 import scala.annotation._
 
 trait TypersTracking {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import typeDebug._
@@ -26,7 +26,9 @@ trait TypersTracking {
   // TODO - this only catches trees which go through def typed,
   // but there are all kinds of back ways - typedClassDef, etc. etc.
   // Funnel everything through one doorway.
-  var lastTreeToTyper: Tree = EmptyTree
+  // Per thread, in the universe's scratch state: written at every `typed`.
+  def lastTreeToTyper: Tree = { val t = global.scratch.lastTreeToTyper; if (t eq null) EmptyTree else t.asInstanceOf[Tree] }
+  def lastTreeToTyper_=(tree: Tree): Unit = global.scratch.lastTreeToTyper = tree
 
   def fullSiteString(context: Context): String = {
     def owner_long_s = (

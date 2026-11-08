@@ -258,7 +258,9 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             in.nextToken()
             done = true
             val tpeArg = convertToTypeId(t)
-            TypeApply(Select(gen.mkAttributedRef(definitions.PredefModule), nme.classOf), tpeArg :: Nil)
+            // (the symbols this parser asks `definitions` for that may still be lazy are asked for under the
+            // completion lock: a parser on another thread must take it before the monitor of a lazy val)
+            TypeApply(Select(underCompletionLock(gen.mkAttributedRef(definitions.PredefModule)), nme.classOf), tpeArg :: Nil)
           } else {
             Select(t, ident())
           }
@@ -457,7 +459,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       // assumed true unless we see public/private/protected
       var isPackageAccess = true
       var annots: List[Tree] = annots0
-      def addAnnot(sym: Symbol) = annots :+= New(sym.tpe)
+      def addAnnot(sym: => Symbol) = annots :+= New(underCompletionLock(sym.tpe))
 
       while (true) {
         in.token match {
@@ -1053,7 +1055,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           blankExpr),
         DefDef(
           Modifiers(Flags.JAVA | Flags.STATIC), nme.valueOf, List(),
-          List(List(makeParam("name", TypeTree(StringTpe)))), // as named by javac (JLS 8.9.3)
+          List(List(makeParam("name", TypeTree(underCompletionLock(StringTpe))))), // as named by javac (JLS 8.9.3)
           enumType,
           blankExpr))
       accept(RBRACE)

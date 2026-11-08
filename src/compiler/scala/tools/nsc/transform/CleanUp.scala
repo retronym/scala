@@ -659,7 +659,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       case _: ClassDef if genBCode.codeGen.CodeGenImpl.isJavaEntryPoint(tree.symbol, currentUnit, settings.mainClass.valueSetByUser.map(_.toString)) =>
         // collecting symbols for entry points here (as opposed to GenBCode where they are used)
         // has the advantage of saving an additional pass over all ClassDefs.
-        entryPoints += tree.symbol
+        lockedIfConcurrent(entryPoints)(entryPoints += tree.symbol)
         tree.transform(this)
 
       /* Transforms dynamic calls (i.e. calls to methods that are undefined
@@ -706,7 +706,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        * as a statement of the form "symbol = tree" to the beginning of the default
        * constructor. */
       case Template(parents, self, body) =>
-        localTyper = typer.atOwner(tree, currentClass)
+        localTyper = typerHere.atOwner(tree, currentClass)
         transformTemplate(tree)
 
       case Literal(c) if c.tag == ClazzTag =>

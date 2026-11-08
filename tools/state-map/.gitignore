@@ -1,0 +1,4 @@
+.bsp/
+.scala-build/
+state-map.json
+state-map.data.js

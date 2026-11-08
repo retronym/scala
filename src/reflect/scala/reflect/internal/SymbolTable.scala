@@ -229,19 +229,66 @@ abstract class SymbolTable extends macros.Universe
   private[this] var ph: Phase = NoPhase
   private[this] var per = NoPeriod
 
+  /** Whether the phase and period are kept per thread, in `Scratch`: in a compiler used from several threads at
+   *  once (`-Yparallel-typer`), each thread is at a phase of its own (`enteringPhase` on one thread must not move
+   *  another). Not in runtime reflection, which is always at one phase. Read while the universe is constructed:
+   *  until this field is initialized, the phase is the shared one, which is only set later.
+   */
+  private[this] val phasePerThread: Boolean = isCompilerUniverse && isConcurrentUniverse && isParallelCompiler
+
+  /** Is this a compiler whose typer runs on several threads (`-Yparallel-typer`)? Not a toolbox's `ReflectGlobal`,
+   *  which is a concurrent compiler universe used from one thread at a time, under the toolbox's lock. */
+  def isParallelCompiler: Boolean = false
+  /** Whether this is a compiler used from several threads at once (`-Yparallel-typer`). */
+  final def isConcurrentCompiler: Boolean = phasePerThread
+  // When they are kept per thread, the shared registers hold markers from here on, so that a serial compiler's `phase`
+  // and `currentPeriod` are a field read and a test, as small as the plain getters they replace.
+  if (phasePerThread) { ph = null; per = -1 }
+
   final def atPhaseStack: List[Phase] = phStack.toList
   final def phase: Phase = {
-    ph
+    val p = ph
+    if (p ne null) p else threadPhase
   }
+  // A worker's own phase and period are in its thread (`util.ScratchThread`, which says why this is spelled out here).
+  private[this] def threadPhase: Phase = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].ph
+    else otherThreadPhase
+  }
+  private[this] def otherThreadPhase: Phase = scratch.ph
 
   def atPhaseStackMessage = atPhaseStack match {
     case Nil    => ""
     case ps     => ps.reverseIterator.map("->" + _).mkString("(", " ", ")")
   }
 
+  /** Has any thread been at a phase with flat classes in this universe? Until one has, a symbol's name and owner
+   *  and a scope's entries need not ask which phase this thread is at, a lookup of the thread's scratch state in a
+   *  concurrent compiler, to learn that it is not such a phase. Never reset. Plain: a thread that moves to such a phase
+   *  writes it first, and a thread that has not moved to one need not see the write.
+   */
+  private[this] var _flatClassesSeen = false
+  final def flatClassesSeen: Boolean = _flatClassesSeen
+
   final def phase_=(p: Phase): Unit = {
-    ph = p
-    per = period(currentRunId, p.id)
+    if (!_flatClassesSeen && p.flatClasses) _flatClassesSeen = true
+    if (phasePerThread) {
+      val s = scratch
+      s.checkOwner()
+      val pr = period(currentRunId, p.id)
+      s.ph = p
+      s.per = pr
+      val t = Thread.currentThread
+      if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) {
+        val st = t.asInstanceOf[util.ScratchThread]
+        st.ph = p
+        st.per = pr
+      }
+    } else {
+      ph = p
+      per = period(currentRunId, p.id)
+    }
   }
   final def pushPhase(ph: Phase): Phase = {
     val current = phase
@@ -271,8 +318,15 @@ abstract class SymbolTable extends macros.Universe
   /** The current period. */
   final def currentPeriod: Period = {
     //assert(per == (currentRunId << 8) + phase.id)
-    per
+    val p = per
+    if (p >= 0) p else threadPeriod
   }
+  private[this] def threadPeriod: Period = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].per
+    else otherThreadPeriod
+  }
+  private[this] def otherThreadPeriod: Period = scratch.per
 
   /** The phase associated with given period. */
   final def phaseOf(period: Period): Phase = phaseWithId(phaseId(period))
@@ -320,23 +374,34 @@ abstract class SymbolTable extends macros.Universe
   def slowButSafeEnteringPhaseNotLaterThan[T](target: Phase)(op: => T): T =
     if (isCompilerUniverse) enteringPhaseNotLaterThan(target)(op) else op
 
+  // `nextFrom(pid)` is the list's head (`pid == NoPhase.id`) when no info transformer is installed at or after `pid`:
+  // always so in a run that stops before the first of them (`-Ystop-after:typer`, `:pickler`). Nothing can then have
+  // changed between the two phases. Reading the head as a transformer at phase 0 that changes base classes made every
+  // switch between the namer's phase (where a completer runs) and the typer's invalidate the infos and the base type
+  // sequences and base classes of every class, which were then computed again. A period at `NoPhase` itself does
+  // start at the head, with every transformer after it: that case stays as it was.
   final def isValid(period: Period): Boolean =
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) nextFrom(pid).pid >= phase.id
-      else nextFrom(phase.id).pid >= pid
+      val cur = phase.id
+      val lo = if (cur > pid) pid else cur
+      val hi = if (cur > pid) cur else pid
+      val it = nextFrom(lo)
+      it.pid >= hi || (lo != NoPhase.id && it.pid == NoPhase.id)
     }
 
   final def isValidForBaseClasses(period: Period): Boolean = {
     @tailrec
     def noChangeInBaseClasses(it: InfoTransformer, limit: Phase#Id): Boolean = (
-      it.pid >= limit ||
+      it.pid >= limit || it.pid == NoPhase.id ||
       !it.changesBaseClasses && noChangeInBaseClasses(it.next, limit)
     )
     period != 0 && runId(period) == currentRunId && {
       val pid = phaseId(period)
-      if (phase.id > pid) noChangeInBaseClasses(nextFrom(pid), phase.id)
-      else noChangeInBaseClasses(nextFrom(phase.id), pid)
+      val cur = phase.id
+      val lo = if (cur > pid) pid else cur
+      val hi = if (cur > pid) cur else pid
+      lo == hi || lo != NoPhase.id && noChangeInBaseClasses(nextFrom(lo), hi)
     }
   }
 
@@ -408,7 +473,7 @@ abstract class SymbolTable extends macros.Universe
     private[this] var caches = List[WeakReference[Clearable]]()
     private[this] var javaCaches = List[JavaClearable[_]]()
 
-    def recordCache[T <: Clearable](cache: T): cache.type = {
+    def recordCache[T <: Clearable](cache: T): cache.type = synchronized {
       cache match {
         case jc: JavaClearable[_] =>
           javaCaches ::= jc
@@ -459,6 +524,10 @@ abstract class SymbolTable extends macros.Universe
     def newWeakMap[K, V]()        = recordCache(mutable.WeakHashMap.empty[K, V])
     def newMap[K, V]()            = recordCache(mutable.HashMap.empty[K, V])
     def newSet[K]()               = recordCache(mutable.HashSet.empty[K])
+    /** A map that a phase on the pool shares between its workers (`-Yparallel-typer`): each operation is atomic, and
+     *  its iteration order is not the serial map's. */
+    def newConcurrentMap[K, V](): mutable.Map[K, V] =
+      if (isConcurrentCompiler) recordCache(scala.collection.concurrent.TrieMap.empty[K, V]) else newMap[K, V]()
     def newWeakSet[K <: AnyRef]() = recordCache(WeakHashSet.empty[K])
 
     @nowarn("cat=deprecation")
@@ -508,6 +577,384 @@ abstract class SymbolTable extends macros.Universe
   /** Is this symbol table a part of a compiler universe?
    */
   def isCompilerUniverse = false
+
+  /** Is this universe used from several threads at once? Runtime reflection is.
+   *
+   *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
+   *  or one per thread, plain or atomic symbol ids, plain or synchronized interning. The batch
+   *  compiler gets the single-threaded ones and pays for the choice with a call through a field.
+   *  Must be a constant: it is read while the universe is constructed.
+   */
+  def isConcurrentUniverse = false
+
+  override protected def synchronizeNames: Boolean = isConcurrentUniverse
+
+  /** In a compiler used from several threads (`isConcurrentCompiler`), the lock under which every completion runs;
+   *  null otherwise. See `Symbol.info`.
+   */
+  final lazy val completionLock: util.CompletionLock =
+    if (!isConcurrentCompiler) null
+    else new util.CompletionLock(
+      cycle = { subject =>
+        reportWaitCycle(subject)
+        subject match {
+          case sym: Symbol => throw CyclicReference(sym, ErrorType) // the cycle a serial nesting would have met
+          case other       => throw new FatalError(s"-Yparallel-typer: a wait-for cycle through $other")
+        }
+      })
+
+  /** `-Dscalac.parallelTyper.debugCycles`: print a wait-for cycle that is about to be reported, with who holds what
+   *  and where the compiler's threads are. */
+  private[internal] def reportWaitCycle(subject: Any): Unit =
+    if (java.lang.Boolean.getBoolean("scalac.parallelTyper.debugCycles")) {
+      val relevant = "complete.*|typed[A-Z].*|.*Sig|isLockedHere|inferImplicit.*|typeParams|info|initialize|acquire|awaitKey|awaitCompletion.*|load.*"
+      def frames(stack: Array[StackTraceElement]) = stack.iterator.filter(_.getMethodName.matches(relevant)).take(40).mkString("    ", "\n    ", "")
+      val threads = Thread.getAllStackTraces.entrySet.toArray(new Array[java.util.Map.Entry[Thread, Array[StackTraceElement]]](0))
+      val others = threads.iterator.filter(e => (e.getKey ne Thread.currentThread) && e.getKey.getName.startsWith("scalac-"))
+        .map(e => s"  ${e.getKey.getName} ${e.getKey.getState}\n${frames(e.getValue)}").mkString("\n")
+      Console.err.println(s"[parallel-typer] wait cycle on $subject (${Thread.currentThread.getName}); holders: ${completionLock.holders}\n${frames(new Throwable().getStackTrace)}\n$others")
+    }
+
+  /** The root whose claim a completion of `sym` takes: the coarse root here; the compiler gives a source symbol its own. */
+  def completionRoot(sym: Symbol): AnyRef = util.CompletionLock.CoarseRoot
+
+  /** `body` holding the claim on `sym`'s completion root, in a concurrent compiler. */
+  @inline final def withCompletionClaim[T](sym: Symbol)(body: => T): T = {
+    val lock = completionLock
+    if (lock eq null) body
+    else lock.claim(completionRoot(sym), util.CompletionLock.completing, sym)(body)
+  }
+
+  /** A value of each thread in a concurrent compiler, else one value: for the scratch state of the typer
+   *  (caches and side channels kept in fields of the cake) that must be confined to a thread. Must be created after
+   *  this universe is constructed. */
+  final class PerThread[T <: AnyRef](init: () => T) {
+    private[this] val single: T = if (isConcurrentCompiler) null.asInstanceOf[T] else init()
+    /** In a concurrent compiler, this value's slot in each thread's `Scratch`, -1 otherwise. The `Scratch` holds the
+     *  values, so they live as long as it does: as long as its thread, or its universe. */
+    private[this] val slot: Int = if (isConcurrentCompiler) perThreadSlots.getAndIncrement() else -1
+    def get: T = if (slot < 0) single else scratch.perThreadValue(slot, init).asInstanceOf[T]
+  }
+  private[this] val perThreadSlots = new java.util.concurrent.atomic.AtomicInteger
+  final def perThread[T <: AnyRef](init: => T): PerThread[T] = new PerThread(() => init)
+
+  /** `body` holding `lock`'s monitor in a concurrent compiler, else `body`: for the monitors that `-Yparallel-typer`
+   *  puts on the typer's shared maps, which a serial compiler need not pay for. */
+  @inline final def lockedIfConcurrent[T](lock: AnyRef)(body: => T): T =
+    if (isConcurrentCompiler) lock.synchronized(body) else body
+
+  /** `body` under the completion lock, in a concurrent compiler. */
+  @inline final def underCompletionLock[T](body: => T): T = {
+    val lock = completionLock
+    if (lock eq null) body
+    else {
+      lock.acquire()
+      try body
+      finally lock.release()
+    }
+  }
+
+  /** The recursion guards of the type operations at one level of completion, with the undo log
+   *  of type constraints. Each operation fetches its frame once and keeps it in a local.
+   */
+  final class Frame {
+    private[this] var _next: Frame = null
+    /** The frame for a completion started from this one. Kept for reuse once allocated. */
+    def next: Frame = {
+      if (_next eq null) _next = new Frame
+      _next
+    }
+    /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
+     *  every call would be too expensive, and this recursion is rare. On a cycle, the caller decides
+     *  what the answer is. `enter` and `exit` keep hot paths free of closures.
+     */
+    final class RecursionGuard[K](threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[K] = null
+      def pending: mutable.HashSet[K] = {
+        if (_pending eq null) _pending = new mutable.HashSet[K]
+        _pending
+      }
+      /** False if `key` is already being computed. Otherwise the caller must call `exit`. */
+      def enter(key: K): Boolean = {
+        _depth += 1
+        _depth < threshold || pending.add(key) || { _depth -= 1; false }
+      }
+      def exit(key: K): Unit = {
+        if (_depth >= threshold) pending -= key
+        _depth -= 1
+      }
+    }
+
+    /** A `RecursionGuard` for subtype checks. A check must not allocate its key unless it is past
+     *  the threshold, and a cycle is remembered for the rest of the outermost check.
+     */
+    final class SubTypeGuard(threshold: Int) {
+      private[this] var _depth: Int = 0
+      def depth: Int = _depth
+      private[this] var _pending: mutable.HashSet[SubTypePair] = null
+      def pending: mutable.HashSet[SubTypePair] = {
+        if (_pending eq null) _pending = new mutable.HashSet[SubTypePair]
+        _pending
+      }
+      private[this] var _knownFalse: java.util.IdentityHashMap[Type, List[Type]] = null
+      def knownFalse: java.util.IdentityHashMap[Type, List[Type]] = {
+        if (_knownFalse eq null) _knownFalse = new java.util.IdentityHashMap[Type, List[Type]]
+        _knownFalse
+      }
+      private def isKnownFalse(tp1: Type, tp2: Type): Boolean =
+        (_knownFalse ne null) && !_knownFalse.isEmpty && { val ts = _knownFalse.get(tp1); ts != null && ts.contains(tp2) }
+      private def recordKnownFalse(tp1: Type, tp2: Type): Unit = { // see scala/bug#13119
+        val ts = knownFalse.get(tp1)
+        knownFalse.put(tp1, tp2 :: (if (ts != null) ts else Nil))
+      }
+
+      /** Enter a check with no key of its own, such as `isSameType`. */
+      def enter(): Unit = _depth += 1
+      def exit(): Unit = {
+        _depth -= 1
+        // Called on every top-level check, but the map is only populated for pathological recursive
+        // subtype checks. Guard the `clear()`, as `IdentityHashMap.clear` zeroes the entire table even when empty.
+        if (_depth == 0 && (_knownFalse ne null) && !_knownFalse.isEmpty) _knownFalse.clear()
+        // undoLog.clear() // too eager, breaks #3281, #3866
+      }
+
+      /** False if `tp1 <:< tp2` is already being checked or is known to be false, which is the answer
+       *  (see neg/t8146-no-finitary*). Otherwise the caller must call `exit`.
+       */
+      def enter(tp1: Type, tp2: Type): Boolean = {
+        enter()
+        val proceed =
+          if (_depth >= threshold) pending.add(SubTypePair(tp1, tp2)) || { recordKnownFalse(tp1, tp2); false }
+          else !isKnownFalse(tp1, tp2)
+        if (!proceed) exit()
+        proceed
+      }
+      def exit(tp1: Type, tp2: Type): Unit = {
+        if (_depth >= threshold) pending -= SubTypePair(tp1, tp2)
+        exit()
+      }
+    }
+
+    val subTypes = new SubTypeGuard(TypeConstants.DefaultLogThreshhold)
+    /** A log of type variable with their original constraints. Used in order
+     *  to undo constraints in the case of isSubType/isSameType failure.
+     */
+    val undoLog = new UndoLog
+    val baseTypes = new RecursionGuard[Type](TypeConstants.LogPendingBaseTypesThreshold)
+    val volatiles = new RecursionGuard[Symbol](TypeConstants.LogVolatileThreshold)
+    /** Memoizes `K`s and prevents recursion on them, for the duration of one operation. A key in
+     *  progress is recorded with a private placeholder, which a real result can't be mistaken for.
+     */
+    final class MemoGuard[K] {
+      private[this] val InProgress: Type = new Type {}
+      val results = new mutable.HashMap[K, Type]
+      /** The result for `key`, or `onCycle` if it is in progress, or `null` if neither. */
+      def lookup(key: K, onCycle: Type): Type = results.getOrElse(key, null) match {
+        case InProgress => onCycle
+        case r          => r
+      }
+      def isInProgress(key: K): Boolean = results.get(key).contains(InProgress)
+      def begin(key: K): Unit = results(key) = InProgress
+      def end(key: K, result: Type): Unit = results(key) = result
+    }
+
+    val lubs = new MemoGuard[(Depth, List[Type])]
+    val glbs = new MemoGuard[(Depth, List[Type])]
+    /** Whether an outermost `lub` or `glb` is in progress in this frame. It owns the tables above. */
+    var inLubOrGlb: Boolean = false
+    /** How many `glb`s of refinements are adding members, see `GlbLubs.globalGlbLimit`. */
+    var globalGlbDepth: Depth = Depth.Zero
+  }
+
+  /** The scratch state of the type operations of one thread, other than the guards in `frame`.
+   *
+   *  A universe used from one thread at a time (the compiler, a toolbox) has one instance; a
+   *  concurrent one has one per thread. Anything that must not be seen by an operation on another
+   *  thread belongs here, not in a field of `SymbolTable`: anything that is shared, such as caches,
+   *  does not.
+   */
+  final class Scratch {
+    /** The thread this belongs to, in a concurrent universe. A `Scratch` must never be kept in a field or a closure
+     *  that outlives the operation that fetched it (a completer or an annotation thunk can run on another thread):
+     *  `-Dscalac.debug.checkScratchOwner` checks it where the registers are written. */
+    val owner: Thread = Thread.currentThread
+    @inline def checkOwner(): Unit =
+      if (CheckScratchOwner && isConcurrentUniverse && (owner ne Thread.currentThread))
+        throw new IllegalStateException(s"the scratch state of $owner used on ${Thread.currentThread}")
+    /** The frame of the completion in progress on this thread. */
+    var frame: Frame = new Frame
+    /** In a concurrent compiler, the names this thread is showing for symbols while it renders a message. */
+    val shownNames = new java.util.HashMap[AnyRef, AnyRef]
+    /** In a concurrent compiler, `MethodSymbol.typeAsMemberOf`'s cache for this thread. */
+    val memberTypes = new java.util.HashMap[AnyRef, AnyRef]
+    /** Where this thread's reports go for now, if not to the run's reporter (`Global.withReporter`). */
+    var threadReporter: AnyRef = null
+    /** The permitted class this thread is checking, by sealed Java class (`ClassSymbol.permittedChildren`). */
+    val permittedCompleting = new java.util.IdentityHashMap[AnyRef, AnyRef](2)
+    /** The current skolemization level, needed for the algorithms
+     *  in isSameType, isSubType that do constraint solving under a prefix.
+     */
+    var skolemizationLevel: Int = 0
+    /** The current indentation string for traces */
+    var indent: String = ""
+    var toStringRecursions: Int = 0
+    val toStringSubjects = new mutable.HashSet[Type]
+    /** The recursion depth of locked symbols, see `-Yrecursion` */
+    var recursionTable = Map.empty[Symbol, Int]
+    /** The number of Namer completers in progress, see `Symbols.lockedCount` */
+    var lockedCount: Int = 0
+    /** The types whose stamped caches this thread is computing, in a concurrent compiler (`Types`' stamped caches):
+     *  the in-progress markers that the serial protocol keeps in the shared fields. */
+    var btsInProgress: List[AnyRef] = Nil
+    var parentsInProgress: List[AnyRef] = Nil
+    var baseClassesInProgress: List[AnyRef] = Nil
+    var underlyingInProgress: List[AnyRef] = Nil
+    /** The type symbols whose `tpe_*` this thread is computing, in a concurrent compiler. */
+    var tpeInProgress: List[AnyRef] = Nil
+    var lazyBtsInProgress: BtsInProgress = null
+    var boxPrimitives: Boolean = true
+    /** The most recent map of `Type.subst` on this thread, in a concurrent compiler (`Types.substTypeMapCache`). */
+    var substTypeMap: SubstTypeMap = null
+    /** Registers that the compiler writes on its hottest paths, here rather than in fields of the universe or of the
+     *  analyzer: a field of an object that every thread reads, written by every thread at each tree it makes or
+     *  types, keeps the cache line it is on, and the fields beside it, moving from core to core. */
+    /** The number of trees this thread has made; a tree's `id`. */
+    var nodeCount: Int = 0
+    /** The last tree handed to `Typer.typed` and the last typer context made, on this thread, for crash reports. */
+    var lastTreeToTyper: AnyRef = null
+    var lastSeenContext: AnyRef = null
+    /** The phase and period of this thread, when they are kept per thread (`phasePerThread`). */
+    var ph: Phase = NoPhase
+    var per: Period = NoPeriod
+
+    /** The values of this thread's `PerThread`s, by slot, made on first use. */
+    private[this] var perThreadValues: Array[AnyRef] = null
+    def perThreadValue(slot: Int, init: () => AnyRef): AnyRef = {
+      val vs = perThreadValues
+      if ((vs ne null) && slot < vs.length) {
+        val v = vs(slot)
+        if (v ne null) return v
+      }
+      newPerThreadValue(slot, init)
+    }
+    private def newPerThreadValue(slot: Int, init: () => AnyRef): AnyRef = {
+      if (perThreadValues eq null) perThreadValues = new Array[AnyRef](math.max(16, slot + 1))
+      else if (slot >= perThreadValues.length)
+        perThreadValues = java.util.Arrays.copyOf(perThreadValues, math.max(slot + 1, perThreadValues.length * 2))
+      val v = init()
+      perThreadValues(slot) = v
+      v
+    }
+
+    // Reusable instances of helpers with mutable state, one per level of reentrance. As the
+    // `Scratch` is confined to a thread, they are reused in runtime reflection too.
+    val findMembers = ReusableInstance(new FindMember)
+    val containsCollectors = ReusableInstance(new ContainsCollector(null))
+    val varianceInTypes = ReusableInstance(new varianceInType)
+    val substSymMaps = ReusableInstance(SubstSymMap())
+    val onlyChildAccumulators = ReusableInstance(new OnlyChildAccumulator)
+    val setChildrenPosAccumulators = ReusableInstance(new SetChildrenPosAccumulator)
+    val commonOwnerMaps = ReusableInstance(new CommonOwnerMap)
+
+    // Instances of the type maps and collectors that `TypeMaps` also offers as shared objects.
+    // They keep state in fields, but save and restore it on reentrance, so one per thread will do.
+    val erroneousCollector = new ErroneousCollector
+    val isDependentCollector = new IsDependentCollector
+    val isRelatableCollector = new IsRelatableCollector
+    val unrelatableCollector = new UnrelatableCollector
+    val wildcardExtrapolation = new wildcardExtrapolation
+    // OPT: hoist allocation of the collector and lambda out of the loop in `maxTypes`
+    val typeContainsTypeVarCollector = new FindTypeCollector(_.isInstanceOf[TypeVar])
+    val isWildCardOrNonGroundTypeVarCollector = new FindTypeCollector({
+      case tv: TypeVar => !tv.isGround
+      case t => t.isWildcard
+    })
+  }
+  private[this] final val CheckScratchOwner = java.lang.Boolean.getBoolean("scalac.debug.checkScratchOwner")
+  /** The one `Scratch` of a universe used from one thread at a time, once made; null in a concurrent one. Not
+   *  initialized in the constructor (`= _`): `scratch` can be called while the traits of the cake are initialized,
+   *  before this class's own fields are. */
+  private[this] var oneScratch: Scratch = _
+  /** The scratch states of a concurrent universe, once made; null in one used from one thread at a time. Published
+   *  without a fence: its fields are final. */
+  private[this] var perThreadScratches: PerThreadScratches = _
+  /** The scratch state of this thread. In a universe used from one thread at a time (the batch compiler), a field
+   *  read and a null test: no lazy val's flag and no virtual call. */
+  final def scratch: Scratch = {
+    val s = oneScratch
+    if (s ne null) s else threadScratch
+  }
+  private[this] def threadScratch: Scratch = {
+    val t = Thread.currentThread
+    if (t.isInstanceOf[util.ScratchThread] && (t.asInstanceOf[util.ScratchThread].scratchOwner eq this)) t.asInstanceOf[util.ScratchThread].scratch.asInstanceOf[Scratch]
+    else otherThreadScratch
+  }
+  private[this] def otherThreadScratch: Scratch = {
+    val p = perThreadScratches
+    if (p ne null) p.get else firstScratch()
+  }
+  private[this] def firstScratch(): Scratch = synchronized {
+    if (oneScratch ne null) oneScratch
+    else if (perThreadScratches ne null) perThreadScratches.get
+    else if (isConcurrentUniverse) {
+      perThreadScratches = new PerThreadScratches
+      perThreadScratches.get
+    } else {
+      oneScratch = new Scratch
+      oneScratch
+    }
+  }
+
+  /** One `Scratch` per thread. The universe holds them, weakly keyed by thread; a `ThreadLocal`
+   *  caches a weak reference for the fast path. Holding the `Scratch` itself in the `ThreadLocal`
+   *  would leak: its outer pointer reaches this universe and so the `ThreadLocal` key, so a
+   *  long-lived thread would keep every universe it ever used.
+   */
+  private final class PerThreadScratches {
+    private[this] val scratches = java.util.Collections.synchronizedMap(new java.util.WeakHashMap[Thread, Scratch])
+    private[this] val scratchRef = new ThreadLocal[java.lang.ref.WeakReference[Scratch]]
+    // The thread that first asks for a scratch state (the one that makes the universe, the driver's) runs the serial
+    // phases and the signatures pass: its scratch state is in a field, so that the parser, the namer and the phases
+    // after the typer pay a comparison, not a `ThreadLocal` lookup.
+    private[this] val firstThread: Thread = Thread.currentThread
+    private[this] var firstThreadScratch: Scratch = null
+    /** The state of a thread other than a worker of this universe (`threadScratch` has dealt with those). */
+    def get: Scratch = {
+      val t = Thread.currentThread
+      if (t eq firstThread) {
+        val s = firstThreadScratch
+        if (s ne null) return s
+      }
+      getSlow(t)
+    }
+    private def getSlow(thread: Thread): Scratch = thread match {
+      case t if t eq firstThread =>
+        val s = viaThreadLocal
+        firstThreadScratch = s
+        s
+      case t: util.ScratchThread if t.scratchOwner eq null =>
+        val s = viaThreadLocal
+        t.scratch = s
+        t.ph = s.ph
+        t.per = s.per
+        t.scratchOwner = SymbolTable.this
+        s
+      case _ => viaThreadLocal
+    }
+    private def viaThreadLocal: Scratch = {
+      val ref = scratchRef.get
+      val s = if (ref eq null) null else ref.get
+      if (s ne null) s else newScratch()
+    }
+    private def newScratch(): Scratch = {
+      val s = new Scratch
+      scratches.put(Thread.currentThread, s)
+      scratchRef.set(new java.lang.ref.WeakReference(s))
+      s
+    }
+  }
 
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)

@@ -296,14 +296,13 @@ trait Positions extends api.Positions { self: SymbolTable =>
    *  @param  parent The parent of the child trees to position. All children must be positionable.
    */
   private def setChildrenPos(pos: Position, parent: Tree): Unit = try {
-    setChildrenPosAccumulator.using(_.set(pos, parent))
+    scratch.setChildrenPosAccumulators.using(_.set(pos, parent))
   } catch {
     case ex: Exception =>
       inform("error while set children pos "+pos+" of "+parent.children)
       throw ex
   }
-  private val setChildrenPosAccumulator = ReusableInstance[SetChildrenPosAccumulator](new SetChildrenPosAccumulator, enabled = isCompilerUniverse)
-  private final class SetChildrenPosAccumulator extends (Tree => Boolean) {
+  private[internal] final class SetChildrenPosAccumulator extends (Tree => Boolean) {
     private[this] val wrappingPosAccumulator = new WrappingPosAccumulator
     private[this] var pos: Position = _
     def set(pos: Position, parent: Tree): Unit = {
@@ -374,6 +373,8 @@ trait Positions extends api.Positions { self: SymbolTable =>
     var pos: Position
   }
   protected[this] lazy val posAssigner: PosAssigner = new DefaultPosAssigner
+  // In a concurrent compiler, one per thread: `pos` is the argument of the `atPos` in progress.
+  private[this] lazy val posAssigners = perThread[PosAssigner](new DefaultPosAssigner)
 
   protected class DefaultPosAssigner extends PosAssigner {
     var pos: Position = _
@@ -402,8 +403,9 @@ trait Positions extends api.Positions { self: SymbolTable =>
    */
   def atPos[T <: Tree](pos: Position)(tree: T): tree.type = {
     if (useOffsetPositions || !pos.isOpaqueRange) {
-      posAssigner.pos = pos
-      posAssigner.traverse(tree)
+      val pa = if (isConcurrentCompiler) posAssigners.get else posAssigner
+      pa.pos = pos
+      pa.traverse(tree)
     }
     else if (!tree.isEmpty && tree.canHaveAttrs && tree.pos == NoPosition) {
       tree.setPos(pos)

@@ -25,7 +25,7 @@ import scala.util.chaining._
  *  @author Martin Odersky
  */
 trait Namers extends MethodSynthesis {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -63,6 +63,13 @@ trait Namers extends MethodSynthesis {
 
     import NamerErrorGen._
     val typer = newTyper(context)
+
+    /** The typer of a completer that types a tree in this namer's own context (an import's qualifier, a self type).
+     *  Under -Yparallel-typer, a typer on a child context: the completer runs on whichever thread forces the symbol,
+     *  while another thread completes a member of this namer and makes its context from this one (`createNamer`),
+     *  copying the mode and reporter that typing sets for the duration of an operation (`withMode`, `inSilentMode`).
+     */
+    private def completerTyper: Typer = if (isConcurrentCompiler) newTyper(context.make()) else typer
 
     private lazy val innerNamer =
       if (isTemplateContext(context)) createInnerNamer() else this
@@ -305,7 +312,15 @@ trait Namers extends MethodSynthesis {
       val sym = enterInScope(assignMemberSymbol(tree))
       sym setInfo completerOf(tree)
       // log("[+info] " + sym.fullLocationString)
+      noteInferredImplicit(sym, tree)
       sym
+    }
+
+    /** See `ImplicitSearch.isValid`. */
+    def noteInferredImplicit(sym: Symbol, tree: MemberDef): Unit = tree match {
+      case vd: ValOrDefDef if vd.mods.isImplicit && vd.tpt.isEmpty && settings.YimplicitEligibilityByPosition.value =>
+        sym.updateAttachment(InferredImplicitType)
+      case _ =>
     }
 
     def createMethod(accessQual: MemberDef, name: TermName, pos: Position, flags: Long): MethodSymbol = {
@@ -749,6 +764,7 @@ trait Namers extends MethodSynthesis {
             } else completerOf(tree)
 
           sym setInfo completer
+          noteInferredImplicit(sym, tree)
       }
       if (mexists(tree.vparamss)(_.mods.hasDefault))
         enterDefaultGetters(tree.symbol, tree, tree.vparamss, tree.tparams)
@@ -1040,7 +1056,7 @@ trait Namers extends MethodSynthesis {
     def selfTypeCompleter(tree: Tree) = new SelfTypeCompleter(tree)
     class SelfTypeCompleter(tree: Tree) extends TypeCompleterBase(tree) {
       override def completeImpl(sym: Symbol): Unit = {
-        val selftpe = typer.typedType(tree).tpe
+        val selftpe = completerTyper.typedType(tree).tpe
         sym setInfo {
           if (selftpe.typeSymbol isNonBottomSubClass sym.owner) selftpe
           else intersectionType(List(sym.owner.tpe, selftpe))
@@ -1497,6 +1513,9 @@ trait Namers extends MethodSynthesis {
         checkDependencies check vparamSymss
       }
 
+      if (meth.isConstructor && !meth.isJavaDefined && methOwner.isNonBottomSubClass(AnnotationClass))
+        mforeach(vparamss)(vparam => if (vparam.symbol.hasDefault) addDefaultArgAnnotation(vparam))
+
       val resTp = {
         // When return type is inferred, we don't just use resTpFromOverride -- it must be packed and widened.
         // Here, C.f has type String (unless -Xsource-features:infer-override):
@@ -1693,6 +1712,22 @@ trait Namers extends MethodSynthesis {
       }
     }
 
+    /** Add `@defaultArg` to a parameter of a constructor of an annotation class. `NamesDefaults.addDefaults` reads it
+     *  to insert the default expression into a use of the annotation. Adding it here and not when the typer reaches the
+     *  class means that a use sees it however the sources are ordered, as it does for a class loaded from a classfile.
+     *
+     *  The annotation is lazy because typing the default can refer to anything in the run, including uses of annotations.
+     */
+    private def addDefaultArgAnnotation(vparam: ValDef): Unit = {
+      var typing = false
+      def computeInfo = enteringTyper {
+        if (typing) throw new TypeError(vparam.rhs.pos, s"recursive default argument: annotation parameter ${vparam.name} is needed to type its own default")
+        typing = true
+        typer.defaultArgAnnotation(vparam)
+      }
+      vparam.symbol.initialize.addAnnotation(AnnotationInfo.lazily(DefaultArgAttr, computeInfo))
+    }
+
     private object DefaultGetterNamerSearch {
       def apply(c: Context, meth: Symbol, initCompanionModule: Boolean) = if (meth.isConstructor) new DefaultGetterInCompanion(c, meth, initCompanionModule)
       else new DefaultMethodInOwningScope(c, meth)
@@ -1819,6 +1854,9 @@ trait Namers extends MethodSynthesis {
     private def safeNextOverriddenSymbol(sym: Symbol, schema: Type = ErrorType, immediate: Boolean = false): Symbol = {
       val savedInfo = sym.rawInfo
       val savedFlags = sym.rawflags
+      // In a concurrent compiler, `sym` need not be the symbol being completed (a field's completion asks this of its
+      // getter). The mark makes another thread wait instead of reading `schema` as the finished info of `sym`.
+      val savedMark = if (isConcurrentCompiler) sym.markCompleting() else null
       try {
         sym setInfo schema
         // pick the overridden symbol with narrowest type; dotty uses intersection
@@ -1838,6 +1876,7 @@ trait Namers extends MethodSynthesis {
       } finally {
         sym setInfo savedInfo // setInfo resets the LOCKED flag, so restore saved flags as well
         sym.rawflags = savedFlags
+        if (isConcurrentCompiler) sym.unmarkCompleting(savedMark)
       }
     }
 
@@ -1879,6 +1918,7 @@ trait Namers extends MethodSynthesis {
 
     private def importSig(imp: Import) = {
       val Import(expr, selectors) = imp
+      val typer = completerTyper
       val expr1 = typer.typedQualifier(expr)
 
       if (expr1.isErrorTyped)
@@ -1896,7 +1936,6 @@ trait Namers extends MethodSynthesis {
         val newImport = treeCopy.Import(imp, expr1, selectors)
         checkSelectors(newImport)
         context.unit.transformed(imp) = newImport
-        registerImport(context, newImport)
         // copy symbol and type attributes back into old expression
         // so that the structure builder will find it.
         expr setSymbol expr1.symbol setType expr1.tpe

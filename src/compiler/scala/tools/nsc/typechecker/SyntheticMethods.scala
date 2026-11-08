@@ -38,7 +38,7 @@ import symtab.Flags._
  *    protected def writeReplace(): AnyRef
  */
 trait SyntheticMethods extends ast.TreeDSL {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -60,10 +60,14 @@ trait SyntheticMethods extends ast.TreeDSL {
   }
   private lazy val renamedCaseAccessors = perRunCaches.newMap[Symbol, mutable.Map[TermName, TermName]]()
   /** Does not force the info of `caseclazz` */
+  // The monitor is for the local case classes of different units, whose companions complete on the pool. A top-level or
+  // member one under -Yparallel-typer has its companion completed with the class headers (`serializableCompanions`),
+  // before any template is typed, so `unapply` is built before this has an entry for it, and which name it selects does
+  // not depend on the order of the units as it does in serial.
   final def caseAccessorName(caseclazz: Symbol, paramName: TermName) =
-    (renamedCaseAccessors get caseclazz).fold(paramName)(_(paramName))
+    lockedIfConcurrent(renamedCaseAccessors)((renamedCaseAccessors get caseclazz).fold(paramName)(_(paramName)))
   final def clearRenamedCaseAccessors(caseclazz: Symbol): Unit = {
-    renamedCaseAccessors -= caseclazz
+    lockedIfConcurrent(renamedCaseAccessors)(renamedCaseAccessors -= caseclazz)
   }
 
   /** Add the synthetic methods to case classes.
@@ -465,8 +469,10 @@ trait SyntheticMethods extends ast.TreeDSL {
         // TODO: shouldn't the next line be: `original resetFlag CASEACCESSOR`?
         ddef.symbol resetFlag CASEACCESSOR
         lb += logResult("case accessor new")(newAcc)
-        val renamedInClassMap = renamedCaseAccessors.getOrElseUpdate(clazz, mutable.Map() withDefault(x => x))
-        renamedInClassMap(original.name.toTermName) = newAcc.symbol.name.toTermName
+        lockedIfConcurrent(renamedCaseAccessors) {
+          val renamedInClassMap = renamedCaseAccessors.getOrElseUpdate(clazz, mutable.Map() withDefault(x => x))
+          renamedInClassMap(original.name.toTermName) = newAcc.symbol.name.toTermName
+        }
       }
 
       (lb ++= templ.body ++= synthesize()).toList

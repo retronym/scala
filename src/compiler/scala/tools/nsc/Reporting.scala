@@ -155,15 +155,20 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
           Action.Warning
       }
 
-    def clearSuppressionsComplete(sourceFile: SourceFile): Unit = suppressionsComplete -= repSrc(sourceFile)
+    // -Yparallel-typer: the state of this object is read and written by every typer thread, under its monitor.
+    // Messages are rendered before the monitor is taken (rendering can complete symbols, so wait for the completion
+    // lock), and nothing under it completes symbols; the reporter's monitor is taken inside this one, never around it.
 
-    def addSuppression(sup: Suppression): Unit = {
+    def clearSuppressionsComplete(sourceFile: SourceFile): Unit = synchronized { suppressionsComplete -= repSrc(sourceFile) }
+
+    def addSuppression(sup: Suppression): Unit = synchronized {
       val source = sup.annotPos.source
       suppressions.getOrElseUpdate(repSrc(source), mutable.ListBuffer.empty) += sup
     }
 
-    def suppressionExists(pos: Position): Boolean =
+    def suppressionExists(pos: Position): Boolean = synchronized {
       suppressions.getOrElse(repSrc(pos.source), Nil).exists(_.annotPos.point == pos.point)
+    }
 
     def runFinished(hasErrors: Boolean): Unit = {
       // report suspended messages (in case the run finished before typer)
@@ -182,7 +187,21 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       textEdits.clear()
     }
 
-    def reportSuspendedMessages(unit: CompilationUnit): Unit = {
+    /** For sources parsed at the same time: keep their suspended messages in the order of `sources`, in which a
+     *  serial parser would have met them (the run reports them in that order if it ends before the typer).
+     */
+    def suspendInOrderOf[T](sources: List[SourceFile])(body: => T): T = {
+      synchronized(sources.foreach(s => suspendedMessages.getOrElseUpdate(repSrc(s), mutable.LinkedHashSet.empty)))
+      try body
+      finally synchronized(suspendedMessages.filterInPlace((_, ms) => ms.nonEmpty))
+    }
+
+    /** Forget the messages suspended for `source`, which is parsed again from the start. */
+    def clearSuspendedMessages(source: SourceFile): Unit = synchronized {
+      suspendedMessages.get(repSrc(source)).foreach(_.clear())
+    }
+
+    def reportSuspendedMessages(unit: CompilationUnit): Unit = synchronized {
       val src = repSrc(unit.source)
       // sort suppressions. they are not added in any particular order because of lazy type completion
       for (sups <- suppressions.get(src))
@@ -237,10 +256,11 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       }
     }
 
-    def shouldSuspend(warning: Message): Boolean =
+    def shouldSuspend(warning: Message): Boolean = synchronized {
       warning.pos.source != NoSourceFile && !suppressionsComplete(repSrc(warning.pos.source))
+    }
 
-    def issueIfNotSuppressed(warning: Message): Unit =
+    def issueIfNotSuppressed(warning: Message): Unit = synchronized {
       if (shouldSuspend(warning))
         suspendedMessages.getOrElseUpdate(repSrc(warning.pos.source), mutable.LinkedHashSet.empty) += warning
       else nowarnAction(warning) match {
@@ -250,6 +270,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
           issueWarning(warning, verbose = true)
         case _ =>
       }
+    }
 
     private def summarize(action: Action, category: WarningCategory): Unit = {
       def rerunMsg: String = {
@@ -330,6 +351,23 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
     }
 
     private[this] var reportedFeature = Set[Symbol]()
+    // the features (`scala.language.x`) that have been explained, by name: the parallel typer's reporter has the message only
+    private[this] var explainedFeatures = Set[String]()
+    /** Set while the parallel typer's workers run. */
+    @volatile var deferFeatureExplanations = false
+    /** The message of a feature warning made while the parallel typer's workers ran, as it is to be issued: with its
+     *  explanation if it is the first of its feature to be issued, else without. */
+    def explainFeature(msg: String): String = synchronized {
+      val start = msg.indexOf(Reporting.featureExplanationStart)
+      val end = if (start < 0) -1 else msg.indexOf(Reporting.featureExplanationEnd, start)
+      if (end < 0) msg
+      else {
+        val nameStart = start + Reporting.featureExplanationStart.length
+        val fqname = msg.substring(nameStart, msg.indexOf('\'', nameStart))
+        if (!explainedFeatures(fqname)) { explainedFeatures += fqname; msg }
+        else msg.substring(0, start - 1) + msg.substring(end + Reporting.featureExplanationEnd.length)
+      }
+    }
     protected def featureReported(featureTrait: Symbol): Unit = reportedFeature += featureTrait
 
     // we don't have access to runDefinitions here, so mapping from strings instead of feature symbols
@@ -347,16 +385,26 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
     }
 
     def featureWarning(pos: Position, featureName: String, featureDesc: String, featureTrait: Symbol, construct: => String = "", required: Boolean, site: Symbol): Unit = {
+      // rendered outside the monitor
+      val constructString = construct
+      val siteString = siteName(site)
+      val category = featureCategory(featureTrait.nameString)
+      featureWarning0(pos, featureName, featureDesc, featureTrait, constructString, required, siteString, category)
+    }
+    private def featureWarning0(pos: Position, featureName: String, featureDesc: String, featureTrait: Symbol, construct: String, required: Boolean, site: String, category: WarningCategory): Unit = synchronized {
       val req     = if (required) "needs to" else "should"
       val fqname  = s"scala.language.$featureName"
+      // While the parallel typer's workers run, which occurrence is the first is a matter of arrival: every one is
+      // explained, and the buffering reporter keeps the explanation of the first in its fixed order (`explainFeature`).
+      val deferred = deferFeatureExplanations
       val explain =
-        if (reportedFeature contains featureTrait) ""
+        if ((reportedFeature contains featureTrait) || explainedFeatures(fqname)) ""
         else sm"""|
-                  |This can be achieved by adding the import clause 'import $fqname'
+                  |${Reporting.featureExplanationStart}$fqname'
                   |or by setting the compiler option -language:$featureName.
                   |See the Scaladoc for value $fqname for a discussion
-                  |why the feature $req be explicitly enabled."""
-      reportedFeature += featureTrait
+                  |why the feature $req ${Reporting.featureExplanationEnd}"""
+      if (!deferred) { reportedFeature += featureTrait; explainedFeatures += fqname }
 
       val msg = s"$featureDesc $req be enabled\nby making the implicit value $fqname visible.$explain".replace("#", construct)
       // on postfix error, include interesting infix warning
@@ -364,7 +412,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       if (required) {
         val amended = if (isXfix) s"$msg\n${suspendedMessages(repSrc(pos.source)).filter(pos includes _.pos).map(_.msg).mkString("\n")}" else msg
         reporter.error(pos, amended)
-      } else warning(pos, msg, featureCategory(featureTrait.nameString), site)
+      } else warning(pos, msg, category, site)
     }
 
     // Used in the optimizer where we don't have symbols, the site string is created from the class internal name and method name.
@@ -388,7 +436,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       CodeAction(title, pos, newText, desc, expected.forall(e => e._1 == e._2.source.sourceAt(pos)))
 
     // Remember CodeActions that match `-quickfix` and report the error through the reporter
-    def error(pos: Position, msg: String, actions: List[CodeAction]): Unit = {
+    def error(pos: Position, msg: String, actions: List[CodeAction]): Unit = synchronized {
       val quickfixed = {
         if (registerErrorTextEdit(pos, msg, actions)) s"[rewritten by -quickfix] $msg"
         else if (actions.exists(_.edits.nonEmpty) && !settings.quickFixSilent) s"$msg [quickfixable]"
@@ -524,6 +572,9 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
 }
 
 object Reporting {
+  // the ends of a feature warning's explanation, for `PerRunReporting.explainFeature`
+  final val featureExplanationStart = "This can be achieved by adding the import clause 'import "
+  final val featureExplanationEnd = "be explicitly enabled."
   sealed trait Message {
     def pos: Position
     def msg: String

@@ -1,0 +1,376 @@
+# Declared overrides of the rules, one per field: owner<TAB>field<TAB>kind<TAB>protection<TAB>note
+# owner and field as in state-map.json's `key` (owner#field); an empty kind or protection keeps the rules' answer.
+# The note is shown in worklist.md as the suggested discipline. Source annotations (@scratch, @guardedBy, ...) are the
+# follow-up; this file stands in for them while other worktrees edit the compiler's sources.
+internal.Types.PerRunUniques	uniques		batch-only	The batch alternative of `SymbolTable.uniques`, chosen only when `!isConcurrentUniverse`; a concurrent compiler universe gets `SynchronizedPerRunUniques`.
+internal.Types.PerRunUniques	uniqueRunId		batch-only	As `uniques`: the batch alternative.
+internal.Symbols.Symbol	_rawflags			`LOCKED` is the completion black hole, and other flags are set with `|=` from many places: an owner-aware completion lock for `LOCKED`, and atomic flag updates (a `VarHandle` CAS) once the symbol is published.
+internal.SymbolTable	ph			The current phase, read by every `info` and period check: per-thread (Scratch), with `enteringPhase`/`exitingPhase` saving and restoring it per thread.
+internal.SymbolTable	per			The period cached from `ph` and the run id: moves with `ph`, so per-thread too.
+nsc.Global	globalPhase			The run's phase cursor: keep it fixed while the parallel typer runs, written only between phases on the driver thread.
+internal.Names	_chrs			Grown by `enterChars` under `nameLock` when `synchronizeNames`, but `Name.toString` and `chrs` read it without the lock: a reader can see a replaced array mid-copy. Publish the grown array with a volatile write, or read under the lock.
+internal.Scopes.Scope	elemsCache			Rebuilt on read and nulled by `enter`: a benign race only if read once into a local and the scope is frozen once its owner's completion publishes it.
+# -Yparallel-typer (stage 1): protection of the fields the parallel typer touches or relies on. Protections: thread-confined, synchronized, concurrent, volatile, atomic, completion-lock (under the completion lock, or reached only inside a completion), pre-pass (written by source completers, which run serially before the workers), publication (published after its fields, with a fence), thread-safe-holder (one immutable holder), benign-race (idempotent or diagnostic only), driver (written by the driver outside the parallel phase), rejected-option (only with an option that -Yparallel-typer rejects), batch-only.
+internal.Symbols.Symbol	_rawflags		atomic	-Yparallel-typer: the read-modify-writes (`setFlag`, `resetFlag`, `LOCKED`) are compare-and-sets through `SymbolFlagsHandle` in a concurrent compiler; the blind stores are made by the creator or under the completion lock.
+internal.Symbols.Symbol	_validTo		completion-lock	Written by completion (under the completion lock) and by `rawInfo`'s phase adaptation (idempotent within the typer's phases); `_completingThread` makes a provisional value invisible to other threads.
+internal.Symbols.Symbol	infos		completion-lock	As `_validTo`.
+internal.Symbols	_lockingTrace		rejected-option	Only with -Vcyclic, which -Yparallel-typer rejects.
+internal.Symbols	originalOwnerMap		synchronized	Every access under the map's monitor.
+internal.Symbols.TypeSymbol	tpeCache		completion-lock	A concurrent compiler takes the fast path only for a value that is neither null nor the `NoType` cycle marker; the update runs under the completion lock.
+internal.Symbols.TypeSymbol	tpePeriod		completion-lock	As `tpeCache`.
+internal.Symbols.TypeSymbol	tyconCache		benign-race	Value then run id; the value is an interned `TypeRef`, so two threads store the same one.
+internal.Symbols.TypeSymbol	tyconRunId		benign-race	As `tyconCache`.
+internal.Symbols.ClassSymbol	thisTypeCache		benign-race	Value then stamp; the value is an interned `ThisType`.
+internal.Symbols.ClassSymbol	thisTypePeriod		benign-race	As `thisTypeCache`.
+internal.Symbols.ClassSymbol	thissym		pre-pass	Set by the class's completion (the signatures pre-pass, or under the completion lock).
+internal.Symbols.ClassSymbol	childSet		pre-pass	Children are added by the namer for subclasses in the same file (the pre-pass) and by Java permitted subclasses (a loader, under the completion lock).
+internal.Symbols.ModuleClassSymbol	typeOfThisCache		benign-race	Value then stamp; an interned `SingleType`.
+internal.Symbols.ModuleClassSymbol	typeOfThisPeriod		benign-race	As `typeOfThisCache`.
+internal.Symbols.MethodSymbol	mtpeRunId		batch-only	No cache in a concurrent compiler (`typeAsMemberOf`).
+internal.Symbols.MethodSymbol	mtpePre		batch-only	As `mtpeRunId`.
+internal.Symbols.MethodSymbol	mtpeInfo		batch-only	As `mtpeRunId`.
+internal.Symbols.MethodSymbol	mtpeResult		batch-only	As `mtpeRunId`.
+internal.Symbols.Symbol	isOverridingSymbolCache		benign-race	One `Int` carrying result and run id.
+internal.Symbols.Symbol	javaBinaryNameStringCache		benign-race	An idempotent `String`.
+internal.Symbols.ModuleClassSymbol	moduleSymbol		pre-pass	Set when the module is entered (namer, serial) or loaded (under the completion lock).
+internal.Types.CompoundType	baseTypeSeqCache		completion-lock	The whole slow path, the read after the definition included, under the completion lock; the fast path accepts no in-progress marker.
+internal.Types.CompoundType	baseTypeSeqPeriod		completion-lock	As `baseTypeSeqCache`.
+internal.Types.CompoundType	baseClassesCache		completion-lock	As `baseTypeSeqCache`.
+internal.Types.CompoundType	baseClassesPeriod		completion-lock	As `baseTypeSeqCache`.
+internal.Types.TypeRef	baseTypeSeqCache		completion-lock	As `CompoundType.baseTypeSeqCache`.
+internal.Types.TypeRef	baseTypeSeqPeriod		completion-lock	As `CompoundType.baseTypeSeqCache`.
+internal.Types.TypeRef	parentsCache		completion-lock	As `CompoundType.baseTypeSeqCache`.
+internal.Types.TypeRef	parentsPeriod		completion-lock	As `CompoundType.baseTypeSeqCache`.
+internal.Types.SingleType	underlyingCache		completion-lock	As `CompoundType.baseTypeSeqCache`; the fast path rejects the initial `NoType` in a concurrent compiler.
+internal.Types.SingleType	underlyingPeriod		completion-lock	As `underlyingCache`.
+internal.Types.ClassInfoType	refs		completion-lock	`expansiveRefs` runs under the completion lock in a concurrent compiler.
+internal.Types.ClassInfoType	state		completion-lock	As `refs`.
+internal.Types.NonClassTypeRef	relativeInfoCache		benign-race	Value before its two stamps; a stale value with new stamps is the same value within the typer's phases (no info transformer).
+internal.Types.NonClassTypeRef	relativeInfoCacheValidForPeriod		benign-race	As `relativeInfoCache`.
+internal.Types.NonClassTypeRef	relativeInfoCacheValidForSymInfo		benign-race	As `relativeInfoCache`.
+internal.Types.RefinedType	normalized		benign-race	Two threads may make two equal normal forms; nothing relies on their identity.
+internal.Types.ModuleTypeRef	narrowedCache		benign-race	An interned `SingleType`.
+internal.Types.SingleType	trivial		benign-race	One `Int`, idempotent.
+internal.Types.SuperType	trivial		benign-race	One `Int`, idempotent.
+internal.Types.TypeRef	trivial		benign-race	One `Int`, idempotent.
+internal.Types.MethodType	trivial		benign-race	One `Int`, idempotent.
+internal.Types.MethodType	isdepmeth		benign-race	One `Int`, idempotent.
+internal.Types.substTypeMapCache$	cached		batch-only	Not used in a concurrent compiler (a new map per call).
+internal.Types	explainSwitch		driver	`-explaintypes`, set before the run.
+internal.BaseTypeSeqs.BaseTypeSeq	pending		completion-lock	A lazy element is evaluated under the completion lock in a concurrent compiler.
+internal.BaseTypeSeqs.BaseTypeSeq	elems		completion-lock	As `pending`; an element is stored after its mark is cleared.
+internal.Scopes.Scope	elemsCache		thread-safe-holder	One holder (head, list, size), valid while the head is unchanged; entries are published with a release fence after their fields.
+internal.Scopes.Scope	hashtable		publication	Filled before it is published (`createHash`); buckets are prepended after a release fence.
+internal.Scopes.Scope	elems		publication	Prepended after a release fence (`publishEntry`).
+internal.Scopes.ScopeEntry	next		publication	Written before the entry is published.
+internal.Scopes.ScopeEntry	tail		publication	Written before the entry is published.
+internal.Scopes.ScopeEntry	sym		publication	Written at construction; `enterBefore` rewrites it in namer/package-object code (serial).
+internal.Names	_chrs		volatile	Volatile: a name made on one thread after the table grew is read on another.
+internal.Names	nc		synchronized	Under `nameLock` when `synchronizeNames`.
+internal.SymbolTable	ph		thread-confined	In Scratch when `phasePerThread`.
+internal.SymbolTable	per		thread-confined	In Scratch when `phasePerThread`.
+internal.SymbolTable	phStack		rejected-option	Only with -Ylog, which -Yparallel-typer rejects.
+internal.SymbolTable	keepPhaseStack		driver	Set when the run is made.
+internal.SymbolTable	infoTransformers		driver	Set up before the typer; a cache write in `transformInfos` happens only past the typer.
+internal.SymbolTable	nextFrom		driver	As `infoTransformers`.
+internal.SymbolTable.perRunCaches$	caches		synchronized	`recordCache` is synchronized.
+internal.SymbolTable.perRunCaches$	javaCaches		synchronized	`recordCache` is synchronized.
+internal.Definitions.DefinitionsClass	samCache		synchronized	Read and stored under the map's monitor, computed outside it.
+internal.Definitions.DefinitionsClass	isInitialized		init-only	Set by `definitions.init()` before the typer.
+internal.Mirrors.RootsBase	initialized		init-only	Set by `rootMirror.init()` before the typer.
+internal.Positions	posAssigner		thread-confined	A concurrent compiler uses one `DefaultPosAssigner` per thread in `atPos`.
+internal.Positions.SetChildrenPosAccumulator	pos		thread-confined	In Scratch.
+internal.Trees.OnlyChildAccumulator	only		thread-confined	In Scratch.
+internal.Variances.varianceInType	tp		thread-confined	In Scratch (`varianceInTypes`).
+internal.Variances.varianceInType	tparam		thread-confined	As `tp`.
+internal.Variances.varianceInType	considerUnchecked		thread-confined	As `tp`.
+internal.AnnotationInfos.LazyAnnotationInfo	_forced		completion-lock	Forced in the serial sub-pass after the signatures, else under the completion lock taken before the lazy val's monitor; volatile.
+internal.AnnotationInfos.AnnotationInfo	rawpos		pre-pass	Set when the annotation is made (namer or typer of its unit).
+internal.AnnotationInfos.CompleteAnnotationInfo	orig		pre-pass	As `rawpos`.
+internal.StdAttachments.PermittedSubclassSymbols	children		completion-lock	Java sealed classes: written by the classfile parser and the Java namer inside a completion.
+internal.SymbolPairs.Cursor	lowSymbol		thread-confined	A cursor per traversal (refchecks, and override checks in the typer of one unit).
+internal.SymbolPairs.Cursor	highSymbol		thread-confined	As `lowSymbol`.
+internal.SymbolPairs.Cursor	lowMemberTypeCache		thread-confined	As `lowSymbol`.
+internal.SymbolPairs.Cursor	lowMemberTypeCacheSym		thread-confined	As `lowSymbol`.
+internal.SymbolPairs.Cursor	curEntry		thread-confined	As `lowSymbol`.
+internal.SymbolPairs.Cursor	nextEntry		thread-confined	As `lowSymbol`.
+internal.Types.TypeError	pos		thread-confined	Per exception.
+internal.Trees.SymTree	symbol		thread-confined	Trees of a unit are typed by its thread; the namer's completers that type them in place run in the serial pre-pass.
+internal.Trees.Tree	rawtpe		thread-confined	As `SymTree.symbol`.
+internal.Trees.TypeTree	orig		thread-confined	As `SymTree.symbol`.
+internal.Trees.TypeTree	wasEmpty		thread-confined	As `SymTree.symbol`.
+internal.Trees.Modifiers	positions		thread-confined	As `SymTree.symbol`.
+internal.StdAttachments.Attachable	rawatt		thread-confined	Trees: as `SymTree.symbol`. Symbols: attachments of source symbols are written by the namer (serial or pre-pass) and the typer of their unit; classpath symbols' by loaders under the completion lock.
+internal.util.BatchSourceFile	lastLine		benign-race	A search hint; `offsetToLine` returns its own result, not the field.
+internal.Reporting.PerRunReportingBase	supplementedError		benign-race	A flag set once.
+internal.Reporter	_errorCount		synchronized	While the workers run, the buffering reporter counts under its monitor; the real reporter is used from the main thread.
+internal.Reporter	_warningCount		synchronized	As `_errorCount`.
+internal.util.TraceSymbolActivity	enabled		rejected-option	Only with -Yshow-symowners/-Yshow-syms (debugging).
+internal.settings.MutableSettings.SettingValue	v		driver	Settings are written before the run.
+internal.settings.MutableSettings.SettingValue	setByUser		driver	As `v`.
+internal.pickling.UnPickler	completingStack		completion-lock	Used only inside an unpickling completion.
+internal.pickling.UnPickler.Scan	entries		completion-lock	Used only inside an unpickling completion.
+internal.pickling.UnPickler.Scan	symScopes		completion-lock	As `entries`.
+internal.pickling.PickleBuffer	readIndex		completion-lock	Unpickling runs inside a completion; pickling is the serial pickler phase.
+internal.Phase	nx		driver	Linked when the phases are made.
+internal.InfoTransformers.InfoTransformer	next		driver	Linked before the typer.
+internal.InfoTransformers.InfoTransformer	prev		driver	Linked before the typer.
+nsc.Global	lastSeenSourceFile		benign-race	For crash messages only: a racy store of a reference may name another thread's source file.
+nsc.Global	curFreshNameCreator		thread-confined	A ThreadLocal under -Yparallel-typer.
+nsc.Global	printTypings		rejected-option	-Ytyper-debug, rejected.
+nsc.Global	globalPhase		driver	Written by the driver between phases.
+nsc.Global	curRun		driver	Written when a run is made.
+nsc.Global	curRunId		driver	As `curRun`.
+nsc.Global	currentSettings		driver	Before the run.
+nsc.Global	currentReporter		driver	Swapped by the driver before and after the workers run.
+nsc.Global.nodePrinters$	lastPrintedSource		rejected-option	Tree printing for -Xprint and debugging.
+nsc.Global.nodePrinters$	lastPrintedPhase		rejected-option	As `lastPrintedSource`.
+nsc.Global.Run	isDefined		driver	Set when the run is made.
+nsc.Global.Run	symSource		concurrent	A ConcurrentHashMap under -Yparallel-typer.
+nsc.Global.Run	unitc		synchronized	`advanceUnit` is synchronized.
+nsc.Global.Run	phasec		driver	Advanced between phases.
+nsc.Global.Run	symData		driver	The pickler phase (serial).
+nsc.Global.Run	compiledFiles		driver	Written by the parser (serial).
+nsc.CompilationUnits.CompilationUnit	transformed		pre-pass	Written by the unit's namer completers (serial pre-pass) and read and removed by the unit's own typer thread.
+nsc.CompilationUnits.CompilationUnit	toCheck		pre-pass	As `transformed`.
+nsc.CompilationUnits.CompilationUnit	checkedFeatures		pre-pass	As `transformed`.
+nsc.CompilationUnits.CompilationUnit	_depends		pre-pass	As `transformed` (-Ytrack-dependencies).
+nsc.CompilationUnits.CompilationUnit	_firstXmlPos		driver	The parser (serial).
+nsc.CompilationUnits.CompilationUnit	body		thread-confined	Replaced by the unit's own typer.
+nsc.CompilationUnits.CompilationUnit.synthetics$	map		pre-pass	As `CompilationUnit.transformed`.
+nsc.Reporting.PerRunReporting	suppressions		synchronized	Every method of `PerRunReporting` that touches its state is synchronized; messages are rendered before.
+nsc.Reporting.PerRunReporting	suppressionsComplete		synchronized	As `suppressions`.
+nsc.Reporting.PerRunReporting	suspendedMessages		synchronized	As `suppressions`.
+nsc.Reporting.PerRunReporting	summarizedWarnings		synchronized	As `suppressions`.
+nsc.Reporting.PerRunReporting	summarizedInfos		synchronized	As `suppressions`.
+nsc.Reporting.PerRunReporting	textEdits		synchronized	As `suppressions`.
+nsc.Reporting.PerRunReporting	reportedFeature		synchronized	As `suppressions`; which occurrence explains a feature now follows arrival order.
+nsc.Reporting.PerRunReporting	seenMacroExpansionsFallingBack		completion-lock	Set during macro expansion, which runs under the completion lock.
+nsc.Reporting.Suppression	_used		synchronized	Marked under `PerRunReporting`'s monitor.
+nsc.reporters.Reporter	_cancelled		benign-race	A flag set by a build tool.
+nsc.typechecker.Contexts	rootImportsCached		synchronized	Read and stored under the map's monitor, computed outside it.
+nsc.typechecker.TypersTracking.typingStack$	depth		rejected-option	-Ytyper-debug.
+nsc.typechecker.TypersTracking.typingStack$	trees		rejected-option	-Ytyper-debug.
+nsc.typechecker.TypeDiagnostics	addendums		synchronized	Under the map's monitor.
+nsc.typechecker.splain.SplainData.ImplicitErrors$	stack		rejected-option	Written only with -Vimplicits, which -Yparallel-typer rejects.
+nsc.typechecker.splain.SplainData.ImplicitErrors$	errors		rejected-option	As `stack`.
+nsc.typechecker.Macros	macroImplBindingCache		completion-lock	`loadMacroImplBinding` runs under the completion lock.
+nsc.typechecker.Typers	superConstructorCalls		synchronized	Written under the map's monitor; read on the main thread after the workers.
+nsc.typechecker.Typers	typerFreshNameCreators		synchronized	`getOrElseUpdate` under the map's monitor.
+nsc.typechecker.Implicits.ImplicitInfo	tpeCache		thread-confined	`ImplicitInfo`s live in per-thread caches and in contexts of one thread.
+nsc.typechecker.Implicits.ImplicitInfo	depolyCache		thread-confined	As `tpeCache`.
+nsc.typechecker.Implicits.ImplicitInfo	isErroneousCache		thread-confined	As `tpeCache`.
+nsc.typechecker.ImportTracking	usedSelectors		synchronized	Both maps under `usedSelectors`'s monitor.
+nsc.typechecker.ImportTracking	importInfos		synchronized	As `usedSelectors`.
+nsc.typechecker.AnalyzerPlugins	analyzerPlugins		driver	Registered before the run; -Yparallel-typer rejects plugins.
+nsc.typechecker.AnalyzerPlugins	macroPlugins		driver	As `analyzerPlugins`.
+nsc.symtab.SymbolLoaders	parentsLevel		completion-lock	Used only inside a loader's completion.
+nsc.symtab.SymbolLoaders	pendingLoadActions		completion-lock	As `parentsLevel`.
+nsc.symtab.SymbolLoaders.SymbolLoader	ok		completion-lock	As `parentsLevel`.
+nsc.ast.DocComments	docComments		rejected-option	Scaladoc only.
+nsc.ast.DocComments	cookedDocComments		rejected-option	Scaladoc only.
+nsc.ast.DocComments	defs		rejected-option	Scaladoc only.
+nsc.Parsing.PerRunParsing	incompleteHandler		driver	The parser (serial) and the REPL.
+nsc.SubComponent	ownPhaseCache		benign-race	An idempotent cache of the phase, filled before the workers start.
+nsc.SubComponent	ownPhaseRunId		benign-race	As `ownPhaseCache`.
+nsc.symtab.classfile.ClassfileParser	in		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	clazz		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	pool		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	staticModule		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	file		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	instanceScope		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	busy		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	isScala		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	currentClass		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	staticScope		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	classTParams		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	isScalaRaw		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	YtastyReader		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser	srcfile0		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ReusableDataReader	bb		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ReusableDataReader	data		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ReusableDataReader	size		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.pickling.PickleBuffer	bytes		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler	typeAtAddr		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler	symAtAddr		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler	cycleAtAddr		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler	roots		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler	ownerTree		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext	mySymbolsToForceAnnots		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext	myInlineDefs		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext	myMacros		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext	myTraitParamAccessors		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext	_trace		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.JavaTypeCompleter	paramNames		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.JavaTypeCompleter	constant		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.JavaTypeCompleter	exceptions		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.JavaTypeCompleter	sig		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+tools.tasty.TastyReader	bp		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.ConstantPool	values		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.ConstantPool	internalized		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.TypeOps.SyncRef	out		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.TypeOps.SyncRef	compute		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.TypeOps.SyncRef	entered		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.AbstractFileReader	bp		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.innerClasses$	inners		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TreeUnpickler.OwnerTree	myChildren		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.symtab.classfile.ClassfileParser.NameOrString	_name		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.InitialContext.TraceFrameImpl	nextChild		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.TastyUnpickler.Table	names		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+nsc.tasty.bridge.ContextOps.FreshContext	mySource		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.Symbols.TypeHistory	_validFrom		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.Symbols.TypeHistory	_info		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.Symbols.TypeHistory	_prev		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.util.AbstractFileClassLoader	packages		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+reflect.macros.runtime.MacroRuntimes	macroRuntimesCache		completion-lock	Used only inside a completion (a loader, the classfile parser, the unpickler, the TASTy reader) or a macro expansion, both under the completion lock.
+internal.pickling.PickleBuffer	writeIndex		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+nsc.symtab.classfile.Pickler.Pickle	ep		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+nsc.symtab.classfile.Pickler.Pickle	index		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+nsc.symtab.classfile.Pickler.Pickle	entries		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+nsc.symtab.classfile.Pickler.Pickle	reserved		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+nsc.CompilationUnits.CompilationUnit	icode		driver	Written by a phase that runs serially (pickler, packageobjects) or not at all in the typer.
+internal.Symbols.Symbol	_rawname		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.Symbol	_privateWithin		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.Symbol	_rawowner		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.ClassSymbol	_associatedFile		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.ClassSymbol	flatname		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.ModuleSymbol	flatname		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.TermSymbol	_referenced		pre-pass	Written when the symbol is made or completed (namer, pre-pass, or a loader under the completion lock), by the unit's own thread for its local symbols, and by later phases.
+internal.Symbols.Symbol	_annotations		pre-pass	Source symbols' annotations are set by their completers (pre-pass) and by the typer of their unit (`annotate`, its own symbols); classpath symbols' by loaders under the completion lock. A read-modify-write on a symbol of another unit during body typing is not known to happen; not protected.
+internal.Scopes.Scope	nestinglevel		init-only	Set at creation or registration, before the typer.
+internal.Types.ClassInfoType	decls		init-only	Set at creation or registration, before the typer.
+internal.AnnotationCheckers	annotationCheckers		init-only	Set at creation or registration, before the typer.
+internal.StdNames.KeywordSetBuilder	kws		init-only	Set at creation or registration, before the typer.
+internal.Chars	char2uescapeArray		init-only	Set at creation or registration, before the typer.
+nsc.Reporting.WarningCategory$	_all		init-only	Set at creation or registration, before the typer.
+internal.Names	termHashtable		synchronized	Lookup-or-enter is under `nameLock` when `synchronizeNames` (a concurrent universe).
+internal.Names	typeHashtable		synchronized	Lookup-or-enter is under `nameLock` when `synchronizeNames` (a concurrent universe).
+nsc.Reporting.MessageFilter.SourcePattern	cache		synchronized	Consulted from `wconf.action` and the quick-fix filters, under `PerRunReporting`'s monitor.
+nsc.typechecker.splain.FormatCache	cache		rejected-option	Splain formatting: -Vimplicits and -Vtype-diffs, both rejected with -Yparallel-typer.
+internal.util.Statistics.Counter	value		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.Statistics.StackableTimer	specificNanos		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.Statistics.TimerStack	elems		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	idleNs		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	taskCount		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	runningNs		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	firstStartNs		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	lastEndNs		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.ThreadPoolFactory.ProfilingThreadPoolFactory.ThreadProfileData	lastStartNs		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.RealProfiler	gcEvents		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.profile.RealProfiler	nextAfterUnitSnap		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.ChromeTrace	context		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.ChromeTrace.ArrayContext	first		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.ChromeTrace.ObjectContext	first		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.TraceSymbolActivity	allSymbols		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.TraceSymbolActivity	allChildren		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.TraceSymbolActivity	prevOwners		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.TraceSymbolActivity	allTrees		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.symtab.SymbolTrackers.SymbolTracker	history		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.symtab.SymbolTrackers.SymbolTracker	currentMap		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.symtab.SymbolTrackers.SymbolTracker	prevMap		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.symtab.SymbolTrackers.SymbolTracker	prevFlags		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.symtab.SymbolTrackers.SymbolTracker	prevOwners		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.Origins	origins		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.util.Origins$	counters		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.typechecker.DestructureTypes.DestructureType	openSymbols		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.ast.DocComments.UseCase	aliases		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+nsc.ast.DocComments.UseCase	defined		rejected-option	Statistics, profiling, tracing, debugging and scaladoc: rejected with -Yparallel-typer, or never on by default.
+internal.Positions.WrappingPosAccumulator	min		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Positions.WrappingPosAccumulator	max		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Importers.StandardImporter	pendingSyms		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Importers.StandardImporter	pendingTpes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.util.TableDef	cols		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.RawTreePrinter	depth		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.RawTreePrinter	printingFootnotes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.RawTreePrinter	printTypesInFootnotes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.Footnotes	counters		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.Footnotes	footnotes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.Printers.Footnotes	index		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+nsc.ast.Trees.ResetAttrs	orderedLocals		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.SymbolPairs.Cursor	decls		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printPositions		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printTypes		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printIds		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printOwners		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printKinds		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.Printers.TreePrinter	printMirrors		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.util.FileUtils.AsyncBufferedWriter	current		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.SerializedTypeTag	tpec		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.SerializedTypeTag	concrete		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.SerializedExpr	tag		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.api.SerializedExpr	treec		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.transform.Transforms.Lazy	_isDefined		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+internal.transform.Transforms.Lazy	value		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+nsc.MainTokenMetric$	reporter		thread-confined	Per call or per instance (iterators, printers, accumulators, importers, cursors), or not reached by the typer.
+reflect.io.ManifestResources	closeables		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+reflect.io.URLZipArchive	closeables		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+nsc.CloseableRegistry	closeables		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+internal.util.ScalaClassLoader.URLClassLoader	classloaderURLs		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+reflect.io.ZipArchive.DirEntry	entries		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+reflect.io.VirtualDirectory	files		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+reflect.io.VirtualFile	content		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+reflect.io.FileZipArchive	dirs		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+nsc.reporters.StoreReporter	infos		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+nsc.Global.Run.SyncedCompilationBuffer	underlying		driver	Class path and file system: built when an archive is opened (by a loader, under the completion lock) or by the driver; a `StoreReporter` behind the buffering reporter is written by the driver only.
+internal.util.CompletionLock	holdStart		thread-confined	Written by the lock's holder only, or per thread.
+internal.util.PerThreadTimes.Times	holdNanos		thread-confined	Written by the lock's holder only, or per thread.
+internal.util.PerThreadTimes.Times	waitNanos		thread-confined	Written by the lock's holder only, or per thread.
+nsc.Global.Run	_currentUnit		batch-only	The serial alternative; a ThreadLocal under -Yparallel-typer.
+internal.Symbols.ModuleClassSymbol	implicitMembersCache		thread-safe-holder	One immutable holder; two threads may both compute it.
+nsc.typechecker.Implicits.ImplicitsCaches	hasMemberCache		thread-confined	A field of the per-thread `ImplicitsCaches`.
+reflect.macros.compiler.Validators.Validator.SigGenerator$	cache		thread-confined	An object inside a Validator, made per macro definition being checked.
+nsc.javac.JavaScanners.JavaScannerConfiguration$	kwOffset		driver	The Java parser (serial).
+# Reviewed from the work list at b31cfcb304 (-Yparallel-typer): disciplines the rules cannot see.
+internal.util.ParallelTyperTimeline$	current		driver	The x-ray recording: set by `runStarting` and cleared by `runFinished` on the driver, before and after the run; the hooks on the workers only read it.
+internal.util.ParallelTyperTimeline$	fromProperty		driver	As `current`.
+internal.util.ParallelTyperTimeline	holdStart		completion-lock	The current hold of the single completion lock: written by its outermost holder after it acquires the lock (`acquire`) and read by the same holder before it releases it (`release`). X-ray only.
+internal.util.ParallelTyperTimeline	holdSite		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline	holdWhat		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline	holdSampled		completion-lock	As `holdStart`.
+internal.util.ParallelTyperTimeline.PerThread	acquisitions		thread-confined	One `PerThread` per recording thread (a `ThreadLocal`), written only by that thread; `toJson` reads it on the driver after the run, once the pool's steps have joined.
+internal.util.ParallelTyperTimeline.PerThread	sampled		thread-confined	As `acquisitions`.
+internal.util.ParallelTyperTimeline.PerThread	whats		thread-confined	As `acquisitions`.
+internal.util.ParallelTyperTimeline.PerThread	whatsRendered		driver	Written and read by `toJson` on the driver after the run.
+internal.util.ParallelTyperTimeline.LongBuf	a		thread-confined	The buffers of a `PerThread`: written only by its thread, read by `toJson` after the run.
+internal.util.ParallelTyperTimeline.LongBuf	n		thread-confined	As `a`.
+internal.util.CompletionLock	holdSite		completion-lock	Written by the outermost holder of the single lock (`recordSite`, with `-Dscalac.parallelTyper.lockSites`) and read by the holder at its release; never written with per-key claims.
+internal.util.ScratchThread	scratchOwner		thread-confined	Written only by the thread itself (`PerThreadScratches.getSlow` and `phase_=` act on `Thread.currentThread`), and read only by it.
+internal.util.ScratchThread	scratch		thread-confined	As `scratchOwner`.
+internal.util.ScratchThread	ph		thread-confined	As `scratchOwner`.
+internal.util.ScratchThread	per		thread-confined	As `scratchOwner`.
+internal.SymbolTable	oneScratch		batch-only	Made (under the universe's monitor) only in a universe used from one thread at a time; null in a concurrent one.
+internal.SymbolTable	perThreadScratches		publication	Set once under the universe's monitor, read without it: published through its final fields (`scratches`, `scratchRef`, `firstThread`).
+internal.SymbolTable.PerThreadScratches	firstThreadScratch		thread-confined	Written and read only by `firstThread`.
+internal.SymbolTable	_flatClassesSeen		benign-race	Monotone, false to true. A thread writes it before it moves to a phase with flat classes, so a thread at such a phase has seen its own write; a thread elsewhere gets the same answer from either value.
+internal.Symbols.TypeSymbol	tpeStamped		publication	One immutable `Stamped` (value and period, final fields) stored with a plain write: a reader gets the pair, and the value as of the store, by the final-field guarantee. Two threads store the same interned `TypeRef`. The cycle marker is per thread (`Scratch.tpeInProgress`), not in the field.
+internal.Types.NonClassTypeRef	relativeInfoStamped		publication	As `TypeSymbol#tpeStamped`, with the symbol's info in the holder; a re-entry is detected from the value (`RecoverableCyclicReference`), not from a marker in the field.
+internal.Types.CompoundType	baseTypeSeqStamped		publication	As `TypeSymbol#tpeStamped`; the in-progress marker is per thread (`Types.scala`, the lock-free type caches).
+internal.Types.CompoundType	baseClassesStamped		publication	As `baseTypeSeqStamped`.
+internal.Types.TypeRef	baseTypeSeqStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Types.TypeRef	parentsStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Types.SingleType	underlyingStamped		publication	As `CompoundType#baseTypeSeqStamped`.
+internal.Symbols.ClassSymbol	thisTypeStamped		publication	As `TypeSymbol#tpeStamped`: an interned `ThisType`.
+internal.Symbols.ModuleClassSymbol	typeOfThisStamped		publication	As `TypeSymbol#tpeStamped`: an interned `SingleType`.
+internal.BaseTypeSeqs.BaseTypeSeq	maxDepthCache		benign-race	An `Int` (a `Depth`) that only goes from `AnyDepth` to the depth, which two threads compute the same; read once into a local.
+internal.Types.OverloadedArgProto	sameTypesFolded		thread-confined	A proto type made by the typer for one argument of one overloaded application (`doTypedApply`'s `handleOverloaded`), not interned: its monitor is never contended.
+internal.Types.OverloadedArgProto	sameTypesFoldedSam		thread-confined	As `sameTypesFolded`.
+internal.Types.OverloadedArgProto	protoTp		thread-confined	As `sameTypesFolded`.
+nsc.Global.Run	stopPhaseSetting		driver	Forced by the `Run`'s constructor (`firstPhase`), on the driver.
+nsc.Global.Run	ranFused		driver	Read and written by `runOnPool`, on the driver between phases.
+nsc.symtab.classfile.Pickler.PickleState	index		thread-confined	One `PickleState` per thread (`perThread`).
+nsc.symtab.classfile.Pickler.PickleState	entries		thread-confined	As `index`.
+nsc.typechecker.AbstractAnalyzer.packageObjects$	deferredOpen		driver	Added to by `openPackageModule` only before the namer is past and drained by packageobjects' `run`, both serial. In the typer the set is empty: `Contexts`' `remove` (a completer at a phase before the typer) only reads it.
+# A `Context` is confined to the typing that made it. Completers capture namer contexts and run on whichever thread forces the symbol, but every completer types on a context of its own (`createNamer`'s `makeNewScope`, `Namer.completerTyper`, `makeNonSilent`/`makeSilent` for annotations), so a namer context is only read once the namer is done: `make` copies its fields. Exceptions, benign: `savingEnclClass`, and the implicits cache below.
+nsc.typechecker.Contexts.Context	scope		thread-confined	The field is a val; the writes are entries into the `Scope`, whose own protection is the scope's (a namer scope is filled by the serial namer, a local scope by its typing).
+nsc.typechecker.Contexts.Context	enclClass		thread-confined	Set by `make`; `savingEnclClass` saves and restores it on a shared context, which is benign (see REVIEW-shared-state.md).
+nsc.typechecker.Contexts.Context	contextMode		thread-confined	Set by `make` and saved and restored around an operation by the typing that owns the context (`withMode`, `inSilentMode`). A completer types on a child context, so a transient mode is never copied into another thread's child.
+nsc.typechecker.Contexts.Context	openImplicits		thread-confined	As `contextMode`; pushed and popped by `typedImplicit` on the search's own context.
+nsc.typechecker.Contexts.Context	implicitDictionary		thread-confined	As `contextMode`: written in the implicit search's context.
+nsc.typechecker.Contexts.Context	savedTypeBounds		thread-confined	As `contextMode`.
+nsc.typechecker.Contexts.Context	pendingStabilizers		thread-confined	As `contextMode`: `typed` saves, clears and restores it on the context it types on.
+nsc.typechecker.Contexts.Context	prefix		thread-confined	Set by `make`.
+nsc.typechecker.Contexts.Context	enclMethod		thread-confined	Set by `make`, and by a synthesised method's own typer (`synthesizePartialFunction`).
+nsc.typechecker.Contexts.Context	_reporter		thread-confined	As `contextMode`: `inSilentMode` swaps it on the context it types on.
+nsc.typechecker.Contexts.Context	_undetparams		thread-confined	As `contextMode`.
+nsc.typechecker.Contexts.Context	implicitsCache		benign-race	Shared through a namer context: in a concurrent compiler the cache is stored before its run id and the in-progress marker is per thread (`implicitsInProgress`); a lost update recomputes the same list.
+nsc.typechecker.Contexts.Context	implicitsRunId		benign-race	As `implicitsCache`.
