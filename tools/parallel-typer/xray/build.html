@@ -267,10 +267,15 @@ li { margin-bottom: 3px; }
     </svg>`;
     const biggest = D.graph.filter((m) => m.ms != null).sort((a, b) => b.ms - a.ms)[0];
     const s = (ms) => Math.round(ms / 1000) + ' s';
+    // the critical path of a pipelined build of serial compiles: a module starts at its dependencies' pickles, or their end for a macro provider
+    const G = new Map(D.graph.map((m) => [m.n, m])), done = new Map();
+    const finish = (n) => { if (done.has(n)) return done.get(n); const m = G.get(n); const start = Math.max(0, ...m.deps.map((d) => { const x = G.get(d); return x ? finish(d) - (x.macros || x.pre == null ? 0 : x.ms - x.pre) : 0; })); const f = start + (m.ms || 0); done.set(n, f); return f; };
+    const critical = Math.max(...D.graph.map((m) => finish(m.n)));
     $('dimsNotes').innerHTML =
       `<section><h3><i style="background:var(--warm)"></i>Up: more compiles at once</h3>
        <p><b>Stresses the collector.</b> Each compile adds a live set, so collections copy more and come more often. GC goes from ${gcPct('trad:1x1')}% of CPU when serial to ${gcPct('pipe:8x1')}% at 8\u00d71 and ${gcPct('pipe:16x1')}% at 16\u00d71, and from ${s(by('trad:1x1').gc)} of GC CPU to ${s(by('pipe:16x1').gc)}.</p>
-       <p><b>Returns:</b> ${x('pipe:8x1')} at 8\u00d71, then down to ${x('pipe:16x1')} at 16\u00d71. A serial compile also cannot go below its own time, and the largest module takes ${s(biggest.ms)}, but that floor is the same for both, so it does not explain the drop.</p></section>
+       <p><b>Cannot shorten the critical path.</b> Each compile runs at serial speed, so a chain of dependent modules takes its serial time however many cores are free. In ScalaTest that chain is ${s(critical)}, most of it the largest module at ${s(biggest.ms)}, against ${s(by('pipe:8x1').wall)} for the whole build at 8\u00d71.</p>
+       <p><b>Returns:</b> ${x('pipe:8x1')} at 8\u00d71, then down to ${x('pipe:16x1')} at 16\u00d71. The critical path is the same for both, so it does not explain the drop.</p></section>
        <section><h3><i style="background:var(--teal)"></i>Along: more threads per compile</h3>
        <p><b>Stresses coordination.</b> Threads share one compile's symbols and types, and wait on its completion lock. GC stays at ${gcPct('pipe:1x8')}\u2013${gcPct('pipe:1x2')}% of CPU, but non-GC CPU grows ${Math.round(100 * (nonGc('pipe:1x8') / nonGc('trad:1x1') - 1))}% by 1\u00d78.</p>
        <p><b>Cause, in part inferred:</b> the 8-thread counter runs put about two-thirds of the added CPU in cycles per instruction and one-third in instructions. Cache-line sharing fits that, but no coherence counter was recorded. Parks and serial phases show up on the x-ray.</p>
