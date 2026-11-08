@@ -67,18 +67,23 @@ def main():
         tokens.append(rec)
     # each module's speed-up at 8 threads alone against its serial time
     scale = []
-    if 'pipe:1x8' in latest:
+    one8 = 'pipe:1x8' if 'pipe:1x8' in latest else 'trad:1x8'  # the same with no dependencies to wait for
+    if one8 in latest:
         for n, (w, _) in times.items():
-            ds = [m['e'] - m['s'] for r in latest['pipe:1x8'] for m in r['mods'] if m['n'] == n]
+            ds = [m['e'] - m['s'] for r in latest[one8] for m in r['mods'] if m['n'] == n]
             if w >= 100 and ds: scale.append(dict(n=n, ms=round(w), s8=round(w / st.median(ds), 2)))
-    fit_path = os.path.join(HERE, 'sim', 'fit.json')
-    fit = json.load(open(fit_path)) if os.path.exists(fit_path) else None
+    # FIT= (empty) for a project the fit was not made for
+    fit_path = os.environ.get('FIT', os.path.join(HERE, 'sim', 'fit.json'))
+    fit = json.load(open(fit_path)) if fit_path and os.path.exists(fit_path) else None
     for t in tokens:
         if fit and t['token'] in fit['predicted']: t['fit'] = fit['predicted'][t['token']]
     d = dict(generated=time.strftime('%Y-%m-%d %H:%M'), graph=reduced_graph(mods, times), tokens=tokens, serial=serial, scale=scale, fit=fit,
              totalLines=sum(m['lines'] for m in mods.values()), modules=sum(1 for m in mods.values() if m['lines'] > 0))
     with open(os.environ.get('BUILD_DATA', os.path.join(HERE, 'build.data.js')), 'w') as f:
-        f.write('// Written by build_report.py. Do not edit.\nwindow.XRAY_BUILD = ' + json.dumps(d, separators=(',', ':')) + ';\n')
+        # BUILD_KEY: one of several datasets the page switches between
+        key = os.environ.get('BUILD_KEY')
+        target = f'(window.XRAY_BUILDS = window.XRAY_BUILDS || {{}})[{json.dumps(key)}]' if key else 'window.XRAY_BUILD'
+        f.write(f'// Written by build_report.py. Do not edit.\n{target} = ' + json.dumps(d, separators=(',', ':')) + ';\n')
     print('tokens', [(t['token'], t['rounds'], t['wall']) for t in tokens], 'serial', serial)
 
 

@@ -6,11 +6,15 @@
 # no real run here can show.
 #
 #   fit.py <module file> <XrayBuild output>...
-import json, statistics as st, sys
+#
+# FIT_STRATEGY=trad reads trad: tokens (a build with no dependencies, where trad and pipe coincide), FIT_FIXED=a,p,c,q
+# applies those terms instead of fitting them, and FIT_OUT names the output (default fit.json).
+import json, os, statistics as st, sys
 from sim import Graph, simulate
 from calibrate import graph, modfile, policy, rows, serial_times
 
-TRAIN = ('pipe:8x1', 'pipe:16x1', 'pipe:4x2', 'pipe:2x8')
+S = os.environ.get('FIT_STRATEGY', 'pipe')
+TRAIN = tuple(f'{S}:{t}' for t in ('8x1', '16x1', '4x2', '2x8'))
 WIDTHS = (2, 4, 6, 8)
 
 
@@ -53,7 +57,7 @@ def tables(rs, names, times):
     # the build's overall speed-up at a width stands in for a module too small to measure
     overall = {}
     for t in WIDTHS:
-        tok = f'pipe:1x{t}'
+        tok = f'{S}:1x{t}'
         if tok in durations:
             overall[t] = sum(times[n][0] for n in names) / sum(st.median(a + b for a, b in durations[tok][n]) for n in names)
     for i, n in enumerate(names):
@@ -61,7 +65,7 @@ def tables(rs, names, times):
         post = max(w - pre, 0.01)
         phases = {0: {}, 1: {}}
         for t in WIDTHS:
-            tok = f'pipe:1x{t}'
+            tok = f'{S}:1x{t}'
             if w < 100:
                 phases[0][t] = phases[1][t] = 1.0
                 continue
@@ -87,8 +91,9 @@ def main():
     measured = {t: st.median(r['batch'] for r in v) for t, v in latest.items()}
     base = tables(rs, names, times)
     best = None
+    fixed = os.environ.get('FIT_FIXED')
     copy = lambda: json.loads(json.dumps(base), object_hook=lambda o: {int(k) if k.lstrip('-').isdigit() else k: v for k, v in o.items()})
-    for a in (0, .002, .005, .01, .02, .03, .05):
+    for a in (() if fixed else (0, .002, .005, .01, .02, .03, .05)):
         for p in (1.0, 1.5):
             for cc in (0, .002, .005, .01, .02, .03, .05, .08, .12):
                 for q in (1.0, 1.5, 2.0):
@@ -99,7 +104,7 @@ def main():
                         pipelined, budget, pol = policy(t)
                         err += (simulate(g, c, budget, pol, pipelined=pipelined) / measured[t] - 1) ** 2
                     if best is None or err < best[0]: best = (err, a, p, cc, q)
-    _, a, p, cc, q = best
+    _, a, p, cc, q = (None, *map(float, fixed.split(','))) if fixed else best
     print(f'fit: a={a} p={p} c={cc} q={q}, on {TRAIN}')
     c = Fitted(names, copy(), a, p, cc, q)
     c.rebase()
@@ -108,9 +113,9 @@ def main():
         pipelined, budget, pol = policy(t)
         pred = simulate(g, c, budget, pol, pipelined=pipelined)
         res[t] = round(pred)
-        role = 'train' if t in TRAIN else 'single-width' if t.startswith('pipe:1x') or t == 'trad:1x1' else 'held out'
+        role = 'train' if t in TRAIN and not fixed else 'single-width' if t.startswith(f'{S}:1x') or t == 'trad:1x1' else 'held out'
         print(f'{t:14s} measured {b/1000:7.1f} predicted {pred/1000:7.1f} {100*(pred/b-1):+6.0f}%  {role}')
-    held = [abs(res[t] / measured[t] - 1) for t in measured if t not in TRAIN and not t.startswith('pipe:1x') and t not in ('trad:1x1', 'trad:1x8')]
+    held = [abs(res[t] / measured[t] - 1) for t in measured if (fixed or t not in TRAIN) and not t.startswith(f'{S}:1x') and t not in ('trad:1x1', 'trad:1x8')]
     print(f'held out: mean absolute error {100*st.mean(held):.1f}%, worst {100*max(held):.1f}%')
     # what no real run here can show: workers that move, and the same graph with no macro providers
     est = {}
@@ -127,7 +132,7 @@ def main():
         trad = simulate(g, c, budget, pol, pipelined=False)
         est[t + ':nomacros'] = round(without); est[t + ':trad'] = round(trad); est[t + ':model'] = round(withm)
         print(f'{t}: traditional {trad/1000:.1f}, pipelined {withm/1000:.1f}, pipelined with no macro waits {without/1000:.1f}')
-    json.dump(dict(predicted=res, a=a, p=p, c=cc, q=q, train=list(TRAIN), heldMeanPct=round(100 * st.mean(held), 1), heldWorstPct=round(100 * max(held), 1), estimates=est), open('fit.json', 'w'))
+    json.dump(dict(predicted=res, a=a, p=p, c=cc, q=q, train=[] if fixed else list(TRAIN), heldMeanPct=round(100 * st.mean(held), 1), heldWorstPct=round(100 * max(held), 1), estimates=est), open(os.environ.get('FIT_OUT', 'fit.json'), 'w'))
 
 
 if __name__ == '__main__':

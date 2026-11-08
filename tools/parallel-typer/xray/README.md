@@ -68,6 +68,8 @@ tools/parallel-typer/xray/bloop_modules.py .bloop project.modules --sbt-sources 
 java -Xms31g -Xmx31g -Xmn20g -XX:+UseParallelGC -Dxray.full=true -cp <compiler snapshot, its jars, XrayBuild's classes> scala.tools.nsc.xray.XrayBuild project.modules pipe:8x1 3 3 trad:1x1 pipe:8x1 pipe:4x4
 ```
 
+`synth_modules.py` writes K copies of one corpus, each in packages of its own, as a module file with no dependencies, and `synth.sh` measures every split of 8 and 16 threads on it, so that M×T trades threads per compile against compiles at once with no critical path. It writes `build-synth-<corpus>-<K>.data.js`, which the page's dataset switch shows beside ScalaTest.
+
 Keep ParallelGC's adaptive sizing on: with it off, the old generation fills and a build's time doubles. Set `-Dxray.jdk.home` to compile against another JDK's API, which ScalaTest needs on a JDK that has removed `Thread.stop`.
 
 ## What is recorded
