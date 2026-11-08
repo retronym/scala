@@ -4557,8 +4557,7 @@ trait Types
   }
 
   /** Discarded at the start of each run, and weak within it. */
-  private class PerRunUniques extends Uniques {
-    private[this] val initialUniquesCapacity = 4096
+  private class PerRunUniques(initialUniquesCapacity: Int = 4096) extends Uniques {
     private[this] var uniques: util.WeakHashSet[Type] = _
     private[this] var uniqueRunId = NoRunId
 
@@ -4578,7 +4577,7 @@ trait Types
     }
   }
 
-  private final class SynchronizedPerRunUniques extends PerRunUniques {
+  private final class SynchronizedPerRunUniques(initialUniquesCapacity: Int = 4096) extends PerRunUniques(initialUniquesCapacity) {
     override def size: Int = synchronized(super.size)
     override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
   }
@@ -4586,10 +4585,11 @@ trait Types
   /** Per run and weak, as `PerRunUniques`, in stripes for a compiler used from several threads (-Yparallel-typer):
    *  a type is interned in the stripe of its hash (the high bits of a multiplicative mix, independent of the bucket
    *  index within the stripe), each stripe under its own monitor, so that equal types meet in one stripe and interning
-   *  stays unique, while threads interning different types rarely contend. `-Dscalac.uniques.stripes=1` for one. */
+   *  stays unique, while threads interning different types rarely contend. `-Dscalac.uniques.stripes=1` for one.
+   *  The stripes share the one table's initial capacity, and grow as it would. */
   private final class StripedPerRunUniques(stripes: Int) extends Uniques {
     private[this] val shift = 32 - Integer.numberOfTrailingZeros(stripes)
-    private[this] val sets = Array.fill(stripes)(new SynchronizedPerRunUniques)
+    private[this] val sets = Array.fill(stripes)(new SynchronizedPerRunUniques(math.max(16, 4096 / stripes)))
     def size: Int = sets.iterator.map(_.size).sum
     def unique[T <: Type](tp: T): T =
       if (stripes == 1) sets(0).unique(tp)
