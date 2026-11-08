@@ -130,7 +130,7 @@ trait CompilationUnits { global: Global =>
     // Also used to cache imports type-checked by namer.
     // concurrent under -Yparallel-typer, as `synthetics`
     val transformed: mutable.Map[Tree, Tree] =
-      if (isConcurrentCompiler) scala.jdk.CollectionConverters.ConcurrentMapHasAsScala(new java.util.concurrent.ConcurrentHashMap[Tree, Tree]).asScala
+      if (isConcurrentCompiler) new CompilationUnits.ConcurrentHashMapAsMap[Tree, Tree]
       else new mutable.HashMap[Tree, Tree]
 
     /** things to check at end of compilation unit */
@@ -161,5 +161,25 @@ trait CompilationUnits { global: Global =>
   object CompilationUnit {
     sealed trait ToCheck { def apply(): Unit }
     trait ToCheckAfterUnit extends ToCheck
+  }
+}
+
+object CompilationUnits {
+  /** A `ConcurrentHashMap` as a `mutable.Map`, for `CompilationUnit.transformed`. Not the collection converters'
+   *  wrapper: its `remove` is a `compute` with a closure, to tell a null value from none, which this map cannot hold;
+   *  and the typer removes an entry at every definition (`lookupTransformed`). */
+  private final class ConcurrentHashMapAsMap[K <: AnyRef, V <: AnyRef] extends mutable.AbstractMap[K, V] {
+    private[this] val underlying = new java.util.concurrent.ConcurrentHashMap[K, V]
+    def get(key: K): Option[V] = Option(underlying.get(key))
+    def iterator: Iterator[(K, V)] =
+      scala.jdk.CollectionConverters.IteratorHasAsScala(underlying.entrySet.iterator).asScala.map(e => (e.getKey, e.getValue))
+    def addOne(kv: (K, V)): this.type = { underlying.put(kv._1, kv._2); this }
+    def subtractOne(key: K): this.type = { underlying.remove(key); this }
+    override def update(key: K, value: V): Unit = underlying.put(key, value)
+    override def remove(key: K): Option[V] = Option(underlying.remove(key))
+    override def clear(): Unit = underlying.clear()
+    override def size: Int = underlying.size
+    override def knownSize: Int = underlying.size
+    override def isEmpty: Boolean = underlying.isEmpty
   }
 }
