@@ -1095,6 +1095,14 @@ trait Implicits extends splain.SplainData {
           } else !(owner hasTransOwner sym)) // faster than owner.ownerChain contains sym
       }
 
+      // The statements of a template and the bodies of its methods are typed in source order, so a use after the
+      // definition in the same template has seen it typed. `comesBefore` compares with the owner and says no for that
+      // use when the owner is the template's class itself, which `isInitialized` covered in the serial compiler.
+      def definedBeforeUse(sym: Symbol) = pos.isDefined && sym.pos.isDefined && sym.pos.point < pos.point && {
+        val symAcc = if (sym.hasAccessorFlag) sym.accessed else NoSymbol
+        !(context.owner.ownerChain exists (o => (o eq sym) || (o eq symAcc)))
+      }
+
       // `isInitialized`, and `hasExplicitResultType` once there is no completer left to ask, depend on whether anything has
       // completed the symbol so far: another unit, which on the pool is a matter of timing. By position, they do not.
       // Not for a local symbol, which only its own unit's typing reaches, in the order of the tree: that is what makes one
@@ -1104,7 +1112,8 @@ trait Implicits extends splain.SplainData {
         sourceFile == null ||
         (sourceFile ne context.unit.source.file) ||
         !sym.hasAttachment[InferredImplicitType.type] ||
-        comesBefore(sym, context.owner)
+        comesBefore(sym, context.owner) ||
+        definedBeforeUse(sym)
       }
       else sym.isInitialized || {
         val sourceFile = sym.sourceFile

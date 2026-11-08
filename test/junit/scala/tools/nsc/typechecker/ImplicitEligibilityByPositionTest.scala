@@ -64,6 +64,44 @@ class ImplicitEligibilityByPositionTest {
         |  }
         |}""".stripMargin))
 
+  /** The owner of the use is the class itself, so `comesBefore` says no; the statement after the definition has seen it typed. */
+  @Test def earlierValWithoutATypeIsEligibleInATemplateStatement(): Unit =
+    assertEquals(true, compiles(byPosition,
+      """class Foo
+        |object O {
+        |  implicit val foo = new Foo
+        |  val a: Foo = implicitly[Foo]
+        |}""".stripMargin))
+
+  @Test def laterValWithoutATypeIsNotEligibleInATemplateStatement(): Unit =
+    assertEquals(false, compiles(byPosition,
+      """class Foo
+        |object O {
+        |  val a: Foo = implicitly[Foo]
+        |  implicit val foo = new Foo
+        |}""".stripMargin))
+
+  @Test def earlierOverrideWithoutATypeIsEligibleInALocalClass(): Unit =
+    assertEquals(true, compiles(byPosition,
+      """class Foo
+        |class Base { implicit def foo: Foo = new Foo }
+        |object O {
+        |  def a = {
+        |    class L extends Base {
+        |      override implicit val foo = new Foo
+        |      val b: Foo = implicitly[Foo]
+        |    }
+        |    new L
+        |  }
+        |}""".stripMargin))
+
+  @Test def valInItsOwnDefinitionIsNotEligible(): Unit =
+    assertEquals(false, compiles(byPosition,
+      """class Foo
+        |object O {
+        |  implicit val foo = implicitly[Foo]
+        |}""".stripMargin))
+
   @Test def earlierValWithoutATypeIsEligible(): Unit =
     assertEquals(true, compiles(byPosition,
       """class Foo
