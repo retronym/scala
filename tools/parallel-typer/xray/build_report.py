@@ -77,7 +77,11 @@ def main():
     fit = json.load(open(fit_path)) if fit_path and os.path.exists(fit_path) else None
     for t in tokens:
         if fit and t['token'] in fit['predicted']: t['fit'] = fit['predicted'][t['token']]
+    # FIT_FIXED: a fit with another project's terms applied unchanged, for its predictions alone
+    fixed_path = os.environ.get('FIT_FIXED')
+    fixed = json.load(open(fixed_path)) if fixed_path and os.path.exists(fixed_path) else None
     d = dict(generated=time.strftime('%Y-%m-%d %H:%M'), graph=reduced_graph(mods, times), tokens=tokens, serial=serial, scale=scale, fit=fit,
+             fitFixed=fixed and {k: fixed[k] for k in ('predicted', 'a', 'p', 'c', 'q', 'heldMeanPct', 'heldWorstPct')},
              totalLines=sum(m['lines'] for m in mods.values()), modules=sum(1 for m in mods.values() if m['lines'] > 0))
     with open(os.environ.get('BUILD_DATA', os.path.join(HERE, 'build.data.js')), 'w') as f:
         # BUILD_KEY: one of several datasets the page switches between
