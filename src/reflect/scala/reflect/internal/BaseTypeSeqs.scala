@@ -62,6 +62,29 @@ trait BaseTypeSeqs {
       tmp
     }
 
+    @inline private[this] def hash(id: Int): Int = (id * 0x9E3779B9) >>> 16
+
+    /** An open-addressing index of `typeSymbols` for `baseTypeIndex`, with linear probing: a slot holds `i + 1` for the
+     *  `typeSymbols(i)` that hashes to it, 0 when empty. Null when the sequence is short enough to scan, or too long
+     *  for a byte to hold its indices.
+     */
+    private[this] val typeSymbolIndex: Array[Byte] = {
+      val len = typeSymbols.length
+      if (len < 8 /* shorter sequences are scanned */ || len > 255) null
+      else {
+        val index = new Array[Byte](Integer.highestOneBit(2 * len - 1) << 1)
+        val mask = index.length - 1
+        var i = 0
+        while (i < len) {
+          var h = hash(typeSymbols(i)) & mask
+          while (index(h) != 0) h = (h + 1) & mask
+          index(h) = (i + 1).toByte
+          i += 1
+        }
+        index
+      }
+    }
+
     /** The number of types in the sequence */
     def length: Int = elems.length
 
@@ -118,13 +141,27 @@ trait BaseTypeSeqs {
 
     final def baseTypeIndex(sym: Symbol): Int = {
       val symId = sym.id
-      var i = 0
-      val len = length
-      while (i < len) {
-        if (typeSymbols(i) == symId) return i
-        i += 1
+      val ids = typeSymbols
+      val index = typeSymbolIndex
+      if (index ne null) {
+        val mask = index.length - 1
+        var h = hash(symId) & mask
+        var slot = index(h) & 0xff
+        while (slot != 0) {
+          if (ids(slot - 1) == symId) return slot - 1
+          h = (h + 1) & mask
+          slot = index(h) & 0xff
+        }
+        -1
+      } else {
+        var i = 0
+        val len = ids.length
+        while (i < len) {
+          if (ids(i) == symId) return i
+          i += 1
+        }
+        -1
       }
-      -1
     }
 
     /** Return all evaluated types in this sequence as a list */
