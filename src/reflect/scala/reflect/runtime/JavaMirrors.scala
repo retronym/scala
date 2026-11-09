@@ -664,6 +664,15 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
           bytesMethod.invoke(ssig).asInstanceOf[T]
         }
 
+      // The unpickler leaves the infos of `clazz` and `module` as lazy types, which mark their
+      // symbols completed when they run. Marking them here would let other threads read them
+      // without the GIL while they are still being completed. A symbol that the pickle does not
+      // define keeps the info from `markAbsent`, and is complete as it is.
+      def markUnpickled(): Unit = {
+        markFlagsCompleted(clazz, module)(mask = AllFlags)
+        for (sym <- List(clazz, module) if sym.rawInfo eq NoType) markAllCompleted(sym)
+      }
+
       try {
         markAbsent(NoType)
         loadBytes[String]("scala.reflect.ScalaSignature") match {
@@ -673,7 +682,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
             val len = ByteCodecs.decode(bytes)
             assignAssociatedFile(clazz, module, jclazz)
             unpickler.unpickle(bytes take len, 0, clazz, module, jclazz.getName)
-            markAllCompleted(clazz, module)
+            markUnpickled()
           case None =>
             loadBytes[Array[String]]("scala.reflect.ScalaLongSignature") match {
               case Some(slsig) =>
@@ -683,7 +692,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
                 val decoded = encoded.take(len)
                 assignAssociatedFile(clazz, module, jclazz)
                 unpickler.unpickle(decoded, 0, clazz, module, jclazz.getName)
-                markAllCompleted(clazz, module)
+                markUnpickled()
               case None =>
                 // class does not have a Scala signature; it's a Java class
                 info("translating reflection info for Java " + jclazz) //debug
