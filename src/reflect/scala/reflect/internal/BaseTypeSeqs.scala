@@ -62,6 +62,19 @@ trait BaseTypeSeqs {
       tmp
     }
 
+    /** A one-word Bloom filter of `typeSymbols`: bit `id & 63` is set for each of their ids. Most lookups of a symbol
+     *  that is not a base are answered from it without reading `typeSymbols`.
+     */
+    private[this] val typeSymbolsMask: Long = {
+      var mask = 0L
+      var i = 0
+      while (i < typeSymbols.length) {
+        mask |= 1L << typeSymbols(i)
+        i += 1
+      }
+      mask
+    }
+
     /** The number of types in the sequence */
     def length: Int = elems.length
 
@@ -118,10 +131,12 @@ trait BaseTypeSeqs {
 
     final def baseTypeIndex(sym: Symbol): Int = {
       val symId = sym.id
+      if ((typeSymbolsMask & (1L << symId)) == 0L) return -1
+      val ids = typeSymbols
       var i = 0
-      val len = length
+      val len = ids.length
       while (i < len) {
-        if (typeSymbols(i) == symId) return i
+        if (ids(i) == symId) return i
         i += 1
       }
       -1
