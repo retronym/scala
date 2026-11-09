@@ -737,7 +737,8 @@ abstract class UnPickler {
 
       override def complete(sym: Symbol) : Unit = {
         completeInternal(sym)
-        if (!isCompilerUniverse) markAllCompleted(sym)
+        // Only `sym`: its module class or source module has its own `LazyTypeRef`, which may not have run yet.
+        if (!isCompilerUniverse) sym.markAllCompleted()
       }
       override def load(sym: Symbol): Unit = { complete(sym) }
     }
