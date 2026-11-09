@@ -118,10 +118,11 @@ trait BaseTypeSeqs {
 
     final def baseTypeIndex(sym: Symbol): Int = {
       val symId = sym.id
+      val ids = typeSymbols
+      val len = ids.length
       var i = 0
-      val len = length
       while (i < len) {
-        if (typeSymbols(i) == symId) return i
+        if (ids(i) == symId) return i
         i += 1
       }
       -1
