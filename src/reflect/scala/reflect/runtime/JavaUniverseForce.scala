@@ -212,7 +212,6 @@ trait JavaUniverseForce { self: runtime.JavaUniverse  =>
     this.dropSingletonType
     this.abstractTypesToBounds
     this.dropIllegalStarTypes
-    this.wildcardExtrapolation
     this.SubstSymMap
     this.ApproximateDependentMap
     this.identityTypeMap

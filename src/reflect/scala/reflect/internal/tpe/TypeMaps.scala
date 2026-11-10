@@ -397,8 +397,7 @@ private[internal] trait TypeMaps {
         case tp => tp.mapOver(this)
       }
   }
-  /** Not thread-safe, see `Scratch.wildcardExtrapolation` */
-  object wildcardExtrapolation extends wildcardExtrapolation
+  def wildcardExtrapolation: wildcardExtrapolation = scratch.wildcardExtrapolation
 
   /** Might the given symbol be important when calculating the prefix
     *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
