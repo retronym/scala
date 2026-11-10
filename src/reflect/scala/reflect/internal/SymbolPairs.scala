@@ -39,20 +39,32 @@ abstract class SymbolPairs {
   final case class SymbolPair(base: Symbol, low: Symbol, high: Symbol) {
     private[this] val self  = base.thisType
 
+    // The member types of `low` and `high` that the cursor computed to match them, if any; see `knownMemberType`.
+    private[this] var knownLow: MemberTypeOf = null
+    private[this] var knownHigh: MemberTypeOf = null
+    private[SymbolPairs] def seed(low: MemberTypeOf, high: MemberTypeOf): this.type = {
+      knownLow = low
+      knownHigh = high
+      this
+    }
+
     def pos                 = if (low.owner == base) low.pos else if (high.owner == base) high.pos else base.pos
     def rootType: Type      = self
 
-    def lowType: Type       = self memberType low
+    def lowType: Type       = knownMemberType(knownLow, low)
     def lowErased: Type     = erasure.specialErasure(low)(low.tpe)
     def lowClassBound: Type = classBoundAsSeen(low.tpe.typeSymbol)
 
-    def highType: Type       = self memberType high
+    def highType: Type       = knownMemberType(knownHigh, high)
     def highInfo: Type       = self memberInfo high
     def highErased: Type     = erasure.specialErasure(high)(high.tpe)
     def highClassBound: Type = classBoundAsSeen(high.tpe.typeSymbol)
 
     def isErroneous = low.tpe.isErroneous || high.tpe.isErroneous
     def sameKind    = sameLength(low.typeParams, high.typeParams)
+
+    private def knownMemberType(known: MemberTypeOf, sym: Symbol): Type =
+      if ((known ne null) && known.isValidFor(sym)) known.tpe else self memberType sym
 
     private def classBoundAsSeen(tsym: Symbol) =
       tsym.classBound.asSeenFrom(rootType, tsym.owner)
@@ -82,6 +94,13 @@ abstract class SymbolPairs {
       | erased  $lowErased
       |  infos  ${low.infosString}
       |}""".trim
+  }
+
+  /** `self.memberType(sym)`, as computed in period `period` when `sym`'s info was `info`. */
+  private final class MemberTypeOf(val sym: Symbol, val tpe: Type) {
+    private[this] val period = currentPeriod
+    private[this] val info = sym.rawInfo
+    def isValidFor(sym: Symbol): Boolean = (sym eq this.sym) && period == currentPeriod && (sym.rawInfo eq info)
   }
 
   /** The cursor class
@@ -131,15 +150,18 @@ abstract class SymbolPairs {
     private[this] var lowSymbol: Symbol  = _
     private[this] var highSymbol: Symbol = _
     def lowMemberType: Type = {
-      if (lowSymbol ne lowMemberTypeCacheSym) {
-        lowMemberTypeCache = self.memberType(lowSymbol)
-        lowMemberTypeCacheSym = lowSymbol
-      }
-      lowMemberTypeCache
+      if ((lowMemberTypeCache eq null) || (lowSymbol ne lowMemberTypeCache.sym))
+        lowMemberTypeCache = new MemberTypeOf(lowSymbol, self.memberType(lowSymbol))
+      lowMemberTypeCache.tpe
+    }
+    /** `self.memberType(high)`, remembered so that the pair formed with `high` can reuse it. */
+    protected def highMemberType(high: Symbol): Type = {
+      highMemberTypeCache = new MemberTypeOf(high, self.memberType(high))
+      highMemberTypeCache.tpe
     }
 
-    private[this] var lowMemberTypeCache: Type = _
-    private[this] var lowMemberTypeCacheSym: Symbol = _
+    private[this] var lowMemberTypeCache: MemberTypeOf = _
+    private[this] var highMemberTypeCache: MemberTypeOf = _
 
     // The current entry candidates for low and high symbol.
     private[this] var curEntry  = decls.elems
@@ -205,7 +227,10 @@ abstract class SymbolPairs {
     def high = highSymbol
 
     def hasNext     = curEntry ne null
-    def currentPair = new SymbolPair(base, low, high)
+    def currentPair = {
+      def known(c: MemberTypeOf, sym: Symbol) = if ((c ne null) && (c.sym eq sym)) c else null
+      new SymbolPair(base, low, high).seed(known(lowMemberTypeCache, low), known(highMemberTypeCache, high))
+    }
     def iterator: Iterator[SymbolPair] = new collection.AbstractIterator[SymbolPair] {
       def hasNext = cursor.hasNext
       def next()  = try cursor.currentPair finally cursor.next()

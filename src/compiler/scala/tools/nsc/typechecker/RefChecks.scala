@@ -658,6 +658,10 @@ abstract class RefChecks extends Transform {
       while (opc.hasNext) {
         if (!opc.high.isClass)
           checkOverride(opc.currentPair)
+        // A term pair is only yielded if the member types matched. Erasure's double-definition check reuses that.
+        // Java-defined members are left out: `checkOverride` cooks their raw types after they were matched.
+        if (!typesOnly && opc.low.isTerm && !opc.low.isJavaDefined && !opc.high.isJavaDefined)
+          overridingPairs.recordMatchedAtRefchecks(clazz, opc.low, opc.high)
 
         opc.next()
       }
