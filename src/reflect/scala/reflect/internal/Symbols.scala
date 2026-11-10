@@ -1664,6 +1664,21 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       hasRawInfo && (infos.info eq NoType)
     }
 
+    /** The info of this symbol if it is already valid in the current period, else null. Unlike `rawInfo`, it never
+     *  completes this symbol or runs info transformers.
+     */
+    final def infoIfCurrent: Type = {
+      val outer = Symbols.this
+      if (_validTo != outer.currentPeriod) null
+      else {
+        var infos = this.infos
+        val curPid = outer.phaseId(_validTo)
+        while (curPid < outer.phaseId(infos.validFrom) && infos.prev != null)
+          infos = infos.prev
+        infos.info
+      }
+    }
+
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more

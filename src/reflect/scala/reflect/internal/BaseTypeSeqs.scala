@@ -62,6 +62,15 @@ trait BaseTypeSeqs {
       tmp
     }
 
+    /** The length of the base type sequence of class `sym` if its info is valid now and has one cached for this
+     *  period, else -1. It never completes `sym`, transforms its info or computes a sequence.
+     */
+    private[this] def cachedBaseTypeSeqLength(sym: Symbol): Int = sym.infoIfCurrent match {
+      case ct: CompoundType => ct.cachedBaseTypeSeqLength
+      case PolyType(_, ct: CompoundType) => ct.cachedBaseTypeSeqLength
+      case _ => -1
+    }
+
     /** The number of types in the sequence */
     def length: Int = elems.length
 
@@ -120,12 +129,24 @@ trait BaseTypeSeqs {
       val symId = sym.id
       val ids = typeSymbols
       val len = ids.length
-      var i = 0
-      while (i < len) {
-        if (ids(i) == symId) return i
-        i += 1
+      val symLen = if (sym.isClass) cachedBaseTypeSeqLength(sym) else -1
+      if (symLen > 0) {
+        // Ordered by `isLess`, a sequence lists each base class before all of that class's own base types,
+        // so `sym` can sit no later than `len - symLen`.
+        var i = len - symLen
+        while (i >= 0) {
+          if (ids(i) == symId) return i
+          i -= 1
+        }
+        -1
+      } else {
+        var i = 0
+        while (i < len) {
+          if (ids(i) == symId) return i
+          i += 1
+        }
+        -1
       }
-      -1
     }
 
     /** Return all evaluated types in this sequence as a list */
