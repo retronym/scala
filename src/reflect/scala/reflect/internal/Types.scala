@@ -1680,6 +1680,13 @@ trait Types
       }
     }
 
+    /** The length of `baseTypeSeq` if it is already computed for this period, else -1. Never computes it. */
+    final def cachedBaseTypeSeqLength: Int = {
+      val cached = baseTypeSeqCache
+      if (baseTypeSeqPeriod == currentPeriod && (cached ne null) && (cached ne undetBaseTypeSeq)) cached.length
+      else -1
+    }
+
     override def baseTypeSeqDepth: Depth = baseTypeSeq.maxDepth
 
     override def baseClasses: List[Symbol] = {
