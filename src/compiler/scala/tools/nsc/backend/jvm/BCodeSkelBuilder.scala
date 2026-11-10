@@ -14,7 +14,7 @@ package scala.tools.nsc
 package backend
 package jvm
 
-import scala.annotation.unused
+import scala.annotation.{tailrec, unused}
 import scala.collection.{immutable, mutable}
 import scala.tools.asm
 import scala.tools.nsc.symtab._
@@ -480,16 +480,54 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
     def lastInsn: asm.tree.AbstractInsnNode = mnode.instructions.getLast
     def currProgramPoint(): asm.Label = {
       lastInsn match {
-        case labnode: asm.tree.LabelNode => labnode.getLabel
+        case labnode: LabelNode1 =>
+          // the caller may use this label as the entry of an exception handler, or jump to it
+          labnode.flags &= ~LabelNode1.FORWARD_JUMPS_ONLY
+          labnode.getLabel
         case _ =>
           val pp = new asm.Label
           mnode visitLabel pp
           pp
       }
     }
+    /** As `currProgramPoint`, for a label that only records a position (a line number, the range of a
+     *  local variable), which is therefore no evidence that control reaches this point.
+     */
+    def currPositionLabel(): asm.Label = {
+      lastInsn match {
+        case labnode: asm.tree.LabelNode => labnode.getLabel
+        case _ =>
+          val pp = new asm.Label
+          markJoinPoint(pp)
+          pp
+      }
+    }
     def markProgramPoint(lbl: asm.Label): Unit = {
       val skip = (lbl == null) || isAtProgramPoint(lbl)
       if (!skip) { mnode visitLabel lbl }
+    }
+    /** Marks a label that is only ever jumped to from earlier in the method, so that
+     *  `isAtUnreachablePoint` can tell that nothing reaches it if no such jump has been emitted.
+     */
+    def markJoinPoint(lbl: asm.Label): Unit = {
+      markProgramPoint(lbl)
+      mnode.instructions.getLast.asInstanceOf[LabelNode1].flags |= LabelNode1.FORWARD_JUMPS_ONLY
+    }
+    /** True if control cannot reach the current position, so anything emitted here would be dead.
+     *  A `false` result is not a proof of reachability: `removeUnreachableCodeImpl` still has the final say.
+     */
+    def isAtUnreachablePoint: Boolean = {
+      @tailrec def loop(insn: asm.tree.AbstractInsnNode): Boolean = insn match {
+        case null => false
+        case _: asm.tree.LineNumberNode => loop(insn.getPrevious)
+        case label: LabelNode1 =>
+          (label.flags & (LabelNode1.FORWARD_JUMPS_ONLY | LabelNode1.JUMP_TARGET)) == LabelNode1.FORWARD_JUMPS_ONLY && loop(insn.getPrevious)
+        case _ =>
+          val op = insn.getOpcode
+          op == asm.Opcodes.GOTO || op == asm.Opcodes.ATHROW || op == asm.Opcodes.TABLESWITCH || op == asm.Opcodes.LOOKUPSWITCH ||
+            (op >= asm.Opcodes.IRETURN && op <= asm.Opcodes.RETURN)
+      }
+      loop(lastInsn)
     }
     def isAtProgramPoint(lbl: asm.Label): Boolean = {
       (lastInsn match { case labnode: asm.tree.LabelNode => (labnode.getLabel == lbl); case _ => false } )
@@ -503,7 +541,7 @@ abstract class BCodeSkelBuilder extends BCodeHelpers {
             // overwrite previous landmark as no instructions have been emitted for it
             lnn.line = nr
           case _ =>
-            mnode.visitLineNumber(nr, currProgramPoint())
+            mnode.visitLineNumber(nr, currPositionLabel())
         }
       }
     }
