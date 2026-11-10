@@ -497,10 +497,16 @@ trait TypeComparers {
               isSubArgs(tr1.args, tr2.args, sym1.typeParams, depth))
               ||
               sym2.isClass && {
-                val base = tr1 baseType sym2
-                // During bootstrap, `base eq NoType` occurs about 2.5 times as often as `base ne NoType`.
-                // The extra check seems like a worthwhile optimization (about 2.5M useless calls to isSubType saved during that run).
-                (base ne tr1) && (base ne NoType) && isSubType(base, tr2, depth)
+                if (sym1.isClass && tr2.args.isEmpty && sym2.rawowner.hasPackageFlag && sym2.typeParams.isEmpty)
+                  // `tr2` is a top-level monomorphic class: its base type in `tr1` would be a type ref to it whose
+                  // prefix and (absent) arguments need no comparing, so membership in `sym1`'s base type sequence decides.
+                  (sym1 ne sym2) && sym1.info.baseTypeIndex(sym2) >= 0
+                else {
+                  val base = tr1 baseType sym2
+                  // During bootstrap, `base eq NoType` occurs about 2.5 times as often as `base ne NoType`.
+                  // The extra check seems like a worthwhile optimization (about 2.5M useless calls to isSubType saved during that run).
+                  (base ne tr1) && (base ne NoType) && isSubType(base, tr2, depth)
+                }
               }
               ||
               thirdTryRef(tr1, tr2))
