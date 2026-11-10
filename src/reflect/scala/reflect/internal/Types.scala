@@ -2001,9 +2001,7 @@ trait Types
       }
 
     // TODO should we pull this out to reduce memory footprint of ClassInfoType?
-    private object enterRefs extends TypeMap {
-      private[this] var tparam: Symbol = _
-
+    private final class EnterRefs(tparam: Symbol) extends TypeMap {
       def apply(tp: Type): Type = {
         tp match {
           case tr @ TypeRef(_, sym, args) if !args.isEmpty =>
@@ -2023,10 +2021,6 @@ trait Types
         }
         tp.mapOver(this)
       }
-      def enter(tparam0: Symbol, parent: Type): Unit = {
-        this.tparam = tparam0
-        this(parent)
-      }
     }
 
     /** Compute initial (one-step) references and set state to `Initializing`.
@@ -2034,9 +2028,8 @@ trait Types
     private def computeRefs(): Unit = {
       refs = Array(Map(), Map())
       typeSymbol.typeParams foreach { tparam =>
-        parents foreach { p =>
-          enterRefs.enter(tparam, p)
-        }
+        val enterRefs = new EnterRefs(tparam)
+        parents foreach enterRefs
       }
       state = Initializing
     }
