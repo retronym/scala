@@ -21,6 +21,13 @@ import scala.annotation.{nowarn, tailrec}
   *  Unlike `ListMap`, `VectorMap` has amortized effectively constant lookup at the expense
   *  of using extra memory and generally lower performance for other operations
   *
+  *  `removed` leaves a tombstone in the internal vector of keys, which is only compacted by
+  *  `tail` and `init`. Memory use is therefore proportional to the number of keys inserted since
+  *  the last `tail` or `init`, not to the current size, under repeated removal and insertion.
+  *
+  *  Unlike most maps, `keys` returns a `Vector` rather than a `Set`, so it may not compare equal
+  *  to the `keys` of other maps (scala/bug#12991).
+  *
   *  @tparam K      the type of the keys contained in this vector map.
   *  @tparam V      the type of the values associated with the keys in this vector map.
   *
