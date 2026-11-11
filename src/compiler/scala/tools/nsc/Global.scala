@@ -1269,6 +1269,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       curRun = this
       phase = SomePhase
       phaseWithId(phase.id) = phase
+      rewindForNewRun()
       definitions.init()
 
       // the components to use, omitting those named by -Yskip and stopping at the -Ystop phase

@@ -761,9 +761,20 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Does symbol have ALL the flags in `mask` set? */
     final def hasAllFlags(mask: Long): Boolean = getFlag(mask) == mask
 
-    def setFlag(mask: Long): this.type   = { _rawflags |= mask ; this }
-    def resetFlag(mask: Long): this.type = { _rawflags &= ~mask ; this }
+    def setFlag(mask: Long): this.type   = {
+      if ((mask & ~_rawflags & RewoundFlags) != 0L) noteRewoundWrite(this, mask & ~_rawflags)
+      _rawflags |= mask
+      this
+    }
+    def resetFlag(mask: Long): this.type = {
+      if ((mask & _rawflags & RewoundFlags) != 0L) noteRewoundWrite(this, mask & _rawflags)
+      _rawflags &= ~mask
+      this
+    }
     def resetFlags(): Unit               = { rawflags = 0 }
+
+    /** Was this symbol made while a completer ran? For a symbol of a class file, it was made by the loader. */
+    final def isCreatedInCompletion: Boolean = (_rawflags & CREATED_IN_COMPLETION) != 0L
 
     /** Default implementation calls the generic string function, which
      *  will print overloaded flags as <flag1/flag2/flag3>.  Subclasses
@@ -775,8 +786,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  that the previous value was 0.
      */
     def initFlags(mask: Long): this.type = {
-      assert(rawflags == 0L, symbolCreationString)
-      _rawflags = mask
+      assert((rawflags & ~CREATED_IN_COMPLETION) == 0L, symbolCreationString)
+      _rawflags = (mask & ~CREATED_IN_COMPLETION) | (if (isInCompletion) CREATED_IN_COMPLETION else 0L)
       this
     }
 
@@ -789,8 +800,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       (fs | ((fs & LateFlags) >>> LateShift)) & ~((fs & AntiFlags) >>> AntiShift)
     }
 
-    def flags_=(fs: Long) = _rawflags = fs
-    def rawflags_=(x: Long): Unit = { _rawflags = x }
+    def flags_=(fs: Long) = rawflags_=(fs)
+    def rawflags_=(x: Long): Unit = {
+      if (((x ^ _rawflags) & RewoundFlags) != 0L) noteRewoundWrite(this, x ^ _rawflags)
+      _rawflags = (x & ~CREATED_IN_COMPLETION) | (_rawflags & CREATED_IN_COMPLETION)
+    }
 
     final def hasGetter = isTerm && nme.isLocalName(name)
 
@@ -1590,8 +1604,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         try {
           assertCorrectThread()
           phase = phaseOf(infos.validFrom)
+          enteringCompletion()
           tp.complete(this)
         } finally {
+          exitingCompletion()
           unlock()
           phase = current
         }
@@ -2927,6 +2943,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def name_=(name: Name): Unit = {
       if (name != rawname) {
         super.name_=(name)   // logging
+        noteRewoundWrite(this, 0L)
         changeNameInOwners(name)
         _rawname = name.toTermName
       }
@@ -3223,6 +3240,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def name_=(name: Name): Unit = {
       if (name != rawname) {
         super.name_=(name)  // logging
+        noteRewoundWrite(this, 0L)
         changeNameInOwners(name)
         _rawname = name.toTypeName
       }

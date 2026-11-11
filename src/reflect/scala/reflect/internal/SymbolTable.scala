@@ -46,6 +46,7 @@ abstract class SymbolTable extends macros.Universe
                               with StdAttachments
                               with Internals
                               with Reporting
+                              with Rewinds
 {
 
   val gen = new InternalTreeGen { val global: SymbolTable.this.type = SymbolTable.this }
