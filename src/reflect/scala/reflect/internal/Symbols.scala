@@ -35,12 +35,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
   protected def nextId(): Int = symbolIds.next()
 
-  /** Used to keep track of the recursion depth on locked symbols */
-  @deprecated("use `scratch.recursionTable`", "2.13.19")
-  def recursionTable: Map[Symbol, Int] = scratch.recursionTable
-  @deprecated("use `scratch.recursionTable`", "2.13.19")
-  def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
-
   private[this] var _lockedCount = 0
   def lockedCount = this._lockedCount
   def lockedCount_=(i: Int) = _lockedCount = i
@@ -559,39 +553,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
 // ----- locking and unlocking ------------------------------------------------------
 
+    /** How many times this symbol has been completed again within its own completion, on this thread. */
+    private def recursions: Int = (scratch.frame.completionsOf(this) - 1) max 0
+
     // True if the symbol is unlocked.
-    // True if the symbol is locked but still below the allowed recursion depth.
+    // True if the symbol is locked but still below the allowed recursion depth (`-Yrecursion`).
     // False otherwise
     private[scala] def lockOK: Boolean = (
       (_rawflags & LOCKED) == 0L || {
         val limit = settings.Yrecursion.value
-        limit != 0 && (
-        scratch.recursionTable.get(this) match {
-          case Some(n) => n <= limit
-          case None => true
-        })
+        limit != 0 && recursions <= limit
       }
     )
 
     // Lock a symbol, using the handler if the recursion depth becomes too great.
     private[scala] def lock(handler: => Unit): Boolean = {
       if ((_rawflags & LOCKED) != 0L) {
-        if (settings.Yrecursion.value != 0) {
-          val s = scratch
-          s.recursionTable.get(this) match {
-            case Some(n) =>
-              if (n > settings.Yrecursion.value) {
-                handler
-                false
-              } else {
-                s.recursionTable += (this -> (n + 1))
-                true
-              }
-            case None =>
-              s.recursionTable += (this -> 1)
-              true
-          }
-        } else {
+        val limit = settings.Yrecursion.value
+        if (limit != 0 && recursions <= limit) true
+        else {
           handler
           false
         }
@@ -603,11 +583,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     // Unlock a symbol
     private[scala] def unlock(): Unit =
-      if ((_rawflags & LOCKED) != 0L) {
+      if ((_rawflags & LOCKED) != 0L)
         _rawflags &= ~LOCKED
-        if (settings.Yrecursion.value != 0)
-          scratch.recursionTable -= this
-      }
 
 // ----- tests ----------------------------------------------------------------------
 
