@@ -525,15 +525,17 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       existentialAbstraction(tparams, dropIllegalStarTypes(lubType))
     }
     if (printLubs) {
-      println(indent + "lub of " + ts0 + " at depth "+depth)//debug
-      indent = indent + "  "
-      assert(indent.length <= 100, "LUB is highly indented")
+      val s = scratch
+      println(s.indent + "lub of " + ts0 + " at depth "+depth)//debug
+      s.indent = s.indent + "  "
+      assert(s.indent.length <= 100, "LUB is highly indented")
     }
     if (settings.areStatisticsEnabled) statistics.incCounter(nestedLubCount)
     val res = lub0(ts0)
     if (printLubs) {
-      indent = indent stripSuffix "  "
-      println(indent + "lub of " + ts0 + " is " + res)//debug
+      val s = scratch
+      s.indent = s.indent stripSuffix "  "
+      println(s.indent + "lub of " + ts0 + " is " + res)//debug
     }
     res
   }

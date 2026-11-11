@@ -93,16 +93,11 @@ trait Types
   import statistics._
 
   private[internal] val typeToStrings: tpe.TypeToStrings[Types.this.type] = new tpe.TypeToStrings[Types.this.type](this)
-  def toStringRecursions: Int = scratch.toStringRecursions
-  def toStringRecursions_=(value: Int): Unit = scratch.toStringRecursions = value
-  def toStringSubjects: mutable.HashSet[Type] = scratch.toStringSubjects
 
   private[internal] val commonOwners: tpe.CommonOwners[Types.this.type] = new tpe.CommonOwners[Types.this.type](this)
   type CommonOwnerMap = commonOwners.CommonOwnerMap
 
   val glbLubs: tpe.GlbLubs[Types.this.type] = new tpe.GlbLubs[Types.this.type](this)
-  def lubResults = scratch.frame.lubs.results
-  def glbResults = scratch.frame.glbs.results
 
   final def lub(ts: List[Type]): Type = glbLubs.lub(ts)
   protected[internal] final def lub(ts: List[Type], depth: Depth): Type = glbLubs.lub(ts, depth)
@@ -134,7 +129,9 @@ trait Types
   }
 
   /** The current skolemization level, see `Scratch.skolemizationLevel`. */
+  @deprecated("use `scratch.skolemizationLevel`", "2.13.19")
   def skolemizationLevel: Int = scratch.skolemizationLevel
+  @deprecated("use `scratch.skolemizationLevel`", "2.13.19")
   def skolemizationLevel_=(value: Int): Unit = scratch.skolemizationLevel = value
 
   /** A map from lists to compound types that have the given list as parents.
@@ -3445,7 +3442,7 @@ trait Types
     override def isGround = instValid && inst.isGround
 
     /** The variable's skolemization level */
-    val level = skolemizationLevel
+    val level = scratch.skolemizationLevel
 
     /** Applies this TypeVar to type arguments, if arity matches.
      *
@@ -4660,10 +4657,6 @@ trait Types
     i.isEmpty && j.isEmpty
   }
 
-  def basetypeRecursions: Int = scratch.frame.baseTypes.depth
-
-  def pendingBaseTypes: mutable.HashSet[Type] = scratch.frame.baseTypes.pending
-
   /** Does this type have a prefix that begins with a type variable,
    *  or is it a refinement type? For type prefixes that fulfil this condition,
    *  type selections with the same name of equal (as determined by `=:=`) prefixes are
@@ -5251,16 +5244,14 @@ trait Types
     def this(pre: Type, tp: String) = this("malformed type: " + pre + "#" + tp)
   }
 
-  protected[reflect] def indent: String = scratch.indent
-  protected[reflect] def indent_=(value: String): Unit = scratch.indent = value
-
   /** Perform operation `p` on arguments `tp1`, `arg2` and print trace of computation. */
   protected def explain[T](op: String, p: (Type, T) => Boolean, tp1: Type, arg2: T): Boolean = {
-    inform(indent + tp1 + " " + op + " " + arg2 + "?" /* + "("+tp1.getClass+","+arg2.getClass+")"*/)
-    indent = indent + "  "
+    val s = scratch
+    inform(s.indent + tp1 + " " + op + " " + arg2 + "?" /* + "("+tp1.getClass+","+arg2.getClass+")"*/)
+    s.indent = s.indent + "  "
     val result = p(tp1, arg2)
-    indent = indent stripSuffix "  "
-    inform(indent + result)
+    s.indent = s.indent stripSuffix "  "
+    inform(s.indent + result)
     result
   }
 

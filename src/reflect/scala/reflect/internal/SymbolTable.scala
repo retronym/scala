@@ -713,7 +713,6 @@ abstract class SymbolTable extends macros.Universe
     /** The current indentation string for traces */
     var indent: String = ""
     var toStringRecursions: Int = 0
-    val toStringSubjects = new mutable.HashSet[Type]
     /** The recursion depth of locked symbols, see `-Yrecursion` */
     var recursionTable = Map.empty[Symbol, Int]
 

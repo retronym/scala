@@ -397,6 +397,7 @@ private[internal] trait TypeMaps {
         case tp => tp.mapOver(this)
       }
   }
+  @deprecated("use `scratch.wildcardExtrapolation`", "2.13.19")
   def wildcardExtrapolation: wildcardExtrapolation = scratch.wildcardExtrapolation
 
   /** Might the given symbol be important when calculating the prefix

@@ -36,7 +36,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   protected def nextId(): Int = symbolIds.next()
 
   /** Used to keep track of the recursion depth on locked symbols */
+  @deprecated("use `scratch.recursionTable`", "2.13.19")
   def recursionTable: Map[Symbol, Int] = scratch.recursionTable
+  @deprecated("use `scratch.recursionTable`", "2.13.19")
   def recursionTable_=(value: Map[Symbol, Int]): Unit = scratch.recursionTable = value
 
   private[this] var _lockedCount = 0
@@ -567,7 +569,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       (_rawflags & LOCKED) == 0L || {
         val limit = settings.Yrecursion.value
         limit != 0 && (
-        recursionTable.get(this) match {
+        scratch.recursionTable.get(this) match {
           case Some(n) => n <= limit
           case None => true
         })
@@ -579,17 +581,18 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (lockTracing) _lockingTrace.addOne(this)
       if ((_rawflags & LOCKED) != 0L) {
         if (settings.Yrecursion.value != 0) {
-          recursionTable.get(this) match {
+          val s = scratch
+          s.recursionTable.get(this) match {
             case Some(n) =>
               if (n > settings.Yrecursion.value) {
                 handler
                 false
               } else {
-                recursionTable += (this -> (n + 1))
+                s.recursionTable += (this -> (n + 1))
                 true
               }
             case None =>
-              recursionTable += (this -> 1)
+              s.recursionTable += (this -> 1)
               true
           }
         } else {
@@ -609,7 +612,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (lockTracing && !_lockingTrace.isEmpty)
           _lockingTrace.remove(index = _lockingTrace.size - 1, count = 1) // dropRightInPlace(1)
         if (settings.Yrecursion.value != 0)
-          recursionTable -= this
+          scratch.recursionTable -= this
       }
 
 // ----- tests ----------------------------------------------------------------------
@@ -3357,7 +3360,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   extends TypeSymbol(initOwner, initPos, initName) {
     type TypeOfClonedSymbol = TypeSkolem
     /** The skolemization level in place when the skolem was constructed */
-    val level = skolemizationLevel
+    val level = scratch.skolemizationLevel
 
     final override def isSkolem = true
 

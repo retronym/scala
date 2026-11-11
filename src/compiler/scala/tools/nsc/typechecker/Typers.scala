@@ -3056,7 +3056,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                     =>
               val sam = samOf(pt)
               if (sam.exists && sam.info.params.lengthCompare(numVparams) == 0)
-                wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
+                scratch.wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
               else pt // allow type slack (pos/6221)
           }
 
