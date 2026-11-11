@@ -433,4 +433,37 @@ class TypesTest {
     assertTrue(typeOf[Nil.type @ann[T] forSome { type T }].isStable)
     assertFalse(typeOf[x.type forSome { val x: String }].isStable)
   }
+
+  trait In0; trait In1; trait In2
+
+  @Test
+  def testRefinedMapOverFlattensParents(): Unit = {
+    def replaceIn0(by: Type) = new TypeMap {
+      def apply(tp: Type): Type = if (tp.typeSymbol == typeOf[In0].typeSymbol) by else mapOver(tp)
+    }
+    def parentsAfter(by: Type) = replaceIn0(by)(typeOf[In0 with In1]) match {
+      case RefinedType(parents, _) => parents
+      case tp                      => fail(s"not a refinement: $tp"); Nil
+    }
+    assertEquals(typeOf[In1] :: typeOf[In2] :: typeOf[In1] :: Nil, parentsAfter(typeOf[In1 with In2]))
+    // A parent with declarations has to stay as it is, or they would be lost.
+    val withDecl = typeOf[In2 { def foo: Int }]
+    assertEquals(withDecl :: typeOf[In1] :: Nil, parentsAfter(withDecl))
+  }
+
+  // Each `::` in `in0 :: in1 :: in2 :: Nil` takes the lub of its element with those so far.
+  @Test
+  def testExtrapolatedLubOfInvariantHasFlatParents(): Unit = {
+    def foo(arg: Type) = appliedType(typeOf[Foo[Any]].typeConstructor, arg)
+    val tail = lub(foo(typeOf[In1]) :: foo(typeOf[In2]) :: Nil)
+    lub(foo(typeOf[In0]) :: tail :: Nil) match {
+      case ExistentialType(quantified :: Nil, _) =>
+        quantified.info.lowerBound match {
+          case RefinedType(parents, _) =>
+            assertEquals(parents.toString, List[Type](typeOf[In2], typeOf[In1], typeOf[In0]).map(_.typeSymbol).toSet, parents.map(_.typeSymbol).toSet)
+          case tp => fail(s"lower bound is not a refinement: $tp")
+        }
+      case tp => fail(s"lub is not existential: $tp")
+    }
+  }
 }
