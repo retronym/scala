@@ -1,4 +1,3 @@
-//> using options -Vcyclic
 class C {
   type OI = Option[Int]
   def f(z: OI, ls: List[OI], rs: List[OI]): (List[OI], List[OI]) = {

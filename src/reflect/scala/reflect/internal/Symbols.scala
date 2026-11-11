@@ -19,7 +19,7 @@ package reflect
 package internal
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 
 import util.{Statistics, shortClassOfInstance}
@@ -44,9 +44,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   private[this] var _lockedCount = 0
   def lockedCount = this._lockedCount
   def lockedCount_=(i: Int) = _lockedCount = i
-
-  private[this] val _lockingTrace = ArrayBuffer.empty[Symbol]
-  private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
   private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
@@ -578,7 +575,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     // Lock a symbol, using the handler if the recursion depth becomes too great.
     private[scala] def lock(handler: => Unit): Boolean = {
-      if (lockTracing) _lockingTrace.addOne(this)
       if ((_rawflags & LOCKED) != 0L) {
         if (settings.Yrecursion.value != 0) {
           val s = scratch
@@ -609,8 +605,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private[scala] def unlock(): Unit =
       if ((_rawflags & LOCKED) != 0L) {
         _rawflags &= ~LOCKED
-        if (lockTracing && !_lockingTrace.isEmpty)
-          _lockingTrace.remove(index = _lockingTrace.size - 1, count = 1) // dropRightInPlace(1)
         if (settings.Yrecursion.value != 0)
           scratch.recursionTable -= this
       }
@@ -1575,18 +1569,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
         lock {
           setInfo(ErrorType)
-          val trace =
-            if (lockTracing) {
-              val t = _lockingTrace.toArray
-              _lockingTrace.clear()
-              t
-            } else CyclicReference.emptyTrace
-          throw CyclicReference(this, tp, trace)
+          throw CyclicReference(this, tp, (scratch.frame.completions :+ this).toArray)
         }
-      } else {
-        if (lockTracing) _lockingTrace.addOne(this)
-        _rawflags |= LOCKED
-      }
+      } else _rawflags |= LOCKED
       val current = phase
       if (isCompilerUniverse) {
         try {
@@ -1615,7 +1600,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     private def completeInNextFrame(tp: Type): Unit = {
       val s = scratch
-      val frame = s.enterNextFrame()
+      val frame = s.enterNextFrame(this)
       try tp.complete(this) finally s.exitFrame(frame)
     }
 
@@ -1627,7 +1612,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val tp = rawInfo
       if (!tp.isComplete) {
         val s = scratch
-        val frame = s.enterNextFrame()
+        val frame = s.enterNextFrame(null)
         try tp.load(this) finally s.exitFrame(frame)
       }
     }

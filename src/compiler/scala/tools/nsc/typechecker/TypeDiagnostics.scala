@@ -1031,11 +1031,9 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
         else if (organics.length == 1) organics(0)
         else organics.find(_.pos.focus == pos.focus).getOrElse(organics(0))
       }
-      def help = if (!badsym.isSynthetic || settings.cyclic.value) "" else
-        s"; $badsym is synthetic; use -Vcyclic to find which definition needs an explicit type"
       condOpt(tree) {
-        case ValDef(_, _, TypeTree(), _)       => s"recursive $badsym needs type$help"
-        case DefDef(_, _, _, _, TypeTree(), _) => s"${cyclicAdjective(badsym)} $badsym needs result type$help"
+        case ValDef(_, _, TypeTree(), _)       => s"recursive $badsym needs type"
+        case DefDef(_, _, _, _, TypeTree(), _) => s"${cyclicAdjective(badsym)} $badsym needs result type"
         case Import(_, _)                      =>
           sm"""encountered unrecoverable cycle resolving import.
               |Note: this is often due in part to a class depending on a definition nested within its companion.

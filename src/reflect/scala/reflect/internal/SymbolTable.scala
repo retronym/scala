@@ -118,6 +118,7 @@ abstract class SymbolTable extends macros.Universe
 
   def settings: MutableSettings
 
+  @deprecated("a cyclic reference error always has the symbols being completed", "2.13.19")
   def isSymbolLockTracingEnabled: Boolean = isDeveloper
 
   /** Override with final implementation for inlining. */
@@ -650,12 +651,28 @@ abstract class SymbolTable extends macros.Universe
   /** The recursion guards of the type operations at one level of completion, with the undo log
    *  of type constraints. Each operation fetches its frame once and keeps it in a local.
    */
-  final class CompletionFrame {
+  final class CompletionFrame(val prev: CompletionFrame) {
+    /** How many completions enclose this frame's operations: 0 in the outermost frame of a thread. */
+    val depth: Int = if (prev eq null) 0 else prev.depth + 1
     private[this] var _next: CompletionFrame = null
     /** The frame for a completion started from this one. Kept for reuse once allocated. */
     def next: CompletionFrame = {
-      if (_next eq null) _next = new CompletionFrame
+      if (_next eq null) _next = new CompletionFrame(this)
       _next
+    }
+    private[this] var _completing: Symbol = null
+    /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
+    def completing: Symbol = _completing
+    private[internal] def completing_=(sym: Symbol): Unit = _completing = sym
+    /** The symbols being completed, from the outermost completion to the one in this frame. */
+    def completions: List[Symbol] = {
+      var syms: List[Symbol] = Nil
+      var f = this
+      while (f ne null) {
+        if (f.completing ne null) syms ::= f.completing
+        f = f.prev
+      }
+      syms
     }
     /** A log of type variable with their original constraints. Used in order
      *  to undo constraints in the case of isSubType/isSameType failure.
@@ -692,19 +709,25 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
-    private[this] var _frame: CompletionFrame = new CompletionFrame
+    private[this] var _frame: CompletionFrame = new CompletionFrame(null)
     /** The frame of the completion in progress on this thread. */
     def frame: CompletionFrame = _frame
-    /** Start a completion in the next frame. Returns the current one, for `exitFrame`. */
-    def enterNextFrame(): CompletionFrame = {
+    /** Start the completion of `completing` (`null` for a load) in the next frame. Returns the
+     *  current one, for `exitFrame`.
+     */
+    def enterNextFrame(completing: Symbol): CompletionFrame = {
       val f = _frame
-      _frame = f.next
+      val next = f.next
+      next.completing = completing
+      _frame = next
       f
     }
     /** End the completion that `enterNextFrame` started from `f`. */
     def exitFrame(f: CompletionFrame): Unit = {
       _frame = f
-      f.next.undoLog.clear() // what it logged can no longer be undone by the completion
+      val next = f.next
+      next.completing = null
+      next.undoLog.clear() // what it logged can no longer be undone by the completion
     }
     /** The current skolemization level, needed for the algorithms
      *  in isSameType, isSubType that do constraint solving under a prefix.
