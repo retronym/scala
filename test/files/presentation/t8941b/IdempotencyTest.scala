@@ -25,7 +25,7 @@ abstract class IdempotencyTest { self =>
     }
     override def signalDone(context: Context, old: Tree, result: Tree): Unit = {
       // println("signalDone: " + old.toString.take(50).replaceAll("\n", "\\n"))
-      if (!interrupted && lockedCount == 0 && interruptsEnabled && shouldInterrupt(result)) {
+      if (!interrupted && !inCompletion && interruptsEnabled && shouldInterrupt(result)) {
         interrupted = true
         val typed = typedTreeAt(markerPosition)
         checkTypedTree(typed)

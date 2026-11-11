@@ -344,7 +344,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   override def signalDone(context: Context, old: Tree, result: Tree): Unit = {
     val canObserveTree = (
          interruptsEnabled
-      && lockedCount == 0
+      && !inCompletion
       && !context.bufferErrors // scala/bug#7558 look away during exploratory typing in "silent mode"
     )
     if (canObserveTree) {
