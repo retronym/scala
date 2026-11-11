@@ -44,4 +44,28 @@ public class MethodNode1 extends MethodNode {
         }
         return (LabelNode) label.info;
     }
+
+    private void markJumpTarget(Label label) {
+        ((LabelNode1) getLabelNode(label)).flags |= LabelNode1.JUMP_TARGET;
+    }
+
+    @Override
+    public void visitJumpInsn(int opcode, Label label) {
+        markJumpTarget(label);
+        super.visitJumpInsn(opcode, label);
+    }
+
+    @Override
+    public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) {
+        markJumpTarget(dflt);
+        for (Label label : labels) markJumpTarget(label);
+        super.visitTableSwitchInsn(min, max, dflt, labels);
+    }
+
+    @Override
+    public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) {
+        markJumpTarget(dflt);
+        for (Label label : labels) markJumpTarget(label);
+        super.visitLookupSwitchInsn(dflt, keys, labels);
+    }
 }
