@@ -7,7 +7,7 @@ import org.junit.runners.JUnit4
 
 import scala.tools.asm.Opcodes._
 import scala.tools.nsc.backend.jvm.AsmUtils._
-import scala.tools.testkit.ASMConverters.Instruction
+import scala.tools.testkit.ASMConverters.{Instruction, TypeOp}
 import scala.tools.testkit.BytecodeTesting
 import scala.tools.testkit.BytecodeTesting._
 
@@ -198,5 +198,20 @@ class PatmatBytecodeTest extends BytecodeTesting {
     List("two", "guard", "colli") foreach { m =>
       assert(getInstructions(switches, m).exists(isSwitchInsn))
     }
+  }
+
+  @Test
+  def noBoxOfUnapplySeqWrapper(): Unit = {
+    val code =
+      """class C {
+        |  def list(xs: List[String]) = xs match { case List(a) => a case _ => "" }
+        |  def seq(xs: collection.Seq[String]) = xs match { case Seq(a, b) => a + b case _ => "" }
+        |  def star(xs: List[String]) = xs match { case List(a, _*) => a case _ => "" }
+        |  def empty(xs: List[String]) = xs match { case List() => "" case _ => "x" }
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    for (m <- List("list", "seq", "star", "empty"))
+      assert(!getInstructions(c, m).exists(cond(_) { case TypeOp(NEW, t) => t.contains("UnapplySeqWrapper") }), textify(c))
   }
 }
