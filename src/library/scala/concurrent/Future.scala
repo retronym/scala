@@ -511,8 +511,12 @@ trait Future[+T] extends Awaitable[T] {
     transform {
       result =>
         try pf.applyOrElse[Try[T], Any](result, Future.id[Try[T]])
-        catch { case t if NonFatal(t) => executor.reportFailure(t) }
-        // TODO: use `finally`?
+        catch {
+          case t if NonFatal(t) => executor.reportFailure(t)
+          case ie: InterruptedException => // Not NonFatal, but must not change the outcome of the returned Future either
+            executor.reportFailure(ie)
+            Thread.currentThread.interrupt()
+        }
         result
     }
 }
