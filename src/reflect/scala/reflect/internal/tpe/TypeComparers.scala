@@ -16,19 +16,13 @@ package internal
 package tpe
 
 import scala.annotation.tailrec
-import scala.collection.mutable
 import util.{StringContextStripMarginOps, TriState}
-import java.util.IdentityHashMap
 
 trait TypeComparers {
   self: SymbolTable =>
 
   import definitions._
   import statistics._
-
-  def pendingSubTypes: mutable.HashSet[SubTypePair] = scratch.frame.subTypes.pending
-
-  def knownFalseSubTypes: IdentityHashMap[Type, List[Type]] = scratch.frame.subTypes.knownFalse
 
   final case class SubTypePair(tp1: Type, tp2: Type) {
     // scala/bug#8146 we used to implement equality here in terms of pairwise =:=.
@@ -41,8 +35,6 @@ trait TypeComparers {
 
     override def toString = tp1.toString+" <:<? "+tp2
   }
-
-  def subsametypeRecursions: Int = scratch.frame.subTypes.depth
 
   private def isUnifiable(pre1: Type, pre2: Type) = (
        (isEligibleForPrefixUnification(pre1) || isEligibleForPrefixUnification(pre2))
