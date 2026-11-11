@@ -58,6 +58,45 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
 
   var lastAccessCheckDetails: String = ""
 
+  /** The info of `sym` before the pattern of `caseDef` narrowed it.
+   *
+   *  Keyed by the tree, as `silent` hands `savedTypeBounds` between contexts for the same `CaseDef`.
+   */
+  private final class GadtNarrowing(val caseDef: CaseDef, val sym: Symbol, val saved: Type)
+
+  /** The narrowings in force, innermost first. See `Infer#instantiateTypeVar`. */
+  private var gadtNarrowings: List[GadtNarrowing] = Nil
+  private val noGadtNarrowingsLifted: () => Unit = () => ()
+
+  /** A lazy completer belongs where its definition is, not where something happened to force it:
+   *  its typed right hand side is kept, so it would never be checked again without the narrowing.
+   *
+   *  Undo the narrowings of each case that does not enclose `definitionContext`. This compares
+   *  contexts rather than tree positions, as a typer retry may be typing a duplicate of the tree.
+   *
+   *  @return the action to put them back when the completer is done. A `null` context stands for
+   *          a completer that doesn't know where its definition is, which lifts nothing.
+   */
+  def liftGadtNarrowings(definitionContext: Context): () => Unit =
+    if (gadtNarrowings.isEmpty || (definitionContext eq null)) noGadtNarrowingsLifted
+    else {
+      val active = gadtNarrowings
+      val (kept, lifted) = active.partition(n => definitionContext.nextEnclosing(_.tree eq n.caseDef) ne NoContext)
+      if (lifted.isEmpty) noGadtNarrowingsLifted
+      else {
+        val narrowedInfos = lifted.map { n =>
+          val narrowed = n.sym.info
+          n.sym setInfo n.saved
+          narrowed
+        }
+        gadtNarrowings = kept
+        () => {
+          foreach2(lifted.reverse, narrowedInfos.reverse)((n, narrowed) => n.sym setInfo narrowed)
+          gadtNarrowings = active
+        }
+      }
+    }
+
   val rootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
 
   val excludedRootImportsCached = perRunCaches.newMap[CompilationUnit, List[Symbol]]()
@@ -153,6 +192,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       }
       context.reporter.clearAll()
     }
+    gadtNarrowings = Nil // a type error may have unwound past `restoreTypeBounds`
   }
 
   /**
@@ -972,6 +1012,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         case info           => devWarning(s"Something other than a TypeBounds seen in pushTypeBounds: $info is a ${shortClassOfInstance(info)}")
       }
       savedTypeBounds ::= ((sym, sym.info))
+      tree match {
+        case caseDef: CaseDef => gadtNarrowings ::= new GadtNarrowing(caseDef, sym, sym.info)
+        case _                =>
+      }
     }
 
     def restoreTypeBounds(tp: Type): Type = {
@@ -999,6 +1043,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
           sym setInfo debuglogResult(s"Discarding inferred $sym=${sym.info}, restoring saved info")(savedInfo)
 
         savedTypeBounds = Nil
+        gadtNarrowings = gadtNarrowings.filterNot(_.caseDef eq tree)
       }
     }
 
