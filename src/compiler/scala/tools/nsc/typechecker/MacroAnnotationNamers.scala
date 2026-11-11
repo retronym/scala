@@ -345,9 +345,7 @@ trait MacroAnnotationNamers { self: Analyzer =>
       }
 
       def complete(sym: Symbol, onlyExpansions: Boolean) = {
-        lockedCount += 1
-        try completeImpl(sym, onlyExpansions)
-        finally lockedCount -= 1
+        completeImpl(sym, onlyExpansions)
       }
 
       override def completeImpl(sym: Symbol): Unit = {
@@ -786,7 +784,7 @@ trait MacroAnnotationNamers { self: Analyzer =>
           if (isMaybeExpandee(sym)) {
             def assert(what: Boolean) = Predef.assert(what, s"${sym.accurateKindString} ${sym.rawname}#${sym.id} with ${sym.rawInfo.kind}")
             assert(sym.rawInfo.isInstanceOf[MacroAnnotationNamer#MaybeExpandeeCompleter])
-            sym.rawInfo.completeOnlyExpansions(sym)
+            inCompletionOf(sym)(sym.rawInfo.completeOnlyExpansions(sym))
             assert(!sym.rawInfo.isInstanceOf[MacroAnnotationNamer#MaybeExpandeeCompleter])
           }
           val derivedTrees = attachedExpansion(sym).getOrElse(List(stat))

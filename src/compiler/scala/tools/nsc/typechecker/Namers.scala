@@ -2173,11 +2173,7 @@ trait Namers extends MethodSynthesis {
   trait LockingTypeCompleter extends TypeCompleter {
     def completeImpl(sym: Symbol): Unit
 
-    override def complete(sym: Symbol) = {
-      lockedCount += 1
-      try completeImpl(sym)
-      finally lockedCount -= 1
-    }
+    override def complete(sym: Symbol) = completeImpl(sym)
   }
 
   /**

@@ -35,9 +35,20 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
   protected def nextId(): Int = symbolIds.next()
 
-  private[this] var _lockedCount = 0
-  def lockedCount = this._lockedCount
-  def lockedCount_=(i: Int) = _lockedCount = i
+  /** Is a completion in progress on this thread? */
+  final def inCompletion: Boolean = scratch.frame.depth > 0
+
+  /** Run `body`, which completes `sym` other than through its `info`, in the next frame. */
+  final def inCompletionOf[T](sym: Symbol)(body: => T): T = {
+    val s = scratch
+    val frame = s.enterNextFrame(sym)
+    try body finally s.exitFrame(frame)
+  }
+
+  @deprecated("use `inCompletion`; this is the number of completions in progress on this thread", "2.13.19")
+  def lockedCount: Int = scratch.frame.depth
+  @deprecated("the completion frames count completions; assigning this has no effect", "2.13.19")
+  def lockedCount_=(i: Int): Unit = ()
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
   private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
@@ -3098,7 +3109,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       //
       // Out of caution, I've also disable caching if there are active type completers, which also
       // mutate symbol infos during val and def return type inference based the overridden member.
-      if (!isCompilerUniverse || isPastTyper || lockedCount > 0) return pre.computeMemberType(this)
+      if (!isCompilerUniverse || isPastTyper || inCompletion) return pre.computeMemberType(this)
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult

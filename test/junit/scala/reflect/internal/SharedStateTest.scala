@@ -94,7 +94,6 @@ object SharedStateTest {
     "scala.reflect.internal.SymbolTable$traceSymbols$.prevOwners" -> Debug,
     "scala.reflect.internal.SymbolTable._chrs" -> NameLock,
     "scala.reflect.internal.SymbolTable._intersectionWitness" -> s"`CompoundType.memo`, from `defineBaseTypeSeqOfCompoundType` and `defineBaseClassesOfCompoundType`: $Gil",
-    "scala.reflect.internal.SymbolTable._lockedCount" -> s"changed by completions: $Gil",
     "scala.reflect.internal.SymbolTable.explainSwitch" -> Debug,
     "scala.reflect.internal.SymbolTable.infoTransformers" -> s"$Init; a compiler universe installs its phases' transformers: $CompilerOnly",
     "scala.reflect.internal.SymbolTable.keepPhaseStack" -> Debug,

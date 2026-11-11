@@ -9,7 +9,7 @@ object Test extends InteractiveTest {
 
   override protected def createGlobal: Global = new Global(settings, compilerReporter) {
     override def signalDone(context: Context, old: Tree, result: Tree): Unit = {
-      if (onCompilerThread && reached.getCount > 0 && interruptsEnabled && lockedCount == 0) {
+      if (onCompilerThread && reached.getCount > 0 && interruptsEnabled && !inCompletion) {
         reached.countDown()
         posted.await()
       }
