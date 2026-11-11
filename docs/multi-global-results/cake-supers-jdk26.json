@@ -1,0 +1,1044 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "30"
+        },
+        "primaryMetric" : {
+            "score" : 1.893479894892345,
+            "scoreError" : 0.018863750706096975,
+            "scoreConfidence" : [
+                1.8746161441862481,
+                1.912343645598442
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.8820726985595089,
+                "50.0" : 1.8896901951190457,
+                "90.0" : 1.9192835353965016,
+                "95.0" : 1.92017301857858,
+                "99.0" : 1.92017301857858,
+                "99.9" : 1.92017301857858,
+                "99.99" : 1.92017301857858,
+                "99.999" : 1.92017301857858,
+                "99.9999" : 1.92017301857858,
+                "100.0" : 1.92017301857858
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.8820726985595089,
+                    1.9112781867577981,
+                    1.891112419466522,
+                    1.8824195425687653,
+                    1.887441697486505,
+                    1.8925592684972359,
+                    1.8929985075566023,
+                    1.8864756386803647,
+                    1.888267970771569,
+                    1.92017301857858
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "60"
+        },
+        "primaryMetric" : {
+            "score" : 1.890047518651534,
+            "scoreError" : 0.01612803438273068,
+            "scoreConfidence" : [
+                1.8739194842688034,
+                1.9061755530342646
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.8767864421843659,
+                "50.0" : 1.88957616709406,
+                "90.0" : 1.9054367755781063,
+                "95.0" : 1.905810723236359,
+                "99.0" : 1.905810723236359,
+                "99.9" : 1.905810723236359,
+                "99.99" : 1.905810723236359,
+                "99.999" : 1.905810723236359,
+                "99.9999" : 1.905810723236359,
+                "100.0" : 1.905810723236359
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.8978993337048435,
+                    1.9020712466538319,
+                    1.8767864421843659,
+                    1.8874824762823588,
+                    1.8825242304091014,
+                    1.8986518198071116,
+                    1.8916698579057614,
+                    1.878394636629548,
+                    1.8791844197020566,
+                    1.905810723236359
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "70"
+        },
+        "primaryMetric" : {
+            "score" : 1.8899860645775166,
+            "scoreError" : 0.00931322355852844,
+            "scoreConfidence" : [
+                1.8806728410189881,
+                1.899299288136045
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.8820743571348946,
+                "50.0" : 1.8893271896662378,
+                "90.0" : 1.9023569904627027,
+                "95.0" : 1.9030548060314687,
+                "99.0" : 1.9030548060314687,
+                "99.9" : 1.9030548060314687,
+                "99.99" : 1.9030548060314687,
+                "99.999" : 1.9030548060314687,
+                "99.9999" : 1.9030548060314687,
+                "100.0" : 1.9030548060314687
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.8960766503438091,
+                    1.9030548060314687,
+                    1.8850055723834127,
+                    1.8862775696204468,
+                    1.8921933660669181,
+                    1.891428487618911,
+                    1.8887172053480024,
+                    1.8899371739844733,
+                    1.8820743571348946,
+                    1.8850954572428305
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "100"
+        },
+        "primaryMetric" : {
+            "score" : 1.971738651178916,
+            "scoreError" : 0.012406966105396156,
+            "scoreConfidence" : [
+                1.9593316850735198,
+                1.984145617284312
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.9609019921622701,
+                "50.0" : 1.970072418568836,
+                "90.0" : 1.9845823853876305,
+                "95.0" : 1.984749972002512,
+                "99.0" : 1.984749972002512,
+                "99.9" : 1.984749972002512,
+                "99.99" : 1.984749972002512,
+                "99.999" : 1.984749972002512,
+                "99.9999" : 1.984749972002512,
+                "100.0" : 1.984749972002512
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.984749972002512,
+                    1.9690618525704218,
+                    1.9756646344398787,
+                    1.9661011490364173,
+                    1.9623486745080585,
+                    1.9830741058536985,
+                    1.9710829845672506,
+                    1.9609019921622701,
+                    1.9770740930642956,
+                    1.9673270535843541
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "30"
+        },
+        "primaryMetric" : {
+            "score" : 1.994834244255569,
+            "scoreError" : 0.01520520777579517,
+            "scoreConfidence" : [
+                1.979629036479774,
+                2.0100394520313642
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.9721163764652814,
+                "50.0" : 1.9966346736225362,
+                "90.0" : 2.005213718752563,
+                "95.0" : 2.005354519158126,
+                "99.0" : 2.005354519158126,
+                "99.9" : 2.005354519158126,
+                "99.99" : 2.005354519158126,
+                "99.999" : 2.005354519158126,
+                "99.9999" : 2.005354519158126,
+                "100.0" : 2.005354519158126
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    2.005354519158126,
+                    1.9926464071106342,
+                    2.001179423945053,
+                    1.9973695486338623,
+                    2.003946515102496,
+                    2.0007932641773265,
+                    1.9842318340297531,
+                    1.9721163764652814,
+                    1.9948047553219477,
+                    1.9958997986112101
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "60"
+        },
+        "primaryMetric" : {
+            "score" : 2.008358876399175,
+            "scoreError" : 0.020464142976753117,
+            "scoreConfidence" : [
+                1.9878947334224217,
+                2.028823019375928
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.9752029362075072,
+                "50.0" : 2.01097542828277,
+                "90.0" : 2.0219235763040913,
+                "95.0" : 2.022140103735191,
+                "99.0" : 2.022140103735191,
+                "99.9" : 2.022140103735191,
+                "99.99" : 2.022140103735191,
+                "99.999" : 2.022140103735191,
+                "99.9999" : 2.022140103735191,
+                "100.0" : 2.022140103735191
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.9965114877563979,
+                    1.9752029362075072,
+                    2.019974829424192,
+                    2.010862589134204,
+                    2.022140103735191,
+                    2.0091900968011287,
+                    2.0110882674313357,
+                    2.010527556114906,
+                    2.0134815309660095,
+                    2.0146093664208795
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "70"
+        },
+        "primaryMetric" : {
+            "score" : 2.1321908259141837,
+            "scoreError" : 0.02829299948369002,
+            "scoreConfidence" : [
+                2.1038978264304937,
+                2.1604838253978738
+            ],
+            "scorePercentiles" : {
+                "0.0" : 2.1198707574583784,
+                "50.0" : 2.1246588493990974,
+                "90.0" : 2.1779988081224864,
+                "95.0" : 2.1818190410348017,
+                "99.0" : 2.1818190410348017,
+                "99.9" : 2.1818190410348017,
+                "99.99" : 2.1818190410348017,
+                "99.999" : 2.1818190410348017,
+                "99.9999" : 2.1818190410348017,
+                "100.0" : 2.1818190410348017
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    2.1436167119116494,
+                    2.1198707574583784,
+                    2.1247840963838165,
+                    2.1818190410348017,
+                    2.132198684201404,
+                    2.1218753344392125,
+                    2.1245336024143784,
+                    2.1232358922173105,
+                    2.1238100025387836,
+                    2.1261641365421067
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaClass",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "100"
+        },
+        "primaryMetric" : {
+            "score" : 2.0739218285780914,
+            "scoreError" : 0.22494894107734564,
+            "scoreConfidence" : [
+                1.8489728875007456,
+                2.298870769655437
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.9672879629097915,
+                "50.0" : 2.0090483509637678,
+                "90.0" : 2.4099494878047967,
+                "95.0" : 2.4269073754052104,
+                "99.0" : 2.4269073754052104,
+                "99.9" : 2.4269073754052104,
+                "99.99" : 2.4269073754052104,
+                "99.999" : 2.4269073754052104,
+                "99.9999" : 2.4269073754052104,
+                "100.0" : 2.4269073754052104
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    2.053366221566209,
+                    2.003819615243028,
+                    1.9672879629097915,
+                    2.0085415584103155,
+                    2.2573284994010736,
+                    2.4269073754052104,
+                    1.9771039154143524,
+                    2.027079980892625,
+                    2.008228013021089,
+                    2.00955514351722
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "30"
+        },
+        "primaryMetric" : {
+            "score" : 2.16302195474425,
+            "scoreError" : 0.43243825446269696,
+            "scoreConfidence" : [
+                1.730583700281553,
+                2.595460209206947
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.92006350696134,
+                "50.0" : 2.0384117529541284,
+                "90.0" : 2.702810932981985,
+                "95.0" : 2.717929175422677,
+                "99.0" : 2.717929175422677,
+                "99.9" : 2.717929175422677,
+                "99.99" : 2.717929175422677,
+                "99.999" : 2.717929175422677,
+                "99.9999" : 2.717929175422677,
+                "100.0" : 2.717929175422677
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.9889263903141212,
+                    2.717929175422677,
+                    2.5667467510157547,
+                    2.276457260565782,
+                    2.252487735071789,
+                    2.087897115594135,
+                    1.9365863001052248,
+                    1.9317270777568936,
+                    1.92006350696134,
+                    1.9513982346347785
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "60"
+        },
+        "primaryMetric" : {
+            "score" : 1.923732228757877,
+            "scoreError" : 0.056687471466277305,
+            "scoreConfidence" : [
+                1.8670447572915998,
+                1.9804197002241544
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.891256697237188,
+                "50.0" : 1.9041736186180898,
+                "90.0" : 1.9957118246205992,
+                "95.0" : 1.9984077946904808,
+                "99.0" : 1.9984077946904808,
+                "99.9" : 1.9984077946904808,
+                "99.99" : 1.9984077946904808,
+                "99.999" : 1.9984077946904808,
+                "99.9999" : 1.9984077946904808,
+                "100.0" : 1.9984077946904808
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.937592027372488,
+                    1.8948565466476002,
+                    1.8938151815779747,
+                    1.891256697237188,
+                    1.9002361909019252,
+                    1.971448093991664,
+                    1.9984077946904808,
+                    1.943281838371875,
+                    1.8983168704533189,
+                    1.908111046334254
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "70"
+        },
+        "primaryMetric" : {
+            "score" : 1.9510409239666664,
+            "scoreError" : 0.04381058564107267,
+            "scoreConfidence" : [
+                1.9072303383255937,
+                1.994851509607739
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.9185042060006468,
+                "50.0" : 1.948450778427346,
+                "90.0" : 1.999041574432094,
+                "95.0" : 1.9991875780016886,
+                "99.0" : 1.9991875780016886,
+                "99.9" : 1.9991875780016886,
+                "99.99" : 1.9991875780016886,
+                "99.999" : 1.9991875780016886,
+                "99.9999" : 1.9991875780016886,
+                "100.0" : 1.9991875780016886
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.9521809813406072,
+                    1.9313013863512343,
+                    1.921230438623342,
+                    1.9275134326561862,
+                    1.9185042060006468,
+                    1.9584506405798117,
+                    1.9447205755140844,
+                    1.9977275423057415,
+                    1.9991875780016886,
+                    1.959592458293324
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "1",
+            "traits" : "100"
+        },
+        "primaryMetric" : {
+            "score" : 1.925106987276774,
+            "scoreError" : 0.049000695020836836,
+            "scoreConfidence" : [
+                1.8761062922559373,
+                1.974107682297611
+            ],
+            "scorePercentiles" : {
+                "0.0" : 1.8944218399706954,
+                "50.0" : 1.9127681879761165,
+                "90.0" : 1.9780423937630878,
+                "95.0" : 1.9791436293107274,
+                "99.0" : 1.9791436293107274,
+                "99.9" : 1.9791436293107274,
+                "99.99" : 1.9791436293107274,
+                "99.999" : 1.9791436293107274,
+                "99.9999" : 1.9791436293107274,
+                "100.0" : 1.9791436293107274
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    1.901171580282048,
+                    1.9681312738343313,
+                    1.9607225326503173,
+                    1.9253766949855113,
+                    1.9040793159838652,
+                    1.8999567241637305,
+                    1.9791436293107274,
+                    1.8944218399706954,
+                    1.9214570599683678,
+                    1.8966092216181454
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "30"
+        },
+        "primaryMetric" : {
+            "score" : 9.676165332283139,
+            "scoreError" : 0.2337251605695016,
+            "scoreConfidence" : [
+                9.442440171713637,
+                9.909890492852641
+            ],
+            "scorePercentiles" : {
+                "0.0" : 9.473385746151536,
+                "50.0" : 9.639081202187334,
+                "90.0" : 9.995125540637192,
+                "95.0" : 10.016051845589137,
+                "99.0" : 10.016051845589137,
+                "99.9" : 10.016051845589137,
+                "99.99" : 10.016051845589137,
+                "99.999" : 10.016051845589137,
+                "99.9999" : 10.016051845589137,
+                "100.0" : 10.016051845589137
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    9.622257415402418,
+                    9.806788796069688,
+                    10.016051845589137,
+                    9.676586662371134,
+                    9.655904988972251,
+                    9.473385746151536,
+                    9.613092457171216,
+                    9.539479056186254,
+                    9.76679180750817,
+                    9.591314547409578
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "60"
+        },
+        "primaryMetric" : {
+            "score" : 10.233644208366403,
+            "scoreError" : 0.3084692811225598,
+            "scoreConfidence" : [
+                9.925174927243843,
+                10.542113489488964
+            ],
+            "scorePercentiles" : {
+                "0.0" : 10.00871085902765,
+                "50.0" : 10.168043461546468,
+                "90.0" : 10.690390873089434,
+                "95.0" : 10.714770953418414,
+                "99.0" : 10.714770953418414,
+                "99.9" : 10.714770953418414,
+                "99.99" : 10.714770953418414,
+                "99.999" : 10.714770953418414,
+                "99.9999" : 10.714770953418414,
+                "100.0" : 10.714770953418414
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    10.168711696725971,
+                    10.178624479204476,
+                    10.470970150128624,
+                    10.714770953418414,
+                    10.167375226366964,
+                    10.00871085902765,
+                    10.18441012759344,
+                    10.148310343213177,
+                    10.145526824862495,
+                    10.149031423122809
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "70"
+        },
+        "primaryMetric" : {
+            "score" : 44.59696461423397,
+            "scoreError" : 0.496390742456976,
+            "scoreConfidence" : [
+                44.100573871776994,
+                45.09335535669094
+            ],
+            "scorePercentiles" : {
+                "0.0" : 44.26497933156316,
+                "50.0" : 44.5341993911846,
+                "90.0" : 45.233209881446044,
+                "95.0" : 45.2717304803123,
+                "99.0" : 45.2717304803123,
+                "99.9" : 45.2717304803123,
+                "99.99" : 45.2717304803123,
+                "99.999" : 45.2717304803123,
+                "99.9999" : 45.2717304803123,
+                "100.0" : 45.2717304803123
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    44.29860219823306,
+                    44.558960083285875,
+                    44.39210861530416,
+                    44.87269067790535,
+                    44.63858207104443,
+                    44.50943869908333,
+                    44.27602949395834,
+                    44.8865244916497,
+                    45.2717304803123,
+                    44.26497933156316
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "scala.tools.nsc.CakeSupersBenchmark.viaTrait",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+        "jvmArgs" : [
+            "-Xms1G",
+            "-Xmx1G",
+            "-XX:CompileCommand=quiet",
+            "-XX:CompileCommand=dontinline,*$Hot::viaTrait",
+            "-XX:CompileCommand=dontinline,*$Hot::viaClass"
+        ],
+        "jdkVersion" : "26.0.2.1-internal",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "26.0.2.1-internal-integration",
+        "warmupIterations" : 10,
+        "warmupTime" : "1 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 10,
+        "measurementTime" : "1 s",
+        "measurementBatchSize" : 1,
+        "params" : {
+            "classes" : "4",
+            "traits" : "100"
+        },
+        "primaryMetric" : {
+            "score" : 61.469000626948606,
+            "scoreError" : 4.936053873013593,
+            "scoreConfidence" : [
+                56.532946753935015,
+                66.4050544999622
+            ],
+            "scorePercentiles" : {
+                "0.0" : 58.48645332830966,
+                "50.0" : 60.443461284606514,
+                "90.0" : 68.54468029204727,
+                "95.0" : 69.00950691112106,
+                "99.0" : 69.00950691112106,
+                "99.9" : 69.00950691112106,
+                "99.99" : 69.00950691112106,
+                "99.999" : 69.00950691112106,
+                "99.9999" : 69.00950691112106,
+                "100.0" : 69.00950691112106
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    59.38858564313659,
+                    58.48645332830966,
+                    59.232666045235746,
+                    62.64343856859424,
+                    61.79825852016652,
+                    59.37028063016372,
+                    58.90123897629893,
+                    61.49833692607645,
+                    69.00950691112106,
+                    64.3612407203831
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+

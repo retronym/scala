@@ -1,0 +1,4 @@
+globalClasses=0:   97.561 ±(99.9%) 2.960 ms/op [Average]
+globalClasses=1:   95.472 ±(99.9%) 2.586 ms/op [Average]
+globalClasses=4:   151.665 ±(99.9%) 8.129 ms/op [Average]
+globalClasses=8:   146.114 ±(99.9%) 3.999 ms/op [Average]
