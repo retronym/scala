@@ -664,6 +664,16 @@ abstract class SymbolTable extends macros.Universe
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
     private[internal] def completing_=(sym: Symbol): Unit = _completing = sym
+    /** How many completions of `sym` are in progress, in this frame and those enclosing it. */
+    def completionsOf(sym: Symbol): Int = {
+      var n = 0
+      var f = this
+      while (f ne null) {
+        if (f.completing eq sym) n += 1
+        f = f.prev
+      }
+      n
+    }
     /** The symbols being completed, from the outermost completion to the one in this frame. */
     def completions: List[Symbol] = {
       var syms: List[Symbol] = Nil
@@ -736,8 +746,6 @@ abstract class SymbolTable extends macros.Universe
     /** The current indentation string for traces */
     var indent: String = ""
     var toStringRecursions: Int = 0
-    /** The recursion depth of locked symbols, see `-Yrecursion` */
-    var recursionTable = Map.empty[Symbol, Int]
 
     // Reusable instances of helpers with mutable state, one per level of reentrance. A concurrent
     // universe makes a fresh one each time instead: a helper keeps the types and symbols of its last
