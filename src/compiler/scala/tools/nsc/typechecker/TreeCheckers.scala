@@ -216,9 +216,9 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     SymbolTracker.check(phase, unit)
     val checker = new TreeChecker(context)
     runWithUnit(unit) {
-      checker.precheck.traverse(unit.body)
+      new checker.Precheck().traverse(unit.body)
       checker.typed(unit.body)
-      checker.postcheck.traverse(unit.body)
+      new checker.Postcheck().traverse(unit.body)
     }
   }
 
@@ -279,7 +279,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       tree
     }
 
-    object precheck extends TreeStackTraverser {
+    class Precheck extends TreeStackTraverser {
       private var enclosingMemberDefs: List[MemberDef] = Nil
       private def pushMemberDef[T](md: MemberDef)(body: => T): T = {
         enclosingMemberDefs ::= md
@@ -430,7 +430,7 @@ abstract class TreeCheckers extends AbstractAnalyzer {
       }
     }
 
-    object postcheck extends Traverser {
+    class Postcheck extends Traverser {
       override def traverse(tree: Tree): Unit = tree match {
         case EmptyTree | TypeTree() => ()
         case _ =>

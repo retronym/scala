@@ -15,7 +15,6 @@ package reflect
 package internal
 
 import scala.annotation.{meta, migration, nowarn, tailrec}
-import scala.collection.mutable
 import Flags._
 import scala.reflect.api.{Universe => ApiUniverse}
 import PartialFunction.cond
@@ -857,7 +856,7 @@ trait Definitions extends api.StandardDefinitions {
           }
 
           if (samSym.exists && tp.typeSymbol != correspondingFunctionSymbol) // don't treat Functions as SAMs
-            wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
+            scratch.wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
           else NoType
       }
 
@@ -951,18 +950,12 @@ trait Definitions extends api.StandardDefinitions {
       def isVolatileAbstractType: Boolean = {
         def sym = tp.typeSymbol
         def volatileUpperBound = isVolatile(tp.upperBound)
-        def safeIsVolatile = (
-          if (volatileRecursions < TypeConstants.LogVolatileThreshold)
-            volatileUpperBound
-          // we can return true when pendingVolatiles contains sym, because
-          // a cycle will be detected afterwards and an error will result anyway.
-          else pendingVolatiles(sym) || {
-            pendingVolatiles += sym
-            try volatileUpperBound finally pendingVolatiles -= sym
-          }
-        )
-        volatileRecursions += 1
-        try safeIsVolatile finally volatileRecursions -= 1
+        val guard = scratch.frame.volatiles
+        // we can return true on a cycle, because
+        // a cycle will be detected afterwards and an error will result anyway.
+        !guard.enter(sym) || {
+          try volatileUpperBound finally guard.exit(sym)
+        }
       }
       /*  A refined type P1 with ... with Pn { decls } is volatile if
        *  one of the parent types Pi is an abstract type, and
@@ -1006,8 +999,6 @@ trait Definitions extends api.StandardDefinitions {
       }
     }
 
-    private[this] var volatileRecursions: Int = 0
-    private[this] val pendingVolatiles = mutable.HashSet[Symbol]()
     def functionNBaseType(tp: Type): Type = tp.baseClasses find isFunctionSymbol match {
       case Some(sym) => tp baseType unspecializedSymbol(sym)
       case _         => tp

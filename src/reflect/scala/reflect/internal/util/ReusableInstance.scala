@@ -29,15 +29,26 @@ final class ReusableInstance[T <: AnyRef] private (make: => T, initialSize: Int)
   private[this] val cache = if (initialSize > 0) new ArrayBuffer[T](initialSize).tap(_.addOne(make)) else null
   private[this] var taken = 0
 
-  @inline def using[R](action: T => R): R =
-    if (cache == null)
-      action(make)
+  @inline def using[R](action: T => R): R = {
+    val instance = take()
+    try action(instance) finally release()
+  }
+
+  /** As `using`, for call sites that should not depend on the JIT to eliminate the closure:
+   *  `val x = take(); try ... finally release()`.
+   */
+  def take(): T =
+    if (cache == null) make
     else {
       if (taken == cache.size)
         cache += make
       taken += 1
-      try action(cache(taken-1)) finally taken -= 1
+      cache(taken-1)
     }
+
+  /** Give back the instance from the matching `take`. */
+  def release(): Unit =
+    if (cache != null) taken -= 1
 }
 
 object ReusableInstance {

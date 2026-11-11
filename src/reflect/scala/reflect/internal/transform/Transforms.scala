@@ -25,13 +25,13 @@ trait Transforms { self: SymbolTable =>
    *  In the absence of this, the Lazy functionality should probably be somewhere
    *  in the standard library. Or is it already?
    */
-  private class Lazy[T](op: => T) {
-    private[this] var value: T = _
-    private[this] var _isDefined = false
-    def isDefined = _isDefined
+  private class Lazy[T <: AnyRef](op: => T) {
+    // Volatile, so that runtime reflection publishes the component safely. Two threads may both
+    // make it; they are interchangeable.
+    @volatile private[this] var value: T = _
     def force: T = {
-      if (!isDefined) { value = op; _isDefined = true }
-      value
+      val v = value
+      if (v ne null) v else { val made = op; value = made; made }
     }
   }
 

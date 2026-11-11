@@ -14,22 +14,9 @@ package scala
 package reflect
 package runtime
 
-import scala.collection.immutable
 import scala.reflect.internal.Flags._
 
 private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: SymbolTable =>
-
-  private lazy val atomicIds = new java.util.concurrent.atomic.AtomicInteger(0)
-  override protected def nextId() = atomicIds.incrementAndGet()
-
-  @deprecated("Global existential IDs no longer used", "2.12.1")
-  private lazy val atomicExistentialIds = new java.util.concurrent.atomic.AtomicInteger(0)
-  @deprecated("Global existential IDs no longer used", "2.12.1")
-  override protected def nextExistentialId() = atomicExistentialIds.incrementAndGet()
-
-  private lazy val _recursionTable = mkThreadLocalStorage(immutable.Map.empty[Symbol, Int])
-  override def recursionTable = _recursionTable.get
-  override def recursionTable_=(value: immutable.Map[Symbol, Int]) = _recursionTable.set(value)
 
   // Set the fields which point companions at one another.  Returns the module.
   override def connectModuleToClass(m: ModuleSymbol, moduleClass: ClassSymbol): m.type =
@@ -182,9 +169,9 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
           else {
             // analogously to the "info" getter, here we allow for two completions:
             //   one: sourceCompleter to LazyType, two: LazyType to completed type
-            rawInfo load this
+            loadInNextFrame()
             if (validTo == NoPeriod)
-              rawInfo load this
+              loadInNextFrame()
 
             rawInfo.typeParams
           }

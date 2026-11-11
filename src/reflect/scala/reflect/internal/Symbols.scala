@@ -19,10 +19,10 @@ package reflect
 package internal
 
 import scala.annotation.tailrec
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.reflect.io.{AbstractFile, NoAbstractFile}
 
-import util.{ReusableInstance, Statistics, shortClassOfInstance}
+import util.{Statistics, shortClassOfInstance}
 import Flags._
 import Variance._
 
@@ -30,27 +30,30 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   import definitions._
   import statistics._
 
-  protected var ids = 0
-  def getCurrentSymbolIdCount: Int = ids
+  private[this] val symbolIds = util.IdCounter(isConcurrentUniverse)
+  def getCurrentSymbolIdCount: Int = symbolIds.current
 
-  protected def nextId() = { ids += 1; ids }
+  protected def nextId(): Int = symbolIds.next()
 
-  /** Used to keep track of the recursion depth on locked symbols */
-  private[this] var _recursionTable = Map.empty[Symbol, Int]
-  def recursionTable = _recursionTable
-  def recursionTable_=(value: Map[Symbol, Int]) = _recursionTable = value
+  /** Is a completion in progress on this thread? */
+  final def inCompletion: Boolean = scratch.frame.depth > 0
 
-  private[this] var _lockedCount = 0
-  def lockedCount = this._lockedCount
-  def lockedCount_=(i: Int) = _lockedCount = i
+  /** Run `body`, which completes `sym` other than through its `info`, in the next frame. */
+  final def inCompletionOf[T](sym: Symbol)(body: => T): T = {
+    val s = scratch
+    val frame = s.enterNextFrame(sym)
+    try body finally s.exitFrame(frame)
+  }
 
-  private[this] val _lockingTrace = ArrayBuffer.empty[Symbol]
-  private[this] val lockTracing: Boolean = self.isSymbolLockTracingEnabled
+  @deprecated("use `inCompletion`; this is the number of completions in progress on this thread", "2.13.19")
+  def lockedCount: Int = scratch.frame.depth
+  @deprecated("the completion frames count completions; assigning this has no effect", "2.13.19")
+  def lockedCount_=(i: Int): Unit = ()
 
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  private[this] var existentialIds = 0
+  private[this] val existentialIds = util.IdCounter(isConcurrentUniverse)
   @deprecated("Global existential IDs no longer used", "2.12.1")
-  protected def nextExistentialId() = { existentialIds += 1; existentialIds }
+  protected def nextExistentialId(): Int = existentialIds.next()
   @deprecated("Use overload that accepts an id", "2.12.1")
   protected def freshExistentialName(suffix: String): TypeName = freshExistentialName(suffix, nextExistentialId())
   protected def freshExistentialName(suffix: String, id: Int): TypeName = newTypeName("_" + id + suffix)
@@ -561,39 +564,25 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
 // ----- locking and unlocking ------------------------------------------------------
 
+    /** How many times this symbol has been completed again within its own completion, on this thread. */
+    private def recursions: Int = (scratch.frame.completionsOf(this) - 1) max 0
+
     // True if the symbol is unlocked.
-    // True if the symbol is locked but still below the allowed recursion depth.
+    // True if the symbol is locked but still below the allowed recursion depth (`-Yrecursion`).
     // False otherwise
     private[scala] def lockOK: Boolean = (
       (_rawflags & LOCKED) == 0L || {
         val limit = settings.Yrecursion.value
-        limit != 0 && (
-        recursionTable.get(this) match {
-          case Some(n) => n <= limit
-          case None => true
-        })
+        limit != 0 && recursions <= limit
       }
     )
 
     // Lock a symbol, using the handler if the recursion depth becomes too great.
     private[scala] def lock(handler: => Unit): Boolean = {
-      if (lockTracing) _lockingTrace.addOne(this)
       if ((_rawflags & LOCKED) != 0L) {
-        if (settings.Yrecursion.value != 0) {
-          recursionTable.get(this) match {
-            case Some(n) =>
-              if (n > settings.Yrecursion.value) {
-                handler
-                false
-              } else {
-                recursionTable += (this -> (n + 1))
-                true
-              }
-            case None =>
-              recursionTable += (this -> 1)
-              true
-          }
-        } else {
+        val limit = settings.Yrecursion.value
+        if (limit != 0 && recursions <= limit) true
+        else {
           handler
           false
         }
@@ -605,13 +594,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     // Unlock a symbol
     private[scala] def unlock(): Unit =
-      if ((_rawflags & LOCKED) != 0L) {
+      if ((_rawflags & LOCKED) != 0L)
         _rawflags &= ~LOCKED
-        if (lockTracing && !_lockingTrace.isEmpty)
-          _lockingTrace.remove(index = _lockingTrace.size - 1, count = 1) // dropRightInPlace(1)
-        if (settings.Yrecursion.value != 0)
-          recursionTable -= this
-      }
 
 // ----- tests ----------------------------------------------------------------------
 
@@ -1132,7 +1116,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
           devWarning(s"calling Symbol#exists with sourcefile based symbol loader may give incorrect results.")
         false
       }
-      rawInfo.load(this)
+      loadInNextFrame()
       rawInfo != NoType || warnIfSourceLoader()
     }
 
@@ -1573,24 +1557,15 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
         lock {
           setInfo(ErrorType)
-          val trace =
-            if (lockTracing) {
-              val t = _lockingTrace.toArray
-              _lockingTrace.clear()
-              t
-            } else CyclicReference.emptyTrace
-          throw CyclicReference(this, tp, trace)
+          throw CyclicReference(this, tp, (scratch.frame.completions :+ this).toArray)
         }
-      } else {
-        if (lockTracing) _lockingTrace.addOne(this)
-        _rawflags |= LOCKED
-      }
+      } else _rawflags |= LOCKED
       val current = phase
       if (isCompilerUniverse) {
         try {
           assertCorrectThread()
           phase = phaseOf(infos.validFrom)
-          tp.complete(this)
+          completeInNextFrame(tp)
         } finally {
           unlock()
           phase = current
@@ -1599,12 +1574,35 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else
         // In runtime reflection, there is only one phase, so don't mutate Global.phase
         // which would lead to warnings of data races from when using TSAN to assess thread safety.
-        try tp.complete(this)
+        try completeInNextFrame(tp)
         finally unlock()
     } catch {
       case ex: CyclicReference =>
         devWarning(s"... hit cycle trying to complete $fullLocationString")
         throw ex
+    }
+
+    /** A completer can typecheck code in the middle of a type operation. That code must not see
+     *  the operation's recursion guards, whose answers are only valid for the operation itself.
+     *  This terminates as `LOCKED` stops a symbol being completed within its own completion.
+     */
+    private def completeInNextFrame(tp: Type): Unit = {
+      val s = scratch
+      val frame = s.enterNextFrame(this)
+      try tp.complete(this) finally s.exitFrame(frame)
+    }
+
+    /** Run `rawInfo.load(this)` in the next frame, as `info` runs a completer. A symbol loader can
+     *  compile a source file, and `typeParams` and `exists` load in the middle of type operations.
+     *  Unlike a completion, a load takes no `LOCKED`. A complete info has nothing to load.
+     */
+    private[scala] final def loadInNextFrame(): Unit = {
+      val tp = rawInfo
+      if (!tp.isComplete) {
+        val s = scratch
+        val frame = s.enterNextFrame(null)
+        try tp.load(this) finally s.exitFrame(frame)
+      }
     }
 
     def info_=(info: Type): Unit = {
@@ -1832,9 +1830,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         else {
           // analogously to the "info" getter, here we allow for two completions:
           //   one: sourceCompleter to LazyType, two: LazyType to completed type
-          enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+          enteringPhase(phaseOf(infos.validFrom))(loadInNextFrame())
           if (validTo == NoPeriod)
-            enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+            enteringPhase(phaseOf(infos.validFrom))(loadInNextFrame())
 
           rawInfo.typeParams
         }
@@ -3111,7 +3109,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       //
       // Out of caution, I've also disable caching if there are active type completers, which also
       // mutate symbol infos during val and def return type inference based the overridden member.
-      if (!isCompilerUniverse || isPastTyper || lockedCount > 0) return pre.computeMemberType(this)
+      if (!isCompilerUniverse || isPastTyper || inCompletion) return pre.computeMemberType(this)
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
@@ -3335,7 +3333,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
   extends TypeSymbol(initOwner, initPos, initName) {
     type TypeOfClonedSymbol = TypeSkolem
     /** The skolemization level in place when the skolem was constructed */
-    val level = skolemizationLevel
+    val level = scratch.skolemizationLevel
 
     final override def isSkolem = true
 
@@ -3838,15 +3836,12 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     if (syms.isEmpty) Nil
     else {
       val syms1 = mapList(syms)(_.cloneSymbol)
-      cloneSymbolsSubstSymMap.using { (msm: SubstSymMap) =>
+      scratch.substSymMaps.using { (msm: SubstSymMap) =>
         msm.reset(syms, syms1)
         syms1.foreach(_.modifyInfo(msm))
       }
       syms1
     }
-
-  private[this] val cloneSymbolsSubstSymMap: ReusableInstance[SubstSymMap] =
-    ReusableInstance[SubstSymMap](SubstSymMap(), enabled = isCompilerUniverse)
 
   def cloneSymbolsAtOwner(syms: List[Symbol], owner: Symbol): List[Symbol] =
     deriveSymbols(syms, _ cloneSymbol owner)

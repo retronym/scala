@@ -20,7 +20,7 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 import Flags._
 import Variance._
-import util.{ReusableInstance, StringContextStripMarginOps}
+import util.StringContextStripMarginOps
 
 private[internal] trait TypeMaps {
   self: SymbolTable =>
@@ -388,7 +388,7 @@ private[internal] trait TypeMaps {
    * For example, the MethodType given by `def bla(x: (_ >: String)): (_ <: Int)`
    * is both a subtype and a supertype of `def bla(x: String): Int`.
    */
-  object wildcardExtrapolation extends VariancedTypeMap {
+  class wildcardExtrapolation extends VariancedTypeMap {
     def apply(tp: Type): Type =
       tp match {
         case BoundedWildcardType(TypeBounds(lo, AnyTpe)) if variance.isContravariant => lo
@@ -397,6 +397,8 @@ private[internal] trait TypeMaps {
         case tp => tp.mapOver(this)
       }
   }
+  @deprecated("use `scratch.wildcardExtrapolation`", "2.13.19")
+  def wildcardExtrapolation: wildcardExtrapolation = scratch.wildcardExtrapolation
 
   /** Might the given symbol be important when calculating the prefix
     *  of a type? When tp.asSeenFrom(pre, clazz) is called on `tp`,
@@ -1299,31 +1301,34 @@ private[internal] trait TypeMaps {
     }
   }
 
-  class UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
-    var barLevel: Int = 0
+  class UnrelatableCollector extends TypeCollector[List[TypeSkolem]](Nil) {
+    private[this] var barLevel: Int = 0
 
-    override def apply(tp: Type): Unit = tp match {
-      case TypeRef(_, ts: TypeSkolem, _) if ts.level > barLevel => buffer += ts
+    /** The skolems in `tp` above `level`, in the order they occur. */
+    def collect(tp: Type, level: Int): List[TypeSkolem] = {
+      val saved = barLevel
+      barLevel = level
+      try collect(tp).reverse finally barLevel = saved
+    }
+
+    def apply(tp: Type): Unit = tp match {
+      case TypeRef(_, ts: TypeSkolem, _) if ts.level > barLevel => result ::= ts
       case _ => tp.foldOver(this)
     }
   }
 
   class IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
-    var barLevel: Int = 0
+    private[this] var barLevel: Int = 0
+
+    def collect(tp: Type, level: Int): Boolean = {
+      val saved = barLevel
+      barLevel = level
+      try collect(tp) finally barLevel = saved
+    }
 
     def apply(tp: Type): Unit = if (result) tp match {
       case TypeRef(_, ts: TypeSkolem, _) if ts.level > barLevel => result = false
       case _ => tp.foldOver(this)
     }
   }
-
-  // These collectors carry mutable state, so runtime reflection must not share an instance between threads.
-  private[internal] val isDependentCollectorInstance: ReusableInstance[IsDependentCollector] =
-    ReusableInstance(new IsDependentCollector, enabled = isCompilerUniverse)
-  private[internal] val erroneousCollectorInstance: ReusableInstance[ErroneousCollector] =
-    ReusableInstance(new ErroneousCollector, enabled = isCompilerUniverse)
-  private[internal] val unrelatableCollectorInstance: ReusableInstance[UnrelatableCollector] =
-    ReusableInstance(new UnrelatableCollector, enabled = isCompilerUniverse)
-  private[internal] val isRelatableCollectorInstance: ReusableInstance[IsRelatableCollector] =
-    ReusableInstance(new IsRelatableCollector, enabled = isCompilerUniverse)
 }

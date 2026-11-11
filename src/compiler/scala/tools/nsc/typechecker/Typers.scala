@@ -455,7 +455,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      */
     def isStale(sym: Symbol): Boolean = {
       sym.rawInfo.isInstanceOf[loaders.ClassfileLoader] && {
-        sym.rawInfo.load(sym)
+        sym.loadInNextFrame()
         (sym.sourceFile ne null) &&
         (currentRun.compiledFiles contains sym.sourceFile.path)
       }
@@ -3069,7 +3069,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                     =>
               val sam = samOf(pt)
               if (sam.exists && sam.info.params.lengthCompare(numVparams) == 0)
-                wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
+                scratch.wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
               else pt // allow type slack (pos/6221)
           }
 
