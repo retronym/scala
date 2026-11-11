@@ -89,6 +89,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   // alternate constructors ------------------------------------------
 
   override def settings = currentSettings
+  override protected def nameTableKind: String = settings.YnameTable.value
 
   override def isSymbolLockTracingEnabled = settings.cyclic.value
 
