@@ -1297,6 +1297,18 @@ trait StdNames {
     final val NON: TermName = TermName("non")
     final val VAR: TermName    = TermName("var")
     final val YIELD: TermName  = TermName("yield")
+
+    // Contextual keywords of module declarations (JLS 3.9)
+    final val OPEN: TermName       = TermName("open")
+    final val MODULE: TermName     = TermName("module")
+    final val REQUIRES: TermName   = TermName("requires")
+    final val TRANSITIVE: TermName = TermName("transitive")
+    final val EXPORTS: TermName    = TermName("exports")
+    final val OPENS: TermName      = TermName("opens")
+    final val TO: TermName         = TermName("to")
+    final val USES: TermName       = TermName("uses")
+    final val PROVIDES: TermName   = TermName("provides")
+    final val WITH: TermName       = TermName("with")
   }
 
   sealed abstract class SymbolNames {
