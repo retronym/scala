@@ -338,6 +338,14 @@ trait Types
     /** True for WildcardType or BoundedWildcardType. */
     def isWildcard = false
 
+    // OPT: tests for the singleton types that avoid their accessors, which read a volatile field twice. The class is a
+    //      constant in the bytecode, and C2 reduces `getClass eq` to a comparison of this object's klass. These fail for
+    //      a null receiver, unlike `eq`.
+    final def isNoType: Boolean       = getClass eq classOf[NoType.type]
+    final def isNoPrefix: Boolean     = getClass eq classOf[NoPrefix.type]
+    final def isWildcardType: Boolean = getClass eq classOf[WildcardType.type]
+    final def isErrorType: Boolean    = getClass eq classOf[ErrorType.type]
+
     /** Is this type produced as a repair for an error? */
     def isError: Boolean = typeSymbol.isError || termSymbol.isError
 
@@ -822,7 +830,7 @@ trait Types
       def map[T](f: Type => T): List[T]  = this.collect(Type.this).map(f)
     }
 
-    @inline final def orElse(alt: => Type): Type = if (this ne NoType) this else alt
+    @inline final def orElse(alt: => Type): Type = if (!isNoType) this else alt
 
     /** Returns optionally first type (in a preorder traversal) which satisfies predicate `p`,
      *  or None if none exists.
@@ -1400,7 +1408,7 @@ trait Types
           case _                       => ABORT // different HO argument types encountered
         }
 
-      if ((sameHoArgTypesFolded eq WildcardType) || (sameHoArgTypesFolded eq NoType)) WildcardType
+      if (sameHoArgTypesFolded.isWildcardType || sameHoArgTypesFolded.isNoType) WildcardType
       else functionOrPfOrSamArgTypes(toWild(sameHoArgTypesFolded)) match {
         case Nil     =>
           // Ok, it's not a function proto, but we did collapse to only one type -- why not use that as our expected type?
@@ -1910,7 +1918,12 @@ trait Types
 
     override def kind = "RefinedType"
     override def mapOver(map: TypeMap): Type = {
-      val parents1 = parents mapConserve map
+      val parents0 = parents mapConserve map
+      // A map can replace a parent by an intersection, as ExistentialExtrapolation does with `_$1 with T` where
+      // `_$1 >: A with B`. Keep it flat, as `normalize` would: subtype checks and `isHigherKinded` walk the nesting.
+      val parents1 =
+        if ((parents0 eq parents) || !parents0.exists { case RefinedType(_, ds) => ds.isEmpty; case _ => false }) parents0
+        else parents0.flatMap { case RefinedType(ps, ds) if ds.isEmpty => ps; case p => p :: Nil }
       val decls1 = map.mapOver(decls)
       copyRefinedType(this, parents1, decls1)
     }
@@ -2406,7 +2419,7 @@ trait Types
    * \@M: a higher-kinded type is represented as a TypeRef with sym.typeParams.nonEmpty, but args.isEmpty
    */
   abstract case class TypeRef(pre: Type, sym: Symbol, args: List[Type]) extends UniqueType with TypeRefApi {
-    override def mapOver(map: TypeMap): Type = {
+    final override def mapOver(map: TypeMap): Type = {
       val pre1 = map(pre)
       val args1 = map match {
         case map: VariancedTypeMap if !args.isEmpty && ! map.variance.isInvariant =>
@@ -2574,7 +2587,7 @@ trait Types
 
     final override def normalize: Type = {
       // arises when argument-dependent types are approximated (see def depoly in implicits)
-      if (pre eq WildcardType) WildcardType
+      if (pre.isWildcardType) WildcardType
       else if (phase.erasedTypes) normalizeImpl
       else {
         if (normalized eq null) {
@@ -3827,7 +3840,7 @@ trait Types
     private def levelString = if (settings.explaintypes.value) level else ""
     override def safeToString = (
       if ((constr eq null) || (inst eq null)) "TVar<" + originName + "=null>"
-      else if (inst ne NoType) "=?" + inst
+      else if (!inst.isNoType) "=?" + inst
       else (if(untouchable) "!?" else "?") + levelString + originName
     )
     def originString = s"$originName in $originLocation"
@@ -4148,7 +4161,7 @@ trait Types
       if (sym.isAliasType && sameLength(sym.info.typeParams, args) && !sym.lockOK)
         throw new RecoverableCyclicReference(sym)
 
-      if ((args eq Nil) && (pre eq NoPrefix))
+      if ((args eq Nil) && pre.isNoPrefix)
         sym.tpeHK // opt lean on TypeSymbol#tyconCache, rather than interning a type ref.
       else
         TypeRef(pre, sym, args)
@@ -4372,7 +4385,7 @@ trait Types
         if (closed.length == tparams.length) tparams else closed.toList
     }
 
-    if (tparams.isEmpty || (tpe0 eq NoType)) tpe0
+    if (tparams.isEmpty || tpe0.isNoType) tpe0
     else {
       val tpe           = normalizeAliases(tpe0)
       val extrapolation = new ExistentialExtrapolation(tparams)
@@ -4478,10 +4491,16 @@ trait Types
   def typeParamsToExistentials(clazz: Symbol): List[Symbol] =
     typeParamsToExistentials(clazz, clazz.typeParams)
 
-  def isRawIfWithoutArgs(sym: Symbol) = sym.isClass && !sym.typeParams.isEmpty && sym.isJavaDefined
+  def isRawIfWithoutArgs(sym: Symbol) = sym.isClass && (
+    // OPT: initialized non-Java classes, the common case, don't call typeParams
+    if (sym.isInitialized) sym.isJavaDefined && !sym.typeParams.isEmpty
+    // The JAVA flag is only reliable once the symbol is initialized: only typeParams forces the classfile to be read,
+    // which sets the flag. See scala/bug#400. In runtime reflection, reading JAVA from an uninitialized symbol also completes it
+    // fully, where typeParams only loads it, and a class completed part way through its enclosing class's completion
+    // can't find its peers.
+    else !sym.typeParams.isEmpty && sym.isJavaDefined
+  )
   /** Is type tp a ''raw type''? */
-  //  note: it's important to write the two tests in this order,
-  //  as only typeParams forces the classfile to be read. See #400
   def isRawType(tp: Type) = !phase.erasedTypes && (tp match {
     case TypeRef(_, sym, Nil) => isRawIfWithoutArgs(sym)
     case _                    => false
@@ -4689,7 +4708,7 @@ trait Types
     case _                     => false
   }
 
-  def isErrorOrWildcard(tp: Type) = (tp eq ErrorType) || (tp eq WildcardType)
+  def isErrorOrWildcard(tp: Type) = tp.isErrorType || tp.isWildcardType
 
   /** This appears to be equivalent to tp.isInstanceof[SingletonType],
    *  except it excludes FoldableConstantTypes.

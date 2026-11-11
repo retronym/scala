@@ -16,7 +16,6 @@
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term m
 [log superaccessors] [context] ++ t12494.scala / term m
 [log superaccessors] [context] ++ t12494.scala / type C
@@ -24,28 +23,22 @@
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term f
 [log superaccessors] [context] ++ t12494.scala / term C
 [log superaccessors] [context] ++ t12494.scala / term C
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / type C2
 [log superaccessors] [context] ++ t12494.scala / type C2
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C2>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C2>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term test
 [log superaccessors] [context] ++ t12494.scala / term test
 [log superaccessors] [context] ++ t12494.scala / term Y
 [log superaccessors] [context] ++ t12494.scala / term Y
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Y>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Y>)
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term n
 [log superaccessors] [context] ++ t12494.scala / term n
@@ -54,23 +47,17 @@
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term f
 [log superaccessors] [context] ++ t12494.scala / type X
 [log superaccessors] [context] ++ t12494.scala / type X
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term x
 [log superaccessors] [context] ++ t12494.scala / term x
 [log superaccessors] [context] ++ t12494.scala / term X
 [log superaccessors] [context] ++ t12494.scala / term X
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local X>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term y
-[log superaccessors] [context] ++ t12494.scala / term y
 [log superaccessors] [context] ++ t12494.scala / term y
 [log superaccessors] [context] ++ t12494.scala / term y
 [log superaccessors] [context] ++ t12494.scala / term C
@@ -78,16 +65,12 @@
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / type C2
 [log superaccessors] [context] ++ t12494.scala / type C2
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C2>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local C2>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term test
 [log superaccessors] [context] ++ t12494.scala / term test
 [log superaccessors] In trait Base, renaming g -> Base$$g
 [log superaccessors] Expanded 'g' to 'Base$$g' in trait Base
@@ -100,32 +83,22 @@
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Base>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Base>)
 [log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term f
-[log superaccessors] [context] ++ t12494.scala / term g
 [log superaccessors] [context] ++ t12494.scala / term g
 [log superaccessors] [context] ++ t12494.scala / term h
-[log superaccessors] [context] ++ t12494.scala / term h
-[log superaccessors] [context] ++ t12494.scala / term p
 [log superaccessors] [context] ++ t12494.scala / term p
 [log superaccessors] [context] ++ t12494.scala / term Base
 [log superaccessors] [context] ++ t12494.scala / term Base
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Base>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Base>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
 [log superaccessors] [context] ++ t12494.scala / type Child
 [log superaccessors] [context] ++ t12494.scala / type Child
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Child>)
 [log superaccessors] [context] ++ t12494.scala / Template(value <local Child>)
 [log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term <init>
-[log superaccessors] [context] ++ t12494.scala / term f
 [log superaccessors] [context] ++ t12494.scala / term f
 [log superaccessors] [context] ++ t12494.scala / term g
-[log superaccessors] [context] ++ t12494.scala / term g
 [log superaccessors] [context] ++ t12494.scala / term h
-[log superaccessors] [context] ++ t12494.scala / term h
-[log superaccessors] [context] ++ t12494.scala / term p
 [log superaccessors] [context] ++ t12494.scala / term p
 [running phase extmethods on t12494.scala]
 [running phase pickler on t12494.scala]

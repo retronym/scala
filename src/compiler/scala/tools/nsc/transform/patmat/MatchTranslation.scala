@@ -461,8 +461,14 @@ trait MatchTranslation {
             else         _ INT_== _
 
           // `if (binder != null && $checkExpectedLength [== | >=] 0) then else zero`
-          (seqTree(binder, forceImmutable = false) ANY_!= NULL) AND compareOp(checkExpectedLength, ZERO)
+          // Except when `binder` is the result of a `get` declared to return a value class: it is then unboxed, and comparing
+          // that with `null` would box it, only to find it is not null. It's the declared type that counts. `Option#get`
+          // and any other `get` declared to return a type parameter or an abstract type return a box, which can be null.
+          if (seqIsUnboxed) compareOp(checkExpectedLength, ZERO)
+          else (seqTree(binder, forceImmutable = false) ANY_!= NULL) AND compareOp(checkExpectedLength, ZERO)
         }
+
+      protected def seqIsUnboxed: Boolean = false
 
       def checkedLength: Option[Int] =
         // no need to check unless it's an unapplySeq and the minimal length is non-trivially satisfied
@@ -562,6 +568,12 @@ trait MatchTranslation {
         else
           extractorTreeMaker :: Nil
       }
+
+      override protected def seqIsUnboxed: Boolean =
+        firstIndexingBinder == 0 && {
+          val get = fun.tpe.finalResultType.member(nme.get).filter(_.paramss.flatten.isEmpty)
+          get.info.finalResultType.typeSymbol.isDerivedValueClass
+        }
 
       override protected def seqTree(binder: Symbol, forceImmutable: Boolean): Tree =
         if (firstIndexingBinder == 0) {
