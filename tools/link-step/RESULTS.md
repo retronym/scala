@@ -2,6 +2,18 @@
 
 The question is whether the parts of a Scala 2 class file that depend on the class's ancestors can be regenerated from pickles alone, without the class's own typed trees. For classes that have a pickle, they can, with two exceptions that both come from specialization and one naming detail. Local and anonymous classes have no pickle. A best-effort mode that rebuilds their symbols from Java generic signatures handles most of the ones it can stub, but cannot stub a class whose parent is an inner class.
 
+## Motivation
+
+In development, iteration speed depends on how much Zinc recompiles after an edit, and much of Zinc's invalidation exists to protect lowering, not typing:
+
+- A class's inheritance dependents are invalidated transitively, whatever changed.
+- A trait's `extraHash` folds in its parents', so even a private member of a trait invalidates every class that mixes it in (sbt/zinc#662, sbt/zinc#1289, sbt/zinc#1794).
+- Same-source inheritance had an under-compilation (sbt/zinc#417, sbt/zinc#424).
+
+These rules exist because a subclass's class file bakes in facts about its ancestors: mixin forwarders, trait fields and setters, bridges, `$init$` calls. Typing the subclass needs none of them. If those parts can be regenerated from the subclass's pickle and its ancestors' pickles, a private or layout change in an ancestor needs only a relink of its subclasses, not a retypecheck. Zinc could then drop the `extraHash` path and stop invalidating inheritance dependents for such changes, and the loop after editing a widely mixed-in trait would cost a typecheck of the edited file plus a relink of its subclasses. A later step could do the relink when a class loads, with a `java.lang.instrument` agent, so the build would not rewrite the subclasses' class files at all.
+
+This spike tests the premise: which ancestor-derived parts can be regenerated from pickles alone, and which lowering steps still need the class's own trees.
+
 ## Method
 
 For every top-level class and object with a pickle, the tool unpickles the symbol from the class path and builds a stub tree: the class, a primary constructor whose only statement is `super.<init>(zeros)`, and the same stub for each member class and object. None of the class's own methods, fields or initializers are in the tree. The stub runs through the compiler's own phases from uncurry to jvm, into memory. Everything the backend emits beyond the stub is derived from symbols, that is from the class's pickle and its ancestors' pickles.
