@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Compiles the link-step tool against build/quick and runs it.
+#   tools/link-step/run --corpus DIR --cp DEPS [--label NAME] [--out DIR] [-- scalac options of the corpus]
+set -euo pipefail
+here="$(cd "$(dirname "$0")" && pwd)"
+root="$(cd "$here/../.." && pwd)"
+toolcp="$(sed -n 's/^TOOL_CLASSPATH="\(.*\)"$/\1/p' "$root/build/quick/bin/scalac")"
+target="$here/target"
+if [[ ! -d "$target" || -n "$(find "$here/src" -newer "$target" -name '*.scala' | head -1)" ]]; then
+  rm -rf "$target"; mkdir -p "$target"
+  java -cp "$toolcp" scala.tools.nsc.Main -nowarn -usejavacp -cp "$toolcp" -d "$target" "$here"/src/*.scala
+fi
+exec java ${LINK_STEP_JAVA_OPTS:--Xss8m -Xmx6g} -cp "$toolcp:$target" linkstep.Main "$@"
