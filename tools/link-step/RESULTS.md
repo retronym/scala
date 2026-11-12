@@ -157,6 +157,36 @@ The comparison covers the members the stub produces. It does not look at the cla
 
 Reasoning suggests those need C's trees whenever the ancestor's change renames something C calls; this spike did not check it. Changes to how a referenced type erases, and inlining with `-opt`, are out of scope as planned. Neither the quick build nor the cats build uses `-opt`.
 
+## Sketch: relowering from TASTy in Zinc and Scala 3
+
+This section is a design sketch, not something the spike built or measured.
+
+Scala 3 is a better fit for the idea than Scala 2. Its TASTy holds the class's full typed trees, method bodies included, not just its signatures. Scala 3 can also already resume a compilation from TASTy (`-from-tasty`), running the phases after pickling on trees read back from `.tasty` files. So the cases above that need the class's own trees (specialized variants of own methods, ancestor renames that reach the class's call sites, local and anonymous classes) are all covered: relowering from TASTy re-derives the whole class file from the class's own trees, against the current ancestors, without parsing or typing. The pickle-only approach would only be needed if TASTy had to be avoided, for example to splice members into a class file at load time.
+
+**What Zinc would need to know.** Zinc already tells inheritance dependencies from member-reference dependencies, but either one leads to a recompile from source. It would need to separate two reasons:
+
+- *Typing invalidation.* The class's typed trees may change: its own source changed, a name it uses changed (the existing name-hash rule), or it declares a member whose name the ancestor's change added, removed or retyped (overriding checks run in the typer). Inline method bodies count here, since Scala 3 expands them during typing and the expansion is part of the class's TASTy.
+- *Lowering invalidation.* The class's typed trees are the same, but its class file may not be: an ancestor's private members, field layout, linearization or `extraHash` changed, and nothing the class uses or overrides. This covers most of what the inheritance rule and `extraHash` are for.
+
+A class with only lowering invalidations is relowered from its previous TASTy. Any typing invalidation means a normal recompile from source.
+
+**Changes in Zinc.**
+
+- Classify each invalidation as typing or lowering. Inheritance dependents go through the name-hash filter for typing, as member-reference dependents already do. Whatever the filter lets pass, and every case the `extraHash` path would have caught, becomes lowering invalidation.
+- Keep the previous `.tasty` of a class scheduled for relowering. The class-file manager currently deletes all outputs of invalidated sources before it compiles. It would delete only the class files, and roll them back as now if the compile fails.
+- Hand the compiler two lists: sources to compile, and TASTy files to relower. Relowered classes skip API extraction and dependency extraction. Their API and dependencies are those of the previous TASTy, so Zinc copies them from the previous analysis.
+
+**Changes in Scala 3.** Accept both inputs in one run, so that relowered classes are lowered against the freshly typed ancestors in the same run. This is close to what `-from-tasty` does, applied to a subset of the run's classes. It also needs one check: the previous TASTy is only reusable if every symbol it refers to still resolves to a member with the same signature. If the check fails, the class falls back to a typing invalidation. That keeps a misclassification from producing a broken class file.
+
+**The terminal round.** Relowering cannot change a class's API, because the class's TASTy is reused unchanged. So relowering never adds invalidations, and Zinc's cycle cannot continue because of it. Two optimizations follow.
+
+- If every task in a round is a relowering, the round is the last one: Zinc can skip the API comparison for it and stop after it.
+- In a mixed round, the relowering can be deferred. Its output feeds nothing in the next round, and a later round may yet promote the same class to a typing invalidation, which would make the relowering wasted. So Zinc can collect relowering tasks across rounds, drop those whose class was later recompiled from source, and run the rest once, after typing has converged. That final pass also lowers every class against its ancestors' final state, so it never has to run twice for one class.
+
+**Expected gain.** A trait used widely across a build is the case that hurts most today: a private change to it recompiles every subclass from source, and can cascade over several rounds through the transitive inheritance rule. With this scheme, such an edit costs one typecheck of the edited file plus one relowering pass over its subclasses, in a single round. Typing is usually the largest share of compile time, so most of the saving would come from skipping it; this spike did not measure how large that share is in these builds.
+
+**Scala 2.** Scala 2's pickles carry no trees, so the same scheme needs either trees kept alongside the pickles or the symbol-only relink measured here. The symbol-only relink needs the class's existing class file for its own members, and has the gaps listed under Mismatches. The terminal-round reasoning applies unchanged.
+
 ## Running it
 
 `tools/link-step/run --corpus DIR --cp DEPS [--label NAME] [--out DIR] [--batch N] [--force-specialized-ancestors false] [--local false] [--local-all true] [-- scalac options]` compiles the tool against `build/quick` and checks one corpus: first the pickled classes, then the class files without a pickle. It writes `<label>-summary.txt`, `<label>.tsv` (one line per mismatch), `<label>-classes.tsv` and `<label>-members.tsv`, and the same with `-local` (or `-local-all`) for the second pass. `tools/link-step/corpora.sh OUT_DIR [CATS_BUILD_DIR]` reproduces the tables above. `Relinker` is the regeneration step, kept apart from the comparison so that a later agent can reuse it.
