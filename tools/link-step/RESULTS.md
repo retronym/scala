@@ -18,6 +18,18 @@ This spike tests the premise: which ancestor-derived parts can be regenerated fr
 
 For every top-level class and object with a pickle, the tool unpickles the symbol from the class path and builds a stub tree: the class, a primary constructor whose only statement is `super.<init>(zeros)`, and the same stub for each member class and object. None of the class's own methods, fields or initializers are in the tree. The stub runs through the compiler's own phases from uncurry to jvm, into memory. Everything the backend emits beyond the stub is derived from symbols, that is from the class's pickle and its ancestors' pickles.
 
+```mermaid
+flowchart LR
+  cp["class path:<br/>C's pickle,<br/>ancestors' pickles"] --> stub["stub tree for C:<br/>class, bare constructor,<br/>nested classes"]
+  stub --> phases["compiler phases<br/>uncurry to jvm,<br/>in memory"]
+  cp --> phases
+  phases --> regen["regenerated<br/>class file"]
+  regen --> cmp{"compare<br/>with ASM"}
+  real["class file the<br/>compiler produced"] --> cmp
+  cmp --> l1["level 1: members,<br/>flags, trait init calls"]
+  cmp --> l2["level 2:<br/>method bodies"]
+```
+
 The tool then compares each regenerated class file with the one the compiler produced, using ASM:
 
 - Level 1: name, descriptor and access flags of every regenerated member; the sequence of `$init$` calls in the constructor (for an object, in its static initializer); and, in the other direction, every member of the real class that looks ancestor-derived but was not regenerated. That covers bridges, trait setters, trait super accessors, outer accessors of traits, accessors of inherited objects, lazy-val bitmaps, mixin-forwarder bodies and specialized variants.
@@ -108,6 +120,26 @@ This mode builds a class symbol from the class file alone, stubs it the same way
 - The class's own members are guessed from the class file. An own method takes the type of the member it overrides when its descriptor is the erasure of that member as seen from the class, and its signature's type otherwise.
 - The stub is a top-level class, because the phases need a class's tree inside its owner's tree, and the enclosing class has no tree here. So it has no outer pointer.
 
+```mermaid
+flowchart TD
+  cf["class file without a pickle"] --> hasSig{"generic Signature<br/>attribute?"}
+  hasSig -- yes --> fromSig["parents from the signature"]
+  hasSig -- no --> fromErased["superclass and interfaces"]
+  fromSig --> spec["a specialized parent Order#36;mcI#36;sp<br/>becomes Order[Int]"]
+  fromErased --> spec
+  spec --> wild{"type-constructor<br/>argument written *?"}
+  wild -- "another parent's<br/>base type agrees" --> fill["use that argument"]
+  wild -- "an own method's<br/>parameter or result shows it" --> fill
+  wild -- otherwise --> fresh["fresh abstract<br/>type constructor"]
+  fill --> own["own members: methods that are<br/>not bridges, forwarders,<br/>setters or accessors"]
+  fresh --> own
+  own --> typeOf{"descriptor is the erasure<br/>of an overridden member?"}
+  typeOf -- yes --> ovr["take that member's type<br/>as seen from the class"]
+  typeOf -- no --> msig["type from the method's<br/>own signature"]
+  ovr --> stub2["stub, phases, compare:<br/>as for pickled classes"]
+  msig --> stub2
+```
+
 | corpus | class files | regenerated | derived | level 1 exact | level 2 exact | failed |
 |---|---:|---:|---:|---:|---:|---:|
 | reflect | 162 | 82 | 54 | 53 | 53 | 80 |
@@ -170,6 +202,18 @@ Scala 3 is a better fit for the idea than Scala 2. Its TASTy holds the class's f
 
 A class with only lowering invalidations is relowered from its previous TASTy. Any typing invalidation means a normal recompile from source.
 
+```mermaid
+flowchart TD
+  change["an ancestor A of class C changed"] --> uses{"does C use, or declare,<br/>a name whose hash changed?<br/>does C use an inline body that changed?"}
+  uses -- yes --> typing["typing invalidation:<br/>recompile C from source"]
+  uses -- no --> layout{"did A's privates, fields,<br/>linearization or extraHash change?"}
+  layout -- yes --> lowering["lowering invalidation:<br/>relower C from its previous TASTy"]
+  layout -- no --> none["C is not invalidated"]
+  lowering --> check{"does every symbol C's TASTy<br/>refers to still resolve<br/>with the same signature?"}
+  check -- yes --> out["new class files for C,<br/>same API and dependencies"]
+  check -- no --> typing
+```
+
 **Changes in Zinc.**
 
 - Classify each invalidation as typing or lowering. Inheritance dependents go through the name-hash filter for typing, as member-reference dependents already do. Whatever the filter lets pass, and every case the `extraHash` path would have caught, becomes lowering invalidation.
@@ -182,6 +226,22 @@ A class with only lowering invalidations is relowered from its previous TASTy. A
 
 - If every task in a round is a relowering, the round is the last one: Zinc can skip the API comparison for it and stop after it.
 - In a mixed round, the relowering can be deferred. Its output feeds nothing in the next round, and a later round may yet promote the same class to a typing invalidation, which would make the relowering wasted. So Zinc can collect relowering tasks across rounds, drop those whose class was later recompiled from source, and run the rest once, after typing has converged. That final pass also lowers every class against its ancestors' final state, so it never has to run twice for one class.
+
+Today, with a private change to a trait `T` that `C` extends, and `D` extends `C`:
+
+```mermaid
+flowchart LR
+  subgraph today["today"]
+    direction LR
+    t1["round 1:<br/>type and lower T"] --> t2["round 2:<br/>type and lower C and D<br/>(transitive inheritance rule)"]
+  end
+  subgraph proposed["proposed"]
+    direction LR
+    p1["round 1:<br/>type and lower T"] --> p2["final pass:<br/>relower C and D<br/>from TASTy"]
+  end
+```
+
+Today every subclass is typed again. In the proposed case the final pass is terminal by construction, since relowering cannot change an API.
 
 **Expected gain.** A trait used widely across a build is the case that hurts most today: a private change to it recompiles every subclass from source, and can cascade over several rounds through the transitive inheritance rule. With this scheme, such an edit costs one typecheck of the edited file plus one relowering pass over its subclasses, in a single round. Typing is usually the largest share of compile time, so most of the saving would come from skipping it; this spike did not measure how large that share is in these builds.
 
