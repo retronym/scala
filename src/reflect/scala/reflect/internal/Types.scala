@@ -4404,8 +4404,23 @@ trait Types
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
+  // forkvar probe: -Dscalac.uniques.strong=true keeps unique types strongly for the run; -Dscalac.uniques.stats=true
+  // prints, when the next run starts, the previous run's lookups, additions and GC-cleared entries
+  private[this] val probeStrong = java.lang.Boolean.getBoolean("scalac.uniques.strong")
+  private[this] val probeStats = java.lang.Boolean.getBoolean("scalac.uniques.stats")
+  private[this] var strongUniques: java.util.HashMap[Type, Type] = _
+  private[this] var probeLookups = 0L
+
+  private[this] def probeReport(): Unit = if (probeStats && probeLookups > 0) {
+    if (strongUniques != null) System.out.println(s"[uniques] strong lookups=$probeLookups size=${strongUniques.size}")
+    else if (uniques != null) System.out.println(s"[uniques] weak lookups=$probeLookups added=${uniques.probeAdded} stale=${uniques.probeStale} size=${uniques.size}")
+  }
+
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
+      probeReport()
+      probeLookups = 0
+      if (probeStrong) strongUniques = new java.util.HashMap[Type, Type](initialUniquesCapacity)
       uniques = util.WeakHashSet[Type](initialUniquesCapacity)
       // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
       // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
@@ -4414,7 +4429,11 @@ trait Types
       // as a) this is now a weak set, and b) it is discarded completely before the next run.
       uniqueRunId = currentRunId
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    probeLookups += 1
+    if (probeStrong) {
+      val prev = strongUniques.putIfAbsent(tp, tp)
+      (if (prev eq null) tp else prev).asInstanceOf[T]
+    } else (uniques findEntryOrUpdate tp).asInstanceOf[T]
   }
 
 // Helper Classes ---------------------------------------------------------

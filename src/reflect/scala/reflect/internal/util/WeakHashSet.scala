@@ -109,6 +109,10 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
   /**
    * remove entries associated with elements that have been gc'ed
    */
+  // forkvar probe: entries cleared by GC and removed, and entries added, over this set's life
+  var probeStale = 0L
+  var probeAdded = 0L
+
   private[this] def removeStaleEntries(): Unit = {
     def poll(): Entry[A] = queue.poll().asInstanceOf[Entry[A]]
 
@@ -116,6 +120,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
     def queueLoop(): Unit = {
       val stale = poll()
       if (stale != null) {
+        probeStale += 1
         val bucket = bucketFor(stale.hash)
 
         @tailrec
@@ -194,6 +199,7 @@ final class WeakHashSet[A <: AnyRef](val initialCapacity: Int, val loadFactor: D
       def add() = {
         table(bucket) = new Entry(elem, hash, oldHead, queue)
         count += 1
+        probeAdded += 1
         if (count > threshold) resize()
         elem
       }
