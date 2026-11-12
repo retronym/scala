@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Reproduces the runs in RESULTS.md. Needs `sbt dist/mkQuick` first.
 #   tools/link-step/corpora.sh OUT_DIR [CATS_BUILD_DIR]
+# LINK_STEP_ARGS are passed to each run, e.g. "--local-all true".
 # CATS_BUILD_DIR defaults to ~/code/.integration/builds/cats (an exported cats build: per-module src/ and lib/).
 set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +13,7 @@ toolcp="$(sed -n 's/^TOOL_CLASSPATH="\(.*\)"$/\1/p' "$root/build/quick/bin/scala
 deps="$q/library:$q/reflect:$q/compiler:$q/interactive:$q/repl:$q/scaladoc:$q/scalap:$toolcp"
 
 for m in reflect compiler interactive scaladoc scalap; do
-  "$here/run" --corpus "$q/$m" --cp "$deps" --label "$m" --out "$out" > "$out/$m.log" 2>&1
+  "$here/run" --corpus "$q/$m" --cp "$deps" --label "$m" --out "$out" ${LINK_STEP_ARGS:-} > "$out/$m.log" 2>&1
 done
 
 if [[ -d "$cats_src" ]]; then
@@ -30,7 +31,7 @@ if [[ -d "$cats_src" ]]; then
     cp="$cp:$cats/$m"
   done
   for m in kernel core free; do
-    "$here/run" --corpus "$cats/$m" --cp "$q/library:$q/reflect:$cp" --label "cats-$m" --out "$out" -- -Xsource:3 -release 8 > "$out/cats-$m.log" 2>&1
+    "$here/run" --corpus "$cats/$m" --cp "$q/library:$q/reflect:$cp" --label "cats-$m" --out "$out" ${LINK_STEP_ARGS:-} -- -Xsource:3 -release 8 > "$out/cats-$m.log" 2>&1
   done
 fi
 grep -h '' "$out"/*-summary.txt

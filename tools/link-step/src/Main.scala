@@ -39,28 +39,59 @@ object Main {
     val artifacts = mutable.ArrayBuffer[String]()
     var topLevels = 0
 
-    def runBatch(names: List[String]): Unit = {
+    final case class Sink(results: mutable.ArrayBuffer[ClassResult], failures: mutable.LinkedHashMap[String, String])
+    val pickled = Sink(results, failures)
+    val local = Sink(mutable.ArrayBuffer(), mutable.LinkedHashMap())
+
+    def collect(r: Relinker, sink: Sink, locals: List[(String, scala.tools.asm.tree.ClassNode)]): Unit = {
+      val own = r.ownMembers
+      if (sys.props.contains("linkstep.debug") && locals.nonEmpty) println(s"local batch: units=${locals.size} outputs=${r.outputs.keys.toList.sorted.take(5)} failures=${r.failures}")
+      for ((cls, bytes) <- r.outputs) {
+        // closures in the stub's super constructor call (by-name arguments) are artifacts of the stub
+        if (locals.isEmpty && cls.contains("$anonfun$")) artifacts += cls
+        else classFiles.get(if (locals.isEmpty) cls else LocalStubs.realName(cls)) match {
+          case Some(p) =>
+            val real = if (locals.isEmpty) cls else LocalStubs.realName(cls)
+            regenerated += real
+            sink.results += Compare.compare(real, bytes, Files.readAllBytes(p), own.getOrElse(cls, Own(Set.empty, Set.empty)),
+              if (locals.isEmpty) identity else LocalStubs.realName)
+          case None => extra += cls; if (sys.props.contains("linkstep.debug")) println("extra output: " + cls)
+        }
+      }
+    }
+
+    def runBatch(names: List[String], locals: List[(String, scala.tools.asm.tree.ClassNode)] = Nil, sink: Sink = pickled, retryFailed: Boolean = true): Unit = {
       val r = new Relinker(cp, scalacOpts.drop(1), forceSpec)
       try {
-        r.relink(names)
-        failures ++= r.failures
-        val own = r.ownMembers
-        for ((cls, bytes) <- r.outputs) {
-          // closures in the stub's super constructor call (by-name arguments) are artifacts of the stub
-          if (cls.contains("$anonfun$")) artifacts += cls
-          else classFiles.get(cls) match {
-            case Some(p) =>
-              regenerated += cls
-              results += Compare.compare(cls, bytes, Files.readAllBytes(p), own.getOrElse(cls, Own(Set.empty, Set.empty)))
-            case None => extra += cls
+        r.relink(names, locals)
+        if (r.jvmFailed.nonEmpty) {
+          sink.failures ++= r.failures.filter { case (k, _) => r.jvmFailed(k) }
+          val again = (names.filterNot(r.jvmFailed), locals.filterNot(l => r.jvmFailed(l._1)))
+          if (again._1.size + again._2.size < names.size + locals.size) runBatch(again._1, again._2, sink)
+          return
+        }
+        // A class that fails can leave shared symbols broken for the rest of its batch (an erasure error, say), and
+        // the next class then fails for that reason. Run each failed class of a local batch again in a Global of its own.
+        if (retryFailed && locals.size > 1) {
+          val failed = locals.filter(l => r.failures.contains(l._1))
+          if (failed.nonEmpty) {
+            sink.failures ++= r.failures.filterNot { case (k, _) => failed.exists(_._1 == k) }
+            collect(r, sink, locals)
+            failed.foreach(f => runBatch(Nil, List(f), sink, retryFailed = false))
+            return
           }
         }
+        sink.failures ++= r.failures
+        collect(r, sink, locals)
       } catch {
         case t: Throwable if names.size > 1 =>
           val (a, b) = names.splitAt(names.size / 2)
-          runBatch(a); runBatch(b)
+          runBatch(a, Nil, sink); runBatch(b, Nil, sink)
+        case t: Throwable if locals.size > 1 =>
+          val (a, b) = locals.splitAt(locals.size / 2)
+          runBatch(Nil, a, sink); runBatch(Nil, b, sink)
         case t: Throwable =>
-          failures(names.head) = "batch: " + t.toString.take(300)
+          sink.failures((names ++ locals.map(_._1)).head) = "batch: " + t.toString.take(300)
       }
     }
 
@@ -81,6 +112,27 @@ object Main {
       Compare.initCalls(cn).nonEmpty || Compare.members(cn).exists(m => Compare.looksDerived(m, isTrait).exists(_ != "specialized variant of own method"))
     }
     writeReports(outDir, label, classFiles.size, topLevels, results.toList, failures.toMap, extra.toList, notRegenerated, withSigns.size, secs)
+
+    // best effort for the class files without a pickle, from their generic signatures (see LocalStubs)
+    if (kv.getOrElse("--local", "true").toBoolean) {
+      val failedTops = failures.keySet.map(_.replace('.', '/'))
+      // --local-all: also the classes that have a pickle, as a check of the method against the pickle-based run
+      val localAll = kv.getOrElse("--local-all", "false").toBoolean
+      LocalStubs.separateNames = localAll
+      val localNames =
+        // objects that have a pickle are left out: the stub is a plain class, not a module class
+        if (localAll) classFiles.keys.toList.sorted.filterNot(n => n.endsWith("$") && !n.matches(""".*\$\d+\$"""))
+        else notRegenerated.toList.sorted.filterNot(n => failedTops.exists(t => n == t || n.startsWith(t + "$")))
+      val parsed = localNames.map(n => n -> Compare.read(Files.readAllBytes(classFiles(n))))
+        .filterNot { case (_, cn) => cn.sourceFile != null && cn.sourceFile.endsWith(".java") }
+      regenerated.clear()
+      val t1 = System.nanoTime()
+      parsed.grouped(batch).foreach(b => runBatch(Nil, b, local))
+      val secs1 = (System.nanoTime() - t1) / 1e9
+      println()
+      writeReports(outDir, label + (if (localAll) "-local-all" else "-local"), parsed.size, parsed.size, local.results.toList, local.failures.toMap, Nil,
+        parsed.map(_._1).toSet -- regenerated, 0, secs1)
+    }
   }
 
   def writeReports(outDir: Path, label: String, nClassFiles: Int, nTop: Int, results: List[ClassResult],

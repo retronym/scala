@@ -79,14 +79,18 @@ object Compare {
     }
   }
 
+  /** Local variable slots taken by a method's receiver and arguments. */
+  def argSlots(desc: String): Int =
+    1 + scala.tools.asm.Type.getArgumentTypes(desc).map(_.getSize).sum
+
   private def op(i: AbstractInsnNode): String =
     if (i.getOpcode < 0) "?" else scala.tools.asm.util.Printer.OPCODES(i.getOpcode)
 
   /** Members of the regenerated class that come from the stub itself, not from ancestors. */
-  private def isStructural(m: Member, isTrait: Boolean, own: Own): Boolean = {
+  private def isStructural(m: Member, isTrait: Boolean, own: Own, ownOuter: String): Boolean = {
     val ownNames = own.names
     m.name == "<init>" || m.name == "<clinit>" || (isTrait && m.name == "$init$") ||
-      (m.isField && m.name == "MODULE$") || m.name == "$outer" ||
+      (m.isField && m.name == "MODULE$") || m.name == "$outer" || m.name == ownOuter ||
       // the backend emits the class's own fields from its decls, whether or not there is a tree for them
       (m.isField && own.isOwn(m.name, field = true)) ||
       // a trait's own outer accessor
@@ -127,32 +131,39 @@ object Compare {
     else "other"
   }
 
+  /** The traits whose `$init$` the class calls, in order: from the constructor, or for an object from its static
+   *  initializer. */
   def initCalls(cn: ClassNode): List[String] =
-    cn.methods.asScala.filter(_.name == "<init>").toList.flatMap(_.instructions.toArray.toList).collect {
+    cn.methods.asScala.filter(m => m.name == "<init>" || m.name == "<clinit>").toList.flatMap(_.instructions.toArray.toList).collect {
       case i: MethodInsnNode if i.name == "$init$" => i.owner
     }.distinct
 
   /** Looks at a real member the regeneration did not produce: is it one we should have produced? */
   def looksDerived(m: Member, isTrait: Boolean): Option[String] = {
-    if (!m.isField && (m.access & Opcodes.ACC_BRIDGE) != 0) Some("bridge")
+    if (m.name == "<init>" || m.name == "<clinit>") None
+    else if (!m.isField && (m.access & Opcodes.ACC_BRIDGE) != 0) Some("bridge")
     else if (m.name.contains("$_setter_$")) Some("trait setter")
     else if (m.name.contains("$$super$")) Some("trait super accessor")
     else if (!m.isField && Specialized.matches(m.name)) Some("specialized variant of own method")
     else if (!m.isField && !isTrait && kind(m) == "mixin forwarder") Some("mixin forwarder")
+    else if (!m.isField && !isTrait && m.name.endsWith("$$$outer")) Some("trait outer accessor")
+    else if (!m.isField && !isTrait && kind(m) == "inherited object accessor") Some("inherited object accessor")
+    else if (m.isField && m.name.startsWith("bitmap$")) Some("lazy val bitmap")
     else None
   }
 
-  def compare(cls: String, regenerated: Array[Byte], real: Array[Byte], own: Own): ClassResult = {
+  def compare(cls: String, regenerated: Array[Byte], real: Array[Byte], own: Own, rename: String => String = identity): ClassResult = {
     val gen = read(regenerated)
     val ref = read(real)
     val isTrait = (ref.access & Opcodes.ACC_INTERFACE) != 0
-    val genMembers = members(gen)
+    val genMembers = members(gen).map(m => m.copy(name = rename(m.name), desc = rename(m.desc), body = m.body.map(_.map(rename))))
     val refMembers = members(ref)
     val refByKey = refMembers.map(m => m.key -> m).toMap
     val genByKey = genMembers.map(m => m.key -> m).toMap
     val refByCanon = refMembers.map(m => m.canonical.key -> m.canonical).toMap
     val genByCanon = genMembers.map(m => m.canonical.key -> m.canonical).toMap
-    val derived = genMembers.filterNot(isStructural(_, isTrait, own))
+    val ownOuter = cls.replace('/', '$').stripSuffix("$") + "$$$outer" // the class's own outer accessor, expanded
+    val derived = genMembers.filterNot(isStructural(_, isTrait, own, ownOuter))
     val diffs = List.newBuilder[Diff]
     for (g <- derived) {
       val k = kind(g)
@@ -168,8 +179,14 @@ object Compare {
       }
     }
     // real members that look ancestor-derived but were not regenerated
-    for (r <- refMembers if !genByCanon.contains(r.canonical.key)  && !own.isOwn(r.name, r.isField)) {
-      looksDerived(r, isTrait).foreach(k => diffs += Diff(cls, k, 1, s"real only: ${r.show}"))
+    // (an own method is never a bridge, so a bridge does not get away by sharing its name)
+    val fieldNames = refMembers.filter(_.isField).map(_.name).toSet
+    for (r <- refMembers if !genByCanon.contains(r.canonical.key) && ((r.access & Opcodes.ACC_BRIDGE) != 0 && !r.isField || !own.isOwn(r.name, r.isField))) {
+      looksDerived(r, isTrait).filter {
+        case "trait outer accessor"      => r.name != ownOuter
+        case "inherited object accessor" => fieldNames(r.name + "$module")
+        case _ => true
+      }.foreach(k => diffs += Diff(cls, k, 1, s"real only: ${r.show}"))
     }
     val genInit = initCalls(gen)
     val refInit = initCalls(ref)

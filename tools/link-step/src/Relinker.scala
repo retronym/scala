@@ -5,6 +5,7 @@ import scala.reflect.internal.util.BatchSourceFile
 import scala.reflect.io.{AbstractFile, VirtualDirectory, VirtualFile}
 import scala.tools.nsc.{Global, Settings}
 import scala.tools.nsc.reporters.StoreReporter
+import scala.reflect.internal.Flags
 
 /** Regenerates the ancestor-derived parts of Scala class files from pickles alone.
  *
@@ -19,7 +20,7 @@ import scala.tools.nsc.reporters.StoreReporter
  *  One `Relinker` is one `Global` and one `Run`. The phases mutate symbols (expanded names, added decls), so a
  *  `Relinker` is used once.
  */
-final class Relinker(classpath: String, options: List[String], forceAncestorSpecialization: Boolean = true) {
+final class Relinker(classpath: String, options: List[String], forceAncestorSpecialization: Boolean = true) extends LocalStubs {
   val settings = new Settings(msg => throw new IllegalArgumentException(msg))
   settings.processArguments(options, processAll = true)
   settings.classpath.value = classpath
@@ -67,26 +68,36 @@ final class Relinker(classpath: String, options: List[String], forceAncestorSpec
   for (p <- analyzer.packageObjects.deferredOpen.toVector)
     if (analyzer.packageObjects.deferredOpen.remove(p)) openPackageModule(p, force = true)
   private[this] val units = mutable.LinkedHashMap[String, CompilationUnit]()
+  /** Units the backend failed on. When there are any, it wrote no class files at all. */
+  val jvmFailed = mutable.LinkedHashSet[String]()
 
   /** Phase-time snapshot of each regenerated class's own pickled decls, by class symbol. */
   val ownDecls = mutable.LinkedHashMap[Symbol, List[Symbol]]()
 
-  def relink(topLevelNames: Seq[String]): Unit = {
-
-    for (name <- topLevelNames) {
+  /** Relinks the pickled top-level classes named, and (best effort, see [[LocalStubs]]) the class files without a
+   *  pickle given by binary name and parsed class. */
+  def relink(topLevelNames: Seq[String], locals: Seq[(String, scala.tools.asm.tree.ClassNode)] = Nil): Unit = {
+    def register(name: String, syms: => List[Symbol]): Unit =
       try {
-        val syms = topLevel(name)
-        if (syms.nonEmpty) {
+        val ss = syms
+        if (ss.nonEmpty) {
           val file = new VirtualFile(name.replace('.', '/') + ".scala")
           val unit = new CompilationUnit(new BatchSourceFile(file, Array.emptyCharArray))
-          unit.body = enteringPhase(currentRun.refchecksPhase.next)(packageDef(syms))
-          syms.foreach(s => run.symSource(s) = file)
+          unit.body = enteringPhase(currentRun.refchecksPhase.next)(packageDef(ss))
+          ss.foreach(s => run.symSource(s) = file)
           units(name) = unit
         }
       } catch {
         case t: Throwable => failures(name) = "stub: " + describe(t)
       }
-    }
+    for (name <- topLevelNames) register(name, topLevel(name))
+    for ((name, cn) <- locals) register(name, enteringPhase(currentRun.typerPhase)(localStub(name, cn)) match {
+      case _ if reporter.hasErrors =>
+        failures(name) = "local stub: " + reporter.infos.filter(_.severity == reporter.ERROR).map(_.msg).mkString("; ").take(300)
+        reporter.reset(); Nil
+      case Right(s) => List(s)
+      case Left(why) => failures(name) = "local stub: " + why; Nil
+    })
     val addUnit = classOf[Global#Run].getDeclaredMethod("addUnit", classOf[CompilationUnit])
     addUnit.setAccessible(true)
     units.valuesIterator.foreach(u => addUnit.invoke(run, u))
@@ -110,7 +121,17 @@ final class Relinker(classpath: String, options: List[String], forceAncestorSpec
       phase = ph
       ph match {
         case _ if ph.name == "jvm" =>
+          reporter.reset()
           ph.run()
+          // the backend writes nothing if any class failed; name the failed units so that the caller can retry without them
+          val Emitting = """(?s)Error while emitting (\S+)\.scala\s*(.*)""".r
+          for (i <- reporter.infos if i.severity == reporter.ERROR) i.msg match {
+            case Emitting(path, why) =>
+              val n = units.keys.find(_.replace('.', '/') == path).getOrElse(path)
+              failures(n) = "jvm: " + (if (sys.props.contains("linkstep.debug")) why else why.linesIterator.take(1).mkString.take(300))
+              jvmFailed += n
+            case m => failures("jvm") = "jvm: " + m.take(300)
+          }
         case gp: GlobalPhase =>
           if (ph.name == "specialize" && forceAncestorSpecialization) forceSpecializedAncestors()
           for (u <- units.valuesIterator if u.body ne EmptyTree) {
@@ -123,6 +144,9 @@ final class Relinker(classpath: String, options: List[String], forceAncestorSpec
               }
             } catch {
               case t: Throwable =>
+                if (sys.props.contains("linkstep.debug")) reporter.infos.foreach(i => println(s"reported in ${ph.name}: ${i.msg.take(400)}"))
+                if (sys.props.contains("linkstep.debug") && ph.name == "mixin")
+                  u.body.foreach { case cd: ClassDef => cd.symbol.info.decls.foreach(s => if (s.hasFlag(Flags.MIXEDIN) && s.isMethod && s.paramss.isEmpty) println(s"no params: ${s.defString} alias ${s.alias.fullLocationString} ${s.alias.info}")) case _ => }
                 failures(nameOf(u)) = s"${ph.name}: " + describe(t)
                 u.body = EmptyTree
             }
@@ -130,6 +154,13 @@ final class Relinker(classpath: String, options: List[String], forceAncestorSpec
           reporter.reset()
         case _ => ph.run()
       }
+      if (sys.props.contains("linkstep.errtypes"))
+        for (u <- units.valuesIterator; cd <- u.body.collect { case cd: ClassDef => cd }) {
+          val bad = exitingPhase(ph)(cd.symbol.info.baseClasses.flatMap(_.info.decls).filter(d => d.isMethod && d.info.isErroneous))
+          if (bad.nonEmpty) println(s"after ${ph.name}: ${cd.symbol} sees erroneous ${bad.take(3).map(_.fullLocationString)}")
+        }
+      if (sys.props.get("linkstep.trace").exists(t => units.keys.exists(_.contains(t))))
+        units.foreach { case (n, u) => if (n.contains(sys.props("linkstep.trace"))) println(s"== after ${ph.name}: $n\n${u.body}") }
       ph = ph.next
     }
     globalPhase = ph
@@ -218,7 +249,7 @@ final class Relinker(classpath: String, options: List[String], forceAncestorSpec
       val fields = decls.filter(d => d.isTerm && (!d.isMethod || d.isLazy) && !d.isModule).map(name) ++
         decls.filter(_.isModule).map(name(_) + "$module")
       binaryName(cls) -> Own(names.toSet, fields.toSet)
-    }.toMap
+    }.toMap ++ localOwn
   }
 
   def binaryName(cls: Symbol): String = exitingPhase(currentRun.jvmPhase) {
