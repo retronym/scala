@@ -4378,9 +4378,11 @@ trait Types
           case l         => l
         }
         layout match {
-          case "chunked" | "chunked-weak" =>
+          case "chunked" | "chunked-weak" | "chunked-weak-rejuv" =>
             uniques = null
-            chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+            chunkedUniques =
+              if (layout == "chunked-weak-rejuv") new util.ChunkedInterner[Type](initialUniquesCapacity, weak = true, rejuvenateAfter = 1, minWrites = 256)
+              else new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
             uniquesCensusAttach(chunkedUniques)
             uncachedCache = if (uncacheCacheSize > 0) new Array[Type](uncacheCacheSize) else null
           case _ =>

@@ -32,7 +32,7 @@ import java.lang.ref.{ReferenceQueue, WeakReference}
  *  Elements are compared with `equals`, probe first, as in `WeakHashSet.findEntryOrUpdate`. Lookups do not
  *  allocate. Not thread-safe.
  */
-final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean) {
+final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean, rejuvenateAfter: Int = 0, minWrites: Int = 256) {
   import ChunkedInterner._
 
   private[this] val InitialCapacity = Integer.highestOneBit(math.max(initialCapacity, 16) * 2 - 1)
@@ -52,6 +52,46 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   private[this] var free = -1
   private[this] var freeHash = 0
   private[this] var freeStamp = -1
+
+  // DO NOT MERGE (from retronym/interner-gc-bench's chunked-weak-rejuv): keep chunks young between rebuilds. A chunk
+  // that lives through enough young GCs is tenured, and from then on every insert into it is an old-to-young store, as
+  // with a humongous bucket array. Count collections with a canary (a weak reference to garbage, cleared by every
+  // collection); on the first insert after a chunk has seen `rejuvenateAfter` of them, and took at least `minWrites`
+  // stores since the previous one, replace it with a copy, which is young. Hash chunks are `Array[Int]`: no GC scans them.
+  private[this] var epoch = 0
+  private[this] var canary: WeakReference[AnyRef] = if (rejuvenateAfter > 0) new WeakReference[AnyRef](new Object) else null
+  private[this] var born: Array[Int] = null
+  private[this] var writes: Array[Int] = null
+  private[this] var spineBorn = 0
+  /** Chunks copied to keep them young. */
+  var rejuvenated: Long = 0L
+  resetBirths()
+
+  private[this] def resetBirths(): Unit = if (rejuvenateAfter > 0) {
+    born = new Array[Int](elems.length)
+    java.util.Arrays.fill(born, epoch)
+    writes = new Array[Int](elems.length)
+    spineBorn = epoch
+  }
+
+  private[this] def newEpoch(): Unit = {
+    epoch += 1
+    canary = new WeakReference[AnyRef](new Object)
+    if (epoch - spineBorn >= rejuvenateAfter) {
+      elems = elems.clone()
+      spineBorn = epoch
+    }
+    var c = 0
+    while (c < born.length) {
+      if (epoch - born(c) >= rejuvenateAfter && writes(c) >= minWrites) {
+        elems(c) = elems(c).clone()
+        born(c) = epoch
+        rejuvenated += 1
+      }
+      writes(c) = 0
+      c += 1
+    }
+  }
 
   /** DO NOT MERGE: the uniques census (`-Dscala.uniques.census=true`), told of each `Ref` added and cleared. */
   var listener: Listener = null
@@ -95,6 +135,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   def add[T <: A](elem: T, h: Int): T = {
     val e = if (weak) new Ref(elem, h, queue) else elem
     if (listener != null && weak) listener.added(e.asInstanceOf[Ref])
+    if (rejuvenateAfter > 0 && canary.get() == null) newEpoch()
     if ((used + 1) * 2 > mask + 1) {
       // grow if live elements fill a quarter of the table, otherwise rebuild at the same size to drop tombstones
       rebuild(if (live * 4 >= mask + 1) (mask + 1) * 2 else mask + 1)
@@ -129,6 +170,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   /** Store slot content `e` with hash `h` at the empty or tombstone slot `i`. */
   private[this] def store(i: Int, e: AnyRef, h: Int): Unit = {
     if (elems(i >>> ChunkBits)(i & ChunkMask) == null) used += 1 // a tombstone is already counted
+    if (rejuvenateAfter > 0) writes(i >>> ChunkBits) += 1
     elems(i >>> ChunkBits)(i & ChunkMask) = e
     hashes(i >>> ChunkBits)(i & ChunkMask) = h
   }
@@ -143,6 +185,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     used = 0
     live = 0
     stamp += 1
+    resetBirths()
     var c = 0
     while (c < oldElems.length) {
       val es = oldElems(c)
@@ -187,6 +230,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     mask = InitialCapacity - 1
     elems = newElems(InitialCapacity)
     hashes = newHashes(InitialCapacity)
+    resetBirths()
     used = 0
     live = 0
     if (weak) while (queue.poll() != null) ()

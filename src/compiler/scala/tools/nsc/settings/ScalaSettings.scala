@@ -365,7 +365,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val exposeEmptyPackage = BooleanSetting ("-Yexpose-empty-package", "Internal only: expose the empty package.").internalOnly()
   val Ydelambdafy        = ChoiceSetting  ("-Ydelambdafy", "strategy", "Strategy used for translating lambdas into JVM code.", List("inline", "method"), "method")
   val YuniquesUncache    = StringSetting  ("-Yuniques-uncache", "scopes", "DO NOT MERGE: weak scopes whose new types are not interned (comma-separated, or all); default: -Dscala.uniques.uncache.", "").internalOnly()
-  val YuniquesLayout     = ChoiceSetting  ("-Yuniques-layout", "layout", "The type interner's table layout for each run; default: -Dscala.uniques.layout, else weak.", List("default", "weak", "chunked", "chunked-weak"), "default").internalOnly()
+  val YuniquesLayout     = ChoiceSetting  ("-Yuniques-layout", "layout", "The type interner's table layout for each run; default: -Dscala.uniques.layout, else weak.", List("default", "weak", "chunked", "chunked-weak", "chunked-weak-rejuv"), "default").internalOnly()
 
   // Allows a specialised jar to be written. For instance one that provides stable hashing of content, or customisation of the file storage
   val YjarFactory = StringSetting   ("-YjarFactory", "classname", "factory for jar files", classOf[DefaultJarFactory].getName)

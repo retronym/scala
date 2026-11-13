@@ -93,6 +93,19 @@ class ChunkedInternerTest {
     }
   }
 
+  @Test def rejuvenatesWrittenChunks(): Unit = {
+    val t = new ChunkedInterner[Key](16, weak = true, rejuvenateAfter = 1, minWrites = 1)
+    val n = ChunkedInterner.ChunkSize * 2 // several chunks
+    val keys = new Array[Key](n)
+    for (i <- 0 until n) {
+      keys(i) = intern(t, i, i)
+      if (i % 20000 == 0) System.gc() // clears the canary: the next insert copies the chunks written since
+    }
+    assumeTrue("no collection cleared the canary", t.rejuvenated > 0)
+    for (i <- 0 until n) assertSame(keys(i), intern(t, i, i))
+    assertEquals(n, t.size)
+  }
+
   @Test def clearForgetsEverything(): Unit = {
     val t = newInterner
     val a = intern(t, 1, 1)
