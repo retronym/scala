@@ -49,6 +49,22 @@ trait UniquesCensus { self: SymbolTable =>
 
   private[this] lazy val census = new Census
 
+  /** Enter a scope whose interned types the rule under test would hold weakly, at this completion level only: a
+   *  completion started inside it runs in a fresh frame, outside any weak scope. Returns null when the census is off. */
+  final def weakScopeEnter(label: Int): CompletionFrame =
+    if (!uniquesCensusOn) null
+    else {
+      val f = scratch.frame
+      if (f.weakDepth == 0) f.weakLabel = label
+      f.weakDepth += 1
+      f
+    }
+  final def weakScopeExit(f: CompletionFrame): Unit =
+    if (f ne null) {
+      f.weakDepth -= 1
+      if (f.weakDepth == 0) f.weakLabel = 0
+    }
+
   /** Called by the table each run, when it is created. */
   private[internal] def uniquesCensusAttach(table: ChunkedInterner[Type]): Unit =
     if (uniquesCensusOn) census.attach(table)
@@ -96,6 +112,10 @@ trait UniquesCensus { self: SymbolTable =>
     private[this] val siteKeys = mutable.ArrayBuffer[String]("-")
     private[this] val anchorSiteFates = new mutable.HashMap[Int, Array[Long]]
     private[this] val createSiteFates = new mutable.HashMap[Int, Array[Long]]
+    private[this] val addedScope = new Array[Long](WeakLabels)
+    // [label][promoted][fate]
+    private[this] val fateScope = new Array[Long](WeakLabels * 2 * Fates)
+    private[this] var promotions = 0L
     private[this] var anchorWalks = 0L
     private[this] var anchorVisits = 0L
     private[this] var runs = 0
@@ -120,11 +140,21 @@ trait UniquesCensus { self: SymbolTable =>
       val cls = classId(tp.getClass)
       val ph = math.min(phase.id, MaxPhases - 1)
       val sh = shapeOf(tp)
-      ref.census = cls | (ph << PhaseShift) | (ctx << CtxShift) | (sh << ShapeShift)
+      ref.census = cls | (ph << PhaseShift) | (ctx << CtxShift) | (sh << ShapeShift) | (frame.weakLabel << WeakShift)
+      addedScope(frame.weakLabel) += 1
       ref.serial = frame.serial
       if (censusSites) ref.site = siteId(stackKey(CreateSkip, 6))
       addedCls((cls * 2 + ctx) * 4 + sh) += 1
       addedPhase((ph * 2 + ctx) * 4 + sh) += 1
+    }
+
+    /** A lookup outside any weak scope found a type made in one: the rule would make it strong. */
+    def hit(ref: ChunkedInterner.Ref): Unit = {
+      val c = ref.census
+      if (((c >>> WeakShift) & WeakMask) != 0 && (c & Promoted) == 0 && scratch.frame.weakLabel == 0) {
+        ref.census = c | Promoted
+        promotions += 1
+      }
     }
 
     def cleared(ref: ChunkedInterner.Ref): Unit = {
@@ -145,10 +175,13 @@ trait UniquesCensus { self: SymbolTable =>
       val src = (c >>> SrcShift) & SrcMask
       fateCls((((cls * 2 + ctx) * 4 + sh) * Fates + fate) * Srcs + src) += 1
       fatePhase(((ph * 2 + ctx) * 4 + sh) * Fates + fate) += 1
+      val wl = (c >>> WeakShift) & WeakMask
+      fateScope((wl * 2 + (if ((c & Promoted) != 0) 1 else 0)) * Fates + fate) += 1
     }
 
     private def countSite(r: ChunkedInterner.Ref, fate: Int): Unit = if (censusSites) {
-      createSiteFates.getOrElseUpdate(r.site, new Array[Long](Fates))(fate) += 1
+      val verdict = scopeVerdict(r.census)
+      createSiteFates.getOrElseUpdate(r.site, new Array[Long](Fates * 3))(verdict * Fates + fate) += 1
       val as = (r.census >>> AnchorSiteShift) & AnchorSiteMask
       if (as != 0) anchorSiteFates.getOrElseUpdate(anchorSiteIds(as), new Array[Long](Fates))(fate) += 1
     }
@@ -158,6 +191,10 @@ trait UniquesCensus { self: SymbolTable =>
     private def anchorSiteIndexOf(site: Int): Int = anchorSiteIndex.getOrElseUpdate(site, {
       if (anchorSiteIds.size > AnchorSiteMask) AnchorSiteMask else { anchorSiteIds += site; anchorSiteIds.size - 1 }
     })
+
+    /** 0: the rule holds it strongly (made outside every weak scope); 1: weakly; 2: made weak, then promoted. */
+    private def scopeVerdict(c: Int): Int =
+      if (((c >>> WeakShift) & WeakMask) == 0) 0 else if ((c & Promoted) != 0) 2 else 1
 
     private def siteId(key: String): Int = siteIds.getOrElseUpdate(key, { siteKeys += key; siteKeys.size - 1 })
 
@@ -285,6 +322,16 @@ trait UniquesCensus { self: SymbolTable =>
       add("runs", runs)
       add("anchor.walks", anchorWalks)
       add("anchor.visits", anchorVisits)
+      add("rule.promotions", promotions)
+      for (wl <- 0 until WeakLabels) {
+        add(s"rule.added.${WeakNames(wl)}", addedScope(wl))
+        for (pr <- 0 to 1; f <- 0 until Fates) {
+          val n = fateScope((wl * 2 + pr) * Fates + f)
+          val verdict = if (wl == 0) "strong" else if (pr == 1) "promoted" else "weak"
+          add(s"rule.$verdict.${FateNames(f)}", n)
+          if (wl != 0) add(s"rule.scope.${WeakNames(wl)}${if (pr == 1) ".promoted" else ""}.${FateNames(f)}", n)
+        }
+      }
       for (cls <- 0 until MaxClasses; ctx <- 0 to 1; sh <- 0 to 3) {
         val n = addedCls((cls * 2 + ctx) * 4 + sh)
         add("added", n)
@@ -319,16 +366,19 @@ trait UniquesCensus { self: SymbolTable =>
         w.print("}, \"probes\": {")
         def esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
         val probes = for {
-          (label, m) <- List("anchor" -> anchorSiteFates, "create" -> createSiteFates)
+          (label, m, verdicts) <- List(("anchor", anchorSiteFates, List("")), ("create", createSiteFates, List("strong.", "weak.", "promoted.")))
+          (vname, v) <- verdicts.zipWithIndex
           f <- 0 until Fates
-          sites = m.iterator.map { case (id, a) => (siteKeys(id), a(f)) }.filter(_._2 > 0).toList.sortBy(-_._2).take(200)
+          sites = m.iterator.map { case (id, a) => (siteKeys(id), a(v * Fates + f)) }.filter(_._2 > 0).toList.sortBy(-_._2).take(200)
           if sites.nonEmpty
-        } yield "\"" + label + "." + FateNames(f) + "\": {\"kind\": \"sites\", \"hits\": " + sites.map(_._2).sum + ", \"sample\": 1, \"sites\": {" +
+        } yield "\"" + label + "." + vname + FateNames(f) + "\": {\"kind\": \"sites\", \"hits\": " + sites.map(_._2).sum + ", \"sample\": 1, \"sites\": {" +
           sites.map { case (k, n) => "\"" + esc(k) + "\": " + n }.mkString(", ") + "}}"
         w.print(probes.mkString(", "))
         w.println("}}")
       } finally w.close()
       def c(k: String) = counters.getOrElse(k, 0L)
+      def r(v: String) = FateNames.map(f => s"$f=${c(s"rule.$v.$f")}").mkString(" ")
+      System.out.println(s"[uniques-census] rule: strong{${r("strong")}} weak{${r("weak")}} promoted{${r("promoted")}} promotions=$promotions")
       System.out.println(s"[uniques-census] runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
     }
   }
@@ -347,8 +397,20 @@ object UniquesCensus {
   final val Anchored = 1 << 18
   final val SameFrame = 1 << 19
   final val Counted = 1 << 20
-  final val AnchorSiteShift = 21
-  final val AnchorSiteMask = (1 << 11) - 1
+  final val WeakShift = 21
+  final val WeakMask = 7
+  final val Promoted = 1 << 24
+  final val AnchorSiteShift = 25
+  final val AnchorSiteMask = (1 << 7) - 1
+
+  final val WeakQuery = 1
+  final val WeakMapParams = 2
+  final val WeakAdaptPoly = 3
+  final val WeakNarrow = 4
+  final val WeakExistential = 5
+  final val WeakMixin = 6
+  final val WeakLabels = 7
+  val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin")
   /** Frames that only plumb an intern or an anchor, left out of a site. */
   val CreateSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|util\\.ChunkedInterner|Types\\$PerRunUniques|Types\\.unique|Types\\$[A-Za-z]*(TypeRef|Type|Bounds)\\$?\\.(apply|<init>)|Types\\.(typeRef|singleType|newTypeRef|copyTypeRef|TypeBounds|ThisType|ConstantType)))")
   val AnchorSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|Symbols\\$[A-Za-z]*Symbol\\.(info_\\$eq|setInfo|updateInfo|setTyconCache|transformInfos|setInfoOwnerAdjusted|setInfoAndEnter|modifyInfo)))")

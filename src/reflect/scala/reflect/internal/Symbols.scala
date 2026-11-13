@@ -2993,7 +2993,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def referenced: Symbol = _referenced
     def referenced_=(x: Symbol): Unit = { _referenced = x }
 
-    def existentialBound = singletonBounds(this.tpe)
+    def existentialBound = {
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakExistential)
+      try singletonBounds(this.tpe) finally weakScopeExit(ws)
+    }
 
     def cloneSymbolImpl(owner: Symbol, newFlags: Long): TermSymbol =
       owner.newTermSymbol(name, pos, newFlags).copyAttrsFrom(this)

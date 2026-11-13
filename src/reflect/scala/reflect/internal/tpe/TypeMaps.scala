@@ -138,10 +138,13 @@ private[internal] trait TypeMaps {
       if (firstChange < 0) origSyms
       else {
         // map is not the identity --> do cloning properly
-        val cloned = cloneSymbols(origSyms)
-        // but we don't need to run the map again on the unchanged symbols
-        cloned.drop(firstChange).foreach(_ modifyInfo this)
-        cloned
+        val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams)
+        try {
+          val cloned = cloneSymbols(origSyms)
+          // but we don't need to run the map again on the unchanged symbols
+          cloned.drop(firstChange).foreach(_ modifyInfo this)
+          cloned
+        } finally weakScopeExit(ws)
       }
     }
 

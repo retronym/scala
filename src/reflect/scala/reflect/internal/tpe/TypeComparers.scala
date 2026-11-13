@@ -99,6 +99,10 @@ trait TypeComparers {
 
   /** Do `tp1` and `tp2` denote equivalent types? */
   def isSameType(tp1: Type, tp2: Type): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try isSameTypeImpl(tp1, tp2) finally weakScopeExit(ws)
+  }
+  private def isSameTypeImpl(tp1: Type, tp2: Type): Boolean = {
     val frame = scratch.frame
     val guard = frame.subTypes
     guard.enter()
@@ -260,6 +264,10 @@ trait TypeComparers {
   }
 
   def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try isSubTypeImpl(tp1, tp2, depth) finally weakScopeExit(ws)
+  }
+  private def isSubTypeImpl(tp1: Type, tp2: Type, depth: Depth): Boolean = {
     val frame = scratch.frame
     val guard = frame.subTypes
     guard.enter(tp1, tp2) && {

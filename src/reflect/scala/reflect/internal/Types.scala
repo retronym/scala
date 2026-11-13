@@ -2935,7 +2935,10 @@ trait Types
       }
       val result1 = map(resultType)
       if ((params1 eq params) && (result1 eq resultType)) this
-      else copyMethodType(this, params1, result1.substSym(params, params1))
+      else {
+        val ws = if (params1 ne params) weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams) else null
+        try copyMethodType(this, params1, result1.substSym(params, params1)) finally weakScopeExit(ws)
+      }
     }
     override def foldOver(folder: TypeFolder): Unit = {
       folder.foldOver(params)
@@ -3038,7 +3041,10 @@ trait Types
       }
       val result1 = map(resultType)
       if ((tparams1 eq typeParams) && (result1 eq resultType)) this
-      else PolyType(tparams1, result1.substSym(typeParams, tparams1))
+      else {
+        val ws = if (tparams1 ne typeParams) weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams) else null
+        try PolyType(tparams1, result1.substSym(typeParams, tparams1)) finally weakScopeExit(ws)
+      }
     }
     override def foldOver(folder: TypeFolder): Unit = {
       folder.foldOver(typeParams)
@@ -4832,6 +4838,10 @@ trait Types
   }
 
   def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try specializesSymImpl(tp, sym, depth) finally weakScopeExit(ws)
+  }
+  private def specializesSymImpl(tp: Type, sym: Symbol, depth: Depth): Boolean = {
     def directlySpecializedBy(member: Symbol): Boolean = (
          member == sym
       || specializesSym(tp.narrow, member, sym.owner.thisType, sym, depth)
@@ -4896,6 +4906,10 @@ trait Types
 
   /** A function implementing `tp1` matches `tp2`. */
   final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try matchesTypeImpl(tp1, tp2, alwaysMatchSimple) finally weakScopeExit(ws)
+  }
+  private def matchesTypeImpl(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)

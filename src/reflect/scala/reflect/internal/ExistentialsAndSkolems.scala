@@ -94,6 +94,10 @@ final class ExistentialsAndSkolems[U <: SymbolTable with Singleton](val self: U)
    *  only the type of the Ident is changed.
    */
   final def existentialTransform[T](rawSyms: List[Symbol], tp: Type, rawOwner: Symbol = NoSymbol)(creator: (List[Symbol], Type) => T): T = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakExistential)
+    try existentialTransformImpl(rawSyms, tp, rawOwner)(creator) finally weakScopeExit(ws)
+  }
+  private def existentialTransformImpl[T](rawSyms: List[Symbol], tp: Type, rawOwner: Symbol)(creator: (List[Symbol], Type) => T): T = {
     val allBounds = existentialBoundsExcludingHidden(rawSyms)
     val typeParams: List[Symbol] = rawSyms map { sym =>
       val name = sym.name match {

@@ -81,7 +81,10 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
       if (tomb < 0 && (e eq Tombstone)) tomb = i
       if (hashes(i >>> ChunkBits)(i & ChunkMask) == h) {
         val x = deref(e)
-        if (x != null && probe.equals(x)) return x
+        if (x != null && probe.equals(x)) {
+          if (listener != null && weak) listener.hit(e.asInstanceOf[Ref])
+          return x
+        }
       }
       i = (i + 1) & mask
     }
@@ -240,6 +243,8 @@ object ChunkedInterner {
   /** DO NOT MERGE (census). */
   trait Listener {
     def added(ref: Ref): Unit
+    /** A lookup found the element held by `ref`. */
+    def hit(ref: Ref): Unit
     /** A `Ref` whose element was collected; may be called more than once for one `Ref`. */
     def cleared(ref: Ref): Unit
   }

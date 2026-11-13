@@ -1242,14 +1242,18 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           //  (the only way to get a PolyType for an anonymous type function is by normalisation, which applies eta-expansion)
           // -- are we sure we want to expand aliases this early?
           // -- what caused this change in behaviour??
-          val tparams1 = cloneSymbols(tparams)
-          val tree1 =
-            if (tree.isType) tree
-            else TypeApply(tree, tparams1.map(tparam => TypeTree(tparam.tpeHK).setPos(tree.pos.focus))).setPos(tree.pos)
+          val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakAdaptPoly)
+          val (tparams1, tree1, restpe1) = try {
+            val tparams1 = cloneSymbols(tparams)
+            val tree1 =
+              if (tree.isType) tree
+              else TypeApply(tree, tparams1.map(tparam => TypeTree(tparam.tpeHK).setPos(tree.pos.focus))).setPos(tree.pos)
+            (tparams1, tree1, restpe.substSym(tparams, tparams1))
+          } finally weakScopeExit(ws)
 
           context.undetparams ++= tparams1
           notifyUndetparamsAdded(tparams1)
-          adapt(tree1 setType restpe.substSym(tparams, tparams1), mode, pt, original)
+          adapt(tree1 setType restpe1, mode, pt, original)
 
         case mt: MethodType if mode.typingExprNotFunNotLhs && mt.isImplicit => // (4.1)
           adaptToImplicitMethod(mt)

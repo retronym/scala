@@ -662,6 +662,9 @@ abstract class SymbolTable extends macros.Universe
     val depth: Int = if (prev eq null) 0 else prev.depth + 1
     /** DO NOT MERGE (uniques census): which entry into this frame is in progress; 0 in the outermost frame. */
     var serial: Int = 0
+    /** DO NOT MERGE (uniques census): the label of the outermost weak scope in progress in this frame, and how many are. */
+    var weakLabel: Int = 0
+    var weakDepth: Int = 0
     private[this] var _next: CompletionFrame = null
     /** The frame for a completion started from this one. Kept for reuse once allocated. */
     def next: CompletionFrame = {
@@ -740,6 +743,8 @@ abstract class SymbolTable extends macros.Universe
       next.completing = completing
       frameSerials += 1
       next.serial = frameSerials
+      next.weakLabel = 0
+      next.weakDepth = 0
       _frame = next
       f
     }
