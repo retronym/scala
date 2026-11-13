@@ -4489,14 +4489,30 @@ trait Types
   private class PerRunUniques extends Uniques {
     private[this] val initialUniquesCapacity = 4096
     private[this] var uniques: util.WeakHashSet[Type] = _
+    /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
+    private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
     private[this] var uniqueRunId = NoRunId
 
-    def size: Int = if (uniques == null) 0 else uniques.size
-    override def isEntry(tp: Type): Boolean = (uniqueRunId == currentRunId) && (uniques.findEntry(tp) eq tp)
+    def size: Int =
+      if (uniques != null) uniques.size
+      else if (chunkedUniques != null) chunkedUniques.size
+      else 0
+    override def isEntry(tp: Type): Boolean = (uniqueRunId == currentRunId) && (findEntry(tp) eq tp)
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
-        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        val layout = uniquesLayout match {
+          case "default" => System.getProperty("scala.uniques.layout", "weak")
+          case l         => l
+        }
+        layout match {
+          case "chunked" | "chunked-weak" =>
+            uniques = null
+            chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+          case _ =>
+            uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+            chunkedUniques = null
+        }
         val on = !isConcurrentUniverse && uniquesClosedScopes
         closedOn = on
         closedCache = if (on) new Array[Type](ClosedCacheSize) else null
@@ -4507,7 +4523,7 @@ trait Types
         // as a) this is now a weak set, and b) it is discarded completely before the next run.
         uniqueRunId = currentRunId
       }
-      if (closedState == 0) (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      if (closedState == 0) findOrAdd(tp)
       else closedUnique(tp)
     }
     private def closedUnique[T <: Type](tp: T): T =
@@ -4516,8 +4532,18 @@ trait Types
       // entering it would let the table hand the part to anyone who builds an equal type. A part was made in a closed
       // scope if the table's entry for it is not that instance.
       else if (hasPartOutsideTable(tp)) tp
+      else findOrAdd(tp)
+    private def findOrAdd[T <: Type](tp: T): T = {
+      val chunked = chunkedUniques
+      if (chunked != null) chunked.findOrAdd(tp)
       else (uniques findEntryOrUpdate tp).asInstanceOf[T]
-    private def outsideTable(p: Type): Boolean = p.isInstanceOf[UniqueType] && (uniques.findEntry(p) ne p)
+    }
+    private def findEntry(tp: Type): Type = {
+      val chunked = chunkedUniques
+      if (chunked != null) chunked.find(tp.hashCode, tp)
+      else uniques.findEntry(tp)
+    }
+    private def outsideTable(p: Type): Boolean = p.isInstanceOf[UniqueType] && (findEntry(p) ne p)
     private def hasPartOutsideTable(tp: Type): Boolean = {
       def any(tps: List[Type]): Boolean = { var xs = tps; while (!xs.isEmpty) { if (outsideTable(xs.head)) return true; xs = xs.tail }; false }
       tp match {
@@ -4533,7 +4559,7 @@ trait Types
     private[this] final val ClosedCacheSize = 4096
     private[this] var closedCache: Array[Type] = null
     private def closedScopeUnique[T <: Type](tp: T): T = {
-      val e = uniques.findEntry(tp)
+      val e = findEntry(tp)
       if (e ne null) e.asInstanceOf[T]
       else {
         val h = tp.hashCode
