@@ -532,6 +532,11 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** The layout of the table that hash-conses types, read when each run creates it: "weak" for
+   *  `util.WeakHashSet`, "chunked-weak" for `util.WeakInterner`.
+   */
+  protected[scala] def uniquesLayout: String = "weak"
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
