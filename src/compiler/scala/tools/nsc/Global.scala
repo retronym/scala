@@ -1154,6 +1154,9 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** The id of the currently active run
    */
   override def currentRunId = curRunId
+  override protected[scala] def uniquesLayout: String = settings.YuniquesLayout.value
+  override protected[scala] def uniquesUncache: String =
+    if (settings.YuniquesUncache.value.nonEmpty) settings.YuniquesUncache.value else super.uniquesUncache
 
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */
@@ -1631,6 +1634,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       runReporting.runFinished(hasErrors = reporter.hasErrors)
 
       reporting.summarizeErrors()
+      uniquesCensusReport()
 
       // val allNamesArray: Array[String] = allNames().map(_.toString).toArray.sorted
       // allNamesArray.foreach(println(_))

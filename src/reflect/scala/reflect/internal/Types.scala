@@ -87,6 +87,7 @@ trait Types
   with tpe.TypeComparers
   with tpe.TypeMaps
   with tpe.TypeConstraints
+  with tpe.UniquesCensus
   with util.Collections { self: SymbolTable =>
 
   import definitions._
@@ -485,7 +486,10 @@ trait Types
      * Amounts to substitution except for higher-kinded types. (See overridden method in TypeRef) -- \@M
      */
     def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
-      if (sameLength(formals, actuals)) this.subst(formals, actuals) else ErrorType
+      if (sameLength(formals, actuals)) {
+        val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakInstantiate)
+        try this.subst(formals, actuals) finally weakScopeExit(ws)
+      } else ErrorType
 
     /** If this type is an existential, turn all existentially bound variables to type skolems.
      *  @param  owner    The owner of the created type skolems
@@ -2934,7 +2938,10 @@ trait Types
       }
       val result1 = map(resultType)
       if ((params1 eq params) && (result1 eq resultType)) this
-      else copyMethodType(this, params1, result1.substSym(params, params1))
+      else {
+        val ws = if (params1 ne params) weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams) else null
+        try copyMethodType(this, params1, result1.substSym(params, params1)) finally weakScopeExit(ws)
+      }
     }
     override def foldOver(folder: TypeFolder): Unit = {
       folder.foldOver(params)
@@ -3037,7 +3044,10 @@ trait Types
       }
       val result1 = map(resultType)
       if ((tparams1 eq typeParams) && (result1 eq resultType)) this
-      else PolyType(tparams1, result1.substSym(typeParams, tparams1))
+      else {
+        val ws = if (tparams1 ne typeParams) weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams) else null
+        try PolyType(tparams1, result1.substSym(typeParams, tparams1)) finally weakScopeExit(ws)
+      }
     }
     override def foldOver(folder: TypeFolder): Unit = {
       folder.foldOver(typeParams)
@@ -4351,13 +4361,34 @@ trait Types
   private class PerRunUniques extends Uniques {
     private[this] val initialUniquesCapacity = 4096
     private[this] var uniques: util.WeakHashSet[Type] = _
+    /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
+    private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
     private[this] var uniqueRunId = NoRunId
 
-    def size: Int = if (uniques == null) 0 else uniques.size
+    def size: Int =
+      if (uniques != null) uniques.size
+      else if (chunkedUniques != null) chunkedUniques.size
+      else 0
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
-        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        refreshUncache()
+        val layout = uniquesLayout match {
+          case "default" => System.getProperty("scala.uniques.layout", "weak")
+          case l         => l
+        }
+        layout match {
+          case "chunked" | "chunked-weak" | "chunked-weak-rejuv" =>
+            uniques = null
+            chunkedUniques =
+              if (layout == "chunked-weak-rejuv") new util.ChunkedInterner[Type](initialUniquesCapacity, weak = true, rejuvenateAfter = 1, minWrites = 256)
+              else new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+            uniquesCensusAttach(chunkedUniques)
+            uncachedCache = if (uncacheCacheSize > 0) new Array[Type](uncacheCacheSize) else null
+          case _ =>
+            uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+            chunkedUniques = null
+        }
         // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
         // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
         // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
@@ -4365,7 +4396,32 @@ trait Types
         // as a) this is now a weak set, and b) it is discarded completely before the next run.
         uniqueRunId = currentRunId
       }
-      (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      val chunked = chunkedUniques
+      if (chunked != null) {
+        if (uncacheMask != 0 && ((uncacheMask >>> scratch.frame.weakLabel) & 1) != 0) uncachedUnique(chunked, tp)
+        else chunked.findOrAdd(tp)
+      }
+      else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    }
+
+    // DO NOT MERGE: -Dscala.uniques.uncache=<scopes>. In those weak scopes a type already interned is shared, but a
+    // new one is not added: it is shared only through a small direct-mapped cache of recent ones, held strongly.
+    private[this] var uncachedCache: Array[Type] = null
+    private def uncachedUnique[T <: Type](chunked: util.ChunkedInterner[Type], tp: T): T = {
+      val h = tp.hashCode
+      val e = chunked.find(h, tp)
+      if (e != null) { uncacheCount(tpe.UniquesCensus.UncacheTableHit); e.asInstanceOf[T] }
+      else {
+        val cache = uncachedCache
+        if (cache != null) {
+          val i = (h ^ (h >>> 16)) & (cache.length - 1)
+          val c = cache(i)
+          if ((c ne null) && c.hashCode == h && tp.equals(c)) { uncacheCount(tpe.UniquesCensus.UncacheCacheHit); return c.asInstanceOf[T] }
+          cache(i) = tp
+        }
+        uncacheMiss(tp)
+        tp
+      }
     }
   }
 
@@ -4812,6 +4868,10 @@ trait Types
   }
 
   def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try specializesSymImpl(tp, sym, depth) finally weakScopeExit(ws)
+  }
+  private def specializesSymImpl(tp: Type, sym: Symbol, depth: Depth): Boolean = {
     def directlySpecializedBy(member: Symbol): Boolean = (
          member == sym
       || specializesSym(tp.narrow, member, sym.owner.thisType, sym, depth)
@@ -4876,6 +4936,10 @@ trait Types
 
   /** A function implementing `tp1` matches `tp2`. */
   final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakQuery)
+    try matchesTypeImpl(tp1, tp2, alwaysMatchSimple) finally weakScopeExit(ws)
+  }
+  private def matchesTypeImpl(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)

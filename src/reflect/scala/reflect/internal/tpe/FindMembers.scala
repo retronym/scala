@@ -222,9 +222,12 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
      */
     private def narrowForFindMember(tp: Type): Type = {
       val w = tp.widen
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakNarrow)
       // Only narrow on widened type when we have to -- narrow is expensive unless the target is a singleton type.
-      if ((tp ne w) && containsExistential(w)) w.narrow
-      else tp.narrow
+      try {
+        if ((tp ne w) && containsExistential(w)) w.narrow
+        else tp.narrow
+      } finally weakScopeExit(ws)
     }
   }
 

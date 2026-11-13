@@ -172,6 +172,10 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
     addMember(clazz, cloneBeforeErasure(mixinClass, mixinMember, clazz))
 
   def cloneBeforeErasure(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMixin)
+    try cloneBeforeErasureImpl(mixinClass, mixinMember, clazz) finally weakScopeExit(ws)
+  }
+  private def cloneBeforeErasureImpl(mixinClass: Symbol, mixinMember: Symbol, clazz: Symbol): Symbol = {
     val newSym = enteringErasure {
       // since we used `mixinMember` from the interface that represents the trait that's
       // being mixed in, have to instantiate the interface type params (that may occur in mixinMember's

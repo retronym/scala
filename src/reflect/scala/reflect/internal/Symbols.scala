@@ -1613,6 +1613,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         infos = TypeHistory(currentPeriod, info, null)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
+      if (uniquesCensusOn) uniquesCensusAnchor(this, info, scala.reflect.internal.tpe.UniquesCensus.SrcInfo)
     }
 
     /** Set initial info. */
@@ -1649,6 +1650,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (pid == phase.id) infos = infos.prev
       infos = TypeHistory(currentPeriod, info, infos)
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
+      if (uniquesCensusOn) uniquesCensusAnchor(this, info, scala.reflect.internal.tpe.UniquesCensus.SrcUpdate)
       this
     }
 
@@ -1716,6 +1718,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (info1 ne infos.info) {
           infos = TypeHistory(currentPeriod + 1, info1, infos)
           this.infos = infos
+          if (uniquesCensusOn) uniquesCensusAnchor(this, info1, scala.reflect.internal.tpe.UniquesCensus.SrcTransform)
         }
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
         itr = itr.next
@@ -2990,7 +2993,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def referenced: Symbol = _referenced
     def referenced_=(x: Symbol): Unit = { _referenced = x }
 
-    def existentialBound = singletonBounds(this.tpe)
+    def existentialBound = {
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakExistential)
+      try singletonBounds(this.tpe) finally weakScopeExit(ws)
+    }
 
     def cloneSymbolImpl(owner: Symbol, newFlags: Long): TermSymbol =
       owner.newTermSymbol(name, pos, newFlags).copyAttrsFrom(this)
@@ -3257,6 +3263,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     private def tyconCacheNeedsUpdate = (tyconCache eq null) || tyconRunId != currentRunId
     private def setTyconCache(tycon: Type): Unit = {
       tyconCache = tycon
+      if (uniquesCensusOn) uniquesCensusAnchor(this, tycon, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
       tyconRunId = currentRunId
       assert(tyconCache ne null, this)
     }
@@ -3282,6 +3289,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         if (noTypeParams) Nil
         else unsafeTypeParams map (_.typeConstructor)
       )
+      if (uniquesCensusOn) uniquesCensusAnchor(this, tpeCache, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
       // Avoid carrying around different types in tyconCache and tpeCache
       // for monomorphic types.
       if (noTypeParams && tyconCacheNeedsUpdate)
@@ -3463,7 +3471,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     override def thisType: Type = {
       val period = thisTypePeriod
       if (period != currentPeriod) {
-        if (!isValid(period)) thisTypeCache = ThisType(this)
+        if (!isValid(period)) {
+          thisTypeCache = ThisType(this)
+          if (uniquesCensusOn) uniquesCensusAnchor(this, thisTypeCache, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
+        }
         thisTypePeriod = currentPeriod
       }
       thisTypeCache

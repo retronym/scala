@@ -133,6 +133,10 @@ private[internal] trait TypeMaps {
 
     /** Map this function over given list of symbols */
     def mapOver(origSyms: List[Symbol]): List[Symbol] = {
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams)
+      try mapOverSyms(origSyms) finally weakScopeExit(ws)
+    }
+    private def mapOverSyms(origSyms: List[Symbol]): List[Symbol] = {
       val firstChange = firstChangedSymbol(origSyms)
       // fast path in case nothing changes due to map
       if (firstChange < 0) origSyms
