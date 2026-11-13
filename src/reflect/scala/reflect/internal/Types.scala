@@ -87,6 +87,7 @@ trait Types
   with tpe.TypeComparers
   with tpe.TypeMaps
   with tpe.TypeConstraints
+  with tpe.UniquesCensus
   with util.Collections { self: SymbolTable =>
 
   import definitions._
@@ -4370,6 +4371,7 @@ trait Types
           case "chunked" | "chunked-weak" =>
             uniques = null
             chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+            uniquesCensusAttach(chunkedUniques)
           case _ =>
             uniques = util.WeakHashSet[Type](initialUniquesCapacity)
             chunkedUniques = null

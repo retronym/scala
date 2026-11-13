@@ -660,6 +660,8 @@ abstract class SymbolTable extends macros.Universe
   final class CompletionFrame(val prev: CompletionFrame) {
     /** How many completions enclose this frame's operations: 0 in the outermost frame of a thread. */
     val depth: Int = if (prev eq null) 0 else prev.depth + 1
+    /** DO NOT MERGE (uniques census): which entry into this frame is in progress; 0 in the outermost frame. */
+    var serial: Int = 0
     private[this] var _next: CompletionFrame = null
     /** The frame for a completion started from this one. Kept for reuse once allocated. */
     def next: CompletionFrame = {
@@ -725,6 +727,7 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
+    private[this] var frameSerials = 0
     private[this] var _frame: CompletionFrame = new CompletionFrame(null)
     /** The frame of the completion in progress on this thread. */
     def frame: CompletionFrame = _frame
@@ -735,6 +738,8 @@ abstract class SymbolTable extends macros.Universe
       val f = _frame
       val next = f.next
       next.completing = completing
+      frameSerials += 1
+      next.serial = frameSerials
       _frame = next
       f
     }

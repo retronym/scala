@@ -53,6 +53,9 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   private[this] var freeHash = 0
   private[this] var freeStamp = -1
 
+  /** DO NOT MERGE: the uniques census (`-Dscala.uniques.census=true`), told of each `Ref` added and cleared. */
+  var listener: Listener = null
+
   /** The element held at the non-null slot content `e`, or null if `e` is a tombstone or its element was collected. */
   @inline private[this] def deref(e: AnyRef): A =
     if (!weak) e.asInstanceOf[A]
@@ -88,6 +91,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   /** Add `elem`, with hash `h`, which a `find` just failed to find. */
   def add[T <: A](elem: T, h: Int): T = {
     val e = if (weak) new Ref(elem, h, queue) else elem
+    if (listener != null && weak) listener.added(e.asInstanceOf[Ref])
     if ((used + 1) * 2 > mask + 1) {
       // grow if live elements fill a quarter of the table, otherwise rebuild at the same size to drop tombstones
       rebuild(if (live * 4 >= mask + 1) (mask + 1) * 2 else mask + 1)
@@ -146,7 +150,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
         if (e != null && deref(e) != null) {
           insert(e, hs(j))
           live += 1
-        }
+        } else if (listener != null && e != null && (e ne Tombstone)) listener.cleared(e.asInstanceOf[Ref])
         j += 1
       }
       c += 1
@@ -158,6 +162,7 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     var stale = queue.poll()
     while (stale != null) {
       val ref = stale.asInstanceOf[Ref]
+      if (listener != null) listener.cleared(ref)
       var i = spread(ref.hash) & mask
       var done = false
       while (!done) {
@@ -187,6 +192,35 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   /** The number of elements, counting ones collected since the last lookup. */
   def size: Int = live
 
+  /** DO NOT MERGE (census): the `Ref` holding `elem`, with hash `h`, or null. */
+  def refOf(elem: AnyRef, h: Int): Ref = if (!weak) null else {
+    removeStaleEntries()
+    var i = spread(h) & mask
+    while (true) {
+      val e = elems(i >>> ChunkBits)(i & ChunkMask)
+      if (e == null) return null
+      if ((e ne Tombstone) && hashes(i >>> ChunkBits)(i & ChunkMask) == h && (e.asInstanceOf[Ref].get() eq elem)) return e.asInstanceOf[Ref]
+      i = (i + 1) & mask
+    }
+    null
+  }
+
+  /** DO NOT MERGE (census): drain the reference queue, then visit every `Ref` still in a slot. */
+  def foreachRef(f: Ref => Unit): Unit = if (weak) {
+    removeStaleEntries()
+    var c = 0
+    while (c < elems.length) {
+      val es = elems(c)
+      var j = 0
+      while (j < es.length) {
+        val e = es(j)
+        if (e != null && (e ne Tombstone)) f(e.asInstanceOf[Ref])
+        j += 1
+      }
+      c += 1
+    }
+  }
+
   /** The number of chunks per array, for testing. */
   private[util] def chunkCount: Int = elems.length
 }
@@ -196,7 +230,18 @@ object ChunkedInterner {
   final val ChunkSize = 1 << ChunkBits
   final val ChunkMask = ChunkSize - 1
 
-  final class Ref(elem: AnyRef, val hash: Int, queue: ReferenceQueue[AnyRef]) extends WeakReference[AnyRef](elem, queue)
+  final class Ref(elem: AnyRef, val hash: Int, queue: ReferenceQueue[AnyRef]) extends WeakReference[AnyRef](elem, queue) {
+    /** DO NOT MERGE (census): the census's tag bits, and the serial of the completion frame the element was added in. */
+    var census: Int = 0
+    var serial: Int = 0
+  }
+
+  /** DO NOT MERGE (census). */
+  trait Listener {
+    def added(ref: Ref): Unit
+    /** A `Ref` whose element was collected; may be called more than once for one `Ref`. */
+    def cleared(ref: Ref): Unit
+  }
 
   private val Tombstone: AnyRef = new Object
 
