@@ -1143,6 +1143,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
   /** The id of the currently active run
    */
   override def currentRunId = curRunId
+  override protected[scala] def uniquesLayout: String = settings.YuniquesLayout.value
 
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */
