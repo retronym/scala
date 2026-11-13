@@ -4,7 +4,7 @@ import org.junit.Assert._
 import org.junit.Assume.assumeTrue
 import org.junit.Test
 
-class WeakInternerTest {
+class ChunkedInternerTest {
   /** Equal by `n` alone, with a hash chosen by the test. */
   final class Key(val n: Int, val h: Int) {
     override def equals(other: Any): Boolean = other match {
@@ -14,9 +14,9 @@ class WeakInternerTest {
     override def hashCode: Int = h
   }
 
-  private def newInterner = new WeakInterner[Key](16)
+  private def newInterner = new ChunkedInterner[Key](16, weak = true)
 
-  private def intern(t: WeakInterner[Key], n: Int, h: Int): Key = t.findOrAdd(new Key(n, h))
+  private def intern(t: ChunkedInterner[Key], n: Int, h: Int): Key = t.findOrAdd(new Key(n, h))
 
   @Test def internsByEquality(): Unit = {
     val t = newInterner
@@ -32,7 +32,7 @@ class WeakInternerTest {
 
   @Test def growsAcrossChunks(): Unit = {
     val t = newInterner
-    val n = WeakInterner.ChunkSize * 2 // needs four chunks at a load of at most 1/2
+    val n = ChunkedInterner.ChunkSize * 2 // needs four chunks at a load of at most 1/2
     // a poor hash, so that probe sequences run across chunk boundaries
     def hash(i: Int) = i * 31 >>> 3
     val keys = Array.tabulate(n)(i => intern(t, i, hash(i)))
@@ -53,6 +53,16 @@ class WeakInternerTest {
     }
     assumeTrue("no weak references were cleared", t.size < 200000)
     for (i <- 0 until 1000) assertSame(kept(i), intern(t, i, i))
+  }
+
+  @Test def strongKeepsElements(): Unit = {
+    val t = new ChunkedInterner[Key](16, weak = false)
+    for (i <- 0 until 200000) intern(t, i, i) // garbage once interned, but held strongly
+    System.gc()
+    assertEquals(200000, t.size)
+    val a = intern(t, -1, 7)
+    assertSame(a, intern(t, -1, 7))
+    assertEquals(200001, t.size)
   }
 
   @Test def clearForgetsEverything(): Unit = {

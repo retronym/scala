@@ -4387,8 +4387,8 @@ trait Types
 
   private[this] val initialUniquesCapacity = 4096
   private[this] var uniques: util.WeakHashSet[Type] = _
-  /** Used in place of `uniques` when `uniquesLayout` is "chunked-weak"; exactly one of the two is set during a run. */
-  private[this] var chunkedUniques: util.WeakInterner[Type] = _
+  /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
+  private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
   private[this] var uniqueRunId = NoRunId
 
   final def howManyUniqueTypes: Int =
@@ -4398,12 +4398,17 @@ trait Types
 
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
-      if (uniquesLayout == "chunked-weak") {
-        uniques = null
-        chunkedUniques = new util.WeakInterner[Type](initialUniquesCapacity)
-      } else {
-        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-        chunkedUniques = null
+      val layout = uniquesLayout match {
+        case "default" => System.getProperty("scala.uniques.layout", "weak")
+        case l         => l
+      }
+      layout match {
+        case "chunked" | "chunked-weak" =>
+          uniques = null
+          chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
+        case _ =>
+          uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+          chunkedUniques = null
       }
       // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
       // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!

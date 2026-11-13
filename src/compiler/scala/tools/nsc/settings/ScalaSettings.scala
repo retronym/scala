@@ -364,7 +364,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val unsafe = MultiStringSetting("-Yrelease", "packages", "Expose platform packages hidden under --release")
   val exposeEmptyPackage = BooleanSetting ("-Yexpose-empty-package", "Internal only: expose the empty package.").internalOnly()
   val Ydelambdafy        = ChoiceSetting  ("-Ydelambdafy", "strategy", "Strategy used for translating lambdas into JVM code.", List("inline", "method"), "method")
-  val YuniquesLayout     = ChoiceSetting  ("-Yuniques-layout", "layout", "Layout of the table that hash-conses types: a chained weak hash set, or open addressing over chunks that G1 allocates young.", List("weak", "chunked-weak"), "weak").internalOnly()
+  val YuniquesLayout     = ChoiceSetting  ("-Yuniques-layout", "layout", "The type interner's table layout for each run; default: -Dscala.uniques.layout, else weak.", List("default", "weak", "chunked", "chunked-weak"), "default").internalOnly()
 
   // Allows a specialised jar to be written. For instance one that provides stable hashing of content, or customisation of the file storage
   val YjarFactory = StringSetting   ("-YjarFactory", "classname", "factory for jar files", classOf[DefaultJarFactory].getName)
