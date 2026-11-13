@@ -65,6 +65,34 @@ class ChunkedInternerTest {
     assertEquals(200001, t.size)
   }
 
+  /** Intern (n, h), running `between` after the failed `find` and before the `add`, as a constructor that interns
+   *  its parts would. */
+  private def internAround(t: ChunkedInterner[Key], n: Int, h: Int)(between: => Unit): Key = {
+    val k = new Key(n, h)
+    val e = t.find(h, k)
+    if (e != null) e
+    else {
+      between
+      t.add(k, h)
+    }
+  }
+
+  @Test def nestedInternBetweenFindAndAdd(): Unit = {
+    for (weak <- List(true, false)) {
+      val t = new ChunkedInterner[Key](16, weak)
+      var nested: List[Key] = Nil
+      // same hash: the nested add takes the slot the outer find saw as free
+      val a = internAround(t, 1, 5) { nested ::= intern(t, 2, 5) }
+      // another hash: a nested failed find moves the free slot elsewhere
+      val b = internAround(t, 3, 6) { nested ::= internAround(t, 4, 9)(()) }
+      // and a nested find that fails without an add
+      val c = internAround(t, 5, 7)(t.find(7, new Key(99, 7)))
+      val List(d, e) = nested
+      for ((n, h, k) <- List((1, 5, a), (3, 6, b), (5, 7, c), (4, 9, d), (2, 5, e))) assertSame(k, intern(t, n, h))
+      assertEquals(5, t.size)
+    }
+  }
+
   @Test def clearForgetsEverything(): Unit = {
     val t = newInterner
     val a = intern(t, 1, 1)
