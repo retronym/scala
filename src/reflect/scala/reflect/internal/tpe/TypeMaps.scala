@@ -133,18 +133,19 @@ private[internal] trait TypeMaps {
 
     /** Map this function over given list of symbols */
     def mapOver(origSyms: List[Symbol]): List[Symbol] = {
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams)
+      try mapOverSyms(origSyms) finally weakScopeExit(ws)
+    }
+    private def mapOverSyms(origSyms: List[Symbol]): List[Symbol] = {
       val firstChange = firstChangedSymbol(origSyms)
       // fast path in case nothing changes due to map
       if (firstChange < 0) origSyms
       else {
         // map is not the identity --> do cloning properly
-        val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMapParams)
-        try {
-          val cloned = cloneSymbols(origSyms)
-          // but we don't need to run the map again on the unchanged symbols
-          cloned.drop(firstChange).foreach(_ modifyInfo this)
-          cloned
-        } finally weakScopeExit(ws)
+        val cloned = cloneSymbols(origSyms)
+        // but we don't need to run the map again on the unchanged symbols
+        cloned.drop(firstChange).foreach(_ modifyInfo this)
+        cloned
       }
     }
 

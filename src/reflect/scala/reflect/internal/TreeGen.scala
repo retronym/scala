@@ -195,15 +195,18 @@ abstract class TreeGen {
   }
 
   /** Computes stable type for a tree if possible */
-  def stableTypeFor(tree: Tree): Type = (
-    if (!treeInfo.admitsTypeSelection(tree)) NoType
-    else tree match {
-      case This(_)         => ThisType(tree.symbol)
-      case Ident(_)        => singleType(tree.symbol.owner.thisType, tree.symbol)
-      case Select(qual, _) => singleType(qual.tpe, tree.symbol)
-      case _               => NoType
-    }
-  )
+  def stableTypeFor(tree: Tree): Type = {
+    val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakStableType)
+    try {
+      if (!treeInfo.admitsTypeSelection(tree)) NoType
+      else tree match {
+        case This(_)         => ThisType(tree.symbol)
+        case Ident(_)        => singleType(tree.symbol.owner.thisType, tree.symbol)
+        case Select(qual, _) => singleType(qual.tpe, tree.symbol)
+        case _               => NoType
+      }
+    } finally weakScopeExit(ws)
+  }
 
   /** Builds a reference with stable type to given symbol */
   def mkAttributedStableRef(pre: Type, sym: Symbol): Tree =

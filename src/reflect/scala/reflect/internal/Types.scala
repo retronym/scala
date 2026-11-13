@@ -486,7 +486,10 @@ trait Types
      * Amounts to substitution except for higher-kinded types. (See overridden method in TypeRef) -- \@M
      */
     def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
-      if (sameLength(formals, actuals)) this.subst(formals, actuals) else ErrorType
+      if (sameLength(formals, actuals)) {
+        val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakInstantiate)
+        try this.subst(formals, actuals) finally weakScopeExit(ws)
+      } else ErrorType
 
     /** If this type is an existential, turn all existentially bound variables to type skolems.
      *  @param  owner    The owner of the created type skolems
