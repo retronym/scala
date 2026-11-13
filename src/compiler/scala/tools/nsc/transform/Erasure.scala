@@ -22,7 +22,6 @@ import scala.reflect.internal.Mode._
 
 abstract class Erasure extends InfoTransform
                           with scala.reflect.internal.transform.Erasure
-                          with typechecker.Analyzer
                           with TypingTransformers
                           with ast.TreeDSL
                           with TypeAdaptingTransformer
@@ -481,7 +480,13 @@ abstract class Erasure extends InfoTransform
 
 // -------- erasure on trees ------------------------------------------
 
-  override def newTyper(context: Context) = new Eraser(context)
+  /** Re-typechecks trees after erasure, using `Eraser` as its typer. */
+  object erasureAnalyzer extends {
+    val global: Erasure.this.global.type = Erasure.this.global
+  } with typechecker.AbstractAnalyzer {
+    override def newTyper(context: Context): Typer = new Eraser(context)
+  }
+  import erasureAnalyzer.{Context, OriginalTreeAttachment, Typer, newTyper, rootContextPostTyper}
 
   class EnterBridges(@unused unit: CompilationUnit, root: Symbol) {
     val site         = root.thisType
@@ -1508,8 +1513,12 @@ abstract class Erasure extends InfoTransform
   final def isJvmAccessible(cls: Symbol, context: Context): Boolean = {
     // Phase travel necessary, isAccessible is too lax after erasure for Java-defined members, see
     // comment in its implementation.
-    !cls.isJavaDefined || enteringErasure(context.isAccessible(cls, cls.owner.thisType))
+    !cls.isJavaDefined || atErasure(context.isAccessible(cls, cls.owner.thisType))
   }
+
+  // `-Ystop-after:<phase before erasure>` leaves erasure out of the run: no phase to travel to.
+  private def atErasure[T](op: => T): T =
+    if (currentRun.erasurePhase == NoPhase) op else enteringErasure(op)
 
   /**
    * Check if a class defines a member after erasure. The phase travel is important for
@@ -1517,7 +1526,10 @@ abstract class Erasure extends InfoTransform
    * `AClass`.
    */
   final def definesMemberAfterErasure(cls: Symbol, member: Symbol): Boolean =
-    exitingErasure(cls.tpe.member(member.name).alternatives.contains(member))
+    atPostErasure(cls.tpe.member(member.name).alternatives.contains(member))
+
+  private def atPostErasure[T](op: => T): T =
+    if (currentRun.erasurePhase == NoPhase) op else exitingErasure(op)
 
   /**
    * The goal of this method is to find a class that is accessible (in bytecode) and can be used

@@ -406,14 +406,16 @@ class ProdConsAnalyzer(methodNode: MethodNode, classInternalName: InternalName) 
       }
   }
 
-  /** For each instruction, a set of potential consumers of the produced values. */
   /** The slots a producer writes, and the consumers of the value in each. */
   private final class Outputs(val slots: Seq[Int]) {
     val consumers: Array[Set[AbstractInsnNode]] = Array.fill(slots.size)(Set.empty)
   }
 
-  // Built in place: updating an immutable map and vector for every value consumed was most of its cost, as was
-  // computing a producer's output slots again for each of its consumers.
+  /** For each instruction, a set of potential consumers of the produced values.
+   *
+   *  Built in place: updating an immutable map and vector for every value consumed was most of its cost, as was
+   *  computing a producer's output slots again for each of its consumers.
+   */
   private lazy val _consumersOfOutputsFrom: collection.Map[AbstractInsnNode, Outputs] = {
     val res = mutable.HashMap.empty[AbstractInsnNode, Outputs]
     for {
@@ -464,6 +466,21 @@ abstract class InitialProducer extends AbstractInsnNode(-1) {
 case class ParameterProducer(local: Int)                                                extends InitialProducer
 case class UninitializedLocalProducer(local: Int)                                       extends InitialProducer
 case class ExceptionProducer[V <: Value](handlerLabel: LabelNode, handlerStackTop: Int) extends InitialProducer
+
+/** A `ProdConsAnalyzer` of a method as it is now, for the method-local optimizations that need one: they share it
+ *  until one of them changes the method, rather than each analyzing the same instructions again.
+ */
+final class ProdConsCache(methodNode: MethodNode, classInternalName: InternalName) {
+  private[this] var analyzer: ProdConsAnalyzer = null
+  def get: ProdConsAnalyzer = {
+    if (analyzer == null) analyzer = new ProdConsAnalyzer(methodNode, classInternalName)
+    analyzer
+  }
+  /** The method changed: the next `get` analyzes it again. */
+  def invalidate(): Unit = analyzer = null
+  /** Whether a `get` has analyzed the method as it is now. */
+  def isAnalyzed: Boolean = analyzer != null
+}
 
 class InitialProducerSourceInterpreter extends SourceInterpreter(scala.tools.asm.Opcodes.ASM7) {
   override def newParameterValue(isInstanceMethod: Boolean, local: Int, tp: Type): SourceValue = {

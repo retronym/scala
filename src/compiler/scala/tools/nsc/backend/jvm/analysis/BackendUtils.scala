@@ -370,6 +370,9 @@ abstract class BackendUtils extends PerRunInit {
    *     static field should not be inlined.
    */
   def looksLikeForwarderOrFactoryOrTrivial(method: MethodNode, owner: InternalName, allowPrivateCalls: Boolean): Int = {
+    // A method without instructions comes from a signature file (ct.sym, a Bazel hjar), it cannot be inlined
+    if (method.instructions.size == 0) return -1
+
     val paramTypes = Type.getArgumentTypes(method.desc)
     val numPrimitives = paramTypes.count(_.getSort < Type.ARRAY) + (if (Type.getReturnType(method.desc).getSort < Type.ARRAY) 1 else 0)
 
@@ -1138,8 +1141,9 @@ object BackendUtils {
     else 0
   }
 
-  def classTagNewArrayArg(mi: MethodInsnNode, prodCons: ProdConsAnalyzer): InternalName = {
+  def classTagNewArrayArg(mi: MethodInsnNode, prodConsCache: ProdConsCache): InternalName = {
     if (mi.name == "newArray" && mi.owner == "scala/reflect/ClassTag" && mi.desc == "(I)Ljava/lang/Object;") {
+      val prodCons = prodConsCache.get
       val prods = prodCons.initialProducersForValueAt(mi, prodCons.frameAt(mi).stackTop - 1)
       if (prods.size == 1) prods.head match {
         case ctApply: MethodInsnNode =>
