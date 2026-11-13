@@ -352,6 +352,9 @@ trait UniquesCensus { self: SymbolTable =>
       runs += 1
     }
 
+    private[this] var lastCounters: collection.Map[String, Long] = Map.empty
+    private[this] var lastProbes: collection.Map[(String, String), Long] = Map.empty
+
     def report(): Unit = {
       finish()
       val counters = new mutable.TreeMap[String, Long]
@@ -398,36 +401,67 @@ trait UniquesCensus { self: SymbolTable =>
           for (f <- 0 until Fates) add(s"fate.${FateNames(f)}.phase.$name", fatePhase(((ph * 2 + ctx) * 4 + sh) * Fates + f))
         }
       }
-      val pid = java.lang.management.ManagementFactory.getRuntimeMXBean.getName.takeWhile(_ != '@')
-      val dir = Option(System.getProperty("scala.uniques.census.out")).orElse(Option(System.getProperty("perflab.cell"))).getOrElse(".")
-      val out = new File(dir, s"audit-$pid.json")
-      val w = new PrintWriter(out, "UTF-8")
-      try {
-        w.print("{\"counters\": {")
-        w.print(counters.iterator.map { case (k, n) => "\"" + k + "\": " + n }.mkString(", "))
-        w.print("}, \"probes\": {")
-        def esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
-        val probes = for {
-          (label, m, verdicts) <- List(("anchor", anchorSiteFates, List("")), ("create", createSiteFates, List("strong.", "weak.", "promoted.")))
-          (vname, v) <- verdicts.zipWithIndex
-          f <- 0 until Fates
-          sites = m.iterator.map { case (id, a) => (siteKeys(id), a(v * Fates + f)) }.filter(_._2 > 0).toList.sortBy(-_._2).take(200)
-          if sites.nonEmpty
-        } yield "\"" + label + "." + vname + FateNames(f) + "\": {\"kind\": \"sites\", \"hits\": " + sites.map(_._2).sum + ", \"sample\": 1, \"sites\": {" +
-          sites.map { case (k, n) => "\"" + esc(k) + "\": " + n }.mkString(", ") + "}}"
-        w.print(probes.mkString(", "))
-        w.println("}}")
-      } finally w.close()
+      // This census's own probes, every site
+      val probes = new mutable.HashMap[(String, String), Long]
+      for {
+        (label, m, verdicts) <- List(("anchor", anchorSiteFates, List("")), ("create", createSiteFates, List("strong.", "weak.", "promoted.")))
+        (vname, v) <- verdicts.zipWithIndex
+        f <- 0 until Fates
+        (id, a) <- m
+        n = a(v * Fates + f)
+        if n > 0
+      } probes((label + "." + vname + FateNames(f), siteKeys(id))) = n
+      // Each op of a benchmark compiles with a new Global, and so a new census: merge what this one counted since its
+      // last report into the totals for the JVM, which the report file holds.
+      val totals = UniquesCensus.merge(counters, lastCounters, probes, lastProbes)
+      lastCounters = counters
+      lastProbes = probes
+      val out = UniquesCensus.write(totals)
       def c(k: String) = counters.getOrElse(k, 0L)
       def r(v: String) = FateNames.map(f => s"$f=${c(s"rule.$v.$f")}").mkString(" ")
       System.out.println(s"[uniques-census] rule: strong{${r("strong")}} weak{${r("weak")}} promoted{${r("promoted")}} hitFromStrong{${r("hitFromStrong")}}")
       if (uncacheMask != 0) System.out.println(s"[uniques-census] uncache: tableHit=${c("uncache.tableHit")} cacheHit=${c("uncache.cacheHit")} miss=${c("uncache.miss")} lostSharing=${c("uncache.lostSharing")}")
-      System.out.println(s"[uniques-census] runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
+      System.out.println(s"[uniques-census] this Global: runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
     }
   }
 }
 
 object UniquesCensus {
+  // The totals over every Global in this JVM
+  private[this] val jvmCounters = new mutable.TreeMap[String, Long]
+  private[this] val jvmProbes = new mutable.HashMap[(String, String), Long]
+
+  private def merge(counters: collection.Map[String, Long], last: collection.Map[String, Long],
+                    probes: collection.Map[(String, String), Long], lastProbes: collection.Map[(String, String), Long]): (collection.Map[String, Long], collection.Map[(String, String), Long]) =
+    synchronized {
+      for ((k, n) <- counters) { val d = n - last.getOrElse(k, 0L); if (d != 0) jvmCounters(k) = jvmCounters.getOrElse(k, 0L) + d }
+      for ((k, n) <- probes) { val d = n - lastProbes.getOrElse(k, 0L); if (d != 0) jvmProbes(k) = jvmProbes.getOrElse(k, 0L) + d }
+      (jvmCounters.clone(), jvmProbes.clone())
+    }
+
+  /** Write the JVM's totals to `audit-<pid>.json`, perflab-agent's report format, keeping 200 sites per probe. */
+  private def write(totals: (collection.Map[String, Long], collection.Map[(String, String), Long])): File = {
+    val (counters, probes) = totals
+    val pid = java.lang.management.ManagementFactory.getRuntimeMXBean.getName.takeWhile(_ != '@')
+    val dir = Option(System.getProperty("scala.uniques.census.out")).orElse(Option(System.getProperty("perflab.cell"))).getOrElse(".")
+    val out = new File(dir, s"audit-$pid.json")
+    def esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+    val w = new PrintWriter(out, "UTF-8")
+    try {
+      w.print("{\"counters\": {")
+      w.print(counters.toList.sortBy(_._1).map { case (k, n) => "\"" + k + "\": " + n }.mkString(", "))
+      w.print("}, \"probes\": {")
+      val byProbe = probes.toList.groupBy(_._1._1).toList.sortBy(_._1)
+      w.print(byProbe.map { case (name, entries) =>
+        val sites = entries.map { case ((_, site), n) => (site, n) }.sortBy(-_._2)
+        "\"" + name + "\": {\"kind\": \"sites\", \"hits\": " + sites.map(_._2).sum + ", \"sample\": 1, \"sites\": {" +
+          sites.take(200).map { case (k, n) => "\"" + esc(k) + "\": " + n }.mkString(", ") + "}}"
+      }.mkString(", "))
+      w.println("}}")
+    } finally w.close()
+    out
+  }
+
   final val MaxClasses = 64
   final val MaxPhases = 64
   final val ClassMask = MaxClasses - 1
