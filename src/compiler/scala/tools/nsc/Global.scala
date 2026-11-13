@@ -1620,6 +1620,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       runReporting.runFinished(hasErrors = reporter.hasErrors)
 
       reporting.summarizeErrors()
+      uniquesProbeReport()
 
       // val allNamesArray: Array[String] = allNames().map(_.toString).toArray.sorted
       // allNamesArray.foreach(println(_))
