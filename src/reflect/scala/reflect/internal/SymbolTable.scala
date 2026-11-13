@@ -533,6 +533,12 @@ abstract class SymbolTable extends macros.Universe
    */
   def isCompilerUniverse = false
 
+  /** The layout of the table that hash-conses types, read when each run creates it: "weak" for
+   *  `util.WeakHashSet`, "chunked" or "chunked-weak" for a strong or weak `util.ChunkedInterner`,
+   *  or "default" for the system property `scala.uniques.layout`, else "weak".
+   */
+  protected[scala] def uniquesLayout: String = "default"
+
   /** Is this universe used from several threads at once? Runtime reflection is.
    *
    *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
