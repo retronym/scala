@@ -53,23 +53,27 @@ trait UniquesCensus { self: SymbolTable =>
   private[this] lazy val census = new Census
 
   /** DO NOT MERGE: `-Dscala.uniques.uncache=query,narrow,...|all`: the weak scopes whose new types are not interned. */
-  final val uncacheMask: Int = isCompilerUniverse && System.getProperty("scala.uniques.uncache") != null match {
-    case false => 0
-    case true =>
-      val labels = System.getProperty("scala.uniques.uncache").split(",").map(_.trim).filter(_.nonEmpty)
+  /** The weak scopes whose new types are not interned, from `uniquesUncache` (`-Yuniques-uncache`, else
+   *  `-Dscala.uniques.uncache`), read when each run creates its table. */
+  final var uncacheMask: Int = 0
+  private[internal] final def refreshUncache(): Unit = {
+    val spec = if (isCompilerUniverse) uniquesUncache else ""
+    val labels = spec.split(",").map(_.trim).filter(_.nonEmpty)
+    uncacheMask =
       if (labels.contains("all")) ~1
       else labels.foldLeft(0) { (m, l) =>
         val i = WeakNames.indexOf(l)
-        require(i > 0, s"-Dscala.uniques.uncache: unknown scope $l, expected one of ${WeakNames.drop(1).mkString(", ")}")
+        require(i > 0, s"-Yuniques-uncache: unknown scope $l, expected one of ${WeakNames.drop(1).mkString(", ")}")
         m | (1 << i)
       }
+    weakScopesOn = uniquesCensusOn || uncacheMask != 0
   }
   /** `-Dscala.uniques.uncache.cache=<slots>`: the direct-mapped cache of uncached types, a power of two, 0 for none. */
   final val uncacheCacheSize: Int = {
     val n = Integer.getInteger("scala.uniques.uncache.cache", 4096).intValue
     if (n <= 0) 0 else Integer.highestOneBit(n)
   }
-  private[this] val weakScopesOn: Boolean = uniquesCensusOn || uncacheMask != 0
+  private[this] var weakScopesOn: Boolean = uniquesCensusOn
 
   private[internal] final def uncacheCount(what: Int): Unit = if (uniquesCensusOn) census.uncacheCount(what)
   private[internal] final def uncacheMiss(tp: Type): Unit = if (uniquesCensusOn) census.uncacheMiss(tp)

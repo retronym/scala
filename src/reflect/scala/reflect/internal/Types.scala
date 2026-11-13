@@ -4372,6 +4372,7 @@ trait Types
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
+        refreshUncache()
         val layout = uniquesLayout match {
           case "default" => System.getProperty("scala.uniques.layout", "weak")
           case l         => l

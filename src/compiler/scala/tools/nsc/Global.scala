@@ -1155,6 +1155,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
    */
   override def currentRunId = curRunId
   override protected[scala] def uniquesLayout: String = settings.YuniquesLayout.value
+  override protected[scala] def uniquesUncache: String =
+    if (settings.YuniquesUncache.value.nonEmpty) settings.YuniquesUncache.value else super.uniquesUncache
 
   def echoPhaseSummary(ph: Phase) = {
     /* Only output a summary message under debug if we aren't echoing each file. */

@@ -539,6 +539,9 @@ abstract class SymbolTable extends macros.Universe
    */
   protected[scala] def uniquesLayout: String = "default"
 
+  /** DO NOT MERGE: the weak scopes whose new types are not interned, comma-separated, or "all". */
+  protected[scala] def uniquesUncache: String = System.getProperty("scala.uniques.uncache", "")
+
   /** Is this universe used from several threads at once? Runtime reflection is.
    *
    *  The universe chooses, once, the implementations of the state that this decides: one `Scratch`
