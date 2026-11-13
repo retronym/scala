@@ -58,7 +58,7 @@ trait UniquesCensus { self: SymbolTable =>
   final var uncacheMask: Int = 0
   private[internal] final def refreshUncache(): Unit = {
     val spec = if (isCompilerUniverse) uniquesUncache else ""
-    val labels = spec.split(",").map(_.trim).filter(_.nonEmpty)
+    val labels = spec.split("[,+]").map(_.trim).filter(_.nonEmpty) // + as well: JMH splits a -p value at commas
     uncacheMask =
       if (labels.contains("all")) ~1
       else labels.foldLeft(0) { (m, l) =>
