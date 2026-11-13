@@ -44,6 +44,8 @@ trait UniquesCensus { self: SymbolTable =>
   import UniquesCensus._
 
   final val uniquesCensusOn: Boolean = isCompilerUniverse && java.lang.Boolean.getBoolean("scala.uniques.census")
+  /** `-Dscala.uniques.census.sites=true`: also record, per anchor and per intern, the code that did it (slow). */
+  private[this] val censusSites: Boolean = java.lang.Boolean.getBoolean("scala.uniques.census.sites")
 
   private[this] lazy val census = new Census
 
@@ -89,6 +91,11 @@ trait UniquesCensus { self: SymbolTable =>
     private[this] val fateCls = new Array[Long](MaxClasses * 2 * 4 * Fates * Srcs)
     // [phase][ctx][shape][fate]
     private[this] val fatePhase = new Array[Long](MaxPhases * 2 * 4 * Fates)
+    // sites: id -> key, and the fates of the types each site anchored or created
+    private[this] val siteIds = new mutable.HashMap[String, Int]
+    private[this] val siteKeys = mutable.ArrayBuffer[String]("-")
+    private[this] val anchorSiteFates = new mutable.HashMap[Int, Array[Long]]
+    private[this] val createSiteFates = new mutable.HashMap[Int, Array[Long]]
     private[this] var anchorWalks = 0L
     private[this] var anchorVisits = 0L
     private[this] var runs = 0
@@ -115,6 +122,7 @@ trait UniquesCensus { self: SymbolTable =>
       val sh = shapeOf(tp)
       ref.census = cls | (ph << PhaseShift) | (ctx << CtxShift) | (sh << ShapeShift)
       ref.serial = frame.serial
+      if (censusSites) ref.site = siteId(stackKey(CreateSkip, 6))
       addedCls((cls * 2 + ctx) * 4 + sh) += 1
       addedPhase((ph * 2 + ctx) * 4 + sh) += 1
     }
@@ -125,6 +133,7 @@ trait UniquesCensus { self: SymbolTable =>
         ref.census = c | Counted
         val fate = if ((c & Anchored) != 0) AnchoredCleared else ClearedFree
         count(c, fate)
+        countSite(ref, fate)
       }
     }
 
@@ -136,6 +145,61 @@ trait UniquesCensus { self: SymbolTable =>
       val src = (c >>> SrcShift) & SrcMask
       fateCls((((cls * 2 + ctx) * 4 + sh) * Fates + fate) * Srcs + src) += 1
       fatePhase(((ph * 2 + ctx) * 4 + sh) * Fates + fate) += 1
+    }
+
+    private def countSite(r: ChunkedInterner.Ref, fate: Int): Unit = if (censusSites) {
+      createSiteFates.getOrElseUpdate(r.site, new Array[Long](Fates))(fate) += 1
+      val as = (r.census >>> AnchorSiteShift) & AnchorSiteMask
+      if (as != 0) anchorSiteFates.getOrElseUpdate(anchorSiteIds(as), new Array[Long](Fates))(fate) += 1
+    }
+    // anchor sites get an index of their own, small enough to fit the census bits
+    private[this] val anchorSiteIds = mutable.ArrayBuffer[Int](0)
+    private[this] val anchorSiteIndex = new mutable.HashMap[Int, Int]
+    private def anchorSiteIndexOf(site: Int): Int = anchorSiteIndex.getOrElseUpdate(site, {
+      if (anchorSiteIds.size > AnchorSiteMask) AnchorSiteMask else { anchorSiteIds += site; anchorSiteIds.size - 1 }
+    })
+
+    private def siteId(key: String): Int = siteIds.getOrElseUpdate(key, { siteKeys += key; siteKeys.size - 1 })
+
+    private def stackKey(skip: java.util.regex.Pattern, depth: Int): String = {
+      val st = new Throwable().getStackTrace
+      val sb = new java.lang.StringBuilder
+      var n = 0
+      var i = 0
+      while (i < st.length && n < depth) {
+        val f = st(i)
+        val m = f.getClassName + "." + f.getMethodName
+        if (!skip.matcher(m).find()) {
+          if (n > 0) sb.append(" <- ")
+          sb.append(f.getClassName.stripPrefix("scala.reflect.internal.").stripPrefix("scala.tools.nsc.")).append('.').append(f.getMethodName).append(':').append(f.getLineNumber)
+          n += 1
+        }
+        i += 1
+      }
+      sb.toString
+    }
+
+    private def symKind(sym: Symbol): String = {
+      val what =
+        if (sym.isTypeSkolem) "type skolem"
+        else if (sym.isExistentiallyBound) "existential"
+        else if (sym.isTypeParameter) "type param"
+        else if (sym.isValueParameter) "value param"
+        else if (sym.isAbstractType) "abstract type"
+        else if (sym.isAliasType) "alias type"
+        else if (sym.isClass) "class"
+        else if (sym.isModule) "module"
+        else if (sym.isMethod) "method"
+        else if (sym.isTerm) "term"
+        else "type"
+      val owner = sym.owner
+      val of =
+        if (owner.isMethod) "method"
+        else if (owner.isClass) (if (owner.isRefinementClass) "refinement" else "class")
+        else if (owner.isTerm) "term"
+        else if (owner.isAbstractType || owner.isAliasType) "type"
+        else "other"
+      s"$what of $of"
     }
 
     /** The shape of `tp`: bit 0, it refers to a method's (type) param; bit 1, to a skolem or existentially bound
@@ -171,6 +235,11 @@ trait UniquesCensus { self: SymbolTable =>
         else SrcOther
       val serial = scratch.frame.serial
       anchorWalks += 1
+      var site = 0 // computed on the first new anchor of this walk
+      def siteBits: Int = if (!censusSites) 0 else {
+        if (site == 0) site = anchorSiteIndexOf(siteId(SrcNames(src) + " | " + symKind(sym) + " | " + stackKey(AnchorSkip, 6)))
+        site << AnchorSiteShift
+      }
       def visit(t: Type): Unit = {
         anchorVisits += 1
         t match {
@@ -179,7 +248,7 @@ trait UniquesCensus { self: SymbolTable =>
             if (r ne null) {
               val c = r.census
               if ((c & Anchored) == 0) {
-                r.census = c | Anchored | (if (r.serial == serial) SameFrame else 0) | (src << SrcShift)
+                r.census = c | Anchored | (if (r.serial == serial) SameFrame else 0) | (src << SrcShift) | siteBits
                 foreachPart(u, visit)
               }
             } else foreachPart(u, visit)
@@ -201,6 +270,7 @@ trait UniquesCensus { self: SymbolTable =>
             else if ((c & SameFrame) != 0) AnchoredSame
             else AnchoredLater
           count(c, fate)
+          countSite(r, fate)
         }
       }
       table.listener = null
@@ -246,7 +316,17 @@ trait UniquesCensus { self: SymbolTable =>
       try {
         w.print("{\"counters\": {")
         w.print(counters.iterator.map { case (k, n) => "\"" + k + "\": " + n }.mkString(", "))
-        w.println("}, \"probes\": {}}")
+        w.print("}, \"probes\": {")
+        def esc(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"")
+        val probes = for {
+          (label, m) <- List("anchor" -> anchorSiteFates, "create" -> createSiteFates)
+          f <- 0 until Fates
+          sites = m.iterator.map { case (id, a) => (siteKeys(id), a(f)) }.filter(_._2 > 0).toList.sortBy(-_._2).take(200)
+          if sites.nonEmpty
+        } yield "\"" + label + "." + FateNames(f) + "\": {\"kind\": \"sites\", \"hits\": " + sites.map(_._2).sum + ", \"sample\": 1, \"sites\": {" +
+          sites.map { case (k, n) => "\"" + esc(k) + "\": " + n }.mkString(", ") + "}}"
+        w.print(probes.mkString(", "))
+        w.println("}}")
       } finally w.close()
       def c(k: String) = counters.getOrElse(k, 0L)
       System.out.println(s"[uniques-census] runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
@@ -267,6 +347,11 @@ object UniquesCensus {
   final val Anchored = 1 << 18
   final val SameFrame = 1 << 19
   final val Counted = 1 << 20
+  final val AnchorSiteShift = 21
+  final val AnchorSiteMask = (1 << 11) - 1
+  /** Frames that only plumb an intern or an anchor, left out of a site. */
+  val CreateSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|util\\.ChunkedInterner|Types\\$PerRunUniques|Types\\.unique|Types\\$[A-Za-z]*(TypeRef|Type|Bounds)\\$?\\.(apply|<init>)|Types\\.(typeRef|singleType|newTypeRef|copyTypeRef|TypeBounds|ThisType|ConstantType)))")
+  val AnchorSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|Symbols\\$[A-Za-z]*Symbol\\.(info_\\$eq|setInfo|updateInfo|setTyconCache|transformInfos|setInfoOwnerAdjusted|setInfoAndEnter|modifyInfo)))")
 
   final val ClearedFree = 0
   final val LiveFree = 1

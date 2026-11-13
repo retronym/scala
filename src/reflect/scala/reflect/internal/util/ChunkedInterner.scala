@@ -234,6 +234,7 @@ object ChunkedInterner {
     /** DO NOT MERGE (census): the census's tag bits, and the serial of the completion frame the element was added in. */
     var census: Int = 0
     var serial: Int = 0
+    var site: Int = 0
   }
 
   /** DO NOT MERGE (census). */
