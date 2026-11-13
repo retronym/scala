@@ -52,10 +52,32 @@ trait UniquesCensus { self: SymbolTable =>
 
   private[this] lazy val census = new Census
 
+  /** DO NOT MERGE: `-Dscala.uniques.uncache=query,narrow,...|all`: the weak scopes whose new types are not interned. */
+  final val uncacheMask: Int = isCompilerUniverse && System.getProperty("scala.uniques.uncache") != null match {
+    case false => 0
+    case true =>
+      val labels = System.getProperty("scala.uniques.uncache").split(",").map(_.trim).filter(_.nonEmpty)
+      if (labels.contains("all")) ~1
+      else labels.foldLeft(0) { (m, l) =>
+        val i = WeakNames.indexOf(l)
+        require(i > 0, s"-Dscala.uniques.uncache: unknown scope $l, expected one of ${WeakNames.drop(1).mkString(", ")}")
+        m | (1 << i)
+      }
+  }
+  /** `-Dscala.uniques.uncache.cache=<slots>`: the direct-mapped cache of uncached types, a power of two, 0 for none. */
+  final val uncacheCacheSize: Int = {
+    val n = Integer.getInteger("scala.uniques.uncache.cache", 4096).intValue
+    if (n <= 0) 0 else Integer.highestOneBit(n)
+  }
+  private[this] val weakScopesOn: Boolean = uniquesCensusOn || uncacheMask != 0
+
+  private[internal] final def uncacheCount(what: Int): Unit = if (uniquesCensusOn) census.uncacheCount(what)
+  private[internal] final def uncacheMiss(tp: Type): Unit = if (uniquesCensusOn) census.uncacheMiss(tp)
+
   /** Enter a scope whose interned types the rule under test would hold weakly, at this completion level only: a
    *  completion started inside it runs in a fresh frame, outside any weak scope. Returns null when the census is off. */
   final def weakScopeEnter(label: Int): CompletionFrame =
-    if (!uniquesCensusOn) null
+    if (!weakScopesOn) null
     else {
       val f = scratch.frame
       if (f.weakDepth == 0) f.weakLabel = label
@@ -119,6 +141,17 @@ trait UniquesCensus { self: SymbolTable =>
     // [label][promoted][fate]
     private[this] val fateScope = new Array[Long](WeakLabels * 2 * Fates)
     private[this] var promotions = 0L
+    // uncached lookups: found in the table, found in the direct-mapped cache, neither (a new instance); of the new
+    // instances, how many equal one made earlier in the run that is still alive (sharing the table would have kept)
+    private[this] val uncacheCounts = new Array[Long](3)
+    private[this] var lostSharing = 0L
+    private[this] var shadow: util.WeakHashSet[Type] = null
+    def uncacheCount(what: Int): Unit = uncacheCounts(what) += 1
+    def uncacheMiss(tp: Type): Unit = {
+      uncacheCounts(UncacheMiss) += 1
+      if (shadow == null) shadow = util.WeakHashSet[Type](4096)
+      if (shadow.findEntryOrUpdate(tp) ne tp) lostSharing += 1
+    }
     private[this] var anchorWalks = 0L
     private[this] var anchorVisits = 0L
     private[this] var runs = 0
@@ -315,6 +348,7 @@ trait UniquesCensus { self: SymbolTable =>
       }
       table.listener = null
       table = null
+      shadow = null
       runs += 1
     }
 
@@ -326,6 +360,10 @@ trait UniquesCensus { self: SymbolTable =>
       add("anchor.walks", anchorWalks)
       add("anchor.visits", anchorVisits)
       add("rule.hitsFromStrong", promotions)
+      add("uncache.tableHit", uncacheCounts(UncacheTableHit))
+      add("uncache.cacheHit", uncacheCounts(UncacheCacheHit))
+      add("uncache.miss", uncacheCounts(UncacheMiss))
+      add("uncache.lostSharing", lostSharing)
       for (wl <- 0 until WeakLabels) {
         add(s"rule.added.${WeakNames(wl)}", addedScope(wl))
         for (pr <- 0 to 1; f <- 0 until Fates) {
@@ -383,6 +421,7 @@ trait UniquesCensus { self: SymbolTable =>
       def c(k: String) = counters.getOrElse(k, 0L)
       def r(v: String) = FateNames.map(f => s"$f=${c(s"rule.$v.$f")}").mkString(" ")
       System.out.println(s"[uniques-census] rule: strong{${r("strong")}} weak{${r("weak")}} promoted{${r("promoted")}} hitFromStrong{${r("hitFromStrong")}}")
+      if (uncacheMask != 0) System.out.println(s"[uniques-census] uncache: tableHit=${c("uncache.tableHit")} cacheHit=${c("uncache.cacheHit")} miss=${c("uncache.miss")} lostSharing=${c("uncache.lostSharing")}")
       System.out.println(s"[uniques-census] runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
     }
   }
@@ -406,6 +445,10 @@ object UniquesCensus {
   final val Promoted = 1 << 25
   final val AnchorSiteShift = 26
   final val AnchorSiteMask = (1 << 6) - 1
+
+  final val UncacheTableHit = 0
+  final val UncacheCacheHit = 1
+  final val UncacheMiss = 2
 
   final val WeakQuery = 1
   final val WeakMapParams = 2

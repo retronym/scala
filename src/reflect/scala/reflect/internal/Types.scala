@@ -4381,6 +4381,7 @@ trait Types
             uniques = null
             chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = layout == "chunked-weak")
             uniquesCensusAttach(chunkedUniques)
+            uncachedCache = if (uncacheCacheSize > 0) new Array[Type](uncacheCacheSize) else null
           case _ =>
             uniques = util.WeakHashSet[Type](initialUniquesCapacity)
             chunkedUniques = null
@@ -4393,8 +4394,31 @@ trait Types
         uniqueRunId = currentRunId
       }
       val chunked = chunkedUniques
-      if (chunked != null) chunked.findOrAdd(tp)
+      if (chunked != null) {
+        if (uncacheMask != 0 && ((uncacheMask >>> scratch.frame.weakLabel) & 1) != 0) uncachedUnique(chunked, tp)
+        else chunked.findOrAdd(tp)
+      }
       else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    }
+
+    // DO NOT MERGE: -Dscala.uniques.uncache=<scopes>. In those weak scopes a type already interned is shared, but a
+    // new one is not added: it is shared only through a small direct-mapped cache of recent ones, held strongly.
+    private[this] var uncachedCache: Array[Type] = null
+    private def uncachedUnique[T <: Type](chunked: util.ChunkedInterner[Type], tp: T): T = {
+      val h = tp.hashCode
+      val e = chunked.find(h, tp)
+      if (e != null) { uncacheCount(tpe.UniquesCensus.UncacheTableHit); e.asInstanceOf[T] }
+      else {
+        val cache = uncachedCache
+        if (cache != null) {
+          val i = (h ^ (h >>> 16)) & (cache.length - 1)
+          val c = cache(i)
+          if ((c ne null) && c.hashCode == h && tp.equals(c)) { uncacheCount(tpe.UniquesCensus.UncacheCacheHit); return c.asInstanceOf[T] }
+          cache(i) = tp
+        }
+        uncacheMiss(tp)
+        tp
+      }
     }
   }
 
