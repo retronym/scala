@@ -81,8 +81,9 @@ class DirectCompiler(val runner: Runner) {
       if (xplugs.isEmpty) Nil
       else List(xprefix + xplugs.map(_ stripPrefix xprefix).flatMap(_ split pathSeparator).map(absolutize).mkString(pathSeparator))
 
-    // tests control most compiler settings, but let the environment tell us whether to exercise optimizer
-    val filteredOpts = runner.suiteRunner.scalacOpts.split(' ').filter(_.startsWith("-opt"))
+    // tests control most compiler settings, but let the environment tell us whether to exercise
+    // the optimizer or to run the late phases unit by unit
+    val filteredOpts = runner.suiteRunner.scalacOpts.split(' ').filter(o => o.startsWith("-opt") || o.startsWith("-Yunit-major-from"))
 
     runner.suiteRunner.scalacExtraArgs ++ filteredOpts ++ others ++ Xplugin
   }
