@@ -675,8 +675,7 @@ abstract class SymbolTable extends macros.Universe
     }
     /** The closed-scope state (see `Types.enterClosedScope`) of this frame's operation that started a completion in
      *  the next frame, which runs outside it: what the completion computes outlives the scope. */
-    private[internal] var closedStateSaved: Int = 0
-    private[internal] var closedWatermarkSaved: Int = Int.MaxValue
+    private[internal] var closedStateSaved: Boolean = false
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
