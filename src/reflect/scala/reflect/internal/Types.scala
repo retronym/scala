@@ -4388,24 +4388,29 @@ trait Types
   // test of a new member (`FindMembers.isNewMember`). Off in runtime reflection and in a concurrent universe.
 
   // The state is kept in the `Uniques` object, beside the fields every `unique` call reads anyway, so that the test in
-  // `unique` costs one load from a line it touches already: `closedState` is 0 outside closed scopes, else bit 1 is
-  // set inside one and bit 0 while it is suspended. Closed scopes are off in a universe used from several threads, so
-  // the table's object is this thread's. A completion saves and clears the state in its `CompletionFrame`.
+  // `unique` costs one load from a line it touches already: `closedState` is 0 outside closed scopes, else `InScope` is
+  // set inside one and `Suspended` while it is suspended, and `Made` once the scope has handed out a type that is not
+  // the table's own entry. Until then every unique type in reach is the table's entry, so nothing needs to look one
+  // up to tell. Closed scopes are off in a universe used from several threads, so the table's object is this
+  // thread's. A completion saves and clears the state in its `CompletionFrame`.
+  private[this] final val Suspended = 1
+  private[this] final val InScope = 2
+  private[this] final val Made = 4
 
   /** Whether entering a closed scope does nothing: closed scopes are off, or one encloses the current operation. Then
    *  an operation that would enter one runs as it is, without saving the state. */
   final def closedScopeEntered: Boolean = {
     val u = uniques
-    u.closedState >= 2 || !u.closedOn
+    (u.closedState & InScope) != 0 || !u.closedOn
   }
   /** Enter a closed scope at the current completion level. Returns what `exitClosedScope` takes. */
   final def enterClosedScope(): Int = {
     val u = uniques
     val s = u.closedState
-    if (s >= 2 || !u.closedOn) -1
+    if ((s & InScope) != 0 || !u.closedOn) -1
     else {
       u.closedWatermark = getCurrentSymbolIdCount
-      u.closedState = s | 2
+      u.closedState = s | InScope
       s
     }
   }
@@ -4416,24 +4421,24 @@ trait Types
   final def closedScopeSuspend(): Int = {
     val u = uniques
     val s = u.closedState
-    if (s < 2) -1
-    else { u.closedState = 1; s }
+    if ((s & InScope) == 0) -1
+    else { u.closedState = Suspended | (s & Made); s }
   }
   /** As `closedScopeSuspend`, for a cache on `owner`, unless `owner` was made inside the current closed scope: then the
    *  cache dies with it, and what fills it stays in the scope. */
   final def closedScopeSuspendFor(owner: Symbol): Int = {
     val u = uniques
     val s = u.closedState
-    if (s < 2 || owner.id > u.closedWatermark) -1
-    else { u.closedState = 1; s }
+    if ((s & InScope) == 0 || owner.id > u.closedWatermark) -1
+    else { u.closedState = Suspended | (s & Made); s }
   }
   /** As `closedScopeSuspendFor(Symbol)`, for a cache on a unique type: one made in a closed scope is not the uniques
    *  table's own entry. */
   final def closedScopeSuspendFor(owner: Type): Int = {
     val u = uniques
     val s = u.closedState
-    if (s < 2 || !u.isEntry(owner)) -1
-    else { u.closedState = 1; s }
+    if ((s & InScope) == 0 || (s & Made) != 0 && !u.isEntry(owner)) -1
+    else { u.closedState = Suspended | (s & Made); s }
   }
   final def closedScopeResume(saved: Int): Unit = if (saved >= 0) uniques.closedState = saved
 
@@ -4457,7 +4462,7 @@ trait Types
   /** `tp` with its unique parts interned, when inside a closed scope: for a type about to be stored where it outlives
    *  the scope (a `TypeVar`'s bound or instance). Only unique types are rebuilt, so no params are cloned. */
   final def internClosedScopeParts(tp: Type): Type = {
-    if (uniques.closedState < 2) tp
+    if ((uniques.closedState & (InScope | Made)) != (InScope | Made)) tp
     else {
       val closed = closedScopeSuspend()
       try internUniqueParts(tp) finally closedScopeResume(closed)
@@ -4478,7 +4483,7 @@ trait Types
     def isEntry(tp: Type): Boolean = true
     /** Whether operations use closed scopes in the current run (see `enterClosedScope`). */
     final var closedOn: Boolean = false
-    /** 0 outside closed scopes; else bit 1 inside one, bit 0 while it is suspended (`closedScopeSuspend`). */
+    /** 0 outside closed scopes; else the bits `InScope`, `Suspended` and `Made` (see `enterClosedScope`). */
     final var closedState: Int = 0
     /** The symbol id counter when the current closed scope was entered: a symbol with a larger id was made inside it,
      *  and dies with it. */
@@ -4526,13 +4531,15 @@ trait Types
       if (closedState == 0) findOrAdd(tp)
       else closedUnique(tp)
     }
-    private def closedUnique[T <: Type](tp: T): T =
-      if (closedState >= 2) closedScopeUnique(tp)
+    private def closedUnique[T <: Type](tp: T): T = {
+      val s = closedState
+      if ((s & InScope) != 0) closedScopeUnique(tp)
       // Filling a cache with the closed scope suspended, a type built from a part it made is derived from that scope:
       // entering it would let the table hand the part to anyone who builds an equal type. A part was made in a closed
       // scope if the table's entry for it is not that instance.
-      else if (hasPartOutsideTable(tp)) tp
+      else if ((s & Made) != 0 && hasPartOutsideTable(tp)) tp
       else findOrAdd(tp)
+    }
     private def findOrAdd[T <: Type](tp: T): T = {
       val chunked = chunkedUniques
       if (chunked != null) chunked.findOrAdd(tp)
@@ -4562,6 +4569,7 @@ trait Types
       val e = findEntry(tp)
       if (e ne null) e.asInstanceOf[T]
       else {
+        closedState |= Made
         val h = tp.hashCode
         val i = (h ^ (h >>> 16)) & (ClosedCacheSize - 1)
         val c = closedCache(i)
