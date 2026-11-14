@@ -183,7 +183,7 @@ trait Infer extends Checkable {
    *  @param upper      When `true` search for max solution else min.
    *  @throws NoInstance
    */
-  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: Depth): List[Type] = {
+  def solvedTypes(tvars: List[TypeVar], tparams: List[Symbol], getVariance: Variance.Extractor[Symbol], upper: Boolean, depth: => Depth): List[Type] = {
     if (tvars.isEmpty) Nil else {
       printTyping("solving for " + parentheses(map2(tparams, tvars)((p, tv) => s"${p.name}: $tv")))
       // !!! What should be done with the return value of "solve", which is at present ignored?
