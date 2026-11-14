@@ -1710,7 +1710,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var infos = infos0
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
-      val closed = closedScopeSuspend() // an info outlives a closed scope that forces it
+      val closed = closedScopeSuspendFor(this) // an info outlives a closed scope that forces it
       try while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
         val info1 = itr.transform(this, infos.info)
@@ -3114,7 +3114,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
-      val closed = closedScopeSuspend() // the cache outlives a closed scope that fills it
+      val closed = closedScopeSuspendFor(this) // the cache outlives a closed scope that fills it
       val res = try pre.computeMemberType(this) finally closedScopeResume(closed)
       mtpeRunId = currentRunId
       mtpePre = pre
@@ -3251,7 +3251,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     override def typeConstructor: Type = {
       if (tyconCacheNeedsUpdate) {
-        val closed = closedScopeSuspend() // the cache outlives a closed scope that fills it
+        val closed = closedScopeSuspendFor(this) // the cache outlives a closed scope that fills it
         try setTyconCache(newTypeRef(Nil)) finally closedScopeResume(closed)
       }
       tyconCache
@@ -3282,7 +3282,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
-      val closed = closedScopeSuspend() // the cache outlives a closed scope that fills it
+      val closed = closedScopeSuspendFor(this) // the cache outlives a closed scope that fills it
       tpeCache = try newTypeRef(
         if (noTypeParams) Nil
         else unsafeTypeParams map (_.typeConstructor)
@@ -3469,7 +3469,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val period = thisTypePeriod
       if (period != currentPeriod) {
         if (!isValid(period)) {
-          val closed = closedScopeSuspend() // the cache outlives a closed scope that fills it
+          val closed = closedScopeSuspendFor(this) // the cache outlives a closed scope that fills it
           thisTypeCache = try ThisType(this) finally closedScopeResume(closed)
         }
         thisTypePeriod = currentPeriod

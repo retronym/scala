@@ -727,6 +727,11 @@ trait Implicits extends splain.SplainData {
      *  This method is performance critical: 5-8% of typechecking time.
      */
     private def matchesPt(tp: Type, pt: Type, undet: List[Symbol]): Boolean = {
+      // a closed scope: the types compared are not kept
+      val closed = enterClosedScope()
+      try matchesPt0(tp, pt, undet) finally exitClosedScope(closed)
+    }
+    private def matchesPt0(tp: Type, pt: Type, undet: List[Symbol]): Boolean = {
       val start = if (settings.areStatisticsEnabled) statistics.startTimer(matchesPtNanos) else null
       val result = normSubType(tp, pt) || isView && {
         pt match {
@@ -764,7 +769,9 @@ trait Implicits extends splain.SplainData {
       if (settings.areStatisticsEnabled) statistics.incCounter(matchesPtInstCalls)
         info.tpe match {
           case PolyType(tparams, restpe) =>
-            try {
+            // a closed scope, once the candidate's type is read: the instantiations tried are not kept
+            val closed = enterClosedScope()
+            try try {
               val allUndetparams = (undetParams ++ tparams).distinct
               val tvars = allUndetparams map freshVar
               val tp = ApproximateDependentMap(restpe)
@@ -786,7 +793,7 @@ trait Implicits extends splain.SplainData {
               }
           } catch {
             case _: NoInstance => false
-          }
+          } finally exitClosedScope(closed)
         case _ => true
       }
     }
@@ -798,6 +805,11 @@ trait Implicits extends splain.SplainData {
      *  can examine the now much smaller concrete implementations below.
      */
     private def checkCompatibility(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
+      // a closed scope: the types compared are not kept
+      val closed = enterClosedScope()
+      try checkCompatibility0(fast, tp0, pt0) finally exitClosedScope(closed)
+    }
+    private def checkCompatibility0(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
       @tailrec def loop(tp: Type, pt: Type): Boolean = tp match {
         case mt @ MethodType(params, restpe) =>
           if (mt.isImplicit)

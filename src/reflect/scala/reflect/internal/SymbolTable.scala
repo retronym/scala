@@ -670,6 +670,9 @@ abstract class SymbolTable extends macros.Universe
     /** Whether the current operation runs with this frame's closed scopes suspended (`Types.closedScopeSuspend`):
      *  it fills a cache that outlives them, and may build types from ones a closed scope made. */
     private[internal] var closedScopesSuspended: Boolean = false
+    /** The symbol id counter when this frame's outermost closed scope was entered: a symbol with a larger id was made
+     *  inside it, and dies with it. */
+    private[internal] var closedWatermark: Int = Int.MaxValue
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
