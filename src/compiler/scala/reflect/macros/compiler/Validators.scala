@@ -14,6 +14,7 @@ package scala.reflect.macros
 package compiler
 
 import scala.reflect.internal.Flags._
+import scala.reflect.internal.LazyDepth
 
 trait Validators {
   self: DefaultMacroCompiler =>
@@ -73,7 +74,7 @@ trait Validators {
 
         checkMacroImplResultTypeMismatch(atpeToRtpe(aret), rret)
 
-        val maxLubDepth = lubDepth(aparamss.flatten map (_.tpe)) max lubDepth(rparamss.flatten map (_.tpe))
+        val maxLubDepth: LazyDepth = () => lubDepth(aparamss.flatten map (_.tpe)) max lubDepth(rparamss.flatten map (_.tpe))
         val atargs = solvedTypes(atvars, atparams, variances.varianceInType(aret), upper = false, maxLubDepth)
         val boundsOk = typer.silent(_.infer.checkBounds(macroDdef, NoPrefix, NoSymbol, atparams, atargs, ""))
         boundsOk match {
