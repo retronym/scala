@@ -193,9 +193,28 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
         && (    (member.owner eq other.owner)                         // same owner, therefore overload
              || (member.flags & PRIVATE) != 0                         // (unqualified) private members never participate in overriding
              || (other.flags & PRIVATE) != 0                          // ... as overrider or overridee.
+             || cannotMatch(member.info, other.info)                  // the member types cannot match, whatever the prefix
              || !(memberTypeLow(member) matches memberTypeHi(other))  // do the member types match? If so, it's an override. Otherwise it's an overload.
            )
       )
+
+    // Whether the member types of symbols with infos `tp1` and `tp2` cannot match (`Type.matches`), as seen from any
+    // prefix: methods with different numbers of type parameters or of parameters, or one implicit and the other not.
+    // `asSeenFrom` keeps these shapes (it may wrap a type in an existential, which `matchesType` looks through), so
+    // the member types need not be computed to tell.
+    private def cannotMatch(tp1: Type, tp2: Type): Boolean = tp1 match {
+      case mt1 @ MethodType(params1, res1) => tp2 match {
+        case mt2 @ MethodType(params2, res2) => mt1.isImplicit != mt2.isImplicit || !sameLength(params1, params2) || cannotMatch(res1, res2)
+        case PolyType(_, _)                  => true
+        case _                               => false
+      }
+      case PolyType(tparams1, res1) => tp2 match {
+        case PolyType(tparams2, res2) => !sameLength(tparams1, tparams2) || cannotMatch(res1, res2)
+        case MethodType(_, _)         => true
+        case _                        => false
+      }
+      case _ => false
+    }
 
     // Cache for the member type of a candidate member when comparing against multiple, already-found existing members
     //
