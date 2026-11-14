@@ -1664,6 +1664,26 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       hasRawInfo && (infos.info eq NoType)
     }
 
+    /** The member scopes of this class's infos for phases after the current one, where they are
+     *  not the current info's. A tree transform that enters or unlinks members in place must also
+     *  update these when they exist, as they do when the later phases of another compilation unit
+     *  have already asked for this class's info (`-Yunit-major-from`).
+     */
+    final def laterDecls: List[Scope] = {
+      val current = info.decls
+      val curPid = phaseId(currentPeriod)
+      var result: List[Scope] = Nil
+      var h = infos
+      while ((h ne null) && phaseId(h.validFrom) > curPid) {
+        h.info match {
+          case ci: ClassInfoType if (ci.decls ne current) && !result.exists(_ eq ci.decls) => result ::= ci.decls
+          case _ =>
+        }
+        h = h.prev
+      }
+      result
+    }
+
     /** Return info without checking for initialization or completing */
     def rawInfo: Type = {
       // OPT: hoisting the outer reference reduces the bytecode size of this method a little which makes it more
