@@ -433,4 +433,23 @@ class TypesTest {
     assertTrue(typeOf[Nil.type @ann[T] forSome { type T }].isStable)
     assertFalse(typeOf[x.type forSome { val x: String }].isStable)
   }
+
+  @Test
+  def uniqueTypesCompareStructurally(): Unit = {
+    // Types made by `unique` must not rely on being the same instance to be =:=.
+    // Make a second instance of each, bypassing the uniques table, as happens when
+    // the table is cleared while types made before the clear are still cached.
+    def check(t1: Type, t2: Type): Unit = {
+      assertTrue(t1 ne t2)
+      assertTrue(s"$t1 =:= $t2", t1 =:= t2)
+      assertTrue(s"$t1 <:< $t2", t1 <:< t2)
+    }
+    val thisList = ThisType(ListClass)
+    check(SuperType(thisList, AnyRefTpe), new UniqueSuperType(thisList, AnyRefTpe))
+    check(ErasedValueType(ListClass, IntTpe), new UniqueErasedValueType(ListClass, IntTpe))
+    check(thisList, new UniqueThisType(ListClass))
+    check(SingleType(ThisType(ScalaPackageClass), PredefModule), new UniqueSingleType(ThisType(ScalaPackageClass), PredefModule))
+    check(TypeBounds(NothingTpe, AnyTpe), new UniqueTypeBounds(NothingTpe, AnyTpe))
+    check(ConstantType(Constant(1)), new UniqueConstantType(Constant(1)))
+  }
 }
