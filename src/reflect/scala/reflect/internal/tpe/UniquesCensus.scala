@@ -46,6 +46,9 @@ trait UniquesCensus { self: SymbolTable =>
   final val uniquesCensusOn: Boolean = isCompilerUniverse && java.lang.Boolean.getBoolean("scala.uniques.census")
   /** `-Dscala.uniques.census.sites=true`: also record, per anchor and per intern, the code that did it (slow). */
   private[this] val censusSites: Boolean = java.lang.Boolean.getBoolean("scala.uniques.census.sites")
+  /** `-Dscala.uniques.census.provenance=<n>`: for 1 in n types interned outside closed scopes, record which kind of
+   *  operation made it (implicit search, silent typing, inference, namer, typer, a transform...) as its site. */
+  private[this] val censusProvenance: Int = Integer.getInteger("scala.uniques.census.provenance", 0).intValue
   /** `-Dscala.uniques.census.promote=true`: the rule promotes a weak type that a lookup outside every scope finds.
    *  Off by default: the hits are counted (`rule.hitsFromStrong`) but the type stays weak. */
   private[this] val censusPromote: Boolean = java.lang.Boolean.getBoolean("scala.uniques.census.promote")
@@ -201,6 +204,10 @@ trait UniquesCensus { self: SymbolTable =>
       addedScope(wl) += 1
       ref.serial = frame.serial
       if (censusSites) ref.site = siteId(stackKey(CreateSkip, 6))
+      else if (censusProvenance > 0 && !isClosedWeakLabel(wl)) {
+        provenanceCount += 1
+        if (provenanceCount % censusProvenance == 0) ref.site = siteId("prov:" + provenance())
+      }
       addedCls((cls * 2 + ctx) * 4 + sh) += 1
       addedPhase((ph * 2 + ctx) * 4 + sh) += 1
     }
@@ -236,7 +243,32 @@ trait UniquesCensus { self: SymbolTable =>
       fateScope((wl * 2 + (if ((c & Promoted) != 0) 1 else 0)) * Fates + fate) += 1
     }
 
-    private def countSite(r: ChunkedInterner.Ref, fate: Int): Unit = if (censusSites) {
+    private[this] var provenanceCount = 0L
+    /** The kind of operation on the stack, by the first of these found anywhere on it. */
+    private def provenance(): String = {
+      val st = new Throwable().getStackTrace
+      def has(p: String): Boolean = { var i = 0; while (i < st.length) { val e = st(i); if ((e.getClassName + "." + e.getMethodName).startsWith(p)) return true; i += 1 }; false }
+      def hasClass(p: String): Boolean = { var i = 0; while (i < st.length) { if (st(i).getClassName.startsWith(p)) return true; i += 1 }; false }
+      if (hasClass("scala.tools.nsc.typechecker.Implicits$ImplicitSearch")) "implicitSearch"
+      else if (has("scala.tools.nsc.typechecker.Typers$Typer.silent")) "silent"
+      else if (hasClass("scala.tools.nsc.typechecker.Infer$Inferencer")) "infer"
+      else if (hasClass("scala.reflect.internal.pickling.UnPickler") || hasClass("scala.tools.nsc.symtab.classfile.ClassfileParser")) "load"
+      else if (hasClass("scala.tools.nsc.typechecker.Namers")) "namer"
+      else if (has("scala.tools.nsc.typechecker.Typers$Typer.adapt")) "typer.adapt"
+      else if (hasClass("scala.tools.nsc.typechecker.Typers")) "typer"
+      else if (hasClass("scala.tools.nsc.typechecker.RefChecks")) "refchecks"
+      else {
+        var i = 0; var r: String = null
+        while ((r eq null) && i < st.length) {
+          val c = st(i).getClassName
+          if (c.startsWith("scala.tools.nsc.transform.") || c.startsWith("scala.tools.nsc.backend.")) r = c.split('.')(4).takeWhile(_ != '$')
+          i += 1
+        }
+        if (r ne null) "phase:" + r else "other"
+      }
+    }
+
+    private def countSite(r: ChunkedInterner.Ref, fate: Int): Unit = if (censusSites || (censusProvenance > 0 && r.site != 0)) {
       val verdict = scopeVerdict(r.census)
       createSiteFates.getOrElseUpdate(r.site, new Array[Long](Fates * 3))(verdict * Fates + fate) += 1
       val as = (r.census >>> AnchorSiteShift) & AnchorSiteMask
