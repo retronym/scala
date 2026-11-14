@@ -48,6 +48,7 @@ trait UniquesCensus { self: SymbolTable =>
   private[this] val censusSites: Boolean = java.lang.Boolean.getBoolean("scala.uniques.census.sites")
   /** `-Dscala.uniques.census.provenance=<n>`: for 1 in n types interned outside closed scopes, record which kind of
    *  operation made it (implicit search, silent typing, inference, namer, typer, a transform...) as its site. */
+  private[this] val censusGcAtEnd: Boolean = java.lang.Boolean.getBoolean("scala.uniques.census.gcAtEnd")
   private[this] val censusProvenance: Int = Integer.getInteger("scala.uniques.census.provenance", 0).intValue
   /** `-Dscala.uniques.census.promote=true`: the rule promotes a weak type that a lookup outside every scope finds.
    *  Off by default: the hits are counted (`rule.hitsFromStrong`) but the type stays weak. */
@@ -245,7 +246,7 @@ trait UniquesCensus { self: SymbolTable =>
 
     private[this] var provenanceCount = 0L
     /** The kind of operation on the stack, by the first of these found anywhere on it. */
-    private def provenance(): String = {
+    private def provenance(): String = if (provenanceInnermost) innermostProvenance() else {
       val st = new Throwable().getStackTrace
       def has(p: String): Boolean = { var i = 0; while (i < st.length) { val e = st(i); if ((e.getClassName + "." + e.getMethodName).startsWith(p)) return true; i += 1 }; false }
       def hasClass(p: String): Boolean = { var i = 0; while (i < st.length) { if (st(i).getClassName.startsWith(p)) return true; i += 1 }; false }
@@ -266,6 +267,30 @@ trait UniquesCensus { self: SymbolTable =>
         }
         if (r ne null) "phase:" + r else "other"
       }
+    }
+
+    /** `-Dscala.uniques.census.provenance.innermost=true`: classify by the innermost marker on the stack instead. */
+    private[this] val provenanceInnermost = java.lang.Boolean.getBoolean("scala.uniques.census.provenance.innermost")
+    private def innermostProvenance(): String = {
+      val st = new Throwable().getStackTrace
+      var i = 0
+      while (i < st.length) {
+        val c = st(i).getClassName; val m = st(i).getMethodName
+        val r =
+          if (c.startsWith("scala.tools.nsc.typechecker.Implicits$ImplicitSearch")) "implicitSearch"
+          else if (c == "scala.tools.nsc.typechecker.Typers$Typer" && m == "silent") "silent"
+          else if (c.startsWith("scala.tools.nsc.typechecker.Infer$Inferencer")) "infer"
+          else if (c.startsWith("scala.reflect.internal.pickling.UnPickler") || c.startsWith("scala.tools.nsc.symtab.classfile.ClassfileParser")) "load"
+          else if (c.startsWith("scala.tools.nsc.typechecker.Namers")) "namer"
+          else if (c == "scala.tools.nsc.typechecker.Typers$Typer" && (m == "adapt" || m.startsWith("adapt"))) "typer.adapt"
+          else if (c.startsWith("scala.tools.nsc.typechecker.RefChecks")) "refchecks"
+          else if (c.startsWith("scala.tools.nsc.typechecker.Typers")) "typer"
+          else if (c.startsWith("scala.tools.nsc.transform.") || c.startsWith("scala.tools.nsc.backend.")) "phase:" + c.split('.')(4).takeWhile(_ != '$')
+          else null
+        if (r ne null) return r
+        i += 1
+      }
+      "other"
     }
 
     private def countSite(r: ChunkedInterner.Ref, fate: Int): Unit = if (censusSites || (censusProvenance > 0 && r.site != 0)) {
@@ -386,6 +411,9 @@ trait UniquesCensus { self: SymbolTable =>
 
     /** At the end of a run, every type still in the table meets its fate. */
     private def finish(): Unit = if (table ne null) {
+      // -Dscala.uniques.census.gcAtEnd=true: collect first, so that a type no longer reachable at the end of the run
+      // counts as cleared, not as alive because no collection has run since it died
+      if (censusGcAtEnd) { System.gc(); System.gc() }
       table.foreachRef { r =>
         val c = r.census
         if ((c & Counted) == 0) {
