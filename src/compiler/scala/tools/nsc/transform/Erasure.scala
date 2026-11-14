@@ -611,7 +611,7 @@ abstract class Erasure extends InfoTransform
           !sigContainsValueClass && !bridgeMayClash || bridgeIsAOK
         }
         if (shouldAdd) {
-          exitingErasure(root.info.decls enter bridge)
+          exitingErasure { root.info.decls enter bridge; root.laterDecls.foreach(_ enter bridge) }
 
           bridgesScope enter bridge
           addBridge(bridge, member, other) // GenerateBridges.addBridge bridges ::= makeBridgeDefDef(bridge, member, other)
@@ -635,7 +635,7 @@ abstract class Erasure extends InfoTransform
 
     override def addBridge(bridge: Symbol, member: Symbol, other: Symbol): Unit = {
       if (other.owner == root) {
-        exitingErasure(root.info.decls.unlink(other))
+        exitingErasure { root.info.decls.unlink(other); root.laterDecls.foreach(_ unlink other) }
         toBeRemoved += other
       }
       bridges ::= makeBridgeDefDef(bridge, member, other)
