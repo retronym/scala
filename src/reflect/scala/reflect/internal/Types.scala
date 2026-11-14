@@ -2116,20 +2116,7 @@ trait Types
     def apply(value: Constant) = unique(new UniqueLiteralType(value))
   }
 
-  class ArgsTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
-    require(args0 ne Nil, this)
-
-    /** No unapplied type params size it has (should have) equally as many args. */
-    override def isHigherKinded = false
-    override def typeParams = Nil
-
-    // note: does not go through typeRef. There's no need to because
-    // neither `pre` nor `sym` changes.  And there's a performance
-    // advantage to call TypeRef directly.
-    override def typeConstructor = TypeRef(pre, sym, Nil)
-  }
-
-  class ModuleTypeRef(pre0: Type, sym0: Symbol) extends NoArgsTypeRef(pre0, sym0) {
+  class ModuleTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
     require(sym.isModuleClass, sym)
     private[this] var narrowedCache: Type = _
     override def narrow = {
@@ -2158,7 +2145,7 @@ trait Types
     require(sym.isPackageClass, sym)
     override protected def finishPrefix(rest: String) = packagePrefix + rest
   }
-  class RefinementTypeRef(pre0: Type, sym0: Symbol) extends NoArgsTypeRef(pre0, sym0) {
+  class RefinementTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
     require(sym.isRefinementClass, sym)
 
     // I think this is okay, but see #1241 (r12414), #2208, and typedTypeConstructor in Typers
@@ -2166,38 +2153,10 @@ trait Types
     override protected def finishPrefix(rest: String) = "" + sym.info
   }
 
-  class NoArgsTypeRef(pre0: Type, sym0: Symbol) extends TypeRef(pre0, sym0, Nil) {
-    // A reference (in a Scala program) to a type that has type parameters, but where the reference
-    // does not include type arguments. Note that it doesn't matter whether the symbol refers
-    // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
-    // TypeRefs w/o type params that occur in java signatures/code are considered raw types, and are
-    // represented as existential types.
-    override def isHigherKinded = (typeParams ne Nil)
-    override def typeParams     = if (isDefinitionsInitialized) sym.typeParams else sym.unsafeTypeParams
-
-    override def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
-      if (isHigherKinded) {
-        if (typeParams.forall(formals.contains))
-          copyTypeRef(this, pre, sym, actuals)
-        // partial application (needed in infer when bunching type arguments from classes and methods together)
-        else
-          copyTypeRef(this, pre, sym, dummyArgs).instantiateTypeParams(formals, actuals)
-      }
-      else
-        super.instantiateTypeParams(formals, actuals)
-
-    override def narrow =
-      if (sym.isModuleClass) singleType(pre, sym.sourceModule)
-      else super.narrow
-
-    override def typeConstructor = this
-    // eta-expand, subtyping relies on eta-expansion of higher-kinded types
-
-    override protected def normalizeImpl: Type =
-      if (isHigherKinded) etaExpand else super.normalizeImpl
-  }
-
-  trait NonClassTypeRef extends TypeRef {
+  /** A reference to an alias or abstract type. The caches here are reached through
+   *  `getfield` on a class rather than interface accessors on a trait.
+   */
+  abstract class NonClassTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends TypeRef(pre0, sym0, args0) {
     require(sym.isNonClassType, sym)
 
     /** Syncnote: These are pure caches for performance; no problem to evaluate these
@@ -2239,7 +2198,7 @@ trait Types
   }
 
 
-  trait AliasTypeRef extends NonClassTypeRef {
+  final class AliasTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends NonClassTypeRef(pre0, sym0, args0) {
     require(sym.isAliasType, sym)
 
     override def dealias    = if (typeParamsMatchArgs) betaReduce.dealias else super.dealias
@@ -2345,7 +2304,7 @@ trait Types
     }
 
 
-  trait AbstractTypeRef extends NonClassTypeRef {
+  final class AbstractTypeRef(pre0: Type, sym0: Symbol, args0: List[Type]) extends NonClassTypeRef(pre0, sym0, args0) {
     require(sym.isAbstractType, sym)
 
     override def baseClasses = relativeInfo.baseClasses
@@ -2388,6 +2347,37 @@ trait Types
       folder(pre)
       args.foreach(folder)
     }
+
+    // A TypeRef with args has as many args as its symbol has type params, so it is not higher-kinded.
+    // One without args is higher-kinded if its symbol has type params.
+    // A reference (in a Scala program) to a type that has type parameters, but where the reference
+    // does not include type arguments. Note that it doesn't matter whether the symbol refers
+    // to a java or scala symbol, but it does matter whether it occurs in java or scala code.
+    // TypeRefs w/o type params that occur in java signatures/code are considered raw types, and are
+    // represented as existential types.
+    override def isHigherKinded = (args eq Nil) && (symTypeParams ne Nil)
+    override def typeParams     = if (args eq Nil) symTypeParams else Nil
+    private def symTypeParams   = if (isDefinitionsInitialized) sym.typeParams else sym.unsafeTypeParams
+
+    // note: does not go through typeRef. There's no need to because
+    // neither `pre` nor `sym` changes.  And there's a performance
+    // advantage to call TypeRef directly.
+    override def typeConstructor = if (args eq Nil) this else TypeRef(pre, sym, Nil)
+
+    override def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]): Type =
+      if (isHigherKinded) {
+        if (typeParams.forall(formals.contains))
+          copyTypeRef(this, pre, sym, actuals)
+        // partial application (needed in infer when bunching type arguments from classes and methods together)
+        else
+          copyTypeRef(this, pre, sym, dummyArgs).instantiateTypeParams(formals, actuals)
+      }
+      else
+        super.instantiateTypeParams(formals, actuals)
+
+    override def narrow =
+      if ((args eq Nil) && sym.isModuleClass) singleType(pre, sym.sourceModule)
+      else super.narrow
     private[this] var trivial: ThreeValue = UNKNOWN
     override def isTrivial: Boolean = {
       if (trivial == UNKNOWN)
@@ -2732,13 +2722,10 @@ trait Types
   }
 
   // No longer defined as anonymous classes in `object TypeRef` to avoid an unnecessary outer pointer.
-  private final class AliasArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AliasTypeRef
-  private final class AbstractArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args) with AbstractTypeRef
-  private final class ClassArgsTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends ArgsTypeRef(pre, sym, args)
-  private final class AliasNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AliasTypeRef
-  private final class AbstractNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) with AbstractTypeRef
-  private final class ClassNoArgsTypeRef(pre: Type, sym: Symbol) extends NoArgsTypeRef(pre, sym) {
-    override def contains(sym0: Symbol): Boolean = (sym eq sym0) || pre.contains(sym0)
+  private final class ClassTypeRef(pre: Type, sym: Symbol, args: List[Type]) extends TypeRef(pre, sym, args) {
+    override def contains(sym0: Symbol): Boolean =
+      if (args eq Nil) (sym eq sym0) || pre.contains(sym0)
+      else super.contains(sym0)
   }
 
   /** Expose ObjectTpeJavaRef so we can create a non-uniqued ObjectTpeJava
@@ -2749,25 +2736,19 @@ trait Types
     *   - the created TypeRef is structurally equal to ObjectTpe, but with its own identity
     *   - we don't want the TypeRef we create here to be unique'd
     */
-  private[internal] final class ObjectTpeJavaRef extends NoArgsTypeRef(definitions.ObjectTpe.prefix, definitions.ObjectClass) {
+  private[internal] final class ObjectTpeJavaRef extends TypeRef(definitions.ObjectTpe.prefix, definitions.ObjectClass, Nil) {
     override def contains(sym0: Symbol): Boolean = (sym eq sym0) || pre.contains(sym0)
   }
 
   object TypeRef extends TypeRefExtractor {
     def apply(pre: Type, sym: Symbol, args: List[Type]): Type = unique({
-      if (args ne Nil) {
-        if (sym.isAliasType)              new AliasArgsTypeRef(pre, sym, args)
-        else if (sym.isAbstractType)      new AbstractArgsTypeRef(pre, sym, args)
-        else                              new ClassArgsTypeRef(pre, sym, args)
-      }
-      else {
-        if (sym.isAliasType)              new AliasNoArgsTypeRef(pre, sym)
-        else if (sym.isAbstractType)      new AbstractNoArgsTypeRef(pre, sym)
-        else if (sym.isRefinementClass)   new RefinementTypeRef(pre, sym)
-        else if (sym.isPackageClass)      new PackageTypeRef(pre, sym)
-        else if (sym.isModuleClass)       new ModuleTypeRef(pre, sym)
-        else                              new ClassNoArgsTypeRef(pre, sym)
-      }
+      if (sym.isAliasType)                         new AliasTypeRef(pre, sym, args)
+      else if (sym.isAbstractType)                 new AbstractTypeRef(pre, sym, args)
+      else if (args ne Nil)                        new ClassTypeRef(pre, sym, args)
+      else if (sym.isRefinementClass)              new RefinementTypeRef(pre, sym)
+      else if (sym.isPackageClass)                 new PackageTypeRef(pre, sym)
+      else if (sym.isModuleClass)                  new ModuleTypeRef(pre, sym)
+      else                                         new ClassTypeRef(pre, sym, Nil)
     })
   }
 
