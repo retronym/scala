@@ -5088,14 +5088,23 @@ trait Types
    *  Return `x` if the computation succeeds with result `x`.
    *  Return `NoType` if the computation fails.
    */
-  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth: Depth): Type = {
+  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth0: => Depth): Type = {
+    // The depth is needed only to merge prefixes or arguments that differ; computing it can build the base type
+    // sequences of `tps0` (see `lubDepth`), so it is computed only then, once.
+    var depthComputed = false
+    var depth1: Depth = Depth.Zero
+    def depth: Depth = { if (!depthComputed) { depth1 = depth0; depthComputed = true }; depth1 }
+    // lub and glb of equal prefixes are that prefix, whatever the depth
+    def mergePrefixes(pres: List[Type]): Type =
+      if (pres.forall(_ eq pres.head)) pres.head
+      else if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
     val (tps, tparams) = stripExistentialsAndTypeVars(tps0, expandLazyBaseType = true)
 
     val merged = tps match {
       case tp :: Nil => tp
       case TypeRef(_, sym, _) :: rest =>
         val pres = tps map (_.prefix) // prefix normalizes automatically
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         val argss = tps map (_.normalize.typeArgs) // symbol equality (of the tp in tps) was checked using typeSymbol, which normalizes, so should normalize before retrieving arguments
         val capturedParams = new ListBuffer[Symbol]
         try {
@@ -5170,7 +5179,7 @@ trait Types
         }
       case SingleType(_, sym) :: rest =>
         val pres = tps map (_.prefix)
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         try singleType(pre, sym)
         catch { case ex: MalformedType => NoType }
       case _ =>
