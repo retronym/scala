@@ -2192,7 +2192,11 @@ trait Namers extends MethodSynthesis {
   trait LockingTypeCompleter extends TypeCompleter {
     def completeImpl(sym: Symbol): Unit
 
-    override def complete(sym: Symbol) = completeImpl(sym)
+    override def complete(sym: Symbol) = {
+      // DO NOT MERGE: census label for a member's (not a block local's) completion
+      val strong = if (sym.isLocalToBlock) -1 else strongScopeEnter(scala.reflect.internal.tpe.UniquesCensus.StrongMemberCompletion)
+      try completeImpl(sym) finally strongScopeExit(strong)
+    }
   }
 
   /**

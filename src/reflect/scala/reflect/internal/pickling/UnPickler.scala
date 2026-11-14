@@ -739,7 +739,8 @@ abstract class UnPickler {
       }
 
       override def complete(sym: Symbol) : Unit = {
-        completeInternal(sym)
+        val strong = strongScopeEnter(scala.reflect.internal.tpe.UniquesCensus.StrongLoad) // DO NOT MERGE
+        try completeInternal(sym) finally strongScopeExit(strong)
         if (!isCompilerUniverse) markAllCompleted(sym)
       }
       override def load(sym: Symbol): Unit = { complete(sym) }

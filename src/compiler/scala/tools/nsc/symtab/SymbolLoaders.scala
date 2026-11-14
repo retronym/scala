@@ -247,7 +247,8 @@ abstract class SymbolLoaders {
         try {
           informingProgress("loaded " + description) {
             val currentphase = phase
-            try doComplete(root)
+            val strong = strongScopeEnter(scala.reflect.internal.tpe.UniquesCensus.StrongLoad) // DO NOT MERGE
+            try try doComplete(root) finally strongScopeExit(strong)
             finally phase = currentphase
           }
           ok = true

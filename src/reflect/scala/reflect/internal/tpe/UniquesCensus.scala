@@ -60,7 +60,7 @@ trait UniquesCensus { self: SymbolTable =>
     val spec = if (isCompilerUniverse) uniquesUncache else ""
     val labels = spec.split("[,+]").map(_.trim).filter(_.nonEmpty) // + as well: JMH splits a -p value at commas
     uncacheMask =
-      if (labels.contains("all")) ~1
+      if (labels.contains("all")) ~1 & ~StrongCandidateLabels
       else if (labels.contains("closed")) ClosedWeakLabels
       else labels.foldLeft(0) { (m, l) =>
         val i = WeakNames.indexOf(l)
@@ -96,6 +96,12 @@ trait UniquesCensus { self: SymbolTable =>
     if (!weakScopesOn) 0
     else { val f = scratch.frame; val l = f.weakLabel; f.weakLabel = 0; l }
   final def weakScopeResume(label: Int): Unit = if (label != 0) scratch.frame.weakLabel = label
+
+  /** DO NOT MERGE: run in strong-scope candidate `label` (a census label): returns what `strongScopeExit` restores. */
+  final def strongScopeEnter(label: Int): Int =
+    if (!weakScopesOn) -1
+    else { val f = scratch.frame; val old = f.strongLabel; f.strongLabel = label; old }
+  final def strongScopeExit(old: Int): Unit = if (old != -1) scratch.frame.strongLabel = old
 
   final def weakScopeExit(f: CompletionFrame): Unit =
     if (f ne null) {
@@ -189,8 +195,10 @@ trait UniquesCensus { self: SymbolTable =>
       val cls = classId(tp.getClass)
       val ph = math.min(phase.id, MaxPhases - 1)
       val sh = shapeOf(tp)
-      ref.census = cls | (ph << PhaseShift) | (ctx << CtxShift) | (sh << ShapeShift) | (frame.weakLabel << WeakShift)
-      addedScope(frame.weakLabel) += 1
+      // a closed scope's label wins; otherwise the strong-scope candidate the type is made in, if any
+      val wl = if (isClosedWeakLabel(frame.weakLabel) || frame.strongLabel == 0) frame.weakLabel else frame.strongLabel
+      ref.census = cls | (ph << PhaseShift) | (ctx << CtxShift) | (sh << ShapeShift) | (wl << WeakShift)
+      addedScope(wl) += 1
       ref.serial = frame.serial
       if (censusSites) ref.site = siteId(stackKey(CreateSkip, 6))
       addedCls((cls * 2 + ctx) * 4 + sh) += 1
@@ -661,8 +669,13 @@ object UniquesCensus {
   final val WeakStableType = 8
   final val WeakOverrideCheck = 9
   final val WeakMemberLookup = 10
-  final val WeakLabels = 11
-  val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin", "instantiate", "stableType", "overrideCheck", "memberLookup")
+  // strong-scope candidates: computations whose types may live for the run (census labels only, never uncached)
+  final val StrongLoad = 11
+  final val StrongMemberCompletion = 12
+  final val StrongInfoTransform = 13
+  final val WeakLabels = 14
+  val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin", "instantiate", "stableType", "overrideCheck", "memberLookup", "load", "memberCompletion", "infoTransform")
+  final val StrongCandidateLabels: Int = (1 << StrongLoad) | (1 << StrongMemberCompletion) | (1 << StrongInfoTransform)
   /** DO NOT MERGE: the closed weak scopes, whose new types should be garbage when they return: the boolean queries
    *  (`isSubType`, `isSameType`, `matchesType`, `specializesSym`, existential subtyping among them), the override checks
    *  (`RefChecks.checkOverride`, erasure's `checkNoDoubleDefs`, `OverridingPairs`' match of a pair) and member lookup's

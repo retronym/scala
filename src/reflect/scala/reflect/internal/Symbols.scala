@@ -1720,6 +1720,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
       val weakLabel = weakScopeSuspend() // DO NOT MERGE: an info outlives the weak scope that forced it
+      val strong = if (isLocalToBlock) -1 else strongScopeEnter(scala.reflect.internal.tpe.UniquesCensus.StrongInfoTransform)
       try while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
         val info1 = itr.transform(this, infos.info)
@@ -1730,7 +1731,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         }
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
         itr = itr.next
-      } finally weakScopeResume(weakLabel)
+      } finally { strongScopeExit(strong); weakScopeResume(weakLabel) }
       _validTo = if (itr.pid == NoPhase.id) curPeriod
       else period(currentRunId, itr.pid)
       infos
