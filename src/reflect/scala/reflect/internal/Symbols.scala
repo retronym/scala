@@ -3127,7 +3127,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
-      val res = pre.computeMemberType(this)
+      // DO NOT MERGE: the cache outlives the weak scope that fills it (and later callers get the cached result)
+      val weakLabel = weakScopeSuspend()
+      val res = try pre.computeMemberType(this) finally weakScopeResume(weakLabel)
       mtpeRunId = currentRunId
       mtpePre = pre
       mtpeInfo = info

@@ -188,7 +188,12 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
     }
 
     // True unless the already-found member of type `memberType` matches the candidate symbol `other`.
-    protected def isNewMember(member: Symbol, other: Symbol): Boolean =
+    protected def isNewMember(member: Symbol, other: Symbol): Boolean = {
+      // DO NOT MERGE: a closed weak scope: the member types compared, and this lookup's caches of them, are not kept
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakMemberLookup)
+      try isNewMember0(member, other) finally weakScopeExit(ws)
+    }
+    private def isNewMember0(member: Symbol, other: Symbol): Boolean =
       (    (other ne member)
         && (    (member.owner eq other.owner)                         // same owner, therefore overload
              || (member.flags & PRIVATE) != 0                         // (unqualified) private members never participate in overriding

@@ -657,7 +657,10 @@ abstract class RefChecks extends Transform {
       val opc = new overridingPairs.PairsCursor(clazz)
       while (opc.hasNext) {
         if (!opc.high.isClass)
-          checkOverride(opc.currentPair)
+          { // DO NOT MERGE: a closed weak scope: the member types compared are not kept
+            val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakOverrideCheck)
+            try checkOverride(opc.currentPair) finally weakScopeExit(ws)
+          }
 
         opc.next()
       }

@@ -61,6 +61,7 @@ trait UniquesCensus { self: SymbolTable =>
     val labels = spec.split("[,+]").map(_.trim).filter(_.nonEmpty) // + as well: JMH splits a -p value at commas
     uncacheMask =
       if (labels.contains("all")) ~1
+      else if (labels.contains("closed")) ClosedWeakLabels
       else labels.foldLeft(0) { (m, l) =>
         val i = WeakNames.indexOf(l)
         require(i > 0, s"-Yuniques-uncache: unknown scope $l, expected one of ${WeakNames.drop(1).mkString(", ")}")
@@ -468,7 +469,7 @@ trait UniquesCensus { self: SymbolTable =>
   private[this] var storeStacks = 0
   /** `info` is being stored as `sym`'s info: if a part of it was returned uninterned by a closed scope, print where
    *  (the first few times), to find the path by which it escapes. */
-  final def uniquesEscapeOnStore(sym: Symbol, info: Type): Unit = if (storeStacks < 5 && !(sym.isParameter || sym.isExistential || sym.isRefinementClass || sym.isSkolem)) {
+  final def uniquesEscapeOnStore(sym: Symbol, info: Type): Unit = if (storeStacks < 8 && !(sym.isParameter || sym.isExistential || sym.isRefinementClass || sym.isSkolem || sym.owner.isRefinementClass)) {
     var found: Type = null
     def look(tp: Type, depth: Int): Unit =
       if ((found eq null) && (tp ne null) && depth < 12) {
@@ -478,9 +479,14 @@ trait UniquesCensus { self: SymbolTable =>
     look(info, 0)
     if (found ne null) {
       storeStacks += 1
-      val e = new Throwable(s"[uniques-escape] closed-scope type $found stored in the info of ${sym.fullNameString} (weak label now ${WeakNames(scratch.frame.weakLabel)}, phase $phase)")
-      e.setStackTrace(e.getStackTrace.take(40))
+      val e = new Throwable(s"[uniques-escape] closed-scope type $found (made in ${WeakNames(found.uniquesEscapeTag)}) stored in ${if (sym eq NoSymbol) "a tree's type" else "the info of " + sym.fullNameString} (weak label now ${WeakNames(scratch.frame.weakLabel)}, phase $phase)")
+      e.setStackTrace(e.getStackTrace.take(60))
       e.printStackTrace(System.out)
+      val made = found.uniquesEscapeStack
+      if (made ne null) {
+        System.out.println(s"  ...the stored instance was ${made.getMessage}:")
+        made.getStackTrace.iterator.map(_.toString).filterNot(s => s.contains("$anonfun") || s.contains("Function") || s.startsWith("scala.collection.") || s.contains("UniquesCensus")).take(45).foreach(s => System.out.println("    " + s))
+      }
     }
   }
 
@@ -497,7 +503,7 @@ trait UniquesCensus { self: SymbolTable =>
         if (ex.size < 12) {
           ex += s"${tp.getClass.getSimpleName} ${tp}${if (via.isEmpty) "" else s"   <- $via"}"
           val st = uniquesEscapeCreationStack(tp)
-          if (st ne null) ex ++= (st.getMessage +: st.getStackTrace.iterator.map(_.toString).filterNot(s => s.contains("$anonfun") || s.contains("Function") || s.contains("withPhase")).take(30).toList).map("        " + _)
+          if (st ne null) ex ++= (st.getMessage +: st.getStackTrace.iterator.map(_.toString).filterNot(s => s.contains("$anonfun") || s.contains("Function") || s.contains("withPhase") || s.startsWith("scala.collection.") || s.contains("TypeMaps$") || s.contains("Types$TypeRef") || s.contains("copyTypeRef") || s.contains(".typeRef")).take(40).toList).map("        " + _)
         }
       }
     }
@@ -633,12 +639,16 @@ object UniquesCensus {
   final val WeakMixin = 6
   final val WeakInstantiate = 7
   final val WeakStableType = 8
-  final val WeakLabels = 9
-  val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin", "instantiate", "stableType")
+  final val WeakOverrideCheck = 9
+  final val WeakMemberLookup = 10
+  final val WeakLabels = 11
+  val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin", "instantiate", "stableType", "overrideCheck", "memberLookup")
   /** DO NOT MERGE: the closed weak scopes, whose new types should be garbage when they return: the boolean queries
-   *  (`isSubType`, `isSameType`, `matchesType`, `specializesSym`, existential subtyping among them). The rest are open:
+   *  (`isSubType`, `isSameType`, `matchesType`, `specializesSym`, existential subtyping among them), the override checks
+   *  (`RefChecks.checkOverride`, erasure's `checkNoDoubleDefs`, `OverridingPairs`' match of a pair) and member lookup's
+   *  test for a new member (`FindMembers.isNewMember`). The rest are open:
    *  they return the types they make. */
-  final val ClosedWeakLabels: Int = 1 << WeakQuery
+  final val ClosedWeakLabels: Int = (1 << WeakQuery) | (1 << WeakOverrideCheck) | (1 << WeakMemberLookup)
   def isClosedWeakLabel(label: Int): Boolean = label > 0 && ((ClosedWeakLabels >>> label) & 1) != 0
   /** Frames that only plumb an intern or an anchor, left out of a site. */
   val CreateSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|util\\.ChunkedInterner|Types\\$PerRunUniques|Types\\.unique|Types\\$[A-Za-z]*(TypeRef|Type|Bounds)\\$?\\.(apply|<init>)|Types\\.(typeRef|singleType|newTypeRef|copyTypeRef|TypeBounds|ThisType|ConstantType)))")

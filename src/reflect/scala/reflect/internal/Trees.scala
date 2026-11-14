@@ -54,7 +54,7 @@ trait Trees extends api.Trees {
     @deprecated("use setType", "2.11.0") def tpe_=(t: Type): Unit = setType(t)
 
     def clearType(): this.type = this setType null
-    def setType(tp: Type): this.type = { rawtpe = tp; this }
+    def setType(tp: Type): this.type = { rawtpe = tp; if (uniquesEscapeCheckOn && (tp ne null)) uniquesEscapeOnStore(NoSymbol, tp); this }
     def defineType(tp: Type): this.type = setType(tp)
 
     def symbol: Symbol = null //!!!OPT!!! symbol is about 3% of hot compile times -- megamorphic dispatch?

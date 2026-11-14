@@ -51,7 +51,10 @@ abstract class OverridingPairs extends SymbolPairs {
       && !bothJavaOwnedAndEitherIsField(low, high)
       && !high.isPrivate               // private or private[this] members never are overridden
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
-      && (lowMemberType matches (self memberType high))
+      && { // DO NOT MERGE: a closed weak scope: the member types compared are not kept
+        val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakOverrideCheck)
+        try lowMemberType matches (self memberType high) finally weakScopeExit(ws)
+      }
     ) // TODO we don't call exclude(high), should we?
 
     override protected def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean = {

@@ -959,6 +959,11 @@ abstract class Erasure extends InfoTransform
      *    but their erased types are the same.
      */
     private def checkNoDoubleDefs(root: Symbol): Unit = {
+      // DO NOT MERGE: a closed weak scope: the member types compared are not kept
+      val ws = weakScopeEnter(scala.reflect.internal.tpe.UniquesCensus.WeakOverrideCheck)
+      try checkNoDoubleDefs0(root) finally weakScopeExit(ws)
+    }
+    private def checkNoDoubleDefs0(root: Symbol): Unit = {
       checkNoDeclaredDoubleDefs(root)
       def isErasureDoubleDef(pair: SymbolPair) = {
         import pair._
