@@ -542,6 +542,10 @@ abstract class SymbolTable extends macros.Universe
    */
   def isConcurrentUniverse = false
 
+  /** Whether types made inside closed scopes are left out of the uniques table (`Types.enterClosedScope`). The
+   *  compiler reads `-Yuniques-closed-scopes`. */
+  protected[scala] def uniquesClosedScopes: Boolean = true
+
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
 
   /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
@@ -660,6 +664,15 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new CompletionFrame(this)
       _next
     }
+    /** How many closed scopes (see `Types.enterClosedScope`) enclose the current operation in this frame. A completion
+     *  started inside one runs in the next frame, outside them: what it computes outlives the scope. */
+    private[internal] var closedScopes: Int = 0
+    /** Whether the current operation runs with this frame's closed scopes suspended (`Types.closedScopeSuspend`):
+     *  it fills a cache that outlives them, and may build types from ones a closed scope made. */
+    private[internal] var closedScopesSuspended: Boolean = false
+    /** The symbol id counter when this frame's outermost closed scope was entered: a symbol with a larger id was made
+     *  inside it, and dies with it. */
+    private[internal] var closedWatermark: Int = Int.MaxValue
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
@@ -719,6 +732,8 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
+    /** Whether this thread's operations use closed scopes in the current run (see `Types.enterClosedScope`). */
+    private[internal] var closedScopesOn: Boolean = false
     private[this] var _frame: CompletionFrame = new CompletionFrame(null)
     /** The frame of the completion in progress on this thread. */
     def frame: CompletionFrame = _frame
@@ -729,6 +744,8 @@ abstract class SymbolTable extends macros.Universe
       val f = _frame
       val next = f.next
       next.completing = completing
+      next.closedScopes = 0
+      next.closedScopesSuspended = false
       _frame = next
       f
     }

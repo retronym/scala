@@ -1511,7 +1511,12 @@ trait Types
     }
   }
 
+  // a cache on a type outlives a closed scope that fills it, unless the scope made the type
   protected def defineUnderlyingOfSingleType(tpe: SingleType): Unit = {
+    val closed = closedScopeSuspendFor(tpe)
+    try defineUnderlyingOfSingleType0(tpe) finally closedScopeResume(closed)
+  }
+  private def defineUnderlyingOfSingleType0(tpe: SingleType): Unit = {
     val period = tpe.underlyingPeriod
     if (period != currentPeriod) {
       tpe.underlyingPeriod = currentPeriod
@@ -1734,7 +1739,12 @@ trait Types
     tpe.typeSymbol :: baseTail
   }
 
-  protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType) = {
+  // a cache on a type outlives a closed scope that fills it, unless the scope made the type
+  protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType): Unit = {
+    val closed = closedScopeSuspendFor(tpe.typeSymbol)
+    try defineBaseTypeSeqOfCompoundType0(tpe) finally closedScopeResume(closed)
+  }
+  private def defineBaseTypeSeqOfCompoundType0(tpe: CompoundType): Unit = {
     val period = tpe.baseTypeSeqPeriod
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
@@ -1795,7 +1805,12 @@ trait Types
       throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
   }
 
+  // a cache on a type outlives a closed scope that fills it, unless the scope made the type
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
+    val closed = closedScopeSuspendFor(tpe.typeSymbol)
+    try defineBaseClassesOfCompoundType0(tpe) finally closedScopeResume(closed)
+  }
+  private def defineBaseClassesOfCompoundType0(tpe: CompoundType): Unit = {
     val period = tpe.baseClassesPeriod
     if (period != currentPeriod) {
       tpe.baseClassesPeriod = currentPeriod
@@ -1837,7 +1852,7 @@ trait Types
     final override def normalize: Type =
       if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) normalized = normalizeImpl
+        if (normalized eq null) normalized = { val closed = closedScopeSuspendFor(this); try normalizeImpl finally closedScopeResume(closed) }
         normalized
       }
 
@@ -2134,7 +2149,7 @@ trait Types
     private[this] var narrowedCache: Type = _
     override def narrow = {
       if (narrowedCache eq null)
-        narrowedCache = singleType(pre, sym.sourceModule)
+        narrowedCache = { val closed = closedScopeSuspendFor(this); try singleType(pre, sym.sourceModule) finally closedScopeResume(closed) }
 
       narrowedCache
     }
@@ -2218,7 +2233,7 @@ trait Types
     final override protected def relativeInfo = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
-        relativeInfoCache = super.relativeInfo
+        relativeInfoCache = { val closed = closedScopeSuspendFor(this); try super.relativeInfo finally closedScopeResume(closed) }
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
 
@@ -2545,7 +2560,7 @@ trait Types
     // TODO: test case that is compiled in a specific order and in different runs
     private[Types] final def defineNormalized() : Unit =
       // In runtime reflection, this null check is part of double-checked locking
-      if (normalized eq null) normalized = normalizeImpl
+      if (normalized eq null) normalized = { val closed = closedScopeSuspendFor(this); try normalizeImpl finally closedScopeResume(closed) }
 
     override def isGround = (
          sym.isPackageClass
@@ -2775,7 +2790,12 @@ trait Types
     tr.defineNormalized()
   }
 
-  protected def defineParentsOfTypeRef(tpe: TypeRef) = {
+  // a cache on a type outlives a closed scope that fills it, unless the scope made the type
+  protected def defineParentsOfTypeRef(tpe: TypeRef): Unit = {
+    val closed = closedScopeSuspendFor(tpe)
+    try defineParentsOfTypeRef0(tpe) finally closedScopeResume(closed)
+  }
+  private def defineParentsOfTypeRef0(tpe: TypeRef): Unit = {
     val period = tpe.parentsPeriod
     if (period != currentPeriod) {
       tpe.parentsPeriod = currentPeriod
@@ -2787,7 +2807,12 @@ trait Types
     }
   }
 
-  protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef) = {
+  // a cache on a type outlives a closed scope that fills it, unless the scope made the type
+  protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef): Unit = {
+    val closed = closedScopeSuspendFor(tpe)
+    try defineBaseTypeSeqOfTypeRef0(tpe) finally closedScopeResume(closed)
+  }
+  private def defineBaseTypeSeqOfTypeRef0(tpe: TypeRef): Unit = {
     val period = tpe.baseTypeSeqPeriod
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
@@ -3487,7 +3512,7 @@ trait Types
       if (tp ne this) {
         undoLog record this
         constr.inst = TypeVar.trace("setInst", s"In $originLocation, $originName=$tp")(
-          tp
+          internClosedScopeParts(tp)
         )
         this
       } else {
@@ -3500,7 +3525,7 @@ trait Types
       //println("addLoBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
       if (!sharesConstraints(tp)) {
         undoLog record this
-        constr.addLoBound(tp, isNumericBound)
+        constr.addLoBound(internClosedScopeParts(tp), isNumericBound)
       }
     }
 
@@ -3509,7 +3534,7 @@ trait Types
       //println("addHiBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
       if (!sharesConstraints(tp)) {
         undoLog record this
-        constr.addHiBound(tp, isNumericBound)
+        constr.addHiBound(internClosedScopeParts(tp), isNumericBound)
       }
     }
     // </region>
@@ -4342,9 +4367,106 @@ trait Types
 
   protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
 
+  // Closed scopes ------------------------------------------------------------
+  //
+  // A closed scope is an operation that computes types only to decide something: whether one type conforms to
+  // another, whether a member overrides another. It returns a Boolean, so the types it makes are garbage when it
+  // returns, yet each new one used to be entered in the uniques table and dirtied a card of the table's old array.
+  // Inside a closed scope, `unique` shares a type already in the table, and otherwise shares one made earlier in a
+  // closed scope through a small direct-mapped cache, or returns the type as it is, without entering it.
+  //
+  // For that to be safe, nothing made in a closed scope may outlive it:
+  //  - a completion started inside it runs in the next `CompletionFrame`, outside the scope;
+  //  - caches that outlive it (a symbol's info transforms and type caches, the caches on types) are filled with the
+  //    scope suspended, unless their owner was made in the scope (a symbol past the scope's watermark of the symbol id
+  //    counter, a type that is not the table's own entry), which dies with it;
+  //  - a bound or an instance recorded in a `TypeVar` is interned first, as it becomes an inferred type;
+  //  - a type built from a part a closed scope made, while that scope is suspended, is not interned either.
+  //
+  // The scopes are `isSubType`, `isSameType`, `matchesType`, `specializesSym`, the override checks of refchecks and
+  // erasure (`RefChecks.checkOverride`, `OverridingPairs`' match of a pair, `checkNoDoubleDefs`) and member lookup's
+  // test of a new member (`FindMembers.isNewMember`). Off in runtime reflection and in a concurrent universe.
+
+  /** Enter a closed scope at the current completion level. Returns what `exitClosedScope` takes. */
+  final def enterClosedScope(): CompletionFrame = {
+    val s = scratch
+    if (!s.closedScopesOn) null
+    else {
+      val f = s.frame
+      if (f.closedScopes == 0) f.closedWatermark = getCurrentSymbolIdCount
+      f.closedScopes += 1
+      f
+    }
+  }
+  final def exitClosedScope(f: CompletionFrame): Unit = if (f ne null) f.closedScopes -= 1
+
+  /** Leave the closed scopes of the current frame, for a computation whose result outlives them. Returns what
+   *  `closedScopeResume` takes. */
+  final def closedScopeSuspend(): Int = {
+    val s = scratch
+    if (!s.closedScopesOn) 0
+    else {
+      val f = s.frame
+      val n = f.closedScopes
+      if (n == 0) 0
+      else {
+        val wasSuspended = f.closedScopesSuspended
+        f.closedScopes = 0
+        f.closedScopesSuspended = true
+        (n << 1) | (if (wasSuspended) 1 else 0)
+      }
+    }
+  }
+  /** As `closedScopeSuspend`, for a cache on `owner`, unless `owner` was made inside the current closed scope: then the
+   *  cache dies with it, and what fills it stays in the scope. */
+  final def closedScopeSuspendFor(owner: Symbol): Int = {
+    val s = scratch
+    if (!s.closedScopesOn) 0
+    else {
+      val f = s.frame
+      if (f.closedScopes > 0 && owner.id > f.closedWatermark) 0 else closedScopeSuspend()
+    }
+  }
+  /** As `closedScopeSuspendFor(Symbol)`, for a cache on a unique type: one made in a closed scope is not the uniques
+   *  table's own entry. */
+  final def closedScopeSuspendFor(owner: Type): Int = {
+    val s = scratch
+    if (!s.closedScopesOn) 0
+    else {
+      val f = s.frame
+      if (f.closedScopes > 0 && !uniques.isEntry(owner)) 0 else closedScopeSuspend()
+    }
+  }
+  final def closedScopeResume(saved: Int): Unit =
+    if (saved != 0) {
+      val f = scratch.frame
+      f.closedScopes = saved >>> 1
+      f.closedScopesSuspended = (saved & 1) != 0
+    }
+
+  /** `tp` with its unique parts interned, when inside a closed scope: for a type about to be stored where it outlives
+   *  the scope (a `TypeVar`'s bound or instance). Only unique types are rebuilt, so no params are cloned. */
+  final def internClosedScopeParts(tp: Type): Type = {
+    val s = scratch
+    if (!s.closedScopesOn || s.frame.closedScopes == 0) tp
+    else {
+      val closed = closedScopeSuspend()
+      try internUniqueParts(tp) finally closedScopeResume(closed)
+    }
+  }
+  private def internUniqueParts(tp: Type): Type = tp match {
+    case u: UniqueType => unique(u.mapOver(internUniquePartsMap))
+    case _             => tp
+  }
+  private object internUniquePartsMap extends TypeMap {
+    def apply(tp: Type): Type = internUniqueParts(tp)
+  }
+
   private[internal] abstract class Uniques {
     def unique[T <: Type](tp: T): T
     def size: Int
+    /** Whether `tp` is this table's own entry for it. */
+    def isEntry(tp: Type): Boolean = true
   }
 
   /** Discarded at the start of each run, and weak within it. */
@@ -4354,10 +4476,14 @@ trait Types
     private[this] var uniqueRunId = NoRunId
 
     def size: Int = if (uniques == null) 0 else uniques.size
+    override def isEntry(tp: Type): Boolean = (uniqueRunId == currentRunId) && (uniques.findEntry(tp) eq tp)
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
         uniques = util.WeakHashSet[Type](initialUniquesCapacity)
+        val on = !isConcurrentUniverse && uniquesClosedScopes
+        scratch.closedScopesOn = on
+        closedCache = if (on) new Array[Type](ClosedCacheSize) else null
         // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
         // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
         // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
@@ -4365,7 +4491,46 @@ trait Types
         // as a) this is now a weak set, and b) it is discarded completely before the next run.
         uniqueRunId = currentRunId
       }
-      (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      val s = scratch
+      if (!s.closedScopesOn) (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      else {
+        val f = s.frame
+        if (f.closedScopes > 0) closedScopeUnique(tp)
+        // Filling a cache with the closed scopes suspended, a type built from a part one of them made is derived from
+        // that scope: entering it would let the table hand the part to anyone who builds an equal type. A part was
+        // made in a closed scope if the table's entry for it is not that instance.
+        else if (f.closedScopesSuspended && hasPartOutsideTable(tp)) tp
+        else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      }
+    }
+    private def outsideTable(p: Type): Boolean = p.isInstanceOf[UniqueType] && (uniques.findEntry(p) ne p)
+    private def hasPartOutsideTable(tp: Type): Boolean = {
+      def any(tps: List[Type]): Boolean = { var xs = tps; while (!xs.isEmpty) { if (outsideTable(xs.head)) return true; xs = xs.tail }; false }
+      tp match {
+        case tr: TypeRef     => outsideTable(tr.pre) || any(tr.args)
+        case st: SingleType  => outsideTable(st.pre)
+        case tb: TypeBounds  => outsideTable(tb.lo) || outsideTable(tb.hi)
+        case SuperType(a, b) => outsideTable(a) || outsideTable(b)
+        case _               => false
+      }
+    }
+
+    // Recent types made in closed scopes, so that repeats within and across them share an instance.
+    private[this] final val ClosedCacheSize = 4096
+    private[this] var closedCache: Array[Type] = null
+    private def closedScopeUnique[T <: Type](tp: T): T = {
+      val e = uniques.findEntry(tp)
+      if (e ne null) e.asInstanceOf[T]
+      else {
+        val h = tp.hashCode
+        val i = (h ^ (h >>> 16)) & (ClosedCacheSize - 1)
+        val c = closedCache(i)
+        if ((c ne null) && c.hashCode == h && tp.equals(c)) c.asInstanceOf[T]
+        else {
+          closedCache(i) = tp
+          tp
+        }
+      }
     }
   }
 
@@ -4812,6 +4977,10 @@ trait Types
   }
 
   def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
+    val closed = enterClosedScope()
+    try specializesSymImpl(tp, sym, depth) finally exitClosedScope(closed)
+  }
+  private def specializesSymImpl(tp: Type, sym: Symbol, depth: Depth): Boolean = {
     def directlySpecializedBy(member: Symbol): Boolean = (
          member == sym
       || specializesSym(tp.narrow, member, sym.owner.thisType, sym, depth)
@@ -4876,6 +5045,10 @@ trait Types
 
   /** A function implementing `tp1` matches `tp2`. */
   final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+    val closed = enterClosedScope()
+    try matchesTypeImpl(tp1, tp2, alwaysMatchSimple) finally exitClosedScope(closed)
+  }
+  private def matchesTypeImpl(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)

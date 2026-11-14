@@ -657,7 +657,10 @@ abstract class RefChecks extends Transform {
       val opc = new overridingPairs.PairsCursor(clazz)
       while (opc.hasNext) {
         if (!opc.high.isClass)
-          checkOverride(opc.currentPair)
+          { // a closed scope: the member types compared are not kept
+            val closed = enterClosedScope()
+            try checkOverride(opc.currentPair) finally exitClosedScope(closed)
+          }
 
         opc.next()
       }

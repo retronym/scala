@@ -1178,6 +1178,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
   def newJavaUnitParser(unit: CompilationUnit): JavaUnitParser = new JavaUnitParser(unit)
 
+  override protected[scala] def uniquesClosedScopes: Boolean = settings.YuniquesClosedScopes.value
+
   override protected[scala] def currentRunProfilerBeforeCompletion(root: Symbol, associatedFile: AbstractFile): Unit =
     curRun.profiler.beforeCompletion(root, associatedFile)
   override protected[scala] def currentRunProfilerAfterCompletion(root: Symbol, associatedFile: AbstractFile): Unit =
