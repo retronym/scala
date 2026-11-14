@@ -4391,9 +4391,18 @@ trait Types
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
+  // Drop the table at the end of the run rather than `clear()` it, which would allocate
+  // a new bucket array of the same size. `unique` makes a new table on its next call.
+  // Held in a field because `perRunCaches` only keeps a weak reference to it.
+  private[this] val uniquesClearer: mutable.Clearable = () => {
+    uniques = null
+    uniqueRunId = NoRunId
+  }
+  perRunCaches.recordCache(uniquesClearer)
+
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
-      uniques = perRunCaches.recordCache(util.WeakHashSet[Type](initialUniquesCapacity))
+      uniques = util.WeakHashSet[Type](initialUniquesCapacity)
       uniqueRunId = currentRunId
     }
     (uniques findEntryOrUpdate tp).asInstanceOf[T]
