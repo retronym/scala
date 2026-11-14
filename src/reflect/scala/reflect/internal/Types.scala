@@ -268,9 +268,6 @@ trait Types
 
   /** The base class for all types */
   abstract class Type extends TypeApiImpl with Annotatable[Type] {
-    /** Set when `unique` returned this type without entering it in the table: it was made in a closed scope (see
-     *  `enterClosedScope`), or from a part that was. */
-    private[internal] final var uninterned: Boolean = false
     /** Types for which asSeenFrom always is the identity, no matter what
      *  prefix or owner.
      */
@@ -4383,59 +4380,60 @@ trait Types
   //  - caches that outlive it (a symbol's info transforms and type caches, the caches on types) are filled with the
   //    scope suspended;
   //  - a bound or an instance recorded in a `TypeVar` is interned first, as it becomes an inferred type;
-  //  - a type built outside closed scopes from a part one returned uninterned is not interned either.
+  //  - a type built from a part a closed scope made, while that scope is suspended, is not interned either.
   //
   // The scopes are `isSubType`, `isSameType`, `matchesType`, `specializesSym`, the override checks of refchecks and
   // erasure (`RefChecks.checkOverride`, `OverridingPairs`' match of a pair, `checkNoDoubleDefs`) and member lookup's
   // test of a new member (`FindMembers.isNewMember`). Off in runtime reflection and in a concurrent universe.
 
-  private[this] var closedScopesOn: Boolean = false
-
   /** Enter a closed scope at the current completion level. Returns what `exitClosedScope` takes. */
-  final def enterClosedScope(): CompletionFrame =
-    if (!closedScopesOn) null
-    else { val f = scratch.frame; f.closedScopes += 1; f }
+  final def enterClosedScope(): CompletionFrame = {
+    val s = scratch
+    if (!s.closedScopesOn) null
+    else { val f = s.frame; f.closedScopes += 1; f }
+  }
   final def exitClosedScope(f: CompletionFrame): Unit = if (f ne null) f.closedScopes -= 1
 
   /** Leave the closed scopes of the current frame, for a computation whose result outlives them. Returns what
    *  `closedScopeResume` takes. */
-  final def closedScopeSuspend(): Int =
-    if (!closedScopesOn) 0
-    else { val f = scratch.frame; val n = f.closedScopes; f.closedScopes = 0; n }
-  final def closedScopeResume(n: Int): Unit = if (n != 0) scratch.frame.closedScopes = n
+  final def closedScopeSuspend(): Int = {
+    val s = scratch
+    if (!s.closedScopesOn) 0
+    else {
+      val f = s.frame
+      val n = f.closedScopes
+      if (n == 0) 0
+      else {
+        val wasSuspended = f.closedScopesSuspended
+        f.closedScopes = 0
+        f.closedScopesSuspended = true
+        (n << 1) | (if (wasSuspended) 1 else 0)
+      }
+    }
+  }
+  final def closedScopeResume(saved: Int): Unit =
+    if (saved != 0) {
+      val f = scratch.frame
+      f.closedScopes = saved >>> 1
+      f.closedScopesSuspended = (saved & 1) != 0
+    }
 
-  /** `tp`, with any part that a closed scope returned uninterned interned, when inside a closed scope; for a type
-   *  about to be stored where it outlives the scope. Only unique types are rebuilt, so no params are cloned. */
-  final def internClosedScopeParts(tp: Type): Type =
-    if (!closedScopesOn || scratch.frame.closedScopes == 0) tp
+  /** `tp` with its unique parts interned, when inside a closed scope: for a type about to be stored where it outlives
+   *  the scope (a `TypeVar`'s bound or instance). Only unique types are rebuilt, so no params are cloned. */
+  final def internClosedScopeParts(tp: Type): Type = {
+    val s = scratch
+    if (!s.closedScopesOn || s.frame.closedScopes == 0) tp
     else {
       val closed = closedScopeSuspend()
-      try internUninterned(tp) finally closedScopeResume(closed)
+      try internUniqueParts(tp) finally closedScopeResume(closed)
     }
-  private def internUninterned(tp: Type): Type = tp match {
-    case u: UniqueType =>
-      val t1 = u.mapOver(internUninternedMap)
-      if (t1.uninterned) {
-        val c = unique(t1)
-        if (c eq t1) t1.uninterned = false
-        c
-      } else t1
-    case _ => tp
   }
-  private object internUninternedMap extends TypeMap {
-    def apply(tp: Type): Type = internUninterned(tp)
+  private def internUniqueParts(tp: Type): Type = tp match {
+    case u: UniqueType => unique(u.mapOver(internUniquePartsMap))
+    case _             => tp
   }
-
-  /** Whether a direct part of `tp` was returned uninterned. */
-  private def hasUninternedPart(tp: Type): Boolean = {
-    def any(tps: List[Type]): Boolean = { var xs = tps; while (!xs.isEmpty) { if (xs.head.uninterned) return true; xs = xs.tail }; false }
-    tp match {
-      case tr: TypeRef     => tr.pre.uninterned || any(tr.args)
-      case st: SingleType  => st.pre.uninterned
-      case tb: TypeBounds  => tb.lo.uninterned || tb.hi.uninterned
-      case SuperType(a, b) => a.uninterned || b.uninterned
-      case _               => false
-    }
+  private object internUniquePartsMap extends TypeMap {
+    def apply(tp: Type): Type = internUniqueParts(tp)
   }
 
   private[internal] abstract class Uniques {
@@ -4454,8 +4452,9 @@ trait Types
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
         uniques = util.WeakHashSet[Type](initialUniquesCapacity)
-        closedScopesOn = !isConcurrentUniverse && uniquesClosedScopes
-        closedCache = if (closedScopesOn) new Array[Type](ClosedCacheSize) else null
+        val on = !isConcurrentUniverse && uniquesClosedScopes
+        scratch.closedScopesOn = on
+        closedCache = if (on) new Array[Type](ClosedCacheSize) else null
         // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
         // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
         // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
@@ -4463,10 +4462,28 @@ trait Types
         // as a) this is now a weak set, and b) it is discarded completely before the next run.
         uniqueRunId = currentRunId
       }
-      if (!closedScopesOn) (uniques findEntryOrUpdate tp).asInstanceOf[T]
-      else if (scratch.frame.closedScopes > 0) closedScopeUnique(tp)
-      else if (hasUninternedPart(tp)) { tp.uninterned = true; tp }
-      else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      val s = scratch
+      if (!s.closedScopesOn) (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      else {
+        val f = s.frame
+        if (f.closedScopes > 0) closedScopeUnique(tp)
+        // Filling a cache with the closed scopes suspended, a type built from a part one of them made is derived from
+        // that scope: entering it would let the table hand the part to anyone who builds an equal type. A part was
+        // made in a closed scope if the table's entry for it is not that instance.
+        else if (f.closedScopesSuspended && hasPartOutsideTable(tp)) tp
+        else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      }
+    }
+    private def outsideTable(p: Type): Boolean = p.isInstanceOf[UniqueType] && (uniques.findEntry(p) ne p)
+    private def hasPartOutsideTable(tp: Type): Boolean = {
+      def any(tps: List[Type]): Boolean = { var xs = tps; while (!xs.isEmpty) { if (outsideTable(xs.head)) return true; xs = xs.tail }; false }
+      tp match {
+        case tr: TypeRef     => outsideTable(tr.pre) || any(tr.args)
+        case st: SingleType  => outsideTable(st.pre)
+        case tb: TypeBounds  => outsideTable(tb.lo) || outsideTable(tb.hi)
+        case SuperType(a, b) => outsideTable(a) || outsideTable(b)
+        case _               => false
+      }
     }
 
     // Recent types made in closed scopes, so that repeats within and across them share an instance.
@@ -4482,7 +4499,6 @@ trait Types
         if ((c ne null) && c.hashCode == h && tp.equals(c)) c.asInstanceOf[T]
         else {
           closedCache(i) = tp
-          tp.uninterned = true
           tp
         }
       }

@@ -667,6 +667,9 @@ abstract class SymbolTable extends macros.Universe
     /** How many closed scopes (see `Types.enterClosedScope`) enclose the current operation in this frame. A completion
      *  started inside one runs in the next frame, outside them: what it computes outlives the scope. */
     private[internal] var closedScopes: Int = 0
+    /** Whether the current operation runs with this frame's closed scopes suspended (`Types.closedScopeSuspend`):
+     *  it fills a cache that outlives them, and may build types from ones a closed scope made. */
+    private[internal] var closedScopesSuspended: Boolean = false
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
@@ -726,6 +729,8 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
+    /** Whether this thread's operations use closed scopes in the current run (see `Types.enterClosedScope`). */
+    private[internal] var closedScopesOn: Boolean = false
     private[this] var _frame: CompletionFrame = new CompletionFrame(null)
     /** The frame of the completion in progress on this thread. */
     def frame: CompletionFrame = _frame
@@ -737,6 +742,7 @@ abstract class SymbolTable extends macros.Universe
       val next = f.next
       next.completing = completing
       next.closedScopes = 0
+      next.closedScopesSuspended = false
       _frame = next
       f
     }
