@@ -1599,7 +1599,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       def enter(p: GlobalPhase): Unit = { globalPhase = p; phase = p }
       try {
         segment.foreach(echoPhaseSummary)
-        val us = units
+        val us = supertypesFirst(units.toList, start).iterator
         while (us.hasNext && !reporter.cancelled) {
           val unit = us.next()
           var i = 0
@@ -1622,6 +1622,36 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       }
       globalPhase = segment.last.next
       phase = globalPhase
+    }
+
+    /** `units`, reordered so that, as far as cycles allow, a unit comes after the units that define
+     *  the base classes of its classes. Mixin completes a class's superclasses first, which must
+     *  have been through erasure, which adds their bridges. javac's desugar takes a class's
+     *  supertypes first for the same reason.
+     */
+    private def supertypesFirst(units: List[CompilationUnit], start: Phase): List[CompilationUnit] = {
+      val unitOf = mutable.HashMap.empty[Symbol, CompilationUnit]
+      val classesOf = mutable.HashMap.empty[CompilationUnit, List[Symbol]]
+      for (u <- units) {
+        var classes: List[Symbol] = Nil
+        u.body.foreach {
+          case cd: ClassDef => classes ::= cd.symbol; unitOf(cd.symbol) = u
+          case _ =>
+        }
+        classesOf(u) = classes
+      }
+      val visiting, done = mutable.HashSet.empty[CompilationUnit]
+      val result = mutable.ListBuffer.empty[CompilationUnit]
+      def visit(u: CompilationUnit): Unit = if (!done(u) && !visiting(u)) {
+        visiting += u
+        for (c <- classesOf(u); b <- enteringPhase(start)(c.info.baseClasses); d <- unitOf.get(b) if d ne u)
+          visit(d)
+        visiting -= u
+        done += u
+        result += u
+      }
+      units.foreach(visit)
+      result.toList
     }
 
     /** The per-unit counterpart of the printing and checking that follows a phase-major phase. */
