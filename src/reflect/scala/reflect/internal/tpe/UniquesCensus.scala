@@ -276,6 +276,14 @@ trait UniquesCensus { self: SymbolTable =>
       var i = 0
       while (i < st.length) {
         val c = st(i).getClassName; val m = st(i).getMethodName
+        // A completion runs in a CompletionFrame of its own: what forced it does not classify its types. Without a
+        // marker inside the completion, the type is the completer's.
+        if (c == "scala.reflect.internal.Symbols$Symbol" && m == "completeInfo") {
+          var j = i - 1
+          while (j >= 0 && st(j).getMethodName != "complete") j -= 1
+          val completer = if (j >= 0) st(j).getClassName else "?"
+          return "completion:" + completer.substring(completer.lastIndexOf('.') + 1).replaceAll("\\$\\$anon\\$\\d+|\\$\\d+", "")
+        }
         val r =
           if (c.startsWith("scala.tools.nsc.typechecker.Implicits$ImplicitSearch")) "implicitSearch"
           else if (c == "scala.tools.nsc.typechecker.Typers$Typer" && m == "silent") "silent"
