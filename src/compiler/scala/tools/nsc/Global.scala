@@ -1623,6 +1623,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
       reporting.summarizeErrors()
       uniquesCensusReport()
+      // DO NOT MERGE
+      if (uniquesEscapeCheckOn) { uniquesEscapeWalk("end of run", units.iterator.map(_.body)); uniquesEscapeReport() }
 
       // val allNamesArray: Array[String] = allNames().map(_.toString).toArray.sorted
       // allNamesArray.foreach(println(_))

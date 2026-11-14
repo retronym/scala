@@ -128,6 +128,8 @@ abstract class Pickler extends SubComponent {
         _index = null
         _entries = null
       }
+      // DO NOT MERGE
+      if (uniquesEscapeCheckOn) uniquesEscapeWalk("after pickler", currentRun.units.map(_.body))
     }
 
     private def writeSigFile(sym: Symbol, pickle: PickleBuffer): Unit = {
@@ -320,6 +322,7 @@ abstract class Pickler extends SubComponent {
     /** Store type and everything it refers to in map index.
      */
     private def putType(tp: Type): Unit = if (putEntry(tp)) {
+      uniquesEscapeNote("pickle", tp) // DO NOT MERGE
       tp match {
         case NoType | NoPrefix =>
           ;

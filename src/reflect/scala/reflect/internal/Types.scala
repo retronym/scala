@@ -269,6 +269,11 @@ trait Types
 
   /** The base class for all types */
   abstract class Type extends TypeApiImpl with Annotatable[Type] {
+    /** DO NOT MERGE: the weak scope (`UniquesCensus.WeakNames`) this type was returned uninterned from by
+     *  `-Yuniques-uncache`, 0 if it was interned or never went through `unique`. Read by the escape check. */
+    final var uniquesEscapeTag: Byte = 0
+    /** DO NOT MERGE: with `-Dscala.uniques.escapeCheck.stacks=true`, where a closed scope returned it uninterned. */
+    final var uniquesEscapeStack: Throwable = null
     /** Types for which asSeenFrom always is the identity, no matter what
      *  prefix or owner.
      */
@@ -1515,7 +1520,12 @@ trait Types
     }
   }
 
+  // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineUnderlyingOfSingleType(tpe: SingleType): Unit = {
+    val weakLabel = weakScopeSuspend()
+    try defineUnderlyingOfSingleType0(tpe) finally weakScopeResume(weakLabel)
+  }
+  private def defineUnderlyingOfSingleType0(tpe: SingleType): Unit = {
     val period = tpe.underlyingPeriod
     if (period != currentPeriod) {
       tpe.underlyingPeriod = currentPeriod
@@ -1738,7 +1748,12 @@ trait Types
     tpe.typeSymbol :: baseTail
   }
 
-  protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType) = {
+  // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
+  protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType): Unit = {
+    val weakLabel = weakScopeSuspend()
+    try defineBaseTypeSeqOfCompoundType0(tpe) finally weakScopeResume(weakLabel)
+  }
+  private def defineBaseTypeSeqOfCompoundType0(tpe: CompoundType): Unit = {
     val period = tpe.baseTypeSeqPeriod
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
@@ -1799,7 +1814,12 @@ trait Types
       throw new TypeError(s"illegal cyclic inheritance involving ${tpe.typeSymbol}")
   }
 
+  // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
+    val weakLabel = weakScopeSuspend()
+    try defineBaseClassesOfCompoundType0(tpe) finally weakScopeResume(weakLabel)
+  }
+  private def defineBaseClassesOfCompoundType0(tpe: CompoundType): Unit = {
     val period = tpe.baseClassesPeriod
     if (period != currentPeriod) {
       tpe.baseClassesPeriod = currentPeriod
@@ -1841,7 +1861,7 @@ trait Types
     final override def normalize: Type =
       if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) normalized = normalizeImpl
+        if (normalized eq null) normalized = { val weakLabel = weakScopeSuspend(); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
         normalized
       }
 
@@ -2138,7 +2158,7 @@ trait Types
     private[this] var narrowedCache: Type = _
     override def narrow = {
       if (narrowedCache eq null)
-        narrowedCache = singleType(pre, sym.sourceModule)
+        narrowedCache = { val weakLabel = weakScopeSuspend(); try singleType(pre, sym.sourceModule) finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
       narrowedCache
     }
@@ -2222,7 +2242,7 @@ trait Types
     final override protected def relativeInfo = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
-        relativeInfoCache = super.relativeInfo
+        relativeInfoCache = { val weakLabel = weakScopeSuspend(); try super.relativeInfo finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
 
@@ -2549,7 +2569,7 @@ trait Types
     // TODO: test case that is compiled in a specific order and in different runs
     private[Types] final def defineNormalized() : Unit =
       // In runtime reflection, this null check is part of double-checked locking
-      if (normalized eq null) normalized = normalizeImpl
+      if (normalized eq null) normalized = { val weakLabel = weakScopeSuspend(); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
     override def isGround = (
          sym.isPackageClass
@@ -2779,7 +2799,12 @@ trait Types
     tr.defineNormalized()
   }
 
-  protected def defineParentsOfTypeRef(tpe: TypeRef) = {
+  // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
+  protected def defineParentsOfTypeRef(tpe: TypeRef): Unit = {
+    val weakLabel = weakScopeSuspend()
+    try defineParentsOfTypeRef0(tpe) finally weakScopeResume(weakLabel)
+  }
+  private def defineParentsOfTypeRef0(tpe: TypeRef): Unit = {
     val period = tpe.parentsPeriod
     if (period != currentPeriod) {
       tpe.parentsPeriod = currentPeriod
@@ -2791,7 +2816,12 @@ trait Types
     }
   }
 
-  protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef) = {
+  // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
+  protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef): Unit = {
+    val weakLabel = weakScopeSuspend()
+    try defineBaseTypeSeqOfTypeRef0(tpe) finally weakScopeResume(weakLabel)
+  }
+  private def defineBaseTypeSeqOfTypeRef0(tpe: TypeRef): Unit = {
     val period = tpe.baseTypeSeqPeriod
     if (period != currentPeriod) {
       tpe.baseTypeSeqPeriod = currentPeriod
@@ -3497,7 +3527,7 @@ trait Types
       if (tp ne this) {
         undoLog record this
         constr.inst = TypeVar.trace("setInst", s"In $originLocation, $originName=$tp")(
-          tp
+          uniquesInternEscaping(tp) // DO NOT MERGE
         )
         this
       } else {
@@ -3510,7 +3540,7 @@ trait Types
       //println("addLoBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
       if (!sharesConstraints(tp)) {
         undoLog record this
-        constr.addLoBound(tp, isNumericBound)
+        constr.addLoBound(uniquesInternEscaping(tp), isNumericBound) // DO NOT MERGE
       }
     }
 
@@ -3519,7 +3549,7 @@ trait Types
       //println("addHiBound: "+(safeToString, typeDebugging.debugString(tp))) //DEBUG
       if (!sharesConstraints(tp)) {
         undoLog record this
-        constr.addHiBound(tp, isNumericBound)
+        constr.addHiBound(uniquesInternEscaping(tp), isNumericBound) // DO NOT MERGE
       }
     }
     // </region>
@@ -4352,6 +4382,30 @@ trait Types
 
   protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
 
+  /** DO NOT MERGE: a type about to be stored where it outlives the current weak scope (a `TypeVar`'s bound or
+   *  instance): inside a closed scope, intern its unique parts, so that nothing the scope returned uninterned
+   *  escapes through the constraint and, after solving, into inferred types. Only unique types are rebuilt, so
+   *  no method or polymorphic type has its params cloned. */
+  final def uniquesInternEscaping(tp: Type): Type =
+    if (uncacheMask == 0 || !tpe.UniquesCensus.isClosedWeakLabel(scratch.frame.weakLabel)) tp
+    else {
+      val label = weakScopeSuspend()
+      try internEscaping(tp) finally weakScopeResume(label)
+    }
+  private def internEscaping(tp: Type): Type = tp match {
+    case u: UniqueType =>
+      val t1 = u.mapOver(internEscapingMap)
+      if (t1.uniquesEscapeTag != 0) {
+        val c = unique(t1)
+        if (c eq t1) t1.uniquesEscapeTag = 0
+        c
+      } else t1
+    case _ => tp
+  }
+  private object internEscapingMap extends TypeMap {
+    def apply(tp: Type): Type = internEscaping(tp)
+  }
+
   private[internal] abstract class Uniques {
     def unique[T <: Type](tp: T): T
     def size: Int
@@ -4416,10 +4470,18 @@ trait Types
         if (cache != null) {
           val i = (h ^ (h >>> 16)) & (cache.length - 1)
           val c = cache(i)
-          if ((c ne null) && c.hashCode == h && tp.equals(c)) { uncacheCount(tpe.UniquesCensus.UncacheCacheHit); return c.asInstanceOf[T] }
+          // An open scope does not take an instance a closed scope made: its parts may refer to that scope's own types
+          // and cloned symbols, which must not outlive it. That hit is a miss, and the new instance replaces it.
+          if ((c ne null) && c.hashCode == h && tp.equals(c) &&
+              (tpe.UniquesCensus.isClosedWeakLabel(scratch.frame.weakLabel) || !tpe.UniquesCensus.isClosedWeakLabel(c.uniquesEscapeTag))) {
+            uncacheCount(tpe.UniquesCensus.UncacheCacheHit)
+            return c.asInstanceOf[T]
+          }
           cache(i) = tp
         }
         uncacheMiss(tp)
+        tp.uniquesEscapeTag = scratch.frame.weakLabel.toByte
+        if (uniquesEscapeCheckOn) uniquesEscapeCreated(tp)
         tp
       }
     }

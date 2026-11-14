@@ -1468,6 +1468,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 // ------ info and type -------------------------------------------------------------------
 
     private[Symbols] var infos: TypeHistory = null
+    /** DO NOT MERGE: every info this symbol has had, for the uniques escape check. */
+    final def foreachInfoInHistory(f: Type => Unit): Unit = {
+      var is = infos
+      while (is ne null) { f(is.info); is = is.prev }
+    }
     def originalInfo = {
       if (infos eq null) null
       else {
@@ -1614,6 +1619,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
       if (uniquesCensusOn) uniquesCensusAnchor(this, info, scala.reflect.internal.tpe.UniquesCensus.SrcInfo)
+      if (uniquesEscapeCheckOn) uniquesEscapeOnStore(this, info)
     }
 
     /** Set initial info. */
@@ -1651,6 +1657,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       infos = TypeHistory(currentPeriod, info, infos)
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
       if (uniquesCensusOn) uniquesCensusAnchor(this, info, scala.reflect.internal.tpe.UniquesCensus.SrcUpdate)
+      if (uniquesEscapeCheckOn) uniquesEscapeOnStore(this, info)
       this
     }
 
@@ -1712,7 +1719,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var infos = infos0
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
-      while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
+      val weakLabel = weakScopeSuspend() // DO NOT MERGE: an info outlives the weak scope that forced it
+      try while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
         val info1 = itr.transform(this, infos.info)
         if (info1 ne infos.info) {
@@ -1722,7 +1730,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         }
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
         itr = itr.next
-      }
+      } finally weakScopeResume(weakLabel)
       _validTo = if (itr.pid == NoPhase.id) curPeriod
       else period(currentRunId, itr.pid)
       infos
@@ -3254,8 +3262,10 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       tpeCache
     }
     override def typeConstructor: Type = {
-      if (tyconCacheNeedsUpdate)
-        setTyconCache(newTypeRef(Nil))
+      if (tyconCacheNeedsUpdate) {
+        val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+        try setTyconCache(newTypeRef(Nil)) finally weakScopeResume(weakLabel)
+      }
       tyconCache
     }
     override def tpeHK: Type = typeConstructor
@@ -3285,10 +3295,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
-      tpeCache = newTypeRef(
+      val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+      tpeCache = try newTypeRef(
         if (noTypeParams) Nil
         else unsafeTypeParams map (_.typeConstructor)
-      )
+      ) finally weakScopeResume(weakLabel)
       if (uniquesCensusOn) uniquesCensusAnchor(this, tpeCache, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
       // Avoid carrying around different types in tyconCache and tpeCache
       // for monomorphic types.
@@ -3472,7 +3483,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val period = thisTypePeriod
       if (period != currentPeriod) {
         if (!isValid(period)) {
-          thisTypeCache = ThisType(this)
+          val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+          thisTypeCache = try ThisType(this) finally weakScopeResume(weakLabel)
           if (uniquesCensusOn) uniquesCensusAnchor(this, thisTypeCache, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
         }
         thisTypePeriod = currentPeriod

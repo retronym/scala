@@ -88,6 +88,14 @@ trait UniquesCensus { self: SymbolTable =>
       f.weakDepth += 1
       f
     }
+  /** DO NOT MERGE: leave the current weak scope for a computation whose result outlives it (a symbol's info transform,
+   *  a symbol's type caches): it is interned as outside any scope. Returns what `weakScopeResume` restores. Weak scopes
+   *  entered inside stay unlabelled, as the enclosing depth is still positive. */
+  final def weakScopeSuspend(): Int =
+    if (!weakScopesOn) 0
+    else { val f = scratch.frame; val l = f.weakLabel; f.weakLabel = 0; l }
+  final def weakScopeResume(label: Int): Unit = if (label != 0) scratch.frame.weakLabel = label
+
   final def weakScopeExit(f: CompletionFrame): Unit =
     if (f ne null) {
       f.weakDepth -= 1
@@ -428,6 +436,135 @@ trait UniquesCensus { self: SymbolTable =>
       System.out.println(s"[uniques-census] this Global: runs=$runs added=${c("added")} anchoredSame=${c("fate.anchoredSame")} anchoredLater=${c("fate.anchoredLater")} anchoredCleared=${c("fate.anchoredCleared")} clearedFree=${c("fate.clearedFree")} liveFree=${c("fate.liveFree")} -> $out")
     }
   }
+
+  // ---- DO NOT MERGE: escape check for -Yuniques-uncache ----------------------------------------------------------
+  //
+  // The weak scopes fall in two categories. Closed (`ClosedWeakLabels`, the boolean queries) return a Boolean, so a
+  // type they make should be garbage when they return; open ones (type maps that clone params, instantiation,
+  // existential packing, mixin's clones, adapt's instantiation, stableTypeFor, narrowing) make the types they return.
+  // `-Dscala.uniques.escapeCheck=true` looks for types returned uninterned by a closed scope (`uniquesEscapeTag`) in
+  // the pickles, and in a walk of the run's trees and the symbol table (every info in each symbol's history, through
+  // the parts of types, params, type params, quantified symbols, refinement and class members, owners and annotations).
+
+  final val uniquesEscapeCheckOn: Boolean = isCompilerUniverse && java.lang.Boolean.getBoolean("scala.uniques.escapeCheck")
+  private[this] lazy val escapeCheck = new EscapeCheck
+
+  /** `tp` is about to be written to sink `sink` (e.g. a pickle). */
+  final def uniquesEscapeNote(sink: String, tp: Type): Unit =
+    if (uniquesEscapeCheckOn && tp.uniquesEscapeTag != 0) escapeCheck.note(sink, tp, "")
+
+  /** Walk `trees` and the symbol table, noting every tagged type reachable from them under sink `sink`. */
+  final def uniquesEscapeWalk(sink: String, trees: Iterator[Tree]): Unit =
+    if (uniquesEscapeCheckOn) escapeCheck.walk(sink, trees)
+
+  final def uniquesEscapeReport(): Unit = if (uniquesEscapeCheckOn) escapeCheck.report()
+
+  private[this] val escapeStacks: Boolean = java.lang.Boolean.getBoolean("scala.uniques.escapeCheck.stacks")
+  /** `-Dscala.uniques.escapeCheck.stacks=true`: remember where each closed-scope type was returned uninterned. */
+  final def uniquesEscapeCreated(tp: Type): Unit =
+    if (escapeStacks && isClosedWeakLabel(tp.uniquesEscapeTag)) tp.uniquesEscapeStack = new Throwable(s"created in phase $phase")
+  final def uniquesEscapeCreationStack(tp: Type): Throwable = tp.uniquesEscapeStack
+
+  private[this] var storeStacks = 0
+  /** `info` is being stored as `sym`'s info: if a part of it was returned uninterned by a closed scope, print where
+   *  (the first few times), to find the path by which it escapes. */
+  final def uniquesEscapeOnStore(sym: Symbol, info: Type): Unit = if (storeStacks < 5 && !(sym.isParameter || sym.isExistential || sym.isRefinementClass || sym.isSkolem)) {
+    var found: Type = null
+    def look(tp: Type, depth: Int): Unit =
+      if ((found eq null) && (tp ne null) && depth < 12) {
+        if (isClosedWeakLabel(tp.uniquesEscapeTag)) found = tp
+        else foreachPart(tp, look(_, depth + 1))
+      }
+    look(info, 0)
+    if (found ne null) {
+      storeStacks += 1
+      val e = new Throwable(s"[uniques-escape] closed-scope type $found stored in the info of ${sym.fullNameString} (weak label now ${WeakNames(scratch.frame.weakLabel)}, phase $phase)")
+      e.setStackTrace(e.getStackTrace.take(40))
+      e.printStackTrace(System.out)
+    }
+  }
+
+  private final class EscapeCheck {
+    // (sink, label) -> count; sink -> examples of closed-scope escapes
+    private[this] val counts = new mutable.HashMap[(String, Int), Long]
+    private[this] val examples = new mutable.HashMap[String, mutable.ArrayBuffer[String]]
+
+    def note(sink: String, tp: Type, via: String): Unit = {
+      val label = tp.uniquesEscapeTag.toInt
+      counts((sink, label)) = counts.getOrElse((sink, label), 0L) + 1
+      if (isClosedWeakLabel(label)) {
+        val ex = examples.getOrElseUpdate(sink, mutable.ArrayBuffer.empty)
+        if (ex.size < 12) {
+          ex += s"${tp.getClass.getSimpleName} ${tp}${if (via.isEmpty) "" else s"   <- $via"}"
+          val st = uniquesEscapeCreationStack(tp)
+          if (st ne null) ex ++= (st.getMessage +: st.getStackTrace.iterator.map(_.toString).filterNot(s => s.contains("$anonfun") || s.contains("Function") || s.contains("withPhase")).take(30).toList).map("        " + _)
+        }
+      }
+    }
+
+    def walk(sink: String, trees: Iterator[Tree]): Unit = {
+      val seenTypes = new java.util.IdentityHashMap[Type, AnyRef]
+      val seenSyms = new java.util.IdentityHashMap[Symbol, AnyRef]
+      val todo = new java.util.ArrayDeque[Symbol]
+      var via = ""
+      def sym(s: Symbol): Unit =
+        if ((s ne null) && (s ne NoSymbol) && seenSyms.put(s, s) == null) todo.add(s)
+      def tpe(tp: Type): Unit =
+        if ((tp ne null) && seenTypes.put(tp, tp) == null) {
+          if (tp.uniquesEscapeTag != 0) note(sink, tp, via)
+          tp match {
+            case TypeRef(pre, s, args)          => tpe(pre); args.foreach(tpe); sym(s)
+            case SingleType(pre, s)             => tpe(pre); sym(s)
+            case ThisType(s)                    => sym(s)
+            case SuperType(a, b)                => tpe(a); tpe(b)
+            case TypeBounds(lo, hi)             => tpe(lo); tpe(hi)
+            case ci: ClassInfoType              => ci.parents.foreach(tpe); ci.decls.foreach(sym); sym(ci.typeSymbol)
+            case rt: RefinedType                => rt.parents.foreach(tpe); rt.decls.foreach(sym); sym(rt.typeSymbol)
+            case MethodType(params, res)        => params.foreach(sym); tpe(res)
+            case PolyType(tparams, res)         => tparams.foreach(sym); tpe(res)
+            case NullaryMethodType(res)         => tpe(res)
+            case ExistentialType(q, u)          => q.foreach(sym); tpe(u)
+            case AnnotatedType(annots, u)       => annots.foreach(a => tpe(a.atp)); tpe(u)
+            case ErasedValueType(c, u)          => sym(c); tpe(u)
+            case ConstantType(c)                => if (c.tag == ClazzTag) tpe(c.typeValue)
+            case tv: TypeVar                    => tpe(tv.inst); tv.constr.loBounds.foreach(tpe); tv.constr.hiBounds.foreach(tpe)
+            case OverloadedType(pre, alts)      => tpe(pre); alts.foreach(sym)
+            case _                              =>
+          }
+        }
+      def drain(): Unit =
+        while (!todo.isEmpty) {
+          val s = todo.poll()
+          via = s.fullNameString
+          s.foreachInfoInHistory(tpe)
+          s.annotations.foreach(a => tpe(a.atp))
+          sym(s.owner)
+        }
+      trees.foreach { t =>
+        t.foreach { x =>
+          via = s"tree ${x.getClass.getSimpleName} at ${x.pos}"
+          tpe(x.tpe)
+          if (x.hasSymbolField) sym(x.symbol)
+          drain()
+        }
+      }
+      sym(rootMirror.RootClass)
+      drain()
+      walked += s"$sink: ${seenTypes.size} types, ${seenSyms.size} symbols"
+    }
+    private[this] val walked = mutable.ArrayBuffer.empty[String]
+
+    def report(): Unit = {
+      val closed = counts.iterator.filter { case ((_, l), _) => isClosedWeakLabel(l) }.map(_._2).sum
+      System.out.println(s"[uniques-escape] walked ${walked.mkString("; ")}")
+      System.out.println(s"[uniques-escape] uninterned types found, by sink and scope (closed: ${WeakNames.indices.filter(isClosedWeakLabel).map(WeakNames(_)).mkString(",")}); closed-scope escapes: $closed")
+      counts.toList.sortBy { case ((s, l), _) => (s, l) }.foreach { case ((s, l), n) =>
+        System.out.println(f"[uniques-escape]   $s%-22s ${WeakNames(l)}%-12s ${if (isClosedWeakLabel(l)) "CLOSED" else "open"}%-6s $n%,d")
+      }
+      examples.foreach { case (s, ex) => ex.foreach(e => System.out.println(s"[uniques-escape]   e.g. $s: $e")) }
+      counts.clear(); examples.clear(); walked.clear()
+    }
+  }
 }
 
 object UniquesCensus {
@@ -498,6 +635,11 @@ object UniquesCensus {
   final val WeakStableType = 8
   final val WeakLabels = 9
   val WeakNames = Array("none", "query", "mapParams", "adaptPoly", "narrow", "existential", "mixin", "instantiate", "stableType")
+  /** DO NOT MERGE: the closed weak scopes, whose new types should be garbage when they return: the boolean queries
+   *  (`isSubType`, `isSameType`, `matchesType`, `specializesSym`, existential subtyping among them). The rest are open:
+   *  they return the types they make. */
+  final val ClosedWeakLabels: Int = 1 << WeakQuery
+  def isClosedWeakLabel(label: Int): Boolean = label > 0 && ((ClosedWeakLabels >>> label) & 1) != 0
   /** Frames that only plumb an intern or an anchor, left out of a site. */
   val CreateSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|util\\.ChunkedInterner|Types\\$PerRunUniques|Types\\.unique|Types\\$[A-Za-z]*(TypeRef|Type|Bounds)\\$?\\.(apply|<init>)|Types\\.(typeRef|singleType|newTypeRef|copyTypeRef|TypeBounds|ThisType|ConstantType)))")
   val AnchorSkip = java.util.regex.Pattern.compile("^(java\\.|scala\\.reflect\\.internal\\.(tpe\\.UniquesCensus|Symbols\\$[A-Za-z]*Symbol\\.(info_\\$eq|setInfo|updateInfo|setTyconCache|transformInfos|setInfoOwnerAdjusted|setInfoAndEnter|modifyInfo)))")
