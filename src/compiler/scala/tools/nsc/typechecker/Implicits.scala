@@ -805,11 +805,6 @@ trait Implicits extends splain.SplainData {
      *  can examine the now much smaller concrete implementations below.
      */
     private def checkCompatibility(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
-      // a closed scope: the types compared are not kept
-      val closed = enterClosedScope()
-      try checkCompatibility0(fast, tp0, pt0) finally exitClosedScope(closed)
-    }
-    private def checkCompatibility0(fast: Boolean, tp0: Type, pt0: Type): Boolean = {
       @tailrec def loop(tp: Type, pt: Type): Boolean = tp match {
         case mt @ MethodType(params, restpe) =>
           if (mt.isImplicit)

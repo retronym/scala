@@ -4882,13 +4882,7 @@ trait Types
     corresponds3(tps1, tps2, tparams)(isSubArg)
   }
 
-  def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean =
-    if (closedScopeEntered) specializesSymImpl(tp, sym, depth) else specializesSymClosed(tp, sym, depth)
-  private def specializesSymClosed(tp: Type, sym: Symbol, depth: Depth): Boolean = {
-    val closed = enterClosedScope()
-    try specializesSymImpl(tp, sym, depth) finally exitClosedScope(closed)
-  }
-  private def specializesSymImpl(tp: Type, sym: Symbol, depth: Depth): Boolean = {
+  def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
     def directlySpecializedBy(member: Symbol): Boolean = (
          member == sym
       || specializesSym(tp.narrow, member, sym.owner.thisType, sym, depth)
@@ -4952,13 +4946,7 @@ trait Types
     }
 
   /** A function implementing `tp1` matches `tp2`. */
-  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean =
-    if (closedScopeEntered) matchesTypeImpl(tp1, tp2, alwaysMatchSimple) else matchesTypeClosed(tp1, tp2, alwaysMatchSimple)
-  private def matchesTypeClosed(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
-    val closed = enterClosedScope()
-    try matchesTypeImpl(tp1, tp2, alwaysMatchSimple) finally exitClosedScope(closed)
-  }
-  private def matchesTypeImpl(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
     def matchesQuantified(tparams1: List[Symbol], tparams2: List[Symbol], res1: Type, res2: Type): Boolean = (
       sameLength(tparams1, tparams2) &&
       matchesType(res1, res2.substSym(tparams2, tparams1), alwaysMatchSimple)
