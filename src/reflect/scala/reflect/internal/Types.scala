@@ -4346,6 +4346,12 @@ trait Types
 
   final def howManyUniqueTypes: Int = uniques.size
 
+  // Drop the table at the end of the run rather than `clear()` it, which would allocate
+  // a new bucket array of the same size. `unique` makes a new table on its next call.
+  // Held in a field because `perRunCaches` only keeps a weak reference to it.
+  private[this] val uniquesClearer: mutable.Clearable = () => uniques.drop()
+  perRunCaches.recordCache(uniquesClearer)
+
   protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
 
   // Closed scopes ------------------------------------------------------------
@@ -4460,6 +4466,8 @@ trait Types
   private[internal] abstract class Uniques {
     def unique[T <: Type](tp: T): T
     def size: Int
+    /** Forget the current run's table, at the end of the run. */
+    def drop(): Unit = ()
     /** Whether `tp` is this table's own entry for it. */
     def isEntry(tp: Type): Boolean = true
     /** Whether operations use closed scopes in the current run (see `enterClosedScope`). */
@@ -4478,11 +4486,12 @@ trait Types
     private[this] var uniqueRunId = NoRunId
 
     def size: Int = if (uniques == null) 0 else uniques.size
+    override def drop(): Unit = { uniques = null; uniqueRunId = NoRunId }
     override def isEntry(tp: Type): Boolean = (uniqueRunId == currentRunId) && (uniques.findEntry(tp) eq tp)
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
-        uniques = perRunCaches.recordCache(util.WeakHashSet[Type](initialUniquesCapacity))
+        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
         val on = !isConcurrentUniverse && uniquesClosedScopes
         closedOn = on
         closedCache = if (on) new Array[Type](ClosedCacheSize) else null
@@ -4534,6 +4543,7 @@ trait Types
 
   private final class SynchronizedPerRunUniques extends PerRunUniques {
     override def size: Int = synchronized(super.size)
+    override def drop(): Unit = synchronized(super.drop())
     override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
   }
 
