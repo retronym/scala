@@ -4321,11 +4321,19 @@ trait Types
 
   final def howManyUniqueTypes: Int = uniques.size
 
+  // Drop the table at the end of the run rather than `clear()` it, which would allocate
+  // a new bucket array of the same size. `unique` makes a new table on its next call.
+  // Held in a field because `perRunCaches` only keeps a weak reference to it.
+  private[this] val uniquesClearer: mutable.Clearable = () => uniques.drop()
+  perRunCaches.recordCache(uniquesClearer)
+
   protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
 
   private[internal] abstract class Uniques {
     def unique[T <: Type](tp: T): T
     def size: Int
+    /** Forget the current run's table, at the end of the run. */
+    def drop(): Unit = ()
   }
 
   /** Discarded at the start of each run, and weak within it. */
@@ -4335,10 +4343,11 @@ trait Types
     private[this] var uniqueRunId = NoRunId
 
     def size: Int = if (uniques == null) 0 else uniques.size
+    override def drop(): Unit = { uniques = null; uniqueRunId = NoRunId }
 
     def unique[T <: Type](tp: T): T = {
       if (uniqueRunId != currentRunId) {
-        uniques = perRunCaches.recordCache(util.WeakHashSet[Type](initialUniquesCapacity))
+        uniques = util.WeakHashSet[Type](initialUniquesCapacity)
         uniqueRunId = currentRunId
       }
       (uniques findEntryOrUpdate tp).asInstanceOf[T]
@@ -4347,6 +4356,7 @@ trait Types
 
   private final class SynchronizedPerRunUniques extends PerRunUniques {
     override def size: Int = synchronized(super.size)
+    override def drop(): Unit = synchronized(super.drop())
     override def unique[T <: Type](tp: T): T = synchronized(super.unique(tp))
   }
 
