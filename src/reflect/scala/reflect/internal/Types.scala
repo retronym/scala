@@ -4346,11 +4346,11 @@ trait Types
 
   final def howManyUniqueTypes: Int = uniques.size
 
-  // Drop the table at the end of the run rather than `clear()` it, which would allocate
-  // a new bucket array of the same size. `unique` makes a new table on its next call.
-  // Held in a field because `perRunCaches` only keeps a weak reference to it.
-  private[this] val uniquesClearer: mutable.Clearable = () => uniques.drop()
-  perRunCaches.recordCache(uniquesClearer)
+  /** Called by `perRunCaches.clearAll()` at the end of a run. Drops the table rather than
+   *  `clear()`ing it, which would allocate a new bucket array of the same size;
+   *  `unique` makes a new table on its next call.
+   */
+  private[internal] def dropUniques(): Unit = uniques.drop()
 
   protected def unique[T <: Type](tp: T): T = uniques.unique(tp)
 
