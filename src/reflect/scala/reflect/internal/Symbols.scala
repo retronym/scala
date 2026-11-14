@@ -1719,7 +1719,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var infos = infos0
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
-      val weakLabel = weakScopeSuspend() // DO NOT MERGE: an info outlives the weak scope that forced it
+      val weakLabel = weakScopeSuspendFor(this) // DO NOT MERGE: an info outlives the weak scope that forced it
       val strong = if (isLocalToBlock) -1 else strongScopeEnter(scala.reflect.internal.tpe.UniquesCensus.StrongInfoTransform)
       try while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
@@ -3129,7 +3129,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (mtpeRunId == currentRunId && (mtpePre eq pre) && (mtpeInfo eq info))
         return mtpeResult
       // DO NOT MERGE: the cache outlives the weak scope that fills it (and later callers get the cached result)
-      val weakLabel = weakScopeSuspend()
+      val weakLabel = weakScopeSuspendFor(this)
       val res = try pre.computeMemberType(this) finally weakScopeResume(weakLabel)
       mtpeRunId = currentRunId
       mtpePre = pre
@@ -3266,7 +3266,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     }
     override def typeConstructor: Type = {
       if (tyconCacheNeedsUpdate) {
-        val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+        val weakLabel = weakScopeSuspendFor(this) // DO NOT MERGE: the cache outlives the weak scope that filled it
         try setTyconCache(newTypeRef(Nil)) finally weakScopeResume(weakLabel)
       }
       tyconCache
@@ -3298,7 +3298,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
       tpeCache = NoType // cycle marker
       val noTypeParams = phase.erasedTypes && this != ArrayClass || unsafeTypeParams.isEmpty
-      val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+      val weakLabel = weakScopeSuspendFor(this) // DO NOT MERGE: the cache outlives the weak scope that filled it
       tpeCache = try newTypeRef(
         if (noTypeParams) Nil
         else unsafeTypeParams map (_.typeConstructor)
@@ -3486,7 +3486,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       val period = thisTypePeriod
       if (period != currentPeriod) {
         if (!isValid(period)) {
-          val weakLabel = weakScopeSuspend() // DO NOT MERGE: the cache outlives the weak scope that filled it
+          val weakLabel = weakScopeSuspendFor(this) // DO NOT MERGE: the cache outlives the weak scope that filled it
           thisTypeCache = try ThisType(this) finally weakScopeResume(weakLabel)
           if (uniquesCensusOn) uniquesCensusAnchor(this, thisTypeCache, scala.reflect.internal.tpe.UniquesCensus.SrcCache)
         }

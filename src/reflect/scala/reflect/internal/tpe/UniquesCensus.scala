@@ -89,7 +89,10 @@ trait UniquesCensus { self: SymbolTable =>
     if (!weakScopesOn) null
     else {
       val f = scratch.frame
-      if (f.weakDepth == 0) f.weakLabel = label
+      if (f.weakDepth == 0) {
+        f.weakLabel = label
+        if (isClosedWeakLabel(label)) f.closedWatermark = getCurrentSymbolIdCount
+      }
       f.weakDepth += 1
       f
     }
@@ -99,6 +102,22 @@ trait UniquesCensus { self: SymbolTable =>
   final def weakScopeSuspend(): Int =
     if (!weakScopesOn) 0
     else { val f = scratch.frame; val l = f.weakLabel; f.weakLabel = 0; l }
+  /** DO NOT MERGE: suspend for a cache on `owner`, unless `owner` was made inside the current closed scope (its id is
+   *  past the scope's watermark): then the cache dies with it, and what fills it stays in the scope. */
+  final def weakScopeSuspendFor(owner: Symbol): Int =
+    if (!weakScopesOn) 0
+    else {
+      val f = scratch.frame
+      if (isClosedWeakLabel(f.weakLabel) && owner.id > f.closedWatermark) 0 else weakScopeSuspend()
+    }
+  /** DO NOT MERGE: as `weakScopeSuspendFor(Symbol)`, for a cache on a unique type: one a closed scope made is not the
+   *  table's own entry. */
+  final def weakScopeSuspendForType(owner: Type): Int =
+    if (!weakScopesOn) 0
+    else {
+      val f = scratch.frame
+      if (isClosedWeakLabel(f.weakLabel) && !isUniquesTableEntry(owner)) 0 else weakScopeSuspend()
+    }
   final def weakScopeResume(label: Int): Unit = if (label != 0) scratch.frame.weakLabel = label
 
   /** DO NOT MERGE: run in strong-scope candidate `label` (a census label): returns what `strongScopeExit` restores. */
@@ -207,7 +226,16 @@ trait UniquesCensus { self: SymbolTable =>
       if (censusSites) ref.site = siteId(stackKey(CreateSkip, 6))
       else if (censusProvenance > 0 && !isClosedWeakLabel(wl)) {
         provenanceCount += 1
-        if (provenanceCount % censusProvenance == 0) ref.site = siteId("prov:" + provenance())
+        if (provenanceCount % censusProvenance == 0) {
+          val kind = provenance()
+          ref.site = siteId("prov:" + kind)
+          if ((provenanceDead ne null) && kind == provenanceDead && deadStacks.size < 20000) deadStacks.put(ref, new Throwable().getStackTrace)
+          if ((provenanceDump ne null) && kind == provenanceDump && provenanceDumped < 6) {
+            provenanceDumped += 1
+            System.out.println(s"[uniques-provenance] $kind: $tp")
+            new Throwable().getStackTrace.iterator.map(_.toString).filterNot(s => s.startsWith("java.") || s.contains("UniquesCensus") || s.contains("ChunkedInterner") || s.contains("PerRunUniques") || s.contains("$anonfun") || s.startsWith("scala.collection.")).take(28).foreach(s => System.out.println("    " + s))
+          }
+        }
       }
       addedCls((cls * 2 + ctx) * 4 + sh) += 1
       addedPhase((ph * 2 + ctx) * 4 + sh) += 1
@@ -229,6 +257,7 @@ trait UniquesCensus { self: SymbolTable =>
         val fate = if ((c & Anchored) != 0) AnchoredCleared else ClearedFree
         count(c, fate)
         countSite(ref, fate)
+        deadFate(ref, fate)
       }
     }
 
@@ -245,6 +274,34 @@ trait UniquesCensus { self: SymbolTable =>
     }
 
     private[this] var provenanceCount = 0L
+    /** `-Dscala.uniques.census.provenance.dead=<kind>`: keep the creation stack of sampled types of that kind, and at
+     *  their fate, group the dead ones by where they were made (the frames outside type internals). */
+    private[this] val provenanceDead: String = System.getProperty("scala.uniques.census.provenance.dead")
+    private[this] val deadStacks = new java.util.IdentityHashMap[ChunkedInterner.Ref, Array[StackTraceElement]]
+    private[this] val deadSites = new mutable.HashMap[String, (Long, Long, Array[StackTraceElement])] // key -> (dead, alive, example)
+    private def deadFate(r: ChunkedInterner.Ref, fate: Int): Unit = if (provenanceDead ne null) {
+      val st = deadStacks.remove(r)
+      if (st ne null) {
+        val frames = st.iterator.map(_.toString).filterNot(s => s.startsWith("java.") || s.startsWith("scala.collection.") || s.contains("$anonfun") ||
+          s.startsWith("scala.reflect.internal.tpe.") || s.startsWith("scala.reflect.internal.Types") || s.startsWith("scala.reflect.internal.Symbols") ||
+          s.startsWith("scala.reflect.internal.SymbolTable") || s.startsWith("scala.reflect.internal.util.") || s.contains("UniquesCensus")).take(4).map(_.replaceAll("\\(.*\\)", "")).toList
+        val key = frames.mkString(" <- ")
+        val dead = fate == ClearedFree || fate == AnchoredCleared
+        val (d, a, ex) = deadSites.getOrElse(key, (0L, 0L, st))
+        deadSites(key) = (d + (if (dead) 1 else 0), a + (if (dead) 0 else 1), ex)
+      }
+    }
+    def reportDead(): Unit = if (provenanceDead ne null) {
+      val tot = deadSites.valuesIterator.map(_._1).sum
+      System.out.println(s"[uniques-dead] $provenanceDead: $tot sampled types dead by the end of the run, by where they were made:")
+      deadSites.toList.sortBy(-_._2._1).take(12).foreach { case (k, (d, a, ex)) =>
+        System.out.println(f"[uniques-dead] ${100.0 * d / tot}%5.1f%% dead ($d dead, $a alive)  $k")
+        ex.iterator.map(_.toString).filterNot(s => s.startsWith("java.") || s.contains("UniquesCensus") || s.contains("ChunkedInterner") || s.contains("PerRunUniques") || s.contains("$anonfun") || s.startsWith("scala.collection.")).take(40).foreach(s => System.out.println("[uniques-dead]        " + s))
+      }
+      deadSites.clear()
+    }
+    private[this] val provenanceDump: String = System.getProperty("scala.uniques.census.provenance.dump")
+    private[this] var provenanceDumped = 0
     /** The kind of operation on the stack, by the first of these found anywhere on it. */
     private def provenance(): String = if (provenanceInnermost) innermostProvenance() else {
       val st = new Throwable().getStackTrace
@@ -433,6 +490,7 @@ trait UniquesCensus { self: SymbolTable =>
             else AnchoredLater
           count(c, fate)
           countSite(r, fate)
+          deadFate(r, fate)
         }
       }
       table.listener = null
@@ -446,6 +504,7 @@ trait UniquesCensus { self: SymbolTable =>
 
     def report(): Unit = {
       finish()
+      reportDead()
       val counters = new mutable.TreeMap[String, Long]
       def add(k: String, n: Long): Unit = if (n != 0) counters(k) = counters.getOrElse(k, 0L) + n
       add("runs", runs)

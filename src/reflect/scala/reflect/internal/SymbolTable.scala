@@ -670,6 +670,9 @@ abstract class SymbolTable extends macros.Universe
     var weakDepth: Int = 0
     /** DO NOT MERGE: the strong-scope candidate (census label) the current operation runs in, 0 if none. */
     var strongLabel: Int = 0
+    /** DO NOT MERGE: the symbol id counter when the outermost closed scope of this frame was entered: a symbol with a
+     *  larger id was made inside it, and dies with it. */
+    var closedWatermark: Int = Int.MaxValue
     private[this] var _next: CompletionFrame = null
     /** The frame for a completion started from this one. Kept for reuse once allocated. */
     def next: CompletionFrame = {

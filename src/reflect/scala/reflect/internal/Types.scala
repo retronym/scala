@@ -1522,7 +1522,7 @@ trait Types
 
   // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineUnderlyingOfSingleType(tpe: SingleType): Unit = {
-    val weakLabel = weakScopeSuspend()
+    val weakLabel = weakScopeSuspendForType(tpe)
     try defineUnderlyingOfSingleType0(tpe) finally weakScopeResume(weakLabel)
   }
   private def defineUnderlyingOfSingleType0(tpe: SingleType): Unit = {
@@ -1750,7 +1750,7 @@ trait Types
 
   // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineBaseTypeSeqOfCompoundType(tpe: CompoundType): Unit = {
-    val weakLabel = weakScopeSuspend()
+    val weakLabel = weakScopeSuspendFor(tpe.typeSymbol)
     try defineBaseTypeSeqOfCompoundType0(tpe) finally weakScopeResume(weakLabel)
   }
   private def defineBaseTypeSeqOfCompoundType0(tpe: CompoundType): Unit = {
@@ -1816,7 +1816,7 @@ trait Types
 
   // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineBaseClassesOfCompoundType(tpe: CompoundType): Unit = {
-    val weakLabel = weakScopeSuspend()
+    val weakLabel = weakScopeSuspendFor(tpe.typeSymbol)
     try defineBaseClassesOfCompoundType0(tpe) finally weakScopeResume(weakLabel)
   }
   private def defineBaseClassesOfCompoundType0(tpe: CompoundType): Unit = {
@@ -1861,7 +1861,7 @@ trait Types
     final override def normalize: Type =
       if (phase.erasedTypes) normalizeImpl
       else {
-        if (normalized eq null) normalized = { val weakLabel = weakScopeSuspend(); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
+        if (normalized eq null) normalized = { val weakLabel = weakScopeSuspendForType(this); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
         normalized
       }
 
@@ -2158,7 +2158,7 @@ trait Types
     private[this] var narrowedCache: Type = _
     override def narrow = {
       if (narrowedCache eq null)
-        narrowedCache = { val weakLabel = weakScopeSuspend(); try singleType(pre, sym.sourceModule) finally weakScopeResume(weakLabel) } // DO NOT MERGE
+        narrowedCache = { val weakLabel = weakScopeSuspendForType(this); try singleType(pre, sym.sourceModule) finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
       narrowedCache
     }
@@ -2242,7 +2242,7 @@ trait Types
     final override protected def relativeInfo = {
       val symInfo = sym.info
       if ((relativeInfoCache eq null) || (relativeInfoCacheValidForSymInfo ne symInfo) || (relativeInfoCacheValidForPeriod != currentPeriod)) {
-        relativeInfoCache = { val weakLabel = weakScopeSuspend(); try super.relativeInfo finally weakScopeResume(weakLabel) } // DO NOT MERGE
+        relativeInfoCache = { val weakLabel = weakScopeSuspendForType(this); try super.relativeInfo finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
         if (this.isInstanceOf[AbstractTypeRef]) validateRelativeInfo()
 
@@ -2569,7 +2569,7 @@ trait Types
     // TODO: test case that is compiled in a specific order and in different runs
     private[Types] final def defineNormalized() : Unit =
       // In runtime reflection, this null check is part of double-checked locking
-      if (normalized eq null) normalized = { val weakLabel = weakScopeSuspend(); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
+      if (normalized eq null) normalized = { val weakLabel = weakScopeSuspendForType(this); try normalizeImpl finally weakScopeResume(weakLabel) } // DO NOT MERGE
 
     override def isGround = (
          sym.isPackageClass
@@ -2801,7 +2801,7 @@ trait Types
 
   // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineParentsOfTypeRef(tpe: TypeRef): Unit = {
-    val weakLabel = weakScopeSuspend()
+    val weakLabel = weakScopeSuspendForType(tpe)
     try defineParentsOfTypeRef0(tpe) finally weakScopeResume(weakLabel)
   }
   private def defineParentsOfTypeRef0(tpe: TypeRef): Unit = {
@@ -2818,7 +2818,7 @@ trait Types
 
   // DO NOT MERGE: a cache on a type outlives the weak scope that fills it
   protected def defineBaseTypeSeqOfTypeRef(tpe: TypeRef): Unit = {
-    val weakLabel = weakScopeSuspend()
+    val weakLabel = weakScopeSuspendForType(tpe)
     try defineBaseTypeSeqOfTypeRef0(tpe) finally weakScopeResume(weakLabel)
   }
   private def defineBaseTypeSeqOfTypeRef0(tpe: TypeRef): Unit = {
@@ -4409,7 +4409,11 @@ trait Types
   private[internal] abstract class Uniques {
     def unique[T <: Type](tp: T): T
     def size: Int
+    /** DO NOT MERGE: whether `tp` is the table's own entry. */
+    def isEntry(tp: Type): Boolean = true
   }
+  /** DO NOT MERGE: whether `tp` is the uniques table's own entry for it (not one made in a closed scope). */
+  final def isUniquesTableEntry(tp: Type): Boolean = uniques.isEntry(tp)
 
   /** Discarded at the start of each run, and weak within it. */
   private class PerRunUniques extends Uniques {
@@ -4418,6 +4422,11 @@ trait Types
     /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
     private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
     private[this] var uniqueRunId = NoRunId
+
+    override def isEntry(tp: Type): Boolean =
+      if (uniqueRunId != currentRunId) false
+      else if (chunkedUniques != null) chunkedUniques.find(tp.hashCode, tp) eq tp
+      else uniques.findEntry(tp) eq tp
 
     def size: Int =
       if (uniques != null) uniques.size
