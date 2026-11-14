@@ -4453,9 +4453,33 @@ trait Types
       val chunked = chunkedUniques
       if (chunked != null) {
         if (uncacheMask != 0 && ((uncacheMask >>> scratch.frame.weakLabel) & 1) != 0) uncachedUnique(chunked, tp)
-        else chunked.findOrAdd(tp)
+        else {
+          // DO NOT MERGE: a type built from a part a closed scope returned uninterned (e.g. a cache on that part,
+          // filled with the scope suspended) is derived from that scope: it is not interned either, or the table
+          // would hand the part out to anyone who builds an equal type
+          val closedPart = if (uncacheMask == 0) 0 else closedPartLabel(tp)
+          if (closedPart != 0) { tp.uniquesEscapeTag = closedPart.toByte; tp }
+          else {
+            val r = chunked.findOrAdd(tp)
+            if (uniquesEscapeCheckOn && !tpe.UniquesCensus.isClosedWeakLabel(scratch.frame.weakLabel)) uniquesEscapeOnReuse(r)
+            r
+          }
+        }
       }
       else (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    }
+
+    /** The closed weak scope that returned a direct part of `tp` uninterned, 0 if none did. */
+    private def closedPartLabel(tp: Type): Int = {
+      def l(p: Type): Int = { val x = p.uniquesEscapeTag.toInt; if (tpe.UniquesCensus.isClosedWeakLabel(x)) x else 0 }
+      def ls(ps: List[Type]): Int = { var r = 0; var xs = ps; while ((r == 0) && !xs.isEmpty) { r = l(xs.head); xs = xs.tail }; r }
+      tp match {
+        case tr: TypeRef      => val r = l(tr.pre); if (r != 0) r else ls(tr.args)
+        case st: SingleType   => l(st.pre)
+        case tb: TypeBounds   => val r = l(tb.lo); if (r != 0) r else l(tb.hi)
+        case SuperType(a, b)  => val r = l(a); if (r != 0) r else l(b)
+        case _                => 0
+      }
     }
 
     // DO NOT MERGE: -Dscala.uniques.uncache=<scopes>. In those weak scopes a type already interned is shared, but a

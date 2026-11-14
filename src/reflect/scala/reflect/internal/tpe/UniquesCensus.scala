@@ -466,6 +466,26 @@ trait UniquesCensus { self: SymbolTable =>
     if (escapeStacks && isClosedWeakLabel(tp.uniquesEscapeTag)) tp.uniquesEscapeStack = new Throwable(s"created in phase $phase")
   final def uniquesEscapeCreationStack(tp: Type): Throwable = tp.uniquesEscapeStack
 
+  private[this] var reuseStacks = 0
+  /** DO NOT MERGE: outside any closed scope, `unique` returned `r`: report (a few times) if it, or a direct part of it,
+   *  was returned uninterned by a closed scope, with where that instance was made. */
+  final def uniquesEscapeOnReuse(r: Type): Unit = if (reuseStacks < 4) {
+    var found: Type = null
+    if (isClosedWeakLabel(r.uniquesEscapeTag)) found = r
+    else foreachPart(r, p => if ((found eq null) && isClosedWeakLabel(p.uniquesEscapeTag)) found = p)
+    if (found ne null) {
+      reuseStacks += 1
+      val e = new Throwable(s"[uniques-escape] closed-scope type $found (made in ${WeakNames(found.uniquesEscapeTag)}) ${if (found eq r) "returned" else "a part of " + r + " returned"} by unique outside closed scopes (label ${WeakNames(scratch.frame.weakLabel)}, phase $phase)")
+      e.setStackTrace(e.getStackTrace.take(50))
+      e.printStackTrace(System.out)
+      val made = found.uniquesEscapeStack
+      if (made ne null) {
+        System.out.println(s"  ...that instance was ${made.getMessage}:")
+        made.getStackTrace.iterator.map(_.toString).filterNot(s => s.contains("$anonfun") || s.contains("Function") || s.startsWith("scala.collection.") || s.contains("UniquesCensus")).take(30).foreach(s => System.out.println("    " + s))
+      }
+    }
+  }
+
   private[this] var storeStacks = 0
   /** `info` is being stored as `sym`'s info: if a part of it was returned uninterned by a closed scope, print where
    *  (the first few times), to find the path by which it escapes. */
