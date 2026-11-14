@@ -254,6 +254,7 @@ trait TypeComparers {
       case LiteralType(c1)            => tp2 match { case LiteralType(c2)            => c1 == c2                                             ; case _ => false }
       case NullaryMethodType(res1)    => tp2 match { case NullaryMethodType(res2)    => res1 =:= res2                                        ; case _ => false }
       case TypeBounds(lo1, hi1)       => tp2 match { case TypeBounds(lo2, hi2)       => lo1 =:= lo2 && hi1 =:= hi2                           ; case _ => false }
+      case ErasedValueType(c1, u1)    => tp2 match { case ErasedValueType(c2, u2)    => (c1 eq c2) && u1 =:= u2                              ; case _ => false }
       case _                          => false
     }
 
