@@ -98,7 +98,9 @@ trait TypeComparers {
   )
 
   /** Do `tp1` and `tp2` denote equivalent types? */
-  def isSameType(tp1: Type, tp2: Type): Boolean = {
+  def isSameType(tp1: Type, tp2: Type): Boolean =
+    if (closedScopeEntered) isSameTypeImpl(tp1, tp2) else isSameTypeClosed(tp1, tp2)
+  private def isSameTypeClosed(tp1: Type, tp2: Type): Boolean = {
     val closed = enterClosedScope()
     try isSameTypeImpl(tp1, tp2) finally exitClosedScope(closed)
   }
@@ -263,7 +265,9 @@ trait TypeComparers {
     )
   }
 
-  def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = {
+  def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean =
+    if (closedScopeEntered) isSubTypeImpl(tp1, tp2, depth) else isSubTypeClosed(tp1, tp2, depth)
+  private def isSubTypeClosed(tp1: Type, tp2: Type, depth: Depth): Boolean = {
     val closed = enterClosedScope()
     try isSubTypeImpl(tp1, tp2, depth) finally exitClosedScope(closed)
   }

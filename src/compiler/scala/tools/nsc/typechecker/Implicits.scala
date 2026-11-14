@@ -771,7 +771,7 @@ trait Implicits extends splain.SplainData {
           case PolyType(tparams, restpe) =>
             // a closed scope, once the candidate's type is read: the instantiations tried are not kept
             val closed = enterClosedScope()
-            try try {
+            try {
               val allUndetparams = (undetParams ++ tparams).distinct
               val tvars = allUndetparams map freshVar
               val tp = ApproximateDependentMap(restpe)

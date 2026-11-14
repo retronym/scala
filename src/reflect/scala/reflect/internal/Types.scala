@@ -4387,68 +4387,77 @@ trait Types
   // erasure (`RefChecks.checkOverride`, `OverridingPairs`' match of a pair, `checkNoDoubleDefs`) and member lookup's
   // test of a new member (`FindMembers.isNewMember`). Off in runtime reflection and in a concurrent universe.
 
+  // The state is kept in the `Uniques` object, beside the fields every `unique` call reads anyway, so that the test in
+  // `unique` costs one load from a line it touches already: `closedState` is 0 outside closed scopes, else bit 1 is
+  // set inside one and bit 0 while it is suspended. Closed scopes are off in a universe used from several threads, so
+  // the table's object is this thread's. A completion saves and clears the state in its `CompletionFrame`.
+
+  /** Whether entering a closed scope does nothing: closed scopes are off, or one encloses the current operation. Then
+   *  an operation that would enter one runs as it is, without saving the state. */
+  final def closedScopeEntered: Boolean = {
+    val u = uniques
+    u.closedState >= 2 || !u.closedOn
+  }
   /** Enter a closed scope at the current completion level. Returns what `exitClosedScope` takes. */
-  final def enterClosedScope(): CompletionFrame = {
-    val s = scratch
-    if (!s.closedScopesOn) null
+  final def enterClosedScope(): Int = {
+    val u = uniques
+    val s = u.closedState
+    if (s >= 2 || !u.closedOn) -1
     else {
-      val f = s.frame
-      if (f.closedScopes == 0) f.closedWatermark = getCurrentSymbolIdCount
-      f.closedScopes += 1
-      f
+      u.closedWatermark = getCurrentSymbolIdCount
+      u.closedState = s | 2
+      s
     }
   }
-  final def exitClosedScope(f: CompletionFrame): Unit = if (f ne null) f.closedScopes -= 1
+  final def exitClosedScope(saved: Int): Unit = if (saved >= 0) uniques.closedState = saved
 
-  /** Leave the closed scopes of the current frame, for a computation whose result outlives them. Returns what
+  /** Leave the closed scope of the current frame, for a computation whose result outlives it. Returns what
    *  `closedScopeResume` takes. */
   final def closedScopeSuspend(): Int = {
-    val s = scratch
-    if (!s.closedScopesOn) 0
-    else {
-      val f = s.frame
-      val n = f.closedScopes
-      if (n == 0) 0
-      else {
-        val wasSuspended = f.closedScopesSuspended
-        f.closedScopes = 0
-        f.closedScopesSuspended = true
-        (n << 1) | (if (wasSuspended) 1 else 0)
-      }
-    }
+    val u = uniques
+    val s = u.closedState
+    if (s < 2) -1
+    else { u.closedState = 1; s }
   }
   /** As `closedScopeSuspend`, for a cache on `owner`, unless `owner` was made inside the current closed scope: then the
    *  cache dies with it, and what fills it stays in the scope. */
   final def closedScopeSuspendFor(owner: Symbol): Int = {
-    val s = scratch
-    if (!s.closedScopesOn) 0
-    else {
-      val f = s.frame
-      if (f.closedScopes > 0 && owner.id > f.closedWatermark) 0 else closedScopeSuspend()
-    }
+    val u = uniques
+    val s = u.closedState
+    if (s < 2 || owner.id > u.closedWatermark) -1
+    else { u.closedState = 1; s }
   }
   /** As `closedScopeSuspendFor(Symbol)`, for a cache on a unique type: one made in a closed scope is not the uniques
    *  table's own entry. */
   final def closedScopeSuspendFor(owner: Type): Int = {
-    val s = scratch
-    if (!s.closedScopesOn) 0
-    else {
-      val f = s.frame
-      if (f.closedScopes > 0 && !uniques.isEntry(owner)) 0 else closedScopeSuspend()
+    val u = uniques
+    val s = u.closedState
+    if (s < 2 || !u.isEntry(owner)) -1
+    else { u.closedState = 1; s }
+  }
+  final def closedScopeResume(saved: Int): Unit = if (saved >= 0) uniques.closedState = saved
+
+  /** Save and clear the closed-scope state in `f`, the frame a completion is started from: it runs outside them. */
+  private[internal] final def closedScopesEnterCompletion(f: CompletionFrame): Unit = {
+    val u = uniques
+    if (u.closedOn) {
+      f.closedStateSaved = u.closedState
+      f.closedWatermarkSaved = u.closedWatermark
+      u.closedState = 0
     }
   }
-  final def closedScopeResume(saved: Int): Unit =
-    if (saved != 0) {
-      val f = scratch.frame
-      f.closedScopes = saved >>> 1
-      f.closedScopesSuspended = (saved & 1) != 0
+  private[internal] final def closedScopesExitCompletion(f: CompletionFrame): Unit = {
+    val u = uniques
+    if (u.closedOn) {
+      u.closedState = f.closedStateSaved
+      u.closedWatermark = f.closedWatermarkSaved
     }
+  }
 
   /** `tp` with its unique parts interned, when inside a closed scope: for a type about to be stored where it outlives
    *  the scope (a `TypeVar`'s bound or instance). Only unique types are rebuilt, so no params are cloned. */
   final def internClosedScopeParts(tp: Type): Type = {
-    val s = scratch
-    if (!s.closedScopesOn || s.frame.closedScopes == 0) tp
+    if (uniques.closedState < 2) tp
     else {
       val closed = closedScopeSuspend()
       try internUniqueParts(tp) finally closedScopeResume(closed)
@@ -4467,6 +4476,13 @@ trait Types
     def size: Int
     /** Whether `tp` is this table's own entry for it. */
     def isEntry(tp: Type): Boolean = true
+    /** Whether operations use closed scopes in the current run (see `enterClosedScope`). */
+    final var closedOn: Boolean = false
+    /** 0 outside closed scopes; else bit 1 inside one, bit 0 while it is suspended (`closedScopeSuspend`). */
+    final var closedState: Int = 0
+    /** The symbol id counter when the current closed scope was entered: a symbol with a larger id was made inside it,
+     *  and dies with it. */
+    final var closedWatermark: Int = Int.MaxValue
   }
 
   /** Discarded at the start of each run, and weak within it. */
@@ -4482,7 +4498,7 @@ trait Types
       if (uniqueRunId != currentRunId) {
         uniques = util.WeakHashSet[Type](initialUniquesCapacity)
         val on = !isConcurrentUniverse && uniquesClosedScopes
-        scratch.closedScopesOn = on
+        closedOn = on
         closedCache = if (on) new Array[Type](ClosedCacheSize) else null
         // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
         // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
@@ -4491,18 +4507,16 @@ trait Types
         // as a) this is now a weak set, and b) it is discarded completely before the next run.
         uniqueRunId = currentRunId
       }
-      val s = scratch
-      if (!s.closedScopesOn) (uniques findEntryOrUpdate tp).asInstanceOf[T]
-      else {
-        val f = s.frame
-        if (f.closedScopes > 0) closedScopeUnique(tp)
-        // Filling a cache with the closed scopes suspended, a type built from a part one of them made is derived from
-        // that scope: entering it would let the table hand the part to anyone who builds an equal type. A part was
-        // made in a closed scope if the table's entry for it is not that instance.
-        else if (f.closedScopesSuspended && hasPartOutsideTable(tp)) tp
-        else (uniques findEntryOrUpdate tp).asInstanceOf[T]
-      }
+      if (closedState == 0) (uniques findEntryOrUpdate tp).asInstanceOf[T]
+      else closedUnique(tp)
     }
+    private def closedUnique[T <: Type](tp: T): T =
+      if (closedState >= 2) closedScopeUnique(tp)
+      // Filling a cache with the closed scope suspended, a type built from a part it made is derived from that scope:
+      // entering it would let the table hand the part to anyone who builds an equal type. A part was made in a closed
+      // scope if the table's entry for it is not that instance.
+      else if (hasPartOutsideTable(tp)) tp
+      else (uniques findEntryOrUpdate tp).asInstanceOf[T]
     private def outsideTable(p: Type): Boolean = p.isInstanceOf[UniqueType] && (uniques.findEntry(p) ne p)
     private def hasPartOutsideTable(tp: Type): Boolean = {
       def any(tps: List[Type]): Boolean = { var xs = tps; while (!xs.isEmpty) { if (outsideTable(xs.head)) return true; xs = xs.tail }; false }
@@ -4976,7 +4990,9 @@ trait Types
     corresponds3(tps1, tps2, tparams)(isSubArg)
   }
 
-  def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean = {
+  def specializesSym(tp: Type, sym: Symbol, depth: Depth): Boolean =
+    if (closedScopeEntered) specializesSymImpl(tp, sym, depth) else specializesSymClosed(tp, sym, depth)
+  private def specializesSymClosed(tp: Type, sym: Symbol, depth: Depth): Boolean = {
     val closed = enterClosedScope()
     try specializesSymImpl(tp, sym, depth) finally exitClosedScope(closed)
   }
@@ -5044,7 +5060,9 @@ trait Types
     }
 
   /** A function implementing `tp1` matches `tp2`. */
-  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
+  final def matchesType(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean =
+    if (closedScopeEntered) matchesTypeImpl(tp1, tp2, alwaysMatchSimple) else matchesTypeClosed(tp1, tp2, alwaysMatchSimple)
+  private def matchesTypeClosed(tp1: Type, tp2: Type, alwaysMatchSimple: Boolean): Boolean = {
     val closed = enterClosedScope()
     try matchesTypeImpl(tp1, tp2, alwaysMatchSimple) finally exitClosedScope(closed)
   }

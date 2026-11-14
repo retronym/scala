@@ -188,8 +188,10 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
     }
 
     // True unless the already-found member of type `memberType` matches the candidate symbol `other`.
-    protected def isNewMember(member: Symbol, other: Symbol): Boolean = {
-      // a closed scope: the member types compared, and this lookup's caches of them, die with the lookup
+    // A closed scope: the member types compared, and this lookup's caches of them, die with the lookup.
+    protected def isNewMember(member: Symbol, other: Symbol): Boolean =
+      if (closedScopeEntered) isNewMember0(member, other) else isNewMemberClosed(member, other)
+    private def isNewMemberClosed(member: Symbol, other: Symbol): Boolean = {
       val closed = enterClosedScope()
       try isNewMember0(member, other) finally exitClosedScope(closed)
     }

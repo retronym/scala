@@ -664,15 +664,10 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new CompletionFrame(this)
       _next
     }
-    /** How many closed scopes (see `Types.enterClosedScope`) enclose the current operation in this frame. A completion
-     *  started inside one runs in the next frame, outside them: what it computes outlives the scope. */
-    private[internal] var closedScopes: Int = 0
-    /** Whether the current operation runs with this frame's closed scopes suspended (`Types.closedScopeSuspend`):
-     *  it fills a cache that outlives them, and may build types from ones a closed scope made. */
-    private[internal] var closedScopesSuspended: Boolean = false
-    /** The symbol id counter when this frame's outermost closed scope was entered: a symbol with a larger id was made
-     *  inside it, and dies with it. */
-    private[internal] var closedWatermark: Int = Int.MaxValue
+    /** The closed-scope state (see `Types.enterClosedScope`) of this frame's operation that started a completion in
+     *  the next frame, which runs outside it: what the completion computes outlives the scope. */
+    private[internal] var closedStateSaved: Int = 0
+    private[internal] var closedWatermarkSaved: Int = Int.MaxValue
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
@@ -732,8 +727,6 @@ abstract class SymbolTable extends macros.Universe
    *  does not.
    */
   final class Scratch {
-    /** Whether this thread's operations use closed scopes in the current run (see `Types.enterClosedScope`). */
-    private[internal] var closedScopesOn: Boolean = false
     private[this] var _frame: CompletionFrame = new CompletionFrame(null)
     /** The frame of the completion in progress on this thread. */
     def frame: CompletionFrame = _frame
@@ -744,14 +737,14 @@ abstract class SymbolTable extends macros.Universe
       val f = _frame
       val next = f.next
       next.completing = completing
-      next.closedScopes = 0
-      next.closedScopesSuspended = false
+      closedScopesEnterCompletion(f)
       _frame = next
       f
     }
     /** End the completion that `enterNextFrame` started from `f`. */
     def exitFrame(f: CompletionFrame): Unit = {
       _frame = f
+      closedScopesExitCompletion(f)
       val next = f.next
       next.completing = null
       next.undoLog.clear() // what it logged can no longer be undone by the completion
