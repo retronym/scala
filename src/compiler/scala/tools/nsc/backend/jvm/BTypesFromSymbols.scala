@@ -453,7 +453,11 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
       } else Lazy.eager(buildNonEmptyNestedInfo(classSym))
     }
 
-    val inlineInfo = buildInlineInfo(classSym, classBType.internalName)
+    // Built from the class's members as of the phase it is forced in. For a class being compiled,
+    // that is when the backend emits it or the optimizer looks at it, after its compilation unit has
+    // been through `delambdafy`, which adds methods. Under `-Yunit-major-from`, a `ClassBType` may
+    // be created while emitting an earlier unit, before that.
+    val inlineInfo = Lazy.withLock(buildInlineInfo(classSym, classBType.internalName))
 
     Right(ClassInfo(superClass, interfaces, flags, nestedClasses, nestedInfo, inlineInfo))
   }
@@ -652,7 +656,7 @@ abstract class BTypesFromSymbols[G <: Global](val global: G) extends BTypes {
         flags = asm.Opcodes.ACC_SUPER | asm.Opcodes.ACC_PUBLIC | asm.Opcodes.ACC_FINAL,
         nestedClasses = nested,
         nestedInfo = Lazy.eagerNone,
-        inlineInfo = EmptyInlineInfo.copy(isEffectivelyFinal = true))) // no method inline infos needed, scala never invokes methods on the mirror class
+        lazyInlineInfo = Lazy.eager(EmptyInlineInfo.copy(isEffectivelyFinal = true)))) // no method inline infos needed, scala never invokes methods on the mirror class
     }
   }
 

@@ -198,8 +198,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     if (settings.verbose.value)
       Console.println("[consistency check at the beginning of phase " + phase + "]")
 
-    currentRun.units foreach (x => wrap(x)(check(x)))
+    currentRun.units foreach checkUnit
   }
+
+  def checkUnit(unit: CompilationUnit): Unit = wrap(unit)(check(unit))
 
   def runWithUnit[T](unit: CompilationUnit)(body: => Unit): Unit = {
     val unit0 = currentUnit

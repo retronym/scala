@@ -443,6 +443,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         applyPhase(units.next())
     }
 
+    /** Under `-Yunit-major-from`, these replace `run` for the phases of the unit-major segment.
+     *  `unitMajorStart` runs before the first unit enters this phase, `unitMajorEnd` after every
+     *  unit has left it (only if the run has no errors), `unitMajorClose` at the end of the segment
+     *  if `unitMajorStart` ran.
+     */
+    def unitMajorStart(): Unit = ()
+    def unitMajorEnd(): Unit = ()
+    def unitMajorClose(): Unit = ()
+
     def apply(unit: CompilationUnit): Unit
 
     // run only the phases needed
@@ -1552,6 +1561,88 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
     private final val GlobalPhaseName = "global (synthetic)"
     protected final val totalCompileTime = statistics.newTimer("#total compile time", GlobalPhaseName)
 
+    /** The first phase of the unit-major segment selected by `-Yunit-major-from`, or `NoPhase`. */
+    private lazy val unitMajorFrom: Phase = {
+      val name = settings.YunitMajorFrom.value
+      if (name.isEmpty) NoPhase
+      else {
+        val start = phaseNamed(name)
+        if (start == NoPhase || start.id > jvmPhase.id) {
+          globalError(s"${settings.YunitMajorFrom.name}: no phase named $name at or before ${jvmPhase.name}")
+          NoPhase
+        } else {
+          val pluginPhases = plugins.flatMap(_.components.map(_.phaseName)).toSet
+          start.iterator.takeWhile(_.id <= jvmPhase.id).find(p => pluginPhases(p.name)) match {
+            case Some(p) =>
+              runReporting.warning(NoPosition, s"${settings.YunitMajorFrom.name} ignored: plugin phase ${p.name} is in the segment", WarningCategory.Other, site = "")
+              NoPhase
+            case None => start
+          }
+        }
+      }
+    }
+
+    /** Run the phases from `start` through `jvm` unit-major: each unit passes through all of
+     *  them before the next unit starts, so its trees can be released once its classes are written.
+     *
+     *  If a unit reports an error in phase `p`, later units only run up to `p`, which keeps the
+     *  errors to those phase-major compilation would report in the common case of a single
+     *  failing phase. Units before the failing one have already been written.
+     */
+    private def runUnitMajor(start: Phase): Unit = {
+      val segment = start.iterator.takeWhile(_.id <= jvmPhase.id).map(_.asInstanceOf[GlobalPhase]).toArray
+      val n = segment.length
+      var started = 0
+      var limit = n
+      def enter(p: GlobalPhase): Unit = { globalPhase = p; phase = p }
+      try {
+        segment.foreach(echoPhaseSummary)
+        val us = units
+        while (us.hasNext && !reporter.cancelled) {
+          val unit = us.next()
+          var i = 0
+          while (i < limit && !reporter.cancelled) {
+            val p = segment(i)
+            enter(p)
+            if (i == started) { p.unitMajorStart(); started += 1 }
+            try p.applyPhase(unit)
+            catch { case _: InterruptedException => reporter.cancelled = true }
+            if (reporter.hasErrors) limit = math.min(limit, i + 1)
+            afterUnitMajorApply(p, unit)
+            i += 1
+          }
+          if (i == n && !reporter.hasErrors) releaseUnit(unit)
+        }
+        if (!reporter.hasErrors && !reporter.cancelled)
+          segment.foreach { p => enter(p); p.unitMajorEnd(); advancePhase() }
+      } finally {
+        segment.take(started).foreach { p => enter(p); p.unitMajorClose() }
+      }
+      globalPhase = segment.last.next
+      phase = globalPhase
+    }
+
+    /** The per-unit counterpart of the printing and checking that follows a phase-major phase. */
+    private def afterUnitMajorApply(p: GlobalPhase, unit: CompilationUnit): Unit = {
+      if (settings.Xprint.containsPhase(p) || settings.printLate.value && p.id == cleanupPhase.id) {
+        print(f"[[syntax trees at end of ${p.name}%25s]]")
+        exitingPhase(p)(nodePrinters.showUnit(unit))
+      }
+      if (!reporter.hasErrors && settings.Yvalidatepos.containsPhase(p))
+        validatePositions(unit.body)
+      if (!reporter.hasErrors && settings.check.containsPhase(p) && p.checkable && p.next.id <= cleanupPhase.id) {
+        val saved = phase
+        phase = p.next
+        try treeChecker.checkUnit(unit) finally phase = saved
+      }
+    }
+
+    /** Drop references from `unit` to trees that are no longer needed after the backend. */
+    private def releaseUnit(unit: CompilationUnit): Unit = {
+      unit.body = EmptyTree
+      unit.transformed.clear()
+    }
+
     def compileUnits(units: List[CompilationUnit], fromPhase: Phase = firstPhase): Unit =
       compileUnitsInternal(units, fromPhase)
     private def compileUnitsInternal(units: List[CompilationUnit], fromPhase: Phase): Unit = {
@@ -1564,56 +1655,59 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
 
       while (globalPhase.hasNext && !reporter.hasErrors) {
-        phase = globalPhase
-        val phaseTimer = if (timePhases) statistics.newSubTimer(s"  ${phase.name}", totalCompileTime) else null
-        val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
+        if (globalPhase eq unitMajorFrom) runUnitMajor(globalPhase)
+        else {
+          phase = globalPhase
+          val phaseTimer = if (timePhases) statistics.newSubTimer(s"  ${phase.name}", totalCompileTime) else null
+          val startPhase = if (timePhases) statistics.startTimer(phaseTimer) else null
 
-        val profileBefore=profiler.beforePhase(phase)
-        try globalPhase.run()
-        catch { case _: InterruptedException => reporter.cancelled = true }
-        finally if (timePhases) statistics.stopTimer(phaseTimer, startPhase) else ()
-        profiler.afterPhase(phase, profileBefore)
+          val profileBefore=profiler.beforePhase(phase)
+          try globalPhase.run()
+          catch { case _: InterruptedException => reporter.cancelled = true }
+          finally if (timePhases) statistics.stopTimer(phaseTimer, startPhase) else ()
+          profiler.afterPhase(phase, profileBefore)
 
-        if (timePhases)
-          informTime(globalPhase.description, phaseTimer.nanos)
+          if (timePhases)
+            informTime(globalPhase.description, phaseTimer.nanos)
 
-        if (reporter.hasErrors && !isPast(packageobjectsPhase))
-          packageobjectsPhase.run()
+          if (reporter.hasErrors && !isPast(packageobjectsPhase))
+            packageobjectsPhase.run()
 
-        // progress update
-        if (settings.Xprint.containsPhase(globalPhase) || settings.printLate.value && runIsAt(cleanupPhase)) {
-          // print trees
-          if (settings.Xshowtrees.value || settings.XshowtreesCompact.value || settings.XshowtreesStringified.value) nodePrinters.printAll()
-          else printAllUnits()
+          // progress update
+          if (settings.Xprint.containsPhase(globalPhase) || settings.printLate.value && runIsAt(cleanupPhase)) {
+            // print trees
+            if (settings.Xshowtrees.value || settings.XshowtreesCompact.value || settings.XshowtreesStringified.value) nodePrinters.printAll()
+            else printAllUnits()
+          }
+
+          // print the symbols presently attached to AST nodes
+          if (settings.Yshowsyms.value)
+            trackerFactory.snapshot()
+
+          // print members
+          if (settings.Yshow containsPhase globalPhase)
+            showMembers()
+
+          // browse trees with swing tree viewer
+          if (settings.browse.containsPhase(globalPhase))
+            treeBrowser.browse(phase.name, units)
+
+          if (!reporter.hasErrors && settings.Yvalidatepos.containsPhase(globalPhase))
+            currentRun.units.foreach(unit => validatePositions(unit.body))
+
+          // move the pointer
+          globalPhase = globalPhase.next
+
+          // run tree checkers
+          if (settings.check containsPhase globalPhase.prev)
+            runCheckers()
+
+          // output collected statistics
+          if (settings.YstatisticsEnabled.value && settings.Ystatistics.contains(phase.name))
+            printStatisticsFor(phase)
+
+          advancePhase()
         }
-
-        // print the symbols presently attached to AST nodes
-        if (settings.Yshowsyms.value)
-          trackerFactory.snapshot()
-
-        // print members
-        if (settings.Yshow containsPhase globalPhase)
-          showMembers()
-
-        // browse trees with swing tree viewer
-        if (settings.browse.containsPhase(globalPhase))
-          treeBrowser.browse(phase.name, units)
-
-        if (!reporter.hasErrors && settings.Yvalidatepos.containsPhase(globalPhase))
-          currentRun.units.foreach(unit => validatePositions(unit.body))
-
-        // move the pointer
-        globalPhase = globalPhase.next
-
-        // run tree checkers
-        if (settings.check containsPhase globalPhase.prev)
-          runCheckers()
-
-        // output collected statistics
-        if (settings.YstatisticsEnabled.value && settings.Ystatistics.contains(phase.name))
-          printStatisticsFor(phase)
-
-        advancePhase()
       }
       profiler.finished()
 
