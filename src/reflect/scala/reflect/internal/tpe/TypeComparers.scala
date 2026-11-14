@@ -99,6 +99,10 @@ trait TypeComparers {
 
   /** Do `tp1` and `tp2` denote equivalent types? */
   def isSameType(tp1: Type, tp2: Type): Boolean = {
+    val closed = enterClosedScope()
+    try isSameTypeImpl(tp1, tp2) finally exitClosedScope(closed)
+  }
+  private def isSameTypeImpl(tp1: Type, tp2: Type): Boolean = {
     val frame = scratch.frame
     val guard = frame.subTypes
     guard.enter()
@@ -260,6 +264,10 @@ trait TypeComparers {
   }
 
   def isSubType(tp1: Type, tp2: Type, depth: Depth = Depth.AnyDepth): Boolean = {
+    val closed = enterClosedScope()
+    try isSubTypeImpl(tp1, tp2, depth) finally exitClosedScope(closed)
+  }
+  private def isSubTypeImpl(tp1: Type, tp2: Type, depth: Depth): Boolean = {
     val frame = scratch.frame
     val guard = frame.subTypes
     guard.enter(tp1, tp2) && {

@@ -542,6 +542,10 @@ abstract class SymbolTable extends macros.Universe
    */
   def isConcurrentUniverse = false
 
+  /** Whether types made inside closed scopes are left out of the uniques table (`Types.enterClosedScope`). The
+   *  compiler reads `-Yuniques-closed-scopes`. */
+  protected[scala] def uniquesClosedScopes: Boolean = true
+
   override protected def synchronizeNames: Boolean = isConcurrentUniverse
 
   /** Prevents recursion on `K`s, starting only once `threshold` calls are in progress: guarding
@@ -660,6 +664,9 @@ abstract class SymbolTable extends macros.Universe
       if (_next eq null) _next = new CompletionFrame(this)
       _next
     }
+    /** How many closed scopes (see `Types.enterClosedScope`) enclose the current operation in this frame. A completion
+     *  started inside one runs in the next frame, outside them: what it computes outlives the scope. */
+    private[internal] var closedScopes: Int = 0
     private[this] var _completing: Symbol = null
     /** The symbol whose completion runs in this frame: `null` in the outermost frame, or for a load. */
     def completing: Symbol = _completing
@@ -729,6 +736,7 @@ abstract class SymbolTable extends macros.Universe
       val f = _frame
       val next = f.next
       next.completing = completing
+      next.closedScopes = 0
       _frame = next
       f
     }
