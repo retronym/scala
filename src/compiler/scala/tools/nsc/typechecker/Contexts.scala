@@ -1008,11 +1008,17 @@ trait Contexts { self: Analyzer with ImportTracking =>
 
     private var implicitsCache: List[ImplicitInfo] = null
     private var implicitsRunId = NoRunId
+    // `implicitss` of this context: the implicits of this context and its outers. Cached once every one of them has
+    // its own implicits cached for the run, as those no longer change.
+    private var implicitssCache: List[List[ImplicitInfo]] = null
+    private var implicitssRunId = NoRunId
 
     @tailrec
     final def resetCache(): Unit = {
       implicitsRunId = NoRunId
       implicitsCache = null
+      implicitssRunId = NoRunId
+      implicitssCache = null
       if (outer != null && outer != this) outer.resetCache()
     }
 
@@ -1083,16 +1089,24 @@ trait Contexts { self: Analyzer with ImportTracking =>
 
     private def implicitssImpl(skipClass: Symbol): List[List[ImplicitInfo]] = {
       if (this == NoContext) Nil
+      else if ((skipClass eq NoSymbol) && implicitssRunId == currentRunId) implicitssCache
       else if (owner == skipClass) outer.implicitssImpl(NoSymbol)
       else {
         def withOuter(is: List[ImplicitInfo]): List[List[ImplicitInfo]] = {
           // In a constructor super call, the members of the constructed class are not in scope. We
           // need to skip over the context of that class when searching for implicits. See PR #8441.
           val nextSkipClass = if (owner.isPrimaryConstructor && inSelfSuperCall) owner.owner else skipClass
-          is match {
-            case Nil => outer.implicitssImpl(nextSkipClass)
-            case _ => is :: outer.implicitssImpl(nextSkipClass)
+          val outers = outer.implicitssImpl(nextSkipClass)
+          val res = is match {
+            case Nil => outers
+            case _ => is :: outers
           }
+          if ((skipClass eq NoSymbol) && (nextSkipClass eq NoSymbol) && implicitsRunId == currentRunId &&
+              ((outer eq NoContext) || outer.implicitssRunId == currentRunId)) {
+            implicitssCache = res
+            implicitssRunId = currentRunId
+          }
+          res
         }
 
         val CycleMarker = NoRunId - 1
