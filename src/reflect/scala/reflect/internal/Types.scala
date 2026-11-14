@@ -5094,9 +5094,11 @@ trait Types
     var depthComputed = false
     var depth1: Depth = Depth.Zero
     def depth: Depth = { if (!depthComputed) { depth1 = depth0; depthComputed = true }; depth1 }
+    val lazyOn = lazyDepth
+    if (!lazyOn) depth
     // lub and glb of equal prefixes are that prefix, whatever the depth
     def mergePrefixes(pres: List[Type]): Type =
-      if (pres.forall(_ eq pres.head)) pres.head
+      if (lazyOn && pres.forall(_ eq pres.head)) pres.head
       else if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
     val (tps, tparams) = stripExistentialsAndTypeVars(tps0, expandLazyBaseType = true)
 

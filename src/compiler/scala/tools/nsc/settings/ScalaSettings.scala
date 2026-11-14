@@ -282,6 +282,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val Yhelp           = BooleanSetting    ("-Y", "Print a synopsis of private options.")
   val breakCycles     = BooleanSetting    ("-Ybreak-cycles", "Attempt to break cycles encountered during typing")
   val check           = PhasesSetting     ("-Ycheck", "Check the tree at the end of")
+  val YlazyDepth = BooleanSetting("-Ylazy-depth", "Compute lub depths for solving and merging only when needed", default = true).internalOnly()
   val Ycompacttrees   = BooleanSetting    ("-Ycompact-trees", "Use compact tree printer when displaying trees.")
   val noCompletion    = BooleanSetting    ("-Yno-completion", "Disable tab-completion in the REPL.")
   val termConflict    = ChoiceSetting     ("-Yresolve-term-conflict", "strategy", "Resolve term conflicts.", List("package", "object", "error"), "error")

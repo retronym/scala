@@ -214,6 +214,7 @@ private[internal] trait TypeConstraints {
     var depthComputed = false
     var depth0: Depth = Depth.AnyDepth
     def depth1: Depth = { if (!depthComputed) { depth0 = depth; depthComputed = true }; depth0 }
+    if (!lazyDepth) depth1
     assert(tvars.corresponds(tparams)((tvar, tparam) => tvar.origin.typeSymbol eq tparam), (tparams, tvars.map(_.origin.typeSymbol)))
     val areContravariant: BitSet = BitSet.empty
     foreachWithIndex(tparams)((tparam, ix) => if (getVariance(tparam).isContravariant) areContravariant += ix)

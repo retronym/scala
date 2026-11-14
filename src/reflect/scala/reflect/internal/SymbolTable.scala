@@ -541,6 +541,8 @@ abstract class SymbolTable extends macros.Universe
   /** Is this symbol table a part of a compiler universe?
    */
   def isCompilerUniverse = false
+  /** Whether solve and mergePrefixAndArgs compute their depth only when needed: the compiler reads `-Ylazy-depth`. */
+  protected[scala] def lazyDepth: Boolean = true
 
   /** Is this universe used from several threads at once? Runtime reflection is.
    *
