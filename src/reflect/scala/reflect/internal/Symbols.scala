@@ -1675,7 +1675,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       var result: List[Scope] = Nil
       var h = infos
       while ((h ne null) && phaseId(h.validFrom) > curPid) {
-        h.info match {
+        h.info.resultType match { // a PolyType for Array, whose type parameter survives erasure
           case ci: ClassInfoType if (ci.decls ne current) && !result.exists(_ eq ci.decls) => result ::= ci.decls
           case _ =>
         }
