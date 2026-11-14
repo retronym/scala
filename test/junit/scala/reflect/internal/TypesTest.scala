@@ -170,7 +170,7 @@ class TypesTest {
   @Test
   def testExistentialMerge(): Unit = {
     val ts = typeOf[Set[Any]] :: typeOf[Set[X] forSome { type X <: Y; type Y <: Int}] :: Nil
-    def merge(ts: List[Type]) = mergePrefixAndArgs(ts, Variance.Contravariant, lubDepth(ts))
+    def merge(ts: List[Type]) = mergePrefixAndArgs(ts, Variance.Contravariant, () => lubDepth(ts))
     val merged1 = merge(ts)
     val merged2 = merge(ts.reverse)
     assertTrue(ts.forall(_ <:< merged1)) // use to fail before fix to mergePrefixAndArgs for existentials

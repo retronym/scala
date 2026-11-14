@@ -147,7 +147,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
 
         if (isUniformFrontier) {
           val ts1 = elimSub(ts0, depth).map(elimHigherOrderTypeParam)
-          mergePrefixAndArgs(ts1, Covariant, depth) match {
+          mergePrefixAndArgs(ts1, Covariant, LazyDepth(depth)) match {
             case NoType =>
             case tp => pretypes += tp
           }
