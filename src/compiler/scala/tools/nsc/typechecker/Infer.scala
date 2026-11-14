@@ -313,7 +313,7 @@ trait Infer extends Checkable {
               case _: SuperType if !sym.isConstructor && !owntype.isInstanceOf[OverloadedType] =>
                 owntype.map((tp: Type) => if (tp eq pre) site.symbol.thisType else tp)
               case _ =>
-                if ((owntype eq ObjectTpe) && isJava) ObjectTpeJava
+                if (isJava && owntype == ObjectTpe) ObjectTpeJava
                 else owntype
             }
           tree.setSymbol(sym1).setType(owntype1)

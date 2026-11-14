@@ -4390,6 +4390,16 @@ trait Types
     else if (chunkedUniques != null) chunkedUniques.size
     else 0
 
+  /** Called by `perRunCaches.clearAll()` at the end of a run. Drops the table rather than
+   *  `clear()`ing it, which would allocate a new bucket array of the same size;
+   *  `unique` makes a new table on its next call.
+   */
+  private[internal] def dropUniques(): Unit = {
+    uniques = null
+    chunkedUniques = null
+    uniqueRunId = NoRunId
+  }
+
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
       val layout = uniquesLayout match {
@@ -4404,11 +4414,6 @@ trait Types
           uniques = util.WeakHashSet[Type](initialUniquesCapacity)
           chunkedUniques = null
       }
-      // JZ: We used to register this as a perRunCache so it would be cleared eagerly at
-      // the end of the compilation run. But, that facility didn't actually clear this map (scala/bug#8129)!
-      // When i fixed that bug, run/tpeCache-tyconCache.scala started failing. Why was that?
-      // I've removed the registration for now. I don't think it's particularly harmful anymore
-      // as a) this is now a weak set, and b) it is discarded completely before the next run.
       uniqueRunId = currentRunId
     }
     val chunked = chunkedUniques
