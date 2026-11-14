@@ -1567,8 +1567,10 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       if (name.isEmpty) NoPhase
       else {
         val start = phaseNamed(name)
-        if (start == NoPhase || start.id > jvmPhase.id) {
-          globalError(s"${settings.YunitMajorFrom.name}: no phase named $name at or before ${jvmPhase.name}")
+        if (start == NoPhase || jvmPhase == NoPhase || start.id > jvmPhase.id) {
+          // inert when -Ystop-after or -Ystop-before leave the phase or the backend out of this run
+          if (!phaseDescriptors.exists(_.phaseName == name) || start.id > jvmPhase.id && jvmPhase != NoPhase)
+            globalError(s"${settings.YunitMajorFrom.name}: $name is not a phase at or before jvm")
           NoPhase
         } else {
           val pluginPhases = plugins.flatMap(_.components.map(_.phaseName)).toSet
