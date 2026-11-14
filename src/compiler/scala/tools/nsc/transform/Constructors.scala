@@ -808,7 +808,9 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
       // Unlink all fields that can be dropped from class scope
       // Iterating on toList is cheaper (decls.filter does a toList anyway)
       val decls = clazz.info.decls
-      decls.toList.filter(omittableSym).foreach(decls.unlink)
+      val omitted = decls.toList.filter(omittableSym)
+      omitted.foreach(decls.unlink)
+      if (omitted.nonEmpty) clazz.laterDecls.foreach(later => omitted.foreach(later.unlink))
 
       // Eliminate all field/accessor definitions that can be dropped from template
       // We never eliminate delayed hooks or the constructors, so, only filter `defs`.
