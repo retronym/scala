@@ -10,7 +10,7 @@ Campaign `m4-forkvar-hash` found that `-XX:hashCode=3` cut the fork-to-fork CV o
   3. **The benchmark thread's hash seed** (mode C only). The default `hashCode=5` is a per-thread xorshift. Its seed is `os::random()` at `Thread` construction. That global generator is also advanced by every VM `Symbol` and thread created before the JMH worker, some of them on other threads. So the seed usually matches across forks, but not always.
 - **`hashCode=3` (A) is the least reproducible mode.** Every hash on any thread advances its counter, and JMH's threads hash concurrently with the benchmark. It still helped the campaign because between iteration boundaries the counter does run in lockstep, while the default mode (C) gives some forks a different seed.
 - **Ids instead of identity hashes (B) make types reproducible across forks and across runs.** This needs `Symbol.hashCode = id`, plus per-run ids for `TypeVar` and `Scope`, and `ClassReader` preloaded. On scalap: 42/42 runs identical across 3 forks, and every run identical to the previous one. With `-Ystop-before:jvm` no preload is needed: 47/47.
-- **Seed study (`-Ystop-after:pickler`, 22 seeds).** Without `-Xbatch`, JIT variance swamps the layout (seed explains nothing, p = 0.39). With `-Xbatch`, forks of one seed agree to about 0.1% in instructions/op and exactly in allocation, and typical layouts differ by an sd of 0.37% (p = 0.003 by permutation). One seed in 22 cost 11.7% more, because its hash layout changed which path was hot when C2 compiled `compoundBaseTypeSeq` and blew that compile's inlining budget, not because of hash-table cost. A/B campaigns should pair variants over several seeds.
+- **Seed study (`-Ystop-after:pickler`, 22 seeds).** Without `-Xbatch`, JIT variance swamps the layout (seed explains nothing, p = 0.39). With `-Xbatch`, forks of one seed agree to about 0.1% in instructions/op and exactly in allocation, and typical layouts differ by an sd of 0.37% (p = 0.003 by permutation). One seed in 22 cost 11.7% more, because its hash layout changed which path was hot when C2 compiled `compoundBaseTypeSeq` and blew that compile's inlining budget, not because of hash-table cost. A/B campaigns should pair variants over several seeds. Refactoring `compoundBaseTypeSeq` so that it no longer relies on escape analysis removes that outlier, allocates 144 MB/op (3.6%) less at every seed and takes about 0.85% fewer instructions.
 - **The `scala` corpus has one more source:** the pattern matcher creates a varying number of symbols (±60 per run, run to run and fork to fork, in every mode including B2 with tree ids). From `uncurry` on, the number of unique types then varies by ±20. Typed trees after the typer are bit-identical in B2; the patmat cause is narrowed to its identity-keyed hash maps but not yet pinned down.
 
 ## Probe
@@ -121,7 +121,26 @@ How large is the layout effect next to fork-to-fork noise? Three local campaigns
 - `-Xbatch` together with a fixed hash seed makes a fork nearly a deterministic function of the build. Forks of one seed agree to about 0.1% in instructions/op, and allocation agrees exactly. That is the cheapest way found so far to get a precise number, and the earlier `m4-forkvar-gc-confirm` campaign agrees (full pipeline, 6 forks: instructions CV 0.69% at baseline, 0.39% with `-Xbatch` and a fixed young generation).
 - Precise is not the same as accurate. The layout is a bias with an sd of about 0.37% across typical seeds, so a single-seed A/B can show about ±0.5% of difference that comes from the layout alone. Occasionally a layout also flips a C2 inlining decision and costs 12%. A change that adds one early symbol re-deals every later hash, so it can move a variant from one layout to another without any real effect.
 - So run each variant over several seeds, paired by seed: the forks of a seed are reproducible, so one fork per (variant, seed) pair is enough. Report the median of the paired differences and its spread across seeds, and look separately at any seed where the variants disagree sharply. About 8–10 seeds would bound a typical layout's bias to about 0.1–0.15%. An outlier like seed 20 shows up as one discordant pair, not as a shifted mean.
-- Some of the variance that looks like hashing is the JIT. The mechanism at seed 20 (a hot, large method compiled once, early, with a profile that fills its inlining budget with a cold-later path) is a code-shape problem in `compoundBaseTypeSeq` and `tpe_*`. Making `compoundBaseTypeSeq` smaller, or keeping its cache-refresh path out of line, should make it robust to both seed and timing. This is a candidate perf fix in its own right, and it should shrink the no-`-Xbatch` allocation bimodality too, if the hypothesis above holds.
+- Some of the variance that looks like hashing is the JIT. The mechanism at seed 20 (a hot, large method compiled once, early, with a profile that fills its inlining budget with a cold-later path) is a code-shape problem in `compoundBaseTypeSeq` and `tpe_*`. Making `compoundBaseTypeSeq` smaller, or keeping its cache-refresh path out of line, should make it robust to both seed and timing. This is a perf fix in its own right (below), and it should shrink the no-`-Xbatch` allocation bimodality too, if the hypothesis above holds.
+
+### Refactoring `compoundBaseTypeSeq`
+
+`compoundBaseTypeSeq` now builds its result without anything that only C2's escape analysis makes cheap. The merge loop moves to its own method, `mergeBaseTypeSeqs`, so that `tpe_*`'s cache refresh cannot use up the loop's inlining budget. It fills an array presized from the parents' base type sequences, not a `ListBuffer`, and keeps the minimal types in a local `var`, not a closure over a boxed one. It loops over lists with `while`, not `foreach`, and tests for `RefinedType` with a type test, not an extractor.
+
+Campaigns `m5-bts-pickler-xbatch-base` and `m5-bts-pickler-xbatch-new` compare the two builds on the same day, seeds 7–22, one fork per (build, seed), with the setup of the seed study (`tools/hashprobe/abseeds.py`).
+
+| | base | refactored |
+|---|---|---|
+| seed 20, instructions/op | 98.11G | 88.72G (−9.6%) |
+| seed 20, alloc/op | 4103.6 MB | 3859.6 MB |
+| other seeds, alloc/op | 4001–4004 MB | 3857–3860 MB (−144.2 MB in every seed) |
+| median paired change in instructions/op | | −0.85% (sign-flip p = 0.0003; 15 of 16 seeds lower) |
+| median paired change in cycles/op | | −0.46% (p = 0.10) |
+| seed medians of instructions/op: sd, range | 2.63%, 11.4% | 0.38%, 1.6% |
+
+The seed 20 outlier is gone, and the spread across seeds is now the typical layouts' spread alone. Allocation falls by 144 MB/op (3.6%) in every seed, not only seed 20, so even the base build's good compiles did not scalar-replace all of the buffer, iterator and closures. Instructions fall by about 0.85% on typical seeds. Cycles fall less, and that is not significant over 16 pairs. A comparison of the refactored build against the previous day's base campaign suggested −5% cycles, which was drift between days: compare cycles within one day only.
+
+Still to check: whether the two allocation modes without `-Xbatch` collapse into one with this build, which would confirm the hypothesis above, and the effect on a full compile.
 
 ## Related work
 
