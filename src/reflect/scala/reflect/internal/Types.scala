@@ -3462,7 +3462,8 @@ trait Types
 
     // We don't want case class equality/hashing as TypeVar-s are mutable,
     // and TypeRefs based on them get wrongly `uniqued` otherwise. See scala/bug#7226.
-    override def hashCode(): Int = System.identityHashCode(this)
+    private[this] val probeId: Int = if (util.HashProbe.STABLE_HASH) nextTypeVarProbeId() else 0
+    override def hashCode(): Int = if (util.HashProbe.STABLE_HASH) probeId else System.identityHashCode(this)
     override def equals(other: Any): Boolean = this eq other.asInstanceOf[AnyRef]
 
     def untouchable = false   // by other typevars
@@ -4384,6 +4385,12 @@ trait Types
   /** Used in place of `uniques` when the layout is "chunked" or "chunked-weak"; exactly one of the two is set during a run. */
   private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
   private[this] var uniqueRunId = NoRunId
+
+  private[this] var typeVarProbeIds = 0
+  private[internal] final def nextTypeVarProbeId(): Int = { typeVarProbeIds += 1; typeVarProbeIds * 0x9E3779B9 }
+
+  /** The chunked uniques table, if this run uses one; for the hash-reproducibility probe. */
+  final def chunkedUniquesForProbe: util.ChunkedInterner[Type] = chunkedUniques
 
   final def howManyUniqueTypes: Int =
     if (uniques != null) uniques.size

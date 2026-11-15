@@ -75,7 +75,7 @@ trait TreeAndTypeAnalysis extends Debugging {
     case Apply(fun, args)     => args.foldLeft(equivalenceHash(fun) + 4)((h, a) => h * 31 + equivalenceHash(a))
     case TypeApply(fun, args) => args.foldLeft(equivalenceHash(fun) + 5)((h, a) => h * 31 + equivalenceHash(a))
     case TypeTree()           => 6
-    case _                    => System.identityHashCode(t) // not equivalent to any tree
+    case _                    => t.hashCode // not equivalent to any tree (an identity hash, unless -Dscalac.treeHashById)
   }
 
   /** Whether `equivalentTree(t, u)` may hold for some tree `u` */

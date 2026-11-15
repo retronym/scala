@@ -38,6 +38,7 @@ abstract class CodeGen[G <: Global](val global: G) extends PerRunInit {
       val position = sym.pos
       val fullSymbolName = sym.javaClassName
       val mainClassNode = genClass(cd, unit)
+      HashDump.mark("genClass:" + fullSymbolName)
       generatedClasses += GeneratedClass(mainClassNode, fullSymbolName, position, isArtifact = false)
       if (bTypes.isTopLevelModuleClass(sym)) {
         if (sym.companionClass == NoSymbol) {

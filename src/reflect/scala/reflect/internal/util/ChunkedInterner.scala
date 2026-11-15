@@ -187,6 +187,19 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
   /** The number of elements, counting ones collected since the last lookup. */
   def size: Int = live
 
+  /** Every occupied slot, in slot order: `f(slot, home slot, hash, element or null if collected)`. For diagnostics. */
+  def foreachSlot(f: (Int, Int, Int, A) => Unit): Unit = {
+    var i = 0
+    while (i <= mask) {
+      val e = elems(i >>> ChunkBits)(i & ChunkMask)
+      if (e != null && (e ne Tombstone)) {
+        val h = hashes(i >>> ChunkBits)(i & ChunkMask)
+        f(i, spread(h) & mask, h, deref(e))
+      }
+      i += 1
+    }
+  }
+
   /** The number of chunks per array, for testing. */
   private[util] def chunkCount: Int = elems.length
 }
