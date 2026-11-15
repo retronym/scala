@@ -4387,7 +4387,7 @@ trait Types
   private[this] var uniqueRunId = NoRunId
 
   private[this] var typeVarProbeIds = 0
-  private[internal] final def nextTypeVarProbeId(): Int = { typeVarProbeIds += 1; typeVarProbeIds * 0x9E3779B9 }
+  private[internal] final def nextTypeVarProbeId(): Int = { typeVarProbeIds += 1; util.HashProbe.idHash(typeVarProbeIds * 0x9E3779B9, 3) }
 
   /** The chunked uniques table, if this run uses one; for the hash-reproducibility probe. */
   final def chunkedUniquesForProbe: util.ChunkedInterner[Type] = chunkedUniques

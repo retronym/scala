@@ -99,7 +99,7 @@ trait Trees extends api.Trees {
       this
     }
 
-    override def hashCode(): Int = if (util.HashProbe.TREE_HASH_BY_ID) id else System.identityHashCode(this)
+    override def hashCode(): Int = if (util.HashProbe.TREE_HASH_BY_ID) util.HashProbe.idHash(id, 2) else System.identityHashCode(this)
     override def equals(that: Any) = this eq that.asInstanceOf[AnyRef]
 
     override def duplicate: this.type =

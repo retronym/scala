@@ -274,7 +274,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     final val id = nextId() // identity displayed when -uniqid
 
     override final def hashCode(): Int =
-      if (util.HashProbe.SYMBOL_HASH_BY_ID) id else System.identityHashCode(this)
+      if (util.HashProbe.SYMBOL_HASH_BY_ID) util.HashProbe.idHash(id, 1) else System.identityHashCode(this)
     //assert(id != 3390, initName)
 
     private[this] var _validTo: Period = NoPeriod
