@@ -1,0 +1,41 @@
+{
+  "name": "m5-hashseed-pickler-xbatch",
+  "benchmark": "CompileBenchmark",
+  "profile": "xctrace:ipc",
+  "jvm": "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+  "jvmArgs": "-Xms8G -Xmx8G -Xss2M -Xmn3g -XX:-G1UseAdaptiveIHOP -Dscala.uniques.layout=chunked -Dscalac.hashdump=/Users/jzaugg-virtus/code/retronym/jvm-perf-lab/labs/scala2/out/hashdump/m5-hashseed-pickler-xbatch -Dscalac.hashdump.lite=true -Dcompilerlab.corpora=/Users/jzaugg-virtus/code/scala/compiler-benchmark/corpus -Xbatch",
+  "variants": {
+    "identity": "",
+    "hc3": "-XX:+UnlockExperimentalVMOptions -XX:hashCode=3",
+    "seed1": "-Dscalac.hashSeed=1",
+    "seed2": "-Dscalac.hashSeed=2",
+    "seed3": "-Dscalac.hashSeed=3",
+    "seed4": "-Dscalac.hashSeed=4",
+    "seed5": "-Dscalac.hashSeed=5",
+    "seed6": "-Dscalac.hashSeed=6"
+  },
+  "variantDescriptions": {
+    "identity": "retronym/scala#248 probe build (perf-integration, `SCALA_RELEASE_OPT=1`), default identity hashes for `Symbol`, `Tree`, `TypeVar`, `Scope`",
+    "hc3": "identity with `-XX:hashCode=3` (global counter), as in `m4-forkvar-hash`",
+    "seed1": "`-Dscalac.hashSeed=1`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment",
+    "seed2": "`-Dscalac.hashSeed=2`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment",
+    "seed3": "`-Dscalac.hashSeed=3`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment",
+    "seed4": "`-Dscalac.hashSeed=4`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment",
+    "seed5": "`-Dscalac.hashSeed=5`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment",
+    "seed6": "`-Dscalac.hashSeed=6`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; every fork of a seed has the same hash assignment"
+  },
+  "loadgate": {
+    "maxCores": 3.0,
+    "quietSecs": 30
+  },
+  "gcLog": true,
+  "rounds": 4,
+  "corpora": {
+    "scala": "-f 1 -bm ss -wi 10 -i 6 -p jdkHome=25.0.4-tem -p scalacOptions=-Ystop-after:pickler"
+  },
+  "description": [
+    "As `m5-hashseed-pickler`, with `-Xbatch` added to every fork: compilation blocks the requesting thread, so JIT decisions follow the program's own progress rather than the compiler threads' timing. `m5-hashseed-pickler` showed that without it, forks of one seed, with an identical hash assignment, still differ by 0.4\u20131.2% in instructions/op and allocation is bimodal (about 4.02 or 4.12 GB/op): JIT variance, not hash layout, dominates. With the JIT made (nearly) deterministic, does the seed then explain the remaining spread? 10 warmup ops for the slower `-Xbatch` warmup.",
+    "With `-Dscalac.hashSeed=n` every fork of a seed sees the same hash assignment, so the spread within a seed is the noise left after fixing hashes, and the spread between seed means is the layout effect. `identity` draws a layout per fork from the JVM's per-thread hash stream; `hc3` from the global counter.",
+    "`-Dscalac.hashdump.lite=true` writes, per op, the identity-hash fingerprints and the uniques table's layout digest and probe displacement to `out/hashdump/m5-hashseed-pickler/<pid>/`, so forks can be grouped by the hash stream they saw."
+  ]
+}

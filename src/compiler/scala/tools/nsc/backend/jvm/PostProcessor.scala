@@ -62,16 +62,22 @@ abstract class PostProcessor extends PerRunInit {
     val classNode = clazz.classNode
     val internalName = classNode.name
     val bytes = try {
+      HashDump.mark("pp:" + internalName)
       if (!clazz.isArtifact) {
         localOptimizations(classNode)
+        HashDump.mark("pp-opt")
         val indyLambdaBodyMethods = backendUtils.indyLambdaBodyMethods(internalName)
         if (indyLambdaBodyMethods.nonEmpty)
           backendUtils.addLambdaDeserialize(classNode, indyLambdaBodyMethods)
       }
 
       warnCaseInsensitiveOverwrite(clazz)
+      HashDump.mark("pp-warn")
       setInnerClasses(classNode)
-      serializeClass(classNode)
+      HashDump.mark("pp-inner")
+      val res = serializeClass(classNode)
+      HashDump.mark("pp-ser")
+      res
     } catch {
       case ex: InterruptedException => throw ex
       case ex: Throwable =>
@@ -87,6 +93,7 @@ abstract class PostProcessor extends PerRunInit {
         AsmUtils.traceClass(bytes)
 
       classfileWriter.writeClass(internalName, bytes, sourceFile)
+      HashDump.mark("pp-write")
     }
   }
 

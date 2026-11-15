@@ -23,6 +23,7 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
 
   // Reset `scopeCount` per every run
   private[scala] var scopeCount = 0
+  private[this] var scopeProbeIds = 0
   perRunCaches.recordCache {
     val clearCount: Clearable = () => {scopeCount = 0}
     clearCount
@@ -83,6 +84,8 @@ trait Scopes extends api.Scopes { self: SymbolTable =>
   class Scope protected[Scopes]() extends AbstractIterable[Symbol] with ScopeApi with MemberScopeApi {
 
     scopeCount += 1
+    private[this] val probeId: Int = if (util.HashProbe.STABLE_HASH) { scopeProbeIds += 1; util.HashProbe.idHash(scopeProbeIds * 0x9E3779B9, 4) } else 0
+    override def hashCode(): Int = if (util.HashProbe.STABLE_HASH) probeId else System.identityHashCode(this)
     private[scala] var elems: ScopeEntry = _
 
     /** The number of times this scope is nested in another

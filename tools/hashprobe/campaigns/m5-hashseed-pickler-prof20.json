@@ -1,0 +1,29 @@
+{
+  "name": "m5-hashseed-pickler-prof20",
+  "benchmark": "CompileBenchmark",
+  "profile": "async:instructions@2500000+cycles@500000,alloc",
+  "jvm": "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+  "jvmArgs": "-Xms8G -Xmx8G -Xss2M -Xmn3g -XX:-G1UseAdaptiveIHOP -Dscala.uniques.layout=chunked -Dscalac.hashdump=/Users/jzaugg-virtus/code/retronym/jvm-perf-lab/labs/scala2/out/hashdump/m5-hashseed-pickler-prof20 -Dscalac.hashdump.lite=true -Dcompilerlab.corpora=/Users/jzaugg-virtus/code/scala/compiler-benchmark/corpus -Xbatch",
+  "variants": {
+    "seed10": "-Dscalac.hashSeed=10",
+    "seed20": "-Dscalac.hashSeed=20"
+  },
+  "variantDescriptions": {
+    "seed10": "`-Dscalac.hashSeed=10`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; a typical layout (88.89G instructions/op, 2 forks within 0.07%)",
+    "seed20": "`-Dscalac.hashSeed=20`: symbol, tree, `TypeVar` and `Scope` hashes from per-run ids scrambled with the seed; the pathological layout (99.17G instructions/op, +11.6%, and 4103.6 vs 4002 MB/op allocated, in both forks)"
+  },
+  "loadgate": {
+    "maxCores": 3.0,
+    "quietSecs": 30
+  },
+  "gcLog": true,
+  "rounds": 2,
+  "corpora": {
+    "scala": "-f 1 -bm ss -wi 10 -i 3 -p jdkHome=25.0.4-tem -p scalacOptions=-Ystop-after:pickler"
+  },
+  "description": [
+    "Why does one hash layout cost 12% more? In `m5-hashseed-pickler-xbatch-many` (`-Xbatch`, `-Ystop-after:pickler`, strong chunked uniques, fixed young gen), 21 of 22 seeds fell within 88.0\u201389.7G instructions/op, but seed 20 took 99.17G and allocated 100 MB/op more, in both forks, with identical compiler output (same symbol and unique-type counts) and an unremarkable uniques table (max probe 38). Profiles of instructions, cycles (kperf) and allocation, and a JIT recording, for seed 20 against the typical seed 10, 2 forks each, to find the hash-sensitive structure."
+  ],
+  "kperf": "/tmp/asprof-kperf.sock",
+  "jitRecording": true
+}

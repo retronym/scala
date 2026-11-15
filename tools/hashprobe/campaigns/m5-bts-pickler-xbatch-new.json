@@ -1,0 +1,55 @@
+{
+  "name": "m5-bts-pickler-xbatch-new",
+  "benchmark": "CompileBenchmark",
+  "profile": "xctrace:ipc",
+  "jvm": "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+  "jvmArgs": "-Xms8G -Xmx8G -Xss2M -Xmn3g -XX:-G1UseAdaptiveIHOP -Dscala.uniques.layout=chunked -Dscalac.hashdump=/Users/jzaugg-virtus/code/retronym/jvm-perf-lab/labs/scala2/out/hashdump/m5-bts-pickler-xbatch-new -Dscalac.hashdump.lite=true -Dcompilerlab.corpora=/Users/jzaugg-virtus/code/scala/compiler-benchmark/corpus -Xbatch",
+  "variants": {
+    "seed7": "-Dscalac.hashSeed=7",
+    "seed8": "-Dscalac.hashSeed=8",
+    "seed9": "-Dscalac.hashSeed=9",
+    "seed10": "-Dscalac.hashSeed=10",
+    "seed11": "-Dscalac.hashSeed=11",
+    "seed12": "-Dscalac.hashSeed=12",
+    "seed13": "-Dscalac.hashSeed=13",
+    "seed14": "-Dscalac.hashSeed=14",
+    "seed15": "-Dscalac.hashSeed=15",
+    "seed16": "-Dscalac.hashSeed=16",
+    "seed17": "-Dscalac.hashSeed=17",
+    "seed18": "-Dscalac.hashSeed=18",
+    "seed19": "-Dscalac.hashSeed=19",
+    "seed20": "-Dscalac.hashSeed=20",
+    "seed21": "-Dscalac.hashSeed=21",
+    "seed22": "-Dscalac.hashSeed=22"
+  },
+  "variantDescriptions": {
+    "seed7": "`-Dscalac.hashSeed=7`",
+    "seed8": "`-Dscalac.hashSeed=8`",
+    "seed9": "`-Dscalac.hashSeed=9`",
+    "seed10": "`-Dscalac.hashSeed=10`",
+    "seed11": "`-Dscalac.hashSeed=11`",
+    "seed12": "`-Dscalac.hashSeed=12`",
+    "seed13": "`-Dscalac.hashSeed=13`",
+    "seed14": "`-Dscalac.hashSeed=14`",
+    "seed15": "`-Dscalac.hashSeed=15`",
+    "seed16": "`-Dscalac.hashSeed=16`",
+    "seed17": "`-Dscalac.hashSeed=17`",
+    "seed18": "`-Dscalac.hashSeed=18`",
+    "seed19": "`-Dscalac.hashSeed=19`",
+    "seed20": "`-Dscalac.hashSeed=20`",
+    "seed21": "`-Dscalac.hashSeed=21`",
+    "seed22": "`-Dscalac.hashSeed=22`"
+  },
+  "loadgate": {
+    "maxCores": 3.0,
+    "quietSecs": 30
+  },
+  "gcLog": true,
+  "rounds": 1,
+  "corpora": {
+    "scala": "-f 1 -bm ss -wi 10 -i 6 -p jdkHome=25.0.4-tem -p scalacOptions=-Ystop-after:pickler"
+  },
+  "description": [
+    "Does refactoring `BaseTypeSeqs.compoundBaseTypeSeq` remove the seed 20 outlier and its sensitivity to C2's inlining budget? Build: `compoundBaseTypeSeq` refactored: the merge loop split into `mergeBaseTypeSeqs`, an array presized to the parents' base type sequences, no closures, iterators, extractors or boxed vars. Seeds 7\u201322, one fork each, `-Xbatch`, strong chunked uniques, fixed young gen, `-Ystop-after:pickler`; the other build is campaign `m5-bts-pickler-xbatch-base`, run with the same seeds. In `m5-hashseed-pickler-prof20`, seed 20's final C2 compile of `compoundBaseTypeSeq` refused its callees with `size > DesiredMethodLimit` after inlining `tpe_*`'s cache refresh, and lost scalar replacement of its `ListBuffer`, iterator and lambdas: +11.7% instructions/op and +101 MB/op."
+  ]
+}

@@ -1563,6 +1563,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
 
       val timePhases = settings.areStatisticsEnabled
       val startTotal = if (timePhases) statistics.startTimer(totalCompileTime) else null
+      val hashDump = if (HashDump.dir != null) new HashDump(Global.this) else null
 
       while (globalPhase.hasNext && !reporter.hasErrors) {
         phase = globalPhase
@@ -1574,6 +1575,11 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         catch { case _: InterruptedException => reporter.cancelled = true }
         finally if (timePhases) statistics.stopTimer(phaseTimer, startPhase) else ()
         profiler.afterPhase(phase, profileBefore)
+        if (hashDump != null) {
+          hashDump.afterPhase(phase.name)
+          hashDump.phaseSize(phase.name)
+          if (phase eq typerPhase) hashDump.afterTyper()
+        }
 
         if (timePhases)
           informTime(globalPhase.description, phaseTimer.nanos)
@@ -1649,6 +1655,8 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         for (q <- statistics.allQuantities if q.phases == List(GlobalPhaseName))
           inform(q.line)
       }
+
+      if (hashDump != null) hashDump.finish()
 
       // Clear any sets or maps created via perRunCaches.
       perRunCaches.clearAll()

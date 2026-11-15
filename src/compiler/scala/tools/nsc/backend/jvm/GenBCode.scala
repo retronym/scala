@@ -71,17 +71,23 @@ abstract class GenBCode extends SubComponent {
   class BCodePhase(prev: Phase) extends StdPhase(prev) {
     override def description = "Generate bytecode from ASTs using the ASM library"
 
-    def apply(unit: CompilationUnit): Unit = codeGen.genUnit(unit)
+    def apply(unit: CompilationUnit): Unit = {
+      codeGen.genUnit(unit)
+      HashDump.mark("jvm:" + unit.source.file.name)
+    }
 
     override def run(): Unit = {
       statistics.timed(bcodeTimer) {
         try {
           initialize()
+          HashDump.mark("jvm-init")
           super.run() // invokes `apply` for each compilation unit
           generatedClassHandler.complete()
+          HashDump.mark("jvm-complete")
           writeOtherFiles()
         } finally {
           this.close()
+          HashDump.mark("jvm-close")
         }
       }
     }
