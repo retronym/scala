@@ -200,6 +200,9 @@ final class ChunkedInterner[A <: AnyRef](initialCapacity: Int, val weak: Boolean
     }
   }
 
+  /** The number of slots. For diagnostics. */
+  def capacity: Int = mask + 1
+
   /** The number of chunks per array, for testing. */
   private[util] def chunkCount: Int = elems.length
 }

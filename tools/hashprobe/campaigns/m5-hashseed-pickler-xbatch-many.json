@@ -1,0 +1,55 @@
+{
+  "name": "m5-hashseed-pickler-xbatch-many",
+  "benchmark": "CompileBenchmark",
+  "profile": "xctrace:ipc",
+  "jvm": "/Users/jzaugg-virtus/code/.worktrees/jdk/jdk26-integration-branch-e9e67e/build/release/images/jdk/bin/java",
+  "jvmArgs": "-Xms8G -Xmx8G -Xss2M -Xmn3g -XX:-G1UseAdaptiveIHOP -Dscala.uniques.layout=chunked -Dscalac.hashdump=/Users/jzaugg-virtus/code/retronym/jvm-perf-lab/labs/scala2/out/hashdump/m5-hashseed-pickler-xbatch-many -Dscalac.hashdump.lite=true -Dcompilerlab.corpora=/Users/jzaugg-virtus/code/scala/compiler-benchmark/corpus -Xbatch",
+  "variants": {
+    "seed7": "-Dscalac.hashSeed=7",
+    "seed8": "-Dscalac.hashSeed=8",
+    "seed9": "-Dscalac.hashSeed=9",
+    "seed10": "-Dscalac.hashSeed=10",
+    "seed11": "-Dscalac.hashSeed=11",
+    "seed12": "-Dscalac.hashSeed=12",
+    "seed13": "-Dscalac.hashSeed=13",
+    "seed14": "-Dscalac.hashSeed=14",
+    "seed15": "-Dscalac.hashSeed=15",
+    "seed16": "-Dscalac.hashSeed=16",
+    "seed17": "-Dscalac.hashSeed=17",
+    "seed18": "-Dscalac.hashSeed=18",
+    "seed19": "-Dscalac.hashSeed=19",
+    "seed20": "-Dscalac.hashSeed=20",
+    "seed21": "-Dscalac.hashSeed=21",
+    "seed22": "-Dscalac.hashSeed=22"
+  },
+  "variantDescriptions": {
+    "seed7": "`-Dscalac.hashSeed=7`",
+    "seed8": "`-Dscalac.hashSeed=8`",
+    "seed9": "`-Dscalac.hashSeed=9`",
+    "seed10": "`-Dscalac.hashSeed=10`",
+    "seed11": "`-Dscalac.hashSeed=11`",
+    "seed12": "`-Dscalac.hashSeed=12`",
+    "seed13": "`-Dscalac.hashSeed=13`",
+    "seed14": "`-Dscalac.hashSeed=14`",
+    "seed15": "`-Dscalac.hashSeed=15`",
+    "seed16": "`-Dscalac.hashSeed=16`",
+    "seed17": "`-Dscalac.hashSeed=17`",
+    "seed18": "`-Dscalac.hashSeed=18`",
+    "seed19": "`-Dscalac.hashSeed=19`",
+    "seed20": "`-Dscalac.hashSeed=20`",
+    "seed21": "`-Dscalac.hashSeed=21`",
+    "seed22": "`-Dscalac.hashSeed=22`"
+  },
+  "loadgate": {
+    "maxCores": 3.0,
+    "quietSecs": 30
+  },
+  "gcLog": true,
+  "rounds": 2,
+  "corpora": {
+    "scala": "-f 1 -bm ss -wi 10 -i 6 -p jdkHome=25.0.4-tem -p scalacOptions=-Ystop-after:pickler"
+  },
+  "description": [
+    "The distribution of the hash-layout effect: 16 more seeds (7\u201322), 2 forks each, under `-Xbatch` with every prior variance reduction, front end only. `m5-hashseed-pickler-xbatch` showed forks of one seed agreeing to about 0.05\u20130.15% in instructions/op, with allocation identical to the byte, and seed means differing by more than that. Two forks per seed give each seed's mean and a check of within-seed agreement; the spread of the 16 (plus 6) seed means estimates the layout effect's distribution."
+  ]
+}

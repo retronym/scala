@@ -41,6 +41,9 @@ object HashDump {
   def mark(name: String): Unit = if (fine) { val c = current; if (c != null) c.afterPhase(name) }
   /** `-Dscalac.hashdump.fine=true`: also record fingerprints within the backend (per unit, method and class). */
   private val fine: Boolean = java.lang.Boolean.getBoolean("scalac.hashdump.fine")
+  /** `-Dscalac.hashdump.lite=true`: record no trees; write only `meta` with fingerprints and the uniques table's digest
+   *  and probe statistics, cheap enough to leave on in a timed benchmark. */
+  private val lite: Boolean = java.lang.Boolean.getBoolean("scalac.hashdump.lite")
   private def pid = ProcessHandle.current().pid()
   private def fingerprint(): Int = System.identityHashCode(new Object)
   private def gcCount(): Long = { var n = 0L; java.lang.management.ManagementFactory.getGarbageCollectorMXBeans.forEach(b => n += b.getCollectionCount); n }
@@ -67,7 +70,7 @@ final class HashDump(val global: Global) {
   /** Uniques size and symbol count after each phase. */
   def phaseSize(name: String): Unit = phaseSizes.append(name).append('=').append(howManyUniqueTypes).append('/').append(getCurrentSymbolIdCount).append(' ')
 
-  def afterTyper(): Unit = {
+  def afterTyper(): Unit = if (!lite) {
     for (unit <- currentRun.units) {
       val path = unit.source.file.path
       unit.body.foreach { t =>
@@ -96,7 +99,17 @@ final class HashDump(val global: Global) {
     }
     val slots = ArrayBuffer[(Int, Int, Int, Type)]()
     val cu = chunkedUniquesForProbe
-    if (cu != null) cu.foreachSlot((slot, home, h, tp) => slots += ((slot, home, h, tp)))
+    // probe statistics: total and maximum displacement of an element from its home slot (linear probing)
+    var dispSum = 0L; var dispMax = 0; var liteDigest = 0; var liteCount = 0
+    if (cu != null) {
+      val cap = cu.capacity
+      cu.foreachSlot { (slot, home, h, tp) =>
+        val d = (slot - home + cap) % cap
+        dispSum += d; if (d > dispMax) dispMax = d
+        if (lite) { liteDigest = scala.util.hashing.MurmurHash3.mix(scala.util.hashing.MurmurHash3.mix(liteDigest, slot), h); liteCount += 1 }
+        else slots += ((slot, home, h, tp))
+      }
+    }
     val endFingerprint = fingerprint()
     val endGc = gcCount()
     import scala.util.hashing.MurmurHash3.{mix, finalizeHash}
@@ -104,8 +117,9 @@ final class HashDump(val global: Global) {
     i = 0
     while (i < recs.length) { td = mix(td, treeHashes(i)); sd = mix(sd, symHashes(i)); i += 1 }
     for ((slot, _, h, _) <- slots) ud = mix(mix(ud, slot), h)
-    td = finalizeHash(td, recs.length); sd = finalizeHash(sd, recs.length); ud = finalizeHash(ud, slots.length)
-    val full = fullRuns.forall(_.contains(n))
+    td = finalizeHash(td, recs.length); sd = finalizeHash(sd, recs.length)
+    ud = if (lite) finalizeHash(liteDigest, liteCount) else finalizeHash(ud, slots.length)
+    val full = !lite && fullRuns.forall(_.contains(n))
     // 2. then strings
     def w(name: String)(body: BufferedWriter => Unit): Unit = {
       val bw = new BufferedWriter(new FileWriter(new File(out, f"run-$n%03d.$name")), 1 << 16)
@@ -127,8 +141,8 @@ final class HashDump(val global: Global) {
     }
     w("meta") { bw =>
       bw.write(s"run\t$n\npid\t$pid\nthread\t${Thread.currentThread.getName}\nsymbolHashById\t${HashProbe.SYMBOL_HASH_BY_ID}\n" +
-        s"startFingerprint\t$startFingerprint\nendFingerprint\t$endFingerprint\ntrees\t${recs.length}\nuniques\t${slots.length}\n" +
-        s"phaseSizes\t$phaseSizes\ntreeDigest\t$td\nsymDigest\t$sd\nuniquesDigest\t$ud\nphases\t$phaseFps\nsymbols\t$getCurrentSymbolIdCount\nnanos\t${System.nanoTime() - startNanos}\n" +
+        s"startFingerprint\t$startFingerprint\nendFingerprint\t$endFingerprint\ntrees\t${recs.length}\nuniques\t${if (lite) liteCount else slots.length}\n" +
+        s"probeDispSum\t$dispSum\nprobeDispMax\t$dispMax\nuniquesCapacity\t${if (cu == null) 0 else cu.capacity}\nphaseSizes\t$phaseSizes\ntreeDigest\t$td\nsymDigest\t$sd\nuniquesDigest\t$ud\nphases\t$phaseFps\nsymbols\t$getCurrentSymbolIdCount\nnanos\t${System.nanoTime() - startNanos}\n" +
         s"threadId\t${Thread.currentThread.threadId}\nstartUptimeMs\t$startUptime\nendUptimeMs\t${uptime()}\nstartGc\t$startGc\nendGc\t$endGc\n")
     }
     recs.clear()
