@@ -138,6 +138,7 @@ abstract class AbstractAnalyzer extends AnyRef
           undoLog.clear()
         }
         finishComputeParamAlias()
+        clearNamerAttachments()
         // defensive measure in case the bookkeeping in deferred macro expansion is buggy
         clearDelayed()
         if (settings.areStatisticsEnabled) statistics.stopTimer(statistics.typerNanos, start)
