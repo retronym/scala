@@ -29,20 +29,71 @@ trait TypingTransformers {
   else // TODO: AM: should some phases use a regular rootContext instead of a post-typer one??
     analyzer.newTyper(analyzer.rootContextPostTyper(unit, EmptyTree))
 
+  /** A transformer with a typer whose context follows the trees it descends into.
+   *
+   *  Entering an owner (`atOwner`) only pushes the tree and owner onto a stack; the context for them is made
+   *  (`Context.make`, as it was eagerly) when `localTyper` is next read. Most definitions in most phases are
+   *  transformed without typing anything, so most of those contexts were never used.
+   */
   abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends AstTransformer {
     def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
-    var localTyper: analyzer.Typer = initLocalTyper
-    currentOwner = localTyper.context.owner
+
+    private[this] var _localTyper: analyzer.Typer = initLocalTyper
+    // The frames entered by `atOwner`. Those below `materialized` have their context made, and `parentContexts(i)` is
+    // the context that frame `i`'s was made from, restored when it exits.
+    private[this] var frameTrees     = new Array[AnyRef](16)
+    private[this] var frameOwners    = new Array[AnyRef](16)
+    private[this] var parentContexts = new Array[AnyRef](16)
+    private[this] var frames         = 0
+    private[this] var materialized   = 0
+    private[this] val eager          = settings.YeagerTypingTransformerContexts.value
+
+    /** The typer, its context made for the innermost owner entered. */
+    def localTyper: analyzer.Typer = {
+      if (materialized < frames) materialize()
+      _localTyper
+    }
+    def localTyper_=(typer: analyzer.Typer): Unit = {
+      if (materialized < frames) materialize()
+      _localTyper = typer
+    }
+
+    private def materialize(): Unit =
+      while (materialized < frames) {
+        val i = materialized
+        val context = _localTyper.context
+        parentContexts(i) = context
+        _localTyper.context = context.make(frameTrees(i).asInstanceOf[Tree], frameOwners(i).asInstanceOf[Symbol])
+        materialized = i + 1
+      }
+
+    currentOwner = _localTyper.context.owner
     protected var curTree: Tree = _
 
     override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
 
     def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
-      val savedContext = localTyper.context
-      localTyper.context = localTyper.context.make(tree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
-      val result = super.atOwner(owner)(trans)
-      localTyper.context = savedContext
-      result
+      val i = frames
+      if (i == frameTrees.length) {
+        frameTrees = java.util.Arrays.copyOf(frameTrees, i * 2)
+        frameOwners = java.util.Arrays.copyOf(frameOwners, i * 2)
+        parentContexts = java.util.Arrays.copyOf(parentContexts, i * 2)
+      }
+      frameTrees(i) = tree
+      frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
+      frames = i + 1
+      if (eager) materialize()
+      try super.atOwner(owner)(trans)
+      finally {
+        if (materialized > i) {
+          _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
+          parentContexts(i) = null
+          materialized = i
+        }
+        frameTrees(i) = null
+        frameOwners(i) = null
+        frames = i
+      }
     }
 
     override def transform(tree: Tree): Tree = {
