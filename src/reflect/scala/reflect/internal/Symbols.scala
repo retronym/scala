@@ -2176,7 +2176,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  Martin says: The reason `thisSym` is `this` is so that thisType can be this.thisSym.tpe.
      *  It's a trick to shave some cycles off.
      *
-     *  Morale: DO:    if (clazz.typeOfThis.typeConstructor ne clazz.typeConstructor) ...
+     *  Morale: DO:    if (clazz.hasSelfType) ...
      *          DON'T: if (clazz.thisSym ne clazz) ...
      *
      */
@@ -2185,7 +2185,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       case _               => this
     }
 
-    def hasSelfType = (thisSym ne this) && (typeOfThis.typeConstructor ne typeConstructor)
+    def hasSelfType = (thisSym ne this) && (typeOfThis.typeConstructor != typeConstructor)
 
     /** The type of `this` in a class, or else the type of the symbol itself. */
     // OPT: final, with a fast path for the default; module classes cache theirs in `customTypeOfThis`.

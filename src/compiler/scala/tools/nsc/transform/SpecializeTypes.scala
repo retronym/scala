@@ -682,7 +682,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         // the same type constructor as the class itself, since they will
         // already be covered.  Then apply the current context to the self-type
         // as with the parents and assign it to typeOfThis.
-        if (clazz.typeOfThis.typeConstructor ne clazz.typeConstructor) {
+        if (clazz.hasSelfType) {
           sClass.typeOfThis = applyContext(clazz.typeOfThis)
           debuglog("Rewriting self-type for specialized class:\n" +
               "    " +  clazz.defStringSeenAs(clazz.typeOfThis) + "\n" +
