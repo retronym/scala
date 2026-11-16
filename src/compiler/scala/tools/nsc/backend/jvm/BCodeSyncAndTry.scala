@@ -367,7 +367,7 @@ abstract class BCodeSyncAndTry extends BCodeBodyBuilder {
        * ------
        */
 
-      markProgramPoint(postHandlers)
+      markJoinPoint(postHandlers)
       if (hasFinally) {
         emitFinalizer(finalizer, tmp, isDuplicate = false) // the only invocation of emitFinalizer with `isDuplicate == false`
       }
