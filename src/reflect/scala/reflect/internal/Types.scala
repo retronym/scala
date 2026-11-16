@@ -4389,6 +4389,12 @@ trait Types
   private[this] var uniques: util.WeakHashSet[Type] = _
   private[this] var uniqueRunId = NoRunId
 
+  // Spike: a lossy, direct-mapped alternative to `uniques`, selected by `-Dscalac.uniques=direct`.
+  // A hit returns the slot's entry, a miss overwrites the slot. The array is replaced every
+  // `DIRECT_REFRESH` inserts so that it, and the types it holds, stay in the young generation.
+  private[this] var directUniques: Array[Type] = _
+  private[this] var directInserts = 0
+
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
   /** Called by `perRunCaches.clearAll()` at the end of a run. Drops the table rather than
@@ -4396,17 +4402,51 @@ trait Types
    *  `unique` makes a new table on its next call.
    */
   private[internal] def dropUniques(): Unit = {
+    if (util.UniquesMode.STATS) util.UniquesMode.runs.incrementAndGet()
     uniques = null
+    directUniques = null
     uniqueRunId = NoRunId
   }
 
-  protected def unique[T <: Type](tp: T): T =  {
+  protected def unique[T <: Type](tp: T): T = (util.UniquesMode.MODE: @annotation.switch) match {
+    case util.UniquesMode.WEAK   => uniqueWeak(tp)
+    case util.UniquesMode.DIRECT => uniqueDirect(tp)
+    case _                       => tp
+  }
+
+  private def uniqueWeak[T <: Type](tp: T): T = {
     if (uniqueRunId != currentRunId) {
       uniques = util.WeakHashSet[Type](initialUniquesCapacity)
       uniqueRunId = currentRunId
     }
-    (uniques findEntryOrUpdate tp).asInstanceOf[T]
+    val result = uniques findEntryOrUpdate tp
+    if (util.UniquesMode.STATS) countUnique(result ne tp)
+    result.asInstanceOf[T]
   }
+
+  private def uniqueDirect[T <: Type](tp: T): T = {
+    var table = directUniques
+    if (table == null || uniqueRunId != currentRunId || directInserts >= util.UniquesMode.DIRECT_REFRESH) {
+      table = new Array[Type](1 << util.UniquesMode.DIRECT_BITS)
+      directUniques = table
+      directInserts = 0
+      uniqueRunId = currentRunId
+    }
+    val i = tp.hashCode & (table.length - 1)
+    val entry = table(i)
+    if (tp == entry) {
+      if (util.UniquesMode.STATS) countUnique(hit = true)
+      entry.asInstanceOf[T]
+    } else {
+      if (util.UniquesMode.STATS) countUnique(hit = false)
+      table(i) = tp
+      directInserts += 1
+      tp
+    }
+  }
+
+  private def countUnique(hit: Boolean): Unit =
+    if (hit) util.UniquesMode.hits.incrementAndGet() else util.UniquesMode.misses.incrementAndGet()
 
 // Helper Classes ---------------------------------------------------------
 
