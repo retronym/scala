@@ -26,6 +26,8 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#239 | Intern types in a chunked table that G1 keeps young | conflict in `SymbolTable.scala`: the base had already turned `isCompilerUniverse` into a val defined elsewhere, so only `uniquesLayout` is added. Off by default: select with `-Dscala.uniques.layout=chunked-weak` |
 | retronym/scala#244 | Stop relying on the uniques table for type identity | conflicts with #239 in `Types.scala`, where #239's layout selection is kept and `dropUniques()` also drops the chunked table; and in `TypesTest.scala`, where both sides' tests are kept |
 | retronym/scala#245 | Compute lub depths for solving and merging only when needed | clean. retronym/scala#246 is an alternative formulation of the same change, left out until a paired A/B against #245 says which one to keep |
+| retronym/scala#250 | Avoid TypeTag in the f interpolator's type constants | clean |
+| retronym/scala#247 | Drop typer and namer state that pins old trees past typer | clean |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
