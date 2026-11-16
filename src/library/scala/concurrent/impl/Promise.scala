@@ -306,9 +306,18 @@ private[concurrent] object Promise {
       if (other ne this) {
         val state = get()
         if (!state.isInstanceOf[Try[_]]) {
-          val resolved = if (other.isInstanceOf[DefaultPromise[_]]) other.asInstanceOf[DefaultPromise[T]].value0 else other.value.orNull
-          if (resolved ne null) tryComplete0(state, resolved)
-          else other.onComplete(this)(ExecutionContext.parasitic)
+          if (other.isInstanceOf[DefaultPromise[_]]) {
+            // A DefaultPromise only ever holds resolve():d values, so `this` can be used as the callback directly.
+            val resolved = other.asInstanceOf[DefaultPromise[T]].value0
+            if (resolved ne null) tryComplete0(state, resolved)
+            else other.onComplete(this)(ExecutionContext.parasitic)
+          } else {
+            // Other Future implementations may complete with values which have not been resolve():d
+            // (e.g. a bare `Failure(InterruptedException)`), so they must go through `tryComplete`.
+            val v = other.value
+            if (v.isDefined) tryComplete0(state, resolve(v.get))
+            else other.onComplete(tryComplete(_))(ExecutionContext.parasitic)
+          }
         }
       }
 
