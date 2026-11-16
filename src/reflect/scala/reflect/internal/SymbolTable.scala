@@ -477,6 +477,8 @@ abstract class SymbolTable extends macros.Universe
 
       javaCaches foreach (_.clear())
       javaCaches = javaCaches.filter(_.isValid)
+
+      dropUniques()
     }
 
     def newWeakMap[K, V]()        = recordCache(mutable.WeakHashMap.empty[K, V])
