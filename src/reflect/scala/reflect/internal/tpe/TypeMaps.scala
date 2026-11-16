@@ -656,7 +656,7 @@ private[internal] trait TypeMaps {
       val SingleType(pre, sym) = tp
 
       val pre1 = this(pre)
-      if (pre1 eq pre) tp
+      if ((pre1 eq pre) || pre1 == pre) tp
       else if (pre1.isStable) singleType(pre1, sym)
       else pre1.memberType(sym).resultType //todo: this should be rolled into existential abstraction
     }
