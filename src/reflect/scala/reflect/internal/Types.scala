@@ -3261,7 +3261,7 @@ trait Types
       val tvars = quantifiedFresh map (tparam => TypeVar(tparam))
       val underlying1 = underlying.instantiateTypeParams(quantified, tvars) // fuse subst quantified -> quantifiedFresh -> tvars
       op(underlying1) && {
-        solve(tvars, quantifiedFresh, (_ => Invariant), upper = false, depth) &&
+        solve(tvars, quantifiedFresh, (_ => Invariant), upper = false, LazyDepth(depth)) &&
         isWithinBounds(NoPrefix, NoSymbol, quantifiedFresh, tvars map (_.inst))
       }
     }
@@ -5126,14 +5126,18 @@ trait Types
    *  Return `x` if the computation succeeds with result `x`.
    *  Return `NoType` if the computation fails.
    */
-  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth: Depth): Type = {
+  def mergePrefixAndArgs(tps0: List[Type], variance: Variance, depth: LazyDepth): Type = {
+    // lub and glb of prefixes that are all the same instance are that prefix, at any depth
+    def mergePrefixes(pres: List[Type]): Type =
+      if (pres.forall(_ eq pres.head)) pres.head
+      else if (variance.isPositive) lub(pres, depth.value) else glb(pres, depth.value)
     val (tps, tparams) = stripExistentialsAndTypeVars(tps0, expandLazyBaseType = true)
 
     val merged = tps match {
       case tp :: Nil => tp
       case TypeRef(_, sym, _) :: rest =>
         val pres = tps map (_.prefix) // prefix normalizes automatically
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         val argss = tps map (_.normalize.typeArgs) // symbol equality (of the tp in tps) was checked using typeSymbol, which normalizes, so should normalize before retrieving arguments
         val capturedParams = new ListBuffer[Symbol]
         try {
@@ -5163,7 +5167,7 @@ trait Types
               val args = map2(sym.typeParams, argsst) { (tparam, as0) =>
                 val as = as0.distinct
                 if (as.size == 1) as.head
-                else if (depth.isZero) {
+                else if (depth.value.isZero) {
                   log("Giving up merging args: can't unify %s under %s".format(as.mkString(", "), tparam.fullLocationString))
                   // Don't return "Any" (or "Nothing") when we have to give up due to
                   // recursion depth. Return NoType, which prevents us from poisoning
@@ -5180,11 +5184,11 @@ trait Types
                   // (so that the type arguments in `as` have the same kind as the type parameter `tparam`).
                   val asKinded = if (hktParams.isEmpty) as else as.map(a => bindHK(applyHK(a)))
 
-                  if (tparam.variance == variance) lub(asKinded, depth.decr)
-                  else if (tparam.variance == variance.flip) glb(asKinded, depth.decr)
+                  if (tparam.variance == variance) lub(asKinded, depth.value.decr)
+                  else if (tparam.variance == variance.flip) glb(asKinded, depth.value.decr)
                   else {
-                    val l = lub(asKinded, depth.decr)
-                    val g = glb(asKinded, depth.decr)
+                    val l = lub(asKinded, depth.value.decr)
+                    val g = glb(asKinded, depth.value.decr)
                     if (l <:< g) l
                     else {
                       // @M this has issues with f-bounds, see #2251
@@ -5208,11 +5212,11 @@ trait Types
         }
       case SingleType(_, sym) :: rest =>
         val pres = tps map (_.prefix)
-        val pre = if (variance.isPositive) lub(pres, depth) else glb(pres, depth)
+        val pre = mergePrefixes(pres)
         try singleType(pre, sym)
         catch { case ex: MalformedType => NoType }
       case _ =>
-        abort(s"mergePrefixAndArgs($tps, $variance, $depth): unsupported tps")
+        abort(s"mergePrefixAndArgs($tps, $variance, ${depth.value}): unsupported tps")
     }
     existentialAbstraction(tparams, merged)
   }

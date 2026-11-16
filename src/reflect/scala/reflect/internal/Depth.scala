@@ -31,6 +31,22 @@ final class Depth private (val depth: Int) extends AnyVal with Ordered[Depth] {
   override def toString = s"Depth($depth)"
 }
 
+/** A depth that is computed at its first use, for callers that need it only in some cases, such as to lub or glb two
+ *  or more types. Computing a `lubDepth` builds the base type sequences of the types it is computed from.
+ *
+ *  Create one from a function literal, `() => lubDepth(ts)`: it becomes a subclass whose `compute` returns the
+ *  underlying `Int`, where a `=> Depth` thunk would box it. `DepthFunction` avoids the box the same way.
+ */
+abstract class LazyDepth {
+  protected def compute(): Depth
+  lazy val value: Depth = compute()
+}
+
+object LazyDepth {
+  def apply(depth: Depth): LazyDepth = () => depth
+  final val AnyDepth: LazyDepth = apply(Depth.AnyDepth)
+}
+
 @FunctionalInterface
 trait DepthFunction[A] { def apply(a: A): Depth }
 
