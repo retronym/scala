@@ -860,6 +860,7 @@ trait Namers extends MethodSynthesis {
 
     def monoTypeCompleter(tree: MemberDef) = new MonoTypeCompleter(tree)
     class MonoTypeCompleter(tree: MemberDef) extends TypeCompleterBase(tree) {
+      override protected def definitionContext: Context = context
       override def completeImpl(sym: Symbol): Unit = {
         def needsCycleCheck = sym.isNonClassType && !sym.isParameter && !sym.isExistential
 
@@ -915,6 +916,7 @@ trait Namers extends MethodSynthesis {
     // as specified by Field.noFieldFor)
     def valTypeCompleter(tree: ValDef) = new ValTypeCompleter(tree)
     class ValTypeCompleter(tree: ValDef) extends TypeCompleterBase(tree) {
+      override protected def definitionContext: Context = context
       override def completeImpl(fieldOrGetterSym: Symbol): Unit = {
         val mods = tree.mods
         val isGetter = fieldOrGetterSym.isMethod
@@ -942,6 +944,7 @@ trait Namers extends MethodSynthesis {
     // knowing `isBean`, we could derive `isSetter` from `valDef.name`
     def accessorTypeCompleter(valDef: ValDef, missingTpt: Boolean, isBean: Boolean, isSetter: Boolean) = new AccessorTypeCompleter(valDef, missingTpt, isBean, isSetter)
     class AccessorTypeCompleter(valDef: ValDef, missingTpt: Boolean, isBean: Boolean, isSetter: Boolean) extends TypeCompleterBase(valDef) {
+      override protected def definitionContext: Context = context
       override def completeImpl(accessorSym: Symbol): Unit = {
         context.unit.synthetics get accessorSym match {
           case Some(ddef: DefDef) =>
@@ -1043,6 +1046,7 @@ trait Namers extends MethodSynthesis {
 
     def selfTypeCompleter(tree: Tree) = new SelfTypeCompleter(tree)
     class SelfTypeCompleter(tree: Tree) extends TypeCompleterBase(tree) {
+      override protected def definitionContext: Context = context
       override def completeImpl(sym: Symbol): Unit = {
         val selftpe = typer.typedType(tree).tpe
         sym setInfo {
@@ -2192,10 +2196,20 @@ trait Namers extends MethodSynthesis {
   trait LockingTypeCompleter extends TypeCompleter {
     def completeImpl(sym: Symbol): Unit
 
+    /** The context the definition was entered in, whose GADT narrowings it should see while
+     *  completing. See `liftGadtNarrowings`. A completer that only delegates to another one,
+     *  which will do this itself, can leave it `null`.
+     */
+    protected def definitionContext: Context = null
+
     override def complete(sym: Symbol) = {
       lockedCount += 1
+      val restoreGadtNarrowings = liftGadtNarrowings(definitionContext)
       try completeImpl(sym)
-      finally lockedCount -= 1
+      finally {
+        restoreGadtNarrowings()
+        lockedCount -= 1
+      }
     }
   }
 
@@ -2207,6 +2221,8 @@ trait Namers extends MethodSynthesis {
    * assigns them to the `tparams` trees.
    */
   class PolyTypeCompleter(tparams: List[TypeDef], restp: TypeCompleter, ctx: Context) extends LockingTypeCompleter with FlagAgnosticCompleter {
+    override protected def definitionContext: Context = ctx
+
     // @M. If `owner` is an abstract type member, `typeParams` are all NoSymbol (see comment in `completerOf`),
     // otherwise, the non-skolemized (external) type parameter symbols
     override val typeParams = tparams map (_.symbol)
