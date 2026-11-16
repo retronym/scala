@@ -15,9 +15,10 @@ import scala.tools.nsc.{Global, Settings}
  */
 @RunWith(classOf[JUnit4])
 class NoInterningTest {
-  private def errors(code: String, stopAfter: String): List[String] = {
+  private def errors(code: String, stopAfter: String, options: String = ""): List[String] = {
     val settings = new Settings
     settings.usejavacp.value = true
+    settings.processArgumentString(options)
     settings.stopAfter.value = List(stopAfter)
     val reporter = new StoreReporter(settings)
     val global = new Global(settings, reporter) {
@@ -68,4 +69,18 @@ class NoInterningTest {
         |trait CoSetLike[U, +A <: U, +This[X] <: CoSetLike[U, A, This] with CoSet[U, A]] {
         |  implicitly[CoSet[U, Any]]
         |}""".stripMargin, "typer"))
+
+  // `=:=` and `<:<` skip the `-explaintypes` trace only for `eq` types, so equal prefixes such as `c.type`
+  // added steps to the trace; see neg/t6123-explaintypes-macros.
+  @Test def explainTypesSkipsEqualTypes(): Unit = {
+    val messages = errors(
+      """import scala.language.experimental.macros
+        |import scala.reflect.macros.blackbox.Context
+        |object BadMac {
+        |  def printf(format: String, params: Any*): Unit = macro printf_impl
+        |  def printf_impl(c: Context)(format: c.Expr[String], params: c.Expr[String]*): c.Expr[Unit] = ???
+        |}""".stripMargin, "typer", "-explaintypes")
+    assertEquals(List("c.universe.Expr[Any]* <: c.universe.Expr[String]*?", "false"), messages.init)
+    assertError("macro implementation has incompatible shape", messages.takeRight(1))
+  }
 }

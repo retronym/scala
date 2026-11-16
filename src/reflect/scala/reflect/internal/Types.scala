@@ -859,7 +859,7 @@ trait Types
       if (settings.areStatisticsEnabled) stat_<:<(that)
       else {
         (this eq that) ||
-        (if (explainSwitch) explain("<:", isSubType(_: Type, _: Type), this, that)
+        (if (explainSwitch) (this == that) || explain("<:", isSubType(_: Type, _: Type), this, that)
          else isSubType(this, that))
       }
     }
@@ -892,7 +892,7 @@ trait Types
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, subtypeNanos) else null
       val result =
         (this eq that) ||
-        (if (explainSwitch) explain("<:", isSubType(_: Type, _: Type), this, that)
+        (if (explainSwitch) (this == that) || explain("<:", isSubType(_: Type, _: Type), this, that)
          else isSubType(this, that))
       if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       result
@@ -905,7 +905,7 @@ trait Types
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, subtypeNanos) else null
       val result =
         ((this eq that) ||
-         (if (explainSwitch) explain("weak_<:", isWeakSubType, this, that)
+         (if (explainSwitch) (this == that) || explain("weak_<:", isWeakSubType, this, that)
           else isWeakSubType(this, that)))
       if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       result
@@ -914,7 +914,7 @@ trait Types
     /** Is this type equivalent to that type? */
     def =:=(that: Type): Boolean = (
       (this eq that) ||
-      (if (explainSwitch) explain("=", isSameType, this, that)
+      (if (explainSwitch) (this == that) || explain("=", isSameType, this, that)
        else isSameType(this, that))
     )
 
