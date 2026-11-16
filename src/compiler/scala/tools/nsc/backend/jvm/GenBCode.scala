@@ -78,12 +78,20 @@ abstract class GenBCode extends SubComponent {
         try {
           initialize()
           super.run() // invokes `apply` for each compilation unit
-          generatedClassHandler.complete()
-          writeOtherFiles()
+          finish()
         } finally {
           this.close()
         }
       }
+    }
+
+    override def unitMajorStart(): Unit = initialize()
+    override def unitMajorEnd(): Unit = finish()
+    override def unitMajorClose(): Unit = close()
+
+    private def finish(): Unit = {
+      generatedClassHandler.complete()
+      writeOtherFiles()
     }
 
     /** See comment in [[GenBCode]] */

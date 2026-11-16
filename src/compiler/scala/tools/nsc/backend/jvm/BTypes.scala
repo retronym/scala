@@ -862,11 +862,15 @@ abstract class BTypes {
    * @param nestedClasses Classes nested in this class. Those need to be added to the
    *                      InnerClass table, see the InnerClass spec summary above.
    * @param nestedInfo    If this describes a nested class, information for the InnerClass table.
-   * @param inlineInfo    Information about this class for the inliner.
+   * @param lazyInlineInfo Information about this class for the inliner. Lazy for classes being
+   *                       compiled, as their methods are only complete once their compilation unit
+   *                       has been through `delambdafy` (see `-Yunit-major-from`).
    */
   final case class ClassInfo(superClass: Option[ClassBType], interfaces: List[ClassBType], flags: Int,
                              nestedClasses: Lazy[List[ClassBType]], nestedInfo: Lazy[Option[NestedInfo]],
-                             inlineInfo: InlineInfo)
+                             lazyInlineInfo: Lazy[InlineInfo]) {
+    def inlineInfo: InlineInfo = lazyInlineInfo.force
+  }
 
   /**
    * Information required to add a class to an InnerClass table.

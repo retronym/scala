@@ -193,22 +193,46 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
   /** Just to mark uncheckable */
   override def newPhase(prev: scala.tools.nsc.Phase): StdPhase = new SpecializationPhase(prev)
+  /** Is specialize running unit-major, where other units' later phases run before it has seen every unit? */
+  private var unitMajor = false
+
+  /** Has specialize seen every unit of the run? */
+  private def specializationDone = isPast(ownPhase) && !unitMajor
+
   class SpecializationPhase(prev: scala.tools.nsc.Phase) extends InfoPhase(prev) {
     override def checkable = false
     override def run(): Unit = {
       super.run()
-      exitingSpecialize {
-        FunctionClass.seq.take(MaxFunctionAritySpecialized + 1).foreach(_.info)
-        TupleClass.seq.take(MaxTupleAritySpecialized).foreach(_.info)
-      }
+      specializeFunctionAndTupleClasses()
+      unfinalizeSpecialOverloads()
+    }
 
-      // Remove the final modifier and @inline annotation from anything in the
-      // original class (since it's being overridden in at least one subclass).
-      //
-      // We do this here so that the specialized subclasses will correctly copy
-      // final and @inline.
-      //
-      // TODO Try to move this logic back to the info transform.
+    // Unit-major (-Yunit-major-from), later units' specialize runs after earlier units have been
+    // emitted, so do before the first unit what phase-major does after the last, and remove the
+    // final modifiers after each unit.
+    override def unitMajorStart(): Unit = {
+      unitMajor = true
+      specializeFunctionAndTupleClasses()
+    }
+    override def unitMajorClose(): Unit = unitMajor = false
+    override def apply(unit: CompilationUnit): Unit = {
+      super.apply(unit)
+      if (unitMajor) unfinalizeSpecialOverloads()
+    }
+
+    private def specializeFunctionAndTupleClasses(): Unit = exitingSpecialize {
+      FunctionClass.seq.take(MaxFunctionAritySpecialized + 1).foreach(_.info)
+      TupleClass.seq.take(MaxTupleAritySpecialized).foreach(_.info)
+    }
+
+    // Remove the final modifier and @inline annotation from anything in the
+    // original class (since it's being overridden in at least one subclass).
+    //
+    // We do this here so that the specialized subclasses will correctly copy
+    // final and @inline.
+    //
+    // TODO Try to move this logic back to the info transform.
+    private def unfinalizeSpecialOverloads(): Unit =
       info.foreach {
         case (sym, SpecialOverload(target, _)) =>
           sym.resetFlag(FINAL)
@@ -217,7 +241,6 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           target.removeAnnotation(ScalaInlineClass)
         case _ =>
       }
-    }
   }
 
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
@@ -1293,7 +1316,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
       tpe
     } else tpe.resultType match {
       case cinfo @ ClassInfoType(parents, decls, clazz) if !unspecializableClass(cinfo) =>
-        if (!currentRun.compiles(sym) && isPast(ownPhase)) {
+        if (!currentRun.compiles(sym) && specializationDone) {
           // Skip specialization info transform for third party classes that aren't referenced directly
           // from the tree or by the specialization info transform itself that are run up to the end of
           // the specialization phase.
