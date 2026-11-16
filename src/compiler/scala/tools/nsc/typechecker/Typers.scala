@@ -2181,7 +2181,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         rightAssocValDefs += ((sym, vdef1.rhs))
       if (vdef.hasAttachment[PatVarDefAttachment.type]) {
         sym.updateAttachment(PatVarDefAttachment)
-        if (sym.isSynthetic && sym.owner.isClass && (tpt1.tpe eq UnitTpe))
+        if (sym.isSynthetic && sym.owner.isClass && (tpt1.tpe == UnitTpe))
           if (sym.isPrivateThis && vdef.mods.isPrivateLocal && !sym.enclClassChain.exists(_.isInterpreterWrapper))
             context.warning(vdef.pos,
               s"Pattern definition introduces Unit-valued member of ${sym.owner.name}; consider wrapping it in `locally { ... }`.",
