@@ -278,12 +278,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         new SubstWildcardMap(tparams).apply(tp)
       case TypeRef(_, sym, _) if sym.isAliasType =>
         val tp0 = tp.dealias
-        if (tp eq tp0) {
+        if (tp == tp0) {
           devWarning(s"dropExistential did not progress dealiasing $tp, see scala/bug#7126")
           tp
         } else {
           val tp1 = dropExistential(tp0)
-          if (tp1 eq tp0) tp else tp1
+          if (tp1 == tp0) tp else tp1
         }
       case _ => tp
     }
@@ -4401,7 +4401,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         @tailrec
         def apply(tp: Type): Type = tp match {
           case TypeRef(pre, sym, _) =>
-            if (sym.isAliasType && containsLocal(tp) && (tp.dealias ne tp)) apply(tp.dealias)
+            if (sym.isAliasType && containsLocal(tp) && (tp.dealias != tp)) apply(tp.dealias)
             else {
               if (pre.isVolatile) pre match {
                 case SingleType(_, sym) if sym.isSynthetic && isPastTyper =>
@@ -5114,7 +5114,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           // See #4712 for a case where this situation arises,
           if ((fun.symbol ne null) && fun.symbol.isJavaDefined) {
             val newtpe = rawToExistential(fun.tpe)
-            if (fun.tpe ne newtpe) {
+            if (fun.tpe != newtpe) {
               // println("late cooking: "+fun+":"+fun.tpe) // DEBUG
               return tryTypedApply(fun setType newtpe, args)
             }
