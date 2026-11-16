@@ -199,7 +199,11 @@ private[concurrent] trait BatchingExecutor extends Executor {
       if(this.size > 0)
         submitForExecution(cloneAndClear()) // If this throws then we have bigger problems
 
-      parentBlockContext.blockOn(thunk) // Now delegate the blocking to the previous BC
+      // For the same reason, tasks submitted *while* we are blocked (e.g. callbacks the blocking code waits for)
+      // must not be queued up on this batch, as they would only run once the blocking has finished.
+      _tasksLocal.remove()
+      try parentBlockContext.blockOn(thunk) // Now delegate the blocking to the previous BC
+      finally _tasksLocal.set(this)
     }
   }
 
@@ -207,7 +211,8 @@ private[concurrent] trait BatchingExecutor extends Executor {
     @tailrec override final def run(): Unit = {
       try runN(BatchingExecutorStatics.runLimit) catch {
         case ie: InterruptedException =>
-          reportFailure(ie) // TODO: Handle InterruptedException differently?
+          reportFailure(ie)
+          Thread.currentThread.interrupt() // We run on the caller's thread, so preserve its interrupt status
         case f if NonFatal(f) =>
           reportFailure(f)
       }
@@ -254,7 +259,8 @@ private[concurrent] trait BatchingExecutor extends Executor {
         try submitForExecution(runnable) // User code so needs to be try-finally guarded here
         catch {
           case ie: InterruptedException =>
-            reportFailure(ie) // TODO: Handle InterruptedException differently?
+            reportFailure(ie)
+            Thread.currentThread.interrupt() // We run on the caller's thread, so preserve its interrupt status
           case f if NonFatal(f) =>
             reportFailure(f)
         }
