@@ -14,6 +14,7 @@ package scala.tools.nsc
 package transform
 
 import scala.annotation.nowarn
+import scala.collection.mutable
 import scala.reflect.internal.SymbolPairs
 
 /** A class that yields a kind of iterator (`Cursor`),
@@ -51,7 +52,7 @@ abstract class OverridingPairs extends SymbolPairs {
       && !bothJavaOwnedAndEitherIsField(low, high)
       && !high.isPrivate               // private or private[this] members never are overridden
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
-      && (lowMemberType matches (self memberType high))
+      && (lowMemberType matches highMemberType(high))
     ) // TODO we don't call exclude(high), should we?
 
     override protected def skipOwnerPair(lowClass: Symbol, highClass: Symbol): Boolean = {
@@ -69,6 +70,24 @@ abstract class OverridingPairs extends SymbolPairs {
       }
     }
   }
+
+  /** For each class, the term pairs `(low, high)` that RefChecks found to match as members of that class.
+   *  Erasure's double-definition check asks the same question, `exitingRefchecks(lowType matches highType)`,
+   *  of nearly the same pairs; it reads the answer here instead of computing both member types again.
+   */
+  private[this] val refchecksMatches = perRunCaches.newMap[Symbol, mutable.LongMap[Unit]]()
+  private def pairKey(low: Symbol, high: Symbol): Long = (low.id.toLong << 32) | (high.id & 0xFFFFFFFFL)
+
+  def recordMatchedAtRefchecks(base: Symbol, low: Symbol, high: Symbol): Unit =
+    refchecksMatches.getOrElseUpdate(base, new mutable.LongMap[Unit]).update(pairKey(low, high), ())
+
+  def matchedAtRefchecks(base: Symbol, low: Symbol, high: Symbol): Boolean =
+    refchecksMatches.get(base) match {
+      case Some(pairs) => pairs.contains(pairKey(low, high))
+      case _           => false
+    }
+
+  def forgetMatchedAtRefchecks(base: Symbol): Unit = refchecksMatches.remove(base)
 
   private def bothJavaOwnedAndEitherIsField(low: Symbol, high: Symbol): Boolean = {
     low.owner.isJavaDefined && high.owner.isJavaDefined &&
