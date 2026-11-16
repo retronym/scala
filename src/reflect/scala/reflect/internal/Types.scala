@@ -4405,7 +4405,7 @@ trait Types
   protected def unique[T <: Type](tp: T): T =  {
     if (uniqueRunId != currentRunId) {
       val layout = uniquesLayout match {
-        case "default" => System.getProperty("scala.uniques.layout", "weak")
+        case "default" => System.getProperty("scala.uniques.layout", "chunked-weak")
         case l         => l
       }
       layout match {
