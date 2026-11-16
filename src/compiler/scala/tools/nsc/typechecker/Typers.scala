@@ -456,8 +456,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def isStale(sym: Symbol): Boolean = {
       sym.rawInfo.isInstanceOf[loaders.ClassfileLoader] && {
         sym.rawInfo.load(sym)
-        (sym.sourceFile ne null) &&
-        (currentRun.compiledFiles contains sym.sourceFile.path)
+        currentRun.compilesSourceOf(sym)
       }
     }
 
