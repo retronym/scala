@@ -43,6 +43,18 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
 
   override protected def makeNoSymbol: NoSymbol = new NoSymbol with SynchronizedSymbol
 
+  // Note: `StubSymbol` is mixed in last, its `info` / `rawInfo` need to win over `SynchronizedSymbol`'s
+  private class SynchronizedStubClassSymbol(owner0: Symbol, name0: TypeName, val missingMessage: String)
+    extends ClassSymbol(owner0, owner0.pos, name0) with SynchronizedClassSymbol with StubSymbol
+  private class SynchronizedStubTermSymbol(owner0: Symbol, name0: TermName, val missingMessage: String)
+    extends TermSymbol(owner0, owner0.pos, name0) with SynchronizedTermSymbol with StubSymbol
+
+  // public (not protected) to match the widened override in `Global`, both are mixed into `ReflectGlobal`
+  override def newStubSymbol(owner: Symbol, name: Name, missingMessage: String): Symbol = name match {
+    case n: TypeName => new SynchronizedStubClassSymbol(owner, n, missingMessage)
+    case _           => new SynchronizedStubTermSymbol(owner, name.toTermName, missingMessage)
+  }
+
   trait SynchronizedSymbol extends Symbol {
 
     /** (Things written in this comment only applies to runtime reflection. Compile-time reflection,
@@ -162,22 +174,19 @@ private[reflect] trait SynchronizedSymbols extends internal.Symbols { self: Symb
     override def typeSignatureIn(site: Type): Type = gilSynchronizedIfNotThreadsafe { super.typeSignatureIn(site) }
     override def typeConstructor: Type = gilSynchronizedIfNotThreadsafe { super.typeConstructor }
 
-    override def typeParams: List[Symbol] = gilSynchronizedIfNotThreadsafe {
-      if (isCompilerUniverse) super.typeParams
+    override protected def completeTypeParams: List[Symbol] = gilSynchronizedIfNotThreadsafe {
+      if (isCompilerUniverse) super.completeTypeParams
       else {
-        def completeTypeParams = {
-          if (isMonomorphicType) Nil
-          else {
-            // analogously to the "info" getter, here we allow for two completions:
-            //   one: sourceCompleter to LazyType, two: LazyType to completed type
+        if (isMonomorphicType) Nil
+        else {
+          // analogously to the "info" getter, here we allow for two completions:
+          //   one: sourceCompleter to LazyType, two: LazyType to completed type
+          rawInfo load this
+          if (validTo == NoPeriod)
             rawInfo load this
-            if (validTo == NoPeriod)
-              rawInfo load this
 
-            rawInfo.typeParams
-          }
+          rawInfo.typeParams
         }
-        if (validTo != NoPeriod) rawInfo.typeParams else completeTypeParams
       }
     }
     override def unsafeTypeParams: List[Symbol] = gilSynchronizedIfNotThreadsafe {

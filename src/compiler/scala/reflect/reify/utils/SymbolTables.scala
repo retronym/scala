@@ -134,7 +134,6 @@ trait SymbolTables {
       s"""symtab = [$symtabString], aliases = [$aliasesString]${if (original.isDefined) ", has original" else ""}"""
     }
 
-    @nowarn // spurious unused buf.type
     def debugString: String = {
       val buf = new StringBuilder
       buf.append("symbol table = " + (if (syms.length == 0) "<empty>" else "")).append(EOL)
@@ -177,7 +176,7 @@ trait SymbolTables {
           // scala/bug#6204 don't reify signatures for incomplete symbols, because this might lead to cyclic reference errors
           val signature =
             if (sym.isInitialized) {
-              if (sym.isCapturedVariable) capturedVariableType(sym)
+              if (sym.isCapturedVariable) capturedVariables.capturedVariableType(sym)
               else if (isFreeTerm) sym.tpe
               else sym.info
             } else NoType

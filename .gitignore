@@ -68,3 +68,5 @@ project/**/metals.sbt
 
 .bsp
 .history
+
+.claude

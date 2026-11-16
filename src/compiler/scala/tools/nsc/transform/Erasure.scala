@@ -22,7 +22,6 @@ import scala.reflect.internal.Mode._
 
 abstract class Erasure extends InfoTransform
                           with scala.reflect.internal.transform.Erasure
-                          with typechecker.Analyzer
                           with TypingTransformers
                           with ast.TreeDSL
                           with TypeAdaptingTransformer
@@ -481,7 +480,13 @@ abstract class Erasure extends InfoTransform
 
 // -------- erasure on trees ------------------------------------------
 
-  override def newTyper(context: Context) = new Eraser(context)
+  /** Re-typechecks trees after erasure, using `Eraser` as its typer. */
+  object erasureAnalyzer extends {
+    val global: Erasure.this.global.type = Erasure.this.global
+  } with typechecker.AbstractAnalyzer {
+    override def newTyper(context: Context): Typer = new Eraser(context)
+  }
+  import erasureAnalyzer.{Context, OriginalTreeAttachment, Typer, newTyper, rootContextPostTyper}
 
   class EnterBridges(@unused unit: CompilationUnit, root: Symbol) {
     val site         = root.thisType
@@ -1412,6 +1417,60 @@ abstract class Erasure extends InfoTransform
     bridge.resetFlag(BRIDGE)
   }
 
+  // exclude primitives and value classes, which need special boxing
+  def isReferenceType(tp: Type) = !isErasedValueType(tp) && {
+    val sym = tp.typeSymbol
+    !(isPrimitiveValueClass(sym) || sym.isDerivedValueClass)
+  }
+
+  /**
+   * Check if LMF can adapt between an `impl` and an `intf` signature.
+   *
+   * The constraints are specified here: https://docs.oracle.com/javase/8/docs/api/java/lang/invoke/LambdaMetafactory.html
+   * Note that LMF can bridge between primitive types and their boxed variants. But we cannot use that because
+   * unboxing `null` in Scala needs to return the zero value (LMF would produce an NPE).
+   *
+   * Given `samMethodType: (U1..Un)Ru` and function type T1,..., Tn => Rt (the target method created by uncurry),
+   * we use the original lambda target for `implMethod: (<captured args> A1..An)Ra` if,
+   * for i=1..N:
+   *  Ai =:= Ui || (Ai <:< Ui <:< AnyRef)
+   *  Ru =:= void || (Ra =:= Ru || (Ra <:< AnyRef, Ru <:< AnyRef))
+   *
+   * (We can ignore captured arguments here)
+   *
+   * Then we can use the target method as-is, LMF will generate a correct bridge if needed.
+   *
+   * Otherwise, we create an `anonfun$adapted` method in delambdafy that uses the types closest
+   * to the target method that still meet the above requirements.
+   */
+  final def lmfAdaptationOk(implParamTypes: List[Type], implResultType: Type, intfParamTypes: List[Type], intfResultType: Type): (Boolean, Boolean) = {
+    val paramsOk = implParamTypes.corresponds(intfParamTypes) { (implParamType, samParamType) =>
+      implParamType =:= samParamType ||
+        (isReferenceType(implParamType) && isReferenceType(samParamType) && implParamType <:< samParamType)
+    }
+
+    val resultOk = intfResultType =:= UnitTpe ||
+      implResultType =:= intfResultType ||
+      isReferenceType(implResultType) && isReferenceType(intfResultType)
+
+    (paramsOk, resultOk)
+  }
+
+  /**
+   * If the SAM overrides a parent method, only use LMF if it can to bridge between the two signatures.
+   * Otherwise, the lambda is expanded to an anonymous class.
+   */
+  private def lmfOverridesOk(samSym: Symbol): Boolean = {
+    val samParamTypes = exitingErasure(samSym.info.paramTypes)
+    val samResult = exitingErasure(samSym.info.resultType)
+    samSym.allOverriddenSymbols.forall { overridden =>
+      val overriddenParamTypes = exitingErasure(overridden.info.paramTypes)
+      val overriddenResult = exitingErasure(overridden.info.resultType)
+      val (paramsOk, resultOk) = lmfAdaptationOk(samParamTypes, samResult, overriddenParamTypes, overriddenResult)
+      paramsOk && resultOk
+    }
+  }
+
   /** Does this symbol compile to the underlying platform's notion of an interface,
     * without requiring compiler magic before it can be instantiated?
     *
@@ -1428,7 +1487,7 @@ abstract class Erasure extends InfoTransform
     *
     * TODO: can we speed this up using the INTERFACE flag, or set it correctly by construction?
     */
-  final def compilesToPureInterface(tpSym: Symbol): Boolean = {
+  final def compilesToPureInterface(tpSym: Symbol, samSym: Symbol): Boolean = {
     def ok(sym: Symbol) =
       sym.isJavaInterface ||
       sym.isTrait &&
@@ -1441,18 +1500,25 @@ abstract class Erasure extends InfoTransform
       // HACK: this is to rule out traits with an effectful initializer.
       // The constructor only exists if the trait's template has statements.
       // Sadly, we can't be more precise without access to the tree that defines the SAM's owner.
+      // Note that Scala 2 adds an `$init$` method when a trait has concrete definition (including a method).
+      // `Function1`, for example, has a constructor (one that just returns).
       !sym.primaryConstructor.exists &&
-      (sym.isInterface || sym.info.decls.forall(mem => mem.isMethod || mem.isType)) // TODO OPT: && {sym setFlag INTERFACE; true})
+      (sym.isInterface || sym.info.decls.forall(mem => mem.isMethod || mem.isType))
 
     // we still need to check our ancestors even if the INTERFACE flag is set, as it doesn't take inheritance into account
-    ok(tpSym) && tpSym.ancestors.forall(sym => (sym eq AnyClass) || (sym eq ObjectClass) || ok(sym))
+    ok(tpSym) && tpSym.ancestors.forall(sym => (sym eq AnyClass) || (sym eq ObjectClass) || ok(sym)) &&
+    lmfOverridesOk(samSym)
   }
 
   final def isJvmAccessible(cls: Symbol, context: Context): Boolean = {
     // Phase travel necessary, isAccessible is too lax after erasure for Java-defined members, see
     // comment in its implementation.
-    !cls.isJavaDefined || enteringErasure(context.isAccessible(cls, cls.owner.thisType))
+    !cls.isJavaDefined || atErasure(context.isAccessible(cls, cls.owner.thisType))
   }
+
+  // `-Ystop-after:<phase before erasure>` leaves erasure out of the run: no phase to travel to.
+  private def atErasure[T](op: => T): T =
+    if (currentRun.erasurePhase == NoPhase) op else enteringErasure(op)
 
   /**
    * Check if a class defines a member after erasure. The phase travel is important for
@@ -1460,7 +1526,10 @@ abstract class Erasure extends InfoTransform
    * `AClass`.
    */
   final def definesMemberAfterErasure(cls: Symbol, member: Symbol): Boolean =
-    exitingErasure(cls.tpe.member(member.name).alternatives.contains(member))
+    atPostErasure(cls.tpe.member(member.name).alternatives.contains(member))
+
+  private def atPostErasure[T](op: => T): T =
+    if (currentRun.erasurePhase == NoPhase) op else exitingErasure(op)
 
   /**
    * The goal of this method is to find a class that is accessible (in bytecode) and can be used

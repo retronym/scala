@@ -26,7 +26,7 @@ import scala.tools.nsc.io.AbstractFile
 import scala.tools.nsc.reporters.Reporter
 import scala.tools.nsc.symtab.Flags.{ACCESSOR, PARAMACCESSOR}
 import scala.tools.nsc.symtab._
-import scala.tools.nsc.typechecker.{Analyzer, Typers}
+import scala.tools.nsc.typechecker.{AbstractAnalyzer, Analyzer, Typers}
 import scala.util.control.Breaks._
 import scala.util.control.ControlThrowable
 
@@ -34,12 +34,15 @@ import scala.util.control.ControlThrowable
  * This trait allows the IDE to have an instance of the PC that
  * does not clear the comments table at every new typer run (those
  * being many and close between in this context).
+ *
+ * Expanded comments are still dropped: they are derived from raw comments,
+ * which are replaced when a source is reloaded.
  */
 
 trait CommentPreservingTypers extends Typers {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
-  override def resetDocComments() = {}
+  override def resetDocComments() = global.docCommentsSupport.cookedDocComments.clear()
 }
 
 trait InteractiveAnalyzer extends Analyzer {
@@ -85,14 +88,18 @@ trait InteractiveAnalyzer extends Analyzer {
         for (defAtt <- sym.attachments.get[DefaultsOfLocalMethodAttachment])
           defAtt.defaultGetters foreach enterIfNotThere
       } else if (sym != null && sym.isClass && sym.isImplicit) {
-        val owningInfo = sym.owner.info
-        val existingDerivedSym = owningInfo.decl(sym.name.toTermName).filter(sym => sym.isSynthetic && sym.isMethod)
-        existingDerivedSym.alternatives foreach (owningInfo.decls.unlink)
-        val defTree = tree match {
+        val classDef = (tree match {
           case dd: DocDef => dd.definition // See scala/bug#9011, Scala IDE's presentation compiler incorporates ScaladocGlobal with InteractiveGlobal, so we have to unwrap DocDefs.
           case _ => tree
+        }).asInstanceOf[ClassDef]
+        // Keep the factory method, implicits cached during an earlier type check of this run refer to it.
+        sym.owner.info.decl(sym.name.toTermName).filter(m => m.isSynthetic && m.isMethod) match {
+          case NoSymbol => enterImplicitWrapper(classDef)
+          case factory  =>
+            val methDef = implicitWrapperDef(classDef).setSymbol(factory)
+            context.unit.synthetics(factory) = methDef
+            factory.setInfo(implicitFactoryMethodCompleter(methDef, sym))
         }
-        enterImplicitWrapper(defTree.asInstanceOf[ClassDef])
       }
       super.enterExistingSym(sym, tree)
     }
@@ -307,7 +314,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
 
   protected[interactive] var minRunId = 1
 
-  private[interactive] var interruptsEnabled = true
+  override var interruptsEnabled = true
 
   private val NoResponse: Response[_] = new Response[Any]
 
@@ -384,6 +391,16 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   /** Called from typechecker every time a top-level class or object is entered.
    */
   override def registerTopLevelSym(sym: Symbol): Unit = { currentTopLevelSyms += sym }
+
+  /** A targeted type check stops early, before the `@nowarn` annotations in the rest of the unit are known.
+   *  Its warnings stay suspended until a full type check of the unit reports them.
+   */
+  override protected def PerRunReporting: PerRunReporting = new PerRunReporting {
+    override def reportSuspendedMessages(unit: CompilationUnit): Unit = unit match {
+      case u: RichCompilationUnit if u.targetPos != NoPosition =>
+      case _ => super.reportSuspendedMessages(unit)
+    }
+  }
 
   protected type SymbolLoadersInInteractive = GlobalSymbolLoaders {
     val global: Global.this.type
@@ -940,7 +957,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
   private def forceDocComment(sym: Symbol, unit: RichCompilationUnit): Unit = {
     unit.body foreachPartial {
       case DocDef(comment, defn) if defn.symbol == sym =>
-        fillDocComment(defn.symbol, comment)
+        docCommentsSupport.fillDocComment(defn.symbol, comment)
         EmptyTree
       case _: ValOrDefDef =>
         EmptyTree
@@ -961,7 +978,7 @@ class Global(settings: Settings, _reporter: Reporter, projectName: String = "") 
         if (mirror eq NoSymbol)
           ("", "", NoPosition)
         else {
-          (expandedDocComment(mirror, site), rawDocComment(mirror), docCommentPos(mirror))
+          (docCommentsSupport.expandedDocComment(mirror, site), docCommentsSupport.rawDocComment(mirror), docCommentsSupport.docCommentPos(mirror))
         }
       }
     }

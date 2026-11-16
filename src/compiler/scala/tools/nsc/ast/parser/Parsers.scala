@@ -1278,7 +1278,10 @@ self =>
           else
             mkOp(infixType(InfixMode.RightOp))
         }
-        if (isIdent) checkRepeatedParam orElse asInfix
+        if (isIdent) checkRepeatedParam.orElse {
+          if (t.pos.isDefined) asInfix
+          else t
+        }
         else t
       }
 

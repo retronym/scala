@@ -530,7 +530,7 @@ sealed abstract class List[+A]
       var currentLast = newHead
 
       // we know that all elements are :: until at least firstMiss.tail
-      while (!(toProcess eq firstMiss)) {
+      while (toProcess ne firstMiss) {
         val newElem = new ::(toProcess.head, Nil)
         currentLast.next = newElem
         currentLast = newElem
@@ -550,7 +550,7 @@ sealed abstract class List[+A]
           next = next.tail
         } else {
           // its not a match - do we have outstanding elements?
-          while (!(nextToCopy eq next)) {
+          while (nextToCopy ne next) {
             val newElem = new ::(nextToCopy.head, Nil)
             currentLast.next = newElem
             currentLast = newElem

@@ -149,6 +149,13 @@ class CompletionTest {
   }
 
   @Test
+  def completionsAfterBrokenInterpolation(): Unit = {
+    val completer = setup()
+    checkExact(completer, "val x_y_z = 1; val a = s\"$\"\nval b = x_y")("x_y_z")
+    checkExact(completer, "val x_y_z = 1; val a = \"\nval b = x_y")("x_y_z")
+  }
+
+  @Test
   def symbolically(): Unit = {
     val completer = setup()
     checkExact(completer, """class C { def +++(a: Any) = 0; def ---(a: Any) = 0; this.++""")("+++")

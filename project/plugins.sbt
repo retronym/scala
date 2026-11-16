@@ -6,11 +6,11 @@ scalacOptions ++= Seq(
   "-Werror",
   "-Wconf:msg=IntegrationTest .* is deprecated:s,msg=itSettings .* is deprecated:s")
 
-libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.19.0"
+libraryDependencies += "org.apache.commons" % "commons-lang3" % "3.21.0"
 
 libraryDependencies += "biz.aQute.bnd" % "biz.aQute.bndlib" % "6.1.0"
 
-addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "1.1.4")
+addSbtPlugin("com.typesafe" % "sbt-mima-plugin" % "1.2.1")
 
 libraryDependencies ++= Seq(
   "org.eclipse.jgit" % "org.eclipse.jgit" % "4.11.9.201909030838-r",
@@ -25,5 +25,3 @@ Global / concurrentRestrictions := Seq(
 addSbtPlugin("com.github.sbt" % "sbt-header" % "5.11.0")
 
 addSbtPlugin("pl.project13.scala" % "sbt-jmh" % "0.4.8")
-
-addSbtPlugin("com.gradle" % "sbt-develocity" % "1.4.1")

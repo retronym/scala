@@ -461,12 +461,15 @@ abstract class UnPickler {
 
     /** Read an annotation argument, which is pickled either
      *  as a Constant or a Tree.
+     *
+     *  The pickler writes a `Literal` of constant type as its value. Give it back the type the typer gives a
+     *  literal, so that an argument has the same type whether the annotation was typed from source or unpickled.
      */
     protected def readAnnotArg(i: Int): Tree = bytes(index(i)) match {
       case TREE => at(i, () => readTree())
       case _    =>
         val const = at(i, () => readConstant())
-        Literal(const) setType const.tpe
+        Literal(const) setType (if (const.tag == UnitTag) definitions.UnitTpe else ConstantType(const))
     }
 
     /** Read a ClassfileAnnotArg (argument to a classfile annotation)
@@ -605,7 +608,7 @@ abstract class UnPickler {
       }
 
       val tpe    = readTypeRef()
-      val sym    = if (isTreeSymbolPickled(tag)) readSymbolRef() else null
+      val sym    = if (translations.isTreeSymbolPickled(tag)) readSymbolRef() else null
       val result = readTree()
 
       if (sym ne null) fixOverload(result.setSymbol(sym), tpe)

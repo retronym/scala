@@ -90,6 +90,8 @@ abstract class BackendUtils extends PerRunInit {
     case "24" => asm.Opcodes.V24
     case "25" => asm.Opcodes.V25
     case "26" => asm.Opcodes.V26
+    case "27" => asm.Opcodes.V27
+    case "28" => asm.Opcodes.V28
     // to be continued...
   })
 
@@ -192,6 +194,8 @@ abstract class BackendUtils extends PerRunInit {
         } else if (isStore(ins)) {
           val vi = ins.asInstanceOf[VarInsnNode]
           writtenLocals += vi.`var`
+        } else if (ins.getOpcode == IINC) {
+          writtenLocals += ins.asInstanceOf[IincInsnNode].`var`
         }
         result add cloned
         map += ((ins, cloned))
@@ -300,6 +304,11 @@ abstract class BackendUtils extends PerRunInit {
   def isRuntimeRefConstructor(insn: MethodInsnNode): Boolean = calleeInMap(insn, srRefConstructors)
   def isTupleConstructor(insn: MethodInsnNode): Boolean = calleeInMap(insn, tupleClassConstructors)
 
+  // The classes of those constructors, to tell from a `NEW` alone that it can't create a box, ref or tuple
+  def isPrimitiveBoxClass(internalName: InternalName): Boolean = primitiveBoxConstructors.contains(internalName)
+  def isRuntimeRefClass(internalName: InternalName): Boolean = srRefConstructors.contains(internalName)
+  def isTupleClass(internalName: InternalName): Boolean = tupleClassConstructors.contains(internalName)
+
 
   def isSideEffectFreeConstructorCall(insn: MethodInsnNode): Boolean = {
     insn.name == INSTANCE_CONSTRUCTOR_NAME && sideEffectFreeConstructors.get((insn.owner, insn.desc))
@@ -361,6 +370,9 @@ abstract class BackendUtils extends PerRunInit {
    *     static field should not be inlined.
    */
   def looksLikeForwarderOrFactoryOrTrivial(method: MethodNode, owner: InternalName, allowPrivateCalls: Boolean): Int = {
+    // A method without instructions comes from a signature file (ct.sym, a Bazel hjar), it cannot be inlined
+    if (method.instructions.size == 0) return -1
+
     val paramTypes = Type.getArgumentTypes(method.desc)
     val numPrimitives = paramTypes.count(_.getSort < Type.ARRAY) + (if (Type.getReturnType(method.desc).getSort < Type.ARRAY) 1 else 0)
 
@@ -1129,8 +1141,9 @@ object BackendUtils {
     else 0
   }
 
-  def classTagNewArrayArg(mi: MethodInsnNode, prodCons: ProdConsAnalyzer): InternalName = {
+  def classTagNewArrayArg(mi: MethodInsnNode, prodConsCache: ProdConsCache): InternalName = {
     if (mi.name == "newArray" && mi.owner == "scala/reflect/ClassTag" && mi.desc == "(I)Ljava/lang/Object;") {
+      val prodCons = prodConsCache.get
       val prods = prodCons.initialProducersForValueAt(mi, prodCons.frameAt(mi).stackTop - 1)
       if (prods.size == 1) prods.head match {
         case ctApply: MethodInsnNode =>

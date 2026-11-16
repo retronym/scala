@@ -30,6 +30,13 @@ object CanOpener {
     val unnamed = getClass.getClassLoader.getUnnamedModule
     val method = getMethodAccessible[Module]("implAddExportsOrOpens")
     for (base <- ModuleLayer.boot.findModule("java.base").toScala; pkg <- base.getPackages.asScala)
-      method.invokeAs[Unit](base, pkg, unnamed, True, True)
+      try
+        // the four-argument form works up through JDK 25
+        method.invokeAs[Unit](base, pkg, unnamed, True, True)
+      catch {
+        case _: java.lang.IllegalArgumentException =>
+          // but as of JDK 26, there's a fifth argument
+          method.invokeAs[Unit](base, pkg, unnamed, True, True, True)
+      }
   }
 }

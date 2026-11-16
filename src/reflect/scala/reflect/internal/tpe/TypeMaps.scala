@@ -20,7 +20,7 @@ import scala.collection.{immutable, mutable}
 import scala.collection.mutable.ListBuffer
 import Flags._
 import Variance._
-import util.StringContextStripMarginOps
+import util.{ReusableInstance, StringContextStripMarginOps}
 
 private[internal] trait TypeMaps {
   self: SymbolTable =>
@@ -909,7 +909,7 @@ private[internal] trait TypeMaps {
   }
 
   // dependent method types
-  object IsDependentCollector extends TypeCollector(initial = false) {
+  class IsDependentCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (tp.isImmediatelyDependent) result = true
       else if (!result) tp.dealias.foldOver(this)
@@ -1147,6 +1147,14 @@ private[internal] trait TypeMaps {
     }
   }
 
+  /** Applies `f` to the types satisfying `p`, in the order `FilterTypeCollector` collects them. */
+  class FilterForEachTypeFolder[U](p: Type => Boolean, f: Type => U) extends TypeFolder {
+    def apply(tp: Type): Unit = {
+      if (p(tp)) f(tp)
+      tp.foldOver(this)
+    }
+  }
+
   /** A map to implement the `filter` method. */
   class FindTypeCollector(p: Type => Boolean) extends TypeCollector[Option[Type]](None) {
     def apply(tp: Type): Unit =
@@ -1154,7 +1162,7 @@ private[internal] trait TypeMaps {
         if (p(tp)) result = Some(tp) else tp.foldOver(this)
   }
 
-  object ErroneousCollector extends TypeCollector(initial = false) {
+  class ErroneousCollector extends TypeCollector(initial = false) {
     def apply(tp: Type): Unit =
       if (!result) {
         result = tp.isError
@@ -1291,7 +1299,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  object UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
+  class UnrelatableCollector extends CollectTypeCollector[TypeSkolem](PartialFunction.empty) {
     var barLevel: Int = 0
 
     override def apply(tp: Type): Unit = tp match {
@@ -1300,7 +1308,7 @@ private[internal] trait TypeMaps {
     }
   }
 
-  object IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
+  class IsRelatableCollector extends TypeCollector[Boolean](initial = true) {
     var barLevel: Int = 0
 
     def apply(tp: Type): Unit = if (result) tp match {
@@ -1308,4 +1316,14 @@ private[internal] trait TypeMaps {
       case _ => tp.foldOver(this)
     }
   }
+
+  // These collectors carry mutable state, so runtime reflection must not share an instance between threads.
+  private[internal] val isDependentCollectorInstance: ReusableInstance[IsDependentCollector] =
+    ReusableInstance(new IsDependentCollector, enabled = isCompilerUniverse)
+  private[internal] val erroneousCollectorInstance: ReusableInstance[ErroneousCollector] =
+    ReusableInstance(new ErroneousCollector, enabled = isCompilerUniverse)
+  private[internal] val unrelatableCollectorInstance: ReusableInstance[UnrelatableCollector] =
+    ReusableInstance(new UnrelatableCollector, enabled = isCompilerUniverse)
+  private[internal] val isRelatableCollectorInstance: ReusableInstance[IsRelatableCollector] =
+    ReusableInstance(new IsRelatableCollector, enabled = isCompilerUniverse)
 }

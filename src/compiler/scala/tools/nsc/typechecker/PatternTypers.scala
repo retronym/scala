@@ -42,7 +42,7 @@ import Mode._
  * }}}
  */
 trait PatternTypers {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -358,6 +358,7 @@ trait PatternTypers {
           val extractedTp = glb(ensureFullyDefined(pt) :: unapplyArgTypeInferred :: Nil)
           val formals = patmat.unapplyFormals(typedApplied, args)(context)
           val typedUnapply = UnApply(typedApplied, typedArgsForFormals(args, formals, mode)) setPos tree.pos setType extractedTp
+          tree.getAndRemoveAttachment[CheckableRecheckAttachment].foreach(typedUnapply.updateAttachment(_))
 
           if (canRemedy && !(typedApplied.symbol.owner isNonBottomSubClass ClassTagClass))
             wrapClassTagUnapply(typedUnapply, remedyUncheckedWithClassTag, extractedTp)

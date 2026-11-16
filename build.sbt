@@ -35,15 +35,20 @@
 import scala.build._, VersionUtil._
 
 // Non-Scala dependencies:
-val junitDep          = "junit"                          % "junit"                            % "4.13.2"
-val junitInterfaceDep = "com.github.sbt"                 % "junit-interface"                  % "0.13.3"                          % Test
-val scalacheckDep     = "org.scalacheck"                %% "scalacheck"                       % "1.18.1"                          % Test
-val jolDep            = "org.openjdk.jol"                % "jol-core"                         % "0.16"
-val asmDep            = "org.scala-lang.modules"         % "scala-asm"                        % versionProps("scala-asm.version")
-val jlineDep          = "org.jline"                      % "jline"                            % versionProps("jline.version")     classifier "jdk8"
-val testInterfaceDep  = "org.scala-sbt"                  % "test-interface"                   % "1.0"
-val diffUtilsDep      = "io.github.java-diff-utils"      % "java-diff-utils"                  % "4.16"
-val compilerInterfaceDep = "org.scala-sbt"               % "compiler-interface"               % "1.10.8"
+val junitDep             = "junit"                          % "junit"                            % "4.13.2"
+val junitInterfaceDep    = "com.github.sbt"                 % "junit-interface"                  % "0.13.3"                          % Test
+val scalacheckDep        = "org.scalacheck"                %% "scalacheck"                       % "1.20.0"                          % Test
+val jolDep               = "org.openjdk.jol"                % "jol-core"                         % "0.16"
+val asmDep               = "org.scala-lang.modules"         % "scala-asm"                        % versionProps("scala-asm.version")
+val jlineVersion         = versionProps("jline.version")
+val jlineTerminalDep     = "org.jline"                      % "jline-terminal"                   % jlineVersion
+val jlineTerminalJniDep  = "org.jline"                      % "jline-terminal-jni"               % jlineVersion
+val jlineReaderDep       = "org.jline"                      % "jline-reader"                     % jlineVersion
+val jlineBuiltinsDep     = "org.jline"                      % "jline-builtins"                   % jlineVersion // for InputRC
+val jlineDeps            = Seq(jlineTerminalDep, jlineTerminalJniDep, jlineReaderDep, jlineBuiltinsDep)
+val testInterfaceDep     = "org.scala-sbt"                  % "test-interface"                   % "1.0"
+val diffUtilsDep         = "io.github.java-diff-utils"      % "java-diff-utils"                  % "4.18"
+val compilerInterfaceDep = "org.scala-sbt"                  % "compiler-interface"               % "1.13.0"
 
 val projectFolder = settingKey[String]("subfolder in src when using configureAsSubproject, else the project name")
 
@@ -55,11 +60,8 @@ val fatalWarnings = settingKey[Boolean]("whether or not warnings should be fatal
 // enable fatal warnings automatically on CI
 Global / fatalWarnings := insideCI.value
 
-Global / credentials ++= {
-  val gpgKey = Credentials("GPG Key", "gpg", "2A5E8B338438CAC7033F9D8FB8A045C0A6EC398E", "ignored")
-  val file = List(Path.userHome / ".credentials").filter(f => f.exists && !f.isDirectory).map(Credentials.apply)
-  gpgKey :: file
-}
+Global / credentials ++=
+  List(Path.userHome / ".credentials").filter(f => f.exists && !f.isDirectory).map(Credentials.apply)
 
 lazy val publishSettings : Seq[Setting[_]] = Seq(
   // Add a "default" Ivy configuration because sbt expects the Scala distribution to have one:
@@ -72,7 +74,7 @@ lazy val publishSettings : Seq[Setting[_]] = Seq(
 // should not be set directly. It is the same as the Maven version and derived automatically from `baseVersion` and
 // `baseVersionSuffix`.
 globalVersionSettings
-Global / baseVersion       := "2.13.18"
+Global / baseVersion       := "2.13.19"
 Global / baseVersionSuffix := "SNAPSHOT"
 ThisBuild / organization   := "org.scala-lang"
 ThisBuild / homepage       := Some(url("https://www.scala-lang.org"))
@@ -94,50 +96,7 @@ ThisBuild / headerLicense  := Some(HeaderLicense.Custom(
 // Save MiMa logs
 SavedLogs.settings
 
-Global / scalaVersion      := {
-  if (DottySupport.compileWithDotty)
-    DottySupport.dottyVersion
-  else
-    versionProps("starr.version")
-}
-
-// Run `sbt -Dscala.build.publishDevelocity` to publish build scans to develocity.scala-lang.org
-// In Jenkins, the `...publishDevelocity=stage` value is used to set the `JENKINS_STAGE` value of the scan
-ThisBuild / develocityConfiguration := {
-  def pubDev = Option(System.getProperty("scala.build.publishDevelocity"))
-  val isInsideCI = sys.env.get("JENKINS_URL").exists(_.contains("scala-ci.typesafe.com"))
-  val config = develocityConfiguration.value
-  val buildScan = config.buildScan
-  val buildCache = config.buildCache
-  config
-    .withProjectId(ProjectId("scala2"))
-    .withServer(config.server.withUrl(Some(url("https://develocity.scala-lang.org"))))
-    .withBuildScan(
-      buildScan
-        .withPublishing(Publishing.onlyIf(ctx => pubDev.nonEmpty && ctx.authenticated))
-        .withBackgroundUpload(false)
-        .withTag(if (isInsideCI) "CI" else "Local")
-        .withTag("2.13")
-        .withLinks(buildScan.links ++
-          sys.env.get("BUILD_URL").map(u => "Jenkins Build" -> url(u)) ++
-          sys.env.get("repo_ref").map(sha => "GitHub Commit" -> url(s"https://github.com/scala/scala/commit/$sha")) ++
-          sys.env.get("_scabot_pr").map(pr => "GitHub PR " -> url(s"https://github.com/scala/scala/pull/$pr")))
-        .withValues(buildScan.values +
-          ("GITHUB_REPOSITORY" -> "scala/scala") +
-          ("GITHUB_BRANCH" -> "2.13.x") ++
-          pubDev.filterNot(_.isEmpty).map("JENKINS_STAGE" -> _) ++
-          sys.env.get("JOB_NAME").map("JENKINS_JOB_NAME" -> _) ++
-          sys.env.get("repo_ref").map("GITHUB_SHA" -> _) ++
-          sys.env.get("_scabot_pr").map("GITHUB_PR" -> _) ++
-          sys.env.get("NODE_NAME").map("JENKINS_NODE" -> _))
-        .withObfuscation(buildScan.obfuscation.withIpAddresses(_.map(_ => "0.0.0.0")))
-    )
-    .withBuildCache(
-      buildCache
-        .withLocal(buildCache.local.withEnabled(false))
-        .withRemote(buildCache.remote.withEnabled(false))
-    )
-}
+Global / scalaVersion      := versionProps("starr.version")
 
 lazy val instanceSettings = Seq[Setting[_]](
   // we don't cross build Scala itself
@@ -157,6 +116,7 @@ lazy val instanceSettings = Seq[Setting[_]](
       s2
     }
   },
+  Compile / doc / scalaInstance := scalaInstance.value,
   // sbt endeavours to align both scalaOrganization and scalaVersion
   // in the Scala artefacts, for example scala-library and scala-compiler.
   // This doesn't work in the scala/scala build because the version of scala-library and the scalaVersion of
@@ -270,12 +230,7 @@ lazy val commonSettings = instanceSettings ++ clearSourceAndResourceDirectories 
   // Don't log process output (e.g. of forked `compiler/runMain ...Main`), just pass it
   // directly to stdout
   run / outputStrategy := Some(StdoutOutput)
-) ++ removePomDependencies ++ setForkedWorkingDirectory ++ (
-  if (DottySupport.compileWithDotty)
-    DottySupport.commonSettings
-  else
-    Seq()
-)
+) ++ removePomDependencies ++ setForkedWorkingDirectory
 
 lazy val fatalWarningsSettings = Seq(
   Compile / scalacOptions ++= {
@@ -497,12 +452,6 @@ lazy val library = configureAsSubproject(project)
     MimaFilters.mimaSettings,
   )
   .settings(filterDocSources("*.scala" -- regexFileFilter(".*/scala/runtime/.*")))
-  .settings(
-    if (DottySupport.compileWithDotty)
-      DottySupport.librarySettings
-    else
-      Seq()
-  )
 
 lazy val reflect = configureAsSubproject(project)
   .settings(generatePropertiesFileSettings)
@@ -549,7 +498,7 @@ lazy val compiler = configureAsSubproject(project)
     libraryDependencies += diffUtilsDep,
     // This is only needed for the POM:
     // TODO: jline dependency is only needed for the REPL shell, which should move to its own jar
-    libraryDependencies += jlineDep,
+    libraryDependencies ++= jlineDeps,
     buildCharacterPropertiesFile := (Compile / resourceManaged).value / "scala-buildcharacter.properties",
     Compile / resourceGenerators += generateBuildCharacterPropertiesFile.map(file => Seq(file)).taskValue,
     // this a way to make sure that classes from interactive and scaladoc projects
@@ -597,9 +546,7 @@ lazy val compiler = configureAsSubproject(project)
       "-doc-root-content", (Compile / sourceDirectory).value + "/rootdoc.txt"
     ),
     Osgi.headers ++= Seq(
-      "Import-Package" -> raw"""org.jline.keymap.*;resolution:=optional
-                            |org.jline.reader.*;resolution:=optional
-                            |org.jline.style.*;resolution:=optional
+      "Import-Package" -> raw"""org.jline.reader.*;resolution:=optional
                             |org.jline.terminal;resolution:=optional
                             |org.jline.terminal.impl;resolution:=optional
                             |org.jline.terminal.spi;resolution:=optional
@@ -646,7 +593,7 @@ lazy val replFrontend = configureAsSubproject(project, srcdir = Some("repl-front
   .settings(fatalWarningsSettings)
   .settings(publish / skip := true)
   .settings(
-    libraryDependencies += jlineDep,
+    libraryDependencies ++= jlineDeps,
     name := "scala-repl-frontend",
   )
   .settings(
@@ -1186,7 +1133,7 @@ lazy val scalaDist = Project("scalaDist", file(".") / "target" / "scala-dist-dis
       (htmlOut ** "*.html").get ++ (fixedManOut ** "*.1").get
     }.taskValue,
     Compile / managedResourceDirectories := Seq((Compile / resourceManaged).value),
-    libraryDependencies += jlineDep,
+    libraryDependencies ++= jlineDeps,
     apiURL := None,
     fixPom(
       "/project/name" -> <name>Scala Distribution Artifacts</name>,
@@ -1288,7 +1235,7 @@ lazy val remainingTests = List(
   (reflect / mimaReportBinaryIssues      ).result.map(_ -> "reflect/mimaReportBinaryIssues"), // ..so specify both
   (testJDeps                             ).result.map(_ -> "testJDeps"),
   (testJarSize                           ).result.map(_ -> "testJarSize"),
-  (bench / Compile / compile).map(_ => ()).result.map(_ -> "bench/compile"),
+  (bench / Jmh / compile).map(_ => ()).result.map(_ -> "bench/Jmh/compile"),
   Def.task(()).dependsOn( // Run these in parallel:
      library / Compile / doc,
      reflect / Compile / doc,
@@ -1349,7 +1296,7 @@ lazy val distDependencies = Seq(replFrontend, compiler, library, reflect, scalap
 lazy val dist = (project in file("dist"))
   .settings(commonSettings)
   .settings(
-    libraryDependencies += jlineDep,
+    libraryDependencies ++= jlineDeps,
     mkBin := mkBinImpl.value,
     mkQuick := Def.task {
       val cp = (testP / IntegrationTest / fullClasspath).value
@@ -1363,8 +1310,9 @@ lazy val dist = (project in file("dist"))
     target := (ThisBuild / target).value / projectFolder.value,
     Compile / packageBin := {
       val targetDir = (ThisBuild / buildDirectory).value / "pack" / "lib"
-      val jlineJAR = findJar((Compile / dependencyClasspath).value, jlineDep).get.data
-      val mappings = Seq((jlineJAR, targetDir / "jline.jar"))
+      val mappings = (Compile / dependencyClasspath).value.flatMap { entry =>
+        entry.get(moduleID.key).filter(_.organization == "org.jline").map(m => (entry.data, targetDir / s"${m.name}.jar"))
+      }
       IO.copy(mappings, CopyOptions() withOverwrite true)
       targetDir
     },
@@ -1491,14 +1439,3 @@ addCommandAlias("scalap",   "scalap/compile:runMain              scala.tools.sca
 
 // aliases to projects to prevent name clashes
 def testP = test
-
-/** Find a specific module's JAR in a classpath, comparing only organization and name */
-def findJar(files: Seq[Attributed[File]], dep: ModuleID): Option[Attributed[File]] = {
-  def extract(m: ModuleID) = (m.organization, m.name)
-  files.find(_.get(moduleID.key).map(extract _) == Some(extract(dep)))
-}
-
-{
-  scala.build.TravisOutput.installIfOnTravis()
-  Nil
-}

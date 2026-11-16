@@ -26,7 +26,7 @@ import java.util.IdentityHashMap
 private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTable =>
 
   // No sharing of map objects:
-  override protected def commonOwnerMap = new CommonOwnerMap
+  override protected[reflect] def commonOwnerMap = new CommonOwnerMap
 
   // we can keep this lock fine-grained, because super.unique just updates the cache
   // and, in particular, doesn't call any reflection APIs which makes deadlocks impossible
@@ -67,6 +67,10 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   override def subsametypeRecursions = _subsametypeRecursions.get
   override def subsametypeRecursions_=(value: Int) = _subsametypeRecursions.set(value)
 
+  private lazy val _globalGlbDepth = mkThreadLocalStorage(Depth.Zero)
+  override def globalGlbDepth = _globalGlbDepth.get
+  override def globalGlbDepth_=(value: Depth) = _globalGlbDepth.set(value)
+
   private lazy val _pendingSubTypes = mkThreadLocalStorage(new mutable.HashSet[SubTypePair])
   override def pendingSubTypes = _pendingSubTypes.get
 
@@ -80,11 +84,9 @@ private[reflect] trait SynchronizedTypes extends internal.Types { self: SymbolTa
   private lazy val _pendingBaseTypes = mkThreadLocalStorage(new mutable.HashSet[Type])
   override def pendingBaseTypes = _pendingBaseTypes.get
 
-  private lazy val _lubResults = mkThreadLocalStorage(new mutable.HashMap[(Depth, List[Type]), Type])
-  override def lubResults = _lubResults.get
-
-  private lazy val _glbResults = mkThreadLocalStorage(new mutable.HashMap[(Depth, List[Type]), Type])
-  override def glbResults = _glbResults.get
+  private lazy val _lubGlbCaches = mkThreadLocalStorage(new LubGlbCaches(null))
+  override def lubGlbCaches = _lubGlbCaches.get
+  override def lubGlbCaches_=(caches: LubGlbCaches) = _lubGlbCaches.set(caches)
 
   private lazy val _indent = mkThreadLocalStorage("")
   override def indent = _indent.get

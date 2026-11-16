@@ -2,13 +2,26 @@
 
 We follow the standard GitHub [fork & pull](https://help.github.com/articles/using-pull-requests/#fork--pull) approach to pull requests. Just fork the official repo, develop in a branch, and submit a PR!
 
-You're always welcome to submit your PR straight away and start the discussion (without reading the rest of this wonderful doc, or the [`README.md`](README.md)). The goal of these notes is to make your experience contributing to Scala as smooth and pleasant as possible. We're happy to guide you through the process once you've submitted your PR.
+You're always welcome to submit your PR straight away and start the discussion (without reading the rest of this wonderful doc, or the [`README.md`](README.md)).
+But take into account our [LLM policy](LLM_POLICY.md) for rules and guidelines regarding the use  of LLM-based tools in your contributions.
+The goal of these notes is to make your experience contributing to Scala as smooth and pleasant as possible.
+We're happy to guide you through the process once you've submitted your PR.
 
 ## What kind of PR are you submitting?
 
-Regardless of the nature of your Pull Request, we have to ask you to digitally sign the [Scala CLA](https://contribute.akka.io/cla/scala), to protect the OSS nature of the code base.
+Regardless of the nature of your Pull Request, we have to ask you to digitally sign the [Scala CLA](https://cla.scala-lang.org/scala/scala), to protect the OSS nature of the code base.
 
 You don't need to submit separate PRs for 2.12.x and 2.13.x. Any change accepted on 2.12.x will, in time, be merged onto 2.13.x too.
+
+### Standard library additions
+
+The Scala 2 standard library is mostly frozen for additions. Any new additions should be proposed and accepted in Scala 3 first before being considered for a possible Scala 2 backport. Don't put a lot of work in a Scala 2 backport of an addition before inquiring first about its chances of being accepted.
+
+Additions to the Scala 3 standard library are governed by the Scala Standard Library Process, which is documented [in the Scala 3 repo](https://github.com/scala/scala3/blob/main/docs/_docs/contributing/procedures/contributing-to-stdlib.md).
+
+### Standard library fixes
+
+If you want to fix a bug in the Scala 2 standard library, you're free to submit the fix to either Scala 2 first, or Scala 3 first. Once the fix is accepted, you may also be encouraged to submit a forward or backward port to the other repo.
 
 ### Documentation
 
@@ -22,9 +35,9 @@ For bigger documentation changes, you may want to poll contributors.scala-lang.o
 
 For bigger changes, we do recommend announcing your intentions on contributors.scala-lang.org first, to avoid duplicated effort, or spending a lot of time reworking something we are not able to change at this time in the release cycle, for example.
 
-The kind of code we can accept depends on the life cycle for the release you're targeting. The current maintenance release (2.13.x) cannot break source/binary compatibility, which means public APIs cannot change. It also means we are reluctant to change, e.g., type inference or implicit search, as this can have unforeseen consequences for source compatibility.
+The kind of code we can accept depends on the life cycle for the release you're targeting. The current maintenance release (2.13.x) cannot break source/binary compatibility of the standard library, which means public APIs cannot change. It also means we are reluctant to change, e.g., type inference or implicit search, as this can have unforeseen consequences for source compatibility.
 
-#### Bug Fix
+#### Bug Fix (compiler or standard library)
 
 At the end of the PR description, which is autofilled with the commit message if there is only one commit, add the phrase, "Fixes scala/bug#NNNN", where `https://github.com/scala/bug/issues/NNNN` tracks the bug you're fixing. Github will turn your bug number into a link.
 
@@ -117,12 +130,30 @@ scala  -cp out Test
 ```
 
 **Flags**
-  - To specify compiler flags such as `-Werror -Xlint`, you can add a comment at the top of your source file of the form:
-    `//> using options -Werror -Xlint`
-  - Similarly, a `// javac: <flags>` comment in a Java source file passes flags to the Java compiler.
-  - A `// filter: <regex>` comment eliminates output lines that match the filter before comparing to the `.check` file.
-  - A `// java: <flags>` comment makes a `run` test execute in a separate JVM and passes the additional flags to the `java` command.
-  - A `// javaVersion <N[+| - M]>` comment makes partest skip the test if the java version is outside the requested range (e.g. `8`, `15+`, `9 - 11`)
+
+Partest reads `//> using <tool> <args>` directives from the first 10 lines of each source file in a test. Directives from all files of a test apply to the whole test. Any other header line that looks like a directive (an unknown `using` key, or the obsolete `// scalac:` style) fails the test.
+
+  - `//> using options -Werror -Xlint` passes flags to the Scala compiler.
+  - `//> using javacOpt <flags>` passes flags to the Java compiler.
+  - `//> using filter <regex>` eliminates output lines that match the regex before comparing to the `.check` file. Quote a regex that contains spaces.
+  - `//> using javaOpt <flags>` makes a `run` test execute in a separate JVM and passes the additional flags to the `java` command.
+  - `//> using jvm <N[+|-M]>` makes partest skip the test if the Java version is outside the requested range (e.g. `8`, `15+`, `9-11`).
+  - `//> using retest.options <flags>` on a `neg` test: after the expected failure matches the `.check` file, compile again with the extra flags and expect success.
+
+**Check files**
+
+Before comparing, partest drops output lines that match any regex in `test/files/filters` (for JVM warnings and similar) or in a `filters` file in the test's category directory, as well as the test's own `//> using filter` patterns.
+
+Output that differs between environments can be handled inside the `.check` file. A line starting with `#partest` begins a block that is kept only if its condition holds, until the next `#partest` line. A bare `#partest` is always true, which ends a conditional block. Conditions are `java11` (exactly that version), `java11+`, `isWin`, or a compiler flag such as `-Xlint` that is set in the run's extra options; a leading `!` negates any of them. For example:
+
+```
+#partest java8
+  location: class
+#partest !java8
+  location: class Test
+#partest
+1 error
+```
 
 **Common Usage**
 
@@ -267,7 +298,7 @@ https://tbaggery.com/2008/04/19/a-note-about-git-commit-messages.html
 
 ### Pass Scabot
 
-Our pull request bot, Scabot, automatically builds all of the PR's commits individually on Jenkins. Every commit is expected to pass CI, so we can `git bisect` later.
+Our pull request bot, Scabot, automatically builds the PR on Jenkins.
 
 Click on the little x next to a commit sha to go to the overview of the PR validation job. To diagnose a failure, consult the console output of the job that failed.
 

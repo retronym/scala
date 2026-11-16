@@ -1652,8 +1652,12 @@ abstract class RefChecks extends Transform {
         annots.foreach { ann =>
           checkVarArgs(ann.atp, tree)
           RefCheckTypeMap.check(ann.atp, tree)
-          if (ann.original != null && ann.original.hasExistingSymbol)
-            checkUndesiredProperties(ann.original.symbol, tree.pos)
+          val original = ann.original match {
+            case Block(Nil, res) => res
+            case original => original
+          }
+          if (original != null && original.hasExistingSymbol)
+            checkUndesiredProperties(original.symbol, original.pos)
         }
         val annotsBySymbol = new mutable.LinkedHashMap[Symbol, ListBuffer[AnnotationInfo]]()
         val transformedAnnots = {
@@ -1872,8 +1876,13 @@ abstract class RefChecks extends Transform {
       if (!sym.exists)
         devWarning("Select node has NoSymbol! " + tree + " / " + tree.tpe)
 
-      if (name == nme.synchronized_ && isBoxedValueClass(qual.tpe.typeSymbol))
-        refchecksWarning(tree.pos, s"Suspicious `synchronized` call involving boxed primitive `${qual.tpe.typeSymbol.name}`", WarningCategory.LintUniversalMethods)
+      if (name == nme.synchronized_) {
+        val cls = qual.tpe.typeSymbol
+        // JEP 390. Boxed primitives are annotated only on JDK 16+; BoxedUnit is not annotated.
+        def isValueBased = isBoxedValueClass(cls) || cls.hasAnnotation(JdkValueBasedAnnot)
+        if (isValueBased)
+          refchecksWarning(tree.pos, s"Suspicious `synchronized` call on value-based class `${cls.name}`", WarningCategory.LintUniversalMethods)
+      }
 
       def checkSuper(mix: Name) =
         // term should have been eliminated by super accessors
@@ -2026,6 +2035,8 @@ abstract class RefChecks extends Transform {
         // type bounds (bug #935), issues deprecation warnings for symbols used
         // inside annotations.
         applyRefchecksToAnnotations(tree)
+        for (attachment <- tree.getAndRemoveAttachment[analyzer.CheckableRecheckAttachment]; recheck <- attachment.rechecks; (msg, category) <- recheck())
+          refchecksWarning(tree.pos, msg, category)
         val result: Tree = tree match {
           // NOTE: a val in a trait is now a DefDef, with the RHS being moved to an Assign in Constructors
           case tree: ValOrDefDef =>

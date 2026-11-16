@@ -142,7 +142,9 @@ import scala.tools.nsc.backend.jvm.opt.BytecodeUtils._
  * running an Analyzer (just that frames allocate more space than required). The correct max
  * values written to the bytecode are re-computed during classfile serialization.
  * To keep things simpler, we don't update the max values in every optimization:
- *   - we do it in `removeUnreachableCodeImpl`, because it's quite straightforward
+ *   - they are computed once by `BackendUtils.computeMaxLocalsMaxStack` before running the first
+ *     Analyzer, and cached using the `ACC_MAXS_COMPUTED` pseudo-flag
+ *   - optimizations that can grow the stack (e.g., box/unbox, copy propagation) increase maxStack
  *   - maxLocals is updated in `compactLocalVariables`, which runs at the end of method optimizations
  *
  *
@@ -287,6 +289,11 @@ abstract class LocalOpt {
 
       traceIfChanged("beforeMethodOpt")
 
+      // box-unbox, stale stores and push-pop share an analysis of the producers and consumers, until a pass changes
+      // the method (nullness and DCE run before any of them)
+      val prodConsCache = new ProdConsCache(method, ownerClassName)
+      def invalidateIf(changed: Boolean): Unit = if (changed) prodConsCache.invalidate()
+
       // NULLNESS OPTIMIZATIONS
       val runNullness = compilerSettings.optNullnessTracking && requestNullness
       val nullnessOptChanged = runNullness && nullnessOptimizations(method, ownerClassName)
@@ -303,27 +310,31 @@ abstract class LocalOpt {
 
       // BOX-UNBOX
       val runBoxUnbox = compilerSettings.optBoxUnbox && (requestBoxUnbox || nullnessOptChanged)
-      val boxUnboxChanged = runBoxUnbox && boxUnboxElimination(method, ownerClassName)
+      val boxUnboxChanged = runBoxUnbox && boxUnboxElimination(method, ownerClassName, prodConsCache)
+      invalidateIf(boxUnboxChanged)
       traceIfChanged("boxUnbox")
 
       // COPY PROPAGATION
       val runCopyProp = compilerSettings.optCopyPropagation && (requestCopyProp || boxUnboxChanged)
       val copyPropChanged = runCopyProp && copyPropagation(method, ownerClassName)
+      invalidateIf(copyPropChanged)
       traceIfChanged("copyProp")
 
       // STALE STORES
       val runStaleStores = compilerSettings.optCopyPropagation && (requestStaleStores || nullnessOptChanged || codeRemoved || boxUnboxChanged || copyPropChanged)
-      val (storesRemoved, intrinsicRewrittenByStaleStores, callInlinedByStaleStores) = if (!runStaleStores) (false, false, false) else eliminateStaleStoresAndRewriteSomeIntrinsics(method, ownerClassName)
+      val (storesRemoved, intrinsicRewrittenByStaleStores, callInlinedByStaleStores) = if (!runStaleStores) (false, false, false) else eliminateStaleStoresAndRewriteSomeIntrinsics(method, ownerClassName, prodConsCache)
+      invalidateIf(storesRemoved || intrinsicRewrittenByStaleStores || callInlinedByStaleStores)
       traceIfChanged("staleStores")
 
       // REDUNDANT CASTS
       val runRedundantCasts = compilerSettings.optRedundantCasts && (requestRedundantCasts || boxUnboxChanged || intrinsicRewrittenByStaleStores || callInlinedByStaleStores)
       val (typeInsnChanged, intrinsicRewrittenByCasts) = if (!runRedundantCasts) (false, false) else eliminateRedundantCastsAndRewriteSomeIntrinsics(method, ownerClassName)
+      invalidateIf(typeInsnChanged || intrinsicRewrittenByCasts)
       traceIfChanged("redundantCasts")
 
       // PUSH-POP
       val runPushPop = compilerSettings.optCopyPropagation && (requestPushPop || storesRemoved || typeInsnChanged)
-      val (pushPopRemoved, pushPopCastAdded, pushPopNullCheckAdded) = if (!runPushPop) (false, false, false) else eliminatePushPop(method, ownerClassName)
+      val (pushPopRemoved, pushPopCastAdded, pushPopNullCheckAdded) = if (!runPushPop) (false, false, false) else eliminatePushPop(method, ownerClassName, prodConsCache)
       traceIfChanged("pushPop")
 
       // STORE-LOAD PAIRS
@@ -800,7 +811,8 @@ object LocalOptImpls {
    *
    * Note that no instructions are eliminated.
    *
-   * Returns a pair of booleans (handlerRemoved, liveHandlerRemoved)
+   * Returns a `RemoveHandlersResult`, which tells whether any handler was removed and whether
+   * a live (reachable) handler was removed.
    *
    * The `liveHandlerRemoved` result depends on `removeUnreachableCode` being executed
    * before, so that `BackendUtils.isLabelReachable` gives a correct answer.

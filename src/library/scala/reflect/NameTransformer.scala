@@ -61,31 +61,37 @@ object NameTransformer {
   enterOp('?', "$qmark")
   enterOp('@', "$at")
 
-  /** Replace operator symbols by corresponding `\$opname`.
+  /** Replaces operator symbols by corresponding `\$opname`.
    *
    *  @param name the string to encode
    *  @return     the string with all recognized opchars replaced with their encoding
    */
-  def encode(name: String): String = {
-    var buf: StringBuilder = null
+  def encode(name: String): String = encodeCharSequence(name).toString
+
+  /** Replaces operator symbols by corresponding `\$opname`, returning `name`
+   *  itself when no encoding is needed.
+   */
+  private[scala] def encodeCharSequence(name: CharSequence): CharSequence = {
+    var buf: java.lang.StringBuilder = null
     val len = name.length()
     var i = 0
     while (i < len) {
       val c = name charAt i
       if (c < nops && (op2code(c.toInt) ne null)) {
         if (buf eq null) {
-          buf = new StringBuilder()
-          buf.append(name.substring(0, i))
+          buf = new java.lang.StringBuilder()
+          buf.append(name, 0, i)
         }
         buf.append(op2code(c.toInt))
       /* Handle glyphs that are not valid Java/JVM identifiers */
       }
       else if (!Character.isJavaIdentifierPart(c)) {
         if (buf eq null) {
-          buf = new StringBuilder()
-          buf.append(name.substring(0, i))
+          buf = new java.lang.StringBuilder()
+          buf.append(name, 0, i)
         }
-        buf.append("$u%04X".format(c.toInt))
+        buf.append("$u")
+        appendHex4(buf, c)
       }
       else if (buf ne null) {
         buf.append(c)
@@ -95,7 +101,22 @@ object NameTransformer {
     if (buf eq null) name else buf.toString()
   }
 
-  /** Replace `\$opname` by corresponding operator symbol.
+  /** Append a 4-uppercase-hex-digit representation of `c` to the given `buf`.
+   *
+   *  The result is '0'-padded if necessary.
+   */
+  private def appendHex4(buf: java.lang.StringBuilder, c: Char): Unit = {
+    var x = c.toInt
+    var j = 0
+    while (j != 4) {
+      val d = (x >>> 12) & 0xf
+      buf.append((d + (if (d < 10) '0' else ('A' - 10))).toChar)
+      x <<= 4
+      j += 1
+    }
+  }
+
+  /** Replaces `\$opname` by corresponding operator symbol.
    *
    *  @param name0 the string to decode
    *  @return      the string with all recognized operator symbol encodings replaced with their name

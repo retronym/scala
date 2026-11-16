@@ -16,7 +16,7 @@ package scala.tools
 package xsbt
 
 import java.nio.file.Path
-import xsbti.VirtualFile
+import xsbti.{ AnalysisCallback4, ClassRef, VirtualFile }
 import xsbti.api.DependencyContext
 import DependencyContext._
 
@@ -28,6 +28,13 @@ import java.util.{ HashMap => JavaMap }
 
 object Dependency {
   def name = "xsbt-dependency"
+
+  // DependencyByMacroExpansion only exists in Zinc 1.10 and later
+  private lazy val macroExpansionContext: DependencyContext =
+    try DependencyByMacroExpansion
+    catch {
+      case _: NoSuchFieldError => DependencyByMemberRef
+    }
 }
 
 /**
@@ -86,6 +93,15 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
       }
     }
 
+    // AnalysisCallback4 only exists in recent Zinc
+    private val callback4: AnalysisCallback4 =
+      try callback match {
+        case cb: AnalysisCallback4 => cb
+        case _                     => null
+      } catch {
+        case _: NoClassDefFoundError => null
+      }
+
     private val sourceFile: VirtualFile = unit.source.file match { case AbstractZincFile(vf) => vf case x => throw new MatchError(x) }
     private val responsibleOfImports = firstClassOrModuleClass(unit.body)
     private var orphanImportsReported = false
@@ -114,6 +130,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
     val memberRef = processDependency(DependencyByMemberRef, allowLocal = false)(_)
     val inheritance = processDependency(DependencyByInheritance, allowLocal = true)(_)
     val localInheritance = processDependency(LocalDependencyByInheritance, allowLocal = true)(_)
+    val scala2MacroExpansion = processDependency(Dependency.macroExpansionContext, allowLocal = false)(_)
 
     @deprecated("Use processDependency that takes allowLocal.", "1.1.0")
     def processDependency(context: DependencyContext)(dep: ClassDependency): Unit =
@@ -128,9 +145,13 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
         dep: ClassDependency
     ): Unit = {
       val fromClassName = classNameAsString(dep.from)
+      // Only touch ClassRef when Zinc has it, see `callback4`
+      lazy val fromClassRef = ClassRef.of(fromClassName, classNameKind(dep.from))
 
       def binaryDependency(file: Path, binaryClassName: String) = {
-        callback.binaryDependency(file, binaryClassName, fromClassName, sourceFile, context)
+        if (callback4 ne null)
+          callback4.binaryDependency(file, binaryClassName, fromClassRef, sourceFile, context)
+        else callback.binaryDependency(file, binaryClassName, fromClassName, sourceFile, context)
       }
       import scala.tools.nsc.io.AbstractFile
       def processExternalDependency(binaryClassName: String, at: AbstractFile): Unit = {
@@ -168,8 +189,9 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
           if (onSourceFile != sourceFile || allowLocal) {
             // We cannot ignore dependencies coming from the same source file because
             // the dependency info needs to propagate. See source-dependencies/trait-trait-211.
-            val onClassName = classNameAsString(dep.to)
-            callback.classDependency(onClassName, fromClassName, context)
+            if (callback4 ne null)
+              callback4.classDependency(classRef(dep.to), fromClassRef, context)
+            else callback.classDependency(classNameAsString(dep.to), fromClassName, context)
           } else ()
         // This could match null or scala.reflect.io.FileZipArchive$LeakyEntry
         case _ =>
@@ -192,6 +214,27 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
                  * but when it does we must ensure the incremental compiler tries its best no to lose
                  * any dependency. Therefore, we do a last-time effort to get the origin of the symbol
                  * by inspecting the classpath manually.
+                 *
+                 * UPDATE: This can also happen without compiler bugs if the symbol is simply uninitialized.
+                 * Example, `class Client { def foo = Server.foo }`. When compiling client, the type `Foo` returned
+                 * by `Server.foo` does not need to be initialized as we do not select from it or check its
+                 * conformance to another type.
+                 *
+                 * Initializing `targetSymbol` before calling `assosicatedFile` would work but is problematic
+                 * see zinc/zinc#949
+                 *
+                 * Perhaps consider this?
+                 * val file = targetSymbol.associatedFile match {
+                 *   case NoAbstractFile => sym.rawInfo match {
+                 *     case cfl: global.loaders.ClassfileLoader =>
+                 *       val f = cfl.associatedFile(sym) // Gets the file from the loader
+                 *       if (f.exists) f else NoAbstractFile
+                 *     case f => f
+                 *   }
+                 * }
+                 *
+                 * Or the status quo might just be perfectly fine -- if compilation doesn't need to force `Foo`,
+                 * then there isn't a real dependency.
                  */
                 val fqn = fullName(targetSymbol, '.', targetSymbol.moduleSuffix, includePackageObjectClassNames = false)
                 global.findAssociatedFile(fqn) match {
@@ -218,6 +261,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
     private val _memberRefCache = new JavaSet[ClassDependency]()
     private val _inheritanceCache = new JavaSet[ClassDependency]()
     private val _localInheritanceCache = new JavaSet[ClassDependency]()
+    private val _dependencyByMacroExpansionCache = new JavaSet[ClassDependency]()
     private val _topLevelImportCache = new JavaSet[Symbol]()
 
     private var _currentDependencySource: Symbol = _
@@ -293,9 +337,12 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
       assert(fromClass.isClass, Feedback.expectedClassSymbol(fromClass))
       val depClass = enclOrModuleClass(dep)
       val dependency = ClassDependency(fromClass, depClass)
+      // An anonymous class be the enclosing class of an existential type symbol inferred from refinements,
+      // prior to https://github.com/scala/scala/pull/10940. Allowing this here leads to a dependency on class name
+      // that does not exist. Guard against it here to avoid the issue with legacy compiler versions.
       if (
         !cache.contains(dependency) &&
-        !depClass.isRefinementClass
+        !depClass.isAnonOrRefinementClass
       ) {
         process(dependency)
         cache.add(dependency)
@@ -367,10 +414,32 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
       override def addDependency(symbol: global.Symbol) = handler(symbol)
     }
 
-    def addTypeDependencies(tpe: Type): Unit = {
+    object TypeDependencyTraverserForMacro extends TypeDependencyTraverser {
+      private var owner: Symbol = _
+      // A type visited for one class must still be recorded for the next one
+      def setOwner(symbol: Symbol) = if (owner != symbol) {
+        owner = symbol
+        reinitializeVisited()
+      }
+      override def addDependency(symbol: global.Symbol): Unit = {
+        addClassDependency(
+          _dependencyByMacroExpansionCache,
+          processor.scala2MacroExpansion,
+          owner,
+          symbol
+        )
+      }
+    }
+
+    def addTypeDependencies(tpe: Type, forMacro: Boolean = false): Unit = {
       val fromClass = resolveDependencySource
-      TypeDependencyTraverser.setOwner(fromClass)
-      TypeDependencyTraverser.traverse(tpe)
+      if (forMacro) {
+        TypeDependencyTraverserForMacro.setOwner(fromClass)
+        TypeDependencyTraverserForMacro.traverse(tpe)
+      } else {
+        TypeDependencyTraverser.setOwner(fromClass)
+        TypeDependencyTraverser.traverse(tpe)
+      }
     }
 
     private def addInheritanceDependency(dep: Symbol): Unit = {
@@ -391,7 +460,31 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
      */
     private val inspectedOriginalTrees = new JavaSet[Tree]()
 
-    override def traverse(tree: Tree): Unit = tree match {
+    override def traverse(tree: Tree): Unit = {
+      traverseAnnotations(tree)
+      traverseTree(tree)
+    }
+
+    /**
+     * After typer, the annotations of a definition only live in its symbol, so the annotation
+     * class and the arguments (including constants folded into them) are traversed from there.
+     */
+    private def traverseAnnotations(tree: Tree): Unit = tree match {
+      case md: MemberDef if md.symbol != null && md.symbol != NoSymbol =>
+        val annotations = md.symbol.annotations
+        if (annotations.nonEmpty) atOwner(md.symbol) {
+          annotations.foreach { annot =>
+            if (annot.original != EmptyTree) traverse(annot.original)
+            else {
+              addTypeDependencies(annot.atp)
+              annot.args.foreach(traverse)
+            }
+          }
+        }
+      case _ =>
+    }
+
+    private def traverseTree(tree: Tree): Unit = tree match {
       case Import(expr, selectors) =>
         inImportNode = true
         traverse(expr)
@@ -421,6 +514,12 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
       case sel @ SelectFromTypeTree(qual, _) =>
         traverse(qual); addTreeDependency(sel)
 
+      // A compound type's parents (`B with C`) are not inherited by the enclosing class.
+      case CompoundTypeTree(templ) =>
+        traverseTrees(templ.parents)
+        traverse(templ.self)
+        traverseTrees(templ.body)
+
       case Template(parents, self, body) =>
         // use typeSymbol to dealias type aliases -- we want to track the dependency on the real class in the alias's RHS
         def flattenTypeToSymbols(tp: Type): List[Symbol] =
@@ -445,7 +544,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
           addDependency(symbol)
         }
 
-        inheritanceTypes.foreach(addTypeDependencies)
+        inheritanceTypes.foreach(addTypeDependencies(_, forMacro = false))
         addTypeDependencies(self.tpt.tpe)
 
         traverseTrees(body)
@@ -466,6 +565,10 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
         addTypeDependencies(typeTree.tpe)
 
       case m @ MacroExpansionOf(original) if inspectedOriginalTrees.add(original) =>
+        // TODO: typesTouchedDuringMacroExpansion can be provided by compiler
+        // in the form of tree attachment
+        val typesTouchedDuringMacroExpansion = treeInfo.dissectApplied(original).targs.map(_.tpe)
+        typesTouchedDuringMacroExpansion.foreach(addTypeDependencies(_, forMacro = true))
         traverse(original)
         super.traverse(m)
 

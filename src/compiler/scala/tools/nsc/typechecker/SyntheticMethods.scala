@@ -38,7 +38,7 @@ import symtab.Flags._
  *    protected def writeReplace(): AnyRef
  */
 trait SyntheticMethods extends ast.TreeDSL {
-  self: Analyzer =>
+  self: AbstractAnalyzer =>
 
   import global._
   import definitions._
@@ -241,11 +241,18 @@ trait SyntheticMethods extends ast.TreeDSL {
       equalsCore(m, List(clazz.derivedValueClassUnbox))
     }
 
-    /* The hashcode method for value classes
-     * def hashCode(): Int = this.underlying.hashCode
+    /* The hashcode method for value classes. If the value is primitive:
+     *  def hashCode(): Int = this.underlying.hashCode
+     * otherwise, the null-safe variant:
+     *   def hashCode(): Int = java.util.Objects.hashCode(this.underlying)
      */
-    def hashCodeDerivedValueClassMethod: Tree = createMethod(nme.hashCode_, Nil, IntTpe) { _ =>
-      Select(mkThisSelect(clazz.derivedValueClassUnbox), nme.hashCode_)
+    def hashCodeDerivedValueClassMethod: Tree = createMethod(nme.hashCode_, Nil, IntTpe) { m =>
+      val acc = clazz.derivedValueClassUnbox
+      val tp = acc.info.resultType
+      if (isPrimitiveValueType(tp))
+        Select(mkThisSelect(acc), nme.hashCode_)
+      else
+        gen.mkMethodCall(Objects_hashCode, List(mkThisSelect(acc)))
     }
 
     /* The _1, _2, etc. methods to implement ProductN, disabled
