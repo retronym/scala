@@ -546,6 +546,12 @@ abstract class SymbolTable extends macros.Universe
   /** The phase which has given index as identifier. */
   final val phaseWithId: Array[Phase] = Array.fill(MaxPhases)(NoPhase)
 
+  /** The layout of the table that hash-conses types, read when each run creates it: "weak" for
+   *  `util.WeakHashSet`, "chunked" or "chunked-weak" for a strong or weak `util.ChunkedInterner`,
+   *  or "default" for the system property `scala.uniques.layout`, else "weak".
+   */
+  protected[scala] def uniquesLayout: String = "default"
+
   @deprecated("use enteringPhase", "2.10.0") // Used in sbt 0.12.4
   @inline final def atPhase[T](ph: Phase)(op: => T): T = enteringPhase(ph)(op)
 
