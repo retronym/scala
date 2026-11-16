@@ -86,8 +86,7 @@ trait SymbolOps { self: TastyUniverse =>
       catch {
         case _: ClassCastException =>
           val raw = u.showRaw(sym.rawInfo)
-          val tastyRepr = u.typeOf[TastyRepr]
-          throw new AssertionError(s"$sym is already completed. Expected $tastyRepr, is $raw.")
+          throw new AssertionError(s"$sym is already completed. Expected TastyRepr, is $raw.")
       }
     }
 
