@@ -2242,7 +2242,7 @@ trait Types
     private def validateRelativeInfo(): Unit = relativeInfoCache match {
       // If a subtyping cycle is not detected here, we'll likely enter an infinite
       // loop before a sensible error can be issued.  scala/bug#5093 is one example.
-      case x: SubType if x.supertype eq this =>
+      case x: SubType if (x.supertype eq this) || x.supertype == this =>
         relativeInfoCache = null
         throw new RecoverableCyclicReference(sym)
       case _ =>
@@ -2285,7 +2285,7 @@ trait Types
     override protected def normalizeImpl =
       if (typeParamsMatchArgs){
         val br = betaReduce
-        if (br ne this)
+        if ((br ne this) && br != this)
           br.normalize
         else
           throw new MalformedType(pre, sym.nameString)
