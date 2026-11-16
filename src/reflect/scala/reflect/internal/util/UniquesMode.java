@@ -16,13 +16,14 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** Spike: selects the implementation of `Types.unique` once per JVM.
  *
- *  `-Dscalac.uniques=weak|direct|off` (default `weak`).
+ *  `-Dscalac.uniques=weak|direct|off|chunked-weak` (default `weak`).
  *  `-Dscalac.uniques.stats=true` counts hits and misses and prints them at JVM exit.
  */
 public final class UniquesMode {
   public static final int WEAK = 0;
   public static final int DIRECT = 1;
   public static final int OFF = 2;
+  public static final int CHUNKED_WEAK = 3;
 
   public static final int MODE;
   public static final boolean STATS = Boolean.getBoolean("scalac.uniques.stats");
@@ -39,6 +40,7 @@ public final class UniquesMode {
       case "weak": MODE = WEAK; break;
       case "direct": MODE = DIRECT; break;
       case "off": MODE = OFF; break;
+      case "chunked-weak": MODE = CHUNKED_WEAK; break;
       default: throw new IllegalArgumentException("scalac.uniques=" + s);
     }
     if (STATS) {

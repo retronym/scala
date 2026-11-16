@@ -4394,6 +4394,8 @@ trait Types
   // `DIRECT_REFRESH` inserts so that it, and the types it holds, stay in the young generation.
   private[this] var directUniques: Array[Type] = _
   private[this] var directInserts = 0
+  // `-Dscalac.uniques=chunked-weak`: retronym/scala#239's `ChunkedInterner(weak = true)`, for comparison.
+  private[this] var chunkedUniques: util.ChunkedInterner[Type] = _
 
   final def howManyUniqueTypes: Int = if (uniques == null) 0 else uniques.size
 
@@ -4405,13 +4407,15 @@ trait Types
     if (util.UniquesMode.STATS) util.UniquesMode.runs.incrementAndGet()
     uniques = null
     directUniques = null
+    chunkedUniques = null
     uniqueRunId = NoRunId
   }
 
   protected def unique[T <: Type](tp: T): T = (util.UniquesMode.MODE: @annotation.switch) match {
-    case util.UniquesMode.WEAK   => uniqueWeak(tp)
-    case util.UniquesMode.DIRECT => uniqueDirect(tp)
-    case _                       => tp
+    case util.UniquesMode.WEAK         => uniqueWeak(tp)
+    case util.UniquesMode.DIRECT       => uniqueDirect(tp)
+    case util.UniquesMode.CHUNKED_WEAK => uniqueChunked(tp)
+    case _                             => tp
   }
 
   private def uniqueWeak[T <: Type](tp: T): T = {
@@ -4422,6 +4426,16 @@ trait Types
     val result = uniques findEntryOrUpdate tp
     if (util.UniquesMode.STATS) countUnique(result ne tp)
     result.asInstanceOf[T]
+  }
+
+  private def uniqueChunked[T <: Type](tp: T): T = {
+    if (uniqueRunId != currentRunId) {
+      chunkedUniques = new util.ChunkedInterner[Type](initialUniquesCapacity, weak = true)
+      uniqueRunId = currentRunId
+    }
+    val result = chunkedUniques.findOrAdd(tp)
+    if (util.UniquesMode.STATS) countUnique(result ne tp)
+    result
   }
 
   private def uniqueDirect[T <: Type](tp: T): T = {
