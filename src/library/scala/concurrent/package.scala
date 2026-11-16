@@ -51,7 +51,7 @@ import scala.util.Try
  * For typical REPL usage and experimentation, importing the global `ExecutionContext` is often desired.
  *
  * {{{
- * import scala.concurrent.ExcutionContext.Implicits.global
+ * import scala.concurrent.ExecutionContext.Implicits.global
  * }}}
  *
  * == Specifying Durations ==
@@ -101,8 +101,9 @@ import scala.util.Try
  *   zebra <- firstZebra
  * } yield zebra - aardvark
  *
- * animalRange.onSuccess {
+ * animalRange.foreach {
  *   case x if x > 500000 => println("It's a long way from Aardvark to Zebra")
+ *   case _ =>
  * }
  * }}}
  */
