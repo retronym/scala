@@ -114,6 +114,9 @@ class ModifierFlags {
                                           // pre: PRIVATE or PROTECTED are also set
   final val JAVA          = 1L << 20       // symbol was defined by a Java class
   final val SCALA3X       = 1L << 60       // class was defined in Scala 3
+  /** Made while a completer ran (`Symbol.isCreatedInCompletion`). Set by `initFlags` only and kept by the other
+   *  setters; no phase's flag mask includes it, so `flags` and `hasFlag` never show it, and it is not pickled. */
+  final val CREATED_IN_COMPLETION = 1L << 61
   final val STATIC        = 1L << 23       // static field, method or class
   final val CASEACCESSOR  = 1L << 24       // symbol is a case parameter (or its accessor, or a GADT skolem)
   final val TRAIT         = 1L << 25       // symbol is a trait
@@ -319,6 +322,9 @@ class Flags extends ModifierFlags {
 
   final val ValidAliasFlags = SUPERACCESSOR | PARAMACCESSOR | MIXEDIN | SPECIALIZED
 
+
+  /** Flags that phases after the typer set on symbols loaded from the class path, undone when a run starts (see `Rewinds`). */
+  final val RewoundFlags = EXPANDEDNAME | notPRIVATE | METHOD | STABLE | SYNTHESIZE_IMPL_IN_SUBCLASS | NEEDS_TREES | LIFTED | TRIEDCOOKING
 
   /** These flags are not pickled */
   final val FlagsNotPickled = IS_ERROR | OVERLOADED | LIFTED | TRANS_FLAG | LOCKED | TRIEDCOOKING | SCALA3X
