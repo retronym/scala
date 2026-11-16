@@ -550,7 +550,7 @@ abstract class SymbolTable extends macros.Universe
 
   /** The layout of the table that hash-conses types, read when each run creates it: "weak" for
    *  `util.WeakHashSet`, "chunked" or "chunked-weak" for a strong or weak `util.ChunkedInterner`,
-   *  or "default" for the system property `scala.uniques.layout`, else "weak".
+   *  or "default" for the system property `scala.uniques.layout`, else "chunked-weak".
    */
   protected[scala] def uniquesLayout: String = "default"
 
