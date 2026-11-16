@@ -1,11 +1,11 @@
 
 package scala.concurrent
 
-import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.Test
 
 import scala.tools.testkit.AssertUtil._
-import scala.util.{Success, Try}
+import scala.util.{Failure, Success, Try}
 import duration.Duration.{Inf, Undefined}
 import duration.DurationInt
 import scala.collection.mutable.ListBuffer
@@ -303,5 +303,19 @@ class FutureTest {
   @Test def completedWaitUndefined(): Unit = {
     assertThrows[IllegalArgumentException](Await.result(Future.successful(1), Undefined))
     assertThrows[IllegalArgumentException](Await.ready(Future.successful(1), Undefined))
+  }
+
+  @Test def zipWithBoxesInterruptedExceptionWhenPending(): Unit = {
+    implicit val ec: ExecutionContext = ExecutionContext.fromExecutor(_.run())
+    for (completeRightFirst <- List(true, false)) try {
+      val p1, p2 = Promise[Int]()
+      val f = p1.future.zipWith(p2.future)((_, _) => throw new InterruptedException("in zipWith"))
+      if (completeRightFirst) { p2.success(2); p1.success(1) } else { p1.success(1); p2.success(2) }
+      assertTrue("interrupt status must be restored", Thread.interrupted())
+      f.value match {
+        case Some(Failure(ee: ExecutionException)) => assertTrue(ee.getCause.isInstanceOf[InterruptedException])
+        case other => fail(s"expected boxed InterruptedException, got $other")
+      }
+    } finally Thread.interrupted()
   }
 }

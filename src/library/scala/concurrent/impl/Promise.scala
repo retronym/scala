@@ -142,11 +142,19 @@ private[concurrent] object Promise {
         val buffer = new AtomicReference[Success[Any]]()
         val zipped = new DefaultPromise[R]()
 
+        // Fatal errors propagate to the enclosing Transformation (which rethrows them), like for all other combinators.
+        def completeZipped(left: T, right: U): Unit =
+          zipped.tryComplete(try Success(f(left, right)) catch {
+            case e if NonFatal(e) => Failure(e)
+            case ie: InterruptedException => // boxed by `resolve`, like an InterruptedException thrown from `map`
+              Thread.currentThread.interrupt()
+              Failure(ie)
+          })
+
         val thisF: Try[T] => Unit = {
           case left: Success[_] =>
             val right = buffer.getAndSet(left).asInstanceOf[Success[U]]
-            if (right ne null)
-              zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
+            if (right ne null) completeZipped(left.get, right.get)
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
         }
@@ -154,8 +162,7 @@ private[concurrent] object Promise {
         val thatF: Try[U] => Unit = {
           case right: Success[_] =>
             val left = buffer.getAndSet(right).asInstanceOf[Success[T]]
-            if (left ne null)
-              zipped.tryComplete(try Success(f(left.get, right.get)) catch { case e if NonFatal(e) => Failure(e) })
+            if (left ne null) completeZipped(left.get, right.get)
           case f => // Can only be Failure
             zipped.tryComplete(f.asInstanceOf[Failure[R]])
         }
