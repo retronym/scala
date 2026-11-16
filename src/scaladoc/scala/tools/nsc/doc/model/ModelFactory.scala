@@ -175,7 +175,8 @@ class ModelFactory(val global: Global, val settings: doc.Settings) {
       if (sym.isMacro) fgs += Paragraph(Text("macro"))
       fgs.toList
     }
-    def deprecation =
+    // lazy: consulted on every comparison by `Entity.EntityOrdering`
+    lazy val deprecation =
       if (sym.isDeprecated)
         Some((sym.deprecationMessage, sym.deprecationVersion) match {
           case (Some(msg), Some(ver)) => parseWiki("''(Since version " + ver + ")'' " + msg, NoPosition, inTpl)

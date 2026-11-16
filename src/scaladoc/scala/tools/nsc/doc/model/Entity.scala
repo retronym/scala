@@ -74,8 +74,17 @@ object Entity {
   }
 
   /** Ordering deprecated things last. */
-  implicit lazy val EntityOrdering: Ordering[Entity] =
-    Ordering[(Boolean, String, Boolean)] on (x => (isDeprecated(x), x.qualifiedName, isObject(x)))
+  implicit lazy val EntityOrdering: Ordering[Entity] = new Ordering[Entity] {
+    def compare(x: Entity, y: Entity): Int = {
+      val c1 = java.lang.Boolean.compare(isDeprecated(x), isDeprecated(y))
+      if (c1 != 0) c1
+      else {
+        val c2 = x.qualifiedName.compareTo(y.qualifiedName)
+        if (c2 != 0) c2
+        else java.lang.Boolean.compare(isObject(x), isObject(y))
+      }
+    }
+  }
 }
 
 /** A template, which is either a class, trait, object or package. Depending on whether documentation is available
