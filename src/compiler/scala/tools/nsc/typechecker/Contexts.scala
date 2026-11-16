@@ -595,6 +595,14 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     // See comment on FormerNonStickyModes.
     @inline final def withOnlyStickyModes[T](op: => T): T = withMode(disabled = FormerNonStickyModes)(op)
 
+    /** Evaluate `op` with the `ScopedModes` taken from `mode`; other modes keep their current value. */
+    final def withScopedModesOf[T](mode: ContextMode)(op: => T): T = {
+      val saved = contextMode
+      contextMode = (contextMode &~ ScopedModes) | (mode & ScopedModes)
+      try op
+      finally contextMode = (contextMode &~ ScopedModes) | (saved & ScopedModes)
+    }
+
     // inliner note: this has to be a simple method for inlining to work -- moved the `&& !reporter.hasErrors` out
     @inline final def inSilentMode(expr: => Boolean): Boolean = {
       val savedContextMode = contextMode
@@ -2080,6 +2088,18 @@ object ContextMode {
    */
   final val FormerNonStickyModes: ContextMode = (
     PatternAlternative | StarPatterns | SuperInit | SecondTry | ReturnExpr | TypeConstructorAllowed
+  )
+
+  /** Modes that typing only changes in place for the extent of an operation, through `withMode` and friends,
+   *  rather than for good on a context it creates. A lazy completer must not see whatever values these have when
+   *  it happens to be forced. The others either describe the context itself (`ConstructorSuffix`, `SelfSuperCall`,
+   *  `ReTyping`, `InImplicitSearch`), accumulate facts about it (`ReturnsSeen`, `DiagUsedDefaults`), or go together
+   *  with its reporter (`AmbiguousErrors`).
+   */
+  final val ScopedModes: ContextMode = (
+    ImplicitsEnabled | EnrichmentEnabled | MacrosEnabled | PatternAlternative | StarPatterns | SuperInit
+      | SecondTry | ReturnExpr | TypeConstructorAllowed | SuppressDeadArgWarning | TypingAnnotation
+      | InPackageClauseName
   )
 
   final val DefaultMode: ContextMode = MacrosEnabled
