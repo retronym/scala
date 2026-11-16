@@ -3285,9 +3285,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         else unsafeTypeParams map (_.typeConstructor)
       )
       // Avoid carrying around different types in tyconCache and tpeCache
-      // for monomorphic types.
-      if (noTypeParams && tyconCacheNeedsUpdate)
-        setTyconCache(tpeCache)
+      // for monomorphic types. Compare with `==` rather than relying on `unique`
+      // to return the cached instance: the uniques table is cleared at the end
+      // of a run, but the REPL and toolboxes keep using the compiler in that run.
+      if (noTypeParams) {
+        if (tyconCacheNeedsUpdate) setTyconCache(tpeCache)
+        else if (tyconCache == tpeCache) tpeCache = tyconCache
+      }
     }
 
     override def info_=(tp: Type): Unit = {
