@@ -115,7 +115,8 @@ private[internal] trait TypeMaps {
       @tailrec def loop(i: Int, syms: List[Symbol]): Int = syms match {
         case x :: xs =>
           val info = x.info
-          if (applyToSymbolInfo(x, info) eq info) loop(i+1, xs)
+          val info1 = applyToSymbolInfo(x, info)
+          if ((info1 eq info) || info1 == info) loop(i+1, xs)
           else i
         case _ => -1
       }
@@ -365,7 +366,7 @@ private[internal] trait TypeMaps {
         if (sym.isPackageClass) tp // short path
         else {
           val pre1 = this(pre)
-          if ((pre1 eq pre) || !pre1.isStable) tp
+          if ((pre1 eq pre) || pre1 == pre || !pre1.isStable) tp
           else singleType(pre1, sym)
         }
       case _ => tp.mapOver(this)
@@ -656,7 +657,7 @@ private[internal] trait TypeMaps {
       val SingleType(pre, sym) = tp
 
       val pre1 = this(pre)
-      if (pre1 eq pre) tp
+      if ((pre1 eq pre) || pre1 == pre) tp
       else if (pre1.isStable) singleType(pre1, sym)
       else pre1.memberType(sym).resultType //todo: this should be rolled into existential abstraction
     }

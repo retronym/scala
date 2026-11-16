@@ -412,7 +412,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
                       def check(freshPrefix: Type): Boolean = {
                         val expectedTpFromFreshPrefix = TypeRef(freshPrefix, sym, args)
                         val baseTypeFromFreshPrefix = expectedTpFromFreshPrefix.baseType(testedBinderClass)
-                        freshPrefix eq baseTypeFromFreshPrefix.prefix
+                        freshPrefix == baseTypeFromFreshPrefix.prefix
                       }
                       pre match {
                         case ThisType(thissym) =>

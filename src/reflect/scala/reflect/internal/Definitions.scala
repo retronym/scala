@@ -937,7 +937,7 @@ trait Definitions extends api.StandardDefinitions {
       case TypeRef(_, NothingClass | SingletonClass, _) => true
       case TypeRef(_, sym, _) if sym.isAbstractType     => tp.upperBound.typeSymbol.isSubClass(SingletonClass)
       case TypeRef(pre, sym, _) if sym.isModuleClass    => isStable(pre)
-      case _: TypeRef                                   => val norm = tp.normalize; (norm ne tp) && isStable(norm)
+      case _: TypeRef                                   => val norm = tp.normalize; (norm != tp) && isStable(norm)
       case TypeVar(origin, _)                           => isStable(origin)
       case ExistentialType(qs, underlying)              => isStable(deriveTypeWithWildcards(qs)(underlying))
       case _: SimpleTypeProxy                           => isStable(tp.underlying)
@@ -988,7 +988,7 @@ trait Definitions extends api.StandardDefinitions {
       }
       def isVolatileTypeRef(tr: TypeRef) = {
         val dealised = tr.dealias
-        if (dealised ne tr) isVolatile(dealised)
+        if (dealised != tr) isVolatile(dealised)
         else if (tr.sym.isAbstractType) isVolatileAbstractType
         else false
       }

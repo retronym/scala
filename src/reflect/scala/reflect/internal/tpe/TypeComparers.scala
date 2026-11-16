@@ -75,7 +75,7 @@ trait TypeComparers {
   }
 
   private def isSubPre(pre1: Type, pre2: Type, sym: Symbol) =
-    if ((pre1 ne pre2) && (pre1 ne NoPrefix) && (pre2 ne NoPrefix) && pre1 <:< pre2) {
+    if ((pre1 != pre2) && (pre1 ne NoPrefix) && (pre2 ne NoPrefix) && pre1 <:< pre2) {
       if (settings.isDebug) println(s"new isSubPre $sym: $pre1 <:< $pre2")
       true
     } else
@@ -180,12 +180,12 @@ trait TypeComparers {
     // called after a surface comparison has failed, so if chaseDealiasedUnderlying
     // does not produce a type other than tp1 and tp2, return false.
     @tailrec def chaseDealiasedUnderlying(tp: Type): Type = tp.underlying.dealias match {
-      case next: SingletonType if tp ne next => chaseDealiasedUnderlying(next)
+      case next: SingletonType if tp != next => chaseDealiasedUnderlying(next)
       case _                                 => tp
     }
     val origin1 = chaseDealiasedUnderlying(tp1)
     val origin2 = chaseDealiasedUnderlying(tp2)
-    ((origin1 ne tp1) || (origin2 ne tp2)) && (origin1 =:= origin2)
+    ((origin1 != tp1) || (origin2 != tp2)) && (origin1 =:= origin2)
   }
 
   private def isSameMethodType(mt1: MethodType, mt2: MethodType) = (
@@ -224,7 +224,7 @@ trait TypeComparers {
       !skip && {
         val lhs = normalizePlus(tp1)
         val rhs = normalizePlus(tp2)
-        ((lhs ne tp1) || (rhs ne tp2)) && isSameType(lhs, rhs)
+        ((lhs != tp1) || (rhs != tp2)) && isSameType(lhs, rhs)
       }
     }
 
@@ -466,7 +466,7 @@ trait TypeComparers {
 
   /** Does type `tp1` conform to `tp2`? */
   private def isSubType2(tp1: Type, tp2: Type, depth: Depth): Boolean = {
-    def retry(lhs: Type, rhs: Type) = ((lhs ne tp1) || (rhs ne tp2)) && isSubType(lhs, rhs, depth)
+    def retry(lhs: Type, rhs: Type) = ((lhs != tp1) || (rhs != tp2)) && isSubType(lhs, rhs, depth)
 
     if (tp1.isInstanceOf[SingletonType] && tp2.isInstanceOf[SingletonType])
       return (tp1 =:= tp2) || isThisAndSuperSubtype(tp1, tp2) || retry(tp1.underlying, tp2)
@@ -502,7 +502,7 @@ trait TypeComparers {
                 val base = tr1 baseType sym2
                 // During bootstrap, `base eq NoType` occurs about 2.5 times as often as `base ne NoType`.
                 // The extra check seems like a worthwhile optimization (about 2.5M useless calls to isSubType saved during that run).
-                (base ne tr1) && (base ne NoType) && isSubType(base, tr2, depth)
+                (base ne NoType) && (base != tr1) && isSubType(base, tr2, depth)
               }
               ||
               thirdTryRef(tr1, tr2))
@@ -617,7 +617,7 @@ trait TypeComparers {
      *   - handle typerefs, refined types, and singleton types.
      */
     def fourthTry = {
-      def retry(lhs: Type, rhs: Type)  = ((tp1 ne lhs) || (tp2 ne rhs)) && isSubType(lhs, rhs, depth)
+      def retry(lhs: Type, rhs: Type)  = ((tp1 != lhs) || (tp2 != rhs)) && isSubType(lhs, rhs, depth)
       def abstractTypeOnLeft(hi: Type) = isDifferentTypeConstructor(tp1, hi) && retry(hi, tp2)
 
       tp1 match {

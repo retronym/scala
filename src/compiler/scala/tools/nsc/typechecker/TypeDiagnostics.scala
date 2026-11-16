@@ -194,7 +194,7 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
     // Don't automatically normalize standard aliases; they still will be
     // expanded if necessary to disambiguate simple identifiers.
     val deepDealias = DealiasedType(tp)
-    if (tp eq deepDealias) "" else {
+    if (tp == deepDealias) "" else {
       // A check against expansion being identical to original.
       val s = "" + deepDealias
       if (s == "" + tp) ""

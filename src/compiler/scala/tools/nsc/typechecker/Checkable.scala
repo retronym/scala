@@ -329,7 +329,7 @@ trait Checkable {
 
         def PString = {
           val pstr = P.toString
-          if (P eq P0) pstr
+          if (P == P0) pstr
           else {
             val ostr = P0.toString
             if (pstr == ostr) pstr

@@ -152,7 +152,7 @@ trait DestructureTypes {
         if (sym.isDefinedInPackage) wrapEmpty else prefix(pre),
         wrapSymbolInfo(sym),
         typeArgs(args),
-        if (tp ne tp.normalize) this("normalize", tp.normalize) else wrapEmpty
+        if (tp != tp.normalize) this("normalize", tp.normalize) else wrapEmpty
       )
     }
 

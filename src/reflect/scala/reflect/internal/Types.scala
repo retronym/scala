@@ -578,10 +578,10 @@ trait Types
     @tailrec
     final def dealiasWiden: Type = {
       val widened = widen
-      if (this ne widened) widened.dealiasWiden
+      if (this != widened) widened.dealiasWiden
       else {
         val dealiased = dealias
-        if (this ne dealiased) dealiased.dealiasWiden
+        if (this != dealiased) dealiased.dealiasWiden
         else this
       }
     }
@@ -592,10 +592,10 @@ trait Types
      */
     def dealiasWidenChain: List[Type] = this :: {
       val widened = widen
-      if (this ne widened) widened.dealiasWidenChain
+      if (this != widened) widened.dealiasWidenChain
       else {
         val betaReduced = betaReduce
-        if (this ne betaReduced) betaReduced.dealiasWidenChain
+        if (this != betaReduced) betaReduced.dealiasWidenChain
         else Nil
       }
     }
@@ -851,7 +851,7 @@ trait Types
       if (settings.areStatisticsEnabled) stat_<:<(that)
       else {
         (this eq that) ||
-        (if (explainSwitch) explain("<:", isSubType(_: Type, _: Type), this, that)
+        (if (explainSwitch) (this == that) || explain("<:", isSubType(_: Type, _: Type), this, that)
          else isSubType(this, that))
       }
     }
@@ -884,7 +884,7 @@ trait Types
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, subtypeNanos) else null
       val result =
         (this eq that) ||
-        (if (explainSwitch) explain("<:", isSubType(_: Type, _: Type), this, that)
+        (if (explainSwitch) (this == that) || explain("<:", isSubType(_: Type, _: Type), this, that)
          else isSubType(this, that))
       if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       result
@@ -897,7 +897,7 @@ trait Types
       val start = if (settings.areStatisticsEnabled) statistics.pushTimer(typeOpsStack, subtypeNanos) else null
       val result =
         ((this eq that) ||
-         (if (explainSwitch) explain("weak_<:", isWeakSubType, this, that)
+         (if (explainSwitch) (this == that) || explain("weak_<:", isWeakSubType, this, that)
           else isWeakSubType(this, that)))
       if (settings.areStatisticsEnabled) statistics.popTimer(typeOpsStack, start)
       result
@@ -906,7 +906,7 @@ trait Types
     /** Is this type equivalent to that type? */
     def =:=(that: Type): Boolean = (
       (this eq that) ||
-      (if (explainSwitch) explain("=", isSameType, this, that)
+      (if (explainSwitch) (this == that) || explain("=", isSameType, this, that)
        else isSameType(this, that))
     )
 
@@ -2268,7 +2268,7 @@ trait Types
     private def validateRelativeInfo(): Unit = relativeInfoCache match {
       // If a subtyping cycle is not detected here, we'll likely enter an infinite
       // loop before a sensible error can be issued.  scala/bug#5093 is one example.
-      case x: SubType if x.supertype eq this =>
+      case x: SubType if (x.supertype eq this) || x.supertype == this =>
         relativeInfoCache = null
         throw new RecoverableCyclicReference(sym)
       case _ =>
@@ -2281,9 +2281,9 @@ trait Types
 
     override def dealias    = if (typeParamsMatchArgs) betaReduce.dealias else super.dealias
     override def narrow     = normalize.narrow
-    override def prefix     = if (this ne normalize) normalize.prefix else pre
-    override def termSymbol = if (this ne normalize) normalize.termSymbol else super.termSymbol
-    override def typeSymbol = if (this ne normalize) normalize.typeSymbol else sym
+    override def prefix     = if (this != normalize) normalize.prefix else pre
+    override def termSymbol = if (this != normalize) normalize.termSymbol else super.termSymbol
+    override def typeSymbol = if (this != normalize) normalize.typeSymbol else sym
 
     // Avoid calling super.isError when we're a type constructor, as that will eta-expand, which can cause spurious cycles,
     // without resulting in additional information about our error state in any case
@@ -2311,7 +2311,7 @@ trait Types
     override protected def normalizeImpl =
       if (typeParamsMatchArgs){
         val br = betaReduce
-        if (br ne this)
+        if ((br ne this) && br != this)
           br.normalize
         else
           throw new MalformedType(pre, sym.nameString)
@@ -2967,7 +2967,7 @@ trait Types
     }
 
     override def atOwner(owner: Symbol) =
-      if (!allSymbolsHaveOwner(params, owner) || (resultType.atOwner(owner) ne resultType))
+      if (!allSymbolsHaveOwner(params, owner) || (resultType.atOwner(owner) != resultType))
         cloneInfo(owner)
       else
         this
@@ -3070,7 +3070,7 @@ trait Types
     }
 
     override def atOwner(owner: Symbol) =
-      if (!allSymbolsHaveOwner(typeParams, owner) || (resultType.atOwner(owner) ne resultType))
+      if (!allSymbolsHaveOwner(typeParams, owner) || (resultType.atOwner(owner) != resultType))
         cloneInfo(owner)
       else
         this
@@ -3118,7 +3118,7 @@ trait Types
     override def typeArgs = underlying.typeArgs map maybeRewrap
     override def params = underlying.params mapConserve { param =>
       val tpe1 = rewrap(param.tpeHK)
-      if (tpe1 eq param.tpeHK) param else param.cloneSymbol.setInfo(tpe1)
+      if (tpe1 == param.tpeHK) param else param.cloneSymbol.setInfo(tpe1)
     }
     override def paramTypes = underlying.paramTypes map maybeRewrap
     override def instantiateTypeParams(formals: List[Symbol], actuals: List[Type]) = {
@@ -4712,7 +4712,7 @@ trait Types
   @tailrec
   final def isExistentialType(tp: Type): Boolean = tp match {
     case _: ExistentialType           => true
-    case tp: Type if tp.dealias ne tp => isExistentialType(tp.dealias)
+    case tp: Type if tp.dealias != tp => isExistentialType(tp.dealias)
     case _                            => false
   }
 
@@ -5387,7 +5387,7 @@ trait Types
           st.invalidateSingleTypeCaches()
           res = true
         }
-        val underInvalid = (st.underlying ne st) && invalidateImpl(st.underlying)
+        val underInvalid = (st.underlying != st) && invalidateImpl(st.underlying)
         res ||= underInvalid
         seen.put(tp, res)
 
