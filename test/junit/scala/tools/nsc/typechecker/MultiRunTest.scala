@@ -1,6 +1,6 @@
 package scala.tools.nsc.typechecker
 
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertFalse}
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
@@ -32,5 +32,24 @@ class MultiRunTest {
     val java  = "K.java"  -> "package p; public class K { public Object f(Object o) { return o; } }"
     val scala = "T.scala" -> "object T { def t(k: p.K, a: Any): Any = k.f(a) }"
     assertEquals(List(Nil, Nil, Nil), errorsPerRun(3, java, scala))
+  }
+
+  // A self type with the class's own type constructor is no self type. `hasSelfType` compared the type
+  // constructors with `ne`, which only works if both come from the same uniques table. Code that runs after
+  // the end-of-run clear, still in that run (as the REPL does), builds one of them in a new table.
+  @Test def selfTypeOfOwnTypeConstructorAfterClear(): Unit = {
+    val settings = new Settings
+    settings.usejavacp.value = true
+    settings.stopAfter.value = List("typer")
+    val reporter = new StoreReporter(settings)
+    val global = new Global(settings, reporter)
+    import global._
+    val run = new Run()
+    run.compileSources(List(new BatchSourceFile("F.scala", "trait F[A] { self: F[A] => }")))
+    assertEquals(Nil, reporter.infos.toList)
+    val F = run.units.next().body.collect { case cd: ClassDef => cd.symbol }.head
+    assertFalse(F.hasSelfType)
+    perRunCaches.clearAll()
+    assertFalse(F.hasSelfType)
   }
 }
