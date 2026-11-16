@@ -1,0 +1,13 @@
+S.scala:3: error: name clash between inherited members:
+def generic(l: java.util.List[String]): Unit in trait J and
+def generic(l: java.util.List[Int]): Unit in trait K1
+have same type after erasure: (l: java.util.List): Unit
+abstract class JavaClash extends J with K1
+               ^
+S.scala:6: error: name clash between inherited members:
+def raw(l: java.util.List): Unit in trait J and
+def raw(l: java.util.List[String]): Unit in trait K2
+have same type after erasure: (l: java.util.List): Unit
+abstract class RawParent extends J with K2
+               ^
+2 errors
