@@ -291,7 +291,7 @@ abstract class UnCurry extends InfoTransform
             // Don't want bottom types getting any further than this (scala/bug#4024)
             if (tp.typeSymbol.isBottomClass) getClassTag(AnyTpe)
             else if (!tag.isEmpty) tag
-            else if (tp.upperBound ne tp) getClassTag(tp.upperBound)
+            else if (tp.upperBound != tp) getClassTag(tp.upperBound)
             else localTyper.TyperErrorGen.MissingClassTagError(tree, tp)
           }
           def iterableClassTag(tpe: Type): Tree = {

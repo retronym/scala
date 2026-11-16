@@ -1518,7 +1518,7 @@ abstract class RefChecks extends Transform {
         // if the unnormalized type is accessible, that's good enough
         if (inaccessible.isEmpty) ()
         // or if the normalized type is, that's good too
-        else if ((tpe ne tpe.normalize) && lessAccessibleSymsInType(tpe.dealiasWiden, member).isEmpty) ()
+        else if ((tpe != tpe.normalize) && lessAccessibleSymsInType(tpe.dealiasWiden, member).isEmpty) ()
         // otherwise warn about the inaccessible syms in the unnormalized type
         else inaccessible.foreach(warnLessAccessible(_, member))
       }

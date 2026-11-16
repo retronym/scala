@@ -405,7 +405,7 @@ abstract class Erasure extends InfoTransform
           jsig(bounds.hi, existentiallyBound, toplevel, unboxedVCs)
         case _ =>
           val etp = erasure(sym0)(tp)
-          if (etp eq tp) throw new UnknownSig
+          if (etp == tp) throw new UnknownSig
           else jsig1(etp)
       }
     }

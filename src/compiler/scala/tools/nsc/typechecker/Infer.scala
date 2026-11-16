@@ -311,7 +311,7 @@ trait Infer extends Checkable {
             pre match {
               // OPT: avoid lambda allocation and Type.map for super constructor calls
               case _: SuperType if !sym.isConstructor && !owntype.isInstanceOf[OverloadedType] =>
-                owntype.map((tp: Type) => if (tp eq pre) site.symbol.thisType else tp)
+                owntype.map((tp: Type) => if (tp == pre) site.symbol.thisType else tp)
               case _ =>
                 if (isJava && owntype == ObjectTpe) ObjectTpeJava
                 else owntype
@@ -402,7 +402,7 @@ trait Infer extends Checkable {
         }
       }
       val tp1 = typeMap(tp)
-      if (tp eq tp1) tp
+      if (tp == tp1) tp
       else existentialAbstraction(typeMap.tparamsList, tp1)
     }
     def ensureFullyDefined(tp: Type): Type = if (isFullyDefined(tp)) tp else makeFullyDefined(tp)
@@ -638,7 +638,7 @@ trait Infer extends Checkable {
       case _ if tp.isError => tp // scala/bug#8228, `ErrorType nonPrivateMember nme.apply` returns an member with an erroneous type!
       case NullaryMethodType(restp) =>
         val restp1 = followApply(restp)
-        if (restp1 eq restp) tp else restp1
+        if (restp1 == restp) tp else restp1
       case _ =>
         //OPT cut down on #closures by special casing non-overloaded case
         // was: tp.nonPrivateMember(nme.apply) filter (_.isPublic)
@@ -751,7 +751,7 @@ trait Infer extends Checkable {
       undets.foreach { undet =>
         val bounds = undet.info.bounds
         val substBounds = bounds.subst(okparams, okargs)
-        if(bounds ne substBounds)
+        if (bounds != substBounds)
           undet.updateInfo(substBounds)
       }
 
