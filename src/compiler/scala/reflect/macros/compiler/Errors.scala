@@ -116,7 +116,7 @@ trait Errors extends Traces {
       def check(rtpe: Type, atpe: Type): Boolean = {
         def success() = { if (verbose) println(f"$rtpe <: $atpe?%ntrue"); true }
         (rtpe, atpe) match {
-          case _ if rtpe eq atpe => success()
+          case _ if rtpe == atpe => success()
           case (TypeRef(_, RepeatedParamClass, rtpe :: Nil), TypeRef(_, RepeatedParamClass, atpe :: Nil)) => check(rtpe, atpe)
           case (ExprClassOf(_), TreeType()) if rtpe.prefix =:= atpe.prefix => success()
           case (SubtreeType(), ExprClassOf(_)) if rtpe.prefix =:= atpe.prefix => success()

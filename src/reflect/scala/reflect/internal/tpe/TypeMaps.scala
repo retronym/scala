@@ -366,7 +366,7 @@ private[internal] trait TypeMaps {
         if (sym.isPackageClass) tp // short path
         else {
           val pre1 = this(pre)
-          if ((pre1 eq pre) || !pre1.isStable) tp
+          if ((pre1 eq pre) || pre1 == pre || !pre1.isStable) tp
           else singleType(pre1, sym)
         }
       case _ => tp.mapOver(this)

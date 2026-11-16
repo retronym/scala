@@ -760,7 +760,7 @@ final class GlbLubs[U <: SymbolTable with Singleton](val self: U) {
       case pt @ PolyType(typeParams, _) if sameLength(typeParams, tparamsHead) => pt
       case tp =>
         val tpn = tp.normalize
-        if (tp ne tpn) normalizeIter(tpn) else throw new NoCommonType(ptHead :: ptRest)
+        if (tp != tpn) normalizeIter(tpn) else throw new NoCommonType(ptHead :: ptRest)
     }
 
     // Since ptHead = PolyType(tparamsHead, _), no need to normalize it or unify tparams
