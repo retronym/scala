@@ -59,4 +59,13 @@ class NoInterningTest {
         |  type Fili[A <: Data] = DataF[A, A]
         |  def g[A <: Fili[A]]: Unit = implicitly[A <:< A#Type]
         |}""".stripMargin, "typer"))
+
+  // `firstChangedSymbol` took an equal but new bound for a change and cloned the type parameter, so the
+  // implicit scope of `CoSet[U, Any]` met a new `CoSet[U, A1]` on every round; see neg/t6528.scala.
+  @Test def cloneOnlyChangedTypeParams(): Unit =
+    assertError("could not find implicit value", errors(
+      """trait CoSet[U, +A <: U] extends CoSetLike[U, A, ({type S[A1 <: U] = CoSet[U, A1]})#S]
+        |trait CoSetLike[U, +A <: U, +This[X] <: CoSetLike[U, A, This] with CoSet[U, A]] {
+        |  implicitly[CoSet[U, Any]]
+        |}""".stripMargin, "typer"))
 }

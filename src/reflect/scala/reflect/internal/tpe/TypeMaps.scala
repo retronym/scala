@@ -115,7 +115,8 @@ private[internal] trait TypeMaps {
       @tailrec def loop(i: Int, syms: List[Symbol]): Int = syms match {
         case x :: xs =>
           val info = x.info
-          if (applyToSymbolInfo(x, info) eq info) loop(i+1, xs)
+          val info1 = applyToSymbolInfo(x, info)
+          if ((info1 eq info) || info1 == info) loop(i+1, xs)
           else i
         case _ => -1
       }
