@@ -28,6 +28,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#245 | Compute lub depths for solving and merging only when needed | clean. retronym/scala#246 is an alternative formulation of the same change, left out until a paired A/B against #245 says which one to keep |
 | retronym/scala#250 | Avoid TypeTag in the f interpolator's type constants | clean |
 | retronym/scala#247 | Drop typer and namer state that pins old trees past typer | clean |
+| retronym/scala#253 | Dispatch typed1 on a class rather than the TypTree trait | clean |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
