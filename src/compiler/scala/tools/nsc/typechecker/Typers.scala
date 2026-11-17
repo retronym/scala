@@ -518,9 +518,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case x                           => throw new MatchError(x)
           }
         }
-        (checkAccessible(tree1, sym, qual.tpe, qual, unit.isJava), qual.tpe)
+        (checkAccessible(tree1, sym, qual.tpe, qual, unit.isJava, checkAccess = !isRetyper), qual.tpe)
       } else {
-        checkAccessible(tree, sym, pre, site, unit.isJava)
+        checkAccessible(tree, sym, pre, site, unit.isJava, checkAccess = !isRetyper)
       }
 
     /** Post-process an identifier or selection node, performing the following:
@@ -5593,7 +5593,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             }
             val pre = qual.tpe
             var accessibleError: AccessTypeError = null
-            val result = silent(_.makeAccessible(tree1, sym, pre, qual)) match {
+            val result = (if (isRetyper) SilentResultValue(makeAccessible(tree1, sym, pre, qual)) else silent(_.makeAccessible(tree1, sym, pre, qual))) match {
               case SilentTypeError(err) => err match {
                 case err: AccessTypeError =>
                   accessibleError = err
