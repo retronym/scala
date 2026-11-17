@@ -6,7 +6,7 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 OUT=${1:?outdir}; shift
 EXTRA=("$@")
-SCALAC="$ROOT/build/quick/bin/scalac"
+SCALAC=${SCALAC:-"$ROOT/build/quick/bin/scalac"}
 DEPS=${DEPS:?set DEPS to the compiler module dependency classpath (scala-asm, jna, ...)}
 
 srcs() { find "$ROOT/src/$1" -name '*.scala' -o -name '*.java'; }
