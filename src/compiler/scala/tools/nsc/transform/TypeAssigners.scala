@@ -92,7 +92,7 @@ trait TypeAssigners { self: TypingTransformers =>
      *  fully defined, else the branches' lub, or their weak lub if that differs, as in
      *  `Typer.typedIf`.
      */
-    private def branchesType(pt: Type, tpes: => List[Type]): Type =
+    @inline private def branchesType(pt: Type, tpes: => List[Type]): Type =
       if (analyzer.isFullyDefined(pt)) pt
       else {
         val tpes1 = tpes.map(_.deconst)
@@ -233,7 +233,7 @@ trait TypeAssigners { self: TypingTransformers =>
         val restpe = ldef.symbol.tpe.resultType
         val rhs1 = typed(rhs, restpe)
         params foreach (param => param setType param.symbol.tpe)
-        deriveLabelDef(ldef)(_ => rhs1) setType restpe
+        treeCopy.LabelDef(ldef, ldef.name, params, rhs1) setType restpe
 
       case vdef @ ValDef(_, _, tpt, rhs) =>
         val sym = vdef.symbol
