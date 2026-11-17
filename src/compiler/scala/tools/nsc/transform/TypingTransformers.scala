@@ -19,7 +19,7 @@ import scala.collection.mutable
 /** A base class for transforms.
  *  A transform contains a compiler phase which applies a tree transformer.
  */
-trait TypingTransformers {
+trait TypingTransformers extends TypeAssigners {
 
   val global: Global
   import global._
