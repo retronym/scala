@@ -5255,11 +5255,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             if (settings.areStatisticsEnabled) statistics.stopTimer(failedApplyNanos, appStart)
             reportError(error)
         }
-        val silentResult = silent(
-          op                    = _.typed(fun, mode.forFunMode, funpt),
-          reportAmbiguousErrors = !mode.inExprMode && context.ambiguousErrors,
-          newtree               = if (mode.inExprMode) tree else context.tree
-        )
+        val silentResult =
+          // A retyper's trees typechecked before, so there is no error to buffer or recover from.
+          if (isRetyper) SilentResultValue(typed(fun, mode.forFunMode, funpt))
+          else silent(
+            op                    = _.typed(fun, mode.forFunMode, funpt),
+            reportAmbiguousErrors = !mode.inExprMode && context.ambiguousErrors,
+            newtree               = if (mode.inExprMode) tree else context.tree
+          )
         silentResult match {
           case SilentResultValue(fun1) =>
             val fun2 = if (stableApplication) stabilizeFun(fun1, mode, pt) else fun1
