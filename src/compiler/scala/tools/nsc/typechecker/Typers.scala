@@ -2168,8 +2168,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       sym.annotations.foreach(_.completeInfo())
       sym.filterAnnotations(_ != UnmappableAnnotation)
 
-      val tpt1 = checkNoEscapingPrivates(this, sym, transformedOr(vdef.tpt, typedType(vdef.tpt)))
-      checkNonCyclic(vdef, tpt1)
+      val tpt0 = transformedOr(vdef.tpt, typedType(vdef.tpt))
+      val tpt1 = if (isRetyper) tpt0 else checkNoEscapingPrivates(this, sym, tpt0)
+      if (!isRetyper) checkNonCyclic(vdef, tpt1)
 
       // allow trait accessors: it's the only vehicle we have to hang on to annotations that must be passed down to
       // the field that's mixed into a subclass
@@ -2432,8 +2433,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (isRepeatedParamType(vparam1.symbol.tpe))
             StarParamNotLastError(vparam1)
 
-        val tpt1 = checkNoEscapingPrivates(this, meth, transformedOr(ddef.tpt, typedType(ddef.tpt)))
-        checkNonCyclic(ddef, tpt1)
+        val tpt0 = transformedOr(ddef.tpt, typedType(ddef.tpt))
+        val tpt1 = if (isRetyper) tpt0 else checkNoEscapingPrivates(this, meth, tpt0)
+        if (!isRetyper) checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
         val rhsAtOwner = // introduced for async, but could be universally handy
@@ -4549,7 +4551,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           val isClassOf = fun.symbol.rawname == nme.classOf && currentRun.runDefinitions.isPredefClassOf(fun.symbol)
           if (isJava && fun.symbol.isTerm) args.foreach(_.modifyType(rawToExistential)) // e.g. List.class, parsed as classOf[List]
           val targs = mapList(args)(_.tpe)
-          checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
+          if (!isRetyper) checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
           if (isClassOf)
             typedClassOf(tree, args.head, noGen = true)
           else {
