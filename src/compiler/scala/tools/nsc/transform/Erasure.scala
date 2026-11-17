@@ -1509,11 +1509,23 @@ abstract class Erasure extends InfoTransform
     final class ErasureRetyper(root: Tree)
         extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
         with TypeAssigner {
-      private val typeAdapter = new ErasureTypeAdapter {
+      private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
         def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
+        override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
       }
       import typeAdapter._
+
+      /** `gen.mkAttributedCast` without a `Typer`: `gen.mkCast` builds `tree.$asInstanceOf[pt]()`
+       *  with the `Select` typed, and the type application and the application get their types from
+       *  it, as `Typer` would give them.
+       */
+      private def typedSyntheticCast(tree: Tree, pt: Type): Tree = gen.mkCast(tree, pt) match {
+        case app @ Apply(ta @ TypeApply(sel: Select, _), Nil) if sel.tpe ne null =>
+          typedApply(app, typedTypeApply(ta, WildcardType), WildcardType, qualMode = false)
+        case _ =>
+          gen.mkAttributedCast(tree, pt) // another shape than `mkCast` builds after uncurry
+      }
 
       def retype(tree: Tree): Tree = typed(tree, WildcardType)
 
