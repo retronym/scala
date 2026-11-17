@@ -72,6 +72,10 @@ trait TypeAssigners { self: TypingTransformers =>
       else tree
     }
 
+    /** Whether a value of type `tp` can be passed where `formal` is expected, without conversion. */
+    private def conforms(tp: Type, formal: Type): Boolean =
+      (tp eq formal) || isRepeatedParamType(formal) || tp <:< dropByName(formal)
+
     /** Prepares a tree that `fallback` hands to `localTyper`. */
     protected def beforeFallback(tree: Tree): Tree = tree
 
@@ -107,7 +111,12 @@ trait TypeAssigners { self: TypingTransformers =>
     private def typedMode(tree: Tree, pt: Type, qualMode: Boolean, funMode: Boolean): Tree = {
       val tree0 = enter(tree)
       val tree1 = if (tree0.tpe ne null) tree0 else typed1(tree0, pt, qualMode)
-      if (tree1.isEmpty) tree1 else adapt(tree1, pt, funMode)
+      if (tree1.isEmpty) tree1
+      else if (!funMode && !phase.erasedTypes && tree1.tpe.isInstanceOf[OverloadedType])
+        // An overloaded member selected by name and not applied, such as a name-based `isEmpty`:
+        // `Typer.adapt` resolves it against `pt`.
+        fallback(tree1, pt, "overloaded-expr")
+      else adapt(tree1, pt, funMode)
     }
 
     /** Analogue of `Typer.typed1`. */
@@ -232,6 +241,8 @@ trait TypeAssigners { self: TypingTransformers =>
           if (rhs.isEmpty) rhs
           else if (sym.hasDefault) return fallback(vdef, pt, "ValDef-default")
           else atOwner(vdef, sym)(typed(rhs, tpt.tpe))
+        if (!phase.erasedTypes && !rhs1.isEmpty && !conforms(rhs1.tpe, tpt.tpe))
+          return fallback(treeCopy.ValDef(vdef, vdef.mods, vdef.name, tpt, rhs1), pt, "ValDef-nonconforming")
         treeCopy.ValDef(vdef, vdef.mods, vdef.name, tpt, rhs1) setType NoType
 
       case ddef @ DefDef(_, _, tparams, vparamss, tpt, rhs) =>
@@ -267,6 +278,20 @@ trait TypeAssigners { self: TypingTransformers =>
         val stats1 = atOwner(pdef, pdef.symbol)(stats mapConserve (stat => typed(stat, WildcardType)))
         treeCopy.PackageDef(pdef, pid1, stats1) setType NoType
 
+      case fun @ Function(vparams, body) if !phase.erasedTypes =>
+        // Typer.typed1 and Typer.doTypedFunction past typer, for a function with no expected
+        // function or SAM type, which would give its body an expected type.
+        if (pt ne WildcardType) return fallback(tree, pt, "Function-pt")
+        if (fun.symbol == NoSymbol) fun.symbol = localTyper.context.owner.newAnonymousFunctionValue(fun.pos)
+        val vparams1 = vparams.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef])
+        val body1 = atOwner(fun, fun.symbol)(typed(body, WildcardType))
+        val resTp = localTyper.packedType(body1, fun.symbol).resultType.deconst match {
+          case ct: ConstantType => ct.widen
+          case tp => tp
+        }
+        val funTp = appliedType(FunctionClass(vparams.length), vparams.map(_.symbol.tpe) :+ resTp)
+        treeCopy.Function(fun, vparams1, body1) setType funTp
+
       case _ =>
         fallback(tree, pt, "core-" + tree.getClass.getSimpleName)
     }
@@ -275,6 +300,9 @@ trait TypeAssigners { self: TypingTransformers =>
     protected final def typedSelect(sel: Select, qual1: Tree, qualMode: Boolean, pt: Type): Tree = {
       val sym = sel.symbol orElse qual1.tpe.member(sel.name)
       if (sym == NoSymbol) return fallback(treeCopy.Select(sel, qual1, sel.name), pt, "Select-nosym")
+      if (sym.alternatives.head.owner.isPackageObjectClass && qual1.symbol != null && qual1.symbol.hasPackageFlag)
+        // As `Typer.typedSelect`, select a package object's member from the package object.
+        return typedSelect(sel, typedQualifier(atPos(qual1.pos.focus)(Select(qual1, nme.PACKAGE))), qualMode, pt)
       if (qual1.isInstanceOf[Super]) {
         // A selection from `super` is typed against the member's owner, or the accessible class
         // in the `QualTypeSymAttachment` (scala/bug#7936): see the comment in `Erasure.preErase`.
@@ -300,8 +328,14 @@ trait TypeAssigners { self: TypingTransformers =>
       }
       def typedArgs = app.args.mapConserve(typed(_, WildcardType))
       fun2.tpe match {
+        case _ if treeInfo.isWildcardStarArgList(app.args) =>
+          fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-star")
         case mt @ MethodType(params, _) if sameLength(params, app.args) =>
           val args1 = map2Conserve(app.args, params)((arg, param) => typed(arg, param.tpe))
+          // Before erasure, an argument that does not conform needs the typer's conversions, or
+          // its error (a translated match can call an extractor's members with the wrong types).
+          if (!phase.erasedTypes && !args1.corresponds(params)((arg, param) => conforms(arg.tpe, param.tpe)))
+            return fallback(treeCopy.Apply(app, fun2, args1), pt, "Apply-nonconforming")
           treeCopy.Apply(app, fun2, args1) setType mt.resultType(args1.map(_.tpe))
         case OverloadedType(pre, alts) if !phase.erasedTypes =>
           // An operator selected by name, such as `==` or `&` on a primitive: the alternative
