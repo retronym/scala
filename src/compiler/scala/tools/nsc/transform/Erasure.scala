@@ -896,7 +896,8 @@ abstract class Erasure extends InfoTransform
    *
    *  Must be created and run `exitingErasure`.
    */
-  final class ErasureRetyper(unit: CompilationUnit) extends TypingTransformer(unit) {
+  final class ErasureRetyper(unit: CompilationUnit, root: Tree)
+      extends TypingTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]) {
     private val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree) }
     import typeAdapter._
 
@@ -929,7 +930,7 @@ abstract class Erasure extends InfoTransform
       case _: Ident | _: Select | _: Apply | _: TypeApply | _: Literal | _: This | _: Typed | _: Block | _: If |
            _: Match | _: Try | _: Throw | _: Return | _: New | _: Assign | _: ArrayValue | _: ApplyDynamic |
            _: LabelDef | _: ValDef | _: DefDef | _: ClassDef | _: PackageDef | _: Template | _: Function |
-           _: InjectDerivedValue | _: Super => true
+           _: InjectDerivedValue | _: Super | _: SelectFromArray => true
       case _ => false
     }
 
@@ -1253,7 +1254,7 @@ abstract class Erasure extends InfoTransform
       case cdef @ ClassDef(_, _, _, impl) =>
         val savedResult = enclMethodResult
         enclMethodResult = NoType
-        val impl1 = try atOwner(cdef.symbol)(typed(impl, WildcardType)).asInstanceOf[Template]
+        val impl1 = try atOwner(cdef, cdef.symbol)(typed(impl, WildcardType)).asInstanceOf[Template]
         finally enclMethodResult = savedResult
         treeCopy.ClassDef(cdef, cdef.mods, cdef.name, Nil, impl1) setType NoType
 
@@ -1857,7 +1858,7 @@ abstract class Erasure extends InfoTransform
       val tree1 = preTransformer.transform(tree)
       // log("tree after pretransform: "+tree1)
       exitingErasure {
-        if (settings.YnewErasure.value) { newErasureFallbacks; new ErasureRetyper(unit).retype(tree1) }
+        if (settings.YnewErasure.value) { newErasureFallbacks; new ErasureRetyper(unit, tree).retype(tree1) }
         else newTyper(rootContextPostTyper(unit, tree)).typed(tree1)
       }
     }
