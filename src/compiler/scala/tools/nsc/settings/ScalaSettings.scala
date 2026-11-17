@@ -329,6 +329,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
 
   def showTreeDiff: Boolean = YprintTrees.value == "diff"
   val Xshowtrees      = BooleanSetting    ("-Yshow-trees", "(Requires -Vprint:) Print detailed ASTs in formatted form.").internalOnly()
+  val YfusedErasure   = BooleanSetting    ("-Yfused-erasure", "Spike: -Ynew-erasure, with preErase fused into the same traversal.").internalOnly()
   val XshowtreesCompact
                       = BooleanSetting    ("-Yshow-trees-compact", "(Requires -Vprint:) Print detailed ASTs in compact form.").internalOnly()
   val XshowtreesStringified
