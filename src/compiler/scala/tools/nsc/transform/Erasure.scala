@@ -1718,7 +1718,9 @@ abstract class Erasure extends InfoTransform
     lmfOverridesOk(samSym)
   }
 
-  final def isJvmAccessible(cls: Symbol, context: Context): Boolean = {
+  // `context` is by-name, and this inlined to drop its closure: a typing transformer makes its
+  // context only when asked, and only a Java-defined class needs one.
+  @inline final def isJvmAccessible(cls: Symbol, context: => Context): Boolean = {
     // Phase travel necessary, isAccessible is too lax after erasure for Java-defined members, see
     // comment in its implementation.
     !cls.isJavaDefined || atErasure(context.isAccessible(cls, cls.owner.thisType))

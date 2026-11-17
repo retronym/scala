@@ -164,7 +164,7 @@ trait TypeAssigners { self: TypingTransformers =>
           case NoSymbol => tree setType ErrorType // reported by qualifyingClass
           case clazz =>
             tree setSymbol clazz setType clazz.thisType.underlying
-            if (localTyper.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
+            if (analyzer.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
         }
 
       case sup: Super =>
