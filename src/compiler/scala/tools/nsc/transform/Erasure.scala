@@ -1769,7 +1769,10 @@ abstract class Erasure extends InfoTransform
   @inline final def isJvmAccessible(cls: Symbol, context: => Context): Boolean = {
     // Phase travel necessary, isAccessible is too lax after erasure for Java-defined members, see
     // comment in its implementation.
-    !cls.isJavaDefined || atErasure(context.isAccessible(cls, cls.owner.thisType))
+    // A public class (`java.lang.String`, say) is accessible from anywhere: `isAccessible` finds its
+    // access boundary is the root class without reading the context, so don't make one.
+    !cls.isJavaDefined || cls.isPublic && cls.enclosingRootClass == rootMirror.RootClass ||
+      atErasure(context.isAccessible(cls, cls.owner.thisType))
   }
 
   // `-Ystop-after:<phase before erasure>` leaves erasure out of the run: no phase to travel to.
