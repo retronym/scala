@@ -683,9 +683,7 @@ abstract class Erasure extends InfoTransform
   private var retypingErasedTrees = false
 
   /** The modifier typer which retypes with erased types. */
-  class Eraser(_context: Context) extends Typer(_context) {
-    val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree) }
-    import typeAdapter._
+  class Eraser(_context: Context) extends Typer(_context) with TypeAdapter {
 
     // Later phases use the Eraser as their localTyper, to type trees they synthesize; only erasure's own retyping
     // of trees that passed typer is a retyper.
