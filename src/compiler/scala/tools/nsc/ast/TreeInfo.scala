@@ -55,8 +55,10 @@ abstract class TreeInfo extends scala.reflect.internal.TreeInfo with MacroAnnoti
     // B.unbox. Returns B.
     object Unbox {
       def unapply(t: Tree): Option[Tree] = t match {
-        case Apply(sel @ Select(ref, _), Nil) if valueUnbox(ref.tpe) == sel.symbol => Some(ref)
-        case _                                                                     => None
+        // `valueUnbox` searches the declarations of the qualifier's class, so test first that
+        // the selected symbol could be the unbox method, a parameter accessor.
+        case Apply(sel @ Select(ref, _), Nil) if sel.symbol.isParamAccessor && valueUnbox(ref.tpe) == sel.symbol => Some(ref)
+        case _ => None
       }
     }
     // new B(v). Returns B and v.
