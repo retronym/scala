@@ -2106,7 +2106,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  This simultaneously allows us to reify annotations and to preserve backward compatibility.
      */
     def typedModifiers(mods: Modifiers): Modifiers =
-      mods.copy(annotations = Nil) setPositions mods.positions
+      if (isRetyper && mods.annotations.isEmpty) mods
+      else mods.copy(annotations = Nil) setPositions mods.positions
 
     def typedValDef(vdef: ValDef): ValDef = {
       val sym = vdef.symbol
