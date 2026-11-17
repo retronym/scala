@@ -121,6 +121,26 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
   private final val typerFreshNameCreators = perRunCaches.newAnyRefMap[Symbol, FreshNameCreator]()
   def freshNameCreatorFor(context: Context) = typerFreshNameCreators.getOrElseUpdate(context.outermostContextAtCurrentPos.enclClassOrMethod.owner, new FreshNameCreator)
 
+  /** Does the context of tree `tree` require a stable type?
+   *  It reads no typer state, so a phase after typer can ask without a typer (or a context) at hand.
+   */
+  private[nsc] def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
+    def ptSym = pt.typeSymbol
+    def expectsStable = (
+         pt.isStable
+      || mode.inQualMode && !tree.symbol.isConstant
+      || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass)
+    )
+    def isNarrowable(tpe: Type): Boolean = unwrapWrapperTypes(tpe) match {
+      case TypeRef(_, _, _) | RefinedType(_, _) => true
+      case tpe                                  => !isConstantType(tpe) && !phase.erasedTypes
+    }
+    (    isNarrowable(tree.tpe)
+      && mode.typingExprNotLhs
+      && expectsStable
+    )
+  }
+
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit
     import typeDebug.ptTree
@@ -453,25 +473,6 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         (sym.sourceFile ne null) &&
         (currentRun.compiledFiles contains sym.sourceFile.path)
       }
-    }
-
-    /** Does the context of tree `tree` require a stable type?
-     */
-    private[nsc] def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
-      def ptSym = pt.typeSymbol
-      def expectsStable = (
-           pt.isStable
-        || mode.inQualMode && !tree.symbol.isConstant
-        || !(tree.tpe <:< pt) && (ptSym.isAbstractType && pt.lowerBound.isStable || ptSym.isRefinementClass)
-      )
-      def isNarrowable(tpe: Type): Boolean = unwrapWrapperTypes(tpe) match {
-        case TypeRef(_, _, _) | RefinedType(_, _) => true
-        case tpe                                  => !isConstantType(tpe) && !phase.erasedTypes
-      }
-      (    isNarrowable(tree.tpe)
-        && mode.typingExprNotLhs
-        && expectsStable
-      )
     }
 
     /** Make symbol accessible. This means:
