@@ -1700,20 +1700,28 @@ trait Namers extends MethodSynthesis {
       }
     }
 
-    /** Add `@defaultArg` to a parameter of a constructor of an annotation class. `NamesDefaults.addDefaults` reads it
-     *  to insert the default expression into a use of the annotation. Adding it here and not when the typer reaches the
-     *  class means that a use sees it however the sources are ordered, as it does for a class loaded from a classfile.
+    /** Arrange for `@defaultArg` to be added to a parameter of a constructor of an annotation class.
+     *  `NamesDefaults.addDefaults` reads it to insert the default expression into a use of the annotation. Arranging it
+     *  here and not when the typer reaches the class means that a use sees it however the sources are ordered, as it
+     *  does for a class loaded from a classfile.
      *
-     *  The annotation is lazy because typing the default can refer to anything in the run, including uses of annotations.
+     *  The annotation is computed when it is first needed, by a use or by `typedValDef`, because typing the default can
+     *  refer to anything in the run, including uses of annotations. Until then the parameter does not carry it: a lazy
+     *  annotation would be forced by anything that lists the parameter's annotations while the default is typed, such
+     *  as a macro in the default that looks for an annotation on its parameter.
      */
     private def addDefaultArgAnnotation(vparam: ValDef): Unit = {
+      val sym = vparam.symbol
       var typing = false
-      def computeInfo = enteringTyper {
+      def compute(): AnnotationInfo = enteringTyper {
         if (typing) throw new TypeError(vparam.rhs.pos, s"recursive default argument: annotation parameter ${vparam.name} is needed to type its own default")
         typing = true
-        typer.defaultArgAnnotation(vparam)
+        val ann = typer.typedDefaultArgAnnotation(vparam)
+        sym.removeAttachment[DefaultArgAnnotationCompleter]
+        sym.addAnnotation(ann)
+        ann
       }
-      vparam.symbol.initialize.addAnnotation(AnnotationInfo.lazily(DefaultArgAttr, computeInfo))
+      sym.updateAttachment(new DefaultArgAnnotationCompleter(compute()))
     }
 
     private object DefaultGetterNamerSearch {

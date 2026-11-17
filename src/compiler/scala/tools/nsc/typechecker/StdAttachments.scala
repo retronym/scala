@@ -214,6 +214,23 @@ trait MacroAnnotationAttachments {
   def unmarkWeak(sym: Symbol) = if (sym != null && sym != NoSymbol) sym.removeAttachment[WeakSymbolAttachment.type] else sym
   def isWeak(sym: Symbol) = sym == null || sym == NoSymbol || sym.attachments.get[WeakSymbolAttachment.type].isDefined
 
+  /** On a parameter with a default of a constructor of an annotation class defined in source, until its `@defaultArg`
+   *  annotation is computed. Computing it types the default and adds the annotation. See `Namer.addDefaultArgAnnotation`.
+   *
+   *  A clone of the parameter, as in the constructor type of `ann[Int]`, is made with the attachment and without the
+   *  annotation if it is made before the annotation is computed. The attachment is shared, so the clone gets the same
+   *  annotation from it.
+   */
+  final class DefaultArgAnnotationCompleter(compute: => AnnotationInfo) {
+    lazy val annotation: AnnotationInfo = compute
+  }
+  /** The `@defaultArg` annotation of `param`, computing it if needed. */
+  def defaultArgAnnotation(param: Symbol): Option[AnnotationInfo] =
+    param.attachments.get[DefaultArgAnnotationCompleter] match {
+      case Some(completer) => Some(completer.annotation)
+      case _               => param.getAnnotation(definitions.DefaultArgAttr)
+    }
+
   case class SymbolCompleterAttachment(info: Type)
   def backupCompleter(sym: Symbol): Symbol = {
     if (sym != null && sym != NoSymbol) {
