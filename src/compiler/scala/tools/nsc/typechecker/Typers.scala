@@ -463,7 +463,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     /** Does the context of tree `tree` require a stable type?
      */
-    private def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
+    private[nsc] def isStableContext(tree: Tree, mode: Mode, pt: Type) = {
       def ptSym = pt.typeSymbol
       def expectsStable = (
            pt.isStable
