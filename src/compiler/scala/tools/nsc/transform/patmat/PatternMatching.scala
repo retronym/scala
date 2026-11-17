@@ -95,7 +95,7 @@ trait PatternMatching extends Transform
           // Keep 2.12 behaviour of using wildcard expected type, recomputing the LUB, then throwing it away for the continuations plugins
           // but for the rest of us pass in top as the expected type to avoid waste.
           val pt = if (origTp <:< definitions.AnyTpe) definitions.AnyTpe else WildcardType
-          localTyper.typed(translated, pt) match {
+          assignTypes(localTyper, translated, pt) match {
             case b @ Block(_, m: Match) =>
               b.setType(origTp)
               m.setType(origTp)
