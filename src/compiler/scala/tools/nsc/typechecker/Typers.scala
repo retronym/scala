@@ -137,6 +137,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     /** Overridden to false in scaladoc and/or interactive. */
     def isInteractive                 = false
+
+    /** Is this typer re-typechecking trees that already passed typer, as erasure's `Eraser` does?
+     *  Such trees carry symbols that typer resolved and checked, so a retyper skips work whose only
+     *  purpose is to find or report errors in user code: silent mode around applications, access checks,
+     *  bounds checks and escape checks. Any error such work would find is a compiler bug, and a retyper's
+     *  root context throws on errors anyway.
+     */
+    def isRetyper                     = false
     def canAdaptConstantTypeToLiteral = true
     def canTranslateEmptyListToNil    = true
     def missingSelectErrorTree(tree: Tree, @unused qual: Tree, @unused name: Name): Tree = tree
