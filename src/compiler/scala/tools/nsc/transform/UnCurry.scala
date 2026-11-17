@@ -83,6 +83,9 @@ abstract class UnCurry extends InfoTransform
     private val noApply           = mutable.HashSet[Tree]()
     private val newMembers        = mutable.Map[Symbol, mutable.Buffer[Tree]]()
 
+    /** `tree`, synthesised at `pos` from typed trees and bound symbols, typed with a `TypeAssigner`. */
+    private def assignTypesPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
+
     // Expand `Function`s in constructors to class instance creation (scala/bug#6666, scala/bug#8363)
     // We use Java's LambdaMetaFactory (LMF), which requires an interface for the sam's owner
     private def mustExpandFunction(fun: Function) = {
@@ -237,7 +240,7 @@ abstract class UnCurry extends InfoTransform
         val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
-        val newFun = deriveFunction(fun)(_ => localTyper.typedPos(fun.pos)(
+        val newFun = deriveFunction(fun)(_ => assignTypesPos(fun.pos)(
           gen.mkForwarder(gen.mkAttributedRef(liftedMethod.symbol), (fun.vparams map (_.symbol)) :: Nil)
         ))
 
@@ -246,7 +249,7 @@ abstract class UnCurry extends InfoTransform
           liftedMethod.updateAttachment(DelambdafyTarget)
         }
 
-        val typedNewFun = localTyper.typedPos(fun.pos)(Block(liftedMethod :: Nil, super.transform(newFun)))
+        val typedNewFun = assignTypesPos(fun.pos)(Block(liftedMethod :: Nil, super.transform(newFun)))
         if (mustExpand) {
           val Block(stats, expr : Function) = typedNewFun: @unchecked
           treeCopy.Block(typedNewFun, stats, gen.expandFunction(localTyper)(expr, inConstructorFlag))
@@ -265,7 +268,7 @@ abstract class UnCurry extends InfoTransform
         // when calling into scala varargs, make sure it's a sequence.
         def arrayToSequence(tree: Tree, elemtp: Type, copy: Boolean): Tree = {
           exitingUncurry {
-            localTyper.typedPos(pos) {
+            assignTypesPos(pos) {
               val pt = arrayType(elemtp)
               val adaptedTree = // might need to cast to Array[elemtp], as arrays are not covariant
                 if (tree.tpe <:< pt) tree
@@ -335,7 +338,7 @@ abstract class UnCurry extends InfoTransform
         exitingUncurry {
           if (isJava && !isReferenceArray(suffix.tpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
             // The array isn't statically known to be a reference array, so call ScalaRuntime.toObjectArray.
-            suffix = localTyper.typedPos(pos) {
+            suffix = assignTypesPos(pos) {
               gen.mkRuntimeCall(nme.toObjectArray, List(suffix))
             }
           }
@@ -362,7 +365,7 @@ abstract class UnCurry extends InfoTransform
             // a Function0. We can then remove the application and use the existing Function0.
             case Apply(Select(qual, nme.apply), Nil) if canUseDirectly(qual) => qual
             case body =>
-              val thunkFun = localTyper.typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
+              val thunkFun = assignTypesPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
               log(s"Change owner from $currentOwner to ${thunkFun.symbol} in ${thunkFun.body}")
               thunkFun.body.changeOwner(currentOwner, thunkFun.symbol)
               transformFunction(thunkFun)
@@ -429,7 +432,7 @@ abstract class UnCurry extends InfoTransform
         val sym = currentOwner.newMethod(unit.freshTermName(nme.LIFTED_TREE), tree.pos, Flag.ARTIFACT)
         sym.setInfo(MethodType(List(), tree.tpe))
         tree.changeOwner(currentOwner, sym)
-        localTyper.typedPos(tree.pos)(Block(
+        assignTypesPos(tree.pos)(Block(
           List(DefDef(sym, ListOfNil, tree)),
           Apply(Ident(sym), Nil)
         ))
@@ -555,7 +558,7 @@ abstract class UnCurry extends InfoTransform
               val tree2 = tree1 setType functionType(Nil, tree1.tpe)
               return {
                 if (noApply contains tree2) tree2
-                else localTyper.typedPos(tree1.pos)(Apply(Select(tree2, nme.apply), Nil))
+                else assignTypesPos(tree1.pos)(Apply(Select(tree2, nme.apply), Nil))
               }
             }
             tree1

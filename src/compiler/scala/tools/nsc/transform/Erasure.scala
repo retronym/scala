@@ -843,7 +843,7 @@ abstract class Erasure extends InfoTransform
     }
     import typeAdapter._
 
-    override protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree
+    override private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree
 
     /**  Replace member references as follows:
      *
@@ -1507,59 +1507,31 @@ abstract class Erasure extends InfoTransform
      *  Must be created and run `exitingErasure`.
      */
     final class ErasureRetyper(root: Tree)
-        extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]) {
+        extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
+        with TypeAssigner {
       private val typeAdapter = new ErasureTypeAdapter {
         def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
       }
       import typeAdapter._
 
-      /** The erased result type of the enclosing method, the expected type of `Return` expressions. */
-      private[this] var enclMethodResult: Type = NoType
-
-      /** A tree shape the retyper does not know: pre-erase what is left of it and type it with `Eraser`. */
-      private def fallback(tree: Tree, pt: Type, why: String): Tree = {
-        devWarning(tree.pos, s"erasure: typing $why with Eraser")
-        localTyper.typed(preEraseChildren(tree), pt)
-      }
-
-      /** The typer's mode for an expression, or for the qualifier of a selection. */
-      private def exprMode(qualMode: Boolean): Mode = if (qualMode) EXPRmode | QUALmode else EXPRmode
-
-      /** The type of a conditional, match or try whose branches have types `tpes`: `pt` if it is
-       *  fully defined, else the branches' lub, or their weak lub if that differs, as in
-       *  `Typer.typedIf`. `finishTyped` adapts the branches to it.
-       */
-      private def branchesType(pt: Type, tpes: => List[Type]): Type =
-        if (erasureAnalyzer.isFullyDefined(pt)) pt
-        else {
-          val tpes1 = tpes.map(_.deconst)
-          if (glbLubs.sameWeakLubAsLub(tpes1)) lub(tpes1) else glbLubs.weakLub(tpes1)
-        }
-
       def retype(tree: Tree): Tree = typed(tree, WildcardType)
-
-      /** Analogue of `Typer.typed`, with `Eraser.adapt`. */
-      def typed(tree: Tree, pt: Type): Tree = typedMode(tree, pt, qualMode = false)
-
-      private def typedQualifier(tree: Tree, pt: Type = WildcardType): Tree = typedMode(tree, pt, qualMode = true)
 
       /** Every tree is visited once, by `typed`. A tree with a type is an original tree, pre-erased
        *  here on entry; after that, it has a type only if it must not be retyped (see
-       *  `preEraseTree`). Trees synthesised below (box, unbox, cast) come back typed and are not
-       *  revisited.
+       *  `preEraseTree`). Trees synthesised by adaptation (box, unbox, cast) come back typed and
+       *  are not revisited.
        */
-      private def typedMode(tree: Tree, pt: Type, qualMode: Boolean): Tree = {
-        val tree0 = enter(tree)
-        val tree1 = if (tree0.tpe ne null) tree0 else typed1(tree0, pt, qualMode)
-        if (tree1.isEmpty) tree1 else adaptToType(tree1, pt)
-      }
+      override protected def enter(tree: Tree): Tree = if (tree.tpe ne null) preEraseNode(tree) else tree
 
-      /** Pre-erase an original tree on entry. */
-      private def enter(tree: Tree): Tree = if (tree.tpe ne null) preEraseNode(tree) else tree
+      /** `Eraser.adapt`. */
+      override protected def adapt(tree: Tree, pt: Type, funMode: Boolean): Tree = adaptToType(tree, pt)
+
+      /** What is left of a tree the assigner does not know is pre-erased whole and typed with `Eraser`. */
+      override protected def beforeFallback(tree: Tree): Tree = preEraseChildren(tree)
 
       /** Analogue of `Eraser.typed1`. */
-      private def typed1(tree: Tree, pt: Type, qualMode: Boolean): Tree = {
+      override protected def typed1(tree: Tree, pt: Type, qualMode: Boolean): Tree = {
         val tree1 = tree match {
           case ddef: DefDef if isPrimaryConstructorDef(ddef) =>
             typedCore(withMixinConstructorCalls(ddef), pt, qualMode)
@@ -1582,35 +1554,25 @@ abstract class Erasure extends InfoTransform
         finishTyped(tree, tree1)
       }
 
-      /** Analogue of `Typer.typed1` for the tree shapes that reach erasure. */
-      private def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
-        case tree: Ident =>
-          val sym = tree.symbol
-          if (sym == NoSymbol) return fallback(tree, pt, "Ident-nosym")
-          val pre = if (sym.isTopLevel) sym.owner.thisType else NoPrefix
-          tree setType pre.memberType(sym)
-
+      /** The tree shapes erasure types differently from `TypeAssigner`. */
+      override protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
         case sel @ Select(qual, name) =>
-          if (sel.symbol == NoSymbol) typedSelect(sel, typedQualifier(qual), pt)
+          if (sel.symbol == NoSymbol) typedSelect(sel, typedQualifier(qual), qualMode, pt)
           else if (name == nme.CONSTRUCTOR) {
             if (sel.symbol.owner == AnyValClass) sel.symbol = ObjectClass.primaryConstructor
-            typedSelect(sel, typedQualifier(qual), pt)
+            typedSelect(sel, typedQualifier(qual), qualMode, pt)
           } else {
             val sel1 = redirectAnyMember(sel)
             val qual1 = typedQualifier(sel1.qualifier)
             val sel2 = adaptQualifier(sel1, qual1)
-            typedSelect(sel2, sel2.qualifier, pt)
+            typedSelect(sel2, sel2.qualifier, qualMode, pt)
           }
 
         case sel @ SelectFromArray(qual, name, erasure) =>
           // An element access of an array of a statically known element type.
           val qual0 = typedQualifier(qual)
           val qual1 = if (qual0.tpe <:< erasure) qual0 else cast(qual0, erasure)
-          typedSelect(Select(qual1, name) copyAttrs sel, qual1, pt)
-
-        case Apply(blk @ Block(stats, expr), args) =>
-          val ap1 = treeCopy.Apply(tree, expr, args).clearType().setPos(tree.pos.makeTransparent)
-          typedCore(treeCopy.Block(blk, stats, ap1).clearType(), pt, qualMode)
+          typedSelect(Select(qual1, name) copyAttrs sel, qual1, qualMode, pt)
 
         case app @ Apply(ta: TypeApply, Nil) if app.symbol == Any_asInstanceOf || app.symbol == Any_isInstanceOf =>
           // The type argument decides how the test or cast is erased: enter the spine to erase it
@@ -1626,146 +1588,13 @@ abstract class Erasure extends InfoTransform
                   unboxingCast(qual1, targ, currentOwner, localTyper.fresh)(localTyper.typed(_))
                 else {
                   val sel1 = adaptQualifier(redirectAnyMember(treeCopy.Select(sel, qual1, sel.name)), qual1)
-                  val fun1 = typedTypeApply(treeCopy.TypeApply(ta1, typedSelect(sel1, sel1.qualifier, WildcardType), targs), pt)
+                  val fun1 = typedTypeApply(treeCopy.TypeApply(ta1, typedSelect(sel1, sel1.qualifier, qualMode = false, WildcardType), targs), pt)
                   typedApply(treeCopy.Apply(app, fun1, Nil), fun1, pt, qualMode)
                 }
               }
             case ta1 =>
               typedApply(treeCopy.Apply(app, ta1, Nil), typed(ta1, WildcardType), pt, qualMode)
           }
-
-        case Apply(fun, _) =>
-          typedApply(tree.asInstanceOf[Apply], typed(fun, WildcardType), pt, qualMode)
-
-        case ta @ TypeApply(fun, _) =>
-          typedTypeApply(treeCopy.TypeApply(ta, typed(fun, WildcardType), ta.args), pt)
-
-        case ReferenceToBoxed(ident) =>
-          // Typer.typedReferenceToBoxed
-          val ident1 = typed1(ident, pt, qualMode)
-          treeCopy.ReferenceToBoxed(tree, ident1.asInstanceOf[Ident]) setType capturedVariables.capturedVariableType(ident.symbol, erasedTypes = true)
-
-        case Literal(value) =>
-          tree setType (if (value.tag == UnitTag) UnitTpe else ConstantType(value))
-
-        case tree: This =>
-          // Typer.typedThis
-          tree.symbol orElse localTyper.qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
-            case NoSymbol => tree setType ErrorType // reported by qualifyingClass
-            case clazz =>
-              tree setSymbol clazz setType clazz.thisType.underlying
-              if (localTyper.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
-          }
-
-        case sup: Super =>
-          typedSuper(sup)
-
-        case Typed(expr, tpt0) =>
-          // Eraser types the ascribed type with `typedType`: here only a tree that is not a `TypeTree`
-          // reaches the retyper without a type.
-          val tpt = if (tpt0.tpe eq null) typed(tpt0, WildcardType) else tpt0
-          val expr1 = typed(expr, tpt.tpe.deconst)
-          treeCopy.Typed(tree, expr1, tpt) setType tpt.tpe
-
-        case Block(stats, expr) =>
-          val stats1 = typedStats(stats)
-          val expr1 = typed(expr, pt)
-          val block1 = treeCopy.Block(tree, stats1, expr1)
-          block1.setType(if (treeInfo.isExprSafeToInline(block1)) expr1.tpe else expr1.tpe.deconst)
-
-        case If(cond, thenp, elsep) =>
-          val cond1 = typed(cond, BooleanTpe)
-          if (elsep.isEmpty)
-            treeCopy.If(tree, cond1, typed(thenp, UnitTpe), elsep) setType UnitTpe
-          else {
-            val thenp1 = typed(thenp, pt)
-            val elsep1 = typed(elsep, pt)
-            treeCopy.If(tree, cond1, thenp1, elsep1) setType branchesType(pt, thenp1.tpe :: elsep1.tpe :: Nil)
-          }
-
-        case Match(selector, cases) =>
-          val selector1 = typed(selector, WildcardType)
-          val selectorTp = selector1.tpe.widen
-          val cases1 = typedCases(cases, selectorTp, pt)
-          treeCopy.Match(tree, selector1, cases1) setType branchesType(pt, cases1.map(_.tpe))
-
-        case Try(block, catches, finalizer) =>
-          val block1 = typed(block, pt)
-          val catches1 = typedCases(catches, ThrowableTpe, pt)
-          val fin1 = if (finalizer.isEmpty) finalizer else typed(finalizer, UnitTpe)
-          treeCopy.Try(tree, block1, catches1, fin1) setType branchesType(pt, (block1 :: catches1).map(_.tpe))
-
-        case Throw(expr) =>
-          treeCopy.Throw(tree, typed(expr, ThrowableTpe)) setType NothingTpe
-
-        case Return(expr) =>
-          if (enclMethodResult eq NoType) return fallback(tree, pt, "Return-noencl")
-          treeCopy.Return(tree, typed(expr, enclMethodResult)) setType NothingTpe
-
-        case New(tpt) =>
-          tree setType tpt.tpe
-
-        case Assign(lhs, rhs) =>
-          val lhs1 = typed(lhs, WildcardType)
-          val varsym = lhs1.symbol
-          if (varsym == null || treeInfo.mayBeVarGetter(varsym)) return fallback(treeCopy.Assign(tree, lhs1, rhs), pt, "Assign-setter")
-          treeCopy.Assign(tree, lhs1, typed(rhs, lhs1.tpe)) setType UnitTpe
-
-        case ArrayValue(elemtpt, elems) =>
-          val elems1 = elems mapConserve (elem => typed(elem, elemtpt.tpe))
-          treeCopy.ArrayValue(tree, elemtpt, elems1) setType arrayType(elemtpt.tpe)
-
-        case ApplyDynamic(qual, args) =>
-          val qual1 = typed(qual, AnyRefTpe)
-          val args1 = args mapConserve (arg => typed(arg, AnyRefTpe))
-          treeCopy.ApplyDynamic(tree, qual1, args1) setType AnyRefTpe
-
-        case ldef @ LabelDef(_, params, rhs) =>
-          val restpe = ldef.symbol.tpe.resultType
-          val rhs1 = typed(rhs, restpe)
-          params foreach (param => param setType param.symbol.tpe)
-          deriveLabelDef(ldef)(_ => rhs1) setType restpe
-
-        case vdef @ ValDef(_, _, tpt, rhs) =>
-          val sym = vdef.symbol
-          val rhs1 =
-            if (rhs.isEmpty) rhs
-            else if (sym.hasDefault) return fallback(vdef, pt, "ValDef-default")
-            else atOwner(vdef, sym)(typed(rhs, tpt.tpe))
-          treeCopy.ValDef(vdef, vdef.mods, vdef.name, tpt, rhs1) setType NoType
-
-        case ddef @ DefDef(_, _, _, vparamss, tpt, rhs) =>
-          val meth = ddef.symbol
-          val vparamss1 = vparamss.mapConserve(_.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef]))
-          val savedResult = enclMethodResult
-          enclMethodResult = tpt.tpe
-          val rhs1 = try atOwner(ddef, meth) {
-            if (ddef.name == nme.CONSTRUCTOR && !meth.hasStaticFlag) typed(rhs, WildcardType)
-            else typed(rhs, tpt.tpe)
-          } finally enclMethodResult = savedResult
-          treeCopy.DefDef(ddef, ddef.mods, ddef.name, Nil, vparamss1, tpt, rhs1) setType NoType
-
-        case cdef @ ClassDef(_, _, _, impl) =>
-          val savedResult = enclMethodResult
-          enclMethodResult = NoType
-          val impl1 = try atOwner(cdef, cdef.symbol)(typed(impl, WildcardType)).asInstanceOf[Template]
-          finally enclMethodResult = savedResult
-          treeCopy.ClassDef(cdef, cdef.mods, cdef.name, Nil, impl1) setType NoType
-
-        case templ @ Template(parents, _, body) =>
-          val clazz = currentOwner
-          val body1 = atOwner(templ, clazz) {
-            body mapConserve { stat =>
-              if (stat.isDef) typed(stat, WildcardType)
-              else atOwner(stat, templ.symbol)(typed(stat, WildcardType))
-            }
-          }
-          treeCopy.Template(templ, parents, noSelfType, body1) setType clazz.tpe_*
-
-        case pdef @ PackageDef(pid, stats) =>
-          val pid1 = typedQualifier(pid).asInstanceOf[RefTree]
-          val stats1 = atOwner(pdef, pdef.symbol)(stats mapConserve (stat => typed(stat, WildcardType)))
-          treeCopy.PackageDef(pdef, pid1, stats1) setType NoType
 
         case fun @ Function(vparams, body) =>
           // No expected type for the body: after erasure `FunctionN` has no type parameters, so
@@ -1779,95 +1608,7 @@ abstract class Erasure extends InfoTransform
           treeCopy.Function(fun, vparams1, body1) setType FunctionClass(vparams.length).tpe
 
         case _ =>
-          fallback(tree, pt, "core-" + tree.getClass.getSimpleName)
-      }
-
-      /** `sel` on its typed (and adapted) qualifier `qual1`: `Typer.typedSelect` after erasure. */
-      private def typedSelect(sel: Select, qual1: Tree, pt: Type): Tree = {
-        val sym = sel.symbol orElse qual1.tpe.member(sel.name)
-        if (sym == NoSymbol) return fallback(treeCopy.Select(sel, qual1, sel.name), pt, "Select-nosym")
-        if (qual1.isInstanceOf[Super]) {
-          // A selection from `super` is typed against the member's owner, or the accessible class
-          // in the `QualTypeSymAttachment` (scala/bug#7936): see the comment in `preErase`.
-          val qualSym = sel.getAndRemoveAttachment[QualTypeSymAttachment] match {
-            case Some(a) => a.sym
-            case None => sym.owner
-          }
-          qual1.setType(qualSym.tpe)
-        }
-        treeCopy.Select(sel, qual1, sel.name).setSymbol(sym).setType(qual1.tpe.memberType(sym))
-      }
-
-      /** `app` with its typed function `fun1`: types the arguments against the erased parameter types. */
-      private def typedApply(app: Apply, fun1: Tree, pt: Type, qualMode: Boolean): Tree = {
-        // Typer.normalTypedApply
-        val fun2 = {
-          val sym = fun1.symbol
-          if ((sym ne null) && sym.isMethod && sym.isStable) localTyper.stabilizeFun(fun1, exprMode(qualMode), pt)
-          else fun1
-        }
-        fun2.tpe match {
-          case MethodType(params, restpe) if sameLength(params, app.args) =>
-            val args1 = map2Conserve(app.args, params)((arg, param) => typed(arg, param.tpe))
-            treeCopy.Apply(app, fun2, args1) setType restpe
-          case _ =>
-            fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-" + fun2.tpe.getClass.getSimpleName)
-        }
-      }
-
-      /** `ta` with its typed function: instantiates the polymorphic type of a type test, cast or `synchronized`. */
-      private def typedTypeApply(ta: TypeApply, pt: Type): Tree = ta.fun.tpe match {
-        case PolyType(tparams, restpe) if tparams.nonEmpty && sameLength(tparams, ta.args) =>
-          ta setType restpe.instantiateTypeParams(tparams, ta.args.map(_.tpe))
-        case _ =>
-          fallback(ta, pt, "TypeApply-nonpoly")
-      }
-
-      private def typedSuper(tree: Super): Tree = {
-        val qual1 = typed(tree.qual, WildcardType)
-        val clazz = qual1 match {
-          case This(_) => qual1.symbol
-          case _ => qual1.tpe.typeSymbol
-        }
-        val owntype =
-          if (!tree.mix.isEmpty) clazz.tpe.parents.find(_.typeSymbol.name == tree.mix) match {
-            case Some(parent) => parent
-            case None => return fallback(tree, WildcardType, "Super-mix")
-          }
-          else intersectionType(clazz.info.parents)
-        treeCopy.Super(tree, qual1, tree.mix) setType SuperType(clazz.thisType, owntype)
-      }
-
-      private def typedStats(stats: List[Tree]): List[Tree] =
-        stats mapConserve (stat => typed(stat, WildcardType))
-
-      private def typedCases(cases: List[CaseDef], pattpe: Type, pt: Type): List[CaseDef] =
-        cases mapConserve { cdef =>
-          val pat1 = typedPattern(cdef.pat, pattpe)
-          val guard1 = if (cdef.guard.isEmpty) cdef.guard else typed(cdef.guard, BooleanTpe)
-          val body1 = typed(cdef.body, pt)
-          treeCopy.CaseDef(cdef, pat1, guard1, body1) setType body1.tpe
-        }
-
-      /** Patterns that survive to erasure: switch alternatives and catch patterns. */
-      private def typedPattern(pat0: Tree, pt: Type): Tree = {
-        val pat = enter(pat0)
-        typedPattern1(pat, pt)
-      }
-      private def typedPattern1(pat: Tree, pt: Type): Tree = pat match {
-        case Ident(nme.WILDCARD) => pat setType pt
-        case Literal(value) => pat setType ConstantType(value)
-        case Alternative(alts) => treeCopy.Alternative(pat, alts mapConserve (typedPattern(_, pt))) setType pt
-        case Typed(expr, tpt) =>
-          val expr1 = typedPattern(expr, tpt.tpe)
-          treeCopy.Typed(pat, expr1, tpt) setType tpt.tpe
-        case Bind(name, body) =>
-          val body1 = typedPattern(body, pt)
-          pat.symbol.setInfo(body1.tpe)
-          treeCopy.Bind(pat, name, body1) setType body1.tpe
-        case _ =>
-          devWarning(pat.pos, s"erasure: typing pattern ${pat.getClass.getSimpleName} with Eraser")
-          localTyper.typedPattern(preEraseChildren(pat), pt)
+          super.typedCore(tree, pt, qualMode)
       }
     }
 
