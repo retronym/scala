@@ -2111,7 +2111,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       val sym = vdef.symbol
       currentRun.profiler.beforeTypedImplDef(sym)
       try {
-        val valDefTyper = {
+        // The retyper only needs a context owned by the val to type its rhs.
+        val valDefTyper = if (isRetyper && vdef.rhs.isEmpty) this else {
           val maybeConstrCtx =
             if ((sym.isParameter || sym.isEarlyInitialized) && sym.owner.isConstructor) context.makeConstructorContext
             else context
