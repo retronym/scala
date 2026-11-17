@@ -1139,8 +1139,14 @@ abstract class Erasure extends InfoTransform
         tree setType (if (value.tag == UnitTag) UnitTpe else ConstantType(value))
 
       case tree: This =>
-        val clazz = tree.symbol
-        if (clazz == NoSymbol) return fallback(tree, pt, "This-nosym")
+        val clazz = tree.symbol orElse {
+          // Typer.qualifyingClass
+          val qual = tree.qual
+          localTyper.context.enclClass.owner.ownersIterator.find(o => qual.isEmpty || o.isClass && o.name == qual) match {
+            case Some(c) if !c.isPackageClass => tree.setSymbol(c); c
+            case _ => return fallback(tree, pt, "This-nosym")
+          }
+        }
         tree setType clazz.thisType.underlying
         def ptSym = pt.typeSymbol
         val stable =
@@ -1278,7 +1284,11 @@ abstract class Erasure extends InfoTransform
           case NoSymbol => WildcardType
           case sym if sym == FunctionClass(vparams.length) || sym == PartialFunctionClass =>
             pt.typeArgs match { case _ :+ res => res case _ => WildcardType }
-          case _ => if (samOf(pt).exists) return fallback(fun, pt, "Function-sam-pt") else WildcardType
+          case _ =>
+            // Typer.argsResProtosFromFun for an erased SAM type
+            val sam = samOf(pt)
+            if (sam.exists && sam.info.params.lengthCompare(vparams.length) == 0) (pt memberInfo sam).resultType
+            else WildcardType
         }
         if (fun.symbol == NoSymbol) return fallback(fun, pt, "Function-nosym")
         val (vparams1, body1) = atOwner(fun, fun.symbol) {
