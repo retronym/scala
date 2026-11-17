@@ -21,7 +21,7 @@ import scala.reflect.NameTransformer
 import scala.reflect.internal.util.ListOfNil
 
 
-abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
+abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis with TypingTransformers {
   import global._
   import definitions._
   import CODE._
@@ -423,7 +423,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
   class MixinTransformer(unit : CompilationUnit) extends AstTransformer with AccessorTreeSynthesis {
     /** The typer */
     private var localTyper: erasure.erasureAnalyzer.Typer = _
-    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+    protected def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper.asInstanceOf[analyzer.Typer], atPos(pos)(tree))
 
     /** The rootContext used for typing */
     private val rootContext =
