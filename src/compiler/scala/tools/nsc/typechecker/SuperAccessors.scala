@@ -417,21 +417,27 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
     /** a typer for each enclosing class */
     private var typers = immutable.Map[Symbol, analyzer.Typer]()
 
-    /** Specialized here for performance; the previous blanked
-     *  introduction of typers in TypingTransformer caused a >5%
-     *  performance hit for the compiler as a whole.
-     */
-    override def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
-      val savedValid = validCurrentOwner
+    // A typer per owner, made eagerly: specialized here for performance; the previous blanket
+    // introduction of typers in TypingTransformer caused a >5% performance hit for the compiler
+    // as a whole. `savedOwnerStates` holds what `enterOwner` replaced, innermost first.
+    private var savedOwnerStates: List[SavedOwnerState] = Nil
+    private final class SavedOwnerState(val validCurrentOwner: Boolean, val localTyper: analyzer.Typer, val owner: Symbol)
+
+    override protected def enterOwner(tree: Tree, owner: Symbol): Int = {
+      savedOwnerStates = new SavedOwnerState(validCurrentOwner, localTyper, owner) :: savedOwnerStates
       if (owner.isClass) validCurrentOwner = true
-      val savedLocalTyper = localTyper
       localTyper = localTyper.atOwner(tree, if (owner.isModuleNotMethod) owner.moduleClass else owner)
       typers = typers.updated(owner, localTyper)
-      val result = super.atOwner(tree, owner)(trans)
-      localTyper = savedLocalTyper
-      validCurrentOwner = savedValid
-      typers -= owner
-      result
+      super.enterOwner(tree, owner)
+    }
+
+    override protected def exitOwner(i: Int): Unit = {
+      super.exitOwner(i)
+      val saved = savedOwnerStates.head
+      savedOwnerStates = savedOwnerStates.tail
+      localTyper = saved.localTyper
+      validCurrentOwner = saved.validCurrentOwner
+      typers -= saved.owner
     }
 
     private def withInvalidOwner[A](trans: => A): A = {
