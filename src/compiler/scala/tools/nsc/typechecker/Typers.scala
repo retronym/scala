@@ -2046,9 +2046,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       // the following is necessary for templates generated later
       assert(clazz.info.decls != EmptyScope, clazz)
-      val body1 = pluginsEnterStats(this, namer.expandMacroAnnotations(templ.body))
-      enterSyms(context.outer.make(templ, clazz, clazz.info.decls), body1)
-      if (!templ.isErrorTyped) // if `parentTypes` has invalidated the template, don't validate it anymore
+      // The retyper's definitions have symbols already, so there is nothing to enter.
+      val body1 = if (isRetyper) templ.body else pluginsEnterStats(this, namer.expandMacroAnnotations(templ.body))
+      if (!isRetyper) enterSyms(context.outer.make(templ, clazz, clazz.info.decls), body1)
+      if (!templ.isErrorTyped && !isRetyper) // if `parentTypes` has invalidated the template, don't validate it anymore
         validateParentClasses(parents1, selfType, clazz.isTrait)
       if (clazz.isCase)
         validateNoCaseAncestor(clazz)
@@ -2583,8 +2584,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedBlock(block0: Block, mode: Mode, pt: Type): Block = {
       val syntheticPrivates = new ListBuffer[Symbol]
       try {
-        namer.enterSyms(block0.stats)
-        val block = treeCopy.Block(block0, pluginsEnterStats(this, namer.expandMacroAnnotations(block0.stats)), block0.expr)
+        val block = if (isRetyper) block0 else { // the retyper's definitions have symbols already
+          namer.enterSyms(block0.stats)
+          treeCopy.Block(block0, pluginsEnterStats(this, namer.expandMacroAnnotations(block0.stats)), block0.expr)
+        }
         for (stat <- block.stats) enterLabelDef(stat)
 
         if (phaseId(currentPeriod) <= currentRun.typerPhase.id) {
