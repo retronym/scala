@@ -137,6 +137,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     /** Overridden to false in scaladoc and/or interactive. */
     def isInteractive                 = false
+
+    /** Is this typer re-typechecking trees that already passed typer, as erasure's `Eraser` does?
+     *  Such trees carry symbols that typer resolved and checked, so a retyper skips work whose only
+     *  purpose is to find or report errors in user code: silent mode around applications, access checks,
+     *  bounds checks and escape checks. Any error such work would find is a compiler bug, and a retyper's
+     *  root context throws on errors anyway.
+     */
+    def isRetyper                     = false
     def canAdaptConstantTypeToLiteral = true
     def canTranslateEmptyListToNil    = true
     def missingSelectErrorTree(tree: Tree, @unused qual: Tree, @unused name: Name): Tree = tree
@@ -378,7 +386,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
     }
 
-    def reenterValueParams(vparamss: List[List[ValDef]]): Unit = {
+    /** A child context for a definition, block, case or function, with a nested scope for the names it binds.
+     *  The retyper looks up no names, all its references having symbols, so it neither nests nor fills scopes.
+     */
+    private def makeNewScope(ctx: Context, tree: Tree, owner: Symbol): Context =
+      if (isRetyper) ctx.make(tree, owner, ctx.scope) else ctx.makeNewScope(tree, owner)
+
+    def reenterValueParams(vparamss: List[List[ValDef]]): Unit = if (!isRetyper) {
       for (vparams <- vparamss)
         for (vparam <- vparams)
           context.scope enter vparam.symbol
@@ -386,7 +400,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     def reenterTypeParams(tparams: List[TypeDef]): List[Symbol] =
       for (tparam <- tparams) yield {
-        context.scope enter tparam.symbol
+        if (!isRetyper) context.scope enter tparam.symbol
         tparam.symbol.deSkolemize
       }
 
@@ -510,9 +524,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case x                           => throw new MatchError(x)
           }
         }
-        (checkAccessible(tree1, sym, qual.tpe, qual, unit.isJava), qual.tpe)
+        (checkAccessible(tree1, sym, qual.tpe, qual, unit.isJava, checkAccess = !isRetyper), qual.tpe)
       } else {
-        checkAccessible(tree, sym, pre, site, unit.isJava)
+        checkAccessible(tree, sym, pre, site, unit.isJava, checkAccess = !isRetyper)
       }
 
     /** Post-process an identifier or selection node, performing the following:
@@ -2038,9 +2052,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       // the following is necessary for templates generated later
       assert(clazz.info.decls != EmptyScope, clazz)
-      val body1 = pluginsEnterStats(this, namer.expandMacroAnnotations(templ.body))
-      enterSyms(context.outer.make(templ, clazz, clazz.info.decls), body1)
-      if (!templ.isErrorTyped) // if `parentTypes` has invalidated the template, don't validate it anymore
+      // The retyper's definitions have symbols already, so there is nothing to enter.
+      val body1 = if (isRetyper) templ.body else pluginsEnterStats(this, namer.expandMacroAnnotations(templ.body))
+      if (!isRetyper) enterSyms(context.outer.make(templ, clazz, clazz.info.decls), body1)
+      if (!templ.isErrorTyped && !isRetyper) // if `parentTypes` has invalidated the template, don't validate it anymore
         validateParentClasses(parents1, selfType, clazz.isTrait)
       if (clazz.isCase)
         validateNoCaseAncestor(clazz)
@@ -2097,17 +2112,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  This simultaneously allows us to reify annotations and to preserve backward compatibility.
      */
     def typedModifiers(mods: Modifiers): Modifiers =
-      mods.copy(annotations = Nil) setPositions mods.positions
+      if (isRetyper && mods.annotations.isEmpty) mods
+      else mods.copy(annotations = Nil) setPositions mods.positions
 
     def typedValDef(vdef: ValDef): ValDef = {
       val sym = vdef.symbol
       currentRun.profiler.beforeTypedImplDef(sym)
       try {
-        val valDefTyper = {
+        // The retyper only needs a context owned by the val to type its rhs.
+        val valDefTyper = if (isRetyper && vdef.rhs.isEmpty) this else {
           val maybeConstrCtx =
             if ((sym.isParameter || sym.isEarlyInitialized) && sym.owner.isConstructor) context.makeConstructorContext
             else context
-          newTyper(maybeConstrCtx.makeNewScope(vdef, sym))
+          newTyper(makeNewScope(maybeConstrCtx, vdef, sym))
         }
         valDefTyper.typedValDefImpl(vdef)
       } finally {
@@ -2160,8 +2177,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       sym.annotations.foreach(_.completeInfo())
       sym.filterAnnotations(_ != UnmappableAnnotation)
 
-      val tpt1 = checkNoEscapingPrivates(this, sym, transformedOr(vdef.tpt, typedType(vdef.tpt)))
-      checkNonCyclic(vdef, tpt1)
+      val tpt0 = transformedOr(vdef.tpt, typedType(vdef.tpt))
+      val tpt1 = if (isRetyper) tpt0 else checkNoEscapingPrivates(this, sym, tpt0)
+      if (!isRetyper) checkNonCyclic(vdef, tpt1)
 
       // allow trait accessors: it's the only vehicle we have to hang on to annotations that must be passed down to
       // the field that's mixed into a subclass
@@ -2424,8 +2442,9 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (isRepeatedParamType(vparam1.symbol.tpe))
             StarParamNotLastError(vparam1)
 
-        val tpt1 = checkNoEscapingPrivates(this, meth, transformedOr(ddef.tpt, typedType(ddef.tpt)))
-        checkNonCyclic(ddef, tpt1)
+        val tpt0 = transformedOr(ddef.tpt, typedType(ddef.tpt))
+        val tpt1 = if (isRetyper) tpt0 else checkNoEscapingPrivates(this, meth, tpt0)
+        if (!isRetyper) checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
         val rhsAtOwner = // introduced for async, but could be universally handy
@@ -2572,8 +2591,10 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedBlock(block0: Block, mode: Mode, pt: Type): Block = {
       val syntheticPrivates = new ListBuffer[Symbol]
       try {
-        namer.enterSyms(block0.stats)
-        val block = treeCopy.Block(block0, pluginsEnterStats(this, namer.expandMacroAnnotations(block0.stats)), block0.expr)
+        val block = if (isRetyper) block0 else { // the retyper's definitions have symbols already
+          namer.enterSyms(block0.stats)
+          treeCopy.Block(block0, pluginsEnterStats(this, namer.expandMacroAnnotations(block0.stats)), block0.expr)
+        }
         for (stat <- block.stats) enterLabelDef(stat)
 
         if (phaseId(currentPeriod) <= currentRun.typerPhase.id) {
@@ -2687,7 +2708,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
     def typedCases(cases: List[CaseDef], pattp: Type, pt: Type): List[CaseDef] =
       cases mapConserve { cdef =>
-        newTyper(context.makeNewScope(cdef, context.owner)).typedCase(cdef, pattp, pt)
+        newTyper(makeNewScope(context, cdef, context.owner)).typedCase(cdef, pattp, pt)
       }
 
     def adaptCase(cdef: CaseDef, mode: Mode, tpe: Type): CaseDef = deriveCaseDef(cdef)(adapt(_, mode, tpe))
@@ -4541,7 +4562,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           val isClassOf = fun.symbol.rawname == nme.classOf && currentRun.runDefinitions.isPredefClassOf(fun.symbol)
           if (isJava && fun.symbol.isTerm) args.foreach(_.modifyType(rawToExistential)) // e.g. List.class, parsed as classOf[List]
           val targs = mapList(args)(_.tpe)
-          checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
+          if (!isRetyper) checkBounds(tree, NoPrefix, NoSymbol, tparams, targs, "")
           if (isClassOf)
             typedClassOf(tree, args.head, noGen = true)
           else {
@@ -4787,7 +4808,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   context.owner.newAbstractType(name, tree.pos) setInfo TypeBounds.empty
               }
 
-            if (name != tpnme.WILDCARD) namer.enterInScope(sym)
+            if (isRetyper) ()
+            else if (name != tpnme.WILDCARD) namer.enterInScope(sym)
             else context.scope.enter(sym)
 
             tree setSymbol sym setType sym.tpeHK
@@ -4797,7 +4819,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               if (tree.symbol != NoSymbol) tree.symbol
               else context.owner.newValue(name, tree.pos)
 
-            if (name != nme.WILDCARD) {
+            if (name != nme.WILDCARD && !isRetyper) {
               if (context.inPatAlternative)
                 VariableInPatternAlternativeError(tree)
 
@@ -5247,11 +5269,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             if (settings.areStatisticsEnabled) statistics.stopTimer(failedApplyNanos, appStart)
             reportError(error)
         }
-        val silentResult = silent(
-          op                    = _.typed(fun, mode.forFunMode, funpt),
-          reportAmbiguousErrors = !mode.inExprMode && context.ambiguousErrors,
-          newtree               = if (mode.inExprMode) tree else context.tree
-        )
+        val silentResult =
+          // A retyper's trees typechecked before, so there is no error to buffer or recover from.
+          if (isRetyper) SilentResultValue(typed(fun, mode.forFunMode, funpt))
+          else silent(
+            op                    = _.typed(fun, mode.forFunMode, funpt),
+            reportAmbiguousErrors = !mode.inExprMode && context.ambiguousErrors,
+            newtree               = if (mode.inExprMode) tree else context.tree
+          )
         silentResult match {
           case SilentResultValue(fun1) =>
             val fun2 = if (stableApplication) stabilizeFun(fun1, mode, pt) else fun1
@@ -5582,7 +5607,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             }
             val pre = qual.tpe
             var accessibleError: AccessTypeError = null
-            val result = silent(_.makeAccessible(tree1, sym, pre, qual)) match {
+            val result = (if (isRetyper) SilentResultValue(makeAccessible(tree1, sym, pre, qual)) else silent(_.makeAccessible(tree1, sym, pre, qual))) match {
               case SilentTypeError(err) => err match {
                 case err: AccessTypeError =>
                   accessibleError = err
@@ -5931,7 +5956,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       def defDefTyper(ddef: DefDef) = {
         val isConstrDefaultGetter = ddef.mods.hasDefault && sym.owner.isModuleClass &&
             nme.defaultGetterToMethod(sym.name) == nme.CONSTRUCTOR
-        newTyper(context.makeNewScope(ddef, sym)).constrTyperIf(isConstrDefaultGetter)
+        newTyper(makeNewScope(context, ddef, sym)).constrTyperIf(isConstrDefaultGetter)
       }
 
       def typedAlternative(alt: Alternative) = {
@@ -6233,7 +6258,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         if (fun.symbol == NoSymbol)
           fun.symbol = context.owner.newAnonymousFunctionValue(fun.pos)
 
-        typerWithLocalContext(context.makeNewScope(fun, fun.symbol))(_.typedFunction(fun, mode, pt))
+        typerWithLocalContext(makeNewScope(context, fun, fun.symbol))(_.typedFunction(fun, mode, pt))
       }
 
       // Trees only allowed during pattern mode.
@@ -6258,8 +6283,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       @inline def typedMemberDef(tree: MemberDef): Tree = tree match {
         case tree: ValDef     => typedValDef(tree)
         case tree: DefDef     => defDefTyper(tree).typedDefDef(tree)
-        case tree: ClassDef   => newTyper(context.makeNewScope(tree, sym)).typedClassDef(tree)
-        case tree: ModuleDef  => newTyper(context.makeNewScope(tree, sym.moduleClass)).typedModuleDef(tree)
+        case tree: ClassDef   => newTyper(makeNewScope(context, tree, sym)).typedClassDef(tree)
+        case tree: ModuleDef  => newTyper(makeNewScope(context, tree, sym.moduleClass)).typedModuleDef(tree)
         case tree: TypeDef    => typedTypeDef(tree)
         case tree: PackageDef => typedPackageDef(tree)
         case _                => abort(s"unexpected member def: ${tree.getClass}\n$tree")
@@ -6268,7 +6293,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       // Trees not allowed during pattern mode.
       def typedOutsidePatternMode(tree: Tree): Tree = tree match {
         case tree: Block            =>
-          val blockContext = context.makeNewScope(tree, context.owner)
+          val blockContext = makeNewScope(context, tree, context.owner)
           try typerWithLocalContext(blockContext)(_.typedBlock(tree, mode, pt))
           finally context.undetparams ++= blockContext.undetparams
         case tree: If               => typedIf(tree)

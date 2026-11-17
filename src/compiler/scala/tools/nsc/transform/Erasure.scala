@@ -679,10 +679,15 @@ abstract class Erasure extends InfoTransform
     }
   }
 
+  /** Is `ErasureTransformer` retyping a unit's erased trees? */
+  private var retypingErasedTrees = false
+
   /** The modifier typer which retypes with erased types. */
-  class Eraser(_context: Context) extends Typer(_context) {
-    val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = Eraser.this.typedPos(pos)(tree) }
-    import typeAdapter._
+  class Eraser(_context: Context) extends Typer(_context) with TypeAdapter {
+
+    // Later phases use the Eraser as their localTyper, to type trees they synthesize; only erasure's own retyping
+    // of trees that passed typer is a retyper.
+    override val isRetyper = retypingErasedTrees
 
     override protected def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = tree
 
@@ -1404,7 +1409,9 @@ abstract class Erasure extends InfoTransform
       val tree1 = preTransformer.transform(tree)
       // log("tree after pretransform: "+tree1)
       exitingErasure {
-        newTyper(rootContextPostTyper(unit, tree)).typed(tree1)
+        retypingErasedTrees = true
+        try newTyper(rootContextPostTyper(unit, tree)).typed(tree1)
+        finally retypingErasedTrees = false
       }
     }
   }
