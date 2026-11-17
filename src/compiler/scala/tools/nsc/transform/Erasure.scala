@@ -744,12 +744,6 @@ abstract class Erasure extends InfoTransform
       } else selectFrom(qual1)
     }
 
-    /** An element access of an array of a statically known element type, on its typed qualifier. */
-    final def adaptArrayQualifier(sel: SelectFromArray, qual0: Tree): Select = {
-      val qual1 = if (qual0.tpe <:< sel.erasure) qual0 else cast(qual0, sel.erasure)
-      Select(qual1, sel.name) copyAttrs sel
-    }
-
     /** Is `x.asInstanceOf[T]` an unboxing after erasure? */
     final def isUnboxingCast(targ: Tree): Boolean = isPrimitiveValueType(targ.tpe) || isErasedValueType(targ.tpe)
 
@@ -793,19 +787,6 @@ abstract class Erasure extends InfoTransform
       val parents1 = templ.symbol.owner.info.parents map (t => TypeTree(t) setPos templ.pos)
       treeCopy.Template(templ, parents1, noSelfType, templ.body)
     }
-
-    /** A value class instance after erasure: its underlying value, typed by `typedArg` against
-     *  the erased type of the class's parameter, with the class's erased value type. */
-    final def typedInjectDerivedValue(tree: InjectDerivedValue)(typedArg: (Tree, Type) => Tree): Tree =
-      (tree.attachments.get[TypeRefAttachment]: @unchecked) match {
-        case Some(itype) =>
-          val tref = itype.tpe
-          val argPt = enteringErasure(erasedValueClassArg(tref))
-          log(s"transforming inject ${tree.arg} -> $tref/$argPt")
-          val result = typedArg(tree.arg, argPt)
-          log(s"transformed inject ${tree.arg} -> $tref/$argPt = $result:${result.tpe}")
-          result setType ErasedValueType(tref.sym, result.tpe)
-      }
 
     /** What erasure does to `tree1`, the typed form of `original`, before adapting it to its
      *  expected type: a lambda gets its erased SAM type; the branches of a conditional, match or
@@ -896,8 +877,6 @@ abstract class Erasure extends InfoTransform
           val sel1 = redirectAnyMember(sel)
           adaptQualifier(sel1, typedQualifier(sel1.qualifier))
         }
-      case sel: SelectFromArray =>
-        adaptArrayQualifier(sel, typedQualifier(sel.qualifier))
       case _ =>
         tree
     }
@@ -916,8 +895,6 @@ abstract class Erasure extends InfoTransform
             super.typed1(withMixinConstructorCalls(ddef), mode, pt) // (3)
           case templ: Template =>
             super.typed1(withErasedParents(templ), mode, pt)
-          case inject: InjectDerivedValue =>
-            return typedInjectDerivedValue(inject)(typed(_, mode, _))
           case tree @ Block(_, _: LabelDef) =>
             // Push adaptations out to the block to preserve patmat tree shapes.
             // This helps the back-end to generate better code.
@@ -1588,8 +1565,14 @@ abstract class Erasure extends InfoTransform
             typedCore(withMixinConstructorCalls(ddef), pt, qualMode)
           case templ: Template =>
             typedCore(withErasedParents(templ), pt, qualMode)
-          case inject: InjectDerivedValue =>
-            return typedInjectDerivedValue(inject)(typed)
+          case InjectDerivedValue(arg) =>
+            // A value class instance: its underlying value, with the class's erased value type.
+            (tree.attachments.get[TypeRefAttachment]: @unchecked) match {
+              case Some(itype) =>
+                val tref = itype.tpe
+                val result = typed(arg, enteringErasure(erasedValueClassArg(tref)))
+                return result setType ErasedValueType(tref.sym, result.tpe)
+            }
           case Block(_, _: LabelDef) =>
             // Push adaptations out to the block to preserve patmat tree shapes.
             typedCore(tree, WildcardType, qualMode)
@@ -1619,9 +1602,11 @@ abstract class Erasure extends InfoTransform
             typedSelect(sel2, sel2.qualifier, pt)
           }
 
-        case sel: SelectFromArray =>
-          val sel1 = adaptArrayQualifier(sel, typedQualifier(sel.qualifier))
-          typedSelect(sel1, sel1.qualifier, pt)
+        case sel @ SelectFromArray(qual, name, erasure) =>
+          // An element access of an array of a statically known element type.
+          val qual0 = typedQualifier(qual)
+          val qual1 = if (qual0.tpe <:< erasure) qual0 else cast(qual0, erasure)
+          typedSelect(Select(qual1, name) copyAttrs sel, qual1, pt)
 
         case Apply(blk @ Block(stats, expr), args) =>
           val ap1 = treeCopy.Apply(tree, expr, args).clearType().setPos(tree.pos.makeTransparent)
@@ -1654,6 +1639,11 @@ abstract class Erasure extends InfoTransform
 
         case ta @ TypeApply(fun, _) =>
           typedTypeApply(treeCopy.TypeApply(ta, typed(fun, WildcardType), ta.args), pt)
+
+        case ReferenceToBoxed(ident) =>
+          // Typer.typedReferenceToBoxed
+          val ident1 = typed1(ident, pt, qualMode)
+          treeCopy.ReferenceToBoxed(tree, ident1.asInstanceOf[Ident]) setType capturedVariables.capturedVariableType(ident.symbol, erasedTypes = true)
 
         case Literal(value) =>
           tree setType (if (value.tag == UnitTag) UnitTpe else ConstantType(value))
