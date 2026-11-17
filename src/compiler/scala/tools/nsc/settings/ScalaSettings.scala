@@ -286,6 +286,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
   val noCompletion    = BooleanSetting    ("-Yno-completion", "Disable tab-completion in the REPL.")
   val termConflict    = ChoiceSetting     ("-Yresolve-term-conflict", "strategy", "Resolve term conflicts.", List("package", "object", "error"), "error")
   val Ynogenericsig   = BooleanSetting    ("-Yno-generic-signatures", "Suppress generation of generic signatures for Java.")
+  val YnewErasure     = BooleanSetting    ("-Ynew-erasure", "Spike: retype erased trees with a transformer rather than the Eraser typer.").internalOnly()
   val noimports       = BooleanSetting    ("-Yno-imports", "Compile without importing scala.*, java.lang.*, or Predef.")
                        .withPostSetHook(bs => if (bs.value) imports.value = Nil)
   val nopredef        = BooleanSetting    ("-Yno-predef", "Compile without importing Predef.")
