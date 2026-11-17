@@ -15,7 +15,7 @@ package scala.tools.nsc.transform.patmat
 import scala.annotation.tailrec
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.{Mode, Types}
+import scala.reflect.internal.Types
 import scala.reflect.internal.util.{SourceFile, Statistics}
 import scala.tools.nsc.Global
 import scala.tools.nsc.ast
@@ -63,6 +63,8 @@ trait PatternMatching extends Transform
   val javaClassesByUnit = perRunCaches.newMap[SourceFile, mutable.Set[Symbol]]()
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new MatchTransformer(unit)
+
+  protected def typedStableRef(typer: analyzer.Typer, tree: Tree): Tree = new TypeAssignerIn(typer).typedStable(tree)
 
   class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private var inForceDesugar = false
@@ -144,6 +146,11 @@ trait Interface extends ast.TreeDSL {
   import global._
   import analyzer.Typer
 
+  /** A stable reference `tree` substituted for a binder, typed in the context of `typer`, with its
+   *  singleton type.
+   */
+  protected def typedStableRef(typer: Typer, tree: Tree): Tree
+
   trait MatchMonadInterface {
     val typer: Typer
     val matchOwner = typer.context.owner
@@ -176,7 +183,7 @@ trait Interface extends ast.TreeDSL {
     class Substitution(val from: List[Symbol], val to: List[Tree]) {
       import global.{AstTransformer, Ident, NoType, TypeTree, SingleType}
 
-      private def typedStable(t: Tree) = typer.typed(t.shallowDuplicate, Mode.MonoQualifierModes | Mode.TYPEPATmode)
+      private def typedStable(t: Tree) = typedStableRef(typer, t.shallowDuplicate)
       lazy val toTypes: List[Type] = to map (tree => typedStable(tree).tpe)
 
       // We must explicitly type the trees that we replace inside some other tree, since the latter may already have been typed,

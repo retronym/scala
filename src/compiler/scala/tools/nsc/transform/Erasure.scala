@@ -1525,7 +1525,7 @@ abstract class Erasure extends InfoTransform
       override protected def enter(tree: Tree): Tree = if (tree.tpe ne null) preEraseNode(tree) else tree
 
       /** `Eraser.adapt`. */
-      override protected def adapt(tree: Tree, pt: Type): Tree = adaptToType(tree, pt)
+      override protected def adapt(tree: Tree, pt: Type, funMode: Boolean): Tree = adaptToType(tree, pt)
 
       /** What is left of a tree the assigner does not know is pre-erased whole and typed with `Eraser`. */
       override protected def beforeFallback(tree: Tree): Tree = preEraseChildren(tree)
