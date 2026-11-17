@@ -29,6 +29,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#250 | Avoid TypeTag in the f interpolator's type constants | clean |
 | retronym/scala#247 | Drop typer and namer state that pins old trees past typer | clean |
 | retronym/scala#253 | Dispatch typed1 on a class rather than the TypTree trait | clean |
+| retronym/scala#256 | Erase in one traversal, without retyping with a Typer | conflict in `Erasure.scala` with scala/scala#11312: #256 moves `Eraser.adaptMember`'s qualifier cast into `ErasureTypeAdapter.adaptQualifier`, where #11312's cast to the self type's class (`selfTypeClass`) is applied |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
