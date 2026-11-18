@@ -44,6 +44,8 @@ trait TypingTransformers extends TypeAssigners {
     private[this] var frameTrees     = new Array[AnyRef](16)
     private[this] var frameOwners    = new Array[AnyRef](16)
     private[this] var parentContexts = new Array[AnyRef](16)
+    // The owner before frame `i` was entered, restored when it exits.
+    private[this] var prevOwners     = new Array[AnyRef](16)
     private[this] var frames         = 0
     private[this] var materialized   = 0
     private[this] val eager          = settings.YeagerTypingTransformerContexts.value
@@ -67,33 +69,58 @@ trait TypingTransformers extends TypeAssigners {
         materialized = i + 1
       }
 
+    /** The context of frame `i`, made now if it was not. A typer on it stays valid while the frame is entered. */
+    protected def frameContext(i: Int): analyzer.Context = {
+      materialize()
+      if (i + 1 < frames) parentContexts(i + 1).asInstanceOf[analyzer.Context] else _localTyper.context
+    }
+
     currentOwner = _localTyper.context.owner
     protected var curTree: Tree = _
 
-    override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
+    @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
 
-    def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+    /** `trans` with `owner` (and `tree`) entered. Final and `@inline`, so that the optimizer inlines it at each
+     *  call site and eliminates the closure of `trans`; the work is in `enterOwner` and `exitOwner`.
+     */
+    @inline final def atOwner[A](tree: Tree, owner: Symbol)(trans: => A): A = {
+      val i = enterOwner(tree, owner)
+      try trans finally exitOwner(i)
+    }
+
+    /** Pushes a frame for `tree` and `owner` and makes `owner` the current owner, as `Transformer.atOwner` does.
+     *  Returns the frame's index for `exitOwner`. A subclass that needs more state per owner extends this pair.
+     *  (Not JVM-private: `atOwner` is inlined into other classes.)
+     */
+    protected def enterOwner(tree: Tree, owner: Symbol): Int = {
       val i = frames
       if (i == frameTrees.length) {
         frameTrees = java.util.Arrays.copyOf(frameTrees, i * 2)
         frameOwners = java.util.Arrays.copyOf(frameOwners, i * 2)
         parentContexts = java.util.Arrays.copyOf(parentContexts, i * 2)
+        prevOwners = java.util.Arrays.copyOf(prevOwners, i * 2)
       }
       frameTrees(i) = tree
       frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
+      prevOwners(i) = currentOwner
       frames = i + 1
       if (eager) materialize()
-      try super.atOwner(owner)(trans)
-      finally {
-        if (materialized > i) {
-          _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
-          parentContexts(i) = null
-          materialized = i
-        }
-        frameTrees(i) = null
-        frameOwners(i) = null
-        frames = i
+      currentOwner = owner
+      i
+    }
+
+    /** Pops frame `i`, restoring the owner and, if it was made, the context from before it. */
+    protected def exitOwner(i: Int): Unit = {
+      currentOwner = prevOwners(i).asInstanceOf[Symbol]
+      if (materialized > i) {
+        _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
+        parentContexts(i) = null
+        materialized = i
       }
+      frameTrees(i) = null
+      frameOwners(i) = null
+      prevOwners(i) = null
+      frames = i
     }
 
     override def transform(tree: Tree): Tree = {

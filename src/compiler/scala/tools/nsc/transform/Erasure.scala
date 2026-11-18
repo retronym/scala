@@ -701,7 +701,7 @@ abstract class Erasure extends InfoTransform
    *  class are not entered by the classfile parser, so a Java superclass other than `Object` that declares no
    *  public method with the descriptor may still declare a private one.
    */
-  private def selfTypeClass(qual: Tree, member: Symbol, context: Context): Type = qual match {
+  private def selfTypeClass(qual: Tree, member: Symbol, context: => Context): Type = qual match {
     case This(_) if qual.symbol.isTrait && member.owner.isTrait =>
       val selfErased = erasure(qual.symbol)(qual.symbol.typeOfThis)
       val cls = selfErased.typeSymbol
@@ -1555,11 +1555,23 @@ abstract class Erasure extends InfoTransform
     final class ErasureRetyper(root: Tree)
         extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
         with TypeAssigner {
-      private val typeAdapter = new ErasureTypeAdapter {
+      private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
         def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
+        override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
       }
       import typeAdapter._
+
+      /** `gen.mkAttributedCast` without a `Typer`: `gen.mkCast` builds `tree.$asInstanceOf[pt]()`
+       *  with the `Select` typed, and the type application and the application get their types from
+       *  it, as `Typer` would give them.
+       */
+      private def typedSyntheticCast(tree: Tree, pt: Type): Tree = gen.mkCast(tree, pt) match {
+        case app @ Apply(ta @ TypeApply(sel: Select, _), Nil) if sel.tpe ne null =>
+          typedApply(app, typedTypeApply(ta, WildcardType), WildcardType, qualMode = false)
+        case _ =>
+          gen.mkAttributedCast(tree, pt) // another shape than `mkCast` builds after uncurry
+      }
 
       def retype(tree: Tree): Tree = typed(tree, WildcardType)
 
@@ -1764,10 +1776,15 @@ abstract class Erasure extends InfoTransform
     lmfOverridesOk(samSym)
   }
 
-  final def isJvmAccessible(cls: Symbol, context: Context): Boolean = {
+  // `context` is by-name, and this inlined to drop its closure: a typing transformer makes its
+  // context only when asked, and only a Java-defined class needs one.
+  @inline final def isJvmAccessible(cls: Symbol, context: => Context): Boolean = {
     // Phase travel necessary, isAccessible is too lax after erasure for Java-defined members, see
     // comment in its implementation.
-    !cls.isJavaDefined || atErasure(context.isAccessible(cls, cls.owner.thisType))
+    // A public class (`java.lang.String`, say) is accessible from anywhere: `isAccessible` finds its
+    // access boundary is the root class without reading the context, so don't make one.
+    !cls.isJavaDefined || cls.isPublic && cls.enclosingRootClass == rootMirror.RootClass ||
+      atErasure(context.isAccessible(cls, cls.owner.thisType))
   }
 
   // `-Ystop-after:<phase before erasure>` leaves erasure out of the run: no phase to travel to.

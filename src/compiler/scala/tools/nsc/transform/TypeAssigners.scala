@@ -92,7 +92,7 @@ trait TypeAssigners { self: TypingTransformers =>
      *  fully defined, else the branches' lub, or their weak lub if that differs, as in
      *  `Typer.typedIf`.
      */
-    private def branchesType(pt: Type, tpes: => List[Type]): Type =
+    @inline private def branchesType(pt: Type, tpes: => List[Type]): Type =
       if (analyzer.isFullyDefined(pt)) pt
       else {
         val tpes1 = tpes.map(_.deconst)
@@ -164,7 +164,7 @@ trait TypeAssigners { self: TypingTransformers =>
           case NoSymbol => tree setType ErrorType // reported by qualifyingClass
           case clazz =>
             tree setSymbol clazz setType clazz.thisType.underlying
-            if (localTyper.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
+            if (analyzer.isStableContext(tree, exprMode(qualMode), pt)) tree setType clazz.thisType else tree
         }
 
       case sup: Super =>
@@ -233,7 +233,7 @@ trait TypeAssigners { self: TypingTransformers =>
         val restpe = ldef.symbol.tpe.resultType
         val rhs1 = typed(rhs, restpe)
         params foreach (param => param setType param.symbol.tpe)
-        deriveLabelDef(ldef)(_ => rhs1) setType restpe
+        treeCopy.LabelDef(ldef, ldef.name, params, rhs1) setType restpe
 
       case vdef @ ValDef(_, _, tpt, rhs) =>
         val sym = vdef.symbol
@@ -300,7 +300,8 @@ trait TypeAssigners { self: TypingTransformers =>
     protected final def typedSelect(sel: Select, qual1: Tree, qualMode: Boolean, pt: Type): Tree = {
       val sym = sel.symbol orElse qual1.tpe.member(sel.name)
       if (sym == NoSymbol) return fallback(treeCopy.Select(sel, qual1, sel.name), pt, "Select-nosym")
-      if (sym.alternatives.head.owner.isPackageObjectClass && qual1.symbol != null && qual1.symbol.hasPackageFlag)
+      // `qual1` is tested first: `alternatives` allocates a list for a non-overloaded symbol.
+      if (qual1.symbol != null && qual1.symbol.hasPackageFlag && sym.alternatives.head.owner.isPackageObjectClass)
         // As `Typer.typedSelect`, select a package object's member from the package object.
         return typedSelect(sel, typedQualifier(atPos(qual1.pos.focus)(Select(qual1, nme.PACKAGE))), qualMode, pt)
       if (qual1.isInstanceOf[Super]) {
@@ -336,7 +337,9 @@ trait TypeAssigners { self: TypingTransformers =>
           // its error (a translated match can call an extractor's members with the wrong types).
           if (!phase.erasedTypes && !args1.corresponds(params)((arg, param) => conforms(arg.tpe, param.tpe)))
             return fallback(treeCopy.Apply(app, fun2, args1), pt, "Apply-nonconforming")
-          treeCopy.Apply(app, fun2, args1) setType mt.resultType(args1.map(_.tpe))
+          // `resultType(actuals)` ignores the actuals when these hold: don't build their list.
+          val restpe = if (mt.isTrivial || phase.erasedTypes) mt.resultType else mt.resultType(args1.map(_.tpe))
+          treeCopy.Apply(app, fun2, args1) setType restpe
         case OverloadedType(pre, alts) if !phase.erasedTypes =>
           // An operator selected by name, such as `==` or `&` on a primitive: the alternative
           // whose parameter types are those of the arguments, if there is exactly one.
