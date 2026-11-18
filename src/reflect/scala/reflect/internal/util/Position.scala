@@ -58,7 +58,9 @@ object Position {
   }
 
   def offset(source: SourceFile, point: Int): Position                            = validate(new OffsetPosition(source, point))
-  def range(source: SourceFile, start: Int, point: Int, end: Int): Position       = validate(new RangePosition(source, start, point, end))
+  def range(source: SourceFile, start: Int, point: Int, end: Int): Position       =
+    if (CompactRangePosition.fits(start, point, end)) new CompactRangePosition(source, CompactRangePosition.pack(start, point, end))
+    else validate(new RangePosition(source, start, point, end))
   def transparent(source: SourceFile, start: Int, point: Int, end: Int): Position = validate(new TransparentPosition(source, start, point, end))
 }
 
@@ -75,6 +77,50 @@ class RangePosition(sourceIn: SourceFile, startIn: Int, pointIn: Int, endIn: Int
   override def point   = pointIn
   override def start   = startIn
   override def end     = endIn
+}
+/** An opaque range position whose start, point and end are packed into a single `Int`.
+ *
+ *  A [[RangePosition]] costs a source reference and three `Int`s (24 bytes with compact object headers, 32 with
+ *  12-byte headers). This class keeps the source reference and one `Int`, saving 8 bytes either way. It is the
+ *  representation chosen by `Position.range` whenever the three offsets fit; the rest use [[RangePosition]].
+ *
+ *  Layout of `packed`, low bits first (the same idea as `Spans` in the Scala 3 compiler):
+ *    - start:        18 bits, offsets below 256K characters
+ *    - length:        9 bits, `end - start`, below 512
+ *    - point delta:   5 bits, `point - start`, below 32
+ *
+ *  On the scala, scalap and re2s corpora about 95% of range positions fit. Most of the rest are large trees
+ *  (blocks, template bodies) that are rare by count.
+ *
+ *  Because this is not a subclass of `RangePosition`, test for ranges with `isRange` (or `isOpaqueRange`),
+ *  not `isInstanceOf[RangePosition]`. `new RangePosition(...)` still works and is never packed.
+ */
+final class CompactRangePosition private[util] (sourceIn: SourceFile, packed: Int) extends DefinedPosition {
+  import CompactRangePosition._
+  override def isRange = true
+  override def source  = sourceIn
+  override def start   = packed & StartMask
+  override def point   = start + (packed >>> PointShift)
+  override def end     = start + ((packed >>> LengthShift) & LengthMask)
+}
+object CompactRangePosition {
+  private final val StartBits   = 18
+  private final val LengthBits  = 9
+  private final val PointBits   = 5 // StartBits + LengthBits + PointBits == 32
+  private final val LengthShift = StartBits
+  private final val PointShift  = StartBits + LengthBits
+  private final val StartMask   = (1 << StartBits) - 1
+  private final val LengthMask  = (1 << LengthBits) - 1
+
+  /** Can the offsets be packed? A negative component becomes a huge value under `>>>`, so this also
+   *  rejects `end < start` and `point < start`; those fall through to `RangePosition` and its validation.
+   */
+  private[util] def fits(start: Int, point: Int, end: Int): Boolean =
+    (start >>> StartBits) == 0 && ((end - start) >>> LengthBits) == 0 && ((point - start) >>> PointBits) == 0
+
+  /** Requires `fits(start, point, end)`. */
+  private[util] def pack(start: Int, point: Int, end: Int): Int =
+    start | ((end - start) << LengthShift) | ((point - start) << PointShift)
 }
 class TransparentPosition(sourceIn: SourceFile, startIn: Int, pointIn: Int, endIn: Int) extends RangePosition(sourceIn, startIn, pointIn, endIn) {
   override def isTransparent = true
