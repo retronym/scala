@@ -449,7 +449,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
   private class TemplateTransformer(val unit: CompilationUnit, val impl: Template, outer: TypingTransformer)
     extends TypingTransformer(unit)
-    with    TypeAssigner
+    with    LocalTyperAssigner
     with    StaticsTransformer
     with    DelayedInitHelper
     with    OmittablesHelper

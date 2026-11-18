@@ -63,7 +63,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
     private def mkTerm(prefix: String): TermName = unit.freshTermName(prefix)
 
     // A typer for the template being transformed, made when `localTyper` is next read.
-    private val typers = new analyzer.LazyTyper(typer)
+    private val typers = new analyzer.TyperStack(typer)
     private def localTyper: analyzer.Typer = typers.typer
 
     private def typedWithPos(pos: Position)(tree: Tree) =

@@ -29,9 +29,9 @@ abstract class TailCalls extends Transform with TypingTransformers {
   import definitions._                // standard classes and methods
 
   // Types the trees this phase synthesises as `typer` would, without its contexts.
-  private object assigner extends ContextLiteTransformer with ContextLiteTypeAssigner {
-    override protected def contextOwner: Symbol = typer.context.owner
-    override protected def typerFor(why: String): analyzer.Typer = typer
+  private object assigner extends OwnerStackTransformer with TypeAssigner {
+    override protected def enclosingOwner: Symbol = typer.context.owner
+    override protected def fallbackTyper(why: String): analyzer.Typer = typer
   }
   private def typedPos(pos: Position)(tree: Tree): Tree = assigner.typed(atPos(pos)(tree), WildcardType)
 
