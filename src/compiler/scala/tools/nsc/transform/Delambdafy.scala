@@ -65,7 +65,9 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new DelambdafyTransformer(unit)
 
-  class DelambdafyTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class DelambdafyTransformer(unit: CompilationUnit) extends ContextLiteTransformer with ContextLiteTypeAssigner {
+    private def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
+
     // we need to know which methods refer to the 'this' reference so that we can determine which lambdas need access to it
     // TODO: this looks expensive, so I made it a lazy val. Can we make it more pay-as-you-go / optimize for common shapes?
     private[this] lazy val methodReferencesThis: collection.Set[Symbol] =
@@ -100,7 +102,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
       }
 
       // We then apply this symbol to the captures.
-      val apply = localTyper.typedPos(pos)(Apply(Ident(msym), allCapturedArgRefs))
+      val apply = typedPos(pos)(Apply(Ident(msym), allCapturedArgRefs))
 
       // TODO: this is a bit gross
       val sam = samUserDefined orElse {
@@ -179,7 +181,10 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
           if (resTpOk && erasure.isReferenceType(samResultType) && functionResultType <:< samResultType) functionResultType
           else postErasure.elimErasedValueType(samResultType)
 
-        val typeAdapter = new TypeAdapter { def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree) }
+        val typeAdapter = new TypeAdapter {
+          def typedPos(pos: Position)(tree: Tree): Tree = DelambdafyTransformer.this.typedPos(pos)(tree)
+          override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
+        }
         import typeAdapter.{adaptToType, unboxValueClass}
 
         val targetParams = target.paramss.head
@@ -196,7 +201,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         methSym setInfo MethodType(bridgeParams, bridgeResultType)
         oldClass.info.decls enter methSym
 
-        val forwarderCall = localTyper.typedPos(pos) {
+        val forwarderCall = typedPos(pos) {
           val capturedArgRefs = bridgeCapturedParams map gen.mkAttributedRef
           val functionArgRefs =
             map3(bridgeFunctionParams, functionParamTypes, targetParams.drop(numCaptures)) { (bridgeParam, functionParamTp, targetParam) =>
@@ -210,7 +215,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
                     // when the original function expected an argument of value class type,
                     // the original target will expect the unboxed underlying value,
                     // whereas the bridge will receive the boxed value (since the sam's argument type did not match and we had to adapt)
-                    localTyper.typed(unboxValueClass(bridgeParamRef, clazz, underlying), targetParamTp)
+                    typed(unboxValueClass(bridgeParamRef, clazz, underlying), targetParamTp)
                   case _ => bridgeParamRef
                 }
 
