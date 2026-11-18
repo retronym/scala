@@ -4,7 +4,7 @@ Measured with scalac 2.13.18 on JDK 25, compiling the compiler-benchmark corpora
 
 ## Scale
 
-On the `scala` corpus, the live heap after typer is 334 MB with 12-byte headers. It holds 1.69M trees in 66 MB (19.7% of the heap) and 32 MB of positions and attachments (9.7%). With compact headers, trees would take 58 MB and positions 24 MB.
+On the `scala` corpus, the live heap after typer is 333 MB with 12-byte headers. It holds 1.69M trees in 66 MB (19.7% of the heap) and 32 MB of positions and attachments (9.7%). With compact headers, trees would take 58 MB and positions 24 MB.
 
 An identity-deduplicated walk of the unit bodies reaches 1.33M of the 1.69M trees. The rest are held elsewhere, for example by symbols' completers and annotations. Weighting by the walk instead of the heap changes the percentages below by at most 0.3 points.
 
