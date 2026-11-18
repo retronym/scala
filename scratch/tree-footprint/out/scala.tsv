@@ -52,12 +52,12 @@ W	shared	scala.reflect.internal.util.RangePosition	115218
 W	shared	scala.reflect.internal.util.TransparentPosition	18429
 W	shared	scala.reflect.internal.util.OffsetPosition	251431
 W	shared	scala.reflect.internal.util.NoPosition$	23350
-H	scala.collection.immutable.$colon$colon	1847335	44336040
-H	[Ljava.lang.Object;	16825	34637768
+H	scala.collection.immutable.$colon$colon	1847278	44334672
+H	[Ljava.lang.Object;	16548	34633328
 H	scala.reflect.internal.util.RangePosition	731741	23415712
-H	scala.reflect.internal.util.WeakHashSet$Entry	513146	20525840
+H	scala.reflect.internal.util.WeakHashSet$Entry	494099	19763960
 H	[C	1369	19702136
-H	scala.reflect.internal.Types$ClassArgsTypeRef	331102	18541712
+H	scala.reflect.internal.Types$ClassArgsTypeRef	331095	18541320
 H	scala.reflect.internal.Trees$Select	386880	15475200
 H	scala.reflect.internal.Trees$Ident	328971	13158840
 H	scala.reflect.internal.Symbols$TermSymbol	166168	11964096
@@ -65,29 +65,29 @@ H	scala.reflect.internal.Symbols$TypeHistory	277221	8871072
 H	scala.reflect.internal.Trees$TypeTree	218751	8750040
 H	scala.reflect.internal.Trees$Apply	173586	6943440
 H	scala.reflect.internal.Trees$Modifiers	170878	6835120
+H	[Ljdk.internal.vm.FillerElement;	10336	6794240
 H	scala.reflect.internal.util.OffsetPosition	258994	6215856
-H	[Ljdk.internal.vm.FillerElement;	6940	6191048
-H	[B	65822	5351840
+H	[B	65815	5349464
 H	scala.reflect.internal.Symbols$MethodSymbol	57112	5025856
 H	scala.reflect.internal.Trees$This	115434	4617360
-H	[I	78755	4485384
+H	[I	78448	4480800
 H	scala.reflect.internal.Trees$ValDef	92448	4437504
 H	[Lscala.reflect.internal.util.WeakHashSet$Entry;	4	4194560
-H	[Lscala.reflect.internal.Types$Type;	66926	3477656
+H	[Lscala.reflect.internal.Types$Type;	66894	3476464
 H	scala.reflect.internal.Trees$DefDef	61351	3435656
 H	scala.reflect.internal.Types$MethodType	96202	3078464
 H	scala.reflect.macros.SingleAttachment	124712	2993088
-H	scala.reflect.internal.Types$RefinedType0	60904	2923392
-H	scala.reflect.internal.Scopes$Scope	71913	2876520
+H	scala.reflect.internal.Types$RefinedType0	60906	2923488
+H	scala.reflect.internal.Scopes$Scope	71915	2876600
 H	scala.reflect.internal.Scopes$ScopeEntry	85178	2725696
-H	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	66926	2677040
+H	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	66894	2675760
 H	scala.tools.nsc.typechecker.Implicits$ImplicitInfo	38573	2468672
 H	[Lscala.reflect.internal.Scopes$ScopeEntry;	3938	2079264
-H	[J	71702	2000296
+H	[J	71670	1999528
 H	scala.reflect.internal.Types$AbstractNoArgsTypeRef	25921	1866312
 H	scala.reflect.internal.Symbols$AbstractTypeSymbol	19041	1675608
 H	scala.reflect.internal.Trees$Literal	50050	1601600
-H	java.lang.String	64690	1552560
+H	java.lang.String	64683	1552392
 H	scala.reflect.internal.Trees$AppliedTypeTree	36502	1460080
 H	scala.reflect.internal.Types$ClassNoArgsTypeRef	24812	1389472
 H	scala.reflect.internal.Names$TermName	42718	1366976
@@ -96,14 +96,14 @@ H	scala.reflect.internal.Trees$Block	30265	1210600
 H	scala.reflect.internal.util.TransparentPosition	37454	1198528
 H	scala.reflect.internal.Constants$Constant	45603	1094472
 H	scala.reflect.internal.StdAttachments$NamePos	44762	1074288
-H	scala.collection.mutable.BitSet	66926	1070816
+H	scala.collection.mutable.BitSet	66894	1070304
 H	scala.reflect.internal.Symbols$ClassSymbol	8527	1023240
 H	scala.reflect.internal.Trees$TypeApply	24147	965880
 H	scala.reflect.internal.Symbols$ModuleClassSymbol	6626	954144
 H	scala.reflect.internal.Symbols$TypeSkolem	9454	907584
 H	scala.reflect.internal.Trees$CaseDef	21984	879360
 H	scala.reflect.internal.Types$NullaryMethodType	36380	873120
-H	java.lang.Class	6296	789072
+H	java.lang.Class	6300	789552
 H	scala.reflect.internal.Trees$TypeDef	16431	788688
 H	scala.collection.immutable.Map$Map1	31967	767208
 H	scala.collection.mutable.LinkedHashMap$LinkedEntry	18827	753080
@@ -112,18 +112,18 @@ H	scala.tools.nsc.typechecker.Contexts$Context	7892	694496
 H	scala.reflect.internal.Trees$TypeBoundsTree	15866	634640
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	11935	572880
 H	scala.reflect.internal.Symbols$ModuleSymbol	6966	557280
-H	scala.reflect.internal.Types$AnnotatedType	22974	551376
+H	scala.reflect.internal.Types$AnnotatedType	22973	551352
 H	scala.reflect.internal.Trees$Bind	13021	520840
 H	[Lscala.collection.mutable.HashMap$Node;	2914	466656
-H	java.util.HashMap$Node	14411	461152
-H	java.util.concurrent.ConcurrentHashMap$Node	13515	432480
+H	java.util.HashMap$Node	14428	461696
+H	java.util.concurrent.ConcurrentHashMap$Node	13521	432672
 H	scala.reflect.internal.Trees$Template	8722	418656
 H	scala.tools.nsc.typechecker.Contexts$ImportContext	3537	367848
 H	scala.reflect.internal.Types$ClassInfoType	6413	359128
 H	scala.reflect.internal.Trees$New	11024	352768
 H	scala.reflect.internal.Types$ModuleTypeRef	5473	350272
-H	scala.collection.immutable.BitmapIndexedSetNode	8692	347680
-H	scala.reflect.internal.Types$PolyType	14307	343368
+H	scala.reflect.internal.Types$PolyType	14308	343392
+H	scala.collection.immutable.BitmapIndexedSetNode	8401	336040
 H	scala.reflect.internal.Names$TypeName	10482	335424
 H	scala.reflect.internal.Trees$Match	8290	331600
 H	scala.collection.immutable.Map$Map2	10343	330976
@@ -144,8 +144,8 @@ H	scala.reflect.internal.Trees$Import	4614	184560
 H	[Lscala.collection.mutable.LinkedHashMap$LinkedEntry;	826	175200
 H	scala.reflect.internal.Types$UniqueThisType	6631	159144
 H	scala.tools.nsc.typechecker.StdAttachments$OriginalTreeAttachment	6429	154296
-H	[Ljava.util.HashMap$Node;	723	153744
-H	java.lang.invoke.MemberName	3188	153024
+H	[Ljava.util.HashMap$Node;	729	154192
+H	java.lang.invoke.MemberName	3194	153312
 H	jdk.internal.jimage.ImageReader$Resource	4755	152160
 H	scala.reflect.io.PlainNioFile	4669	149408
 H	scala.collection.mutable.HashMap$Node	4589	146848
@@ -167,12 +167,12 @@ H	scala.collection.mutable.HashMap	2910	93120
 H	java.lang.Long	3820	91680
 H	java.lang.Object	5713	91408
 H	[Lscala.collection.mutable.LinkedHashSet$Entry;	1137	90960
-H	java.lang.invoke.MethodType	2220	88800
+H	java.lang.invoke.MethodType	2224	88960
 H	java.util.concurrent.ConcurrentHashMap	1228	78592
 H	scala.reflect.internal.Types$UniqueTypeBounds	2437	77984
 H	scala.reflect.internal.Trees$UnApply	1933	77320
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$NameOrString	3101	74424
-H	jdk.internal.util.WeakReferenceKey	2293	73376
+H	jdk.internal.util.WeakReferenceKey	2297	73504
 H	scala.collection.mutable.HashSet	2290	73280
 H	scala.reflect.macros.NonemptyAttachments	3052	73248
 H	scala.tools.nsc.CompilationUnits$CompilationUnit	1135	72640
@@ -180,15 +180,15 @@ H	scala.reflect.internal.Trees$Annotated	1784	71360
 H	scala.reflect.internal.AnnotationInfos$ExtraLazyAnnotationInfo	1458	69984
 H	java.lang.reflect.Method	721	63448
 H	scala.reflect.internal.Trees$LabelDef	1311	62928
-H	[Ljava.lang.Class;	2030	60752
+H	[Ljava.lang.Class;	2033	60832
 H	jdk.internal.jimage.ImageReader$Directory	1774	56768
 H	scala.collection.immutable.Set$Set2	2198	52752
 H	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader$classfileParser$	545	52320
-H	[Ljava.util.WeakHashMap$Entry;	231	52272
 H	scala.tools.nsc.typechecker.Typers$NormalTyper	1631	52192
 H	scala.collection.mutable.HashSet$Node	2174	52176
-H	java.lang.invoke.ResolvedMethodName	2130	51120
-H	java.lang.invoke.DirectMethodHandle	1246	49840
+H	[Ljava.util.WeakHashMap$Entry;	231	51888
+H	java.lang.invoke.ResolvedMethodName	2135	51240
+H	java.lang.invoke.DirectMethodHandle	1250	50000
 H	jdk.internal.jimage.ImageReader$LinkNode	1539	49248
 H	java.util.ArrayList	1951	46824
 H	java.util.jar.Attributes	2900	46400
@@ -204,15 +204,15 @@ H	scala.collection.mutable.LinkedHashSet	1137	36384
 H	scala.reflect.internal.util.BatchSourceFile	1135	36320
 H	scala.reflect.io.VirtualFile	1135	36320
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$InnerClassEntry	1131	36192
-H	java.util.HashMap	741	35568
+H	java.util.HashMap	747	35856
 H	scala.reflect.internal.Types$AbstractArgsTypeRef	494	35568
-H	java.lang.invoke.DirectMethodHandle$Constructor	736	35328
+H	java.lang.invoke.DirectMethodHandle$Constructor	737	35376
 H	[Ljava.lang.ref.SoftReference;	432	32832
 H	scala.reflect.internal.Scopes$$anon$3	811	32440
 H	scala.collection.immutable.Map$Map3	786	31440
 H	scala.reflect.internal.Trees$ExistentialTypeTree	778	31120
 H	scala.reflect.internal.Trees$Throw	948	30336
-H	scala.collection.immutable.BitmapIndexedMapNode	745	29800
+H	scala.collection.immutable.BitmapIndexedMapNode	757	30280
 H	[Ljava.lang.ClassValue$Entry;	194	27816
 H	scala.reflect.internal.Trees$Try	683	27320
 H	scala.collection.mutable.ArrayDeque	1137	27288
@@ -223,7 +223,7 @@ H	java.lang.Integer	1614	25824
 H	scala.collection.immutable.Set$Set3	1026	24624
 H	java.lang.module.ModuleDescriptor$Exports	996	23904
 H	scala.reflect.internal.Trees$SingletonTypeTree	727	23264
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x0000080001389820	944	22656
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe01389820	944	22656
 H	java.util.concurrent.atomic.AtomicLong	920	22080
 H	scala.tools.nsc.typechecker.StdAttachments$MacroExpansionAttachment	884	21216
 H	[Lscala.collection.immutable.Map;	875	21000
@@ -232,7 +232,7 @@ H	[Ljava.lang.String;	670	20568
 H	scala.reflect.internal.Trees$Return	511	20440
 H	scala.reflect.internal.Types$PackageTypeRef	310	19840
 H	scala.reflect.internal.Trees$Alternative	579	18528
-H	java.lang.ref.WeakReference	565	18080
+H	java.lang.ref.WeakReference	567	18144
 H	java.lang.invoke.LambdaForm$Name	534	17088
 H	scala.tools.nsc.typechecker.Contexts$BufferingReporter	704	16896
 H	scala.tools.nsc.Reporting$Suppression	526	16832
@@ -246,12 +246,12 @@ H	java.lang.ref.SoftReference	353	14120
 H	scala.Some	875	14000
 H	scala.reflect.internal.AnnotationInfos$LiteralAnnotArg	571	13704
 H	[Ljava.lang.invoke.MethodHandle;	75	13392
-H	java.util.WeakHashMap$Entry	333	13320
+H	java.util.WeakHashMap$Entry	332	13280
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$innerClasses$	545	13080
-H	java.lang.invoke.BoundMethodHandle$Species_L	312	12480
+H	java.lang.invoke.BoundMethodHandle$Species_L	315	12600
 H	java.lang.ClassValue$ClassValueMap	193	12352
 H	scala.tools.nsc.typechecker.StdAttachments$SuperArgsAttachment	500	12000
-H	java.util.ImmutableCollections$Set12	492	11808
+H	java.util.ImmutableCollections$Set12	493	11832
 H	scala.collection.immutable.Set$Set1	735	11760
 H	scala.reflect.internal.AnnotationInfos$LazyAnnotationInfo	364	11648
 H	java.lang.invoke.MethodTypeForm	290	11600
@@ -270,8 +270,8 @@ H	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	275	8800
 H	scala.collection.mutable.ListBuffer	267	8544
 H	java.lang.classfile.Opcode	213	8520
 H	scala.tools.nsc.Reporting$MessageFilter$Category	529	8464
+H	java.util.HashSet	519	8304
 H	scala.reflect.internal.Types$PackageClassInfoType	147	8232
-H	java.util.HashSet	514	8224
 H	[Lscala.math.BigInt;	1	8216
 H	jdk.internal.module.ModuleReferenceImpl	144	8064
 H	java.lang.ref.ReferenceQueue	250	8000
@@ -285,12 +285,12 @@ H	scala.reflect.internal.Trees$SelectFromTypeTree	164	6560
 H	java.util.TreeMap$Entry	162	6480
 H	javax.management.ImmutableDescriptor	270	6480
 H	[Ljava.lang.reflect.Method;	119	6192
-H	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter$$Lambda/0x000008000142b0d8	257	6168
+H	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter$$Lambda/0x000001fe0142b0d8	257	6168
 H	com.sun.jmx.mbeanserver.ConvertingMethod	167	5344
 H	scala.tools.nsc.settings.MutableSettings$BooleanSetting	110	5280
 H	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	163	5216
 H	java.lang.invoke.LambdaForm$NamedFunction	213	5112
-H	java.lang.ClassValue$Entry	205	4920
+H	java.lang.ClassValue$Entry	206	4944
 H	java.lang.Module	78	4368
 H	java.lang.invoke.DirectMethodHandle$StaticAccessor	78	4368
 H	java.security.Provider$Service	68	4352
@@ -302,13 +302,11 @@ H	[Ljava.nio.ByteBuffer;	1	4112
 H	java.lang.Byte	256	4096
 H	java.lang.ref.ReferenceQueue$Lock	252	4032
 H	java.util.ImmutableCollections$List12	168	4032
-H	java.util.zip.Inflater	61	3904
 H	com.sun.management.internal.DiagnosticCommandArgumentInfo	97	3880
 H	java.math.BigInteger	91	3640
 H	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	112	3584
 H	[Lcom.sun.jmx.mbeanserver.MXBeanMapping;	178	3528
 H	java.lang.module.ModuleDescriptor$Provides	144	3456
-H	jdk.internal.ref.CleanerImpl$PhantomCleanableRef	71	3408
 H	java.lang.module.ResolvedModule	137	3288
 H	javax.management.openmbean.OpenMBeanAttributeInfoSupport	51	3264
 H	[Ljavax.management.MBeanAttributeInfo;	63	3224
@@ -333,6 +331,8 @@ H	jdk.internal.loader.BuiltinClassLoader$LoadedModule	70	2240
 H	java.lang.reflect.Constructor	30	2160
 H	java.lang.Character	131	2096
 H	jdk.internal.constant.MethodTypeDescImpl	87	2088
+H	java.util.zip.Inflater	32	2048
+H	jdk.internal.ref.CleanerImpl$PhantomCleanableRef	42	2016
 H	scala.collection.immutable.Set$Set4	63	2016
 H	java.security.Provider$UString	82	1968
 H	jdk.internal.module.SystemModuleFinders$2	122	1952
@@ -353,7 +353,6 @@ H	[Ljava.lang.invoke.MemberName;	11	1584
 H	scala.collection.immutable.HashMap	95	1520
 H	scala.reflect.ClassTag$GenericClassTag	94	1504
 H	java.io.ObjectStreamField	37	1480
-H	java.util.zip.Inflater$InflaterZStreamRef	61	1464
 H	[Ljavax.management.MBeanOperationInfo;	51	1456
 H	java.time.temporal.ChronoField	30	1440
 H	java.time.temporal.ValueRange	30	1440
@@ -420,6 +419,7 @@ H	scala.tools.nsc.settings.MutableSettings$MultiChoiceSetting	9	792
 H	[S	9	784
 H	com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory$IdentityMapping	32	768
 H	java.security.Provider$EngineDescription	32	768
+H	java.util.zip.Inflater$InflaterZStreamRef	32	768
 H	scala.reflect.internal.Types$UniqueLiteralType	32	768
 H	scala.tools.nsc.settings.MutableSettings$PhasesSetting	12	768
 H	javax.management.openmbean.CompositeType	13	728
@@ -444,7 +444,7 @@ H	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	20	640
 H	sun.util.locale.BaseLocale	20	640
 H	java.lang.classfile.Opcode$Kind	26	624
 H	java.time.LocalTime	26	624
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x00000800013ba3d0	26	624
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe013ba3d0	26	624
 H	[Lscala.reflect.internal.AnnotationInfos$ClassfileAnnotArg;	21	608
 H	java.io.File	19	608
 H	com.sun.jmx.mbeanserver.PerInterface	15	600
@@ -558,7 +558,7 @@ H	java.util.regex.Pattern$Start	10	240
 H	jdk.internal.loader.NativeLibraries$NativeLibraryImpl	6	240
 H	scala.collection.immutable.BitSet$BitSet1	10	240
 H	scala.collection.mutable.AnyRefMap	6	240
-H	scala.collection.mutable.Map$$Lambda/0x0000080001223c58	15	240
+H	scala.collection.mutable.Map$$Lambda/0x000001fe01223c58	15	240
 H	scala.reflect.api.PredefTypeCreator	15	240
 H	scala.reflect.internal.util.ReusableInstance	10	240
 H	scala.reflect.internal.util.Statistics$Timer	5	240
@@ -595,7 +595,7 @@ H	javax.management.StandardEmitterMBean	6	192
 H	jdk.internal.loader.URLClassPath$JarLoader	6	192
 H	scala.Enumeration$ValueSet$	8	192
 H	scala.reflect.internal.tpe.TypeMaps$SubstSymMap	4	192
-H	scala.reflect.macros.Attachments$$anon$1$$Lambda/0x000008000132c400	12	192
+H	scala.reflect.macros.Attachments$$anon$1$$Lambda/0x000001fe0132c400	12	192
 H	scala.tools.nsc.Reporting$WarningCategory$Other	8	192
 H	[Ljava.time.LocalDateTime;	2	168
 H	[Ljava.util.Set;	1	168
@@ -621,7 +621,7 @@ H	scala.collection.immutable.ArraySeq$ofRef	10	160
 H	scala.reflect.internal.util.WeakHashSet	4	160
 H	scala.tools.nsc.Global$Run	1	160
 H	scala.tools.nsc.ast.Trees$TypeTreeWithDeferredRefCheck	4	160
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x0000080001389ae8	5	160
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe01389ae8	5	160
 H	sun.net.www.protocol.jar.URLJarFile	2	160
 H	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	1	152
 H	scala.reflect.internal.Mirrors$Roots$RootClass	1	152
@@ -743,7 +743,7 @@ H	scala.tools.nsc.ast.Trees$StrictTreeCopier	6	96
 H	scala.tools.nsc.ast.Trees$treeInfo$	1	96
 H	scala.tools.nsc.settings.SpecificScalaVersion	3	96
 H	scala.tools.nsc.transform.async.AsyncNames$TermNameCache	3	96
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001473370	4	96
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01473370	4	96
 H	scala.tools.nsc.typechecker.splain.FormatCache	6	96
 H	sun.reflect.generics.reflectiveObjects.TypeVariableImpl	3	96
 H	sun.reflect.generics.repository.ClassRepository	3	96
@@ -854,7 +854,7 @@ H	scala.tools.nsc.backend.jvm.GenBCode$$anon$3	1	64
 H	scala.tools.nsc.classpath.FileBasedCache$$anon$1	2	64
 H	scala.tools.nsc.settings.MutableSettings$OutputSetting	1	64
 H	scala.tools.nsc.symtab.classfile.ReusableDataReader$$anon$1	4	64
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x00000800013ba698	2	64
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe013ba698	2	64
 H	sun.reflect.annotation.AnnotationType	2	64
 H	sun.security.provider.FileInputStreamPool$StreamRef	2	64
 H	[Ljava.lang.Runnable;	1	56
@@ -1041,7 +1041,7 @@ H	jdk.internal.module.ModuleTarget	2	32
 H	jdk.internal.reflect.ReflectionFactory$Config	2	32
 H	jdk.internal.util.ReferencedKeySet	2	32
 H	scala.collection.ClassTagSeqFactory$AnySeqDelegate	2	32
-H	scala.collection.immutable.Map$$Lambda/0x0000080001226800	2	32
+H	scala.collection.immutable.Map$$Lambda/0x000001fe01226800	2	32
 H	scala.reflect.ManifestFactory$AnyManifest	1	32
 H	scala.reflect.ManifestFactory$AnyValPhantomManifest	1	32
 H	scala.reflect.ManifestFactory$NothingManifest	1	32
@@ -1075,8 +1075,8 @@ H	scala.tools.nsc.javac.JavaScanners$JavaScannerConfiguration$	1	32
 H	scala.tools.nsc.settings.ScalaSettings$CachePolicy$	1	32
 H	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	1	32
 H	scala.tools.nsc.transform.async.AsyncNames	1	32
-H	scala.tools.nsc.typechecker.Contexts$$Lambda/0x000008000123b330	2	32
-H	scala.tools.nsc.typechecker.Implicits$$Lambda/0x0000080001244d38	2	32
+H	scala.tools.nsc.typechecker.Contexts$$Lambda/0x000001fe0123b3a0	2	32
+H	scala.tools.nsc.typechecker.Implicits$$Lambda/0x000001fe012449d0	2	32
 H	scala.tools.nsc.typechecker.Implicits$ImplicitInfo$	2	32
 H	scala.tools.nsc.typechecker.Implicits$ImplicitNotFoundMsg$	1	32
 H	scala.tools.nsc.typechecker.TypersTracking$typingStack$	1	32
@@ -1107,9 +1107,8 @@ H	com.sun.management.internal.PlatformMBeanProviderImpl$4	1	24
 H	com.sun.management.internal.PlatformMBeanProviderImpl$7	1	24
 H	java.io.InputStreamReader	1	24
 H	java.io.UnixFileSystem	1	24
-H	java.lang.ClassValue$RemovalToken	1	24
 H	java.lang.ProcessEnvironment$StringEnvironment	1	24
-H	java.lang.String$$StringConcat/0x00000800014c0800	1	24
+H	java.lang.String$$StringConcat/0x000001fe014c0800	1	24
 H	java.lang.ThreadLocal$SuppliedThreadLocal	1	24
 H	java.lang.invoke.StringConcatFactory$InlineHiddenClassStrategy$MethodHandlePair	1	24
 H	java.lang.reflect.Proxy$1	1	24
@@ -1126,7 +1125,7 @@ H	java.util.concurrent.ConcurrentLinkedQueue$Node	1	24
 H	java.util.concurrent.locks.ReentrantReadWriteLock	1	24
 H	java.util.logging.LogManager$LoggerContext	1	24
 H	java.util.logging.LogManager$SystemLoggerContext	1	24
-H	java.util.regex.Pattern$$Lambda/0x000008000100d5b8	1	24
+H	java.util.regex.Pattern$$Lambda/0x000001fe0100da40	1	24
 H	java.util.regex.Pattern$Pos	1	24
 H	java.util.regex.Pattern$Ques	1	24
 H	java.util.regex.Pattern$SliceI	1	24
@@ -1202,8 +1201,8 @@ H	scala.tools.nsc.classpath.AggregateClassPath	1	24
 H	scala.tools.nsc.classpath.ClassPathEntries	1	24
 H	scala.tools.nsc.classpath.ZipAndJarClassPathFactory$ZipArchiveClassPath	1	24
 H	scala.tools.nsc.classpath.ZipAndJarFileLookupFactory$ZipSettings	1	24
-H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x00000800011273f0	1	24
-H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x00000800011277c8	1	24
+H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x000001fe011273f0	1	24
+H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x000001fe011277c8	1	24
 H	scala.tools.nsc.settings.MutableSettings$OutputDirs	1	24
 H	scala.tools.nsc.settings.ScalaSettings$CachePolicy$Always$	1	24
 H	scala.tools.nsc.settings.ScalaSettings$CachePolicy$LastModified$	1	24
@@ -1269,19 +1268,21 @@ H	[[[[Ljava.lang.Object;	1	16
 H	[[[[[Ljava.lang.Object;	1	16
 H	[[[[[[Ljava.lang.Object;	1	16
 H	Survey$	1	16
-H	Survey$$$Lambda/0x000008000105d9c8	1	16
-H	Survey$$$Lambda/0x000008000105f598	1	16
-H	Survey$$$Lambda/0x000008000109a2a0	1	16
-H	Survey$$$Lambda/0x000008000115c508	1	16
-H	Survey$$$Lambda/0x000008000115c8d8	1	16
-H	Survey$$$Lambda/0x000008000115cca8	1	16
-H	Survey$$$Lambda/0x0000080001312458	1	16
-H	Survey$$$Lambda/0x000008000147c298	1	16
-H	Survey$$$Lambda/0x000008000147c668	1	16
-H	Survey$$$Lambda/0x000008000147ca38	1	16
-H	Survey$$$Lambda/0x000008000147ce08	1	16
-H	Survey$$$Lambda/0x000008000147d1d8	1	16
-H	Survey$$$Lambda/0x000008000147d5a8	1	16
+H	Survey$$$Lambda/0x000001fe01058c88	1	16
+H	Survey$$$Lambda/0x000001fe0105d9c8	1	16
+H	Survey$$$Lambda/0x000001fe0105f598	1	16
+H	Survey$$$Lambda/0x000001fe0109a330	1	16
+H	Survey$$$Lambda/0x000001fe0115c508	1	16
+H	Survey$$$Lambda/0x000001fe0115c7c8	1	16
+H	Survey$$$Lambda/0x000001fe0115cb98	1	16
+H	Survey$$$Lambda/0x000001fe0115cf68	1	16
+H	Survey$$$Lambda/0x000001fe01312458	1	16
+H	Survey$$$Lambda/0x000001fe0147c298	1	16
+H	Survey$$$Lambda/0x000001fe0147c668	1	16
+H	Survey$$$Lambda/0x000001fe0147ca38	1	16
+H	Survey$$$Lambda/0x000001fe0147ce08	1	16
+H	Survey$$$Lambda/0x000001fe0147d1d8	1	16
+H	Survey$$$Lambda/0x000001fe0147d5a8	1	16
 H	com.sun.jmx.interceptor.DefaultMBeanServerInterceptor$ResourceContext$1	1	16
 H	com.sun.jmx.mbeanserver.DefaultMXBeanMappingFactory	1	16
 H	com.sun.jmx.mbeanserver.DescriptorCache	1	16
@@ -1302,8 +1303,8 @@ H	java.lang.ApplicationShutdownHooks$1	1	16
 H	java.lang.CharacterData00	1	16
 H	java.lang.CharacterDataLatin1	1	16
 H	java.lang.CharacterDataUndefined	1	16
-H	java.lang.Class$$Lambda/0x00000800014b9ab8	1	16
-H	java.lang.Module$$Lambda/0x000008000149d5b0	1	16
+H	java.lang.Class$$Lambda/0x000001fe014ba110	1	16
+H	java.lang.Module$$Lambda/0x000001fe0149dc08	1	16
 H	java.lang.Runtime	1	16
 H	java.lang.String$CaseInsensitiveComparator	1	16
 H	java.lang.System$1	1	16
@@ -1318,21 +1319,21 @@ H	java.lang.management.DefaultPlatformMBeanProvider$10	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$2	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$3	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$5	1	16
-H	java.lang.management.DefaultPlatformMBeanProvider$5$$Lambda/0x00000800014a3930	1	16
+H	java.lang.management.DefaultPlatformMBeanProvider$5$$Lambda/0x000001fe014a3f88	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$6	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$7	1	16
 H	java.lang.management.DefaultPlatformMBeanProvider$9	1	16
-H	java.lang.management.ManagementFactory$$Lambda/0x0000080001487310	1	16
-H	java.lang.management.ManagementFactory$$Lambda/0x0000080001487568	1	16
-H	java.lang.management.ManagementFactory$$Lambda/0x00000800014877b0	1	16
+H	java.lang.management.ManagementFactory$$Lambda/0x000001fe01487968	1	16
+H	java.lang.management.ManagementFactory$$Lambda/0x000001fe01487bc0	1	16
+H	java.lang.management.ManagementFactory$$Lambda/0x000001fe01487e08	1	16
 H	java.lang.module.ModuleDescriptor$1	1	16
 H	java.lang.module.ModuleDescriptor$Builder$$Lambda/0x80000000e	1	16
 H	java.lang.ref.Cleaner	1	16
 H	java.lang.ref.Cleaner$1	1	16
 H	java.lang.ref.Reference$1	1	16
-H	java.lang.reflect.Proxy$$Lambda/0x000008000149c7d0	1	16
-H	java.lang.reflect.Proxy$ProxyBuilder$$Lambda/0x000008000149cc20	1	16
-H	java.lang.reflect.ProxyGenerator$$Lambda/0x000008000149e480	1	16
+H	java.lang.reflect.Proxy$$Lambda/0x000001fe0149ce28	1	16
+H	java.lang.reflect.Proxy$ProxyBuilder$$Lambda/0x000001fe0149d278	1	16
+H	java.lang.reflect.ProxyGenerator$$Lambda/0x000001fe0149ead8	1	16
 H	java.lang.reflect.ReflectAccess	1	16
 H	java.net.URI$1	1	16
 H	java.net.URL$1	1	16
@@ -1340,11 +1341,11 @@ H	java.net.URL$DefaultFactory	1	16
 H	java.nio.Bits$1	1	16
 H	java.nio.Buffer$1	1	16
 H	java.nio.Buffer$2	1	16
-H	java.nio.file.Files$$Lambda/0x0000080001007e58	1	16
+H	java.nio.file.Files$$Lambda/0x000001fe010082e0	1	16
 H	java.nio.file.Files$AcceptAllFilter	1	16
 H	java.security.AllPermission	1	16
 H	java.security.AllPermissionCollection	1	16
-H	java.security.Provider$$Lambda/0x0000080001016250	1	16
+H	java.security.Provider$$Lambda/0x000001fe010166d8	1	16
 H	java.security.Security$2	1	16
 H	java.util.AbstractMap$2	1	16
 H	java.util.Collections$EmptyEnumeration	1	16
@@ -1361,7 +1362,7 @@ H	java.util.concurrent.atomic.AtomicReferenceArray	1	16
 H	java.util.concurrent.locks.ReentrantReadWriteLock$ReadLock	1	16
 H	java.util.concurrent.locks.ReentrantReadWriteLock$Sync$ThreadLocalHoldCounter	1	16
 H	java.util.concurrent.locks.ReentrantReadWriteLock$WriteLock	1	16
-H	java.util.function.Function$$Lambda/0x00000800014a3b78	1	16
+H	java.util.function.Function$$Lambda/0x000001fe014a41d0	1	16
 H	java.util.jar.JavaUtilJarAccessImpl	1	16
 H	java.util.logging.Level$$Lambda/0x80000001f	1	16
 H	java.util.logging.Level$KnownLevel$$Lambda/0x800000020	1	16
@@ -1370,19 +1371,19 @@ H	java.util.logging.Level$KnownLevel$$Lambda/0x800000022	1	16
 H	java.util.logging.LogManager$LoggingProviderAccess	1	16
 H	java.util.logging.LogManager$VisitedLoggers	1	16
 H	java.util.logging.Logging	1	16
-H	java.util.regex.CharPredicates$$Lambda/0x0000080001024440	1	16
+H	java.util.regex.CharPredicates$$Lambda/0x000001fe010248c8	1	16
 H	java.util.regex.CharPredicates$$Lambda/0x800000024	1	16
 H	java.util.regex.CharPredicates$$Lambda/0x800000025	1	16
-H	java.util.regex.Pattern$$Lambda/0x000008000100d118	1	16
-H	java.util.regex.Pattern$$Lambda/0x00000800010241d8	1	16
+H	java.util.regex.Pattern$$Lambda/0x000001fe0100d5a0	1	16
+H	java.util.regex.Pattern$$Lambda/0x000001fe01024660	1	16
 H	java.util.regex.Pattern$$Lambda/0x80000002f	1	16
 H	java.util.regex.Pattern$LastNode	1	16
 H	java.util.regex.Pattern$Node	1	16
-H	java.util.stream.Collectors$$Lambda/0x00000800014a3dc0	1	16
-H	java.util.stream.Collectors$$Lambda/0x00000800014a4228	1	16
-H	java.util.stream.Collectors$$Lambda/0x00000800014b64d0	1	16
-H	java.util.stream.Collectors$$Lambda/0x00000800014b66f8	1	16
-H	java.util.stream.Collectors$$Lambda/0x00000800014b6930	1	16
+H	java.util.stream.Collectors$$Lambda/0x000001fe014a4418	1	16
+H	java.util.stream.Collectors$$Lambda/0x000001fe014a4880	1	16
+H	java.util.stream.Collectors$$Lambda/0x000001fe014b6b28	1	16
+H	java.util.stream.Collectors$$Lambda/0x000001fe014b6d50	1	16
+H	java.util.stream.Collectors$$Lambda/0x000001fe014b6f88	1	16
 H	java.util.stream.Collectors$$Lambda/0x800000038	1	16
 H	java.util.stream.Collectors$$Lambda/0x80000003e	1	16
 H	java.util.stream.Collectors$$Lambda/0x800000040	1	16
@@ -1396,7 +1397,7 @@ H	java.util.stream.Nodes$EmptyNode$OfDouble	1	16
 H	java.util.stream.Nodes$EmptyNode$OfInt	1	16
 H	java.util.stream.Nodes$EmptyNode$OfLong	1	16
 H	java.util.stream.Nodes$EmptyNode$OfRef	1	16
-H	java.util.stream.ReferencePipeline$$Lambda/0x00000800014ab860	1	16
+H	java.util.stream.ReferencePipeline$$Lambda/0x000001fe014abeb8	1	16
 H	java.util.zip.ZipFile$1	1	16
 H	javax.management.JMX	1	16
 H	javax.management.MBeanServerBuilder	1	16
@@ -1411,7 +1412,7 @@ H	jdk.internal.jimage.ImageReaderFactory$1	1	16
 H	jdk.internal.jimage.ImageStringsReader	1	16
 H	jdk.internal.jimage.decompressor.Decompressor	1	16
 H	jdk.internal.jrtfs.JrtFileSystemProvider	1	16
-H	jdk.internal.jrtfs.SystemImage$$Lambda/0x00000800010288b8	1	16
+H	jdk.internal.jrtfs.SystemImage$$Lambda/0x000001fe01028d40	1	16
 H	jdk.internal.jrtfs.SystemImage$1	1	16
 H	jdk.internal.logger.LazyLoggers$1	1	16
 H	jdk.internal.logger.LazyLoggers$LazyLoggerFactories	1	16
@@ -1424,6 +1425,7 @@ H	jdk.internal.module.DefaultRoots$$Lambda/0x80000004c	1	16
 H	jdk.internal.module.DefaultRoots$$Lambda/0x80000004d	1	16
 H	jdk.internal.module.DefaultRoots$$Lambda/0x80000004e	1	16
 H	jdk.internal.module.DefaultRoots$$Lambda/0x80000004f	1	16
+H	jdk.internal.module.ModuleBootstrap$$Lambda/0x000001fe01001280	1	16
 H	jdk.internal.module.ModuleLoaderMap$Mapper	1	16
 H	jdk.internal.module.ModulePatcher	1	16
 H	jdk.internal.module.ModuleResolution	1	16
@@ -1432,16 +1434,16 @@ H	jdk.internal.reflect.ReflectionFactory	1	16
 H	jdk.internal.util.Preconditions$1	1	16
 H	jdk.internal.util.Preconditions$2	1	16
 H	jdk.internal.util.Preconditions$3	1	16
-H	jdk.jfr.internal.dcmd.DCmdCheck$$Lambda/0x00000800014b4710	1	16
-H	jdk.jfr.internal.dcmd.DCmdDump$$Lambda/0x00000800014b44e8	1	16
-H	jdk.jfr.internal.dcmd.DCmdStart$$Lambda/0x00000800014ad400	1	16
-H	jdk.jfr.internal.dcmd.DCmdStart$$Lambda/0x00000800014b42c0	1	16
-H	jdk.jfr.internal.dcmd.DCmdStop$$Lambda/0x00000800014acba8	1	16
-H	jdk.jfr.internal.dcmd.DCmdView$$Lambda/0x00000800014ac980	1	16
-H	jdk.jfr.internal.jfc.model.JFCModel$$Lambda/0x00000800014b3ba0	1	16
-H	jdk.jfr.internal.jfc.model.JFCModel$$Lambda/0x00000800014b3dd8	1	16
+H	jdk.jfr.internal.dcmd.DCmdCheck$$Lambda/0x000001fe014b4d68	1	16
+H	jdk.jfr.internal.dcmd.DCmdDump$$Lambda/0x000001fe014b4b40	1	16
+H	jdk.jfr.internal.dcmd.DCmdStart$$Lambda/0x000001fe014ada58	1	16
+H	jdk.jfr.internal.dcmd.DCmdStart$$Lambda/0x000001fe014b4918	1	16
+H	jdk.jfr.internal.dcmd.DCmdStop$$Lambda/0x000001fe014ad200	1	16
+H	jdk.jfr.internal.dcmd.DCmdView$$Lambda/0x000001fe014acfd8	1	16
+H	jdk.jfr.internal.jfc.model.JFCModel$$Lambda/0x000001fe014b41f8	1	16
+H	jdk.jfr.internal.jfc.model.JFCModel$$Lambda/0x000001fe014b4430	1	16
 H	jdk.jfr.internal.management.HiddenWait	1	16
-H	jdk.jfr.internal.util.Utils$$Lambda/0x00000800014b4020	1	16
+H	jdk.jfr.internal.util.Utils$$Lambda/0x000001fe014b4678	1	16
 H	jdk.management.jfr.SettingDescriptorInfo$1	1	16
 H	jdk.nio.zipfs.ZipFileSystemProvider	1	16
 H	scala.$less$colon$less$	1	16
@@ -1451,16 +1453,16 @@ H	scala.Console$	1	16
 H	scala.None$	1	16
 H	scala.Option$	1	16
 H	scala.PartialFunction$	1	16
-H	scala.PartialFunction$$$Lambda/0x000008000126c000	1	16
-H	scala.PartialFunction$$$Lambda/0x000008000126c3d0	1	16
+H	scala.PartialFunction$$$Lambda/0x000001fe0126c210	1	16
+H	scala.PartialFunction$$$Lambda/0x000001fe0126c5e0	1	16
 H	scala.PartialFunction$$anon$1	1	16
-H	scala.PartialFunction$$anon$1$$Lambda/0x000008000126cb10	1	16
+H	scala.PartialFunction$$anon$1$$Lambda/0x000001fe0126cd20	1	16
 H	scala.Predef$	1	16
 H	scala.Predef$ArrowAssoc$	1	16
 H	scala.StringContext$	1	16
 H	scala.Tuple2$	1	16
 H	scala.collection.ArrayOps$	1	16
-H	scala.collection.ArrayOps$$$Lambda/0x0000080001115c78	1	16
+H	scala.collection.ArrayOps$$$Lambda/0x000001fe01115c78	1	16
 H	scala.collection.BuildFrom$	1	16
 H	scala.collection.BuildFrom$$anon$5	1	16
 H	scala.collection.BuildFrom$$anon$6	1	16
@@ -1468,32 +1470,32 @@ H	scala.collection.Hashing$	1	16
 H	scala.collection.Iterable$	1	16
 H	scala.collection.IterableFactory$	1	16
 H	scala.collection.IterableOnce$	1	16
-H	scala.collection.IterableOnceOps$$Lambda/0x000008000130b2e8	1	16
-H	scala.collection.IterableOps$$Lambda/0x00000800013c9400	1	16
+H	scala.collection.IterableOnceOps$$Lambda/0x000001fe0130b2e8	1	16
+H	scala.collection.IterableOps$$Lambda/0x000001fe013c9400	1	16
 H	scala.collection.IterableOps$SizeCompareOps$	1	16
 H	scala.collection.Iterator$	1	16
 H	scala.collection.Iterator$$anon$19	1	16
 H	scala.collection.Map$	1	16
-H	scala.collection.Map$$$Lambda/0x000008000143f0e8	1	16
+H	scala.collection.Map$$$Lambda/0x000001fe0143f0e8	1	16
 H	scala.collection.SeqFactory$UnapplySeqWrapper$	1	16
-H	scala.collection.SeqOps$$Lambda/0x0000080001166360	1	16
-H	scala.collection.SeqOps$$Lambda/0x00000800014520c0	1	16
+H	scala.collection.SeqOps$$Lambda/0x000001fe01166d38	1	16
+H	scala.collection.SeqOps$$Lambda/0x000001fe014520c0	1	16
 H	scala.collection.Set$	1	16
 H	scala.collection.StringOps$	1	16
-H	scala.collection.StringOps$$$Lambda/0x00000800010cecf0	1	16
+H	scala.collection.StringOps$$$Lambda/0x000001fe010cacf0	1	16
 H	scala.collection.concurrent.INode$	1	16
 H	scala.collection.concurrent.TrieMap$	1	16
 H	scala.collection.convert.JavaCollectionWrappers$JSetWrapper	1	16
 H	scala.collection.immutable.$colon$colon$	1	16
 H	scala.collection.immutable.ArraySeq$	1	16
 H	scala.collection.immutable.BitSet$	1	16
-H	scala.collection.immutable.BitSet$$$Lambda/0x00000800012db380	1	16
+H	scala.collection.immutable.BitSet$$$Lambda/0x000001fe012db380	1	16
 H	scala.collection.immutable.HashMap$	1	16
 H	scala.collection.immutable.HashSet$	1	16
 H	scala.collection.immutable.IndexedSeq$	1	16
 H	scala.collection.immutable.Iterable$	1	16
 H	scala.collection.immutable.LazyList$	1	16
-H	scala.collection.immutable.LazyList$$$Lambda/0x00000800010e34a8	1	16
+H	scala.collection.immutable.LazyList$$$Lambda/0x000001fe010e34a8	1	16
 H	scala.collection.immutable.LazyList$EmptyMarker$	1	16
 H	scala.collection.immutable.List$	1	16
 H	scala.collection.immutable.List$$anon$1	1	16
@@ -1517,7 +1519,7 @@ H	scala.collection.immutable.VectorInline$	1	16
 H	scala.collection.immutable.VectorStatics$	1	16
 H	scala.collection.immutable.WrappedString	1	16
 H	scala.collection.immutable.WrappedString$	1	16
-H	scala.collection.immutable.WrappedString$$$Lambda/0x000008000144f548	1	16
+H	scala.collection.immutable.WrappedString$$$Lambda/0x000001fe0144f548	1	16
 H	scala.collection.immutable.WrappedString$UnwrapOp$	1	16
 H	scala.collection.mutable.AnyRefMap$	1	16
 H	scala.collection.mutable.AnyRefMap$ExceptionDefault	1	16
@@ -1544,13 +1546,13 @@ H	scala.collection.mutable.WeakHashMap$	1	16
 H	scala.collection.package$$colon$plus$	1	16
 H	scala.collection.package$$plus$colon$	1	16
 H	scala.io.Codec$	1	16
-H	scala.io.Codec$$Lambda/0x000008000113df88	1	16
+H	scala.io.Codec$$Lambda/0x000001fe0113df88	1	16
 H	scala.jdk.CollectionConverters$	1	16
 H	scala.jdk.javaapi.CollectionConverters$	1	16
 H	scala.math.BigDecimal$	1	16
 H	scala.math.BigInt$	1	16
 H	scala.math.Equiv$	1	16
-H	scala.math.Equiv$$$Lambda/0x00000800012de318	1	16
+H	scala.math.Equiv$$$Lambda/0x000001fe012de318	1	16
 H	scala.math.Fractional$	1	16
 H	scala.math.Integral$	1	16
 H	scala.math.Numeric$	1	16
@@ -1584,57 +1586,57 @@ H	scala.reflect.NameTransformer$	1	16
 H	scala.reflect.NoManifest$	1	16
 H	scala.reflect.api.Exprs$Expr$	1	16
 H	scala.reflect.api.Printers$BooleanFlag$	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ec398	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ec768	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ecb38	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ecf08	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ed2d8	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ed6a8	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013eda78	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ede48	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ee218	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ee5e8	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ee9b8	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013eed88	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ef158	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ef528	1	16
-H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x00000800013ef8f8	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ec398	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ec768	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ecb38	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ecf08	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ed2d8	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ed6a8	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013eda78	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ede48	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ee218	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ee5e8	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ee9b8	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013eed88	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ef158	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ef528	1	16
+H	scala.reflect.api.TypeTags$TypeTag$$$Lambda/0x000001fe013ef8f8	1	16
 H	scala.reflect.internal.AnnotationInfos$AnnotationInfo$	1	16
-H	scala.reflect.internal.AnnotationInfos$AnnotationInfo$$Lambda/0x0000080001409810	1	16
+H	scala.reflect.internal.AnnotationInfos$AnnotationInfo$$Lambda/0x000001fe01409810	1	16
 H	scala.reflect.internal.Chars$	1	16
 H	scala.reflect.internal.ClassfileConstants$FlagTranslation$	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000008000129f878	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x00000800012a0a78	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x00000800012a0e48	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x00000800012a1da0	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x00000800013d2348	1	16
-H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x00000800013e1bd0	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe0129f878	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe012a0a78	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe012a0e48	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe012a1da0	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe013d2348	1	16
+H	scala.reflect.internal.Definitions$DefinitionsClass$$Lambda/0x000001fe013e1bd0	1	16
 H	scala.reflect.internal.Definitions$DefinitionsClass$VarArityClass$	1	16
 H	scala.reflect.internal.Depth$	1	16
 H	scala.reflect.internal.FatalError$	1	16
 H	scala.reflect.internal.JavaAccFlags$	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000008000128f290	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000008000129d700	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000008000129ded0	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x00000800013521f0	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x0000080001400698	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x0000080001400a68	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x0000080001400e38	1	16
-H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x00000800014015e0	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe0128f290	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe0129d700	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe0129ded0	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe013521f0	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe01400698	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe01400a68	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe01400e38	1	16
+H	scala.reflect.internal.Mirrors$RootsBase$$Lambda/0x000001fe014015e0	1	16
 H	scala.reflect.internal.MissingRequirementError$	1	16
 H	scala.reflect.internal.Mode$	1	16
 H	scala.reflect.internal.Names$TermName$	1	16
 H	scala.reflect.internal.Names$TypeName$	1	16
-H	scala.reflect.internal.Phase$$Lambda/0x000008000130e7b0	1	16
-H	scala.reflect.internal.Phase$$Lambda/0x000008000130eb80	1	16
-H	scala.reflect.internal.Positions$$Lambda/0x0000080001216be0	1	16
+H	scala.reflect.internal.Phase$$Lambda/0x000001fe0130e7b0	1	16
+H	scala.reflect.internal.Phase$$Lambda/0x000001fe0130eb80	1	16
+H	scala.reflect.internal.Positions$$Lambda/0x000001fe01217838	1	16
 H	scala.reflect.internal.Positions$$anon$1	1	16
 H	scala.reflect.internal.Precedence$	1	16
 H	scala.reflect.internal.ReificationSupport$ReificationSupportImpl$SyntacticBlock$	1	16
-H	scala.reflect.internal.ScopeStats$$Lambda/0x0000080001311918	1	16
+H	scala.reflect.internal.ScopeStats$$Lambda/0x000001fe01311918	1	16
 H	scala.reflect.internal.Scopes$LookupNotFound$	1	16
-H	scala.reflect.internal.Scopes$Scope$$Lambda/0x0000080001361c70	1	16
-H	scala.reflect.internal.Scopes$Scope$$Lambda/0x0000080001362040	1	16
+H	scala.reflect.internal.Scopes$Scope$$Lambda/0x000001fe01362010	1	16
+H	scala.reflect.internal.Scopes$Scope$$Lambda/0x000001fe013623e0	1	16
 H	scala.reflect.internal.StdAttachments$AutoApplicationAttachment$	1	16
 H	scala.reflect.internal.StdAttachments$BackquotedIdentifierAttachment$	1	16
 H	scala.reflect.internal.StdAttachments$FieldTypeInferred$	1	16
@@ -1652,20 +1654,20 @@ H	scala.reflect.internal.StdAttachments$SyntheticUnitAttachment$	1	16
 H	scala.reflect.internal.StdAttachments$UnnamedArg$	1	16
 H	scala.reflect.internal.StdAttachments$VirtualStringContext$	1	16
 H	scala.reflect.internal.SymbolTable$SimpleNameOrdering$	1	16
-H	scala.reflect.internal.SymbolTable$perRunCaches$$$Lambda/0x00000800013df418	1	16
-H	scala.reflect.internal.Symbols$$Lambda/0x00000800011e2288	1	16
-H	scala.reflect.internal.Symbols$$Lambda/0x00000800011e61e0	1	16
-H	scala.reflect.internal.Symbols$ClassSymbol$$Lambda/0x0000080001436db8	1	16
-H	scala.reflect.internal.Symbols$NoSymbol$$Lambda/0x0000080001432000	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000008000136e918	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000008000137ea08	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x00000800013834a8	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x0000080001383878	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x0000080001383c48	1	16
-H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x0000080001389450	1	16
+H	scala.reflect.internal.SymbolTable$perRunCaches$$$Lambda/0x000001fe013df418	1	16
+H	scala.reflect.internal.Symbols$$Lambda/0x000001fe011e3838	1	16
+H	scala.reflect.internal.Symbols$$Lambda/0x000001fe011e7790	1	16
+H	scala.reflect.internal.Symbols$ClassSymbol$$Lambda/0x000001fe01436db8	1	16
+H	scala.reflect.internal.Symbols$NoSymbol$$Lambda/0x000001fe01432000	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe0136ece8	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe0137ec08	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe013836b0	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe01383a80	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe01383e50	1	16
+H	scala.reflect.internal.Symbols$Symbol$$Lambda/0x000001fe01389450	1	16
 H	scala.reflect.internal.Symbols$TypeHistory$	1	16
-H	scala.reflect.internal.SymbolsStats$$Lambda/0x0000080001311630	1	16
-H	scala.reflect.internal.TreeGen$$Lambda/0x000008000132f3c0	1	16
+H	scala.reflect.internal.SymbolsStats$$Lambda/0x000001fe01311630	1	16
+H	scala.reflect.internal.TreeGen$$Lambda/0x000001fe0132f3c0	1	16
 H	scala.reflect.internal.TreeGen$Filter$	1	16
 H	scala.reflect.internal.TreeGen$ValEq$	1	16
 H	scala.reflect.internal.TreeGen$ValFrom$	1	16
@@ -1674,7 +1676,7 @@ H	scala.reflect.internal.TreeInfo$Applied$	1	16
 H	scala.reflect.internal.TreeInfo$DynamicApplicationNamed$$anonfun$$lessinit$greater$3	1	16
 H	scala.reflect.internal.TreeInfo$LiteralNameOrAdapted$	1	16
 H	scala.reflect.internal.TreeInfo$WildcardStarArg$	1	16
-H	scala.reflect.internal.Trees$$Lambda/0x00000800012032c0	1	16
+H	scala.reflect.internal.Trees$$Lambda/0x000001fe012046e0	1	16
 H	scala.reflect.internal.Trees$ClassDef$	1	16
 H	scala.reflect.internal.Trees$DefDef$	1	16
 H	scala.reflect.internal.Trees$MethodValue$	1	16
@@ -1682,25 +1684,25 @@ H	scala.reflect.internal.Trees$Modifiers$	1	16
 H	scala.reflect.internal.Trees$TypeDef$	1	16
 H	scala.reflect.internal.Trees$ValDef$	1	16
 H	scala.reflect.internal.Trees$ValOrDefDef$	1	16
-H	scala.reflect.internal.TreesStats$$Lambda/0x000008000130d880	1	16
-H	scala.reflect.internal.TreesStats$$Lambda/0x000008000130db68	1	16
+H	scala.reflect.internal.TreesStats$$Lambda/0x000001fe0130d880	1	16
+H	scala.reflect.internal.TreesStats$$Lambda/0x000001fe0130db68	1	16
 H	scala.reflect.internal.TypeDebugging$typeDebug$str$	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800011f4258	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800011f7910	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800011f8000	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800011f83d8	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800011f87b0	1	16
-H	scala.reflect.internal.Types$$Lambda/0x0000080001385f30	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800013cf348	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800013d1ba8	1	16
-H	scala.reflect.internal.Types$$Lambda/0x00000800013d1f78	1	16
-H	scala.reflect.internal.Types$$Lambda/0x000008000146e7e0	1	16
-H	scala.reflect.internal.Types$ClassInfoType$$Lambda/0x000008000143c9c0	1	16
-H	scala.reflect.internal.Types$ClassInfoType$$Lambda/0x000008000143df18	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe011f51b8	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe011f8ff8	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe011f93c8	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe011f97a0	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe011f9b78	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe01386138	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe013cf348	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe013d1ba8	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe013d1f78	1	16
+H	scala.reflect.internal.Types$$Lambda/0x000001fe0146e7e0	1	16
+H	scala.reflect.internal.Types$ClassInfoType$$Lambda/0x000001fe0143c9c0	1	16
+H	scala.reflect.internal.Types$ClassInfoType$$Lambda/0x000001fe0143df18	1	16
 H	scala.reflect.internal.Types$ConstantType$	1	16
 H	scala.reflect.internal.Types$ErrorType$	1	16
-H	scala.reflect.internal.Types$ExistentialType$$Lambda/0x00000800013b59d0	1	16
-H	scala.reflect.internal.Types$ExistentialType$$Lambda/0x00000800014085b8	1	16
+H	scala.reflect.internal.Types$ExistentialType$$Lambda/0x000001fe013b59d0	1	16
+H	scala.reflect.internal.Types$ExistentialType$$Lambda/0x000001fe014085b8	1	16
 H	scala.reflect.internal.Types$FoldableConstantType$	1	16
 H	scala.reflect.internal.Types$GenPolyType$	1	16
 H	scala.reflect.internal.Types$HasTypeMember$	1	16
@@ -1712,34 +1714,34 @@ H	scala.reflect.internal.Types$RefinedType$	1	16
 H	scala.reflect.internal.Types$SingleType$	1	16
 H	scala.reflect.internal.Types$SuperType$	1	16
 H	scala.reflect.internal.Types$ThisType$	1	16
-H	scala.reflect.internal.Types$Type$$Lambda/0x000008000142c7a8	1	16
+H	scala.reflect.internal.Types$Type$$Lambda/0x000001fe0142c7a8	1	16
 H	scala.reflect.internal.Types$TypeBounds$	1	16
-H	scala.reflect.internal.Types$TypeBounds$$Lambda/0x0000080001443200	1	16
+H	scala.reflect.internal.Types$TypeBounds$$Lambda/0x000001fe01443200	1	16
 H	scala.reflect.internal.Types$TypeRef$	1	16
-H	scala.reflect.internal.Types$TypeRef$$Lambda/0x0000080001371330	1	16
-H	scala.reflect.internal.Types$TypeRef$$Lambda/0x0000080001432ff8	1	16
+H	scala.reflect.internal.Types$TypeRef$$Lambda/0x000001fe01371708	1	16
+H	scala.reflect.internal.Types$TypeRef$$Lambda/0x000001fe01432ff8	1	16
 H	scala.reflect.internal.Types$TypeVar$	1	16
-H	scala.reflect.internal.TypesStats$$Lambda/0x000008000130f8f8	1	16
+H	scala.reflect.internal.TypesStats$$Lambda/0x000001fe0130f8f8	1	16
 H	scala.reflect.internal.Variance$	1	16
-H	scala.reflect.internal.Variances$$Lambda/0x00000800011fbc30	1	16
-H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x00000800011fc100	1	16
-H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x00000800013beaf0	1	16
-H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x00000800013d6f88	1	16
+H	scala.reflect.internal.Variances$$Lambda/0x000001fe011fcff8	1	16
+H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x000001fe011fd4c8	1	16
+H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x000001fe013beaf0	1	16
+H	scala.reflect.internal.Variances$varianceInType$$Lambda/0x000001fe013d6f88	1	16
 H	scala.reflect.internal.settings.MutableSettings$	1	16
 H	scala.reflect.internal.settings.MutableSettings$SettingsOps$	1	16
-H	scala.reflect.internal.tpe.FindMembers$$Lambda/0x00000800011ebb28	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x00000800011ea448	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x00000800013ca000	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x00000800013d4338	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x0000080001453a90	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x0000080001471a88	1	16
-H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x0000080001471e58	1	16
-H	scala.reflect.internal.tpe.TypeComparers$$Lambda/0x000008000140d870	1	16
-H	scala.reflect.internal.tpe.TypeConstraints$$Lambda/0x00000800011eb2e0	1	16
-H	scala.reflect.internal.tpe.TypeConstraints$$Lambda/0x00000800013b5bf8	1	16
+H	scala.reflect.internal.tpe.FindMembers$$Lambda/0x000001fe011f0848	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe011e9000	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe013ca000	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe013d4338	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe01453a90	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe01471a88	1	16
+H	scala.reflect.internal.tpe.GlbLubs$$Lambda/0x000001fe01471e58	1	16
+H	scala.reflect.internal.tpe.TypeComparers$$Lambda/0x000001fe0140d870	1	16
+H	scala.reflect.internal.tpe.TypeConstraints$$Lambda/0x000001fe011f0000	1	16
+H	scala.reflect.internal.tpe.TypeConstraints$$Lambda/0x000001fe013b5bf8	1	16
 H	scala.reflect.internal.tpe.TypeConstraints$TypeConstraint$	1	16
 H	scala.reflect.internal.tpe.TypeMaps$ApproximateDependentMap$	1	16
-H	scala.reflect.internal.tpe.TypeMaps$InstantiateDependentMap$$Lambda/0x00000800014567b0	1	16
+H	scala.reflect.internal.tpe.TypeMaps$InstantiateDependentMap$$Lambda/0x000001fe014567b0	1	16
 H	scala.reflect.internal.tpe.TypeMaps$SubstSymMap$	1	16
 H	scala.reflect.internal.tpe.TypeMaps$abstractTypesToBounds$	1	16
 H	scala.reflect.internal.tpe.TypeMaps$dropIllegalStarTypes$	1	16
@@ -1748,13 +1750,13 @@ H	scala.reflect.internal.tpe.TypeMaps$identityTypeMap$	1	16
 H	scala.reflect.internal.tpe.TypeMaps$normalizeAliases$	1	16
 H	scala.reflect.internal.tpe.TypeMaps$typeVarToOriginMap$	1	16
 H	scala.reflect.internal.transform.Erasure$GenericArray$	1	16
-H	scala.reflect.internal.transform.Transforms$$Lambda/0x00000800011fcd40	1	16
-H	scala.reflect.internal.transform.Transforms$$Lambda/0x00000800011fd2e0	1	16
-H	scala.reflect.internal.transform.Transforms$$Lambda/0x00000800011fd7e8	1	16
+H	scala.reflect.internal.transform.Transforms$$Lambda/0x000001fe011fe108	1	16
+H	scala.reflect.internal.transform.Transforms$$Lambda/0x000001fe011fe6a8	1	16
+H	scala.reflect.internal.transform.Transforms$$Lambda/0x000001fe011febb0	1	16
 H	scala.reflect.internal.util.CodeAction$	1	16
 H	scala.reflect.internal.util.FakePos$	1	16
 H	scala.reflect.internal.util.FreshNameCreator$	1	16
-H	scala.reflect.internal.util.FreshNameCreator$$Lambda/0x000008000132f178	1	16
+H	scala.reflect.internal.util.FreshNameCreator$$Lambda/0x000001fe0132f178	1	16
 H	scala.reflect.internal.util.HashSet$	1	16
 H	scala.reflect.internal.util.JavaClearable$	1	16
 H	scala.reflect.internal.util.NoPosition$	1	16
@@ -1776,18 +1778,18 @@ H	scala.reflect.io.ZipArchive$	1	16
 H	scala.reflect.macros.Attachments$	1	16
 H	scala.reflect.macros.Attachments$$anon$1	1	16
 H	scala.reflect.macros.TypecheckException$	1	16
-H	scala.reflect.macros.contexts.Typers$$Lambda/0x00000800014603d8	1	16
+H	scala.reflect.macros.contexts.Typers$$Lambda/0x000001fe014603d8	1	16
 H	scala.reflect.package$	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x00000800014649a8	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x0000080001464d78	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x0000080001465038	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x00000800014652f8	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x0000080001469218	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x00000800014695e8	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x00000800014699b8	1	16
-H	scala.reflect.reify.Reifier$$Lambda/0x000008000146a160	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe014649a8	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe01464d78	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe01465038	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe014652f8	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe01469218	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe014695e8	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe014699b8	1	16
+H	scala.reflect.reify.Reifier$$Lambda/0x000001fe0146a160	1	16
 H	scala.reflect.reify.package$	1	16
-H	scala.reflect.reify.utils.SymbolTables$SymbolTable$$Lambda/0x0000080001467200	1	16
+H	scala.reflect.reify.utils.SymbolTables$SymbolTable$$Lambda/0x000001fe01467200	1	16
 H	scala.runtime.BoxedUnit	1	16
 H	scala.runtime.ClassValueCompat$	1	16
 H	scala.runtime.ObjectRef	1	16
@@ -1798,18 +1800,18 @@ H	scala.runtime.ScalaRunTime$	1	16
 H	scala.sys.package$	1	16
 H	scala.sys.process.Parser$	1	16
 H	scala.tools.nsc.CloseableRegistry	1	16
-H	scala.tools.nsc.CompilationUnits$$anon$1$$Lambda/0x000008000145a298	1	16
+H	scala.tools.nsc.CompilationUnits$$anon$1$$Lambda/0x000001fe0145a298	1	16
 H	scala.tools.nsc.DependencyGraph$	1	16
-H	scala.tools.nsc.DependencyGraph$$$Lambda/0x00000800012ec7c0	1	16
-H	scala.tools.nsc.DependencyGraph$$$Lambda/0x00000800012ecb90	1	16
-H	scala.tools.nsc.DependencyGraph$$$Lambda/0x00000800012ed1b8	1	16
-H	scala.tools.nsc.DependencyGraph$$Lambda/0x00000800012ff268	1	16
-H	scala.tools.nsc.DependencyGraph$$Lambda/0x0000080001301438	1	16
-H	scala.tools.nsc.DependencyGraph$$Lambda/0x0000080001301808	1	16
-H	scala.tools.nsc.Global$Run$$Lambda/0x00000800012fd870	1	16
-H	scala.tools.nsc.Global$Run$$Lambda/0x0000080001308268	1	16
-H	scala.tools.nsc.Global$Run$$Lambda/0x0000080001309000	1	16
-H	scala.tools.nsc.Global$Run$$Lambda/0x0000080001309d98	1	16
+H	scala.tools.nsc.DependencyGraph$$$Lambda/0x000001fe012ec7c0	1	16
+H	scala.tools.nsc.DependencyGraph$$$Lambda/0x000001fe012ecb90	1	16
+H	scala.tools.nsc.DependencyGraph$$$Lambda/0x000001fe012ed1b8	1	16
+H	scala.tools.nsc.DependencyGraph$$Lambda/0x000001fe012ff268	1	16
+H	scala.tools.nsc.DependencyGraph$$Lambda/0x000001fe01301438	1	16
+H	scala.tools.nsc.DependencyGraph$$Lambda/0x000001fe01301808	1	16
+H	scala.tools.nsc.Global$Run$$Lambda/0x000001fe012fd870	1	16
+H	scala.tools.nsc.Global$Run$$Lambda/0x000001fe01308268	1	16
+H	scala.tools.nsc.Global$Run$$Lambda/0x000001fe01309000	1	16
+H	scala.tools.nsc.Global$Run$$Lambda/0x000001fe01309d98	1	16
 H	scala.tools.nsc.Properties$	1	16
 H	scala.tools.nsc.Reporting$Action$Error$	1	16
 H	scala.tools.nsc.Reporting$Action$Info$	1	16
@@ -1821,217 +1823,217 @@ H	scala.tools.nsc.Reporting$Action$WarningSummary$	1	16
 H	scala.tools.nsc.Reporting$Action$WarningVerbose$	1	16
 H	scala.tools.nsc.Reporting$MessageFilter$Any$	1	16
 H	scala.tools.nsc.Reporting$MessageFilter$Category$	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x00000800013352d0	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x0000080001420fb8	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x0000080001445650	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x00000800014463d0	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x0000080001446690	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000008000145eb58	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x0000080001479d18	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x0000080001478dd0	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x00000800014791a0	1	16
-H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x0000080001479570	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe013352d0	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe01420fb8	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe01445650	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe014463d0	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe01446690	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe0145eb58	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$$Lambda/0x000001fe01479d18	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x000001fe01478dd0	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x000001fe014791a0	1	16
+H	scala.tools.nsc.Reporting$PerRunReporting$quickfix$$$Lambda/0x000001fe01479570	1	16
 H	scala.tools.nsc.Reporting$Suppression$	1	16
 H	scala.tools.nsc.Reporting$Version$	1	16
 H	scala.tools.nsc.Reporting$WConf	1	16
 H	scala.tools.nsc.Reporting$WConf$	1	16
-H	scala.tools.nsc.Reporting$WConf$$$Lambda/0x0000080001429b40	1	16
+H	scala.tools.nsc.Reporting$WConf$$$Lambda/0x000001fe01429b40	1	16
 H	scala.tools.nsc.Reporting$WarningCategory$	1	16
-H	scala.tools.nsc.Reporting$WarningCategory$$$Lambda/0x00000800010f5cd0	1	16
-H	scala.tools.nsc.Reporting$WarningCategory$$$Lambda/0x00000800010f62e0	1	16
+H	scala.tools.nsc.Reporting$WarningCategory$$$Lambda/0x000001fe010f5cd0	1	16
+H	scala.tools.nsc.Reporting$WarningCategory$$$Lambda/0x000001fe010f62e0	1	16
 H	scala.tools.nsc.ast.TreeBrowsers$SwingBrowser	1	16
 H	scala.tools.nsc.ast.TreeDSL$CODE$LIT$	1	16
 H	scala.tools.nsc.ast.TreeInfo$ArrayInstantiation$	1	16
 H	scala.tools.nsc.ast.parser.Cbuf$	1	16
 H	scala.tools.nsc.ast.parser.Cbuf$StringBuilderOps$	1	16
-H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000008000131b4f8	1	16
-H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000008000134e6c0	1	16
-H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000008000134e980	1	16
-H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000008000134ec40	1	16
-H	scala.tools.nsc.ast.parser.ScannersCommon$$Lambda/0x00000800012a64a8	1	16
-H	scala.tools.nsc.ast.parser.ScannersCommon$$Lambda/0x00000800012a72e8	1	16
+H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000001fe0131b4f8	1	16
+H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000001fe0134e6c0	1	16
+H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000001fe0134e980	1	16
+H	scala.tools.nsc.ast.parser.Parsers$Parser$$Lambda/0x000001fe0134ec40	1	16
+H	scala.tools.nsc.ast.parser.ScannersCommon$$Lambda/0x000001fe012a64a8	1	16
+H	scala.tools.nsc.ast.parser.ScannersCommon$$Lambda/0x000001fe012a72e8	1	16
 H	scala.tools.nsc.ast.parser.xml.Utility$	1	16
-H	scala.tools.nsc.backend.jvm.BTypesFromSymbols$$Lambda/0x00000800012d4480	1	16
+H	scala.tools.nsc.backend.jvm.BTypesFromSymbols$$Lambda/0x000001fe012d4480	1	16
 H	scala.tools.nsc.backend.jvm.PostProcessor$$anon$8	1	16
 H	scala.tools.nsc.backend.jvm.opt.FifoCache$	1	16
-H	scala.tools.nsc.backend.jvm.opt.FifoCache$ConcFifoCache$$Lambda/0x000008000147b718	1	16
-H	scala.tools.nsc.backend.jvm.opt.Inliner$$Lambda/0x00000800012e4618	1	16
+H	scala.tools.nsc.backend.jvm.opt.FifoCache$ConcFifoCache$$Lambda/0x000001fe0147b718	1	16
+H	scala.tools.nsc.backend.jvm.opt.Inliner$$Lambda/0x000001fe012e4618	1	16
 H	scala.tools.nsc.backend.jvm.opt.Inliner$callsiteOrdering$	1	16
 H	scala.tools.nsc.classpath.ClassPathEntries$	1	16
 H	scala.tools.nsc.classpath.ClassPathFactory$	1	16
 H	scala.tools.nsc.classpath.DirectorySourcePath	1	16
-H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x0000080001269c00	1	16
-H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000008000126b740	1	16
-H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000008000126bb10	1	16
-H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x0000080001270c20	1	16
+H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000001fe01269c00	1	16
+H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000001fe0126b740	1	16
+H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000001fe0126bb10	1	16
+H	scala.tools.nsc.classpath.FileBasedCache$$Lambda/0x000001fe01270c20	1	16
 H	scala.tools.nsc.classpath.FileUtils$	1	16
 H	scala.tools.nsc.classpath.FileUtils$AbstractFileOps$	1	16
 H	scala.tools.nsc.classpath.FileUtils$FileOps$	1	16
-H	scala.tools.nsc.classpath.JFileDirectoryLookup$$Lambda/0x000008000127fc80	1	16
+H	scala.tools.nsc.classpath.JFileDirectoryLookup$$Lambda/0x000001fe0127fc80	1	16
 H	scala.tools.nsc.classpath.JrtClassPath$	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x00000800010bdb58	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x00000800010c7268	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000008000127d468	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x0000080001281000	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x0000080001281908	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000008000128f660	1	16
-H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x00000800012a3558	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe010bf530	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe012672b0	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe0127d468	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe01281000	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe01281908	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe0128f660	1	16
+H	scala.tools.nsc.classpath.JrtClassPath$$Lambda/0x000001fe012a3558	1	16
 H	scala.tools.nsc.classpath.PackageNameUtils$	1	16
 H	scala.tools.nsc.classpath.ZipAndJarClassPathFactory$	1	16
 H	scala.tools.nsc.io.Jar$	1	16
 H	scala.tools.nsc.io.package$	1	16
 H	scala.tools.nsc.package$	1	16
-H	scala.tools.nsc.package$$$Lambda/0x0000080001152180	1	16
+H	scala.tools.nsc.package$$$Lambda/0x000001fe01152180	1	16
 H	scala.tools.nsc.plugins.Plugin$	1	16
-H	scala.tools.nsc.plugins.Plugins$$Lambda/0x00000800012ea438	1	16
+H	scala.tools.nsc.plugins.Plugins$$Lambda/0x000001fe012ea438	1	16
 H	scala.tools.nsc.profile.NoOpProfiler$	1	16
 H	scala.tools.nsc.profile.Profiler$	1	16
-H	scala.tools.nsc.settings.AbsSettings$$Lambda/0x00000800011674c0	1	16
+H	scala.tools.nsc.settings.AbsSettings$$Lambda/0x000001fe01162000	1	16
 H	scala.tools.nsc.settings.AnyScalaVersion$	1	16
 H	scala.tools.nsc.settings.DefaultPathFactory$	1	16
 H	scala.tools.nsc.settings.Final$	1	16
-H	scala.tools.nsc.settings.MutableSettings$ChoiceSetting$$Lambda/0x00000800010cdf28	1	16
-H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x000008000113eb00	1	16
-H	scala.tools.nsc.settings.MutableSettings$PhasesSetting$$Lambda/0x0000080001166730	1	16
-H	scala.tools.nsc.settings.MutableSettings$Setting$$Lambda/0x000008000109c2a0	1	16
+H	scala.tools.nsc.settings.MutableSettings$ChoiceSetting$$Lambda/0x000001fe010c9f28	1	16
+H	scala.tools.nsc.settings.MutableSettings$EnableSettings$$Lambda/0x000001fe0113eb00	1	16
+H	scala.tools.nsc.settings.MutableSettings$PhasesSetting$$Lambda/0x000001fe01167108	1	16
+H	scala.tools.nsc.settings.MutableSettings$Setting$$Lambda/0x000001fe0109c330	1	16
 H	scala.tools.nsc.settings.NoScalaVersion$	1	16
 H	scala.tools.nsc.settings.Optionlike$	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001138cd8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x00000800011390b0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000113e358	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000113e728	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000113eed8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000113f2a8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000113f678	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x00000800011531f0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001154b10	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001154ee8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x00000800011552c0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001155698	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001155a68	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001155e40	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001157380	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001157750	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001157b20	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001158000	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x00000800011583d8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x00000800011587b0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001158b88	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001158f60	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001159338	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001159710	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001159ae8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x0000080001159ec0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115a290	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115a660	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115aa38	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115ae10	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115b1e0	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115b5b8	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115b990	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115bd60	1	16
-H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000008000115c138	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01138cd8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe011390b0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0113e358	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0113e728	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0113eed8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0113f2a8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0113f678	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe011531f0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01154b10	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01154ee8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe011552c0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01155698	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01155a68	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01155e40	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01157380	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01157750	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01157b20	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01158000	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe011583d8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe011587b0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01158b88	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01158f60	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01159338	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01159710	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01159ae8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe01159ec0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115a290	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115a660	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115aa38	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115ae10	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115b1e0	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115b5b8	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115b990	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115bd60	1	16
+H	scala.tools.nsc.settings.ScalaSettings$$Lambda/0x000001fe0115c138	1	16
 H	scala.tools.nsc.settings.ScalaVersion$	1	16
 H	scala.tools.nsc.settings.StandardScalaSettings$	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010c66a0	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010ce2f8	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010f1030	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010f1408	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010f17e0	1	16
-H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x00000800010f1bb8	1	16
-H	scala.tools.nsc.settings.Warnings$$Lambda/0x0000080001110eb8	1	16
-H	scala.tools.nsc.settings.Warnings$$Lambda/0x0000080001125660	1	16
-H	scala.tools.nsc.settings.Warnings$$Lambda/0x00000800011382c0	1	16
-H	scala.tools.nsc.symtab.SymbolLoaders$$Lambda/0x0000080001295ad0	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010c66a0	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010ca2f8	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010f1030	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010f1408	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010f17e0	1	16
+H	scala.tools.nsc.settings.StandardScalaSettings$$Lambda/0x000001fe010f1bb8	1	16
+H	scala.tools.nsc.settings.Warnings$$Lambda/0x000001fe01110eb8	1	16
+H	scala.tools.nsc.settings.Warnings$$Lambda/0x000001fe01125660	1	16
+H	scala.tools.nsc.settings.Warnings$$Lambda/0x000001fe011382c0	1	16
+H	scala.tools.nsc.symtab.SymbolLoaders$$Lambda/0x000001fe01295ad0	1	16
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$	1	16
-H	scala.tools.nsc.symtab.classfile.ClassfileParser$$Lambda/0x000008000129fc48	1	16
-H	scala.tools.nsc.symtab.classfile.ClassfileParser$$Lambda/0x00000800013ac800	1	16
+H	scala.tools.nsc.symtab.classfile.ClassfileParser$$Lambda/0x000001fe0129fc48	1	16
+H	scala.tools.nsc.symtab.classfile.ClassfileParser$$Lambda/0x000001fe013ac800	1	16
 H	scala.tools.nsc.symtab.classfile.ClassfileParser$GoodTimes$	1	16
 H	scala.tools.nsc.symtab.package$	1	16
-H	scala.tools.nsc.transform.SpecializeTypes$$Lambda/0x00000800012bd390	1	16
-H	scala.tools.nsc.transform.async.TransformUtils$$Lambda/0x00000800012c5108	1	16
-H	scala.tools.nsc.transform.patmat.PatternMatchingStats$$Lambda/0x0000080001312190	1	16
+H	scala.tools.nsc.transform.SpecializeTypes$$Lambda/0x000001fe012bd390	1	16
+H	scala.tools.nsc.transform.async.TransformUtils$$Lambda/0x000001fe012c5310	1	16
+H	scala.tools.nsc.transform.patmat.PatternMatchingStats$$Lambda/0x000001fe01312190	1	16
 H	scala.tools.nsc.typechecker.Checkable$CheckabilityChecker$	1	16
 H	scala.tools.nsc.typechecker.ConstantFolder$ConstantTerm$	1	16
 H	scala.tools.nsc.typechecker.ConstantFolder$FoldableTerm$	1	16
-H	scala.tools.nsc.typechecker.ContextErrors$$Lambda/0x00000800013ba000	1	16
-H	scala.tools.nsc.typechecker.ContextErrors$$Lambda/0x00000800013bf8d0	1	16
+H	scala.tools.nsc.typechecker.ContextErrors$$Lambda/0x000001fe013ba000	1	16
+H	scala.tools.nsc.typechecker.ContextErrors$$Lambda/0x000001fe013bf8d0	1	16
 H	scala.tools.nsc.typechecker.ContextErrors$ErrorUtils$	1	16
 H	scala.tools.nsc.typechecker.ContextErrors$NormalTypeError$	1	16
 H	scala.tools.nsc.typechecker.ContextErrors$TypeErrorWrapper$	1	16
-H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x000008000142e148	1	16
-H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x00000800014335d8	1	16
-H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x00000800014383d8	1	16
+H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x000001fe0142e148	1	16
+H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x000001fe014335d8	1	16
+H	scala.tools.nsc.typechecker.ContextErrors$TyperContextErrors$TyperErrorGen$$$Lambda/0x000001fe014383d8	1	16
 H	scala.tools.nsc.typechecker.ContextMode$	1	16
 H	scala.tools.nsc.typechecker.Contexts$BufferingReporter$	1	16
 H	scala.tools.nsc.typechecker.Contexts$Context$	1	16
-H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x0000080001380e08	1	16
-H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x000008000139c0b0	1	16
-H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x0000080001458000	1	16
+H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x000001fe01381010	1	16
+H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x000001fe0139c378	1	16
+H	scala.tools.nsc.typechecker.Contexts$Context$$Lambda/0x000001fe01458000	1	16
 H	scala.tools.nsc.typechecker.Contexts$ContextReporter$	1	16
 H	scala.tools.nsc.typechecker.Contexts$ImmediateReporter$	1	16
-H	scala.tools.nsc.typechecker.Contexts$ImportInfo$$Lambda/0x0000080001449060	1	16
+H	scala.tools.nsc.typechecker.Contexts$ImportInfo$$Lambda/0x000001fe01449060	1	16
 H	scala.tools.nsc.typechecker.Implicits$ImplicitNotFoundMsg$$anonfun$$lessinit$greater$1	1	16
-H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$$Lambda/0x00000800013b9990	1	16
-H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$$Lambda/0x00000800013bae50	1	16
-H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$ImplicitComputation$$Lambda/0x00000800013dcb60	1	16
-H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$ImplicitComputation$$Lambda/0x00000800013fd188	1	16
-H	scala.tools.nsc.typechecker.Implicits$Message$$Lambda/0x000008000145d668	1	16
+H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$$Lambda/0x000001fe013b9990	1	16
+H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$$Lambda/0x000001fe013bae50	1	16
+H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$ImplicitComputation$$Lambda/0x000001fe013dcb60	1	16
+H	scala.tools.nsc.typechecker.Implicits$ImplicitSearch$ImplicitComputation$$Lambda/0x000001fe013fd188	1	16
+H	scala.tools.nsc.typechecker.Implicits$Message$$Lambda/0x000001fe0145d668	1	16
 H	scala.tools.nsc.typechecker.Implicits$NoShadower$	1	16
 H	scala.tools.nsc.typechecker.Implicits$OpenImplicit$	1	16
 H	scala.tools.nsc.typechecker.Implicits$SearchResult$	1	16
-H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x00000800013a9400	1	16
-H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x0000080001432c28	1	16
-H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x000008000144d000	1	16
-H	scala.tools.nsc.typechecker.Macros$MacroExpander$$Lambda/0x00000800013e72f0	1	16
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x0000080001388c00	1	16
-H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x0000080001448c90	1	16
-H	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter$$Lambda/0x0000080001367c30	1	16
-H	scala.tools.nsc.typechecker.Namers$TypeTreeSubstituter$$Lambda/0x00000800013c2850	1	16
-H	scala.tools.nsc.typechecker.NamesDefaults$$Lambda/0x0000080001409be0	1	16
+H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x000001fe013a9400	1	16
+H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x000001fe01432c28	1	16
+H	scala.tools.nsc.typechecker.Infer$Inferencer$$Lambda/0x000001fe0144d000	1	16
+H	scala.tools.nsc.typechecker.Macros$MacroExpander$$Lambda/0x000001fe013e72f0	1	16
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe01390000	1	16
+H	scala.tools.nsc.typechecker.Namers$Namer$$Lambda/0x000001fe01448c90	1	16
+H	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter$$Lambda/0x000001fe01368000	1	16
+H	scala.tools.nsc.typechecker.Namers$TypeTreeSubstituter$$Lambda/0x000001fe013c2850	1	16
+H	scala.tools.nsc.typechecker.NamesDefaults$$Lambda/0x000001fe01409be0	1	16
 H	scala.tools.nsc.typechecker.NamesDefaults$CaseApplyDefaultGetters$	1	16
 H	scala.tools.nsc.typechecker.StdAttachments$SuppressMacroExpansionAttachment$	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x00000800013843f0	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x0000080001384f70	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x0000080001396760	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x0000080001396b30	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x0000080001471028	1	16
-H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x00000800014712e8	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x00000800014109c8	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x0000080001411170	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x0000080001413588	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x0000080001413958	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x00000800014347b0	1	16
-H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x0000080001434a70	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe013845f8	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe01385178	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe01396bd0	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe01396fa0	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe01471028	1	16
+H	scala.tools.nsc.typechecker.SyntheticMethods$$Lambda/0x000001fe014712e8	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe014109c8	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe01411170	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe01413588	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe01413958	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe014347b0	1	16
+H	scala.tools.nsc.typechecker.TypeDiagnostics$$Lambda/0x000001fe01434a70	1	16
 H	scala.tools.nsc.typechecker.TypeDiagnostics$DealiasedType$	1	16
 H	scala.tools.nsc.typechecker.TypeDiagnostics$checkDead$	1	16
-H	scala.tools.nsc.typechecker.Typers$$Lambda/0x000008000139f900	1	16
-H	scala.tools.nsc.typechecker.Typers$$Lambda/0x0000080001475000	1	16
-H	scala.tools.nsc.typechecker.Typers$$Lambda/0x00000800014755b0	1	16
-H	scala.tools.nsc.typechecker.Typers$$Lambda/0x0000080001475870	1	16
+H	scala.tools.nsc.typechecker.Typers$$Lambda/0x000001fe0139fbc8	1	16
+H	scala.tools.nsc.typechecker.Typers$$Lambda/0x000001fe01475000	1	16
+H	scala.tools.nsc.typechecker.Typers$$Lambda/0x000001fe014755b0	1	16
+H	scala.tools.nsc.typechecker.Typers$$Lambda/0x000001fe01475870	1	16
 H	scala.tools.nsc.typechecker.Typers$SilentTypeError$	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000137b140	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001382070	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000138f530	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000139b350	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000139bce0	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800013aee48	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800013c19f0	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800013c35b8	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800013d7748	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800013e6480	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000140af88	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000008000140b358	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001434f60	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001435330	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001439220	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001444810	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001445280	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x0000080001456b80	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x00000800014716b8	1	16
-H	scala.tools.nsc.typechecker.Typers$Typer$NonCyclicStack$$Lambda/0x00000800013a9140	1	16
-H	scala.tools.nsc.typechecker.TypersStats$$Lambda/0x0000080001311c00	1	16
-H	scala.tools.nsc.typechecker.TypersStats$$Lambda/0x0000080001311ec8	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0137b140	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01382278	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0138f530	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0139b618	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0139bfa8	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe013aee48	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe013c19f0	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe013c35b8	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe013d7748	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe013e6480	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0140af88	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe0140b358	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01434f60	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01435330	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01439220	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01444810	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01445280	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe01456b80	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$$Lambda/0x000001fe014716b8	1	16
+H	scala.tools.nsc.typechecker.Typers$Typer$NonCyclicStack$$Lambda/0x000001fe013a9140	1	16
+H	scala.tools.nsc.typechecker.TypersStats$$Lambda/0x000001fe01311c00	1	16
+H	scala.tools.nsc.typechecker.TypersStats$$Lambda/0x000001fe01311ec8	1	16
 H	scala.tools.nsc.typechecker.Unapplies$ApplyAccess$	1	16
 H	scala.tools.nsc.typechecker.Unapplies$HasUnapply$	1	16
 H	scala.tools.nsc.typechecker.splain.FormatCache$	1	16
@@ -2040,9 +2042,9 @@ H	scala.tools.nsc.util.EditDistance$	1	16
 H	scala.tools.nsc.util.SimpleTracer$	1	16
 H	scala.tools.nsc.util.StringUtil$	1	16
 H	scala.tools.nsc.util.package$	1	16
-H	scala.tools.reflect.FastTrack$$Lambda/0x00000800013df150	1	16
+H	scala.tools.reflect.FastTrack$$Lambda/0x000001fe013df150	1	16
 H	scala.tools.reflect.FormatInterpolator$	1	16
-H	scala.tools.reflect.FormatInterpolator$$Lambda/0x000008000145abf8	1	16
+H	scala.tools.reflect.FormatInterpolator$$Lambda/0x000001fe0145abf8	1	16
 H	scala.tools.reflect.FormatInterpolator$boolean$u0020whimsy$	1	16
 H	scala.tools.reflect.FormatInterpolator$enumlike$	1	16
 H	scala.tools.reflect.FormatInterpolator$match$u0020game$	1	16
@@ -2053,27 +2055,27 @@ H	scala.util.ChainingOps$	1	16
 H	scala.util.Either$	1	16
 H	scala.util.Left$	1	16
 H	scala.util.Properties$	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010a11a0	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010a1728	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010a19e8	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010a1ca8	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010c63e0	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x00000800010d08e0	1	16
-H	scala.util.PropertiesTrait$$Lambda/0x0000080001442890	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010a11a0	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010a1728	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010a19e8	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010a1ca8	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010c63e0	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe010d0628	1	16
+H	scala.util.PropertiesTrait$$Lambda/0x000001fe01442890	1	16
 H	scala.util.Right$	1	16
 H	scala.util.Sorting$	1	16
 H	scala.util.control.Exception$	1	16
-H	scala.util.control.Exception$$$Lambda/0x0000080001411750	1	16
-H	scala.util.control.Exception$$$Lambda/0x0000080001411b20	1	16
+H	scala.util.control.Exception$$$Lambda/0x000001fe01411750	1	16
+H	scala.util.control.Exception$$$Lambda/0x000001fe01411b20	1	16
 H	scala.util.control.Exception$Catch$	1	16
-H	scala.util.control.Exception$Catch$$$Lambda/0x0000080001412978	1	16
+H	scala.util.control.Exception$Catch$$$Lambda/0x000001fe01412978	1	16
 H	scala.util.hashing.Hashing$	1	16
 H	scala.util.hashing.MurmurHash3$	1	16
 H	scala.util.matching.Regex$	1	16
 H	scala.util.matching.Regex$Groups$	1	16
 H	scala.util.package$chaining$	1	16
 H	sun.management.ClassLoadingImpl	1	16
-H	sun.management.ManagementFactoryHelper$$Lambda/0x00000800014b6288	1	16
+H	sun.management.ManagementFactoryHelper$$Lambda/0x000001fe014b68e0	1	16
 H	sun.net.www.protocol.file.Handler	1	16
 H	sun.net.www.protocol.jar.Handler	1	16
 H	sun.net.www.protocol.jar.JarFileFactory	1	16
@@ -2090,3 +2092,805 @@ H	sun.reflect.generics.tree.VoidDescriptor	1	16
 H	sun.security.provider.NativePRNG	1	16
 H	sun.util.calendar.Gregorian	1	16
 H	sun.util.logging.internal.LoggingProviderImpl	1	16
+N	nameTableSize	594751
+S	scala.reflect.internal.Types$ObjectTpeJavaRef	1
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.trivial	byte	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	0	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.internal.Types$UniqueType.hashCode	int	1	
+F	scala.reflect.internal.Types$ObjectTpeJavaRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Symbols$TermSymbol	166168
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$TermSymbol._referenced	scala.reflect.internal.Symbols$Symbol	206	NoSymbol=165962
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	166168	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	166168	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	161991	NoSymbol=4177
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	156540	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.id	int	166168	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	164258	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	888	NoSymbol=165280
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	166168	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	2171	Nil=163997
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	246	
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	159288	NoPosition=6880
+F	scala.reflect.internal.Symbols$TermSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	166168	
+S	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	112
+F	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter.$outer	scala.tools.nsc.typechecker.Namers$Namer	112	
+F	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleterBase.tree	scala.reflect.internal.Trees$Tree	112	
+F	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleter.$outer	scala.tools.nsc.typechecker.Analyzer	112	
+F	scala.tools.nsc.typechecker.Namers$Namer$ModuleClassTypeCompleter	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	112	
+S	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	66894
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.maxDepth	int	41889	
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.scala$reflect$internal$BaseTypeSeqs$$parents	scala.collection.immutable.List	65177	Nil=1717
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.scala$reflect$internal$BaseTypeSeqs$$elems	[Lscala.reflect.internal.Types$Type;	66894	
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.typeSymbols	[I	66894	
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.pending	scala.collection.mutable.BitSet	66894	
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.bitmap$0	boolean	41889	
+F	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.$outer	scala.reflect.internal.SymbolTable	66894	
+S	scala.reflect.internal.Types$ClassInfoType	6413
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.enterRefs$module	scala.reflect.internal.Types$ClassInfoType$enterRefs$	874	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.parents	scala.collection.immutable.List	5810	Nil=603
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.decls	scala.reflect.internal.Scopes$Scope	6413	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.typeSymbol	scala.reflect.internal.Symbols$Symbol	6413	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.refs	[Lscala.collection.immutable.Map;	874	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.state	int	874	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$CompoundType.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	5611	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$CompoundType.baseTypeSeqPeriod	int	5611	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$CompoundType.baseClassesCache	scala.collection.immutable.List	5748	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$CompoundType.baseClassesPeriod	int	5748	
+F	scala.reflect.internal.Types$ClassInfoType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	6413	
+S	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	11935
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter.name	scala.reflect.internal.Names$Name	11935	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter.jflags	int	11935	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter.descriptor	java.lang.String	11935	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$JavaTypeCompleter.constant	scala.reflect.internal.Constants$Constant	1102	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$JavaTypeCompleter.sig	java.lang.String	1276	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$JavaTypeCompleter.paramNames	scala.tools.nsc.symtab.classfile.ClassfileParser$ParamNames	306	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$JavaTypeCompleter.exceptions	scala.collection.immutable.List	1122	Nil=10813
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.tools.nsc.symtab.classfile.ClassfileParser$JavaTypeCompleter.$outer	scala.tools.nsc.symtab.classfile.ClassfileParser	11935	
+F	scala.tools.nsc.symtab.classfile.ClassfileParser$MemberTypeCompleter	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	11935	
+S	scala.reflect.internal.Types$AliasArgsTypeRef	3627
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$AliasArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCache	scala.reflect.internal.Types$Type	2082	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$AliasArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForPeriod	int	2082	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$AliasArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForSymInfo	scala.reflect.internal.Types$Type	2082	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	3563	NoPrefix=64
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	3627	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	3627	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	1966	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	34	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	34	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	1297	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	1297	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	2995	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	3627	
+F	scala.reflect.internal.Types$AliasArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	3627	
+S	scala.reflect.internal.Mirrors$Roots$RootPackage	1
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Mirrors$Roots$RootPackage.$outer	scala.reflect.internal.Mirrors$Roots	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$ModuleSymbol.flatname	scala.reflect.internal.Names$TermName	0	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$TermSymbol._referenced	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Mirrors$Roots$RootPackage	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Names$TypeName	10482
+F	scala.reflect.internal.Names$TypeName	scala.reflect.internal.Names$TypeName.next	scala.reflect.internal.Names$TypeName	1505	
+F	scala.reflect.internal.Names$TypeName	scala.reflect.internal.Names$Name.index	int	10482	
+F	scala.reflect.internal.Names$TypeName	scala.reflect.internal.Names$Name.len	int	10481	
+F	scala.reflect.internal.Names$TypeName	scala.reflect.internal.Names$Name.cachedString	java.lang.String	249	
+F	scala.reflect.internal.Names$TypeName	scala.reflect.api.Names$NameApi.$outer	scala.reflect.api.Names	10482	
+S	scala.reflect.internal.Names$TermName	42718
+F	scala.reflect.internal.Names$TermName	scala.reflect.internal.Names$TermName.next	scala.reflect.internal.Names$TermName	18852	nme.EMPTY=1
+F	scala.reflect.internal.Names$TermName	scala.reflect.internal.Names$Name.index	int	42717	
+F	scala.reflect.internal.Names$TermName	scala.reflect.internal.Names$Name.len	int	42717	
+F	scala.reflect.internal.Names$TermName	scala.reflect.internal.Names$Name.cachedString	java.lang.String	1053	
+F	scala.reflect.internal.Names$TermName	scala.reflect.api.Names$NameApi.$outer	scala.reflect.api.Names	42718	
+S	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	4696
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader.classfileParser$module	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader$classfileParser$	545	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader.classfile	scala.reflect.io.AbstractFile	4696	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader.clazz	scala.reflect.internal.Symbols$ClassSymbol	4696	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader.module	scala.reflect.internal.Symbols$ModuleSymbol	4696	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.ok	boolean	545	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.$outer	scala.tools.nsc.symtab.SymbolLoaders	4696	
+F	scala.tools.nsc.symtab.SymbolLoaders$ClassfileLoader	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	4696	
+S	scala.reflect.internal.Symbols$PackageClassSymbol	308
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.owner	scala.reflect.internal.Symbols$Symbol	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.moduleSymbol	scala.reflect.internal.Symbols$Symbol	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisCache	scala.reflect.internal.Types$Type	123	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisPeriod	int	123	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheValue	scala.reflect.internal.Scopes$Scope	40	EmptyScope=268
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey1	scala.reflect.internal.Types$Type	40	NoType=268
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey2	scala.reflect.internal.Scopes$ScopeEntry	40	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	146	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	146	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=308
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	228	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	66	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.id	int	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	146	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=308
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	308	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=308
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	44	NoPosition=264
+F	scala.reflect.internal.Symbols$PackageClassSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	308	
+S	scala.reflect.internal.Mirrors$Roots$EmptyPackage	1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Mirrors$Roots$EmptyPackage.$outer	scala.reflect.internal.Mirrors$Roots	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$ModuleSymbol.flatname	scala.reflect.internal.Names$TermName	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$TermSymbol._referenced	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackage	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Types$AbstractNoArgsTypeRef	25921
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$AbstractNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCache	scala.reflect.internal.Types$Type	8555	NoType=9
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$AbstractNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForPeriod	int	8555	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$AbstractNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForSymInfo	scala.reflect.internal.Types$Type	8555	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	1964	NoPrefix=23957
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	25921	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=25921
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	10147	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	0	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	2021	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	2021	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	5244	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	25921	
+F	scala.reflect.internal.Types$AbstractNoArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	25921	
+S	scala.reflect.internal.Types$AliasNoArgsTypeRef	1628
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$AliasNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCache	scala.reflect.internal.Types$Type	778	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$AliasNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForPeriod	int	778	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$AliasNoArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForSymInfo	scala.reflect.internal.Types$Type	778	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	1608	NoPrefix=20
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	1628	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=1628
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	676	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	2	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	2	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	204	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	204	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	1214	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	1628	
+F	scala.reflect.internal.Types$AliasNoArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1628	
+S	scala.reflect.internal.Types$PackageClassInfoType	147
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.enterRefs$module	scala.reflect.internal.Types$ClassInfoType$enterRefs$	0	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.parents	scala.collection.immutable.List	0	Nil=147
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.decls	scala.reflect.internal.Scopes$Scope	147	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.typeSymbol	scala.reflect.internal.Symbols$Symbol	147	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.refs	[Lscala.collection.immutable.Map;	1	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.state	int	1	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$CompoundType.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	99	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$CompoundType.baseTypeSeqPeriod	int	99	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$CompoundType.baseClassesCache	scala.collection.immutable.List	147	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$CompoundType.baseClassesPeriod	int	147	
+F	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	147	
+S	scala.reflect.internal.Symbols$AbstractTypeSymbol	19041
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	13846	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	14999	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	6063	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	5010	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.id	int	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=19041
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	19041	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	56	Nil=18985
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	1	
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	18136	NoPosition=905
+F	scala.reflect.internal.Symbols$AbstractTypeSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	19041	
+S	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Definitions$DefinitionsClass$BottomClassSymbol.$outer	scala.reflect.internal.Definitions$DefinitionsClass	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NothingClass$	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.tools.nsc.symtab.SymbolLoaders$moduleClassLoader$	1
+F	scala.tools.nsc.symtab.SymbolLoaders$moduleClassLoader$	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.ok	boolean	0	
+F	scala.tools.nsc.symtab.SymbolLoaders$moduleClassLoader$	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.$outer	scala.tools.nsc.symtab.SymbolLoaders	1	
+F	scala.tools.nsc.symtab.SymbolLoaders$moduleClassLoader$	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass.$outer	scala.reflect.internal.Mirrors$Roots	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.owner	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.moduleSymbol	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisPeriod	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheValue	scala.reflect.internal.Scopes$Scope	0	EmptyScope=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey1	scala.reflect.internal.Types$Type	0	NoType=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey2	scala.reflect.internal.Scopes$ScopeEntry	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._validTo	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Mirrors$Roots$EmptyPackageClass	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1	1
+F	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1.typeParams	scala.collection.immutable.List	1	
+F	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1.typeSkolems	scala.collection.immutable.List	1	
+F	scala.reflect.internal.ExistentialsAndSkolems$Deskolemizer$1	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Types$NoPrefix$	1
+F	scala.reflect.internal.Types$NoPrefix$	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Scopes$ScopeEntry	85178
+F	scala.reflect.internal.Scopes$ScopeEntry	scala.reflect.internal.Scopes$ScopeEntry.sym	scala.reflect.internal.Symbols$Symbol	85178	
+F	scala.reflect.internal.Scopes$ScopeEntry	scala.reflect.internal.Scopes$ScopeEntry.owner	scala.reflect.internal.Scopes$Scope	85178	
+F	scala.reflect.internal.Scopes$ScopeEntry	scala.reflect.internal.Scopes$ScopeEntry.tail	scala.reflect.internal.Scopes$ScopeEntry	21131	
+F	scala.reflect.internal.Scopes$ScopeEntry	scala.reflect.internal.Scopes$ScopeEntry.next	scala.reflect.internal.Scopes$ScopeEntry	77766	
+F	scala.reflect.internal.Scopes$ScopeEntry	scala.reflect.internal.Scopes$ScopeEntry.$outer	scala.reflect.internal.SymbolTable	85178	
+S	scala.reflect.internal.Types$UniqueSingleType	32275
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$SingleType.pre	scala.reflect.internal.Types$Type	11550	NoPrefix=20725
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$SingleType.sym	scala.reflect.internal.Symbols$Symbol	32275	
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$SingleType.trivial	byte	2450	
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$SingleType.underlyingCache	scala.reflect.internal.Types$Type	32158	NoType=117
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$SingleType.underlyingPeriod	int	32158	
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.internal.Types$UniqueType.hashCode	int	32275	
+F	scala.reflect.internal.Types$UniqueSingleType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	32275	
+S	scala.reflect.internal.Symbols$ModuleClassSymbol	6626
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.owner	scala.reflect.internal.Symbols$Symbol	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.moduleSymbol	scala.reflect.internal.Symbols$Symbol	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisCache	scala.reflect.internal.Types$Type	1470	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisPeriod	int	1470	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheValue	scala.reflect.internal.Scopes$Scope	739	EmptyScope=5887
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey1	scala.reflect.internal.Types$Type	739	NoType=5887
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey2	scala.reflect.internal.Scopes$ScopeEntry	672	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	1752	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	1484	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	1484	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=6626
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	2068	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	2068	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	2068	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	2068	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.id	int	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	2068	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	143	NoSymbol=6483
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	6626	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	28	Nil=6598
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	1579	NoPosition=5047
+F	scala.reflect.internal.Symbols$ModuleClassSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	6626	
+S	scala.reflect.internal.Symbols$PackageObjectClassSymbol	49
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.owner	scala.reflect.internal.Symbols$Symbol	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.moduleSymbol	scala.reflect.internal.Symbols$Symbol	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisCache	scala.reflect.internal.Types$Type	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisPeriod	int	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheValue	scala.reflect.internal.Scopes$Scope	31	EmptyScope=18
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey1	scala.reflect.internal.Types$Type	31	NoType=18
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey2	scala.reflect.internal.Scopes$ScopeEntry	31	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=49
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	32	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.id	int	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=49
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	49	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=49
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	32	NoPosition=17
+F	scala.reflect.internal.Symbols$PackageObjectClassSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	49	
+S	scala.reflect.internal.Types$ImportType	4156
+F	scala.reflect.internal.Types$ImportType	scala.reflect.internal.Types$ImportType.expr	scala.reflect.internal.Trees$Tree	4156	
+F	scala.reflect.internal.Types$ImportType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	4156	
+S	scala.reflect.internal.Types$BoundedWildcardType	3
+F	scala.reflect.internal.Types$BoundedWildcardType	scala.reflect.internal.Types$BoundedWildcardType.bounds	scala.reflect.internal.Types$TypeBounds	3	
+F	scala.reflect.internal.Types$BoundedWildcardType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	3	
+S	scala.reflect.internal.Types$ExistentialType	1916
+F	scala.reflect.internal.Types$ExistentialType	scala.reflect.internal.Types$ExistentialType.quantified	scala.collection.immutable.List	1916	
+F	scala.reflect.internal.Types$ExistentialType	scala.reflect.internal.Types$ExistentialType.underlying	scala.reflect.internal.Types$Type	1916	
+F	scala.reflect.internal.Types$ExistentialType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1916	
+S	scala.reflect.internal.Scopes$EmptyScope$	1
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.elems	scala.reflect.internal.Scopes$ScopeEntry	0	
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$nestinglevel	int	0	
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	[Lscala.reflect.internal.Scopes$ScopeEntry;	0	
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.elemsCache	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.cachedSize	int	0	
+F	scala.reflect.internal.Scopes$EmptyScope$	scala.reflect.internal.Scopes$Scope.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Types$WildcardType$	1
+F	scala.reflect.internal.Types$WildcardType$	scala.reflect.internal.Types$WildcardType$.FillListCache	[Lscala.collection.immutable.List;	1	
+F	scala.reflect.internal.Types$WildcardType$	scala.reflect.internal.Types$WildcardType$.bitmap$0	boolean	1	
+F	scala.reflect.internal.Types$WildcardType$	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Types$ClassArgsTypeRef	331095
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	331095	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	331095	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	331095	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	53550	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	622	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	622	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	46285	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	46285	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	122167	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	331095	
+F	scala.reflect.internal.Types$ClassArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	331095	
+S	scala.reflect.internal.Symbols$ModuleSymbol	6966
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$ModuleSymbol.flatname	scala.reflect.internal.Names$TermName	0	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$TermSymbol._referenced	scala.reflect.internal.Symbols$Symbol	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.id	int	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	2702	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	171	NoSymbol=6795
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	6966	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	31	Nil=6935
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	1655	NoPosition=5311
+F	scala.reflect.internal.Symbols$ModuleSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	6966	
+S	scala.reflect.internal.Types$RefinementTypeRef	1666
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	1364	NoPrefix=302
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	1666	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=1666
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	366	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	0	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	359	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	359	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	9	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	1666	
+F	scala.reflect.internal.Types$RefinementTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1666	
+S	scala.reflect.internal.Mirrors$Roots$RootClass	1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Mirrors$Roots$RootClass.$outer	scala.reflect.internal.Mirrors$Roots	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.owner	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.moduleSymbol	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.typeOfThisPeriod	int	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheValue	scala.reflect.internal.Scopes$Scope	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey1	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ModuleClassSymbol.implicitMembersCacheKey2	scala.reflect.internal.Scopes$ScopeEntry	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Mirrors$Roots$RootClass	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Types$AnnotatedType	22973
+F	scala.reflect.internal.Types$AnnotatedType	scala.reflect.internal.Types$AnnotatedType.annotations	scala.collection.immutable.List	22973	
+F	scala.reflect.internal.Types$AnnotatedType	scala.reflect.internal.Types$AnnotatedType.underlying	scala.reflect.internal.Types$Type	22973	
+F	scala.reflect.internal.Types$AnnotatedType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	22973	
+S	scala.reflect.internal.Types$ErrorType$	1
+F	scala.reflect.internal.Types$ErrorType$	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Symbols$ClassSymbol	8527
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	2437	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	3834	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	3834	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	147	Set()=8380
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	4097	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	4157	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	4194	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	4140	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	4197	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.id	int	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	4271	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	289	NoSymbol=8238
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	8527	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	417	Nil=8110
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	1	
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	3738	NoPosition=4789
+F	scala.reflect.internal.Symbols$ClassSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	8527	
+S	scala.reflect.internal.Symbols$TypeSkolem	9454
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSkolem.origin	java.lang.Object	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSkolem.level	int	0	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	9439	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	8755	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	8747	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._rawflags	long	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.id	int	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._validTo	int	9453	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=9454
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	9454	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	24	Nil=9430
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	9239	NoPosition=215
+F	scala.reflect.internal.Symbols$TypeSkolem	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	9454	
+S	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	20
+F	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter.$outer	scala.tools.nsc.typechecker.Namers$Namer	20	
+F	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleterBase.tree	scala.reflect.internal.Trees$Tree	20	
+F	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleter.$outer	scala.tools.nsc.typechecker.Analyzer	20	
+F	scala.tools.nsc.typechecker.Namers$Namer$ImportTypeCompleter	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	20	
+S	scala.reflect.internal.Types$UniqueLiteralType	32
+F	scala.reflect.internal.Types$UniqueLiteralType	scala.reflect.internal.Types$LiteralType.value	scala.reflect.internal.Constants$Constant	32	
+F	scala.reflect.internal.Types$UniqueLiteralType	scala.reflect.internal.Types$UniqueType.hashCode	int	32	
+F	scala.reflect.internal.Types$UniqueLiteralType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	32	
+S	scala.reflect.internal.Symbols$NoSymbol	1
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	0	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	1	
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Symbols$NoSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Types$UniqueConstantType	8994
+F	scala.reflect.internal.Types$UniqueConstantType	scala.reflect.internal.Types$FoldableConstantType.value	scala.reflect.internal.Constants$Constant	8994	
+F	scala.reflect.internal.Types$UniqueConstantType	scala.reflect.internal.Types$UniqueType.hashCode	int	8994	
+F	scala.reflect.internal.Types$UniqueConstantType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	8994	
+S	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	163
+F	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader.packageName	java.lang.String	163	
+F	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader.classPath	scala.tools.nsc.util.ClassPath	163	
+F	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.ok	boolean	0	
+F	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.$outer	scala.tools.nsc.symtab.SymbolLoaders	163	
+F	scala.tools.nsc.symtab.SymbolLoaders$PackageLoader	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	163	
+S	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	275
+F	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter.$outer	scala.tools.nsc.typechecker.Namers$Namer	275	
+F	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleterBase.tree	scala.reflect.internal.Trees$Tree	275	
+F	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	scala.tools.nsc.typechecker.Namers$TypeCompleter.$outer	scala.tools.nsc.typechecker.Analyzer	275	
+F	scala.tools.nsc.typechecker.Namers$Namer$MonoTypeCompleter	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	275	
+S	scala.reflect.internal.Types$UniqueThisType	6631
+F	scala.reflect.internal.Types$UniqueThisType	scala.reflect.internal.Types$ThisType.sym	scala.reflect.internal.Symbols$Symbol	6631	
+F	scala.reflect.internal.Types$UniqueThisType	scala.reflect.internal.Types$UniqueType.hashCode	int	6631	
+F	scala.reflect.internal.Types$UniqueThisType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	6631	
+S	scala.reflect.internal.Types$UniqueTypeBounds	2437
+F	scala.reflect.internal.Types$UniqueTypeBounds	scala.reflect.internal.Types$TypeBounds.lo	scala.reflect.internal.Types$Type	2437	
+F	scala.reflect.internal.Types$UniqueTypeBounds	scala.reflect.internal.Types$TypeBounds.hi	scala.reflect.internal.Types$Type	2437	
+F	scala.reflect.internal.Types$UniqueTypeBounds	scala.reflect.internal.Types$UniqueType.hashCode	int	2437	
+F	scala.reflect.internal.Types$UniqueTypeBounds	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	2437	
+S	scala.reflect.internal.Types$NullaryMethodType	36380
+F	scala.reflect.internal.Types$NullaryMethodType	scala.reflect.internal.Types$NullaryMethodType.resultType	scala.reflect.internal.Types$Type	36374	WildcardType=6
+F	scala.reflect.internal.Types$NullaryMethodType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	36380	
+S	scala.reflect.internal.Types$PackageTypeRef	310
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$ModuleTypeRef.narrowedCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	309	NoPrefix=1
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	310	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=310
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	130	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	0	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	91	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	91	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	27	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	310	
+F	scala.reflect.internal.Types$PackageTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	310	
+S	scala.reflect.internal.Types$UniqueSuperType	4464
+F	scala.reflect.internal.Types$UniqueSuperType	scala.reflect.internal.Types$SuperType.thistpe	scala.reflect.internal.Types$Type	4464	
+F	scala.reflect.internal.Types$UniqueSuperType	scala.reflect.internal.Types$SuperType.supertpe	scala.reflect.internal.Types$Type	4464	
+F	scala.reflect.internal.Types$UniqueSuperType	scala.reflect.internal.Types$SuperType.trivial	byte	0	
+F	scala.reflect.internal.Types$UniqueSuperType	scala.reflect.internal.Types$UniqueType.hashCode	int	4464	
+F	scala.reflect.internal.Types$UniqueSuperType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	4464	
+S	scala.reflect.internal.Symbols$TypeHistory	277221
+F	scala.reflect.internal.Symbols$TypeHistory	scala.reflect.internal.Symbols$TypeHistory.scala$reflect$internal$Symbols$TypeHistory$$_validFrom	int	277221	
+F	scala.reflect.internal.Symbols$TypeHistory	scala.reflect.internal.Symbols$TypeHistory.scala$reflect$internal$Symbols$TypeHistory$$_info	scala.reflect.internal.Types$Type	265913	NoType=11166,WildcardType=141,ErrorType=1
+F	scala.reflect.internal.Symbols$TypeHistory	scala.reflect.internal.Symbols$TypeHistory.scala$reflect$internal$Symbols$TypeHistory$$_prev	scala.reflect.internal.Symbols$TypeHistory	0	
+F	scala.reflect.internal.Symbols$TypeHistory	scala.reflect.internal.Symbols$TypeHistory.$outer	scala.reflect.internal.SymbolTable	277221	
+S	scala.reflect.internal.Symbols$RefinementClassSymbol	2483
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	1134	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	1134	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=2483
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	1660	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	1660	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	1660	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	1660	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	2450	NoSymbol=33
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.id	int	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=2483
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	2483	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=2483
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	1567	NoPosition=916
+F	scala.reflect.internal.Symbols$RefinementClassSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	2483	
+S	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Definitions$DefinitionsClass$BottomClassSymbol.$outer	scala.reflect.internal.Definitions$DefinitionsClass	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.flipped	scala.reflect.internal.Symbols$ClassSymbol	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.flatname	scala.reflect.internal.Names$TypeName	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol._associatedFile	scala.reflect.io.AbstractFile	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.thissym	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.thisTypeCache	scala.reflect.internal.Types$Type	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.thisTypePeriod	int	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.childSet	scala.collection.immutable.Set	0	Set()=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$ClassSymbol.bitmap$0	boolean	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._rawflags	long	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.id	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._validTo	int	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	1	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	0	Nil=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	0	
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	0	NoPosition=1
+F	scala.reflect.internal.Definitions$DefinitionsClass$NullClass$	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Scopes$Scope	71915
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.elems	scala.reflect.internal.Scopes$ScopeEntry	10082	
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$nestinglevel	int	3916	
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	[Lscala.reflect.internal.Scopes$ScopeEntry;	3929	
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.elemsCache	scala.collection.immutable.List	6416	Nil=31284
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.cachedSize	int	40631	
+F	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.$outer	scala.reflect.internal.SymbolTable	71915	
+S	scala.reflect.internal.Types$PolyType	14308
+F	scala.reflect.internal.Types$PolyType	scala.reflect.internal.Types$PolyType.typeParams	scala.collection.immutable.List	14308	
+F	scala.reflect.internal.Types$PolyType	scala.reflect.internal.Types$PolyType.resultType	scala.reflect.internal.Types$Type	14308	
+F	scala.reflect.internal.Types$PolyType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	14308	
+S	scala.reflect.internal.Types$ClassNoArgsTypeRef	24812
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	24132	NoPrefix=680
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	24812	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=24812
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	10416	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	423	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	423	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	8108	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	8108	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	10716	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	24812	
+F	scala.reflect.internal.Types$ClassNoArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	24812	
+S	scala.reflect.internal.Symbols$MethodSymbol	57112
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$MethodSymbol.mtpeRunId	int	28112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$MethodSymbol.mtpePre	scala.reflect.internal.Types$Type	26204	NoPrefix=1908
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$MethodSymbol.mtpeResult	scala.reflect.internal.Types$Type	28112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$MethodSymbol.mtpeInfo	scala.reflect.internal.Types$Type	28112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$TermSymbol._referenced	scala.reflect.internal.Symbols$Symbol	1583	NoSymbol=55529
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.id	int	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	47239	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	2668	NoSymbol=54444
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	57112	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	2784	Nil=54328
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	29524	
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	44867	NoPosition=12245
+F	scala.reflect.internal.Symbols$MethodSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	57112	
+S	scala.reflect.internal.Types$ModuleTypeRef	5473
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$ModuleTypeRef.narrowedCache	scala.reflect.internal.Types$Type	512	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	5450	NoPrefix=23
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	5473	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	0	Nil=5473
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	1692	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	33	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	33	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	1090	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	1090	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	951	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	5473	
+F	scala.reflect.internal.Types$ModuleTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	5473	
+S	scala.reflect.internal.Types$RefinedType0	60906
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$RefinedType0.clazz	scala.reflect.internal.Symbols$Symbol	60906	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$RefinedType.parents	scala.collection.immutable.List	60906	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$RefinedType.decls	scala.reflect.internal.Scopes$Scope	60689	EmptyScope=217
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$RefinedType.normalized	scala.reflect.internal.Types$Type	833	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$CompoundType.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	1716	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$CompoundType.baseTypeSeqPeriod	int	1716	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$CompoundType.baseClassesCache	scala.collection.immutable.List	1490	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.internal.Types$CompoundType.baseClassesPeriod	int	1490	
+F	scala.reflect.internal.Types$RefinedType0	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	60906	
+S	scala.reflect.internal.Types$NoType$	1
+F	scala.reflect.internal.Types$NoType$	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Types$AntiPolyType	34
+F	scala.reflect.internal.Types$AntiPolyType	scala.reflect.internal.Types$AntiPolyType.pre	scala.reflect.internal.Types$Type	34	
+F	scala.reflect.internal.Types$AntiPolyType	scala.reflect.internal.Types$AntiPolyType.targs	scala.collection.immutable.List	34	
+F	scala.reflect.internal.Types$AntiPolyType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	34	
+S	scala.reflect.internal.Symbols$AliasTypeSymbol	480
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconCache	scala.reflect.internal.Types$Type	368	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tyconRunId	int	368	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpeCache	scala.reflect.internal.Types$Type	370	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$TypeSymbol.tpePeriod	int	370	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.initName	scala.reflect.internal.Names$Name	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawname	scala.reflect.internal.Names$Name	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawowner	scala.reflect.internal.Symbols$Symbol	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._rawflags	long	86	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.id	int	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._validTo	int	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.javaBinaryNameStringCache	java.lang.String	0	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._privateWithin	scala.reflect.internal.Symbols$Symbol	0	NoSymbol=480
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.scala$reflect$internal$Symbols$$infos	scala.reflect.internal.Symbols$TypeHistory	480	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol._annotations	scala.collection.immutable.List	28	Nil=452
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.isOverridingSymbolCache	int	53	
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$Symbol.rawatt	scala.reflect.macros.Attachments	479	NoPosition=1
+F	scala.reflect.internal.Symbols$AliasTypeSymbol	scala.reflect.internal.Symbols$SymbolContextApiImpl.$outer	scala.reflect.internal.SymbolTable	480	
+S	scala.reflect.internal.Scopes$$anon$3	811
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.elems	scala.reflect.internal.Scopes$ScopeEntry	172	
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$nestinglevel	int	0	
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	[Lscala.reflect.internal.Scopes$ScopeEntry;	9	
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.elemsCache	scala.collection.immutable.List	172	Nil=639
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.cachedSize	int	172	
+F	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.$outer	scala.reflect.internal.SymbolTable	811	
+S	scala.reflect.internal.Types$OverloadedType	34
+F	scala.reflect.internal.Types$OverloadedType	scala.reflect.internal.Types$OverloadedType.pre	scala.reflect.internal.Types$Type	34	
+F	scala.reflect.internal.Types$OverloadedType	scala.reflect.internal.Types$OverloadedType.alternatives	scala.collection.immutable.List	34	
+F	scala.reflect.internal.Types$OverloadedType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	34	
+S	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	1
+F	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader.srcfile	scala.reflect.io.AbstractFile	1	
+F	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.ok	boolean	0	
+F	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	scala.tools.nsc.symtab.SymbolLoaders$SymbolLoader.$outer	scala.tools.nsc.symtab.SymbolLoaders	1	
+F	scala.tools.nsc.symtab.SymbolLoaders$SourcefileLoader	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	1	
+S	scala.reflect.internal.Scopes$ErrorScope	1
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.elems	scala.reflect.internal.Scopes$ScopeEntry	0	
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$nestinglevel	int	0	
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	[Lscala.reflect.internal.Scopes$ScopeEntry;	0	
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.elemsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.cachedSize	int	1	
+F	scala.reflect.internal.Scopes$ErrorScope	scala.reflect.internal.Scopes$Scope.$outer	scala.reflect.internal.SymbolTable	1	
+S	scala.reflect.internal.Types$MethodType	96202
+F	scala.reflect.internal.Types$MethodType	scala.reflect.internal.Types$MethodType.params	scala.collection.immutable.List	85156	Nil=11046
+F	scala.reflect.internal.Types$MethodType	scala.reflect.internal.Types$MethodType.resultType	scala.reflect.internal.Types$Type	96202	
+F	scala.reflect.internal.Types$MethodType	scala.reflect.internal.Types$MethodType.trivial	byte	67866	
+F	scala.reflect.internal.Types$MethodType	scala.reflect.internal.Types$MethodType.isdepmeth	byte	0	
+F	scala.reflect.internal.Types$MethodType	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	96202	
+S	scala.reflect.internal.Types$AbstractArgsTypeRef	494
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$AbstractArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCache	scala.reflect.internal.Types$Type	74	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$AbstractArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForPeriod	int	74	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$AbstractArgsTypeRef.scala$reflect$internal$Types$NonClassTypeRef$$relativeInfoCacheValidForSymInfo	scala.reflect.internal.Types$Type	74	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.pre	scala.reflect.internal.Types$Type	23	NoPrefix=471
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.sym	scala.reflect.internal.Symbols$Symbol	494	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.args	scala.collection.immutable.List	494	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.trivial	byte	88	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsCache	scala.collection.immutable.List	0	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.parentsPeriod	int	0	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqCache	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	24	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.baseTypeSeqPeriod	int	24	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$TypeRef.normalized	scala.reflect.internal.Types$Type	95	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.internal.Types$UniqueType.hashCode	int	494	
+F	scala.reflect.internal.Types$AbstractArgsTypeRef	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	494	
+S	scala.reflect.internal.Types$TypeVar$$anon$5	80
+F	scala.reflect.internal.Types$TypeVar$$anon$5	scala.reflect.internal.Types$TypeVar.origin	scala.reflect.internal.Types$Type	80	
+F	scala.reflect.internal.Types$TypeVar$$anon$5	scala.reflect.internal.Types$TypeVar.constr	scala.reflect.internal.tpe.TypeConstraints$TypeConstraint	80	
+F	scala.reflect.internal.Types$TypeVar$$anon$5	scala.reflect.internal.Types$TypeVar.level	int	0	
+F	scala.reflect.internal.Types$TypeVar$$anon$5	scala.reflect.internal.Types$TypeVar._suspended	scala.reflect.internal.Types$Type	80	
+F	scala.reflect.internal.Types$TypeVar$$anon$5	scala.reflect.api.Types$TypeApi.$outer	scala.reflect.api.Universe	80	
+A	scala.tools.nsc.Global	scala.reflect.internal.SymbolTable.nextFrom	1	5	40	32
+A	scala.tools.nsc.Global	scala.reflect.internal.SymbolTable.scala$reflect$internal$Names$$termHashtable	1	32768	131088	131088
+A	scala.tools.nsc.Global	scala.reflect.internal.SymbolTable.phaseWithId	1	256	1040	1040
+A	scala.reflect.internal.Types$WildcardType$	scala.reflect.internal.Types$WildcardType$.FillListCache	1	32	144	144
+A	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.typeSymbols	66894	572130	3476464	3241184
+A	scala.reflect.internal.Scopes$Scope	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	3929	502912	2074512	2074512
+A	scala.reflect.internal.Scopes$$anon$3	scala.reflect.internal.Scopes$Scope.scala$reflect$internal$Scopes$$hashtable	9	1152	4752	4752
+A	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.scala$reflect$internal$BaseTypeSeqs$$elems	66894	572130	3476464	3241184
+A	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq	scala.reflect.internal.BaseTypeSeqs$BaseTypeSeq.pending	66894	66929	1605736	1605736
+A	scala.reflect.internal.Types$ClassInfoType	scala.reflect.internal.Types$ClassInfoType.refs	874	1748	20976	20976
+A	scala.tools.nsc.Global	scala.reflect.internal.SymbolTable.scala$reflect$internal$Names$$_chrs	1	1048576	2097168	2097168
+A	scala.tools.nsc.Global	scala.reflect.internal.SymbolTable.scala$reflect$internal$Names$$typeHashtable	1	32768	131088	131088
+A	scala.reflect.internal.Types$PackageClassInfoType	scala.reflect.internal.Types$ClassInfoType.refs	1	2	24	24

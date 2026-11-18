@@ -1,4 +1,4 @@
-<title>Scalac Tree Footprint</title>
+<title>Scalac Heap Footprint</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;600&display=swap">
 <style>
@@ -7,16 +7,17 @@
   --bg:#f6f7f9; --panel:#ffffff; --fg:#1b2330; --muted:#5d6878; --rule:#dde2ea;
   --accent:#2f5fd0; --accent2:#8aa6e8; --sym:#2f5fd0; --nosym:#c27a2c;
   --good:#1f8a5b; --bad:#c2412d; --hdr:#c9d0db; --fid:#e8b4a8; --pad:#eef0f3; --padline:#b9c1cd; --bar:rgba(246,247,249,.92);
+  --fsym:#2f5fd0; --ftype:#c27a2c; --fname:#1f8a5b; --fscope:#7a52b3; --uhi:#2f5fd0; --umid:#8aa6e8; --ulo:#e0895f;
   --display:"Space Grotesk",system-ui,sans-serif; --body:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#12161d; --panel:#1a2029; --fg:#e4e8ef; --muted:#97a2b3; --rule:#2c3440;
   --accent:#7ea2ff; --accent2:#3d5594; --sym:#7ea2ff; --nosym:#e0a25e;
-  --good:#5fcf98; --bad:#ff8a73; --hdr:#3a4352; --fid:#8a4a3e; --pad:#20262f; --padline:#4a5566; --bar:rgba(18,22,29,.92); color-scheme:dark}}
+  --good:#5fcf98; --bad:#ff8a73; --hdr:#3a4352; --fid:#8a4a3e; --pad:#20262f; --padline:#4a5566; --bar:rgba(18,22,29,.92); --fsym:#7ea2ff; --ftype:#e0a25e; --fname:#5fcf98; --fscope:#b493e8; --uhi:#7ea2ff; --umid:#3d5594; --ulo:#d9774f; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#12161d; --panel:#1a2029; --fg:#e4e8ef; --muted:#97a2b3; --rule:#2c3440;
   --accent:#7ea2ff; --accent2:#3d5594; --sym:#7ea2ff; --nosym:#e0a25e;
-  --good:#5fcf98; --bad:#ff8a73; --hdr:#3a4352; --fid:#8a4a3e; --pad:#20262f; --padline:#4a5566; --bar:rgba(18,22,29,.92); color-scheme:dark}
+  --good:#5fcf98; --bad:#ff8a73; --hdr:#3a4352; --fid:#8a4a3e; --pad:#20262f; --padline:#4a5566; --bar:rgba(18,22,29,.92); --fsym:#7ea2ff; --ftype:#e0a25e; --fname:#5fcf98; --fscope:#b493e8; --uhi:#7ea2ff; --umid:#3d5594; --ulo:#d9774f; color-scheme:dark}
 :root:not([data-hdr="12"]) .h12{display:none}
 :root[data-hdr="12"] .h8{display:none}
 body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body)}
@@ -50,6 +51,13 @@ section{display:grid;gap:12px;min-width:0}
 .chart .tick{fill:var(--muted);font-size:11px}
 .chart .grid{stroke:var(--rule)}
 .chart .neg{fill:var(--good);font-weight:600}.chart .pos{fill:var(--bad);font-weight:600}
+.fsym{fill:var(--fsym)}.ftype{fill:var(--ftype)}.fname{fill:var(--fname)}.fscope{fill:var(--fscope)}
+.uhi{fill:var(--uhi)}.umid{fill:var(--umid)}.ulo{fill:var(--ulo)}
+td.ulot{color:var(--bad);font-weight:600}
+.fields{display:grid;gap:6px}
+details{background:var(--panel);border:1px solid var(--rule);border-radius:6px;padding:8px 12px;overflow-x:auto}
+summary{cursor:pointer;font-size:14px}
+tr.padrow td{background:var(--pad)}
 .b12{fill:var(--muted)}.b8{fill:var(--accent)}.sym{fill:var(--sym)}.nosym{fill:var(--nosym)}
 .hdr{fill:var(--hdr)}.f{fill:var(--accent2)}.fs{fill:var(--sym)}.fid{fill:var(--fid)}.pad{fill:var(--pad);stroke:var(--padline);stroke-dasharray:3 2}
 .chart .cell{font:11px var(--mono);fill:var(--fg)}
@@ -69,7 +77,7 @@ code{font-family:var(--mono);font-size:13px}
 </style>
 
 <div class="topbar"><div class="in">
-<span class="name">Scalac tree footprint</span>
+<span class="name">Scalac heap footprint</span>
 <span class="seglab" id="seglab">Object header</span>
 <div class="seg" role="group" aria-labelledby="seglab">
 <button type="button" id="hdr8" data-hdr="8" aria-pressed="true">Compact · 8 B</button>
@@ -79,8 +87,8 @@ code{font-family:var(--mono);font-size:13px}
 
 <main>
 <header style="display:grid;gap:10px">
-<h1>Scalac tree footprint after typer</h1>
-<p class="lede">Live <code>Tree</code> and <code>Position</code> instances once typer finishes, measured on the compiler-benchmark corpora with scalac 2.13.18 on JDK 25, and what three candidate field changes do to the weighted total. <span class="h8">Figures assume compact object headers (<code>-XX:+UseCompactObjectHeaders</code>, 8-byte header). Counts are measured; sizes are modelled from the same field layout that reproduces the measured 12-byte sizes exactly.</span><span class="h12">Figures use today's default 12-byte header, which the run measured directly; the modelled size of every tree class matches the heap histogram.</span></p>
+<h1>Scalac heap footprint after typer</h1>
+<p class="lede">Live <code>Tree</code>, <code>Position</code>, <code>Symbol</code>, <code>Type</code> and <code>Name</code> instances once typer finishes, measured on the compiler-benchmark corpora with scalac 2.13.18 on JDK 25, and what candidate field changes do to the weighted totals. <span class="h8">Figures assume compact object headers (<code>-XX:+UseCompactObjectHeaders</code>, 8-byte header).</span><span class="h12">Figures use today's default 12-byte header.</span> Counts come from the live heap histogram. Sizes come from a model of HotSpot's field layout, which matches the histogram for every class with both header sizes.</p>
 </header>
 
 <div class="stats">
@@ -88,6 +96,7 @@ code{font-family:var(--mono);font-size:13px}
 <div class="stat"><b>{{n:treeMB}} MB</b><span>tree bytes, scala corpus</span></div>
 <div class="stat"><b>{{n:posMB}} MB</b><span>positions and attachments</span></div>
 <div class="stat"><b>{{n:A}} / {{n:AB}}</b><span>tree bytes from A (drop <code>id</code>) / A+B</span></div>
+<div class="stat"><b>{{o:objMB}} MB</b><span>symbols, types, names and scopes</span></div>
 </div>
 
 <section>
@@ -141,6 +150,54 @@ code{font-family:var(--mono);font-size:13px}
 </section>
 
 <section>
+<h2>Symbols, types, names and scopes</h2>
+<p>Next to trees and positions, the scala corpus holds {{o:objMB}} MB of <code>Symbol</code>, <code>Type</code>, <code>Name</code> and <code>Scope</code> objects after typer, {{o:objPct}}% of the live heap. Each family below includes the objects and arrays it owns: a symbol's <code>TypeHistory</code>; a base type sequence's <code>elems</code> and <code>typeSymbols</code> arrays and its <code>pending</code> bit set; the name table's character array and hash tables; a scope's hash table.</p>
+<div class="box">{{FAMCHART}}</div>
+<div class="legend"><span><i style="background:var(--fsym)"></i>Symbol</span><span><i style="background:var(--ftype)"></i>Type</span><span><i style="background:var(--fname)"></i>Name</span><span><i style="background:var(--fscope)"></i>Scope</span><span><i style="background:var(--muted)"></i>tree and position, from above</span></div>
+<p>The top classes and owned arrays by bytes. A <code>TypeRef</code> with arguments is the largest single class. Every symbol has its own <code>TypeHistory</code>, which makes it the third largest class.</p>
+<div class="box">{{OBJCLASSES}}</div>
+</section>
+
+<section>
+<h2>Field layouts</h2>
+<p>Each bar is one instance, 5 px per byte, laid out as HotSpot places the fields: primitives first, largest first, then references, each class's fields filling gaps left by its superclasses. Color shows how often a field holds something other than its default (null, zero, or a sentinel such as <code>NoSymbol</code>, <code>Nil</code> or <code>NoPrefix</code>), counted by a reflective walk of everything reachable from <code>Global</code>. Hover a cell for the field name.</p>
+<div class="box">{{STRIPS}}</div>
+<div class="legend"><span><i style="background:var(--hdr)"></i>header</span><span><i style="background:var(--uhi)"></i>non-default in ≥ 50%</span><span><i style="background:var(--umid)"></i>5–50%</span><span><i style="background:var(--ulo)"></i>under 5%</span><span><i style="background:var(--pad);outline:1px dashed var(--padline)"></i>alignment padding</span></div>
+<div class="fields">{{FIELDS}}</div>
+</section>
+
+<section>
+<h2>Cheap wins in symbols, types and names</h2>
+<p>Each candidate below removes a field that only diagnostics or a rare path reads, or that holds its default in nearly every instance, or it removes an object. None is implemented. Change in bytes of symbols, types, names and scopes, scala corpus:</p>
+<div class="box">{{CANDS}}</div>
+<ul>
+<li><b>S1, drop <code>Symbol.initName</code>.</b> The constructor parameter is kept as a field because <code>sealedSortName</code> reads it. That method orders sealed children for the pickler and for exhaustivity checking. Both run before names are expanded, so <code>rawname</code> may give the same order. This still needs checking.</li>
+<li><b>S2, move <code>javaBinaryNameStringCache</code> to <code>ClassSymbol</code>.</b> No symbol has it set after typer. It is read for classes and modules, by the pickler's <code>.sig</code> writer and by the backend, and a module could compute it from its module class.</li>
+<li><b>S3, inline the head of the type history.</b> Every symbol owns one <code>TypeHistory</code>, and none has a <code>_prev</code> after typer. Storing the info, its valid-from period and the previous entry on the symbol adds 8 bytes to every symbol and removes a <span class="h8">24</span><span class="h12">32</span> byte object. Later phases add history entries, which would still be separate objects.</li>
+<li><b>S4, move <code>TermSymbol._referenced</code> to <code>ModuleSymbol</code>.</b> Every module sets it, to its module class. Only 0.1% of other term symbols and 2.8% of method symbols set it after typer, mostly default getters. Later phases set it on accessors and outer fields, which could use an attachment.</li>
+<li><b>T1, move the <code>TypeRef</code> parents cache to a side table.</b> <code>parentsCache</code> and <code>parentsPeriod</code> are set on 0.2% of <code>ClassArgsTypeRef</code> and 1.7% of <code>ClassNoArgsTypeRef</code>. Removing both saves 8 bytes on every <code>TypeRef</code> with either header.</li>
+<li><b>T2, allocate <code>BaseTypeSeq.pending</code> lazily.</b> Every base type sequence allocates a <code>BitSet</code> and its <code>long[]</code>. These are only used while a lazy intersection element is being computed. The figure assumes none is needed, so it is an upper bound.</li>
+<li><b>N1, drop <code>Name.cachedString</code>.</b> Set on 2.5% of names. It only saves memory with compact headers, and names are small: 53k names in 1.7 MB.</li>
+<li><b>X, drop the cake <code>$outer</code></b> from symbols, types, names and type histories, for reference only, like C for trees.</li>
+</ul>
+<p class="note">Instance size per candidate. Green is smaller than today's layout with the same header, red larger; – means the object is gone.</p>
+<div class="box">{{OBJSIZES}}</div>
+<p>The same candidates on three corpora. The smaller corpora load most of their symbols from the classpath, so S3 matters more there and the type candidates less.</p>
+<div class="box">{{OBJCORPORA}}</div>
+</section>
+
+<section>
+<h2>Where one field makes a difference</h2>
+<p><span class="h8">With compact headers, <code>TermSymbol</code> and <code>MethodSymbol</code> carry 4 bytes of padding, so S1, S2 or S4 alone shrinks them by 8 bytes. Type symbols and modules have none.</span><span class="h12">With 12-byte headers, <code>TermSymbol</code> and <code>MethodSymbol</code> have no padding, so a single dropped field saves nothing on them, and S1 or S2 alone only helps type symbols and modules.</span> <code>ClassArgsTypeRef</code> holds ten 4-byte fields and a 1-byte <code>trivial</code> flag. <span class="h8">With compact headers the flag is the one byte that pushes it from 48 to 56.</span><span class="h12">With 12-byte headers it has 3 bytes of padding, so only dropping two fields (T1) shrinks it.</span></p>
+{{PADDING}}
+</section>
+
+<section>
+<h2>Name table</h2>
+<p>A <code>Name</code> is an offset and length into one shared <code>char[]</code>, plus a hash chain link, a cached string and the cake <code>$outer</code>. The table holds {{NAMECHARS}} characters in a 1M-character array, which has doubled from its initial 128k. Names and the table together take {{o:Name}} MB, so no change here is worth much.</p>
+</section>
+
+<section>
 <h2>Notes for B beyond footprint</h2>
 <ul>
 <li>Non-SymTrees with a <code>symbol</code> override delegate rather than store: <code>Apply</code>/<code>TypeApply</code> → <code>fun.symbol</code>, <code>Super</code> → <code>qual.symbol</code>, <code>AppliedTypeTree</code> → <code>tpt.symbol</code>, <code>TypeTree</code> → <code>typeTreeSymbol</code>, <code>ReferenceToBoxed</code>, and nsc's <code>DocDef</code>. A field read in <code>Tree</code> only replaces the virtual call if these cache the delegate's symbol (setters already write through, but <code>TypeTree</code>'s depends on <code>tpe</code>) or keep an override, which leaves the call site polymorphic.</li>
@@ -154,7 +211,10 @@ code{font-family:var(--mono);font-size:13px}
 <ul>
 <li>Compile each corpus with <code>-Ystop-after:typer</code> in one JVM, holding the <code>Run</code>, then take a live class histogram (<code>GC.class_histogram</code>, after full GC). Corpora: compiler-benchmark <code>scala</code> (library, reflect and compiler, 1135 files, library on the sourcepath), <code>scalap</code>, <code>re2s</code>. All compile without errors. The live heap after typer on the scala corpus was 334 MB with 12-byte headers, trees 19.7% of it and positions 9.7%.</li>
 <li>The heap counts all live trees: {{TREEN}} for scala. An identity-deduplicated walk of unit bodies (including <code>TypeTree.original</code>) reaches {{WALKN}}; the rest are held outside unit bodies, for example by symbols' completers and annotations. Weighting by the walk instead gives the same percentages within 0.3 points.</li>
-<li>Sizes per scenario: JOL 0.17 field list per class, 4-byte compressed references, header 12 or 8, rounded up to 8. With only 4-byte and 1-byte fields this rule is exact under JDK 15+ field layout, and with the 12-byte header it matched the histogram's bytes per instance for every tree class.</li>
+<li>Tree sizes per scenario: JOL 0.17 field list per class, 4-byte compressed references, header 12 or 8, rounded up to 8. With only 4-byte and 1-byte fields this rule is exact under JDK 15+ field layout.</li>
+<li>Symbol, type, name and scope sizes come from a model of HotSpot's JDK 15+ field layout, applied class by class from <code>Object</code> down. Primitives are placed largest first, then references. Each field goes into the smallest gap that fits it at its natural alignment, left by the header or a superclass, or else at the end. This matters for the 8-byte <code>_rawflags</code> and for 1-byte flags.</li>
+<li>Each corpus was also run with <code>-XX:+UseCompactObjectHeaders</code>. The modelled sizes match the histogram's bytes per instance for every class, trees included, with both header sizes.</li>
+<li>Field use comes from a reflective, identity-deduplicated walk of everything reachable from <code>Global</code>, run after the histogram. Its instance counts match the histogram for every symbol, type, name and scope class. Array bytes are summed per owning field, and for the type and scope arrays they match the histogram.</li>
 </ul>
 </section>
 </main>
