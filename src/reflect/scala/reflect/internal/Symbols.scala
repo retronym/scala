@@ -1328,12 +1328,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def javaSimpleName: Name = addModuleSuffix(simpleName.dropLocal)
     def javaBinaryName: Name = name.newName(javaBinaryNameString)
-    def javaBinaryNameString: String = {
-      if (javaBinaryNameStringCache == null)
-        javaBinaryNameStringCache = fullName('/', moduleSuffix)
-      javaBinaryNameStringCache
-    }
-    private[this] var javaBinaryNameStringCache: String = null
+    def javaBinaryNameString: String = fullName('/', moduleSuffix)
     def javaClassName: String  = fullName('.', moduleSuffix)
 
     /** The encoded full path name of this symbol, where outer names and inner names
@@ -3431,6 +3426,13 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     private[this] var thisTypeCache: Type      = _
     private[this] var thisTypePeriod           = NoPeriod
+
+    private[this] var javaBinaryNameStringCache: String = null
+    override def javaBinaryNameString: String = {
+      if (javaBinaryNameStringCache == null)
+        javaBinaryNameStringCache = super.javaBinaryNameString
+      javaBinaryNameStringCache
+    }
 
     override def resolveOverloadedFlag(flag: Long) = flag match {
       case INCONSTRUCTOR => "<inconstructor>" // INCONSTRUCTOR / CONTRAVARIANT / LABEL
