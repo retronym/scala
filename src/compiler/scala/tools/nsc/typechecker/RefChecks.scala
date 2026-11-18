@@ -83,20 +83,9 @@ abstract class RefChecks extends Transform {
   class RefCheckTransformer(@unused unit: CompilationUnit) extends AstTransformer {
     private final val indent = "  "
 
-    private[this] var _localTyper: analyzer.Typer = typer
-    // The templates entered (`pendingFrom` until `pendingTo`, with their owners) whose typers, made on
-    // `_localTyper` in turn, are made when `localTyper` is next read.
-    private[this] var pendingTrees  = new Array[Tree](16)
-    private[this] var pendingOwners = new Array[Symbol](16)
-    private[this] var pendingFrom, pendingTo = 0
-    def localTyper: analyzer.Typer = {
-      while (pendingFrom < pendingTo) {
-        _localTyper = _localTyper.atOwner(pendingTrees(pendingFrom), pendingOwners(pendingFrom))
-        pendingFrom += 1
-      }
-      _localTyper
-    }
-    def localTyper_=(typer: analyzer.Typer): Unit = { _localTyper = typer; pendingFrom = pendingTo }
+    // A typer for each template entered, made when `localTyper` is next read.
+    private[this] val typers = new analyzer.LazyTyper(typer)
+    def localTyper: analyzer.Typer = typers.typer
     var currentApplication: Tree = EmptyTree
     var inAnnotation: Boolean = false
     var inPattern: Boolean = false
@@ -2037,9 +2026,7 @@ abstract class RefChecks extends Transform {
     } // end checkInterestingResultInStatement
 
     override def transform(tree: Tree): Tree = {
-      val savedLocalTyper = _localTyper
-      val savedPendingFrom = pendingFrom
-      val savedPendingTo = pendingTo
+      val savedDepth = typers.depth
       val savedCurrentApplication = currentApplication
       try {
         val sym = tree.symbol
@@ -2079,13 +2066,7 @@ abstract class RefChecks extends Transform {
             r.transform(this)
 
           case Template(_, _, body) =>
-            if (pendingTo == pendingTrees.length) {
-              pendingTrees = java.util.Arrays.copyOf(pendingTrees, pendingTo * 2)
-              pendingOwners = java.util.Arrays.copyOf(pendingOwners, pendingTo * 2)
-            }
-            pendingTrees(pendingTo) = tree
-            pendingOwners(pendingTo) = currentOwner
-            pendingTo += 1
+            typers.enter(tree, currentOwner)
             for (stat <- body)
               if (!checkInterestingResultInStatement(stat) && treeInfo.isPureExprForWarningPurposes(stat)) {
                 val msg = "a pure expression does nothing in statement position"
@@ -2308,9 +2289,7 @@ abstract class RefChecks extends Transform {
           reporter.error(tree.pos, ex.getMessage())
           tree
       } finally {
-        _localTyper = savedLocalTyper
-        pendingFrom = savedPendingFrom
-        pendingTo = savedPendingTo
+        typers.depth = savedDepth
         currentApplication = savedCurrentApplication
       }
     }
