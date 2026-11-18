@@ -1,0 +1,180 @@
+scala.reflect.internal.Trees$Tree base=32B: Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$SymTree base=32B: Trees.SymTree.symbol:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$Ident base=40B: Trees.Ident.name:4, Trees.SymTree.symbol:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$Select base=40B: Trees.Select.qualifier:4, Trees.Select.name:4, Trees.SymTree.symbol:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$TypeTree base=40B: Trees.TypeTree.orig:4, Trees.TypeTree.wasEmpty:1, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$Apply base=40B: Trees.Apply.fun:4, Trees.Apply.args:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$Literal base=32B: Trees.Literal.value:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.Trees$DefDef base=56B: Trees.DefDef.mods:4, Trees.DefDef.name:4, Trees.DefDef.tparams:4, Trees.DefDef.vparamss:4, Trees.DefDef.tpt:4, Trees.DefDef.rhs:4, Trees.SymTree.symbol:4, Trees.Tree.id:4, Trees.Tree.rawtpe:4, Trees.Tree.rawatt:4, Trees.TreeContextApiImpl.$outer:4
+scala.reflect.internal.util.OffsetPosition base=24B: util.OffsetPosition.sourceIn:4, util.OffsetPosition.pointIn:4
+scala.reflect.internal.util.RangePosition base=32B: util.RangePosition.sourceIn:4, util.RangePosition.startIn:4, util.RangePosition.pointIn:4, util.RangePosition.endIn:4
+scala.reflect.internal.util.TransparentPosition base=32B: util.RangePosition.sourceIn:4, util.RangePosition.startIn:4, util.RangePosition.pointIn:4, util.RangePosition.endIn:4
+scala.reflect.macros.SingleAttachment base=24B: scala.reflect.macros.SingleAttachment.pos:4, scala.reflect.macros.SingleAttachment.att:4
+scala.reflect.macros.NonemptyAttachments base=24B: scala.reflect.macros.NonemptyAttachments.pos:4, scala.reflect.macros.NonemptyAttachments.all:4
+
+#### corpus scalap  (live heap after typer: 27 MB)
+class	heapN	walkN	heapBytes	12B-hdr/base	12B-hdr/A:-id	12B-hdr/B:+sym	12B-hdr/A+B	12B-hdr/C:-outer	12B-hdr/A+B+C	8B-hdr/base	8B-hdr/A:-id	8B-hdr/B:+sym	8B-hdr/A+B	8B-hdr/C:-outer	8B-hdr/A+B+C	symTree?
+Select	9670	9261	386800	40	40	40	40	40	32	40	32	40	32	32	32	true
+Ident	8599	7820	343960	40	32	40	32	32	32	32	32	32	32	32	24	true
+TypeTree	8474	8447	338960	40	32	40	40	32	32	32	32	40	32	32	32	false
+Apply	4022	3535	160880	40	32	40	40	32	32	32	32	40	32	32	32	false
+DefDef	1997	1850	111832	56	56	56	56	56	48	56	48	56	48	48	48	true
+ValDef	2261	1872	108528	48	48	48	48	48	40	48	40	48	40	40	40	true
+This	2464	2408	98560	40	32	40	32	32	32	32	32	32	32	32	24	true
+Literal	2235	2083	71520	32	32	40	32	32	32	32	24	32	32	24	24	false
+TypeApply	1157	1131	46280	40	32	40	40	32	32	32	32	40	32	32	32	false
+AppliedTypeTree	877	775	35080	40	32	40	40	32	32	32	32	40	32	32	32	false
+CaseDef	816	735	32640	40	40	48	40	40	40	40	32	40	40	32	32	false
+Block	637	509	25480	40	32	40	40	32	32	32	32	40	32	32	32	false
+TypeDef	315	301	15120	48	48	48	48	48	40	48	40	48	40	40	40	true
+Match	320	286	12800	40	32	40	40	32	32	32	32	40	32	32	32	false
+TypeBoundsTree	306	292	12240	40	32	40	40	32	32	32	32	40	32	32	32	false
+Template	248	184	11904	48	40	48	40	40	40	40	40	40	40	40	32	true
+Bind	257	233	10280	40	40	40	40	40	32	40	32	40	32	32	32	true
+Function	256	239	10240	40	40	40	40	40	32	40	32	40	32	32	32	true
+If	246	204	9840	40	40	48	40	40	40	40	32	40	40	32	32	false
+New	269	259	8608	32	32	40	32	32	32	32	24	32	32	24	24	false
+ClassDef	163	102	7824	48	48	48	48	48	40	48	40	48	40	40	40	true
+Typed	186	152	7440	40	32	40	40	32	32	32	32	40	32	32	32	false
+Super	172	171	6880	40	32	40	40	32	32	32	32	40	32	32	32	false
+ApplyImplicitView	153	153	6120	40	32	40	40	32	32	32	32	40	32	32	32	false
+Assign	127	126	5080	40	32	40	40	32	32	32	32	40	32	32	32	false
+ModuleDef	83	81	3984	48	40	48	40	40	40	40	40	40	40	40	32	true
+PackageDef	67	60	2680	40	40	40	40	40	32	40	32	40	32	32	32	true
+Import	63	52	2520	40	40	40	40	40	32	40	32	40	32	32	32	true
+ApplyToImplicitArgs	56	56	2240	40	32	40	40	32	32	32	32	40	32	32	32	false
+Annotated	31	24	1240	40	32	40	40	32	32	32	32	40	32	32	32	false
+LabelDef	22	18	1056	48	40	48	40	40	40	40	40	40	40	40	32	true
+SelectFromTypeTree	21	17	840	40	40	40	40	40	32	40	32	40	32	32	32	true
+Throw	7	7	224	32	32	40	32	32	32	32	24	32	32	24	24	false
+Return	4	4	160	40	32	40	32	32	32	32	32	32	32	32	24	true
+Try	4	4	160	40	40	48	40	40	40	40	32	40	40	32	32	false
+Alternative	3	2	96	32	32	40	32	32	32	32	24	32	32	24	24	false
+ExistentialTypeTree	2	2	80	40	32	40	40	32	32	32	32	40	32	32	32	false
+noSelfType$	1	0	48	48	48	48	48	48	40	48	40	48	40	40	40	true
+pendingSuperCall$	1	0	40	40	32	40	40	32	32	32	32	40	32	32	32	false
+CompoundTypeTree	1	1	32	32	32	40	32	32	32	32	24	32	32	24	24	false
+EmptyTree$	1	1	32	32	32	40	32	32	32	32	24	32	32	24	24	false
+TOTAL heap trees: n=46594 bytes=1900328 (6.7% of live heap); walk trees n=43457
+  12B-hdr heap-weighted: base=1900328 (+0.00%)  A:-id=1676800 (-11.76%)  B:+sym=1928984 (+1.51%)  A+B=1808968 (-4.81%)  C:-outer=1676800 (-11.76%)  A+B+C=1556232 (-18.11%)
+  12B-hdr walk-weighted: base=1769520 (+0.00%)  A:-id=1560128 (-11.83%)  B:+sym=1795888 (+1.49%)  A+B=1685400 (-4.75%)  C:-outer=1560128 (-11.83%)  A+B+C=1448232 (-18.16%)
+  8B-hdr heap-weighted: base=1676800 (+0.00%)  A:-id=1527576 (-8.90%)  B:+sym=1808968 (+7.88%)  A+B=1556232 (-7.19%)  C:-outer=1527576 (-8.90%)  A+B+C=1436216 (-14.35%)
+  8B-hdr walk-weighted: base=1560128 (+0.00%)  A:-id=1421864 (-8.86%)  B:+sym=1685400 (+8.03%)  A+B=1448232 (-7.17%)  C:-outer=1421864 (-8.86%)  A+B+C=1337744 (-14.25%)
+positions/attachments (heap):
+  scala.reflect.internal.util.RangePosition          n=    13753 bytes=    440096  each=32
+  scala.reflect.internal.util.OffsetPosition         n=     8205 bytes=    196920  each=24
+  scala.reflect.macros.SingleAttachment              n=     2336 bytes=     56064  each=24
+  scala.reflect.internal.util.TransparentPosition    n=      835 bytes=     26720  each=32
+  scala.reflect.macros.NonemptyAttachments           n=       46 bytes=      1104  each=24
+  positions total bytes=720904 (2.5% of live heap)
+
+#### corpus re2s  (live heap after typer: 21 MB)
+class	heapN	walkN	heapBytes	12B-hdr/base	12B-hdr/A:-id	12B-hdr/B:+sym	12B-hdr/A+B	12B-hdr/C:-outer	12B-hdr/A+B+C	8B-hdr/base	8B-hdr/A:-id	8B-hdr/B:+sym	8B-hdr/A+B	8B-hdr/C:-outer	8B-hdr/A+B+C	symTree?
+Select	10695	10193	427800	40	40	40	40	40	32	40	32	40	32	32	32	true
+Ident	7805	7487	312200	40	32	40	32	32	32	32	32	32	32	32	24	true
+TypeTree	3969	3934	158760	40	32	40	40	32	32	32	32	40	32	32	32	false
+Apply	3729	3630	149160	40	32	40	40	32	32	32	32	40	32	32	32	false
+Literal	2890	2777	92480	32	32	40	32	32	32	32	24	32	32	24	24	false
+This	1789	1686	71560	40	32	40	32	32	32	32	32	32	32	32	24	true
+ValDef	1448	1401	69504	48	48	48	48	48	40	48	40	48	40	40	40	true
+AppliedTypeTree	1389	1374	55560	40	32	40	40	32	32	32	32	40	32	32	32	false
+DefDef	818	806	45808	56	56	56	56	56	48	56	48	56	48	48	48	true
+Block	637	614	25480	40	32	40	40	32	32	32	32	40	32	32	32	false
+If	553	536	22120	40	40	48	40	40	40	40	32	40	40	32	32	false
+Assign	407	407	16280	40	32	40	40	32	32	32	32	40	32	32	32	false
+New	353	348	11296	32	32	40	32	32	32	32	24	32	32	24	24	false
+Return	162	162	6480	40	32	40	32	32	32	32	32	32	32	32	24	true
+CaseDef	155	147	6200	40	40	48	40	40	40	40	32	40	40	32	32	false
+LabelDef	101	95	4848	48	40	48	40	40	40	40	40	40	40	40	32	true
+TypeApply	81	47	3240	40	32	40	40	32	32	32	32	40	32	32	32	false
+Template	42	40	2016	48	40	48	40	40	40	40	40	40	40	40	32	true
+Super	43	42	1720	40	32	40	40	32	32	32	32	40	32	32	32	false
+Import	36	27	1440	40	40	40	40	40	32	40	32	40	32	32	32	true
+Typed	34	34	1360	40	32	40	40	32	32	32	32	40	32	32	32	false
+Throw	41	41	1312	32	32	40	32	32	32	32	24	32	32	24	24	false
+ApplyToImplicitArgs	31	31	1240	40	32	40	40	32	32	32	32	40	32	32	32	false
+ClassDef	22	22	1056	48	48	48	48	48	40	48	40	48	40	40	40	true
+Match	24	23	960	40	32	40	40	32	32	32	32	40	32	32	32	false
+ModuleDef	19	18	912	48	40	48	40	40	40	40	40	40	40	40	32	true
+PackageDef	18	17	720	40	40	40	40	40	32	40	32	40	32	32	32	true
+Alternative	14	14	448	32	32	40	32	32	32	32	24	32	32	24	24	false
+Function	10	10	400	40	40	40	40	40	32	40	32	40	32	32	32	true
+TypeDef	6	6	288	48	48	48	48	48	40	48	40	48	40	40	40	true
+TypeBoundsTree	4	4	160	40	32	40	40	32	32	32	32	40	32	32	32	false
+Bind	3	3	120	40	40	40	40	40	32	40	32	40	32	32	32	true
+noSelfType$	1	0	48	48	48	48	48	48	40	48	40	48	40	40	40	true
+ApplyImplicitView	1	1	40	40	32	40	40	32	32	32	32	40	32	32	32	false
+pendingSuperCall$	1	0	40	40	32	40	40	32	32	32	32	40	32	32	32	false
+EmptyTree$	1	1	32	32	32	40	32	32	32	32	24	32	32	24	24	false
+TOTAL heap trees: n=37332 bytes=1493088 (6.6% of live heap); walk trees n=35978
+  12B-hdr heap-weighted: base=1493088 (+0.00%)  A:-id=1330944 (-10.86%)  B:+sym=1525144 (+2.15%)  A+B=1413744 (-5.31%)  C:-outer=1330944 (-10.86%)  A+B+C=1226488 (-17.86%)
+  12B-hdr walk-weighted: base=1439224 (+0.00%)  A:-id=1282192 (-10.91%)  B:+sym=1470136 (+2.15%)  A+B=1363320 (-5.27%)  C:-outer=1282192 (-10.91%)  A+B+C=1182312 (-17.85%)
+  8B-hdr heap-weighted: base=1330944 (+0.00%)  A:-id=1194432 (-10.26%)  B:+sym=1413744 (+6.22%)  A+B=1226488 (-7.85%)  C:-outer=1194432 (-10.26%)  A+B+C=1115088 (-16.22%)
+  8B-hdr walk-weighted: base=1282192 (+0.00%)  A:-id=1151400 (-10.20%)  B:+sym=1363320 (+6.33%)  A+B=1182312 (-7.79%)  C:-outer=1151400 (-10.20%)  A+B+C=1075496 (-16.12%)
+positions/attachments (heap):
+  scala.reflect.internal.util.RangePosition          n=    25284 bytes=    809088  each=32
+  scala.reflect.internal.util.OffsetPosition         n=     6831 bytes=    163944  each=24
+  scala.reflect.macros.SingleAttachment              n=     3639 bytes=     87336  each=24
+  scala.reflect.internal.util.TransparentPosition    n=      572 bytes=     18304  each=32
+  scala.reflect.macros.NonemptyAttachments           n=       53 bytes=      1272  each=24
+  positions total bytes=1079944 (4.8% of live heap)
+
+#### corpus scala  (live heap after typer: 334 MB)
+class	heapN	walkN	heapBytes	12B-hdr/base	12B-hdr/A:-id	12B-hdr/B:+sym	12B-hdr/A+B	12B-hdr/C:-outer	12B-hdr/A+B+C	8B-hdr/base	8B-hdr/A:-id	8B-hdr/B:+sym	8B-hdr/A+B	8B-hdr/C:-outer	8B-hdr/A+B+C	symTree?
+Select	386880	331296	15475200	40	40	40	40	40	32	40	32	40	32	32	32	true
+Ident	328971	224836	13158840	40	32	40	32	32	32	32	32	32	32	32	24	true
+TypeTree	218751	216997	8750040	40	32	40	40	32	32	32	32	40	32	32	32	false
+Apply	173586	110329	6943440	40	32	40	40	32	32	32	32	40	32	32	32	false
+This	115434	112429	4617360	40	32	40	32	32	32	32	32	32	32	32	24	true
+ValDef	92448	59765	4437504	48	48	48	48	48	40	48	40	48	40	40	40	true
+DefDef	61351	42359	3435656	56	56	56	56	56	48	56	48	56	48	48	48	true
+Literal	50050	46700	1601600	32	32	40	32	32	32	32	24	32	32	24	24	false
+AppliedTypeTree	36502	22819	1460080	40	32	40	40	32	32	32	32	40	32	32	32	false
+Block	30265	18247	1210600	40	32	40	40	32	32	32	32	40	32	32	32	false
+TypeApply	24147	21707	965880	40	32	40	40	32	32	32	32	40	32	32	32	false
+CaseDef	21984	13916	879360	40	40	48	40	40	40	40	32	40	40	32	32	false
+TypeDef	16431	12453	788688	48	48	48	48	48	40	48	40	48	40	40	40	true
+If	17827	10351	713080	40	40	48	40	40	40	40	32	40	40	32	32	false
+TypeBoundsTree	15866	12085	634640	40	32	40	40	32	32	32	32	40	32	32	32	false
+Bind	13021	10676	520840	40	40	40	40	40	32	40	32	40	32	32	32	true
+Template	8722	5637	418656	48	40	48	40	40	40	40	40	40	40	40	32	true
+New	11024	6631	352768	32	32	40	32	32	32	32	24	32	32	24	24	false
+Match	8290	4997	331600	40	32	40	40	32	32	32	32	40	32	32	32	false
+Function	7483	5340	299320	40	40	40	40	40	32	40	32	40	32	32	32	true
+ClassDef	6054	3740	290592	48	48	48	48	48	40	48	40	48	40	40	40	true
+Typed	5545	4210	221800	40	32	40	40	32	32	32	32	40	32	32	32	false
+Assign	5101	2952	204040	40	32	40	40	32	32	32	32	40	32	32	32	false
+Super	4833	4830	193320	40	32	40	40	32	32	32	32	40	32	32	32	false
+Import	4614	2591	184560	40	40	40	40	40	32	40	32	40	32	32	32	true
+ApplyImplicitView	3391	3391	135640	40	32	40	40	32	32	32	32	40	32	32	32	false
+PackageDef	3257	2333	130280	40	40	40	40	40	32	40	32	40	32	32	32	true
+ApplyToImplicitArgs	3040	3040	121600	40	32	40	40	32	32	32	32	40	32	32	32	false
+ModuleDef	2392	1611	114816	48	40	48	40	40	40	40	40	40	40	40	32	true
+UnApply	1933	1933	77320	40	32	40	40	32	32	32	32	40	32	32	32	false
+Annotated	1784	1129	71360	40	32	40	40	32	32	32	32	40	32	32	32	false
+LabelDef	1311	770	62928	48	40	48	40	40	40	40	40	40	40	40	32	true
+NamedArg	944	9	37760	40	32	40	40	32	32	32	32	40	32	32	32	false
+ExistentialTypeTree	778	457	31120	40	32	40	40	32	32	32	32	40	32	32	32	false
+Throw	948	570	30336	32	32	40	32	32	32	32	24	32	32	24	24	false
+Try	683	387	27320	40	40	48	40	40	40	40	32	40	40	32	32	false
+SingletonTypeTree	727	673	23264	32	32	40	32	32	32	32	24	32	32	24	24	false
+Return	511	423	20440	40	32	40	32	32	32	32	32	32	32	32	24	true
+Alternative	579	355	18528	32	32	40	32	32	32	32	24	32	32	24	24	false
+CompoundTypeTree	286	286	9152	32	32	40	32	32	32	32	24	32	32	24	24	false
+SelectFromTypeTree	164	104	6560	40	40	40	40	40	32	40	32	40	32	32	32	true
+Star	3	3	96	32	32	40	32	32	32	32	24	32	32	24	24	false
+noSelfType$	1	0	48	48	48	48	48	48	40	48	40	48	40	40	40	true
+pendingSuperCall$	1	0	40	40	32	40	40	32	32	32	32	40	32	32	32	false
+EmptyTree$	1	1	32	32	32	40	32	32	32	32	24	32	32	24	24	false
+TOTAL heap trees: n=1687914 bytes=69008104 (19.7% of live heap); walk trees n=1325372
+  12B-hdr heap-weighted: base=69008104 (+0.00%)  A:-id=61071320 (-11.50%)  B:+sym=69841000 (+1.21%)  A+B=65349376 (-5.30%)  C:-outer=61071320 (-11.50%)  A+B+C=56337688 (-18.36%)
+  12B-hdr walk-weighted: base=53922520 (+0.00%)  A:-id=47723816 (-11.50%)  B:+sym=54561504 (+1.19%)  A+B=51156872 (-5.13%)  C:-outer=47723816 (-11.50%)  A+B+C=43958560 (-18.48%)
+  8B-hdr heap-weighted: base=61071320 (+0.00%)  A:-id=55504792 (-9.11%)  B:+sym=65349376 (+7.01%)  A+B=56337688 (-7.75%)  C:-outer=55504792 (-9.11%)  A+B+C=51846064 (-15.11%)
+  8B-hdr walk-weighted: base=47723816 (+0.00%)  A:-id=43319576 (-9.23%)  B:+sym=51156872 (+7.19%)  A+B=43958560 (-7.89%)  C:-outer=43319576 (-9.23%)  A+B+C=40553928 (-15.02%)
+positions/attachments (heap):
+  scala.reflect.internal.util.RangePosition          n=   731741 bytes=  23415712  each=32
+  scala.reflect.internal.util.OffsetPosition         n=   258994 bytes=   6215856  each=24
+  scala.reflect.macros.SingleAttachment              n=   124712 bytes=   2993088  each=24
+  scala.reflect.internal.util.TransparentPosition    n=    37454 bytes=   1198528  each=32
+  scala.reflect.macros.NonemptyAttachments           n=     3052 bytes=     73248  each=24
+  positions total bytes=33896432 (9.7% of live heap)
