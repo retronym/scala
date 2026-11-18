@@ -1507,11 +1507,10 @@ abstract class Erasure extends InfoTransform
      *  Must be created and run `exitingErasure`.
      */
     final class ErasureRetyper(root: Tree)
-        extends PreEraseTransformer(null)
-        with LocalTyperAssigner {
+        extends PreEraseTransformer(null) {
       override protected def initialTyper(): analyzer.Typer = newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]
       // Types the trees that adaptation synthesises, which `typed` here would erase again.
-      private object adaptAssigner extends OwnerStackTransformer with TypeAssigner {
+      private object adaptAssigner extends TypeAssigner {
         override protected def fallbackTyper(why: String): analyzer.Typer = ErasureRetyper.this.localTyper
       }
       private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
