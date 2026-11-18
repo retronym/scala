@@ -170,9 +170,40 @@ trait TypingTransformers extends TypeAssigners {
           atOwner(currentOwner) { tree.transform(this) }
         case PackageDef(_, _) =>
           atOwner(tree.symbol) { tree.transform(this) }
+        case _: ValDef | _: DefDef | _: ClassDef | _: ModuleDef | _: TypeDef | _: Function =>
+          transformDefinition(tree)
         case _ =>
           tree.transform(this)
       }
+    }
+
+    /** What `tree.transform(this)` does for a definition, which enters its owner with `Transformer.atOwner` and
+     *  a closure over the copy. That call is virtual and outside this class, so the closure is allocated for
+     *  every definition; entering the owner here needs none.
+     */
+    private def transformDefinition(tree: Tree): Tree = {
+      val sym = tree.symbol
+      val owner = tree match {
+        case _: ModuleDef => if (sym eq NoSymbol) sym else sym.asModule.moduleClass
+        case _            => sym
+      }
+      val i = enterOwner(tree, owner)
+      try tree match {
+        case vd @ ValDef(mods, name, tpt, rhs) =>
+          treeCopy.ValDef(vd, transformModifiers(mods), name, transform(tpt), transform(rhs))
+        case dd @ DefDef(mods, name, tparams, vparamss, tpt, rhs) =>
+          treeCopy.DefDef(dd, transformModifiers(mods), name, transformTypeDefs(tparams), transformValDefss(vparamss),
+            transform(tpt), transform(rhs))
+        case cd @ ClassDef(mods, name, tparams, impl) =>
+          treeCopy.ClassDef(cd, transformModifiers(mods), name, transformTypeDefs(tparams), transformTemplate(impl))
+        case md @ ModuleDef(mods, name, impl) =>
+          treeCopy.ModuleDef(md, transformModifiers(mods), name, transformTemplate(impl))
+        case td @ TypeDef(mods, name, tparams, rhs) =>
+          treeCopy.TypeDef(td, transformModifiers(mods), name, transformTypeDefs(tparams), transform(rhs))
+        case fun @ Function(vparams, body) =>
+          treeCopy.Function(fun, transformValDefs(vparams), transform(body))
+        case _ => throw new MatchError(tree)
+      } finally exitOwner(i)
     }
     def transformAtOwner(owner: Symbol, tree: Tree): Tree = atOwner(tree, owner) { transform(tree) }
   }
