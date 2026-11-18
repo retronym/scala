@@ -205,7 +205,7 @@ abstract class ExplicitOuter extends InfoTransform
    *  The class provides methods for referencing via outer.
    */
   abstract class OuterPathTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) with TypeAssigner {
-    def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
+    def this(unit: CompilationUnit) = { this(null: analyzer.Typer); rootUnit = unit }
     /** The directly enclosing outer parameter, if we are in a constructor */
     protected var outerParam: Symbol = NoSymbol
 
@@ -352,7 +352,11 @@ abstract class ExplicitOuter extends InfoTransform
      */
     def outerAccessorDef: Tree = {
       val acc = outerAccessor(currentClass)
-      val rhs = if (acc.isDeferred) EmptyTree else Select(This(currentClass), outerField(currentClass))
+      val rhs = if (acc.isDeferred) EmptyTree else {
+        // A non-final class's own field overloads its parent's: select it, as the typer would.
+        val fld = outerField(currentClass)
+        Select(This(currentClass), if (fld.isOverloaded) fld.suchThat(_.owner == currentClass) else fld)
+      }
       typed(DefDef(acc, rhs), WildcardType)
     }
 

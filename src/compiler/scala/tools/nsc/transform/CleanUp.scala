@@ -62,7 +62,17 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
     }
     private def mkTerm(prefix: String): TermName = unit.freshTermName(prefix)
 
-    private var localTyper: analyzer.Typer = null
+    private var _localTyper: analyzer.Typer = null
+    // The template (and its class) whose typer is made when `localTyper` is next read.
+    private var typerTree: Tree = _
+    private var typerOwner: Symbol = _
+    private def localTyper: analyzer.Typer = {
+      if (typerTree ne null) {
+        _localTyper = typer.atOwner(typerTree, typerOwner)
+        typerTree = null
+      }
+      _localTyper
+    }
 
     private def typedWithPos(pos: Position)(tree: Tree) =
       localTyper.typedPos(pos)(tree)
@@ -706,7 +716,8 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
        * as a statement of the form "symbol = tree" to the beginning of the default
        * constructor. */
       case Template(parents, self, body) =>
-        localTyper = typer.atOwner(tree, currentClass)
+        typerTree = tree
+        typerOwner = currentClass
         transformTemplate(tree)
 
       case Literal(c) if c.tag == ClazzTag =>
