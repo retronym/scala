@@ -1547,8 +1547,9 @@ abstract class Erasure extends InfoTransform
      *  On entering a tree, it pre-erases it (`preEraseNode`). On leaving, the tree gets its erased
      *  type from the erased info of its symbol and the types of its children, as `Eraser` (a
      *  `Typer` with an overridden `adapt`) would compute it, and is adapted to its expected type
-     *  with `TypeAdapter.adaptToType`, where boxing, unboxing and casts are inserted. Only the trees
-     *  that adaptation synthesises go through `localTyper`, which is an `Eraser`.
+     *  with `TypeAdapter.adaptToType`, where boxing, unboxing and casts are inserted. The trees that
+     *  adaptation synthesises are typed with `assignTypes`; only those it cannot type go through
+     *  `localTyper`, which is an `Eraser`.
      *
      *  Must be created and run `exitingErasure`.
      */
@@ -1556,7 +1557,9 @@ abstract class Erasure extends InfoTransform
         extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
         with TypeAssigner {
       private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
-        def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+        // Boxing and unboxing build trees of bound symbols around typed trees: a `TypeAssigner` that does
+        // not adapt types them, and hands any that do not conform to `localTyper`.
+        def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
         override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
       }
