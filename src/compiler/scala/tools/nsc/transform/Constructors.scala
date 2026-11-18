@@ -22,7 +22,7 @@ import symtab.Flags._
 /** This phase converts classes with parameters into Java-like classes with
  *  fields, which are assigned to from constructors.
  */
-abstract class Constructors extends Statics with Transform with TypingTransformers with ast.TreeDSL {
+abstract class Constructors extends Statics with Transform with TypingTransformers with ast.TreeDSL with TypeAdaptingTransformer {
   import global._
   import definitions._
 
@@ -87,8 +87,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
             cd
           else {
             checkUninitializedReads(cd)
-            val tplTransformer = new TemplateTransformer(unit, impl0)
-            tplTransformer.localTyper = this.localTyper
+            val tplTransformer = new TemplateTransformer(unit, impl0, this)
             tplTransformer.atOwner(impl0, cd.symbol) {
               treeCopy.ClassDef(cd, mods0, name0, tparams0, tplTransformer.transformed)
             }
@@ -448,7 +447,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
   } // GuardianOfCtorStmts
 
-  private class TemplateTransformer(val unit: CompilationUnit, val impl: Template)
+  private class TemplateTransformer(val unit: CompilationUnit, val impl: Template, outer: TypingTransformer)
     extends TypingTransformer(unit)
     with    StaticsTransformer
     with    DelayedInitHelper
@@ -456,7 +455,17 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     with    GuardianOfCtorStmts
     with    fields.CheckedAccessorTreeSynthesis
   {
-    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+    override protected def initialTyper(): analyzer.Typer = outer.localTyper
+    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
+
+    private[this] val typeAdapter = new TypeAdapter {
+      def typedPos(pos: Position)(tree: Tree): Tree = TemplateTransformer.this.typedPos(pos)(tree)
+      override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
+    }
+
+    /** As the `Eraser` that typed these trees did: box, unbox or cast to the expected type. */
+    override protected def adapt(tree: Tree, pt: Type, funMode: Boolean): Tree =
+      if (phase.erasedTypes) typeAdapter.adaptToType(tree, pt) else super.adapt(tree, pt, funMode)
 
     override val clazz                = impl.symbol.owner  // the transformed class
     private val stats                 = impl.body          // the transformed template body
@@ -563,7 +572,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     // Assign `rhs` to class field / trait setter `assignSym`
     def mkAssign(assignSym: Symbol, rhs: Tree): Tree =
-      localTyper.typedPos(assignSym.pos) {
+      typedPos(assignSym.pos) {
         val qual = Select(This(clazz), assignSym)
         if (assignSym.isSetter) Apply(qual, List(rhs))
         else Assign(qual, rhs)
@@ -579,7 +588,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
       if (from.name != nme.OUTER ||
         from.tpe.typeSymbol.isPrimitiveValueClass) result
-      else localTyper.typedPos(to.pos) {
+      else typedPos(to.pos) {
         // `throw null` has the same effect as `throw new NullPointerException`, see JVM spec on instruction `athrow`
         IF(from OBJ_EQ NULL) THEN Throw(gen.mkZero(ThrowableTpe)) ELSE result
       }
@@ -784,7 +793,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
       val specializedStats = guardSpecializedInitializer(remainingConstrStatsDelayedInit)
       val fence = if (needFenceForDelayedInit || clazz.primaryConstructor.hasAttachment[ConstructorNeedsFence.type]) {
-        val tree = localTyper.typedPos(clazz.primaryConstructor.pos)(gen.mkMethodCall(RuntimeStaticsModule, nme.releaseFence, Nil))
+        val tree = typedPos(clazz.primaryConstructor.pos)(gen.mkMethodCall(RuntimeStaticsModule, nme.releaseFence, Nil))
         tree :: Nil
       } else Nil
 

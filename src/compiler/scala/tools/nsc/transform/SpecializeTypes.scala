@@ -1615,7 +1615,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         val qual1                     = transform(qual)
         def copySelect                = treeCopy.Select(tree, qual1, name)
         def newSelect(member: Symbol) = atPos(tree.pos)(Select(qual1, member))
-        def typedOp(member: Symbol)   = localTyper typedOperator newSelect(member)
+        def typedOp(member: Symbol)   = typedFun(newSelect(member)) // as `localTyper.typedOperator`
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
         val ignoreEnv = specializedTypeVars(symbol.info).isEmpty || name == nme.CONSTRUCTOR
@@ -1728,13 +1728,13 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         case PackageDef(pid, stats) =>
           tree.symbol.info // make sure specializations have been performed
           atOwner(tree, symbol) {
-            val specMembers = implSpecClasses(stats) map localTyper.typed
+            val specMembers = implSpecClasses(stats).map(localTyper.typed(_))
             treeCopy.PackageDef(tree, pid, transformStats(stats ::: specMembers, symbol.moduleClass))
           }
 
         case Template(parents, self, body) =>
           def transformTemplate = {
-            val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: implSpecClasses(body).map(localTyper.typed)
+            val specMembers = makeSpecializedMembers(tree.symbol.enclClass) ::: implSpecClasses(body).map(localTyper.typed(_))
             if (!symbol.isPackageClass)
               new CollectMethodBodies()(tree)
             // currentOwner.info.parents.map(tpe => TypeTree(tpe) setPos parents.head.pos)

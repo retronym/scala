@@ -1207,7 +1207,18 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
      */
     private[Contexts] def importedAccessibleSymbol(imp: ImportInfo, sym: => Symbol): Symbol =
       if (isExcludedRootImport(imp)) NoSymbol
-      else sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
+      else accessibleImported(imp, sym)
+
+    /** `importedAccessibleSymbol` of a symbol already looked up, without a closure for it. */
+    private[Contexts] def importedAccessibleSymbolOf(imp: ImportInfo, sym: Symbol): Symbol =
+      if (isExcludedRootImport(imp)) NoSymbol
+      else accessibleImported(imp, sym)
+
+    // `sym.filter(isAccessible ...)`, with a closure only for an overloaded symbol.
+    private def accessibleImported(imp: ImportInfo, sym: Symbol): Symbol =
+      if (sym.isOverloaded) sym.filter(s => s.exists && isAccessible(s, imp.qual.tpe, superAccess = false))
+      else if (sym.exists && isAccessible(sym, imp.qual.tpe, superAccess = false)) sym
+      else NoSymbol
 
     private def isExcludedRootImport(imp: ImportInfo): Boolean =
       imp.isRootImport && excludedRootImportsCached.get(unit).exists(_.contains(imp.qual.symbol))
@@ -1494,7 +1505,7 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         val pair @ (sel, sym) = imp.importedSelectedSymbol(name, requireExplicit)
         if (sym == NoSymbol) pair
         else {
-          val sym1 = thisContext.importedAccessibleSymbol(imp, sym).filter(qualifies)
+          val sym1 = thisContext.importedAccessibleSymbolOf(imp, sym).filter(qualifies)
           if (sym1 eq sym) pair
           else (sel, sym1)
         }
@@ -1588,15 +1599,16 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
         val cx0     = cx
         val depth0  = symbolDepth
         val wasFoundInSuper = foundInSuper
-        val foundCompetingSymbol: () => Boolean =
-          if (foreignDefined)
+        val defSym0IsLevel4 = foreignDefined
+        def foundCompetingSymbol(): Boolean =
+          if (defSym0IsLevel4)
             // if the first found symbol (defSym0) is level 4 (foreignDefined), a lower level (1 or 1b) defSym is competing
-            () => defSym.exists && !foreignDefined
+            defSym.exists && !foreignDefined
           else {
             // if defSym0 is level 1 or 1b, another defSym is competing if defined in an outer scope in the same file
-            () => defSym.exists && !(pre.typeSymbol.isPackageClass && !defSym.owner.isPackageClass) && !foundInSuper && !foreignDefined
-            //                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-            //                       defined in package object (or inherited into package object)
+            defSym.exists && !(pre.typeSymbol.isPackageClass && !defSym.owner.isPackageClass) && !foundInSuper && !foreignDefined
+            //               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            //               defined in package object (or inherited into package object)
           }
         while ((cx ne NoContext) && cx.depth >= symbolDepth) cx = cx.outer
         if (wasFoundInSuper)
@@ -1883,6 +1895,10 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
     /** The symbol with name `name` imported from import clause `tree`. */
     def importedSymbol(name: Name): Symbol = importedSelectedSymbol(name, requireExplicit = false)._2
 
+    private def isImportable(sym: Symbol): Boolean =
+      if (isRootImport) !definitions.isUnimportableUnlessRenamed(sym)
+      else definitions.isImportable(sym)
+
     /** If requireExplicit is true, wildcard imports are not considered. */
     def importedSelectedSymbol(name: Name, requireExplicit: Boolean): (ImportSelector, Symbol) = {
       var result: Symbol = NoSymbol
@@ -1927,10 +1943,11 @@ trait Contexts { self: AbstractAnalyzer with ImportTracking =>
       //      check inside the above loop, as I believe that
       //      this always represents a mistake on the part of
       //      the caller.
-      result.filter(sym =>
-        if (isRootImport) !definitions.isUnimportableUnlessRenamed(sym)
-        else definitions.isImportable(sym)
-      ) match {
+      val importable =
+        if (result.isOverloaded) result.filter(isImportable)
+        else if ((result ne NoSymbol) && isImportable(result)) result
+        else NoSymbol
+      importable match {
         case _: NoSymbol => TupleOfNullAndNoSymbol
         case _           => (current, result)
       }
