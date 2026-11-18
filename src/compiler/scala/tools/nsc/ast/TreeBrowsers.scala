@@ -318,8 +318,7 @@ abstract class TreeBrowsers {
         case ProgramTree(_) => ()
         case UnitTree(_)    => ()
         case _ =>
-          str.append("tree.id: ").append(t.id)
-          str.append("\ntree.pos: ").append(t.pos)
+          str.append("tree.pos: ").append(t.pos)
           str.append(TreeInfo.attachments(t, "tree"))
           str.append("\nSymbol: ").append(TreeInfo.symbolText(t))
           str.append("\nSymbol owner: ").append(

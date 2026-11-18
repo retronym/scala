@@ -158,21 +158,23 @@ trait Positions extends api.Positions { self: SymbolTable =>
   }
 
   def validatePositions(tree: Tree): Unit = if (!useOffsetPositions) {
+    lazy val ids = new TreeIds
+
     def reportTree(prefix: String, tree: Tree): Unit = {
       val source = if (tree.pos.isDefined) tree.pos.source else ""
-      inform("== " + prefix + " tree [" + tree.id + "] of type " + tree.productPrefix + " at " + tree.pos.show + source)
+      inform("== " + prefix + " tree [" + ids(tree) + "] of type " + tree.productPrefix + " at " + tree.pos.show + source)
       inform("")
-      inform(treeStatus(tree))
+      inform(ids.status(tree))
       inform("")
     }
 
     def positionError(topTree: Tree, msg: String)(body: => Unit): Unit = {
       inform("======= Position error\n" + msg)
       body
-      inform("\nWhile validating #" + topTree.id)
-      inform(treeStatus(topTree))
+      inform("\nWhile validating #" + ids(topTree))
+      inform(ids.status(topTree))
       inform("\nChildren:")
-      topTree.children foreach (t => inform("  " + treeStatus(t, topTree)))
+      topTree.children foreach (t => inform("  " + ids.status(t, topTree)))
       inform("=======")
       throw new ValidateException(msg)
     }
@@ -220,13 +222,13 @@ trait Positions extends api.Positions { self: SymbolTable =>
       def loop(tree: Tree, encltree: Tree): Unit = if (!tree.isEmpty && tree.canHaveAttrs) {
         val treePos = tree.pos
         if (trace)
-          inform(f"[${"validate"}%10s] ${treeStatus(tree, encltree)}")
+          inform(f"[${"validate"}%10s] ${ids.status(tree, encltree)}")
 
         if (!treePos.isDefined)
-          positionError(topTree, s"Unpositioned tree #${tree.id}") {
-            inform("%15s %s".format("unpositioned", treeStatus(tree, encltree)))
-            inform("%15s %s".format("enclosing", treeStatus(encltree)))
-            encltree.children foreach (t => inform("%15s %s".format("sibling", treeStatus(t, encltree))))
+          positionError(topTree, s"Unpositioned tree #${ids(tree)}") {
+            inform("%15s %s".format("unpositioned", ids.status(tree, encltree)))
+            inform("%15s %s".format("enclosing", ids.status(encltree)))
+            encltree.children foreach (t => inform("%15s %s".format("sibling", ids.status(t, encltree))))
           }
 
         solidChildrenCollector(tree)
@@ -235,12 +237,12 @@ trait Positions extends api.Positions { self: SymbolTable =>
         if (treePos.isRange) {
           val enclPos = encltree.pos
           if (!enclPos.isRange)
-            positionError(topTree, "Synthetic tree [" + encltree.id + "] contains nonsynthetic tree [" + tree.id + "]") {
+            positionError(topTree, "Synthetic tree [" + ids(encltree) + "] contains nonsynthetic tree [" + ids(tree) + "]") {
               reportTree("Enclosing", encltree)
               reportTree("Enclosed", tree)
             }
           if (!enclPos.includes(treePos))
-            positionError(topTree, "Enclosing tree [" + encltree.id + "] does not include tree [" + tree.id + "]") {
+            positionError(topTree, "Enclosing tree [" + ids(encltree) + "] does not include tree [" + ids(tree) + "]") {
               reportTree("Enclosing", encltree)
               reportTree("Enclosed", tree)
             }
