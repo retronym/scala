@@ -22,33 +22,38 @@ import scala.tools.nsc.ast.parser.xml.Utility.isNameStart
 import scala.tools.nsc.settings.ScalaVersion
 import scala.tools.nsc.util.{CharArrayReader, CharArrayReaderData}
 import Tokens._
-import java.lang.StringBuilder
+
+/** The scanner's buffer for the characters of a token. A plain array, as appending and comparing are hot for
+ *  identifiers, and it keeps `String.hashCode` of its contents so that entering a name needn't compute it.
+ */
+final class Cbuf {
+  private[this] var chars = new Array[Char](Cbuf.TargetCapacity)
+  private[this] var size = 0
+  private[this] var h = 0
+
+  def append(c: Char): Unit = {
+    if (size == chars.length) chars = java.util.Arrays.copyOf(chars, size * 2)
+    chars(size) = c
+    size += 1
+    h = 31 * h + c
+  }
+  def clear(): Unit = {
+    if (chars.length > Cbuf.TargetCapacity) chars = new Array[Char](Cbuf.TargetCapacity)
+    size = 0
+    h = 0
+  }
+  def array: Array[Char] = chars
+  def length: Int = size
+  def hash: Int = h
+  def isEmpty = size == 0
+  def last = chars(size - 1)
+  override def toString = new String(chars, 0, size)
+}
 
 object Cbuf {
   final val TargetCapacity = 256
-
-  def create(): StringBuilder = new StringBuilder(TargetCapacity)
-
-  implicit class StringBuilderOps(val sb: StringBuilder) extends AnyVal {
-    def clear(): Unit = {
-      if (sb.capacity() > TargetCapacity) {
-        sb.setLength(TargetCapacity)
-        sb.trimToSize()
-      }
-      sb.setLength(0)
-    }
-    def toCharArray: Array[Char] = {
-      val n = sb.length()
-      val res = new Array[Char](n)
-      sb.getChars(0, n, res, 0)
-      res
-    }
-    def isEmpty = sb.length() == 0
-    def last = sb.charAt(sb.length() - 1)
-  }
+  def create(): Cbuf = new Cbuf
 }
-
-import Cbuf.StringBuilderOps
 
 /** See Parsers.scala / ParsersCommon for some explanation of ScannersCommon.
  */
@@ -102,12 +107,12 @@ trait ScannersCommon {
   }
 
   def createKeywordArray(keywords: Seq[(Name, Token)], defaultToken: Token): (Token, Array[Token]) = {
-    val names = keywords.sortBy(_._1.start).map { case (k, v) => (k.start, v) }
+    val names = keywords.sortBy(_._1.id).map { case (k, v) => (k.id, v) }
     val low   = names.head._1
     val high  = names.last._1
     val arr   = Array.fill(high - low + 1)(defaultToken)
 
-    names foreach { case (k, v) => arr(k + low) = v }
+    names foreach { case (k, v) => arr(k - low) = v }
     (low, arr)
   }
 }
@@ -298,11 +303,11 @@ trait Scanners extends ScannersCommon {
 
     /** Clear buffer and set name and token */
     private def finishNamed(idtoken: Token = IDENTIFIER): Unit = {
-      name = newTermName(cbuf.toCharArray)
+      name = newTermNameHashed(cbuf.array, cbuf.length, cbuf.hash)
       cbuf.clear()
       token = idtoken
       if (idtoken == IDENTIFIER) {
-        val idx = name.start - kwOffset
+        val idx = name.id - kwOffset
         if (idx >= 0 && idx < kwArray.length) {
           token = kwArray(idx)
           if (token == IDENTIFIER && allowIdent != name) {
@@ -1050,9 +1055,9 @@ trait Scanners extends ScannersCommon {
             getInterpolatedIdentRest()
           } else {
             next.token = IDENTIFIER
-            next.name = newTermName(cbuf.toCharArray)
+            next.name = newTermNameHashed(cbuf.array, cbuf.length, cbuf.hash)
             cbuf.clear()
-            val idx = next.name.start - kwOffset
+            val idx = next.name.id - kwOffset
             if (idx >= 0 && idx < kwArray.length)
               next.token = kwArray(idx)
           }
