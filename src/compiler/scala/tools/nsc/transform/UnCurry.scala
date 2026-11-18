@@ -75,7 +75,7 @@ abstract class UnCurry extends InfoTransform
 
 // uncurry and uncurryType expand type aliases
 
-  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with TypeAssigner {
+  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private val forceExpandFunction = settings.Ydelambdafy.value == "inline"
     private var needTryLift       = false
     private var inConstructorFlag = 0L

@@ -64,7 +64,7 @@ trait PatternMatching extends Transform
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new MatchTransformer(unit)
 
-  class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with TypeAssigner {
+  class MatchTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
     private var inForceDesugar = false
 
     override def transform(tree: Tree): Tree = tree match {

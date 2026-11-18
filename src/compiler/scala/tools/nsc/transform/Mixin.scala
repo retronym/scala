@@ -420,15 +420,15 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new MixinTransformer(unit)
 
-  class MixinTransformer(unit : CompilationUnit) extends ContextLiteTransformer with ContextLiteTypeAssigner with AccessorTreeSynthesis {
+  class MixinTransformer(unit : CompilationUnit) extends TypeAssigner with AccessorTreeSynthesis {
     /** The rootContext used for typing */
     private val rootContext =
       erasure.erasureAnalyzer.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)
 
     // A typer for the template being transformed, made when `localTyper` is next read.
-    private val typers = new erasure.erasureAnalyzer.LazyTyper(erasure.erasureAnalyzer.newTyper(rootContext))
+    private val typers = new erasure.erasureAnalyzer.TyperStack(erasure.erasureAnalyzer.newTyper(rootContext))
     private def localTyper: erasure.erasureAnalyzer.Typer = typers.typer
-    override protected def typerFor(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
+    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
     protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     private val nullables = mutable.HashMap[Symbol, Map[Symbol, List[Symbol]]]()
