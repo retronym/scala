@@ -36,6 +36,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#267 | Skip virtual widen/dealias in dealiasWiden for class type refs | textually clean, adapted to retronym/scala#243: the fast path tests for its single `ClassTypeRef` class, and `AliasTypeRef` is a final class there |
 | retronym/scala#268 | Type post-typer trees without a context, and make contexts only when read | supersedes retronym/scala#148's `TypingTransformer` (its side taken in `TypingTransformers.scala` and `neg/t12494.check`, whose `-Ylog` context lines go away); in `PatternMatching.scala` its `typedStableRef(tree)` and stable-reference shortcut are applied to scala/scala#11307's `substitute` |
 | retronym/scala#204 | Select how names are stored with -Yname-table | clean, without its `PLAN.md`. A commit on top makes `-Yname-table:shared` the default, so benchmarks need no flag |
+| retronym/scala#270 | Pack opaque range positions into one Int when they fit | clean |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
