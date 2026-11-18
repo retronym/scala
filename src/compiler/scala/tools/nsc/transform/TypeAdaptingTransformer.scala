@@ -26,6 +26,9 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
 
     def typedPos(pos: Position)(tree: Tree): Tree
 
+    /** `tree`, typed, cast to `pt`: `gen.mkAttributedCast`, which types the cast with a `Typer`. */
+    protected def typedCast(tree: Tree, pt: Type): Tree = gen.mkAttributedCast(tree, pt)
+
     /**
      * scala/bug#4148: can't always replace box(unbox(x)) by x because
      *   - unboxing x may lead to throwing an exception, e.g. in "aah".asInstanceOf[Int]
@@ -142,7 +145,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
         // See scala/bug#2386 for one example of when this might be necessary.
         val needsExtraCast = isPrimitiveValueType(tree.tpe.typeArgs.head) && !isPrimitiveValueType(pt.typeArgs.head)
         val tree1 = if (needsExtraCast) gen.mkRuntimeCall(nme.toObjectArray, List(tree)) else tree
-        gen.mkAttributedCast(tree1, pt)
+        typedCast(tree1, pt)
       } else {
         tree match {
           case ld: LabelDef =>
@@ -153,7 +156,7 @@ trait TypeAdaptingTransformer { self: TreeDSL =>
             }
             deriveLabelDef(ld)(rhs => cast(rhs, pt)).setType(pt)
           case _ =>
-            gen.mkAttributedCast(tree, pt)
+            typedCast(tree, pt)
         }
       }
     }
