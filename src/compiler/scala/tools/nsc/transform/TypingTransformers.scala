@@ -35,18 +35,13 @@ trait TypingTransformers extends TypeAssigners {
    *  (`Context.make`, as it was eagerly) when `localTyper` is next read. Most definitions in most phases are
    *  transformed without typing anything, so most of those contexts were never used.
    */
-  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends AstTransformer {
+  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends ContextLiteTransformer {
     def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
 
     private[this] var _localTyper: analyzer.Typer = initLocalTyper
-    // The frames entered by `atOwner`. Those below `materialized` have their context made, and `parentContexts(i)` is
-    // the context that frame `i`'s was made from, restored when it exits.
-    private[this] var frameTrees     = new Array[AnyRef](16)
-    private[this] var frameOwners    = new Array[AnyRef](16)
+    // The frames below `materialized` have their context made, and `parentContexts(i)` is the context that frame
+    // `i`'s was made from, restored when it exits.
     private[this] var parentContexts = new Array[AnyRef](16)
-    // The owner before frame `i` was entered, restored when it exits.
-    private[this] var prevOwners     = new Array[AnyRef](16)
-    private[this] var frames         = 0
     private[this] var materialized   = 0
     private[this] val eager          = settings.YeagerTypingTransformerContexts.value
 
@@ -76,6 +71,36 @@ trait TypingTransformers extends TypeAssigners {
     }
 
     currentOwner = _localTyper.context.owner
+
+    override protected def enterOwner(tree: Tree, owner: Symbol): Int = {
+      val i = super.enterOwner(tree, owner)
+      if (i == parentContexts.length) parentContexts = java.util.Arrays.copyOf(parentContexts, i * 2)
+      if (eager) materialize()
+      i
+    }
+
+    /** Pops frame `i`, restoring the owner and, if it was made, the context from before it. */
+    override protected def exitOwner(i: Int): Unit = {
+      super.exitOwner(i)
+      if (materialized > i) {
+        _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
+        parentContexts(i) = null
+        materialized = i
+      }
+    }
+  }
+
+  /** A "context-lite" transformer: a stack of the trees and owners it has entered, with no typing context.
+   *  A phase that needs only its enclosing owners, and types the trees it synthesises with a
+   *  `ContextLiteTypeAssigner`, extends it directly; `TypingTransformer` makes contexts for its frames.
+   */
+  abstract class ContextLiteTransformer extends AstTransformer {
+    // The frames entered by `atOwner`, and the owner before frame `i` was entered, restored when it exits.
+    protected[this] var frameTrees  = new Array[AnyRef](16)
+    protected[this] var frameOwners = new Array[AnyRef](16)
+    private[this] var prevOwners    = new Array[AnyRef](16)
+    protected[this] var frames      = 0
+
     protected var curTree: Tree = _
 
     @inline override final def atOwner[A](owner: Symbol)(trans: => A): A = atOwner(curTree, owner)(trans)
@@ -97,26 +122,19 @@ trait TypingTransformers extends TypeAssigners {
       if (i == frameTrees.length) {
         frameTrees = java.util.Arrays.copyOf(frameTrees, i * 2)
         frameOwners = java.util.Arrays.copyOf(frameOwners, i * 2)
-        parentContexts = java.util.Arrays.copyOf(parentContexts, i * 2)
         prevOwners = java.util.Arrays.copyOf(prevOwners, i * 2)
       }
       frameTrees(i) = tree
       frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
       prevOwners(i) = currentOwner
       frames = i + 1
-      if (eager) materialize()
       currentOwner = owner
       i
     }
 
-    /** Pops frame `i`, restoring the owner and, if it was made, the context from before it. */
+    /** Pops frame `i`, restoring the owner from before it. */
     protected def exitOwner(i: Int): Unit = {
       currentOwner = prevOwners(i).asInstanceOf[Symbol]
-      if (materialized > i) {
-        _localTyper.context = parentContexts(i).asInstanceOf[analyzer.Context]
-        parentContexts(i) = null
-        materialized = i
-      }
       frameTrees(i) = null
       frameOwners(i) = null
       prevOwners(i) = null
