@@ -30,8 +30,24 @@ trait TypeAssigners { self: TypingTransformers =>
    *  A subclass hooks in at three points: `enter` (on entering an original tree), `adapt`
    *  (adapting a typed tree to its expected type) and `typed1`/`typedCore` (special cases).
    *  `Erasure.ErasureRetyper` is one, typing erased trees.
+   *
+   *  It needs no typing context: what it needs from `localTyper` goes through `contextOwner` and
+   *  `typerFor`, which `TypeAssigner` implements. After erasure, only `fallback` needs a `Typer`.
    */
-  trait TypeAssigner extends TypingTransformer {
+  trait ContextLiteTypeAssigner extends ContextLiteTransformer {
+    /** The owner of the typing context. */
+    protected def contextOwner: Symbol = currentOwner
+
+    private[this] var rootTyper: analyzer.Typer = null
+
+    /** A `Typer` for what the assigner cannot do itself, `why`: one in the root context of the unit,
+     *  made when first needed, with no context for the owners entered.
+     */
+    protected def typerFor(why: String): analyzer.Typer = {
+      if (rootTyper eq null) rootTyper = newRootLocalTyper(currentUnit)
+      rootTyper
+    }
+
     /** The result type of the enclosing method, the expected type of `Return` expressions. */
     private[this] var enclMethodResult: Type = NoType
 
@@ -67,8 +83,8 @@ trait TypeAssigners { self: TypingTransformers =>
      */
     private def skolemized(tree: Tree): Tree = {
       val tp = tree.tpe
-      if (tree.isTerm && isExistentialType(tp) && !localTyper.context.owner.isAccessor)
-        tree setType tp.dealias.skolemizeExistential(localTyper.context.owner, tree)
+      if (tree.isTerm && isExistentialType(tp) && !contextOwner.isAccessor)
+        tree setType tp.dealias.skolemizeExistential(contextOwner, tree)
       else tree
     }
 
@@ -81,6 +97,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
     /** A tree shape the assigner does not know: type it with `localTyper`. */
     protected def fallback(tree: Tree, pt: Type, why: String): Tree = {
+      val localTyper = typerFor(why)
       devWarning(tree.pos, s"$phase: typing $why with ${localTyper.getClass.getSimpleName}")
       localTyper.typed(beforeFallback(tree), pt)
     }
@@ -127,7 +144,13 @@ trait TypeAssigners { self: TypingTransformers =>
      *  underlying type.
      */
     private def stabilized(tree: Tree, pre: Type, qualMode: Boolean, pt: Type): Tree =
-      if (phase.erasedTypes) tree else localTyper.stabilize(tree, pre, exprMode(qualMode), pt)
+      if (phase.erasedTypes) tree
+      else {
+        val sym = tree.symbol
+        // Without these, `stabilize` needs no `Typer`: it reports no error and resolves no overload.
+        val needsTyper = tree.isErrorTyped || sym.isOverloaded || !sym.isValue && !qualMode
+        analyzer.stabilize(tree, pre, exprMode(qualMode), pt, if (needsTyper) typerFor("stabilize") else null)
+      }
 
     /** Analogue of `Typer.typed1` for the tree shapes that synthesised trees, and erased trees, have. */
     protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
@@ -160,7 +183,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
       case tree: This =>
         // Typer.typedThis
-        tree.symbol orElse localTyper.qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
+        tree.symbol orElse typerFor("This-nosym").qualifyingClass(tree, tree.qual, packageOK = false, immediate = true) match {
           case NoSymbol => tree setType ErrorType // reported by qualifyingClass
           case clazz =>
             tree setSymbol clazz setType clazz.thisType.underlying
@@ -282,10 +305,10 @@ trait TypeAssigners { self: TypingTransformers =>
         // Typer.typed1 and Typer.doTypedFunction past typer, for a function with no expected
         // function or SAM type, which would give its body an expected type.
         if (pt ne WildcardType) return fallback(tree, pt, "Function-pt")
-        if (fun.symbol == NoSymbol) fun.symbol = localTyper.context.owner.newAnonymousFunctionValue(fun.pos)
+        if (fun.symbol == NoSymbol) fun.symbol = contextOwner.newAnonymousFunctionValue(fun.pos)
         val vparams1 = vparams.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef])
         val body1 = atOwner(fun, fun.symbol)(typed(body, WildcardType))
-        val resTp = localTyper.packedType(body1, fun.symbol).resultType.deconst match {
+        val resTp = typerFor("Function").packedType(body1, fun.symbol).resultType.deconst match {
           case ct: ConstantType => ct.widen
           case tp => tp
         }
@@ -324,7 +347,7 @@ trait TypeAssigners { self: TypingTransformers =>
       // Typer.normalTypedApply
       val fun2 = {
         val sym = fun1.symbol
-        if ((sym ne null) && sym.isMethod && sym.isStable) localTyper.stabilizeFun(fun1, exprMode(qualMode), pt)
+        if ((sym ne null) && sym.isMethod && sym.isStable) analyzer.stabilizeFun(fun1, exprMode(qualMode), pt)
         else fun1
       }
       def typedArgs = app.args.mapConserve(typed(_, WildcardType))
@@ -368,6 +391,17 @@ trait TypeAssigners { self: TypingTransformers =>
         case _ =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-" + fun2.tpe.getClass.getSimpleName)
       }
+    }
+
+    /** `gen.mkAttributedCast` without a `Typer`: `gen.mkCast` builds `tree.$asInstanceOf[pt]()`
+     *  with the `Select` typed, and the type application and the application get their types from
+     *  it, as `Typer` would give them.
+     */
+    protected final def typedSyntheticCast(tree: Tree, pt: Type): Tree = gen.mkCast(tree, pt) match {
+      case app @ Apply(ta @ TypeApply(sel: Select, _), Nil) if sel.tpe ne null =>
+        typedApply(app, typedTypeApply(ta, WildcardType), WildcardType, qualMode = false)
+      case _ =>
+        gen.mkAttributedCast(tree, pt) // another shape than `mkCast` builds after uncurry
     }
 
     /** `ta` with its typed function: instantiates the polymorphic type. */
@@ -419,10 +453,17 @@ trait TypeAssigners { self: TypingTransformers =>
           pat.symbol.setInfo(body1.tpe)
           treeCopy.Bind(pat, name, body1) setType body1.tpe
         case _ =>
+          val localTyper = typerFor("pattern")
           devWarning(pat.pos, s"$phase: typing pattern ${pat.getClass.getSimpleName} with ${localTyper.getClass.getSimpleName}")
           localTyper.typedPattern(beforeFallback(pat), pt)
       }
     }
+  }
+
+  /** A `ContextLiteTypeAssigner` with `localTyper`. */
+  trait TypeAssigner extends TypingTransformer with ContextLiteTypeAssigner {
+    override protected def contextOwner: Symbol = localTyper.context.owner
+    override protected def typerFor(why: String): analyzer.Typer = localTyper
   }
 
   /** A `TypeAssigner` typing in the context of `typer`. */

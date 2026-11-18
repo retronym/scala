@@ -27,7 +27,7 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
   def newTransformer(unit: CompilationUnit): AstTransformer = new PostErasureTransformer(unit)
   override def changesBaseClasses = false
 
-  class PostErasureTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class PostErasureTransformer(unit: CompilationUnit) extends ContextLiteTransformer with ContextLiteTypeAssigner {
     override def transform(tree: Tree) = {
       def finish(res: Tree) = logResult(s"Posterasure reduction\n  Old: $tree\n  New")(res)
 
@@ -38,7 +38,22 @@ trait PostErasure extends InfoTransform with TypingTransformers with scala.refle
        * is from java.lang.Integer.
        */
       def binop(lhs: Tree, op: Symbol, rhs: Tree) =
-        finish(localTyper typed (Apply(Select(lhs, op.name) setPos tree.pos, rhs :: Nil) setPos tree.pos))
+        finish(typed(Apply(Select(lhs, primitiveOp(lhs.tpe, op.name, rhs.tpe)) setPos tree.pos, rhs :: Nil) setPos tree.pos, WildcardType))
+
+      /* The member `name` of `lhs` that takes an `rhs`, as `Typer` resolves the overload: the one
+       * whose parameter type is `rhs`, else the only one that accepts it.
+       */
+      def primitiveOp(lhs: Type, name: Name, rhs: Type): Symbol = {
+        val alts = lhs.member(name).alternatives
+        def unique(p: Type => Boolean) = alts.filter(_.paramss match {
+          case List(List(param)) => p(param.tpe)
+          case _ => false
+        }) match {
+          case List(op) => op
+          case _ => NoSymbol
+        }
+        unique(rhs =:= _) orElse unique(rhs <:< _) orElse abort(s"$phase: no unique $name in $lhs taking $rhs: $alts")
+      }
 
       super.transform(tree) setType elimErasedValueType(tree.tpe) match {
         case AsInstanceOf(v, tpe) if v.tpe <:< tpe => finish(v)          // x.asInstanceOf[X]       ==> x
