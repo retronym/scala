@@ -456,7 +456,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     with    GuardianOfCtorStmts
     with    fields.CheckedAccessorTreeSynthesis
   {
-    protected def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+    protected def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
 
     override val clazz                = impl.symbol.owner  // the transformed class
     private val stats                 = impl.body          // the transformed template body
@@ -563,7 +563,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
     // Assign `rhs` to class field / trait setter `assignSym`
     def mkAssign(assignSym: Symbol, rhs: Tree): Tree =
-      localTyper.typedPos(assignSym.pos) {
+      typedPos(assignSym.pos) {
         val qual = Select(This(clazz), assignSym)
         if (assignSym.isSetter) Apply(qual, List(rhs))
         else Assign(qual, rhs)
@@ -579,7 +579,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
       if (from.name != nme.OUTER ||
         from.tpe.typeSymbol.isPrimitiveValueClass) result
-      else localTyper.typedPos(to.pos) {
+      else typedPos(to.pos) {
         // `throw null` has the same effect as `throw new NullPointerException`, see JVM spec on instruction `athrow`
         IF(from OBJ_EQ NULL) THEN Throw(gen.mkZero(ThrowableTpe)) ELSE result
       }

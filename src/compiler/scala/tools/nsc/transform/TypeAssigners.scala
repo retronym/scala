@@ -72,6 +72,13 @@ trait TypeAssigners { self: TypingTransformers =>
       else tree
     }
 
+    /** Whether `adapt` converts a tree to its expected type after erasure (boxing, unboxing, casts), as
+     *  `ErasureRetyper`'s does. If not, a tree whose type does not conform needs the typer's conversions
+     *  after erasure as well as before it.
+     */
+    protected def adaptsErasedTypes: Boolean = false
+    private def checksConformance: Boolean = !phase.erasedTypes || !adaptsErasedTypes
+
     /** Whether a value of type `tp` can be passed where `formal` is expected, without conversion. */
     private def conforms(tp: Type, formal: Type): Boolean =
       (tp eq formal) || isRepeatedParamType(formal) || tp <:< dropByName(formal)
@@ -218,7 +225,10 @@ trait TypeAssigners { self: TypingTransformers =>
         val lhs1 = typed(lhs, WildcardType)
         val varsym = lhs1.symbol
         if (varsym == null || treeInfo.mayBeVarGetter(varsym)) return fallback(treeCopy.Assign(tree, lhs1, rhs), pt, "Assign-setter")
-        treeCopy.Assign(tree, lhs1, typed(rhs, lhs1.tpe)) setType UnitTpe
+        val rhs1 = typed(rhs, lhs1.tpe)
+        if (checksConformance && !conforms(rhs1.tpe, lhs1.tpe))
+          return fallback(treeCopy.Assign(tree, lhs1, rhs1), pt, "Assign-nonconforming")
+        treeCopy.Assign(tree, lhs1, rhs1) setType UnitTpe
 
       case ArrayValue(elemtpt, elems) =>
         val elems1 = elems mapConserve (elem => typed(elem, elemtpt.tpe))
@@ -241,7 +251,7 @@ trait TypeAssigners { self: TypingTransformers =>
           if (rhs.isEmpty) rhs
           else if (sym.hasDefault) return fallback(vdef, pt, "ValDef-default")
           else atOwner(vdef, sym)(typed(rhs, tpt.tpe))
-        if (!phase.erasedTypes && !rhs1.isEmpty && !conforms(rhs1.tpe, tpt.tpe))
+        if (checksConformance && !rhs1.isEmpty && !conforms(rhs1.tpe, tpt.tpe))
           return fallback(treeCopy.ValDef(vdef, vdef.mods, vdef.name, tpt, rhs1), pt, "ValDef-nonconforming")
         treeCopy.ValDef(vdef, vdef.mods, vdef.name, tpt, rhs1) setType NoType
 
@@ -333,9 +343,9 @@ trait TypeAssigners { self: TypingTransformers =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-star")
         case mt @ MethodType(params, _) if sameLength(params, app.args) =>
           val args1 = map2Conserve(app.args, params)((arg, param) => typed(arg, param.tpe))
-          // Before erasure, an argument that does not conform needs the typer's conversions, or
-          // its error (a translated match can call an extractor's members with the wrong types).
-          if (!phase.erasedTypes && !args1.corresponds(params)((arg, param) => conforms(arg.tpe, param.tpe)))
+          // An argument that does not conform needs the typer's conversions, or its error (a translated
+          // match can call an extractor's members with the wrong types), unless `adapt` converted it.
+          if (checksConformance && !args1.corresponds(params)((arg, param) => conforms(arg.tpe, param.tpe)))
             return fallback(treeCopy.Apply(app, fun2, args1), pt, "Apply-nonconforming")
           // `resultType(actuals)` ignores the actuals when these hold: don't build their list.
           val restpe = if (mt.isTrivial || phase.erasedTypes) mt.resultType else mt.resultType(args1.map(_.tpe))

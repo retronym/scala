@@ -255,7 +255,7 @@ abstract class ExplicitOuter extends InfoTransform
           if (outerFld != NoSymbol) Select(base, outerFld)
           else Apply(Select(base, outerAcc), Nil)
 
-        localTyper typed path
+        assignTypes(localTyper, path)
       }
     }
 
@@ -350,11 +350,11 @@ abstract class ExplicitOuter extends InfoTransform
 
     /** The definition tree of the outer accessor of current class
      */
-    def outerAccessorDef: Tree = localTyper typed {
+    def outerAccessorDef: Tree = assignTypes(localTyper, {
       val acc = outerAccessor(currentClass)
       val rhs = if (acc.isDeferred) EmptyTree else Select(This(currentClass), outerField(currentClass))
       DefDef(acc, rhs)
-    }
+    })
 
     /** The definition tree of the outer accessor for class mixinClass.
      *
@@ -375,7 +375,7 @@ abstract class ExplicitOuter extends InfoTransform
         else gen.mkAttributedQualifier(mixinPrefix)
       )
       // Need to cast for nested outer refs in presence of self-types. See ticket #3274.
-      localTyper typed DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType))
+      assignTypes(localTyper, DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType)))
     }
 
     /** The main transformation method */
@@ -475,7 +475,7 @@ abstract class ExplicitOuter extends InfoTransform
             transform(TRUE) // urgh... drop condition if there's no accessor (or if it may disappear after constructors)
           } else {
             // println("(base, acc)= "+(base, acc))
-            val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
+            val outerSelect = assignTypes(localTyper, Apply(Select(base, acc), Nil))
             // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
             // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
             // println("outerSelect = "+ outerSelect)

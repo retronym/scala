@@ -1612,6 +1612,8 @@ abstract class Erasure extends InfoTransform
         finishTyped(tree, tree1)
       }
 
+      override protected def adaptsErasedTypes: Boolean = true
+
       /** The tree shapes erasure types differently from `TypeAssigner`. */
       override protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
         case sel @ Select(qual, name) =>

@@ -41,11 +41,12 @@ trait TypingTransformers extends TypeAssigners {
     private[this] var _localTyper: analyzer.Typer = initLocalTyper
     // The frames entered by `atOwner`. Those below `materialized` have their context made, and `parentContexts(i)` is
     // the context that frame `i`'s was made from, restored when it exits.
-    private[this] var frameTrees     = new Array[AnyRef](16)
-    private[this] var frameOwners    = new Array[AnyRef](16)
-    private[this] var parentContexts = new Array[AnyRef](16)
+    // Allocated on the first `atOwner`: many typing transformers (`assignTypes`'s, for one) never enter an owner.
+    private[this] var frameTrees     = TypingTransformers.NoFrames
+    private[this] var frameOwners    = TypingTransformers.NoFrames
+    private[this] var parentContexts = TypingTransformers.NoFrames
     // The owner before frame `i` was entered, restored when it exits.
-    private[this] var prevOwners     = new Array[AnyRef](16)
+    private[this] var prevOwners     = TypingTransformers.NoFrames
     private[this] var frames         = 0
     private[this] var materialized   = 0
     private[this] val eager          = settings.YeagerTypingTransformerContexts.value
@@ -95,10 +96,11 @@ trait TypingTransformers extends TypeAssigners {
     protected def enterOwner(tree: Tree, owner: Symbol): Int = {
       val i = frames
       if (i == frameTrees.length) {
-        frameTrees = java.util.Arrays.copyOf(frameTrees, i * 2)
-        frameOwners = java.util.Arrays.copyOf(frameOwners, i * 2)
-        parentContexts = java.util.Arrays.copyOf(parentContexts, i * 2)
-        prevOwners = java.util.Arrays.copyOf(prevOwners, i * 2)
+        val n = math.max(16, i * 2)
+        frameTrees = java.util.Arrays.copyOf(frameTrees, n)
+        frameOwners = java.util.Arrays.copyOf(frameOwners, n)
+        parentContexts = java.util.Arrays.copyOf(parentContexts, n)
+        prevOwners = java.util.Arrays.copyOf(prevOwners, n)
       }
       frameTrees(i) = tree
       frameOwners(i) = if (owner.isModuleNotMethod) owner.moduleClass else owner
@@ -190,3 +192,6 @@ trait TypingTransformers extends TypeAssigners {
   }
 }
 
+object TypingTransformers {
+  private val NoFrames = new Array[AnyRef](0)
+}

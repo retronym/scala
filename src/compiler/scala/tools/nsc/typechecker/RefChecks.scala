@@ -40,7 +40,7 @@ import transform.Transform
  *
  *  @author  Martin Odersky
  */
-abstract class RefChecks extends Transform {
+abstract class RefChecks extends Transform with transform.TypingTransformers {
 
   val global: Global               // need to repeat here because otherwise last mixin defines global as
                                    // SymbolTable. If we had DOT this would not be an issue
@@ -1777,11 +1777,9 @@ abstract class RefChecks extends Transform {
     private def transformCaseApply(tpe: Type, pos: Position) = {
       val rtpe = tpe.finalResultType
       assert(rtpe.typeSymbol hasFlag CASE, tpe)
-      localTyper.typedOperator {
-        atPos(pos) {
-          Select(New(TypeTree(rtpe)), rtpe.typeSymbol.primaryConstructor)
-        }
-      }
+      assignTypes(localTyper, atPos(pos) {
+        Select(New(TypeTree(rtpe)), rtpe.typeSymbol.primaryConstructor)
+      })
     }
 
     private def transformApplication(tree: Tree, fun: Tree, @unused targs: List[Tree], argss: List[List[Tree]]): Tree = {
