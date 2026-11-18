@@ -660,7 +660,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
      */
     override def transform(tree: Tree): Tree = {
       val saved = typers.depth
-      val tree1 = preTransform(tree).transform(this)
+      val tree1 = super.transform(preTransform(tree))
       // localTyper needed when not flattening inner classes. parts after an
       // inner class will otherwise be typechecked with a wrong scope
       try exitingMixin(postTransform(tree1))
