@@ -286,8 +286,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     // Update the surrounding scopes
     protected[this] def changeNameInOwners(name: Name): Unit = {
-      if (owner.isClass) {
-        var ifs = owner.infos
+      if (owner.isClass && owner.hasRawInfo) {
+        owner._info.decls.rehash(this, name)
+        var ifs = owner._infoPrev
         while (ifs != null) {
           ifs.info.decls.rehash(this, name)
           ifs = ifs.prev
@@ -1478,14 +1479,41 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
 // ------ info and type -------------------------------------------------------------------
 
-    private[Symbols] var infos: TypeHistory = null
+    // The type history: the current info, the period it is valid from, and the older entries, newest first.
+    // OPT: the first entry is held in fields rather than in a `TypeHistory`. Most symbols never have another one.
+    private[Symbols] var _info: Type = null
+    private[Symbols] var _infoValidFrom: Period = NoPeriod
+    private[Symbols] var _infoPrev: TypeHistory = null
+
+    /** Make `info`, valid from `validFrom`, the only entry in the type history. */
+    private[Symbols] final def resetInfos(validFrom: Period, info: Type): Unit = {
+      _infoValidFrom = validFrom
+      _info = info
+      _infoPrev = null
+    }
+    /** Add an entry, valid from `validFrom`, after the current one, which moves to `_infoPrev`. */
+    private[Symbols] final def pushInfo(validFrom: Period, info: Type): Unit = {
+      if (_info ne null) _infoPrev = TypeHistory(_infoValidFrom, _info, _infoPrev)
+      _infoValidFrom = validFrom
+      _info = info
+      checkInfos()
+    }
+    /** Replace the history with `info`, valid from `validFrom`, followed by `prev`. */
+    private[Symbols] final def setInfos(validFrom: Period, info: Type, prev: TypeHistory): Unit = {
+      _infoValidFrom = validFrom
+      _info = info
+      _infoPrev = prev
+      checkInfos()
+    }
+    private[Symbols] final def checkInfos(): Unit = {
+      assert((_infoPrev eq null) || phaseId(_infoValidFrom) > phaseId(_infoPrev.validFrom), infosString)
+      assert(_infoValidFrom != NoPeriod, infosString)
+    }
+
     def originalInfo = {
-      if (infos eq null) null
-      else {
-        var is = infos
-        while (is.prev ne null) { is = is.prev }
-        is.info
-      }
+      if (_info eq null) null
+      else if (_infoPrev eq null) _info
+      else _infoPrev.oldest.info
     }
 
     /** The "type" of this symbol.  The type of a term symbol is its usual
@@ -1554,16 +1582,16 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
         cnt += 1
         // allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        def abortNoProgress() = abort(s"no progress in completing $this: ${infos.info}")
+        def abortNoProgress() = abort(s"no progress in completing $this: ${_info}")
         if (cnt == 3) abortNoProgress()
       }
       rawInfo
     }
 
     private def completeInfo(): Unit = try {
-      assert(infos ne null, this.name)
-      assert(infos.prev eq null, this.name)
-      val tp = infos.info
+      assert(_info ne null, this.name)
+      assert(_infoPrev eq null, this.name)
+      val tp = _info
 
       if ((_rawflags & LOCKED) != 0L) { // rolled out once for performance
         lock {
@@ -1584,7 +1612,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (isCompilerUniverse) {
         try {
           assertCorrectThread()
-          phase = phaseOf(infos.validFrom)
+          phase = phaseOf(_infoValidFrom)
           tp.complete(this)
         } finally {
           unlock()
@@ -1604,10 +1632,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     def info_=(info: Type): Unit = {
       assert(info ne null, "Can't assign a null type")
-      if (infos ne null) {
-        infos.reset(currentPeriod, info)
-      } else
-        infos = TypeHistory(currentPeriod, info, null)
+      resetInfos(currentPeriod, info)
       unlock()
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
     }
@@ -1641,22 +1666,26 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     /** Set new info valid from start of this phase. */
     def updateInfo(info: Type): this.type = {
-      val pid = phaseId(infos.validFrom)
+      val pid = phaseId(_infoValidFrom)
       assert(pid <= phase.id, (pid, phase.id))
-      if (pid == phase.id) infos = infos.prev
-      infos = TypeHistory(currentPeriod, info, infos)
+      if (pid == phase.id) {
+        val prev = _infoPrev
+        if (prev eq null) _info = null
+        else setInfos(prev.validFrom, prev.info, prev.prev)
+      }
+      pushInfo(currentPeriod, info)
       _validTo = if (info.isComplete) currentPeriod else NoPeriod
       this
     }
 
-    def hasRawInfo: Boolean = infos ne null
+    def hasRawInfo: Boolean = _info ne null
     def hasCompleteInfo = hasRawInfo && rawInfo.isComplete
 
     // does not run adaptToNewRun, which is prone to trigger cycles (scala/bug#8029)
     // TODO: give this a better name if you understand the intent of the caller.
     //       Is it something to do with `reallyExists` or `isStale`?
     final def rawInfoIsNoType: Boolean = {
-      hasRawInfo && (infos.info eq NoType)
+      hasRawInfo && (_info eq NoType)
     }
 
     /** Return info without checking for initialization or completing */
@@ -1665,84 +1694,87 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       //      likely to inline into hot callers of .info
       val outer = Symbols.this
 
-      var infos = this.infos
-      outer.assert(infos != null, "infos must not be null")
+      outer.assert(_info != null, "infos must not be null")
 
-      if (_validTo != NoPeriod) {
+      if (_validTo == NoPeriod) _info
+      else {
         val curPeriod = outer.currentPeriod
         val curPid = outer.phaseId(curPeriod)
 
-        // skip any infos that concern later phases
-        while (curPid < outer.phaseId(infos.validFrom) && infos.prev != null)
-          infos = infos.prev
+        // skip any infos that concern later phases; `hist` is the entry found, or null for the current one
+        var hist: TypeHistory = null
+        if (curPid < outer.phaseId(_infoValidFrom) && (_infoPrev ne null)) {
+          hist = _infoPrev
+          while (curPid < outer.phaseId(hist.validFrom) && (hist.prev ne null))
+            hist = hist.prev
+        }
 
         if (_validTo < curPeriod) {
           // adapt any infos that come from previous runs
           val curPhase = outer.phase
           try {
-            if (infos != null && outer.runId(infos.validFrom) != outer.currentRunId) {
+            val validFrom = if (hist eq null) _infoValidFrom else hist.validFrom
+            if (outer.runId(validFrom) != outer.currentRunId) {
               // scala/bug#8871 Discard all but the first element of type history. Specialization only works in the resident
               // compiler / REPL if re-run its info transformer in this run to correctly populate its
               // per-run caches, e.g. typeEnv
-              adaptInfo(infos.oldest)
-              infos = this.infos
+              adaptInfo()
+              hist = null
             }
 
             //assert(runId(validTo) == currentRunId, name)
-            //assert(runId(infos.validFrom) == currentRunId, name)
+            //assert(runId(validFrom) == currentRunId, name)
 
             if (_validTo < curPeriod) {
-              infos = transformInfos(infos, curPhase, curPeriod)
+              hist = transformInfos(hist, curPhase, curPeriod)
             }
           } finally {
             outer.phase = curPhase
           }
         }
+        if (hist eq null) _info else hist.info
       }
-      infos.info
     }
 
-    private def transformInfos(infos0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
+    /** Run the info transformers from `validTo` up to `curPhase`, starting from the history entry `hist0`
+     *  (null for the current one). A changed info becomes the current entry, after `hist0`.
+     *  @return the entry for `curPhase`, or null for the current one
+     */
+    private def transformInfos(hist0: TypeHistory, curPhase: Phase, curPeriod: Period): TypeHistory = {
       assertCorrectThread()
-      var infos = infos0
+      var hist = hist0
       var itr = nextFrom(phaseId(_validTo))
       infoTransformers = itr; // caching optimization
       while (itr.pid != NoPhase.id && itr.pid < curPhase.id) {
         phase = phaseWithId(itr.pid)
-        val info1 = itr.transform(this, infos.info)
-        if (info1 ne infos.info) {
-          infos = TypeHistory(currentPeriod + 1, info1, infos)
-          this.infos = infos
+        val info0 = if (hist eq null) _info else hist.info
+        val info1 = itr.transform(this, info0)
+        if (info1 ne info0) {
+          if (hist eq null) pushInfo(currentPeriod + 1, info1)
+          else setInfos(currentPeriod + 1, info1, hist) // drops the entries for later phases
+          hist = null
         }
         _validTo = currentPeriod + 1 // to enable reads from same symbol during info-transform
         itr = itr.next
       }
       _validTo = if (itr.pid == NoPhase.id) curPeriod
       else period(currentRunId, itr.pid)
-      infos
+      hist
     }
 
     // adapt to new run in fsc.
-    private def adaptInfo(oldest: TypeHistory): Unit = {
+    private def adaptInfo(): Unit = {
       assert(isCompilerUniverse, "Must be compiler universe")
-      assert(oldest.prev == null, "Previous history must be null")
-      val pid = phaseId(oldest.validFrom)
+      val oldest = if (_infoPrev eq null) null else _infoPrev.oldest
+      val oldestInfo = if (oldest eq null) _info else oldest.info
+      val pid = phaseId(if (oldest eq null) _infoValidFrom else oldest.validFrom)
 
       _validTo = period(currentRunId, pid)
       phase   = phaseWithId(pid)
 
-      val info1 = adaptToNewRunMap(oldest.info)
-      if (info1 eq oldest.info) {
-        oldest.validFrom = validTo
-        this.infos = oldest
-      } else {
-        if (this.infos ne null) {
-          this.infos = this.infos.reset(validTo, info1)
-        } else
-          this.infos = TypeHistory(validTo, info1, null)
-      }
+      val info1 = adaptToNewRunMap(oldestInfo)
+      resetInfos(validTo, info1)
     }
-
 
     /** Raises a `MissingRequirementError` if this symbol is a `StubSymbol` */
     def failIfStub(): Unit = {}
@@ -1760,9 +1792,11 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     /** Was symbol's type updated during given phase? */
     final def hasTypeAt(pid: Phase#Id): Boolean = {
       assert(isCompilerUniverse, "Must be compiler universe")
-      var infos = this.infos
-      while ((infos ne null) && phaseId(infos.validFrom) > pid) infos = infos.prev
-      infos ne null
+      (_info ne null) && (phaseId(_infoValidFrom) <= pid || {
+        var hist = _infoPrev
+        while ((hist ne null) && phaseId(hist.validFrom) > pid) hist = hist.prev
+        hist ne null
+      })
     }
 
     /** Modify term symbol's type so that a raw type C is converted to an existential C[_]
@@ -1833,9 +1867,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       else {
         // analogously to the "info" getter, here we allow for two completions:
         //   one: sourceCompleter to LazyType, two: LazyType to completed type
-        enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+        enteringPhase(phaseOf(_infoValidFrom))(rawInfo load this)
         if (validTo == NoPeriod)
-          enteringPhase(phaseOf(infos.validFrom))(rawInfo load this)
+          enteringPhase(phaseOf(_infoValidFrom))(rawInfo load this)
 
         rawInfo.typeParams
       }
@@ -1888,7 +1922,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      */
     def reset(completer: Type): this.type = {
       resetFlags()
-      infos = null
+      _info = null
+      _infoPrev = null
       _validTo = NoPeriod
       //limit = NoPhase.id
       setInfo(completer)
@@ -2875,7 +2910,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       loop(tp, followsParens = false)
     }
 
-    def infosString = infos.toString
+    def infosString = if (_info eq null) "null" else TypeHistory(_infoValidFrom, _info, _infoPrev).toString
     def debugLocationString = {
       val pre = flagString match {
         case ""                  => ""
@@ -2960,7 +2995,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
       if (this.isInitialized)
         this hasFlag OVERLOADED
       else
-        (infos ne null) && infos.info.isInstanceOf[OverloadedType]
+        (_info ne null) && _info.isInstanceOf[OverloadedType]
     )
     ***/
     override def isValueParameter   = this hasFlag PARAM
@@ -3729,7 +3764,7 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     privateWithin = this
 
     override def info_=(info: Type) = {
-      infos = noTypeHistory
+      resetInfos(1, NoType)
       unlock()
       validTo = currentPeriod
     }
@@ -3915,26 +3950,8 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     val emptyTrace: Array[Symbol] = Array.empty[Symbol]
   }
 
-  /** A class for type histories */
-  private final case class TypeHistory protected (private var _validFrom: Period, private var _info: Type, private var _prev: TypeHistory) {
-    assert((prev eq null) || phaseId(validFrom) > phaseId(prev.validFrom), this)
-    assert(validFrom != NoPeriod, this)
-
-    def validFrom: Int = _validFrom
-    def validFrom_=(x: Int): Unit = {_validFrom = x }
-    def info: Type = _info
-    def prev: TypeHistory = _prev
-
-    // OPT: mutate the current TypeHistory rather than creating a new one. TypeHistory instances should not be shared.
-    final def reset(validFrom: Period, info: Type): TypeHistory =
-      if (this ne noTypeHistory) {
-        this._validFrom = validFrom
-        this._info = info
-        this._prev = null
-        this
-      } else
-          TypeHistory(validFrom, info, null)
-
+  /** An entry in a symbol's type history, older than its current info. */
+  private final case class TypeHistory(validFrom: Period, info: Type, prev: TypeHistory) {
     private def phaseString = {
       val phase = phaseOf(validFrom)
       s"$phase: ${exitingPhase(phase)(info.toString)}"
@@ -3945,7 +3962,6 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
 
     @tailrec def oldest: TypeHistory = if (prev == null) this else prev.oldest
   }
-  private[this] final val noTypeHistory = TypeHistory(1, NoType, null)
 
 // ----- Hoisted closures and convenience methods, for compile time reductions -------
 
