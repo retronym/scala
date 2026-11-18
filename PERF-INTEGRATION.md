@@ -32,6 +32,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#256 | Erase in one traversal, without retyping with a Typer | conflict in `Erasure.scala` with scala/scala#11312: #256 moves `Eraser.adaptMember`'s qualifier cast into `ErasureTypeAdapter.adaptQualifier`, where #11312's cast to the self type's class (`selfTypeClass`) is applied |
 | retronym/scala#258 | Test for a parameter accessor before looking up a value class's unbox | clean |
 | retronym/scala#259 | Type synthesised trees after typer without a Typer | conflict in `PatternMatching.scala` with scala/scala#11307, which moved `typedStable` out of `Substitution` and caches its types: its `typedStable` now calls `typedStableRef` |
+| retronym/scala#264 | Remove Tree.id | clean |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
