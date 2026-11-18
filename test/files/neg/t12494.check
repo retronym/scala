@@ -3,10 +3,6 @@
 [running phase packageobjects on t12494.scala]
 [running phase typer on t12494.scala]
 [running phase superaccessors on t12494.scala]
-[log superaccessors] [context] ++ t12494.scala / Import(value <import>)
-[log superaccessors] [context] ++ t12494.scala / Import(value <import>)
-[log superaccessors] [context] ++ t12494.scala / Import(value <import>)
-[log superaccessors] [context] ++ t12494.scala / EmptyTree
 [log superaccessors] In trait Base, renaming g -> Base$$g
 [log superaccessors] Expanded 'g' to 'Base$$g' in trait Base
 [log superaccessors] In trait Base, renaming h -> Base$$h

@@ -204,6 +204,59 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     }
   }
 
+  /** A stack of the trees and owners a transformer has entered, and a typer for the innermost, each level's
+   *  made with `atOwner` on the one below it (or on `root`) when `typer` is next read. A phase after typer
+   *  that enters every template but types in few of them makes few typers and contexts.
+   *
+   *  `depth` saves and restores the stack around a step of the traversal: a typer made for a level stays
+   *  valid while that level is entered.
+   */
+  final class LazyTyper(root: Typer) {
+    private[this] var trees     = new Array[Tree](16)
+    private[this] var owners    = new Array[Symbol](16)
+    private[this] var fromRoot  = new Array[Boolean](16)
+    private[this] var typers    = new Array[Typer](16)
+    private[this] var depth0    = 0
+    private[this] var made      = 0
+
+    /** Enters `tree` and `owner`, with a typer made on the enclosing level's. */
+    def enter(tree: Tree, owner: Symbol): Unit = push(tree, owner, isRoot = false)
+    /** Enters `tree` and `owner`, with a typer made on `root`, not on the enclosing level's. */
+    def enterFromRoot(tree: Tree, owner: Symbol): Unit = push(tree, owner, isRoot = true)
+
+    private def push(tree: Tree, owner: Symbol, isRoot: Boolean): Unit = {
+      val i = depth0
+      if (i == trees.length) {
+        trees = java.util.Arrays.copyOf(trees, i * 2)
+        owners = java.util.Arrays.copyOf(owners, i * 2)
+        fromRoot = java.util.Arrays.copyOf(fromRoot, i * 2)
+        typers = java.util.Arrays.copyOf(typers, i * 2)
+      }
+      trees(i) = tree
+      owners(i) = owner
+      fromRoot(i) = isRoot
+      depth0 = i + 1
+    }
+
+    def depth: Int = depth0
+    /** Leaves the levels above `d`. */
+    def depth_=(d: Int): Unit = {
+      depth0 = d
+      if (made > d) made = d
+    }
+
+    /** The typer for the innermost level entered, made now if it was not. */
+    def typer: Typer = {
+      while (made < depth0) {
+        val i = made
+        val base = if (i == 0 || fromRoot(i)) root else typers(i - 1)
+        typers(i) = base.atOwner(trees(i), owners(i))
+        made = i + 1
+      }
+      if (depth0 == 0) root else typers(depth0 - 1)
+    }
+  }
+
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit
     import typeDebug.ptTree

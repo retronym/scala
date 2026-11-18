@@ -1553,10 +1553,15 @@ abstract class Erasure extends InfoTransform
      *  Must be created and run `exitingErasure`.
      */
     final class ErasureRetyper(root: Tree)
-        extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
+        extends PreEraseTransformer(null)
         with TypeAssigner {
+      override protected def initialTyper(): analyzer.Typer = newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]
+      // Types the trees that adaptation synthesises, which `typed` here would erase again.
+      private object adaptAssigner extends ContextLiteTransformer with ContextLiteTypeAssigner {
+        override protected def typerFor(why: String): analyzer.Typer = ErasureRetyper.this.localTyper
+      }
       private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
-        def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+        def typedPos(pos: Position)(tree: Tree): Tree = adaptAssigner.typed(atPos(pos)(tree), WildcardType)
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
         override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
       }
@@ -1801,7 +1806,7 @@ abstract class Erasure extends InfoTransform
    * - For Java-defined members we prefer a direct parent over of the owner, even if the owner is
    *   accessible. This way the owner doesn't need to be added as a direct parent, see scala-dev#143.
    */
-  final def accessibleOwnerOrParentDefiningMember(member: Symbol, parents: Iterator[Symbol], context: Context): Option[Symbol] = {
+  final def accessibleOwnerOrParentDefiningMember(member: Symbol, parents: Iterator[Symbol], context: => Context): Option[Symbol] = {
     def eraseAny(cls: Symbol) = if (cls == AnyClass || cls == AnyValClass) ObjectClass else cls
 
     if (member.isConstructor || !member.isJavaDefined) Some(eraseAny(member.owner))

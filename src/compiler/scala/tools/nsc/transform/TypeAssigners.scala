@@ -102,6 +102,17 @@ trait TypeAssigners { self: TypingTransformers =>
       localTyper.typed(beforeFallback(tree), pt)
     }
 
+    /** `Typer.packedType(tree, owner)`, which changes only a type that mentions a symbol defined in `owner`,
+     *  a captured existential, a type parameter of a raw type or an annotation.
+     */
+    private def packedType(tree: Tree, owner: Symbol): Type = {
+      def mayPack(sym: Symbol) = (sym ne NoSymbol) &&
+        (sym.hasTransOwner(owner) || sym.hasAllFlags(symtab.Flags.EXISTENTIAL | symtab.Flags.CAPTURED) || existentialsAndSkolems.isRawParameter(sym))
+      if (tree.tpe.exists(t => t.isInstanceOf[AnnotatedType] || mayPack(t.typeSymbol) || mayPack(t.termSymbol)))
+        typerFor("Function").packedType(tree, owner)
+      else tree.tpe
+    }
+
     /** The typer's mode for an expression, or for the qualifier of a selection. */
     protected final def exprMode(qualMode: Boolean): Mode = if (qualMode) EXPRmode | QUALmode else EXPRmode
 
@@ -308,7 +319,7 @@ trait TypeAssigners { self: TypingTransformers =>
         if (fun.symbol == NoSymbol) fun.symbol = contextOwner.newAnonymousFunctionValue(fun.pos)
         val vparams1 = vparams.mapConserve(vd => typed(vd, WildcardType).asInstanceOf[ValDef])
         val body1 = atOwner(fun, fun.symbol)(typed(body, WildcardType))
-        val resTp = typerFor("Function").packedType(body1, fun.symbol).resultType.deconst match {
+        val resTp = packedType(body1, fun.symbol).resultType.deconst match {
           case ct: ConstantType => ct.widen
           case tp => tp
         }
@@ -462,7 +473,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
   /** A `ContextLiteTypeAssigner` with `localTyper`. */
   trait TypeAssigner extends TypingTransformer with ContextLiteTypeAssigner {
-    override protected def contextOwner: Symbol = localTyper.context.owner
+    override protected def contextOwner: Symbol = localTyperOwner
     override protected def typerFor(why: String): analyzer.Typer = localTyper
   }
 
