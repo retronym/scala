@@ -576,14 +576,29 @@ trait Types
      *  might lurk in the upper bounds of an abstract type. See scala/bug#7051.
      */
     @tailrec
-    final def dealiasWiden: Type = {
-      val widened = widen
-      if (this ne widened) widened.dealiasWiden
+    final def dealiasWiden: Type =
+      if (!mayDealiasOrWiden) this
       else {
-        val dealiased = dealias
-        if (this ne dealiased) dealiased.dealiasWiden
-        else this
+        val widened = widen
+        if (this ne widened) widened.dealiasWiden
+        else {
+          val dealiased = dealias
+          if (this ne dealiased) dealiased.dealiasWiden
+          else this
+        }
       }
+
+    /** False if `widen` and `dealias` are certainly the identity on this type.
+     *
+     *  OPT: answers without the megamorphic virtual calls to `widen` and `dealias`.
+     *  Class type refs are by far the most common case and are recognized with two
+     *  exact-class tests. The trait tests below must cover every class that overrides
+     *  `widen` or `dealias`.
+     */
+    private[internal] final def mayDealiasOrWiden: Boolean = this match {
+      case _: ClassNoArgsTypeRef | _: ClassArgsTypeRef => false
+      case _: SimpleTypeProxy | _: AliasTypeRef        => true
+      case _                                           => false
     }
 
     /** All the types encountered in the course of dealiasing/widening,
