@@ -2741,8 +2741,14 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
      *  This uses data which is stable across runs and variable classpaths
      *  (the initial Name) before falling back on id, which varies depending
      *  on exactly when a symbol is loaded.
+     *
+     *  The initial name is recovered from `rawname` rather than kept in a field: flatten does not change
+     *  `rawname`, and `expandName`, which does, is undone here.
      */
-    final def sealedSortName: String = initName.toString + "#" + id
+    final def sealedSortName: String = {
+      val initialName = if (hasFlag(EXPANDEDNAME)) nme.unexpandedName(rawname) else rawname
+      initialName.toString + "#" + id
+    }
 
     /** String representation of symbol's definition key word */
     final def keyString: String =

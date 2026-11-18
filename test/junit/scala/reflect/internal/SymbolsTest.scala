@@ -51,4 +51,15 @@ class SymbolsTest {
     assertSame(m, m.filter(_ => true))
     assertSame(NoSymbol, m.filter(_ => false))
   }
+
+  @Test
+  def sealedSortNameUsesTheUnexpandedName(): Unit = {
+    val owner = rootMirror.EmptyPackageClass.newClass(TypeName("C"))
+    val sym = owner.newValue(TermName("x"))
+    val before = sym.sealedSortName
+    sym.expandName(owner)
+    assertNotEquals(TermName("x"), sym.rawname)
+    assertEquals(before, sym.sealedSortName)
+    assertTrue(before, before.startsWith("x#"))
+  }
 }
