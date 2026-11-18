@@ -141,6 +141,26 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     )
   }
 
+  /** A reference to a stable method with no parameters gets the singleton type of its result where the
+   *  context requires a stable type. Like `isStableContext`, it reads no typer state.
+   */
+  private[nsc] def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = {
+    val sym = tree.symbol
+    val pre = tree match {
+      case Select(qual, _) => qual.tpe
+      case _               => NoPrefix
+    }
+    def stabilizable = (
+         pre.isStable
+      && sym.tpe.params.isEmpty
+      && (isStableContext(tree, mode, pt) || sym.isModule)
+    )
+    tree.tpe match {
+      case MethodType(_, _) if stabilizable => tree setType MethodType(Nil, singleType(pre, sym)) // TODO: should this be a NullaryMethodType?
+      case _                                => tree
+    }
+  }
+
   abstract class Typer(context0: Context) extends TyperDiagnostics with Adaptation with Tag with PatternTyper with TyperContextErrors {
     private def unit = context.unit
     import typeDebug.ptTree
@@ -557,22 +577,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         tree
     }
 
-    def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = {
-      val sym = tree.symbol
-      val pre = tree match {
-        case Select(qual, _) => qual.tpe
-        case _               => NoPrefix
-      }
-      def stabilizable = (
-           pre.isStable
-        && sym.tpe.params.isEmpty
-        && (isStableContext(tree, mode, pt) || sym.isModule)
-      )
-      tree.tpe match {
-        case MethodType(_, _) if stabilizable => tree setType MethodType(Nil, singleType(pre, sym)) // TODO: should this be a NullaryMethodType?
-        case _                                => tree
-      }
-    }
+    def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = Typers.this.stabilizeFun(tree, mode, pt)
 
     @deprecated("Use the overload accepting a Type.", "2.12.9")
     def member(qual: Tree, name: Name): Symbol = member(qual.tpe, name)
