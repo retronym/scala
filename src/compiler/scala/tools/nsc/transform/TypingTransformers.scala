@@ -35,7 +35,7 @@ trait TypingTransformers extends TypeAssigners {
    *  (`Context.make`, as it was eagerly) when `localTyper` is next read. Most definitions in most phases are
    *  transformed without typing anything, so most of those contexts were never used.
    */
-  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends ContextLiteTransformer {
+  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends OwnerStackTransformer {
     /** A transformer whose root typer for `unit` is made when it is first needed. */
     def this(unit: CompilationUnit) = {
       this(null: analyzer.Typer)
@@ -108,11 +108,11 @@ trait TypingTransformers extends TypeAssigners {
     }
   }
 
-  /** A "context-lite" transformer: a stack of the trees and owners it has entered, with no typing context.
+  /** A transformer that keeps a stack of the trees and owners it has entered, with no typing context.
    *  A phase that needs only its enclosing owners, and types the trees it synthesises with a
-   *  `ContextLiteTypeAssigner`, extends it directly; `TypingTransformer` makes contexts for its frames.
+   *  `TypeAssigner`, extends it directly; `TypingTransformer` makes contexts for its frames.
    */
-  abstract class ContextLiteTransformer extends AstTransformer {
+  abstract class OwnerStackTransformer extends AstTransformer {
     // The frames entered by `atOwner`, and the owner before frame `i` was entered, restored when it exits.
     protected[this] var frameTrees  = new Array[AnyRef](16)
     protected[this] var frameOwners = new Array[AnyRef](16)

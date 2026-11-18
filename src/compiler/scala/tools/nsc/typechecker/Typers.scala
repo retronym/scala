@@ -211,7 +211,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
    *  `depth` saves and restores the stack around a step of the traversal: a typer made for a level stays
    *  valid while that level is entered.
    */
-  final class LazyTyper(root: Typer) {
+  final class TyperStack(root: Typer) {
     private[this] var trees     = new Array[Tree](16)
     private[this] var owners    = new Array[Symbol](16)
     private[this] var fromRoot  = new Array[Boolean](16)

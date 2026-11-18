@@ -84,7 +84,7 @@ abstract class RefChecks extends Transform {
     private final val indent = "  "
 
     // A typer for each template entered, made when `localTyper` is next read.
-    private[this] val typers = new analyzer.LazyTyper(typer)
+    private[this] val typers = new analyzer.TyperStack(typer)
     def localTyper: analyzer.Typer = typers.typer
     var currentApplication: Tree = EmptyTree
     var inAnnotation: Boolean = false
