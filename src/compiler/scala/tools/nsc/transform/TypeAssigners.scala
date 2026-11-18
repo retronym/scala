@@ -462,7 +462,7 @@ trait TypeAssigners { self: TypingTransformers =>
 
   /** A `ContextLiteTypeAssigner` with `localTyper`. */
   trait TypeAssigner extends TypingTransformer with ContextLiteTypeAssigner {
-    override protected def contextOwner: Symbol = localTyper.context.owner
+    override protected def contextOwner: Symbol = localTyperOwner
     override protected def typerFor(why: String): analyzer.Typer = localTyper
   }
 

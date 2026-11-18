@@ -55,6 +55,10 @@ trait TypingTransformers extends TypeAssigners {
       _localTyper = typer
     }
 
+    /** The owner of `localTyper`'s context, without making it. */
+    protected def localTyperOwner: Symbol =
+      if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol] else _localTyper.context.owner
+
     private def materialize(): Unit =
       while (materialized < frames) {
         val i = materialized

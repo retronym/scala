@@ -237,7 +237,7 @@ abstract class UnCurry extends InfoTransform
       } else {
         val mustExpand = mustExpandFunction(fun)
         // method definition with the same arguments, return type, and body as the original lambda
-        val liftedMethod = gen.mkLiftedFunctionBodyMethod(localTyper)(fun.symbol.owner, fun)
+        val liftedMethod = gen.mkLiftedFunctionBodyMethod(fun.symbol.owner, fun)
 
         // new function whose body is just a call to the lifted method
         val newFun = deriveFunction(fun)(_ => assignTypesPos(fun.pos)(
@@ -596,9 +596,9 @@ abstract class UnCurry extends InfoTransform
          * - synthetic Java varargs forwarders for repeated parameters
          */
         case Template(_, _, _) =>
-          localTyper = typer.atOwner(tree, currentClass)
           useNewMembers(currentClass) {
             newMembers =>
+              if (newMembers.nonEmpty) localTyper = typer.atOwner(tree, currentClass)
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 

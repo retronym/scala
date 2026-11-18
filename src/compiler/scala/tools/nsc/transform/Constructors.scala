@@ -87,8 +87,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
             cd
           else {
             checkUninitializedReads(cd)
-            val tplTransformer = new TemplateTransformer(unit, impl0)
-            tplTransformer.localTyper = this.localTyper
+            val tplTransformer = new TemplateTransformer(unit, impl0, this.localTyper)
             tplTransformer.atOwner(impl0, cd.symbol) {
               treeCopy.ClassDef(cd, mods0, name0, tparams0, tplTransformer.transformed)
             }
@@ -448,8 +447,8 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
 
   } // GuardianOfCtorStmts
 
-  private class TemplateTransformer(val unit: CompilationUnit, val impl: Template)
-    extends TypingTransformer(unit)
+  private class TemplateTransformer(val unit: CompilationUnit, val impl: Template, initLocalTyper: analyzer.Typer)
+    extends TypingTransformer(initLocalTyper)
     with    TypeAssigner
     with    StaticsTransformer
     with    DelayedInitHelper
