@@ -1507,10 +1507,15 @@ abstract class Erasure extends InfoTransform
      *  Must be created and run `exitingErasure`.
      */
     final class ErasureRetyper(root: Tree)
-        extends PreEraseTransformer(newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer])
+        extends PreEraseTransformer(null)
         with TypeAssigner {
+      override protected def initialTyper(): analyzer.Typer = newTyper(rootContextPostTyper(unit, root)).asInstanceOf[global.analyzer.Typer]
+      // Types the trees that adaptation synthesises, which `typed` here would erase again.
+      private object adaptAssigner extends ContextLiteTransformer with ContextLiteTypeAssigner {
+        override protected def typerFor(why: String): analyzer.Typer = ErasureRetyper.this.localTyper
+      }
       private val typeAdapter: ErasureTypeAdapter = new ErasureTypeAdapter {
-        def typedPos(pos: Position)(tree: Tree): Tree = localTyper.typedPos(pos)(tree)
+        def typedPos(pos: Position)(tree: Tree): Tree = adaptAssigner.typed(atPos(pos)(tree), WildcardType)
         protected def accessContext: Context = localTyper.context.asInstanceOf[Context]
         override protected def typedCast(tree: Tree, pt: Type): Tree = typedSyntheticCast(tree, pt)
       }

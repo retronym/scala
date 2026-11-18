@@ -36,9 +36,16 @@ trait TypingTransformers extends TypeAssigners {
    *  transformed without typing anything, so most of those contexts were never used.
    */
   abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends ContextLiteTransformer {
-    def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
+    /** A transformer whose root typer for `unit` is made when it is first needed. */
+    def this(unit: CompilationUnit) = {
+      this(null: analyzer.Typer)
+      rootUnit = unit
+      if (unit.hasXml) localTyper // making the root context reports a missing scala.xml, as it did eagerly
+    }
 
     private[this] var _localTyper: analyzer.Typer = initLocalTyper
+    // Without an initial typer, the unit to make the root typer for.
+    protected[this] var rootUnit: CompilationUnit = _
     // The frames below `materialized` have their context made, and `parentContexts(i)` is the context that frame
     // `i`'s was made from, restored when it exits.
     private[this] var parentContexts = new Array[AnyRef](16)
@@ -47,7 +54,7 @@ trait TypingTransformers extends TypeAssigners {
 
     /** The typer, its context made for the innermost owner entered. */
     def localTyper: analyzer.Typer = {
-      if (materialized < frames) materialize()
+      if (materialized < frames || (_localTyper eq null)) materialize()
       _localTyper
     }
     def localTyper_=(typer: analyzer.Typer): Unit = {
@@ -57,9 +64,15 @@ trait TypingTransformers extends TypeAssigners {
 
     /** The owner of `localTyper`'s context, without making it. */
     protected def localTyperOwner: Symbol =
-      if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol] else _localTyper.context.owner
+      if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol]
+      else if (_localTyper eq null) rootMirror.RootClass
+      else _localTyper.context.owner
 
-    private def materialize(): Unit =
+    /** The typer to start from, made when first needed if the transformer was given none. */
+    protected def initialTyper(): analyzer.Typer = newRootLocalTyper(rootUnit)
+
+    private def materialize(): Unit = {
+      if (_localTyper eq null) _localTyper = initialTyper()
       while (materialized < frames) {
         val i = materialized
         val context = _localTyper.context
@@ -67,6 +80,7 @@ trait TypingTransformers extends TypeAssigners {
         _localTyper.context = context.make(frameTrees(i).asInstanceOf[Tree], frameOwners(i).asInstanceOf[Symbol])
         materialized = i + 1
       }
+    }
 
     /** The context of frame `i`, made now if it was not. A typer on it stays valid while the frame is entered. */
     protected def frameContext(i: Int): analyzer.Context = {
@@ -74,7 +88,7 @@ trait TypingTransformers extends TypeAssigners {
       if (i + 1 < frames) parentContexts(i + 1).asInstanceOf[analyzer.Context] else _localTyper.context
     }
 
-    currentOwner = _localTyper.context.owner
+    currentOwner = if (_localTyper eq null) rootMirror.RootClass else _localTyper.context.owner
 
     override protected def enterOwner(tree: Tree, owner: Symbol): Int = {
       val i = super.enterOwner(tree, owner)

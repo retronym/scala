@@ -78,7 +78,7 @@ trait TreeAndTypeAnalysis extends Debugging {
   }
 
   trait CheckableTreeAndTypeAnalysis {
-    val typer: Typer
+    def typer: Typer
 
     def enumerateSubtypes(tp: Type, grouped: Boolean): List[List[Type]] = tp.typeSymbol match {
       case UnitClass                    => List(List(UnitTpe))
