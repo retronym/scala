@@ -352,6 +352,10 @@ trait TypeAssigners { self: TypingTransformers =>
       fun2.tpe match {
         case _ if treeInfo.isWildcardStarArgList(app.args) =>
           fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-star")
+        case mt: MethodType if !phase.erasedTypes && mt.isDependentMethodType =>
+          // The typer types an argument for a dependent parameter with its singleton type (`b.type`), which
+          // the result type then refers to (`Option[b.type]`): pos/t6574.
+          fallback(treeCopy.Apply(app, fun2, app.args), pt, "Apply-dependent")
         case mt @ MethodType(params, _) if sameLength(params, app.args) =>
           val args1 = map2Conserve(app.args, params)((arg, param) => typed(arg, param.tpe))
           // An argument that does not conform needs the typer's conversions, or its error (a translated
