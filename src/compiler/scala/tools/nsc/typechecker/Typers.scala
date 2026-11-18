@@ -141,6 +141,49 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     )
   }
 
+  /** `Typer.stabilize`. It reads `typer`, and its context, only to report an error or to resolve an
+   *  overloaded symbol: a caller that has ruled those out can pass `null`.
+   */
+  private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type, typer: Typer): Tree = {
+
+    val sym = {
+      // inferExprAlternative side-effects the tree's symbol.
+      if (tree.symbol.isOverloaded && !mode.inFunMode)
+        typer.infer.inferExprAlternative(tree, pt)
+      tree.symbol
+    }
+    val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
+    def isModuleTypedExpr = (
+         treeInfo.admitsTypeSelection(tree)
+      && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
+    )
+    def isStableValueRequired = (
+         isStableIdPattern
+      || mode.in(all = EXPRmode, none = QUALmode) && !phase.erasedTypes
+    )
+    // To fully benefit from special casing the return type of
+    // getClass, we have to catch it immediately so expressions like
+    // x.getClass().newInstance() are typed with the type of x.
+    // For non-public classes, this aligns with Scala 3 under -Xsource:3: a private class
+    // can then escape into the inferred type of a non-private member (neg/t12974-escape).
+    def isGetClassCall = isGetClass(sym) && (pre.typeSymbol.isPublic || currentRun.isScala3)
+
+    if (tree.isErrorTyped)
+      tree
+    else if (!sym.isValue && isStableValueRequired) // (2)
+      typer.TyperErrorGen.NotAValueError(tree, sym)
+    else if (isStableIdPattern)                     // (1)
+      if (!treeInfo.isStableIdentifierPattern(tree)) typer.TyperErrorGen.UnstableTreeError(tree)
+      else if (sym.isModuleNotMethod) tree.setType(singleType(pre, sym))
+      else tree
+    else if (isModuleTypedExpr)                     // (3)
+      tree.setType(singleType(pre, sym))
+    else if (isGetClassCall)                        // (4)
+      tree.setType(MethodType(Nil, getClassReturnType(pre)))
+    else
+      tree
+  }
+
   /** A reference to a stable method with no parameters gets the singleton type of its result where the
    *  context requires a stable type. Like `isStableContext`, it reads no typer state.
    */
@@ -537,45 +580,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
      *  3. Turn tree type into stable type if possible and required by context.
      *  4. Give getClass calls a more precise type based on the type of the target of the call.
      */
-    private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = {
-
-      val sym = {
-        // inferExprAlternative side-effects the tree's symbol.
-        if (tree.symbol.isOverloaded && !mode.inFunMode)
-          inferExprAlternative(tree, pt)
-        tree.symbol
-      }
-      val isStableIdPattern = mode.typingPatternNotConstructor && tree.isTerm
-      def isModuleTypedExpr = (
-           treeInfo.admitsTypeSelection(tree)
-        && (isStableContext(tree, mode, pt) || sym.isModuleNotMethod)
-      )
-      def isStableValueRequired = (
-           isStableIdPattern
-        || mode.in(all = EXPRmode, none = QUALmode) && !phase.erasedTypes
-      )
-      // To fully benefit from special casing the return type of
-      // getClass, we have to catch it immediately so expressions like
-      // x.getClass().newInstance() are typed with the type of x.
-      // For non-public classes, this aligns with Scala 3 under -Xsource:3: a private class
-      // can then escape into the inferred type of a non-private member (neg/t12974-escape).
-      def isGetClassCall = isGetClass(sym) && (pre.typeSymbol.isPublic || currentRun.isScala3)
-
-      if (tree.isErrorTyped)
-        tree
-      else if (!sym.isValue && isStableValueRequired) // (2)
-        NotAValueError(tree, sym)
-      else if (isStableIdPattern)                     // (1)
-        if (!treeInfo.isStableIdentifierPattern(tree)) UnstableTreeError(tree)
-        else if (sym.isModuleNotMethod) tree.setType(singleType(pre, sym))
-        else tree
-      else if (isModuleTypedExpr)                     // (3)
-        tree.setType(singleType(pre, sym))
-      else if (isGetClassCall)                        // (4)
-        tree.setType(MethodType(Nil, getClassReturnType(pre)))
-      else
-        tree
-    }
+    private[nsc] def stabilize(tree: Tree, pre: Type, mode: Mode, pt: Type): Tree = Typers.this.stabilize(tree, pre, mode, pt, this)
 
     def stabilizeFun(tree: Tree, mode: Mode, pt: Type): Tree = Typers.this.stabilizeFun(tree, mode, pt)
 

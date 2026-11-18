@@ -38,8 +38,15 @@ trait TypeAssigners { self: TypingTransformers =>
     /** The owner of the typing context. */
     protected def contextOwner: Symbol = currentOwner
 
-    /** A `Typer` for what the assigner cannot do itself, `why`. Without one, it aborts. */
-    protected def typerFor(why: String): analyzer.Typer = abort(s"$phase: $why needs a Typer")
+    private[this] var rootTyper: analyzer.Typer = null
+
+    /** A `Typer` for what the assigner cannot do itself, `why`: one in the root context of the unit,
+     *  made when first needed, with no context for the owners entered.
+     */
+    protected def typerFor(why: String): analyzer.Typer = {
+      if (rootTyper eq null) rootTyper = newRootLocalTyper(currentUnit)
+      rootTyper
+    }
 
     /** The result type of the enclosing method, the expected type of `Return` expressions. */
     private[this] var enclMethodResult: Type = NoType
@@ -137,7 +144,13 @@ trait TypeAssigners { self: TypingTransformers =>
      *  underlying type.
      */
     private def stabilized(tree: Tree, pre: Type, qualMode: Boolean, pt: Type): Tree =
-      if (phase.erasedTypes) tree else typerFor("stabilize").stabilize(tree, pre, exprMode(qualMode), pt)
+      if (phase.erasedTypes) tree
+      else {
+        val sym = tree.symbol
+        // Without these, `stabilize` needs no `Typer`: it reports no error and resolves no overload.
+        val needsTyper = tree.isErrorTyped || sym.isOverloaded || !sym.isValue && !qualMode
+        analyzer.stabilize(tree, pre, exprMode(qualMode), pt, if (needsTyper) typerFor("stabilize") else null)
+      }
 
     /** Analogue of `Typer.typed1` for the tree shapes that synthesised trees, and erased trees, have. */
     protected def typedCore(tree: Tree, pt: Type, qualMode: Boolean): Tree = tree match {
