@@ -22,7 +22,7 @@ trait MatchWarnings {
   trait TreeMakerWarnings {
     self: MatchTranslator =>
 
-    import typer.context
+    private def context = typer.context
 
     // Why is it so difficult to say "here's a name and a context, give me any
     // matching symbol in scope" ? I am sure this code is wrong, but attempts to

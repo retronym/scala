@@ -422,7 +422,17 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
 
   class MixinTransformer(unit : CompilationUnit) extends ContextLiteTransformer with ContextLiteTypeAssigner with AccessorTreeSynthesis {
     /** The typer */
-    private var localTyper: erasure.erasureAnalyzer.Typer = _
+    private var _localTyper: erasure.erasureAnalyzer.Typer = _
+    // The template (and its class) whose typer is made when `localTyper` is next read.
+    private var typerTree: Tree = _
+    private var typerOwner: Symbol = _
+    private def localTyper: erasure.erasureAnalyzer.Typer = {
+      if (typerTree ne null) {
+        _localTyper = erasure.erasureAnalyzer.newTyper(rootContext.make(typerTree, typerOwner))
+        typerTree = null
+      }
+      _localTyper
+    }
     override protected def typerFor(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
     protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
@@ -442,7 +452,8 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
       val sym = tree.symbol
       tree match {
         case Template(parents, self, body) =>
-          localTyper = erasure.erasureAnalyzer.newTyper(rootContext.make(tree, currentOwner))
+          typerTree = tree
+          typerOwner = currentOwner
           exitingMixin(currentOwner.owner.info)//todo: needed?
 
           if (!currentOwner.isTrait && !isPrimitiveValueClass(currentOwner))
@@ -658,12 +669,14 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
      *  when coming back, it performs a postTransform at phase after.
      */
     override def transform(tree: Tree): Tree = {
-      val saved = localTyper
+      val saved = _localTyper
+      val savedTree = typerTree
+      val savedOwner = typerOwner
       val tree1 = preTransform(tree).transform(this)
       // localTyper needed when not flattening inner classes. parts after an
       // inner class will otherwise be typechecked with a wrong scope
       try exitingMixin(postTransform(tree1))
-      finally localTyper = saved
+      finally { _localTyper = saved; typerTree = savedTree; typerOwner = savedOwner }
     }
   }
 

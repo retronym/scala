@@ -30,7 +30,7 @@ trait MatchTranslation {
     sym setInfo debug.patmatResult(s"changing ${sym.defString} to")(repeatedToSeq(info))
 
   trait MatchTranslator extends TreeMakers with TreeMakerWarnings {
-    import typer.context
+    private def context = typer.context
     def selectorPos: Position
 
     /** A conservative approximation of which patterns do not discern anything.
