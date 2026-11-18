@@ -204,7 +204,7 @@ abstract class ExplicitOuter extends InfoTransform
    *  values for outer parameters of constructors.
    *  The class provides methods for referencing via outer.
    */
-  abstract class OuterPathTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) {
+  abstract class OuterPathTransformer(initLocalTyper: analyzer.Typer) extends TypingTransformer(initLocalTyper) with TypeAssigner {
     def this(unit: CompilationUnit) = this(newRootLocalTyper(unit))
     /** The directly enclosing outer parameter, if we are in a constructor */
     protected var outerParam: Symbol = NoSymbol
@@ -255,7 +255,7 @@ abstract class ExplicitOuter extends InfoTransform
           if (outerFld != NoSymbol) Select(base, outerFld)
           else Apply(Select(base, outerAcc), Nil)
 
-        localTyper typed path
+        typed(path, WildcardType)
       }
     }
 
@@ -350,10 +350,10 @@ abstract class ExplicitOuter extends InfoTransform
 
     /** The definition tree of the outer accessor of current class
      */
-    def outerAccessorDef: Tree = localTyper typed {
+    def outerAccessorDef: Tree = {
       val acc = outerAccessor(currentClass)
       val rhs = if (acc.isDeferred) EmptyTree else Select(This(currentClass), outerField(currentClass))
-      DefDef(acc, rhs)
+      typed(DefDef(acc, rhs), WildcardType)
     }
 
     /** The definition tree of the outer accessor for class mixinClass.
@@ -375,7 +375,7 @@ abstract class ExplicitOuter extends InfoTransform
         else gen.mkAttributedQualifier(mixinPrefix)
       )
       // Need to cast for nested outer refs in presence of self-types. See ticket #3274.
-      localTyper typed DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType))
+      typed(DefDef(outerAcc, gen.mkCast(transformer.transform(path), outerAcc.info.resultType)), WildcardType)
     }
 
     /** The main transformation method */
@@ -475,7 +475,7 @@ abstract class ExplicitOuter extends InfoTransform
             transform(TRUE) // urgh... drop condition if there's no accessor (or if it may disappear after constructors)
           } else {
             // println("(base, acc)= "+(base, acc))
-            val outerSelect = localTyper typed Apply(Select(base, acc), Nil)
+            val outerSelect = typed(Apply(Select(base, acc), Nil), WildcardType)
             // achieves the same as: localTyper typed atPos(tree.pos)(outerPath(base, base.tpe.typeSymbol, outerFor.outerClass))
             // println("(b, tpsym, outerForI, outerFor, outerClass)= "+ (base, base.tpe.typeSymbol, outerFor, sel.symbol.owner, outerFor.outerClass))
             // println("outerSelect = "+ outerSelect)
