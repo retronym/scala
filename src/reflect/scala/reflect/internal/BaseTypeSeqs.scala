@@ -69,11 +69,12 @@ trait BaseTypeSeqs {
     // (while NoType is in there to indicate a cycle in this BTS, during the execution of
     //  the mergePrefixAndArgs below, the elems get copied without the pending map,
     //  so that NoType's are seen instead of the original type --> spurious compile error)
-    private[this] val pending = new mutable.BitSet(length)
+    // OPT: allocated when the first lazy element is computed. Most sequences have none.
+    private[this] var pending: mutable.BitSet = null
 
     /** The type at i'th position in this sequence; lazy types are returned evaluated. */
     def apply(i: Int): Type =
-      if(pending contains i) {
+      if ((pending ne null) && pending.contains(i)) {
         pending.clear()
         throw CyclicInheritance
       } else {
@@ -85,6 +86,7 @@ trait BaseTypeSeqs {
           // can't assert decls.isEmpty; see t0764
           //if (!decls.isEmpty) abort("computing closure of "+this+":"+this.isInstanceOf[RefinedType]+"/"+closureCache(j))
           //Console.println("compute closure of "+this+" => glb("+variants+")")
+          if (pending eq null) pending = new mutable.BitSet(length)
           pending += i
           try {
             mergePrefixAndArgs(variants, Variance.Contravariant, lubDepth(variants)) match {
