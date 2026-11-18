@@ -69,6 +69,12 @@ trait TypingTransformers extends TypeAssigners {
         materialized = i + 1
       }
 
+    /** The context of frame `i`, made now if it was not. A typer on it stays valid while the frame is entered. */
+    protected def frameContext(i: Int): analyzer.Context = {
+      materialize()
+      if (i + 1 < frames) parentContexts(i + 1).asInstanceOf[analyzer.Context] else _localTyper.context
+    }
+
     currentOwner = _localTyper.context.owner
     protected var curTree: Tree = _
 
