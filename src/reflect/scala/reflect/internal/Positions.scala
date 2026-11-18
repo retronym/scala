@@ -309,7 +309,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
     def set(pos: Position, parent: Tree): Unit = {
       wrappingPosAccumulator.reset()
       this.pos = pos
-      try parent.foreachChild(apply)
+      try parent.foreachChild(this)
       finally {
         this.pos = null
       }
@@ -317,7 +317,7 @@ trait Positions extends api.Positions { self: SymbolTable =>
     def apply(tree: Tree): Boolean = {
       wrappingPosAccumulator.reset()
       if (!tree.isEmpty && tree.canHaveAttrs && tree.pos == NoPosition) {
-        tree.foreachChild(apply)
+        tree.foreachChild(this)
         tree.foreachChild(wrappingPosAccumulator)
         val wrappingPos = wrappingPosAccumulator.result(pos, focus = true)
         tree setPos wrappingPos
