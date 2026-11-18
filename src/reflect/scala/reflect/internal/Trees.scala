@@ -30,21 +30,32 @@ trait Trees extends api.Trees {
     if (t.pos.isDefined && t.pos.isRange) t.pos.lineContent.drop(t.pos.column - 1).take(t.pos.end - t.pos.start + 1)
     else t.summaryString
 
-  protected def treeStatus(t: Tree, enclosingTree: Tree = null) = {
-    val parent = if (enclosingTree eq null) "        " else " P#%5s".format(enclosingTree.id)
+  /** Numbers trees for diagnostics in the order they are first mentioned, so that the lines of one report agree. */
+  protected final class TreeIds {
+    private[this] val ids = new java.util.IdentityHashMap[Tree, Integer]
 
-    "[L%4s%8s] #%-6s %-15s %-10s // %s".format(t.pos.line, parent, t.id, t.pos.show, t.shortClass, treeLine(t))
-  }
-  protected def treeSymStatus(t: Tree) = {
-    val line = if (t.pos.isDefined) "line %-4s".format(t.pos.line) else "         "
-    "#%-5s %s %-10s // %s".format(t.id, line, t.shortClass,
-      if (t.symbol ne NoSymbol) "(" + t.symbol.fullLocationString + ")"
-      else treeLine(t)
-    )
+    def apply(t: Tree): Int = {
+      val id = ids.get(t)
+      if (id ne null) id.intValue
+      else { val n = ids.size + 1; ids.put(t, n); n }
+    }
+
+    def status(t: Tree, enclosingTree: Tree = null): String = {
+      val parent = if (enclosingTree eq null) "        " else " P#%5s".format(apply(enclosingTree))
+
+      "[L%4s%8s] #%-6s %-15s %-10s // %s".format(t.pos.line, parent, apply(t), t.pos.show, t.shortClass, treeLine(t))
+    }
+
+    def symStatus(t: Tree): String = {
+      val line = if (t.pos.isDefined) "line %-4s".format(t.pos.line) else "         "
+      "#%-5s %s %-10s // %s".format(apply(t), line, t.shortClass,
+        if (t.symbol ne NoSymbol) "(" + t.symbol.fullLocationString + ")"
+        else treeLine(t)
+      )
+    }
   }
 
   abstract class Tree extends TreeContextApiImpl with Attachable with Product {
-    val id = nodeCount // TODO: add to attachment?
     nodeCount += 1
 
     final override def pos: Position = rawatt.pos
