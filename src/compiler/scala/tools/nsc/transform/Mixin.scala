@@ -420,10 +420,11 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new MixinTransformer(unit)
 
-  class MixinTransformer(unit : CompilationUnit) extends AstTransformer with AccessorTreeSynthesis {
+  class MixinTransformer(unit : CompilationUnit) extends ContextLiteTransformer with ContextLiteTypeAssigner with AccessorTreeSynthesis {
     /** The typer */
     private var localTyper: erasure.erasureAnalyzer.Typer = _
-    protected def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper.asInstanceOf[analyzer.Typer], atPos(pos)(tree))
+    override protected def typerFor(why: String): analyzer.Typer = localTyper.asInstanceOf[analyzer.Typer]
+    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     /** The rootContext used for typing */
     private val rootContext =
