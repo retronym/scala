@@ -420,7 +420,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
   protected def newTransformer(unit: CompilationUnit): AstTransformer =
     new MixinTransformer(unit)
 
-  class MixinTransformer(unit : CompilationUnit) extends OwnerStackTransformer with TypeAssigner with AccessorTreeSynthesis {
+  class MixinTransformer(unit : CompilationUnit) extends TypeAssigner with AccessorTreeSynthesis {
     /** The rootContext used for typing */
     private val rootContext =
       erasure.erasureAnalyzer.NoContext.make(EmptyTree, rootMirror.RootClass, newScope)

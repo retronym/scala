@@ -29,7 +29,7 @@ abstract class TailCalls extends Transform with TypingTransformers {
   import definitions._                // standard classes and methods
 
   // Types the trees this phase synthesises as `typer` would, without its contexts.
-  private object assigner extends OwnerStackTransformer with TypeAssigner {
+  private object assigner extends TypeAssigner {
     override protected def enclosingOwner: Symbol = typer.context.owner
     override protected def fallbackTyper(why: String): analyzer.Typer = typer
   }

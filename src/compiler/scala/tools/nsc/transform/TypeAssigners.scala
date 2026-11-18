@@ -32,9 +32,18 @@ trait TypeAssigners { self: TypingTransformers =>
    *  `Erasure.ErasureRetyper` is one, typing erased trees.
    *
    *  It needs no typing context: what it needs from `localTyper` goes through `enclosingOwner` and
-   *  `fallbackTyper`, which `LocalTyperAssigner` implements. After erasure, only `fallback` needs a `Typer`.
+   *  `fallbackTyper`, which `TypingTransformer` implements with its `localTyper`. After erasure, only
+   *  `fallback` needs a `Typer`.
+   *
+   *  A class, not a trait, and with `global` in a field of its own: a dozen transformers extend it, so calls
+   *  from its shared code to its own methods, to its enclosing phase or to `global` through an interface would
+   *  dispatch through an itable at a megamorphic call site.
    */
-  trait TypeAssigner extends OwnerStackTransformer {
+  abstract class TypeAssigner extends OwnerStackTransformer {
+    protected[this] final val assignerGlobal: TypeAssigners.this.global.type = TypeAssigners.this.global
+    import assignerGlobal._
+    import assignerGlobal.definitions._
+
     /** The innermost owner entered, as the owner of a typing context there would be. */
     protected def enclosingOwner: Symbol = currentOwner
 
@@ -471,18 +480,12 @@ trait TypeAssigners { self: TypingTransformers =>
     }
   }
 
-  /** A `TypeAssigner` with `localTyper`. */
-  trait LocalTyperAssigner extends TypingTransformer with TypeAssigner {
-    override protected def enclosingOwner: Symbol = localTyperOwner
-    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper
-  }
-
-  /** A `LocalTyperAssigner` typing in the context of `typer`. */
-  final class TypeAssignerIn(typer: analyzer.Typer) extends TypingTransformer(typer) with LocalTyperAssigner {
+  /** A `TypeAssigner` typing in the context of `typer`. */
+  final class TypeAssignerIn(typer: analyzer.Typer) extends TypingTransformer(typer) {
     def typedStable(tree: Tree): Tree = typedQualifier(tree)
   }
 
-  /** `tree`, synthesised after typer, typed with a `LocalTyperAssigner` in the context of `typer`. */
+  /** `tree`, synthesised after typer, typed with a `TypeAssigner` in the context of `typer`. */
   def assignTypes(typer: analyzer.Typer, tree: Tree, pt: Type = WildcardType): Tree =
     new TypeAssignerIn(typer).typed(tree, pt)
 }

@@ -35,7 +35,7 @@ trait TypingTransformers extends TypeAssigners {
    *  (`Context.make`, as it was eagerly) when `localTyper` is next read. Most definitions in most phases are
    *  transformed without typing anything, so most of those contexts were never used.
    */
-  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends OwnerStackTransformer {
+  abstract class TypingTransformer(initLocalTyper: global.analyzer.Typer) extends TypeAssigner {
     /** A transformer whose root typer for `unit` is made when it is first needed. */
     def this(unit: CompilationUnit) = {
       this(null: analyzer.Typer)
@@ -67,6 +67,9 @@ trait TypingTransformers extends TypeAssigners {
       if (materialized < frames) frameOwners(frames - 1).asInstanceOf[Symbol]
       else if (_localTyper eq null) rootMirror.RootClass
       else _localTyper.context.owner
+
+    override protected def enclosingOwner: Symbol = localTyperOwner
+    override protected def fallbackTyper(why: String): analyzer.Typer = localTyper
 
     /** The typer to start from, made when first needed if the transformer was given none. */
     protected def initialTyper(): analyzer.Typer = newRootLocalTyper(rootUnit)
