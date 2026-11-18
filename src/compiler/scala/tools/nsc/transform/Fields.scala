@@ -558,8 +558,8 @@ abstract class Fields extends InfoTransform with ast.TreeDSL with TypingTransfor
   // TODO: could we rebind more aggressively? consider overriding in type equality?
   def castHack(tree: Tree, pt: Type) = gen.mkAsInstanceOf(tree, pt)
 
-  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with CheckedAccessorTreeSynthesis {
-    protected def typedPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
+  class FieldsTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with TypeAssigner with CheckedAccessorTreeSynthesis {
+    protected def typedPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     def mkTypedUnit(pos: Position) = typedPos(pos)(CODE.UNIT)
     // TODO: clean up. this method is not used
