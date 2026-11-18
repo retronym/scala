@@ -33,6 +33,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#258 | Test for a parameter accessor before looking up a value class's unbox | clean |
 | retronym/scala#259 | Type synthesised trees after typer without a Typer | conflict in `PatternMatching.scala` with scala/scala#11307, which moved `typedStable` out of `Substitution` and caches its types: its `typedStable` now calls `typedStableRef` |
 | retronym/scala#264 | Remove Tree.id | clean |
+| retronym/scala#267 | Skip virtual widen/dealias in dealiasWiden for class type refs | textually clean, adapted to retronym/scala#243: the fast path tests for its single `ClassTypeRef` class, and `AliasTypeRef` is a final class there |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
