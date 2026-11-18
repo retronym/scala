@@ -34,6 +34,8 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#259 | Type synthesised trees after typer without a Typer | conflict in `PatternMatching.scala` with scala/scala#11307, which moved `typedStable` out of `Substitution` and caches its types: its `typedStable` now calls `typedStableRef` |
 | retronym/scala#264 | Remove Tree.id | clean |
 | retronym/scala#267 | Skip virtual widen/dealias in dealiasWiden for class type refs | textually clean, adapted to retronym/scala#243: the fast path tests for its single `ClassTypeRef` class, and `AliasTypeRef` is a final class there |
+| retronym/scala#268 | Type post-typer trees without a context, and make contexts only when read | supersedes retronym/scala#148's `TypingTransformer` (its side taken in `TypingTransformers.scala` and `neg/t12494.check`, whose `-Ylog` context lines go away); in `PatternMatching.scala` its `typedStableRef(tree)` and stable-reference shortcut are applied to scala/scala#11307's `substitute` |
+| retronym/scala#204 | Select how names are stored with -Yname-table | clean, without its `PLAN.md`. A commit on top makes `-Yname-table:shared` the default, so benchmarks need no flag |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
@@ -44,7 +46,7 @@ Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in
 
 - Merged into 2.13.x since the previous refresh: #11389, #11390.
 - #11291, #11318: see their descriptions; not perf-tested or not merged wholesale.
-- retronym/scala#204 (name table), #203 (direct class writing), #202 (asSeenFrom fast path): parked.
+- retronym/scala#203 (direct class writing), #202 (asSeenFrom fast path): parked.
 
 ## Build
 
