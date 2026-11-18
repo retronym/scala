@@ -19,7 +19,7 @@ import scala.collection.mutable, mutable.{Buffer, ListBuffer}
 import scala.tools.nsc.Reporting.WarningCategory
 import scala.util.chaining._
 
-abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
+abstract class CleanUp extends Statics with Transform with TypingTransformers with ast.TreeDSL {
   import global._
   import definitions._
   import CODE._
@@ -65,7 +65,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
     private var localTyper: analyzer.Typer = null
 
     private def typedWithPos(pos: Position)(tree: Tree) =
-      localTyper.typedPos(pos)(tree)
+      assignTypes(localTyper, atPos(pos)(tree))
 
     /** A value class is defined to be only Java-compatible values: unit is
       * not part of it, as opposed to isPrimitiveValueClass in definitions. scala.Int is
