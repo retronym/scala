@@ -75,7 +75,7 @@ abstract class UnCurry extends InfoTransform
 
 // uncurry and uncurryType expand type aliases
 
-  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
+  class UnCurryTransformer(unit: CompilationUnit) extends TypingTransformer(unit) with TypeAssigner {
     private val forceExpandFunction = settings.Ydelambdafy.value == "inline"
     private var needTryLift       = false
     private var inConstructorFlag = 0L
@@ -84,7 +84,7 @@ abstract class UnCurry extends InfoTransform
     private val newMembers        = mutable.Map[Symbol, mutable.Buffer[Tree]]()
 
     /** `tree`, synthesised at `pos` from typed trees and bound symbols, typed with a `TypeAssigner`. */
-    private def assignTypesPos(pos: Position)(tree: Tree): Tree = assignTypes(localTyper, atPos(pos)(tree))
+    private def assignTypesPos(pos: Position)(tree: Tree): Tree = typed(atPos(pos)(tree), WildcardType)
 
     // Expand `Function`s in constructors to class instance creation (scala/bug#6666, scala/bug#8363)
     // We use Java's LambdaMetaFactory (LMF), which requires an interface for the sam's owner
