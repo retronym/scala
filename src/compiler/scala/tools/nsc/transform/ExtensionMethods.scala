@@ -166,9 +166,9 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           // Apply all the argument lists.
           deriveDefDef(tree)(_ =>
             atOwner(origMeth)(
-              localTyper.typedPos(rhs.pos)(
+              assignTypes(localTyper, atPos(rhs.pos)(
                 gen.mkForwarder(callPrefix, mmap(vparamss)(_.symbol))
-              )
+              ))
             )
           )
         case _ =>
@@ -206,14 +206,14 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       //         object C   { def meth$extension[M, C](this$: C[C], a: A)
       //                        = { meth$extension[M', C']({ <expr>: C[C'] })(a1) } }
       case treeInfo.Applied(sel @ Select(qual, _), targs, argss) if sel.symbol == origMeth =>
-        localTyper.typedPos(tree.pos) {
+        assignTypes(localTyper, atPos(tree.pos) {
           val allArgss = List(qual) :: argss
           val origThis = extensionMeth.owner.companionClass
           val baseType = qual.tpe.baseType(origThis)
           val allTargs = targs.map(_.tpe) ::: baseType.typeArgs
           val fun = gen.mkAttributedTypeApply(gen.mkAttributedThis(extensionMeth.owner), extensionMeth, allTargs)
           allArgss.foldLeft(fun)(Apply(_, _))
-        }
+        })
       case _ => super.transform(tree)
     }
   }

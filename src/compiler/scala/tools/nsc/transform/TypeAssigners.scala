@@ -86,10 +86,15 @@ trait TypeAssigners { self: TypingTransformers =>
     /** Prepares a tree that `fallback` hands to `localTyper`. */
     protected def beforeFallback(tree: Tree): Tree = tree
 
+    /** The typer's mode for the tree being typed, for `fallback`: the function of an application is
+     *  typed in `FUNmode`, so that the typer does not apply it to implicit arguments or eta-expand it.
+     */
+    private[this] var fallbackMode: Mode = EXPRmode
+
     /** A tree shape the assigner does not know: type it with `localTyper`. */
     protected def fallback(tree: Tree, pt: Type, why: String): Tree = {
       devWarning(tree.pos, s"$phase: typing $why with ${localTyper.getClass.getSimpleName}")
-      localTyper.typed(beforeFallback(tree), pt)
+      localTyper.typed(beforeFallback(tree), fallbackMode, pt)
     }
 
     /** The typer's mode for an expression, or for the qualifier of a selection. */
@@ -117,7 +122,13 @@ trait TypeAssigners { self: TypingTransformers =>
     /** A tree with a type is not retyped. */
     private def typedMode(tree: Tree, pt: Type, qualMode: Boolean, funMode: Boolean): Tree = {
       val tree0 = enter(tree)
-      val tree1 = if (tree0.tpe ne null) tree0 else typed1(tree0, pt, qualMode)
+      val tree1 = if (tree0.tpe ne null) tree0 else {
+        val savedMode = fallbackMode
+        fallbackMode = if (funMode) EXPRmode.forFunMode else exprMode(qualMode)
+        val typed = typed1(tree0, pt, qualMode)
+        fallbackMode = savedMode
+        typed
+      }
       if (tree1.isEmpty) tree1
       else if (!funMode && !phase.erasedTypes && tree1.tpe.isInstanceOf[OverloadedType])
         // An overloaded member selected by name and not applied, such as a name-based `isEmpty`:
