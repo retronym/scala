@@ -15,6 +15,11 @@ SB g via JB: SB.ga
 SB g from Java: SB.gq
 SB g from Java, non-generic call: SB.gq
 SB g Java caller: SB.gab
+SC g via JC: SC.gab
+SC g from Java: SC.gqq
+SC r via JC: SC.ra
+SC r from Java: SC.rqq
+SC h from Java: SC.hqq
 SW k via JW: SW.kt12
 SW k from Java: SW.kq12
 SA a via JA: SA.ax
