@@ -124,7 +124,9 @@ trait UnCurry {
 
     def toArrayType(tp: Type, newParam: Symbol): Type = {
       val arg = elementType(SeqClass, tp)
-      val elem = if (arg.typeSymbol.isTypeParameterOrSkolem && !(arg <:< AnyRefTpe)) {
+      // The same test as erasure's: `Array[T]` erases to `Object` for any abstract `T` not known to be a reference type,
+      // be it a type parameter or an abstract type member.
+      val elem = if (arg.typeSymbol.isAbstractType && !(arg <:< AnyRefTpe)) {
         // To prevent generation of an `Object` parameter from `Array[T]` parameter later
         // as this would crash the Java compiler which expects an `Object[]` array for varargs
         //   e.g.        def foo[T](a: Int, b: T*)
