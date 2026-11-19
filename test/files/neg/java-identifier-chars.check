@@ -1,0 +1,19 @@
+J.java:3: error: illegal character: 128512
+  public int 😀;
+              ^
+J.java:3: error: identifier expected but something found.
+  public int 😀;
+             ^
+J.java:4: error: illegal character: 183
+  public int ·;
+              ^
+J.java:4: error: identifier expected but something found.
+  public int ·;
+             ^
+J.java:5: error: illegal character: 8472
+  public int ℘;
+              ^
+J.java:5: error: identifier expected but something found.
+  public int ℘;
+             ^
+6 errors
