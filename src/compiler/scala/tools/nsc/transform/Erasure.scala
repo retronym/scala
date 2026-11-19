@@ -509,18 +509,19 @@ abstract class Erasure extends InfoTransform
      *  That is, check that the signature of the bridge method does not accidentally override some
      *  other method, possibly written by the user or inherited.
      *
-     *  As an optimization, only perform this check for susceptible bridges.
-     *
      *  This test is necessary for members that have a value class in their type.
      *  Such members are special because their types after erasure and after post-erasure differ.
      *  This means we generate them after erasure, but the post-erasure transform might introduce
      *  a name clash. The present method guards against these name clashes.
      *
      *  A bridge might also introduce a signature that accidentally matches an existing method.
-     *  In that case, it will have a parameter erased to the upper bound of a type parameter
-     *  in the signature of the member overridden by the original member. (That upper bound might
-     *  be `Object`.) By contrast, erasure of a parameter `List[A]` would already have induced an error
-     *  if there were a matching member.
+     *  A parameter type of the bridge can differ from that of the original member after erasure:
+     *  a type parameter erased to its upper bound (which might be `Object`), but also `Array[A]`,
+     *  an abstract type member or `A with B`. Even when the parameter types agree, the JVM also
+     *  matches the result type: for `def f(a: List[String]): String` overriding
+     *  `def f(a: List[A]): Object`, the bridge `f(List): Object` overrides an inherited
+     *  `def f(a: List[Int]): Object` that the member does not. Since every bridge differs from its
+     *  member after erasure, the check runs for every bridge.
      *
      *  @param  member   The original member
      *  @param  other    The overridden symbol for which the bridge was generated
@@ -600,15 +601,10 @@ abstract class Erasure extends InfoTransform
         bridge setInfo (otpe cloneInfo bridge)
         bridgeTarget(bridge) = member
 
-        val shouldAdd = {
-          val sigContainsValueClass = member.tpe.exists(_.typeSymbol.isDerivedValueClass)
-          def bridgeMayClash = other.paramss.exists(_.exists(_.tpe match { case TypeRef(_, r, _) => r.isTypeParameter case _ => false }))
-          def bridgeIsAOK = checkBridgeOverrides(member, other, bridge) match {
-            case Nil => true
-            case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
-            case es => for ((pos, msg) <- es) reporter.error(pos, msg); false
-          }
-          !sigContainsValueClass && !bridgeMayClash || bridgeIsAOK
+        val shouldAdd = checkBridgeOverrides(member, other, bridge) match {
+          case Nil => true
+          case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
+          case es => for ((pos, msg) <- es) reporter.error(pos, msg); false
         }
         if (shouldAdd) {
           exitingErasure(root.info.decls enter bridge)
