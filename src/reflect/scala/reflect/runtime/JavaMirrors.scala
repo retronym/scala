@@ -181,6 +181,8 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       sm"""Scala field ${sym.name} of ${sym.owner} isn't represented as a Java field, nor does it have a
           |Java accessor method. One common reason for this is that it may be a private class parameter
           |not used outside the primary constructor.""")
+    private def ErrorNonExistentAccessedField(sym: Symbol, jclazz: jClass[_]) = abort(
+      s"Scala field ${sym.name} of ${sym.owner} isn't represented as a Java field in ${jclazz.getName} or its superclasses")
 
     /** Helper functions for extracting typed values from a (Class[_], Any)
      *  representing an annotation argument.
@@ -298,12 +300,24 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
         checkMemberOf(field, symbol)
         if ((field.isMethod && !field.isAccessor) || field.isModule) ErrorNotField(field)
         val name = if (field.isAccessor) field.localName else field.name
-        val field1 = (field.owner.info decl name).asTerm
-        try fieldToJava(field1)
-        catch {
-          case _: NoSuchFieldException => ErrorNonExistentField(field1)
+        field.owner.info.decl(name) match {
+          case NoSymbol =>
+            // The owner has no field for a getter that is deferred or a member of a trait,
+            // the field is in one of the classes of the instance.
+            val getter = (if (field.isSetter) field.getterIn(field.owner) else field).asTerm
+            val mirror = new JavaAccessedFieldMirror(instance, getter)
+            try mirror.jfield
+            catch {
+              case _: NoSuchFieldException => ErrorNonExistentAccessedField(getter, instance.getClass)
+            }
+            mirror
+          case field1 =>
+            try fieldToJava(field1.asTerm)
+            catch {
+              case _: NoSuchFieldException => ErrorNonExistentField(field1)
+            }
+            new JavaFieldMirror(instance, field1.asTerm)
         }
-        new JavaFieldMirror(instance, field1)
       }
       def reflectMethod(method: MethodSymbol): MethodMirror = {
         checkMemberOf(method, symbol)
@@ -352,6 +366,13 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       }
 
       override def toString = s"field mirror for ${showDecl(symbol)} (bound to $receiver)"
+    }
+
+    private class JavaAccessedFieldMirror(receiver: Any, getter: TermSymbol, metadata: DerivedValueClassMetadata)
+            extends JavaFieldMirror(receiver, getter, metadata) {
+      def this(receiver: Any, getter: TermSymbol) = this(receiver, getter, new DerivedValueClassMetadata(getter.info.resultType))
+      override def bind(newReceiver: Any) = new JavaAccessedFieldMirror(newReceiver, getter, metadata)
+      override lazy val jfield = ensureAccessible(accessedFieldToJava(getter, receiver.getClass))
     }
 
     // the "symbol == Any_getClass || symbol == Object_getClass" test doesn't cut it
@@ -1370,6 +1391,20 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
         else specializedVariant(jclazz.getSuperclass) orElse jclazz.getDeclaredFields.find(f => isSpecializedVariant(f.getName))
       if (receiver == null || !fld.owner.typeParams.exists(_.isSpecialized)) jfield
       else specializedVariant(receiver.getClass).getOrElse(jfield)
+    }
+
+    /** The Java field accessed by a given Scala getter in an instance of a given Java class,
+     *  for a getter whose owner has no field for it. The field of a trait is added to each class
+     *  that mixes in the trait, and a deferred getter is implemented in a subclass. Of the classes
+     *  of the instance that declare such a field, the one closest to the owner of the getter is chosen.
+     */
+    private def accessedFieldToJava(getter: TermSymbol, jclazz: jClass[_]): jField = {
+      val jowner = classToJava(getter.owner.asClass)
+      val jname = expandedName(getter)
+      def loop(jclazz: jClass[_]): Option[jField] =
+        if (jclazz == null || !jowner.isAssignableFrom(jclazz)) None
+        else loop(jclazz.getSuperclass) orElse jclazz.getDeclaredFields.find(_.getName == jname)
+      loop(jclazz).getOrElse(throw new NoSuchFieldException(jname))
     }
 
     /** The Java method corresponding to a given Scala method.
