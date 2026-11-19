@@ -96,6 +96,31 @@ class DependencyTest extends BridgeTesting {
     }
 
   @Test
+  def `Dependency phase should extract class dependencies from refinements and existential quantifiers`(): Unit = {
+    val srcDefs =
+      """|class Box[T]
+         |object A { type T[X] = Box[X] }
+         |class C { type V = Int; class W; val c: C = this }
+         |class D { class W }
+         |object O { val p: C = new C }
+         |""".stripMargin
+    val srcParent = "class Parent { def f: Box[D#W { def member: Int }] = null }"
+    val srcMember = "class Member { def f: Box[AnyRef { def member: A.T[D#W] }] = null }"
+    val srcPath = "class Path { def f: Box[AnyRef { val v: O.p.c.W }] = null }"
+    val srcBound = "class Bound { def f: Box[X forSome { type X <: A.T[D#W] }] = null }"
+    val srcAlias = "class Alias { def f: Box[X forSome { type X <: A.T[C#V] }] = null }"
+    val memberRef = extractDependenciesFromSrcs(srcDefs, srcParent, srcMember, srcPath, srcBound, srcAlias).memberRef
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"memberRef($name) = ${memberRef(name)}", expected.subsetOf(memberRef(name)))
+    includes("Parent", Set("Box", "D", "D.W"))
+    includes("Member", Set("Box", "A", "D", "D.W"))
+    includes("Path", Set("Box", "O", "C", "C.W"))
+    includes("Bound", Set("Box", "A", "D", "D.W"))
+    includes("Alias", Set("Box", "A", "C"))
+    assertEquals(Set.empty, memberRef.keySet.filter(_.contains("refinement")))
+  }
+
+  @Test
   def `Dependency phase should extract class dependencies with trait as first parent`(): Unit = {
     val classDependencies = extractClassDependenciesTraitAsFirstPatent
     val memberRef = classDependencies.memberRef

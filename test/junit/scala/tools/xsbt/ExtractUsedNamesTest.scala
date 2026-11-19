@@ -248,6 +248,29 @@ class ExtractUsedNamesTest extends BridgeTesting {
     includes("Existential", Set("Box", "A", "T", "C"))
   }
 
+  @Test
+  def `Used names extraction should extract names in refinements and existential quantifiers`(): Unit = {
+    val srcDefs =
+      """|class Box[T]
+         |object A { type T[X] = Box[X] }
+         |class C { type V = Int; class W; val c: C = this }
+         |object O { val p: C = new C }
+         |""".stripMargin
+    val srcParent = "class Parent { def f: Box[C#W { def member: Int }] = null }"
+    val srcMember = "class Member { def f: Box[AnyRef { def member: A.T[C#V] }] = null }"
+    val srcPath = "class Path { val q: C = new C; def f: Box[AnyRef { def member: Box[q.c.W]; val v: O.p.c.W }] = null }"
+    val srcBound = "class Bound { def f: Box[X forSome { type X <: A.T[C#V] }] = null }"
+    val srcWildcard = "class Wildcard { def f: Box[_ <: A.T[C#V]] = null }"
+    val usedNames = extractUsedNamesFromSrc(srcDefs, srcParent, srcMember, srcPath, srcBound, srcWildcard)
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"$name is missing ${expected -- usedNames(name)}", expected.subsetOf(usedNames(name)))
+    includes("Parent", Set("Box", "C", "W"))
+    includes("Member", Set("Box", "A", "T", "C", "V"))
+    includes("Path", Set("Box", "q", "O", "p", "c", "W"))
+    includes("Bound", Set("Box", "A", "T", "C", "V"))
+    includes("Wildcard", Set("Box", "A", "T", "C", "V"))
+  }
+
   // pending test for https://issues.scala-lang.org/browse/SI-7173
   @Test @Ignore
   def `Used names extraction should extract names of constants`(): Unit = {
