@@ -469,8 +469,7 @@ abstract class RefChecks extends Transform {
         /* Is the intersection between given two lists of overridden symbols empty? */
         def intersectionIsEmpty(syms1: List[Symbol], syms2: List[Symbol]) = !syms1.exists(syms2.contains)
 
-        if (memberClass == ObjectClass && otherClass == AnyClass) () // skip -- can we have a mode of symbolpairs where this pair doesn't even appear?
-        else if (typesOnly) checkOverrideTypes()
+        if (typesOnly) checkOverrideTypes()
         else {
           // o: public | protected        | package-protected  (aka java's default access)
           // ^-may be overridden by member with access privileges-v
