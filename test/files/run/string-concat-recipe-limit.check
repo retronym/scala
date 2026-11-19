@@ -1,0 +1,18 @@
+-release 8
+80001 -1614724048
+30001 1878188976
+32770 804584829
+90030 2023751040
+80005 1955488401
+error: Error while emitting TooLarge$
+UTF8 string too large
+error: Method f in class TooLarge$ has a bad String constant of length 70000
+-release 9
+80001 -1614724048
+30001 1878188976
+32770 804584829
+90030 2023751040
+80005 1955488401
+error: Error while emitting TooLarge$
+UTF8 string too large
+error: Method f in class TooLarge$ has a bad bootstrap method argument of length 70000
