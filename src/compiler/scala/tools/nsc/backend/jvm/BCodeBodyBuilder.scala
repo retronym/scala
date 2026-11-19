@@ -1210,6 +1210,11 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
              * the string concatenation is longer (unlikely), we spill into multiple calls
              */
             val MaxIndySlots = 200
+            /* The recipe is a constant pool string, limited to 65535 bytes of modified UTF-8. A
+             * literal that does not fit into the recipe is passed as a constant of its own. The
+             * tags take one byte each, and there are at most `MaxIndySlots` of them.
+             */
+            val MaxRecipeLiteralBytes = 65535 - MaxIndySlots
             val TagArg = '\u0001'    // indicates a hole (in the recipe string) for an argument
             val TagConst = '\u0002'  // indicates a hole (in the recipe string) for a constant
 
@@ -1217,6 +1222,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
             val argTypes = Seq.newBuilder[asm.Type]
             val constVals = Seq.newBuilder[String]
             var totalArgSlots = 0
+            var recipeLiteralBytes = 0
             var countConcats = 1     // ie. 1 + how many times we spilled
 
             for (elem <- concatArguments) {
@@ -1228,6 +1234,7 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
                 bc.genIndyStringConcat(recipe.toString, argTypes.result(), constVals.result())
                 countConcats += 1
                 totalArgSlots = 0
+                recipeLiteralBytes = 0
                 recipe.setLength(0)
                 argTypes.clear()
                 constVals.clear()
@@ -1235,11 +1242,13 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
 
               elem match {
                 case Literal(Constant(s: String)) =>
-                  if (s.contains(TagArg) || s.contains(TagConst)) {
+                  val literalBytes = utf8Length(s)
+                  if (s.contains(TagArg) || s.contains(TagConst) || recipeLiteralBytes + literalBytes > MaxRecipeLiteralBytes) {
                     totalArgSlots += elemSlots
                     recipe.append(TagConst)
                     constVals += s
                   } else {
+                    recipeLiteralBytes += literalBytes
                     recipe.append(s)
                   }
 
@@ -1264,6 +1273,18 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
           }
       }
       StringRef
+    }
+
+    /* The length of `s` as a `CONSTANT_Utf8`, which uses modified UTF-8 (JVMS 4.4.7) */
+    private def utf8Length(s: String): Int = {
+      var bytes = 0
+      var i = 0
+      while (i < s.length) {
+        val c = s.charAt(i)
+        bytes += (if (c >= 0x0001 && c <= 0x007F) 1 else if (c <= 0x07FF) 2 else 3)
+        i += 1
+      }
+      bytes
     }
 
     /**

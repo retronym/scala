@@ -19,7 +19,7 @@ import scala.collection.mutable
 import scala.reflect.internal.util.{NoPosition, Position}
 import scala.reflect.io.AbstractFile
 import scala.tools.asm.{ByteVector, ClassVisitor, ClassWriter, MethodVisitor, Opcodes}
-import scala.tools.asm.tree.ClassNode
+import scala.tools.asm.tree.{ClassNode, InvokeDynamicInsnNode}
 import scala.tools.nsc.backend.jvm.analysis.BackendUtils
 import scala.tools.nsc.backend.jvm.opt._
 import scala.util.control.NonFatal
@@ -92,6 +92,15 @@ abstract class PostProcessor extends PerRunInit {
 
   // Provide more useful messaging when class writing fails. -Xverify verifies always.
   private def checkConformance(classNode: ClassNode): Unit = {
+    val max = 0xFFFF
+    val threshold = 0xFFFF / 6 // char never expands to more than 6 bytes
+    def checkString(site: String, which: String)(s: String): Unit = if (s != null && s.length > threshold) {
+      def fail() = backendReporting.error(NoPosition, s"$site in class ${classNode.name} has a bad $which of length ${s.length}${ if (frontendAccess.compilerSettings.debug) s":\n$s" else "" }")
+      if (s.length > max) fail()
+      else
+        try new ByteVector(s.length).putUTF8(s)
+        catch { case _: IllegalArgumentException => fail() }
+    }
     val visitor = new ClassVisitor(Opcodes.ASM9) {
       override def visitMethod(access: Int, name: String, descriptor: String, signature: String, exceptions: Array[String]) = {
         val site = s"Method $name"
@@ -108,17 +117,18 @@ abstract class PostProcessor extends PerRunInit {
           }
         }
       }
-      private final val max = 0xFFFF
-      private final val threshold = 0xFFFF / 6 // char never expands to more than 6 bytes
-      private def checkString(site: String, which: String)(s: String): Unit = if (s != null && s.length > threshold) {
-        def fail() = backendReporting.error(NoPosition, s"$site in class ${classNode.name} has a bad $which of length ${s.length}${ if (frontendAccess.compilerSettings.debug) s":\n$s" else "" }")
-        if (s.length > max) fail()
-        else
-          try new ByteVector(s.length).putUTF8(s)
-          catch { case _: IllegalArgumentException => fail() }
-      }
     }
     classNode.accept(visitor)
+    // the recipe and the constants of a string concatenation
+    classNode.methods.forEach(method => method.instructions.forEach {
+      case indy: InvokeDynamicInsnNode =>
+        indy.bsmArgs.foreach {
+          case value: String =>
+            checkString(s"Method ${method.name}", "bootstrap method argument")(value)
+          case _ =>
+        }
+      case _ =>
+    })
   }
 
   private def warnCaseInsensitiveOverwrite(clazz: GeneratedClass): Unit = {
