@@ -1,3 +1,4 @@
+//> using options -Wconf:cat=deprecation:s
 // A `try` with a `catch` in the body of `synchronized` is not lifted to a method
 // if the `synchronized` expression itself is evaluated with an empty stack.
 // The class must verify, and the monitor must be released on every path.
@@ -31,6 +32,16 @@ class C {
   def assignLocal(s: String): Int = { var r = 0; r = try parse(s) catch { case _: NumberFormatException => -1 }; r }
   def assignCaptured(s: String): Int = { var r = 0; r = try parse(s) catch { case _: NumberFormatException => -1 }; val g = () => r; g() }
 
+  // the receiver of a String concatenation is evaluated after the StringBuilder is created
+  def concatSync(s: String): String = lock.synchronized { try { parse(s); s } catch { case _: NumberFormatException => "" } } + s
+  def concatSyncToString(s: String): String = lock.synchronized { try parse(s) catch { case _: NumberFormatException => -1 } }.toString + s
+  def concatTry(s: String): String = (try parse(s) catch { case _: NumberFormatException => -1 }).toString + s
+  def concatIntRecv(s: String): String = (try parse(s) catch { case _: NumberFormatException => -1 }) + s
+  def concatNested(s: String): String = (lock.synchronized { try { parse(s); s } catch { case _: NumberFormatException => "" } } + s) + s
+  def concatArg(s: String): String = s + lock.synchronized { try parse(s) catch { case _: NumberFormatException => -1 } }
+  def arrayStore(s: String): Int = { val a = new Array[Int](1); a(0) = lock.synchronized { try parse(s) catch { case _: NumberFormatException => -1 } }; a(0) }
+  def newArg(s: String): String = new Some(lock.synchronized { try { parse(s); s } catch { case _: NumberFormatException => "" } }).value
+
   def locked: Boolean = Thread.holdsLock(lock) || Thread.holdsLock(this)
 }
 
@@ -60,6 +71,14 @@ object Test {
     check("assignField")(c.assignField)
     check("assignLocal")(c.assignLocal)
     check("assignCaptured")(c.assignCaptured)
+    check("concatSync")(c.concatSync)
+    check("concatSyncToString")(c.concatSyncToString)
+    check("concatTry")(c.concatTry)
+    check("concatIntRecv")(c.concatIntRecv)
+    check("concatNested")(c.concatNested)
+    check("concatArg")(c.concatArg)
+    check("arrayStore")(c.arrayStore)
+    check("newArg")(c.newArg)
     println(c.field)
   }
 }
