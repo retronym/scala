@@ -458,6 +458,39 @@ object Test extends BytecodeTest {
     assertEnclosingMethod("LocalAndAnonymousInLazyInitializer$T$AA$8$",    "LocalAndAnonymousInLazyInitializer$T", null, null)
   }
 
+  def testNestedInSuperConstructorArg(): Unit = {
+    val prefix = "NestedInSuperConstructorArg$"
+    val names = new java.io.File(sys.props("partest.output")).list().toList.collect {
+      case s if s.startsWith(prefix) && s.endsWith(".class") => s.stripSuffix(".class")
+    }.sorted
+    for (name <- names) {
+      // JVMS 4.7.6, 4.7.7: a nested class and its enclosing class both have an InnerClasses entry for the nested class
+      val encl = enclosingMethod(name).outerClass
+      if (encl != null) {
+        assert(innerClassNodes(name).exists(_.name == name), s"$name has no InnerClasses entry for itself")
+        assert(innerClassNodes(encl).exists(_.name == name), s"$encl has no InnerClasses entry for $name")
+      }
+      // Java reflection checks this consistency when it looks for the declaring class
+      val c = Class.forName(name, false, getClass.getClassLoader)
+      c.getDeclaringClass
+      c.getEnclosingClass
+      c.getEnclosingMethod
+      c.getEnclosingConstructor
+      c.getDeclaredClasses
+      try c.getSimpleName catch { case _: InternalError => } // "Malformed class name" on Java 8, see jvm/javaReflection
+    }
+
+    // The anonymous function class is nested in the constructor, the classes defined in the function are nested in the
+    // anonymous function class.
+    val AnonFun = """((.*)\$\$anonfun\$\$lessinit\$greater\$\d+)(.*)""".r
+    val nestedInAnonFun = names.collect {
+      case name @ AnonFun(_, cls, "")    => assertSame(enclosingMethod(name).copy(descriptor = null), EnclosingMethod("<init>", null, cls)); None
+      case name @ AnonFun(anonFun, _, _) => assertEnclosingMethod(name, anonFun, null, null); Some(name)
+    }.flatten
+    assertSame(nestedInAnonFun.length, 13)
+    assertEnclosingMethod(prefix + "O$LL$1", prefix + "O$", "<init>", "()V")
+  }
+
   def show(): Unit = {
     testA1()
     testA2()
@@ -488,5 +521,6 @@ object Test extends BytecodeTest {
     testAnonymousClassesMayBeNestedInSpecialized()
     testNestedInValueClass()
     testLocalAndAnonymousInLazyInitializer()
+    testNestedInSuperConstructorArg()
   }
 }
