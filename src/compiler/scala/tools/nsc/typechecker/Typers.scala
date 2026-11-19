@@ -3308,8 +3308,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         // need to delay rest of typedRefinement to avoid cyclic reference errors
         debuglog(s"deferred typed refinement")
+        // The refinement may be typed in a silent context, e.g. in the qualifier of the function
+        // of an application, which `typedApply` first types silently. By the time the deferred
+        // check runs that context's error buffer is long gone, so issue its errors directly.
+        val typer1 = if (context.reporter.isBuffering) newTyper(context.makeNonSilent(context.tree)) else this
         unit.addPostUnitCheck { () =>
-          val stats1 = typedStats(stats, NoSymbol)
+          val stats1 = typer1.typedStats(stats, NoSymbol)
           // this code kicks in only after typer, so `stats` will never be filled in time
           // as a result, most of compound type trees with non-empty stats will fail to reify
           // todo. investigate whether something can be done about this
