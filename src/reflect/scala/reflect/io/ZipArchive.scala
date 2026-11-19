@@ -16,7 +16,7 @@ package io
 
 import java.lang.Boolean.{getBoolean => booleanProperty}
 import java.net.URL
-import java.io.{ByteArrayInputStream, FilterInputStream, IOException, InputStream}
+import java.io.{ByteArrayInputStream, ByteArrayOutputStream, FilterInputStream, IOException, InputStream}
 import java.io.{File => JFile}
 import java.util.concurrent.{ArrayBlockingQueue, TimeUnit}
 import java.util.zip.{ZipEntry, ZipFile, ZipInputStream}
@@ -307,49 +307,41 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
 }
 /** ''Note:  This library is considered experimental and should not be used unless you know what you are doing.'' */
 final class URLZipArchive(val url: URL) extends ZipArchive(null) {
+  // The contents of an entry, read eagerly. The size in the entry's header is not used: `ZipInputStream`
+  // reports -1 for an entry that is followed by a data descriptor, which is what `ZipOutputStream` writes
+  // for a deflated entry.
+  private final class FileEntry(path: String, bytes: Array[Byte]) extends Entry(path) {
+    override def input: InputStream = new ByteArrayInputStream(bytes)
+    override def sizeOption: Option[Int] = Some(bytes.length)
+    override def toByteArray: Array[Byte] = bytes
+  }
+
   def iterator: Iterator[Entry] = {
     val root     = new DirEntry(RootEntry)
     val dirs     = new java.util.HashMap[String, DirEntry]()
     dirs.put(RootEntry, root)
-    val in       = new ZipInputStream(new ByteArrayInputStream(Streamable.bytes(input)))
-    closeables ::= in
+    val in       = new ZipInputStream(input)
+    val buf      = new Array[Byte](8192)
+
+    def readEntry(): Array[Byte] = {
+      val out = new ByteArrayOutputStream()
+      @tailrec def loop(): Unit = {
+        val read = in.read(buf, 0, buf.length)
+        if (read >= 0) {
+          out.write(buf, 0, read)
+          loop()
+        }
+      }
+      loop()
+      if (out.size == 0) Array.emptyByteArray else out.toByteArray
+    }
 
     @tailrec def loop(): Unit = {
       val zipEntry = in.getNextEntry()
-      class EmptyFileEntry() extends Entry(zipEntry.getName) {
-        override def toByteArray: Array[Byte] = null
-        override def sizeOption = Some(0)
-      }
-      class FileEntry() extends Entry(zipEntry.getName) {
-        override val toByteArray: Array[Byte] = {
-          val len    = zipEntry.getSize().toInt
-          val arr    = if (len == 0) Array.emptyByteArray else new Array[Byte](len)
-          var offset = 0
-
-          @tailrec
-          def loop(): Unit = {
-            if (offset < len) {
-              val read = in.read(arr, offset, len - offset)
-              if (read >= 0) {
-                offset += read
-                loop()
-              }
-            }
-          }
-          loop()
-
-          if (offset == arr.length) arr
-          else throw new IOException("Input stream truncated: read %d of %d bytes".format(offset, len))
-        }
-        override def sizeOption = Some(zipEntry.getSize().toInt)
-      }
-
       if (zipEntry != null) {
         val dir = getDir(dirs, zipEntry)
-        if (zipEntry.isDirectory)
-          dir
-        else {
-          val f = if (zipEntry.getSize() == 0) new EmptyFileEntry() else new FileEntry()
+        if (!zipEntry.isDirectory) {
+          val f = new FileEntry(zipEntry.getName, readEntry())
           dir.entries(f.name) = f
         }
         in.closeEntry()
@@ -357,7 +349,8 @@ final class URLZipArchive(val url: URL) extends ZipArchive(null) {
       }
     }
 
-    loop()
+    try loop()
+    finally in.close()
     try root.iterator
     finally dirs.clear()
   }
@@ -375,10 +368,7 @@ final class URLZipArchive(val url: URL) extends ZipArchive(null) {
     case x: URLZipArchive => url == x.url
     case _                => false
   }
-  private[this] var closeables: List[java.io.Closeable] = Nil
-  def close(): Unit = {
-    closeables.foreach(_.close())
-  }
+  def close(): Unit = ()
 }
 
 final class ManifestResources(val url: URL) extends ZipArchive(null) {

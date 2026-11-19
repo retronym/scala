@@ -103,6 +103,82 @@ class ZipArchiveTest {
       ()
     }
   }
+  private val contents = List(
+    "foo.class"   -> "hello, world".getBytes,
+    "empty.txt"   -> Array.emptyByteArray,
+    "big.bin"     -> Array.tabulate[Byte](100000)(i => (i * 31 / 7).toByte),
+    "p/q/bar.txt" -> "bar".getBytes,
+  )
+
+  private def createZip(stored: Boolean): Path = Files.createTempFile("junit", ".zip").tap { f =>
+    import java.util.zip._
+    Using.resource(new ZipOutputStream(Files.newOutputStream(f))) { zout =>
+      for ((name, bytes) <- contents) {
+        val entry = new ZipEntry(name)
+        if (stored) {
+          entry.setMethod(ZipEntry.STORED)
+          entry.setSize(bytes.length)
+          entry.setCompressedSize(bytes.length)
+          entry.setCrc(new CRC32().tap(_.update(bytes, 0, bytes.length)).getValue)
+        }
+        // otherwise deflated: the sizes follow the data in a data descriptor, and ZipInputStream reports -1
+        zout.putNextEntry(entry)
+        zout.write(bytes, 0, bytes.length)
+        zout.closeEntry()
+      }
+    }
+  }
+
+  private def checkURLArchive(stored: Boolean): Unit = {
+    val z = createZip(stored)
+    Using.resources(ForDeletion(z), new URLZipArchive(z.toUri.toURL)) { (_, zip) =>
+      def files(dir: AbstractFile): List[AbstractFile] =
+        dir.iterator.toList.flatMap(f => if (f.isDirectory) files(f) else List(f))
+      val found = zip.iterator.toList.flatMap(f => if (f.isDirectory) files(f) else List(f)).map(f => f.path -> f).toMap
+      assertEquals(contents.map(_._1).toSet, found.keySet)
+      for ((name, bytes) <- contents) {
+        val f = found(name)
+        assertEquals(name, Some(bytes.length), f.sizeOption)
+        assertArrayEquals(name, bytes, f.toByteArray)
+        assertArrayEquals(name, bytes, f.unsafeToByteArray)
+        Using.resource(f.input) { in =>
+          assertEquals(name, bytes.length, in.available)
+          val out = new java.io.ByteArrayOutputStream
+          val buf = new Array[Byte](1024)
+          var n = in.read(buf)
+          while (n >= 0) { out.write(buf, 0, n); n = in.read(buf) }
+          assertArrayEquals(name, bytes, out.toByteArray)
+        }
+      }
+    }
+  }
+
+  @Test def `URL archive reads stored entries`(): Unit = checkURLArchive(stored = true)
+
+  @Test def `URL archive reads deflated entries`(): Unit = checkURLArchive(stored = false)
+
+  @annotation.nowarn("cat=deprecation")
+  @Test def `URL archive closes the stream it opens`(): Unit = {
+    val z = createZip(stored = false)
+    var opened, closed = 0
+    val handler = new java.net.URLStreamHandler {
+      override def openConnection(url: URL): java.net.URLConnection = new java.net.URLConnection(url) {
+        override def connect() = ()
+        override def getInputStream = {
+          opened += 1
+          new java.io.FilterInputStream(Files.newInputStream(z)) {
+            override def close(): Unit = { closed += 1; super.close() }
+          }
+        }
+      }
+    }
+    Using.resources(ForDeletion(z), new URLZipArchive(new URL(null, "test:archive.zip", handler))) { (_, zip) =>
+      assertEquals(4, zip.iterator.size)
+      assertEquals(1, opened)
+      assertEquals(1, closed)
+    }
+  }
+
   /* zipfs doesn't write size field in file header as required by URLZipArchive
   private def createTestZip2(): Path = {
     import java.nio.file.FileSystems
