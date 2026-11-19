@@ -318,6 +318,8 @@ abstract class UnCurry extends InfoTransform
             val Typed(tree, _) = args.last: @unchecked
             if (javaStyleVarArgs)
               if (tree.tpe.typeSymbol == ArrayClass) tree
+              // `null: _*` has no `toArray`: pass the null as the array, as Java does for `m((T[]) null)`
+              else if (tree.tpe <:< NullTpe) tree
               else sequenceToArray(tree)
             else
               if (tree.tpe.typeSymbol isSubClass SeqClass) tree
@@ -333,7 +335,7 @@ abstract class UnCurry extends InfoTransform
           }
 
         exitingUncurry {
-          if (isJava && !isReferenceArray(suffix.tpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
+          if (isJava && !isReferenceArray(suffix.tpe) && !(suffix.tpe <:< NullTpe) && isArrayOfSymbol(fun.tpe.params.last.tpe, ObjectClass)) {
             // The array isn't statically known to be a reference array, so call ScalaRuntime.toObjectArray.
             suffix = localTyper.typedPos(pos) {
               gen.mkRuntimeCall(nme.toObjectArray, List(suffix))
