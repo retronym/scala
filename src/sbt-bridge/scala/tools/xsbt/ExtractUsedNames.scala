@@ -310,9 +310,24 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
         if (!inspectedTypeTrees.contains(original)) {
           inspectedTypeTrees.add(original)
           traverse(original)
-          // A member of a refinement or an existential quantifier is the owner of the trees
-          // below it, but the names used there belong to the class that encloses the type.
-          if (original.exists(_.isInstanceOf[DefTree])) original.foreach(handleTreeNode)
+        }
+
+      // The template of a compound type is not typed, so `super.traverse` finds few symbols in it
+      case CompoundTypeTree(templ) =>
+        traverseTypedRefinement(templ)(traverse)
+
+      // The original keeps the quantifiers as the parser built them. Their symbols know the typed bounds, but
+      // the typer expands `C#V` in those, so the references it left without a symbol are added as written.
+      case ExistentialTypeTree(_, whereClauses) =>
+        whereClauses.foreach { wc =>
+          if (!ignoredSymbol(wc.symbol)) addTypeNames(wc.symbol.info)
+          val names = getNamesOfEnclosingScope
+          wc.foreach {
+            case ref: RefTree if ignoredSymbol(ref.symbol) && !isEmptyName(ref.name) =>
+              names.add(ref.name)
+              ()
+            case _ =>
+          }
         }
 
       case t if t.hasSymbolField =>
@@ -342,7 +357,7 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
     private var _currentScopedNamesCache: JavaMap[Name, EnumSet[UseScope]] = _
 
     @inline private def resolveNonLocal(from: Symbol): Symbol = {
-      val fromClass = enclOrModuleClass(from)
+      val fromClass = enclOrModuleClassSkippingRefinements(from)
       if (ignoredSymbol(fromClass) || fromClass.hasPackageFlag) NoSymbol
       else localToNonLocalClass.resolveNonLocal(fromClass)
     }

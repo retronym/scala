@@ -269,7 +269,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
     private var _isLocalSource: Boolean = false
 
     @inline def resolveNonLocalClass(from: Symbol): (Symbol, Boolean) = {
-      val fromClass = enclOrModuleClass(from)
+      val fromClass = enclOrModuleClassSkippingRefinements(from)
       if (fromClass == NoSymbol || fromClass.hasPackageFlag) (fromClass, false)
       else {
         val nonLocal = localToNonLocalClass.resolveNonLocal(fromClass)
@@ -518,6 +518,7 @@ final class Dependency(val global: CallbackGlobal) extends LocateClassFile with 
         traverseTrees(templ.parents)
         traverse(templ.self)
         traverseTrees(templ.body)
+        traverseTypedRefinement(templ)(traverse)
 
       case Template(parents, self, body) =>
         // use typeSymbol to dealias type aliases -- we want to track the dependency on the real class in the alias's RHS
