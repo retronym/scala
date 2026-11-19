@@ -158,30 +158,24 @@ trait NamesDefaults { self: AbstractAnalyzer =>
 
       // baseFun1: extract the function from a potential TypeApply
       // funTargs: type arguments on baseFun, used to reconstruct TypeApply in blockWith(Out)Qualifier
-      // defaultTargs: type arguments to be used for calling defaultGetters. If the type arguments are given
-      //   in the source code, re-use them for default getter. Otherwise infer the default getter's t-args.
+      // defaultTargs: type arguments to be used for calling defaultGetters, the same as for the method
+      //   (spec 6.6.1). If the method's type arguments are being inferred, these are its undetermined
+      //   type parameters, so the default getters are instantiated with the type arguments solved for
+      //   the application, rather than inferring their own type arguments (which gives `Nothing` for a
+      //   default of type `T`).
       val (baseFun1, funTargs, defaultTargs) = baseFun match {
         case TypeApply(fun, targs) =>
-          val targsInSource =
-            if (targs.forall(a => context.undetparams contains a.symbol)) Nil
-            else targs
-          (fun, targs, targsInSource)
+          (fun, targs, targs)
 
         case Select(New(tpt @ TypeTree()), _) if isConstr =>
-          val targsInSource = tpt.tpe match {
-            case TypeRef(pre, sym, args)
-            if (!args.forall(a => context.undetparams contains a.typeSymbol)) =>
-              args.map(TypeTree(_))
-            case _ =>
-              Nil
+          val targs = tpt.tpe match {
+            case TypeRef(_, _, args) => args.map(TypeTree(_))
+            case _                   => Nil
           }
-          (baseFun, Nil, targsInSource)
+          (baseFun, Nil, targs)
 
         case Select(TypeApply(New(TypeTree()), targs), _) if isConstr =>
-          val targsInSource =
-            if (targs.forall(a => context.undetparams contains a.symbol)) Nil
-            else targs
-          (baseFun, Nil, targsInSource)
+          (baseFun, Nil, targs)
 
         case _ => (baseFun, Nil, Nil)
       }
@@ -358,13 +352,21 @@ trait NamesDefaults { self: AbstractAnalyzer =>
             case Apply(_, typedArgs) if (typedApp :: typedArgs).exists(_.isErrorTyped) =>
               setError(tree) // bail out with and erroneous Apply *or* erroneous arguments, see scala/bug#7238, scala/bug#7509
             case Apply(expr, typedArgs) =>
+              // The type arguments of a constructor call are not trees in `funOnly`, so they are not
+              // substituted when they are inferred for this application. Take them from the instantiated
+              // type, for the default getters of later argument lists.
+              val targs1 = funOnly match {
+                case Select(New(tpt @ TypeTree()), _) if funOnly.symbol.isConstructor && targs.nonEmpty =>
+                  tpt.tpe.typeArgs.map(TypeTree(_))
+                case _ => targs
+              }
               val isAnnot = mode.in(Mode.ANNOTmode) && {
                 val s = funOnly.symbol
                 s != null && s.isConstructor && s.owner.isNonBottomSubClass(AnnotationClass)
               }
 
               if (isAnnot) {
-                NamedApplyBlock(stats, typedApp)(NamedApplyInfo(qual, targs, vargss :+ typedArgs, blockTyper, tree))
+                NamedApplyBlock(stats, typedApp)(NamedApplyInfo(qual, targs1, vargss :+ typedArgs, blockTyper, tree))
                   .setType(typedApp.tpe)
                   .setPos(tree.pos.makeTransparent)
               } else {
@@ -394,7 +396,7 @@ trait NamesDefaults { self: AbstractAnalyzer =>
                 // cannot call blockTyper.typedBlock here, because the method expr might be partially applied only
                 val res = blockTyper.doTypedApply(tree, expr, refArgs, mode, pt)
                 res.setPos(res.pos.makeTransparent)
-                NamedApplyBlock(stats ::: valDefs.flatten, res)(NamedApplyInfo(qual, targs, vargss :+ refArgs, blockTyper, tree))
+                NamedApplyBlock(stats ::: valDefs.flatten, res)(NamedApplyInfo(qual, targs1, vargss :+ refArgs, blockTyper, tree))
                   .setType(res.tpe)
                   .setPos(tree.pos.makeTransparent)
               }
