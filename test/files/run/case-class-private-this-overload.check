@@ -1,0 +1,15 @@
+K(3)
+6
+Some(3)
+3
+K(4)
+true
+true
+3
+L(2,s)
+xx
+Some((2,s))
+(2,s)
+L(2,t)
+Some(ArraySeq(1, 2))
+3
