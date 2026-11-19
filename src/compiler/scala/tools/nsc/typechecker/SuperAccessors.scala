@@ -384,9 +384,9 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
                 lhs.symbol.isJavaDefined &&
                 needsProtectedAccessor(lhs.symbol, tree.pos)) {
               debuglog("Adding protected setter for " + tree)
-              val setter = makeSetter(lhs)
+              val setter = makeSetter(lhs, rhs)
               debuglog("Replaced " + tree + " with " + setter)
-              transform(localTyper.typed(Apply(setter, List(qual, rhs))))
+              transform(localTyper.typed(setter))
             } else
               super.transform(tree)
           }
@@ -459,15 +459,25 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
 
       // if the result type depends on the this type of an enclosing class, the accessor
       // has to take an object of exactly this type, otherwise it's more general
-      val objType = if (isThisType(memberType.finalResultType)) clazz.thisType else clazz.typeOfThis
-      val accType = (protAcc: Symbol) => memberType match {
-        case PolyType(tparams, restpe) =>
-          // luc: question to author: should the tparams symbols not be cloned and get a new owner (protAcc)?
-          PolyType(tparams, MethodType(List(protAcc.newSyntheticValueParam(objType)),
-                                       restpe.cloneInfo(protAcc).asSeenFrom(qual.tpe, sym.owner)))
-        case _ =>
-          MethodType(List(protAcc.newSyntheticValueParam(objType)),
-                     memberType.cloneInfo(protAcc).asSeenFrom(qual.tpe, sym.owner))
+      val dependsOnThis = isThisType(memberType.finalResultType)
+      // The qualifier of a generic host need not have the host's type arguments (`o.m` for an
+      // `o: C[Int]` within `C[A]`), so the accessor abstracts over them.
+      val isPoly = !dependsOnThis && clazz.typeParams.nonEmpty
+      val accType = (protAcc: Symbol) => {
+        val (hostTparams, objType) =
+          if (dependsOnThis) (Nil, clazz.thisType)
+          else hostTypeParamsAndObjType(clazz, protAcc)
+        val view = if (isPoly) objType else qual.tpe
+        memberType match {
+          case PolyType(tparams, restpe) =>
+            val accTparams = cloneSymbolsAtOwnerAndModify(tparams, protAcc, _.asSeenFrom(view, sym.owner))
+            PolyType(hostTparams ::: accTparams, MethodType(List(protAcc.newSyntheticValueParam(objType)),
+                                                            restpe.substSym(tparams, accTparams).cloneInfo(protAcc).asSeenFrom(view, sym.owner)))
+          case _ =>
+            val mt = MethodType(List(protAcc.newSyntheticValueParam(objType)),
+                                memberType.cloneInfo(protAcc).asSeenFrom(view, sym.owner))
+            if (isPoly) PolyType(hostTparams, mt) else mt
+        }
       }
 
       val protAcc = clazz.info.decl(accName).suchThat(s => s == NoSymbol || s.tpe =:= accType(s)) orElse {
@@ -488,12 +498,12 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         newAcc
       }
       val selection = Select(This(clazz), protAcc)
-      def mkApply(fn: Tree) = Apply(fn, qual :: Nil)
+      val (receiver, hostTargs) = if (isPoly) receiverAndHostTypeArgs(clazz, qual) else (qual, Nil)
+      def mkApply(fn: Tree) = Apply(fn, receiver :: Nil)
+      val allTargs = hostTargs ::: targs.filterNot(_ == EmptyTree)
       val res = atPos(tree.pos) {
-        targs.head match {
-          case EmptyTree  => mkApply(selection)
-          case _          => mkApply(TypeApply(selection, targs))
-        }
+        if (allTargs.isEmpty) mkApply(selection)
+        else mkApply(TypeApply(selection, allTargs))
       }
       debuglog(s"Replaced $tree with $res")
       if (hasArgs) localTyper.typedOperator(res) else localTyper.typed(res)
@@ -523,10 +533,10 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         result
     }
 
-    /** Add an accessor for field, if needed, and return a selection tree for it .
+    /** Add an accessor for field, if needed, and return a call to it that assigns `rhs`.
      *  The result is not typed.
      */
-    private def makeSetter(tree: Select): Tree = {
+    private def makeSetter(tree: Select, rhs: Tree): Tree = {
       val field = tree.symbol
       val clazz = hostForAccessorOf(field, currentClass)
       assert(clazz != NoSymbol, field)
@@ -535,18 +545,42 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       val accName = nme.protSetterName(field.unexpandedName)
       val protectedAccessor = clazz.info decl accName orElse {
         val protAcc      = clazz.newMethod(accName, field.pos, newFlags = ARTIFACT)
-        val paramTypes   = List(clazz.typeOfThis, field.tpe)
+        val (tparams, objType) = hostTypeParamsAndObjType(clazz, protAcc)
+        val paramTypes   = List(objType, field.tpe.asSeenFrom(objType, field.owner))
         val params       = protAcc newSyntheticValueParams paramTypes
         val accessorType = MethodType(params, UnitTpe)
 
-        protAcc setInfoAndEnter accessorType
+        protAcc setInfoAndEnter (if (tparams.isEmpty) accessorType else PolyType(tparams, accessorType))
         val obj :: value :: Nil = params: @unchecked
         storeAccessorDefinition(clazz, DefDef(protAcc, Assign(Select(Ident(obj), field.name), Ident(value))))
 
         protAcc
       }
-      atPos(tree.pos)(Select(This(clazz), protectedAccessor))
+      val (receiver, hostTargs) = receiverAndHostTypeArgs(clazz, tree.qualifier)
+      val selection = Select(This(clazz), protectedAccessor)
+      val fn = if (hostTargs.isEmpty) selection else TypeApply(selection, hostTargs)
+      atPos(tree.pos)(Apply(fn, List(receiver, rhs)))
     }
+
+    /** Type parameters for an accessor in `clazz` that abstract over those of `clazz`,
+     *  and the type of the receiver parameter in terms of them.
+     */
+    private def hostTypeParamsAndObjType(clazz: Symbol, protAcc: Symbol): (List[Symbol], Type) = {
+      val tparams = cloneSymbolsAtOwner(clazz.typeParams, protAcc)
+      (tparams, clazz.typeOfThis.substSym(clazz.typeParams, tparams))
+    }
+
+    /** The receiver `qual` to pass to an accessor in `clazz`, and the type arguments of `clazz`
+     *  in its type. As the typer does for an argument, an existential type is skolemized.
+     */
+    private def receiverAndHostTypeArgs(clazz: Symbol, qual: Tree): (Tree, List[Tree]) =
+      if (clazz.typeParams.isEmpty) (qual, Nil)
+      else {
+        val widened = qual.tpe.widen
+        val tp      = widened.skolemizeExistential(currentOwner, qual)
+        val receiver = if (tp eq widened) qual else qual.shallowDuplicate.setType(tp)
+        (receiver, tp.baseType(clazz).typeArgs.map(TypeTree(_)))
+      }
 
     /** Does `sym` need an accessor when accessed from `currentClass`?
      *  A special case arises for classes with explicit self-types. If the
