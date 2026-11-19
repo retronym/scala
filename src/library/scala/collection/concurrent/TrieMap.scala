@@ -18,7 +18,7 @@ import java.util.concurrent.atomic._
 import scala.{unchecked => uc}
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap.RemovalPolicy
-import scala.collection.generic.DefaultSerializable
+import scala.collection.generic.{DefaultSerializable, DefaultSerializationProxy}
 import scala.collection.immutable.{List, Nil}
 import scala.collection.mutable.GrowableBuilder
 import scala.util.Try
@@ -285,7 +285,7 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
           clean(parent, ct, lev - 5)
           RESTART
         } else {
-          if (tn.hc == hc && tn.k == k) tn.v.asInstanceOf[AnyRef]
+          if (tn.hc == hc && equal(tn.k, k, ct)) tn.v.asInstanceOf[AnyRef]
           else NO_SUCH_ELEMENT_SENTINEL
         }
         cleanReadOnly(tn)
@@ -697,10 +697,10 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     with scala.collection.MapFactoryDefaults[K, V, TrieMap, mutable.Iterable]
     with DefaultSerializable {
 
-  private[this] var hashingobj = if (hashf.isInstanceOf[Hashing.Default[_]]) new TrieMap.MangledHashing[K] else hashf
-  private[this] var equalityobj = ef
+  private[this] val hashingobj = if (hashf.isInstanceOf[Hashing.Default[_]]) new TrieMap.MangledHashing[K] else hashf
+  private[this] val equalityobj = ef
   @transient
-  private[this] var rootupdater = rtupd
+  private[this] val rootupdater = rtupd
   def hashing = hashingobj
   def equality = equalityobj
   @volatile private var root = r
@@ -718,37 +718,11 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
 
   /* internal methods */
 
-  private def writeObject(out: java.io.ObjectOutputStream): Unit = {
-    out.writeObject(hashingobj)
-    out.writeObject(equalityobj)
-
-    val it = iterator
-    while (it.hasNext) {
-      val (k, v) = it.next()
-      out.writeObject(k)
-      out.writeObject(v)
-    }
-    out.writeObject(TrieMapSerializationEnd)
-  }
-
-  private def readObject(in: java.io.ObjectInputStream): Unit = {
-    root = INode.newRootNode(equality)
-    rootupdater = AtomicReferenceFieldUpdater.newUpdater(classOf[TrieMap[K, V]], classOf[AnyRef], "root")
-
-    hashingobj = in.readObject().asInstanceOf[Hashing[K]]
-    equalityobj = in.readObject().asInstanceOf[Equiv[K]]
-
-    var obj: AnyRef = in.readObject()
-
-    while (obj != TrieMapSerializationEnd) {
-      obj = in.readObject()
-      if (obj != TrieMapSerializationEnd) {
-        val k = obj.asInstanceOf[K]
-        val v = in.readObject().asInstanceOf[V]
-        update(k, v)
-      }
-    }
-  }
+  // The default proxy rebuilds the map with `TrieMap.newBuilder`, which is right, and keeps the serialized form
+  // unchanged, for a map with default hashing and equality. Other maps need a factory that carries the two.
+  override protected[this] def writeReplace(): AnyRef =
+    if (TrieMap.isDefault(hashingobj, equalityobj)) super.writeReplace()
+    else new DefaultSerializationProxy(new TrieMap.DeserializationFactory[K, V](hashingobj, equalityobj), this)
 
   private def CAS_ROOT(ov: AnyRef, nv: AnyRef) = rootupdater.compareAndSet(this, ov, nv)
 
@@ -1056,6 +1030,20 @@ object TrieMap extends MapFactory[TrieMap] {
     def hash(k: K): Int = scala.util.hashing.byteswap32(k.##)
   }
 
+  private[this] val universalEquivClass: Class[_] = Equiv.universal[Any].getClass
+
+  /** Are these the hashing and equality of a map created with `new TrieMap()`? An `Equiv.universal` that is not
+   *  recognized as such (one that has been deserialized, for instance) is treated as custom, which is always correct.
+   */
+  private def isDefault(hashing: Hashing[_], equality: Equiv[_]): Boolean =
+    (hashing.getClass eq classOf[MangledHashing[_]]) && (equality.getClass eq universalEquivClass)
+
+  @SerialVersionUID(3L)
+  private final class DeserializationFactory[K, V](val hashing: Hashing[K], val equality: Equiv[K]) extends Factory[(K, V), TrieMap[K, V]] with Serializable {
+    def fromSpecific(it: IterableOnce[(K, V)]): TrieMap[K, V] = new TrieMap[K, V](hashing, equality) ++= it
+    def newBuilder: mutable.Builder[(K, V), TrieMap[K, V]] = new GrowableBuilder(new TrieMap[K, V](hashing, equality))
+  }
+
   private[concurrent] object RemovalPolicy {
     final val Always = 0
     final val FullEquals = 1
@@ -1201,4 +1189,6 @@ private[collection] class TrieMapIterator[K, V](var level: Int, private var ct: 
 
 /** Only used for ctrie serialization. */
 @SerialVersionUID(3L)
+// Unused: it terminated the stream written by TrieMap's former `writeObject`. A TrieMap is serialized through
+// `DefaultSerializable`'s proxy. Kept for binary compatibility.
 private[concurrent] case object TrieMapSerializationEnd
