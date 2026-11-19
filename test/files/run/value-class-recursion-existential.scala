@@ -1,6 +1,8 @@
 // A recursive call in a method of a generic value class, on a qualifier whose type does not
 // supply the type arguments of the class.
 
+import scala.annotation.tailrec
+
 class V[T](val t: T) extends AnyVal {
   def f(o: V[_], n: Int): Int = if (n == 0) 0 else 1 + o.f(o, n - 1)
   def tail(o: V[_], n: Int, acc: Int): Int = if (n == 0) acc else o.tail(this, n - 1, acc + 1)
@@ -12,6 +14,17 @@ class V[T](val t: T) extends AnyVal {
 class W[A, B](val a: A) extends AnyVal {
   def f(o: W[_, _], n: Int): Int = if (n == 0) 0 else 1 + o.f(o, n - 1)
   def half(o: W[A, _], n: Int): Int = if (n == 0) 0 else 1 + o.half(o, n - 1)
+}
+
+// With a variant type parameter, the qualifier conforms to the class instantiated at a bound of the
+// quantified variable, `Cov[Any]` or `Contra[Nothing]`, so the call is rewritten and is a tail call.
+class Cov[+T](val t: T) extends AnyVal {
+  @tailrec final def f(o: Cov[_], n: Int): Int = if (n == 0) 0 else o.f(o, n - 1)
+  @tailrec final def bounded(o: Cov[_ <: CharSequence], n: Int): Int = if (n == 0) o.t.length else o.bounded(o, n - 1)
+}
+
+class Contra[-T](val t: Any) extends AnyVal {
+  @tailrec final def f(o: Contra[_], n: Int): Int = if (n == 0) 0 else o.f(o, n - 1)
 }
 
 class HK[M[_]](val v: Int) extends AnyVal {
@@ -29,4 +42,7 @@ object Test extends App {
   println(w.f(new W[String, Int](""), 3))
   println(w.half(w, 3))
   println(new HK[List](1).f(new HK[Option](2), 3))
+  println(new Cov(1).f(new Cov(""), 100000))
+  println(new Cov(1).bounded(new Cov("abc"), 100000))
+  println(new Contra[Int](1).f(new Contra[String](""), 100000))
 }
