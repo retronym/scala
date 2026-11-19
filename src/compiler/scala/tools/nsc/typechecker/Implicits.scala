@@ -1638,7 +1638,13 @@ trait Implicits extends splain.SplainData {
             if (containsExistential(tp1)) EmptyTree
             else manifestFactoryCall("singleType", tp, gen.mkAttributedQualifier(tp1))
           case ConstantType(_) =>
-            manifestOfType(tp1.deconst, FullManifestClass)
+            // A manifest cannot represent a literal type: use the manifest of the widened type,
+            // as `classTag` does, cast to the requested type. (`deconst` is the identity on a
+            // literal type, so it must not be used here.)
+            manifestOfType(tp1.widen, FullManifestClass) match {
+              case res if res.isFailure => res
+              case res => new SearchResult(typedPos(tree.pos.focus)(gen.mkCast(res.tree, appliedType(FullManifestClass, tp))), res.subst, res.undetparams)
+            }
           case TypeRef(pre, sym, args) =>
             if (isPrimitiveValueClass(sym) || isPhantomClass(sym)) {
               findSingletonManifest(sym.name.toString)
