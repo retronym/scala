@@ -1,0 +1,25 @@
+Parent init, a = 4
+Child init, e = 4
+(4,4)
+Parent init, a = s
+Child init, e = s
+(s,s)
+Parent init, a = 5
+Child init, e = 5
+GrandChild init, g = 5
+(5,5,5)
+Parent init, a = 6
+NoFields init
+6
+Parent init, a = 1
+Child2 init, e = 7
+(1,7)
+Parent init, a = 1
+Child2 init, e = t
+(1,t)
+Parent init, a = 8
+8
+Child3 init, e = 9
+9
+Child3 init, e = u
+u

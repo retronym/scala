@@ -325,7 +325,7 @@ abstract class Constructors extends Statics with Transform with TypingTransforme
     def primaryConstrParams: List[Symbol]
     def usesSpecializedField: Boolean
 
-    lazy val hasSpecializedFieldsSym   = clazz.info.decl(nme.SPECIALIZED_INSTANCE)
+    lazy val hasSpecializedFieldsSym   = clazz.info.decl(specializeTypes.specializedInstanceName(clazz))
     // The constructor of a non-specialized class that has specialized subclasses
     // should use `q"${hasSpecializedFieldsSym}()"` to guard the initialization of specialized fields.
     lazy val guardSpecializedFieldInit = (hasSpecializedFieldsSym != NoSymbol) && !clazz.hasFlag(SPECIALIZED)

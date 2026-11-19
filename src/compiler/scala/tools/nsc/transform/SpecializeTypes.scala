@@ -308,6 +308,26 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     */
   def possiblySpecialized(sym: Symbol) = specializedTypeVars(sym).nonEmpty
 
+  /** Whether `sClass` has a `specInstance$` method, because it has specialized members that are field accessors.
+   *  The method is not pickled, so this also applies to classes that are not compiled in this run.
+   */
+  private def hasSpecializedFields(sClass: Symbol): Boolean =
+    exitingSpecialize(sClass.info.decls).exists(m =>
+      m.isMethod && m.hasFlag(SPECIALIZED) && satisfiable(typeEnv(m)) && info.get(m).exists(_.target.hasAccessorFlag))
+
+  /** The name of the method that the constructor of a generic class `clazz` calls to skip its initialisation in
+   *  a specialized instance (see `guardSpecializedInitializer` in Constructors), or of the overriding method
+   *  in a specialized subclass of `clazz`.
+   *
+   *  It is `specInstance$`, unless a superclass of `clazz` has such a method already: the specialized subclasses
+   *  of `clazz` do not extend the specialized subclasses of that superclass, so they must not override its method.
+   */
+  def specializedInstanceName(clazz: Symbol): TermName = {
+    val genericClazz = if (clazz.hasFlag(SPECIALIZED)) clazz.superClass else clazz
+    if (genericClazz.ancestors.exists(cls => !cls.isTrait && hasSpecializedFields(cls))) nme.expandedName(nme.SPECIALIZED_INSTANCE, genericClazz)
+    else nme.SPECIALIZED_INSTANCE
+  }
+
   /** Refines possiblySpecialized taking into account the instantiation of the specialized type variables at `site` */
   def isSpecializedIn(sym: Symbol, site: Type) =
     specializedTypeVars(sym) exists { tvar =>
@@ -2008,10 +2028,9 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
         }
       }
       if (hasSpecializedFields) {
-        val isSpecializedInstance = (sClass hasFlag SPECIALIZED) || sClass.parentSymbolsIterator.exists(_ hasFlag SPECIALIZED)
-        val sym = sClass.newMethod(nme.SPECIALIZED_INSTANCE, sClass.pos) setInfoAndEnter MethodType(Nil, BooleanTpe)
+        val sym = sClass.newMethod(specializedInstanceName(sClass), sClass.pos) setInfoAndEnter MethodType(Nil, BooleanTpe)
 
-        mbrs += DefDef(sym, Literal(Constant(isSpecializedInstance)).setType(BooleanTpe)).setType(NoType)
+        mbrs += DefDef(sym, Literal(Constant(sClass hasFlag SPECIALIZED)).setType(BooleanTpe)).setType(NoType)
       }
       mbrs.toList
     }
