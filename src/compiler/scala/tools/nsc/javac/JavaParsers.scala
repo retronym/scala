@@ -402,7 +402,8 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
      *  //   https://docs.oracle.com/javase/specs/jls/se14/html/jls-15.html#jls-15.29
      *  //
      *  // Luckily, we can just parse matching `(` and `)` to find our way to the end of the argument list.
-     *  // and drop the arguments until we implement full support for Java constant expressions
+     *  // and drop the arguments until we implement full support for Java constant expressions.
+     *  // To that end, the parens and braces in the tokens consumed below are always balanced.
      *  //
      *  ConditionalExpressionSubset := Literal
      *                               | Identifier
@@ -420,19 +421,21 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         case IDENTIFIER  => qualId(orClassLiteral = true)
         case LBRACE      => accept(LBRACE); elementArray()
         case AT          => accept(AT); annotation()
-        case _           => in.nextToken(); EmptyTree
+        case _           => EmptyTree // unsupported, not consumed
       }
 
       def elementArray(): Tree = atPos(in.pos) {
         val ts = new ListBuffer[Tree]
-        while (in.token != RBRACE) {
-          ts += elementValue()
+        var ok = true
+        while (ok && in.token != RBRACE) {
+          val t = elementValue()
+          ts += t
+          ok = t.nonEmpty
           if (in.token == COMMA) in.nextToken() // done this way trailing commas are supported
         }
-        val ok = !ts.contains(EmptyTree)
         in.token match {
           case RBRACE if ok => accept(RBRACE); Apply(ArrayModule_overloadedApply, ts.toList: _*)
-          case _            => skipTo(RBRACE); EmptyTree
+          case _            => skipTo(RBRACE); accept(RBRACE); EmptyTree
         }
       }
 
@@ -454,8 +457,6 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         val id = convertToTypeId(qualId())
         in.token match {
           case LPAREN =>
-            // TODO: fix copyFrom+skipAhead; CharArrayReaderData missing
-            val saved = new JavaTokenData {}.copyFrom(in) // prep to bail if non-literals/identifiers
             accept(LPAREN)
             val args = in.token match {
               case RPAREN => Nil
@@ -464,7 +465,7 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
             val ok = !args.contains(EmptyTree)
             in.token match {
               case RPAREN if ok => accept(RPAREN); New(id, List(args))
-              case _            => in.copyFrom(saved); skipAhead(); accept(RPAREN); EmptyTree
+              case _            => skipTo(RPAREN); accept(RPAREN); EmptyTree // bail if non-literals/identifiers
             }
           case _ => New(id, ListOfNil)
         }
