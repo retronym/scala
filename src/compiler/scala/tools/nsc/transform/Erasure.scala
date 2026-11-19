@@ -517,10 +517,9 @@ abstract class Erasure extends InfoTransform
      *  a name clash. The present method guards against these name clashes.
      *
      *  A bridge might also introduce a signature that accidentally matches an existing method.
-     *  In that case, it will have a parameter erased to the upper bound of a type parameter
-     *  in the signature of the member overridden by the original member. (That upper bound might
-     *  be `Object`.) By contrast, erasure of a parameter `List[A]` would already have induced an error
-     *  if there were a matching member.
+     *  That requires a parameter type of the bridge to differ from that of the original member
+     *  after erasure, for instance a type parameter erased to its upper bound (which might be
+     *  `Object`), but also `Array[A]`, an abstract type member or `A with B`.
      *
      *  @param  member   The original member
      *  @param  other    The overridden symbol for which the bridge was generated
@@ -602,7 +601,8 @@ abstract class Erasure extends InfoTransform
 
         val shouldAdd = {
           val sigContainsValueClass = member.tpe.exists(_.typeSymbol.isDerivedValueClass)
-          def bridgeMayClash = other.paramss.exists(_.exists(_.tpe match { case TypeRef(_, r, _) => r.isTypeParameter case _ => false }))
+          // A bridge that differs from the member only in its result type cannot override anything the member does not.
+          def bridgeMayClash = exitingErasure(!(other.tpe.paramTypes corresponds member.tpe.paramTypes)(_ =:= _))
           def bridgeIsAOK = checkBridgeOverrides(member, other, bridge) match {
             case Nil => true
             case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
