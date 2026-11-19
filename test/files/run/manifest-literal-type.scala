@@ -22,5 +22,18 @@ object Test {
     println(manifest[c.type])
     println(manifest[1] == manifest[Int])
     println(manifest[1].runtimeClass == classTag[1].runtimeClass)
+
+    // singleton types of values that are not AnyRefs
+    def h(x: Int) = manifest[x.type]
+    println(h(42))
+    val x: 1 = 1
+    val y: x.type = x
+    println(manifest[y.type])
+    def a(x: Any) = manifest[x.type]
+    println(a("s"))
+    println(manifest[List[y.type]])
+    // a singleton type of an AnyRef is still represented as such
+    val s = "s"
+    println(manifest[s.type])
   }
 }

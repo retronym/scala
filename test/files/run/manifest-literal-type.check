@@ -11,3 +11,8 @@ scala.Option[_ >: Int <: Int]
 Int
 true
 true
+Int
+Int
+Any
+scala.collection.immutable.List[Int]
+s.type
