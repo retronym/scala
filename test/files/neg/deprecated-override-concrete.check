@@ -1,0 +1,12 @@
+deprecated-override-concrete.scala:19: warning: method f overrides concrete, non-deprecated symbol(s):    f
+  @deprecated("no longer", "1.0") override def f = 2    // warn
+                                               ^
+deprecated-override-concrete.scala:20: warning: value v overrides concrete, non-deprecated symbol(s):    v
+  @deprecated("no longer", "1.0") override val v = 2    // warn
+                                               ^
+deprecated-override-concrete.scala:27: warning: method g overrides concrete, non-deprecated symbol(s):    g
+  @deprecated("no longer", "1.0") override def g = old
+                                               ^
+error: No warnings can be incurred under -Werror.
+3 warnings
+1 error
