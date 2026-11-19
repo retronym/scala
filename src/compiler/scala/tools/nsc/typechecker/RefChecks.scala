@@ -654,12 +654,29 @@ abstract class RefChecks extends Transform {
         }
       }
 
+      // A class that is not accessible from `clazz`, such as a nested Java class with package access, is not overridden.
+      def isAccessibleInClazz(sym: Symbol) =
+        !sym.isPrivate && (!sym.hasAccessBoundary || sym.isProtected || clazz.hasTransOwner(sym.privateWithin))
+
+      // A type alias with the name of an inherited class is deprecated, as a class that shadows one is in checkNestedClassShadow.
+      // Warn where the pair is formed, in the class that defines the alias or mixes the two together, not in its subclasses.
+      def checkTypeAliasOverridesClass(alias: Symbol, cls: Symbol): Unit =
+        if (!clazz.parentSymbols.exists(p => p.isSubClass(alias.owner) && p.isSubClass(cls.owner))) {
+          val (pos, where) = if (alias.owner == clazz) (alias.pos, "") else (clazz.pos, s" defined in ${alias.owner}")
+          def msg(what: String) = s"overriding a nested class of a parent with a type alias is $what but $alias$where overrides $cls defined in ${cls.owner}; rename the type to something else"
+          if (currentRun.isScala3) runReporting.warning(pos, msg("deprecated"), WarningCategory.Scala3Migration, clazz)
+          else runReporting.deprecationWarning(pos, alias, currentOwner, msg("deprecated"), "2.13.19")
+        }
+
       val opc = new overridingPairs.PairsCursor(clazz)
       while (opc.hasNext) {
         // A class that shadows a class of a parent is deprecated in checkNestedClassShadow.
-        // Any other member with the name of an inherited class is an error, reported by checkOverride.
-        if (!opc.high.isClass || !opc.low.isClass)
+        if (!opc.high.isClass)
           checkOverride(opc.currentPair)
+        else if (!opc.low.isClass && isAccessibleInClazz(opc.high)) {
+          if (opc.low.isAliasType) checkTypeAliasOverridesClass(opc.low, opc.high)
+          else checkOverride(opc.currentPair)
+        }
 
         opc.next()
       }
