@@ -505,11 +505,19 @@ abstract class RefChecks extends Transform {
               (member.isJavaDefined && !member.isDeferred) // In Java, the OVERRIDE flag is implied
 
             // Concrete `other` requires `override` for `member`.
-            // Synthetic exclusion for (at least) default getters, fixes scala/bug#5178.
+            // Exclusion for default getters, fixes scala/bug#5178.
             // We cannot assign the OVERRIDE flag to the default getter:
             // one default getter might sometimes override, sometimes not. Example in comment on ticket.
-            if (!memberOverrides && !other.isDeferred && !member.isSynthetic)
-              overrideErrorConcreteMissingOverride()
+            // Other synthetic members that may override are created with the OVERRIDE flag, as the methods of a case class are.
+            // The conversion method of an implicit class is not: it has the name of the class, which cannot be given the modifier.
+            def isDefaultGetter = member.isSynthetic && member.isDefaultGetter
+            def isImplicitClassConversion = member.isSynthetic && member.isImplicit && member.isMethod
+            if (!memberOverrides && !other.isDeferred && !isDefaultGetter) {
+              if (isImplicitClassConversion && isMemberClass)
+                overrideErrorWithMemberInfo(s"the conversion method of implicit class ${member.name} cannot override a concrete member, rename the class:")
+              else
+                overrideErrorConcreteMissingOverride()
+            }
             else if (other.isAbstractOverride && other.isIncompleteIn(clazz) && !member.isAbstractOverride)
               overrideErrorWithMemberInfo("`abstract override` modifiers required to override:")
             else if (memberOverrides && other.hasFlag(ACCESSOR) && !other.hasFlag(STABLE | DEFERRED))
