@@ -1040,11 +1040,17 @@ A type is _volatile_ if it falls into one of four categories:
 A compound type `´T_1´ with … with ´T_n´ {´R\,´}`
 is volatile if one of the following three conditions hold.
 
-1. One of ´T_2 , \ldots , T_n´ is a type parameter or abstract type, or
-1. ´T_1´ is an abstract type and either the refinement ´R´
+1. ´T_1´ is neither a type parameter nor an abstract type, and
+   one of ´T_2 , \ldots , T_n´ is a type parameter or abstract type, or
+1. ´T_1´ is a type parameter or abstract type and either the refinement ´R´
    or a type ´T_j´ for ´j > 1´ contributes an abstract member
    to the compound type, or
-1. one of ´T_1 , \ldots , T_n´ is a singleton type.
+1. one of ´T_1 , \ldots , T_n´ is volatile.
+
+For the purpose of the first two conditions, a singleton type `´p´.type`
+whose underlying type is a type parameter or abstract type is treated like
+that type parameter or abstract type. A singleton type among
+´T_1 , \ldots , T_n´ does not otherwise make the compound type volatile.
 
 Here, a type ´S´ _contributes an abstract member_ to a type ´T´ if
 ´S´ contains an abstract member that is also a member of ´T´.
