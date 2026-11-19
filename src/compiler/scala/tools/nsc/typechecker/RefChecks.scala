@@ -558,6 +558,9 @@ abstract class RefChecks extends Transform {
             val memberOverrides = member.isAnyOverride ||
               member.hasAnnotation(definitions.uncheckedOverrideClass) ||
               (member.isJavaDefined && !member.isDeferred) // In Java, the OVERRIDE flag is implied
+            // A Java class that extends a Scala class may override the accessors of a `var`, `val` or `lazy val`.
+            // javac doesn't know Scala's rules for those, and the author of `clazz` can't do anything about them.
+            def isJavaOverride = member.isJavaDefined && memberClass.isNonBottomSubClass(otherClass)
 
             // Concrete `other` requires `override` for `member`.
             // Synthetic exclusion for (at least) default getters, fixes scala/bug#5178.
@@ -567,7 +570,7 @@ abstract class RefChecks extends Transform {
               overrideErrorConcreteMissingOverride()
             else if (other.isAbstractOverride && other.isIncompleteIn(clazz) && !member.isAbstractOverride)
               overrideErrorWithMemberInfo("`abstract override` modifiers required to override:")
-            else if (memberOverrides && other.hasFlag(ACCESSOR) && !other.hasFlag(STABLE | DEFERRED))
+            else if (memberOverrides && other.hasFlag(ACCESSOR) && !other.hasFlag(STABLE | DEFERRED) && !isJavaOverride)
               // TODO: this is not covered by the spec.
               overrideErrorWithMemberInfo("mutable variable cannot be overridden:")
             else if (memberOverrides &&
@@ -576,12 +579,12 @@ abstract class RefChecks extends Transform {
                      intersectionIsEmpty(member.extendedOverriddenSymbols, other.extendedOverriddenSymbols))
               overrideErrorWithMemberInfo("cannot override a concrete member without a third member that's overridden by both " +
                                           "(this rule is designed to prevent accidental overrides)")
-            else if (other.isStable && !member.isStable) // (1.4)
+            else if (other.isStable && !member.isStable && !isJavaOverride) // (1.4)
               overrideErrorWithMemberInfo("stable, immutable value required to override:")
             else if (member.isValue && member.isLazy &&
                        other.isValue && other.hasStableFlag && !other.isDeferred && !other.isLazy)
               overrideErrorWithMemberInfo("concrete non-lazy value cannot be overridden:")
-            else if (other.isValue && other.isLazy && member.isValue && !member.isLazy)
+            else if (other.isValue && other.isLazy && member.isValue && !member.isLazy && !isJavaOverride)
               overrideErrorWithMemberInfo("value must be lazy when overriding concrete lazy value:")
             else if (other.isDeferred && member.isTermMacro && member.extendedOverriddenSymbols.forall(_.isDeferred)) // (1.9)
               overrideErrorWithMemberInfo("macro cannot override abstract method:")
