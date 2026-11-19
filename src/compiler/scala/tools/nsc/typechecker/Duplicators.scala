@@ -377,6 +377,19 @@ abstract class Duplicators extends AbstractAnalyzer {
             super.typed(atPos(tree.pos)(tree1), mode, pt)
           }
 
+        case Apply(fun @ Select(qual, _), Nil) if fun.symbol == Any_getClass =>
+          // In a specialized copy, the qualifier can have a primitive type where the original had a type
+          // parameter. `Int.getClass` would be `classOf[Int]`; the original returns the class of the box,
+          // which is known statically.
+          val qual1   = typedByValueExpr(qual)
+          val qualSym = qual1.tpe.widen.typeSymbol
+          val tree1 =
+            if (isPrimitiveValueClass(qualSym))
+              gen.mkCast(Block(List(qual1), Literal(Constant((if (qualSym == UnitClass) BoxedUnitClass else boxedClass(qualSym)).tpe))), fixType(tree.tpe))
+            else
+              Apply(Select(qual1, nme.getClass_), Nil)
+          super.typed(atPos(tree.pos)(tree1), mode, pt)
+
         case EmptyTree =>
           // no need to do anything, in particular, don't set the type to null, EmptyTree.tpe_= asserts
           tree
