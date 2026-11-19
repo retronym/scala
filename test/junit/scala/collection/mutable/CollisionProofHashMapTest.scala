@@ -6,6 +6,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
+import scala.util.Random
+
 @RunWith(classOf[JUnit4])
 class CollisionProofHashMapTest {
 
@@ -135,5 +137,78 @@ class CollisionProofHashMapTest {
     // deprecated
     val m9 = (m1.updated(4, "d")).addOne(3 -> "c")
     assertEquals(m9(3), "c")
+  }
+
+  import CollisionProofHashMapTest._
+
+  @Test
+  def putReturnsPreviousValue(): Unit = {
+    val m = mutable.CollisionProofHashMap.empty[String, Int]
+    assertEquals(None, m.put("a", 1))
+    assertEquals(Some(1), m.put("a", 2))
+    assertEquals(None, m.put("b", 1))
+    assertEquals(Some(2), m.get("a"))
+
+    // more than `treeifyThreshold` keys with the same hash code turn the bucket into a red-black tree
+    val t = mutable.CollisionProofHashMap.empty[Key, Int]
+    for (i <- 0 until 20) assertEquals(None, t.put(new Key(i, 0), i))
+    for (i <- 0 until 20) assertEquals(Some(i), t.put(new Key(i, 0), -i))
+    for (i <- 0 until 20) assertEquals(Some(-i), t.get(new Key(i, 0)))
+    assertEquals(None, t.put(new Key(20, 0), 20))
+    assertEquals(21, t.size)
+  }
+
+  @Test
+  def differentialAgainstHashMap(): Unit = {
+    for (seed <- 0 until 200) {
+      val rnd = new Random(seed)
+      // few distinct hash codes force long (treeified) buckets, many leave short lists
+      val hashes = Array(1, 2, 3, 17, 1000)(seed % 5)
+      val keyspace = Array(20, 200, 2000)(seed % 3)
+      def key() = { val id = rnd.nextInt(keyspace); new Key(id, (id % hashes) * (if (seed % 7 == 0) 0x10001 else 1)) }
+      val c =
+        if (seed % 2 == 0) new mutable.CollisionProofHashMap[Key, Int]()
+        else new mutable.CollisionProofHashMap[Key, Int](rnd.nextInt(100), Array(0.75, 0.5, 2.0, 0.9)(rnd.nextInt(4)))
+      val r = new mutable.HashMap[Key, Int]()
+      for (step <- 0 until 300) {
+        val k = key()
+        val v = rnd.nextInt(1000)
+        val op = rnd.nextInt(16)
+        def msg = s"seed=$seed step=$step op=$op key=$k"
+        op match {
+          case 0 | 1 | 2 | 3 => assertEquals(msg, r.put(k, v), c.put(k, v))
+          case 4 | 5 => c(k) = v; r(k) = v
+          case 6 | 7 | 8 => assertEquals(msg, r.remove(k), c.remove(k))
+          case 9 => c -= k; r -= k
+          case 10 => assertEquals(msg, r.getOrElseUpdate(k, v), c.getOrElseUpdate(k, v))
+          case 11 =>
+            val f = (o: Option[Int]) => if (v % 2 == 0) None else Some(o.getOrElse(0) + v)
+            assertEquals(msg, r.updateWith(k)(f), c.updateWith(k)(f))
+          case 12 => c.filterInPlace((_, v) => v % 3 != 0); r.filterInPlace((_, v) => v % 3 != 0)
+          case 13 => val xs = List.fill(rnd.nextInt(50))((key(), rnd.nextInt(9))); c ++= xs; r ++= xs
+          case 14 => val xs = List.fill(rnd.nextInt(50))(key()); c --= xs; r --= xs
+          case 15 => if (rnd.nextInt(20) == 0) { c.clear(); r.clear() }
+        }
+        assertEquals(msg, r.get(k), c.get(k))
+        assertEquals(msg, r.size, c.size)
+        if (step % 10 == 0) {
+          assertEquals(msg, r, c.iterator.toMap)
+          r.foreach { case (k, v) => assertEquals(msg, Some(v), c.get(k)) }
+        }
+      }
+      assertEquals(s"seed=$seed", r, c)
+    }
+  }
+}
+
+object CollisionProofHashMapTest {
+  /** A key with a chosen hash code, ordered by `id`. */
+  final class Key(val id: Int, val hash: Int) {
+    override def hashCode: Int = hash
+    override def equals(o: Any): Boolean = o match { case k: Key => k.id == id; case _ => false }
+    override def toString = s"Key($id, $hash)"
+  }
+  object Key {
+    implicit val ordering: Ordering[Key] = Ordering.by(_.id)
   }
 }
