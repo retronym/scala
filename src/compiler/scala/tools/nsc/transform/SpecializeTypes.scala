@@ -744,7 +744,12 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           (sym.hasFlag(SYNTHESIZE_IMPL_IN_SUBCLASS) || isTraitValSetter(sym.nextOverriddenSymbol))
 
       for (m <- normMembers) {
-        if (!needsSpecialization(fullEnv, m)) {
+        if (m.hasFlag(PRESUPER) && m.isValue && !m.isMethod) {
+          // An early definition is assigned before the super constructor call, which is not
+          // among the constructor statements that the specialized subclass replays (see
+          // `guardSpecializedInitializer` in Constructors). A specialized field would never
+          // be assigned, so keep the generic field and its accessors.
+        } else if (!needsSpecialization(fullEnv, m)) {
           if (m.isValue && !m.isMutable && !m.isMethod && !m.isDeferred && !m.isLazy && !m.isParamAccessor) {
             // non-specialized `val` fields are made mutable (in Constructors) and assigned from the
             // constructors of specialized subclasses. See PR scala/scala#9704.
@@ -2071,6 +2076,10 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   private def forwardCtorCall(pos: scala.reflect.internal.util.Position, receiver: Tree, paramss: List[List[ValDef]], clazz: Symbol): Tree = {
     log(s"forwardCtorCall($pos, $receiver, $paramss, $clazz)")
 
+    // Early definitions of the generic class are evaluated in its constructor, which may
+    // read the parameters, so the generic constructor must receive the actual arguments.
+    val genericHasEarlyDefs = clazz.superClass.info.decls.exists(_.hasFlag(PRESUPER))
+
     /* A constructor parameter `f` initializes a specialized field
      * iff:
      *   - it is specialized itself
@@ -2084,7 +2093,7 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     )
 
     val argss = mmap(paramss)(x =>
-      if (initializesSpecializedField(x.symbol))
+      if (!genericHasEarlyDefs && initializesSpecializedField(x.symbol))
         gen.mkAsInstanceOf(Literal(Constant(null)).updateAttachment(SpecializedSuperConstructorCallArgument), x.symbol.tpe)
       else
         Ident(x.symbol)
