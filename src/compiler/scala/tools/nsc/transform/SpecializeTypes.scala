@@ -1674,7 +1674,19 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
         case Apply(sel @ Select(sup @ Super(qual, name), name1), args) if hasNewParents(sup) =>
           val sup1  = Super(qual, name) setPos sup.pos
-          val tree1 = Apply(Select(sup1, name1) setPos sel.pos, transformTrees(args))
+          // Call the specialized variant, as `transformSelect` does. The generic method in the
+          // specialized parent forwards to the variant with a virtual call, which would land in
+          // the override of the variant in this class, e.g. the method making this super call.
+          val name2 =
+            if (specializedTypeVars(symbol.info).isEmpty) name1
+            else {
+              val env = unify(symbol.tpe, sel.tpe, emptyEnv, strict = false, tparams = false)
+              overloads(symbol) find (_ matchesEnv env) match {
+                case Some(Overload(member, _)) if env.nonEmpty => member.name
+                case _                                         => name1
+              }
+            }
+          val tree1 = Apply(Select(sup1, name2) setPos sel.pos, transformTrees(args))
           val res   = localTyper.typedPos(tree.pos)(tree1)
           debuglog(s"retyping call to super, from: $symbol to ${res.symbol}")
           res
