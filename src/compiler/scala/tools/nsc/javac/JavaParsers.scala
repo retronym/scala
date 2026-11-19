@@ -592,10 +592,14 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
       accept(LPAREN)
       val vparams = if (in.token == RPAREN) List() else repsep(() => formalParam(), COMMA)
       accept(RPAREN)
-      vparams
+      vparams.collect { case vd: ValDef => vd }
     }
 
-    def formalParam(): ValDef = {
+    /** A formal parameter, or `EmptyTree` for a receiver parameter (JLS 8.4.1), `T this` or, in the
+     *  constructor of an inner class, `Outer Outer.this`. It only serves as a place for annotations on
+     *  the type of the receiver and is not a parameter of the method.
+     */
+    def formalParam(): Tree = {
       if (in.token == FINAL) in.nextToken()
       val anns = annotations()
       var t = typ()
@@ -605,7 +609,18 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
           AppliedTypeTree(scalaDot(tpnme.JAVA_REPEATED_PARAM_CLASS_NAME), List(t))
         }
       }
-     varDecl(in.currentPos, Modifiers(Flags.JAVA | Flags.PARAM, typeNames.EMPTY, anns), t, ident().toTermName)
+      if (in.token == THIS) {
+        in.nextToken()
+        EmptyTree
+      } else {
+        val pos = in.currentPos
+        val name = ident()
+        if (in.token == DOT) {
+          in.nextToken()
+          accept(THIS)
+          EmptyTree
+        } else varDecl(pos, Modifiers(Flags.JAVA | Flags.PARAM, typeNames.EMPTY, anns), t, name.toTermName)
+      }
     }
 
     /** Type parameters of the enclosing classes, innermost first. */
