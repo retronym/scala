@@ -132,11 +132,15 @@ trait ContextErrors extends splain.SplainErrors {
     val tp        = found.widen
     def name      = tp.typeSymbol.nameString
     def parents   = tp.parents filterNot isTrivialTopType
-    def onlyAny   = tp.parents forall (_.typeSymbol == AnyClass)
     def parents_s = ( if (parents.isEmpty) tp.parents else parents ) mkString ", "
     def what = (
       if (tp.typeSymbol.isAbstractType) {
-        val descr = if (onlyAny) "unbounded" else "bounded only by " + parents_s
+        // the parents of an abstract type are those of its upper bound, so describe the bound itself
+        val bounds = (tp.upperBound match {
+          case RefinedType(ps, _) => ps
+          case hi                 => hi :: Nil
+        }).filterNot(_.typeSymbol == AnyClass)
+        val descr = if (bounds.isEmpty) "unbounded" else bounds.mkString("bounded only by ", ", ", "")
         s"$name is $descr, which means AnyRef is not a known parent"
       }
       else if (tp.typeSymbol.isAnonOrRefinementClass)
