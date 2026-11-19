@@ -121,11 +121,11 @@ final class TreeSeqMap[K, +V] private (
 
   def refresh(key: K): TreeSeqMap[K, V] = {
     mapping.get(key) match {
-      case Some((o, _)) =>
+      case Some((o, v)) =>
         val o1 = increment(ordinal)
         new TreeSeqMap(
           ordering.exclude(o).append(o1, key),
-          mapping,
+          mapping.updated(key, (o1, v)),
           o1,
           orderedBy)
       case None =>
