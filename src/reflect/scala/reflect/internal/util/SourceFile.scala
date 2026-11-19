@@ -29,6 +29,9 @@ abstract class SourceFile {
   def isEndOfLine(idx: Int): Boolean
   def isSelfContained: Boolean
   def length : Int
+  /** An upper bound for line indices, not the number of lines: a `BatchSourceFile` whose content ends in a
+   *  line terminator counts one more than the lines it has. `lines` yields the lines there are.
+   */
   def lineCount: Int
   def position(offset: Int): Position = {
     assert(offset < length, file.toString + ": " + offset + " >= " + length)
@@ -54,7 +57,7 @@ abstract class SourceFile {
 
   @tailrec
   final def skipWhitespace(offset: Int): Int =
-    if (content(offset).isWhitespace) skipWhitespace(offset + 1) else offset
+    if (offset < length && content(offset).isWhitespace) skipWhitespace(offset + 1) else offset
 
   def identFrom(pos: Position): Option[String] =
     Option.when(pos.isDefined && pos.source == this && pos.point != -1) {
@@ -74,7 +77,8 @@ abstract class SourceFile {
     -1
   }
 
-  /** An iterator over the lines between `start` and `end`.
+  /** An iterator over the lines between `start` and `end`, without their line terminators,
+    * as given by `lineToString`.
     *
     * Bounds are checked and clipped as necessary.
     */
@@ -161,6 +165,9 @@ class BatchSourceFile(val file : AbstractFile, content0: Array[Char]) extends So
     else content0
   )
   def length = content.length
+  // `lineIndices` holds the start of each line, then `length` as a sentinel. After a final line terminator
+  // (and `content` usually ends in one, see above) the start of the next line is also `length`, so this counts
+  // a line that `lineToOffset` and `offsetToLine` do not admit. It is left as is for callers that allow for it.
   def lineCount = lineIndices.length - 1
   def start = 0
   def isSelfContained = true
@@ -223,11 +230,9 @@ class BatchSourceFile(val file : AbstractFile, content0: Array[Char]) extends So
   }
 
   override def lines(start: Int, end: Int): Iterator[String] =
-    ((start max 0) until (end min lineCount)).iterator.map { ix =>
-      val off = lineIndices(ix)
-      val len = 0 max (lineIndices(ix + 1) - off - 1) // drop newline character
-      String.valueOf(content, off, len)
-    }
+    ((start max 0) until (end min lineCount)).iterator
+      .takeWhile(lineIndices(_) < length) // `lineCount` may count a line starting at the end of the content
+      .map(lineToString)
 
 
   override def equals(that : Any) = that match {
