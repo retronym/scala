@@ -210,7 +210,7 @@ abstract class SymbolPairs {
       var i = 0
       while (i < n) {
         val name = syms(i).name
-        var h = (name.start * 0x9E3779B9) >>> 16 & mask
+        var h = (name.hashCode * 0x9E3779B9) >>> 16 & mask
         while (lastSeen(h) != 0 && (syms(lastSeen(h) - 1).name ne name)) h = (h + 1) & mask
         nextSame(i) = lastSeen(h) - 1
         lastSeen(h) = i + 1
