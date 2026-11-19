@@ -116,4 +116,15 @@ class StringOpsTest {
     assertEquals("", "a".tail)
     assertThrows[UnsupportedOperationException]("".tail)
   }
+
+  @Test def patchClampsReplaced(): Unit = {
+    val indices = List(Int.MinValue, -1, 0, 1, 2, 4, 5, 6, Int.MaxValue)
+    for (s <- List("", "abcde"); from <- indices; replaced <- indices) {
+      val msg = s"\"$s\".patch($from, _, $replaced)"
+      assertEquals(msg, s.toList.patch(from, "XY", replaced).mkString, s.patch(from, "XY", replaced))
+      assertEquals(msg, s.toList.patch(from, "XY", replaced).mkString, s.patch(from, List('X', 'Y'), replaced))
+      assertEquals(msg, s.toList.patch[Any](from, List(1, 2), replaced), s.patch[Any](from, List(1, 2), replaced))
+      assertEquals(msg, s.toList.patch[Any](from, Iterator(1, 2), replaced), s.patch[Any](from, Iterator(1, 2), replaced))
+    }
+  }
 }
