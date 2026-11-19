@@ -19,6 +19,17 @@ class E extends A {
   implicit class Foo(val x: String)         // ok, an overload
 }
 
+class A2 { implicit class Foo(val x: Int) { def a = 1 } }
+class B2 extends A2 {
+  implicit class Foo(x: Int) extends super.Foo(x) { def b = 2 }  // ok, overrides the conversion of `A2.Foo`
+}
+class C2 extends A2 {
+  implicit class Foo(val x: Int)            // error, the result type of the conversion does not conform
+}
+class D2 extends A2 {
+  def Foo(x: Int): Foo = null               // error, a user-written method still needs `override`
+}
+
 // synthetic members that may override without a modifier in source
 class P { def f(x: Int = 1): Int = x }
 class Q extends P { override def f(x: Int = 2): Int = x }
