@@ -375,7 +375,10 @@ abstract class Inliner {
 
         var currentMethodRolledBack = false
 
-        for ((r, aliasFrame) <- rsWithAliasFrames) if (!currentMethodRolledBack) {
+        // A null frame means the callsite is unreachable. The call graph only has callsites that were reachable when they
+        // were added, but rewriting a closure invocation to a body method of type Nothing inserts an ATHROW, and further
+        // invocations of the same closure are then rewritten, and added to the call graph, in the code after it.
+        for ((r, aliasFrame) <- rsWithAliasFrames) if (!currentMethodRolledBack && aliasFrame != null) {
           canInlineCallsite(r.callsite) match {
             case None =>
               doInline(r, aliasFrame, None)
