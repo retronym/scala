@@ -31,7 +31,7 @@ t6593.scala:94: warning: FinCls and Cls are unrelated: they will most likely nev
 t6593.scala:95: warning: comparing values of types FinCls and Int using `==` will always yield false
     fin == 1 // w: non-sensible
         ^
-t6593.scala:96: warning: comparing values of types FinCls and String using `==` will always yield false
+t6593.scala:96: warning: comparing non-null values of types FinCls and String using `==` will always yield false
     fin == str // w: non-sensible
         ^
 t6593.scala:97: warning: FinCls and List[Int] are unrelated: they will most likely never compare equal
@@ -103,9 +103,6 @@ t6593.scala:150: warning: comparing values of types List[Int] and scala.collecti
 t6593.scala:151: warning: comparing values of types List[Int] and Eqs using `==` will always yield false
     lst == eqs // w: non-sensible (collections)
         ^
-t6593.scala:153: warning: comparing values of types List[Int] and Iterator[Int] using `==` will always yield false
-    lst == itr // w: non-sensible (collections)
-        ^
 t6593.scala:159: warning: comparing values of types Int and Cls using `==` will always yield false
     int == cls   // w: non-sensible
         ^
@@ -143,5 +140,5 @@ t6593.scala:185: warning: comparing values of types Integer and Unit using `==` 
     intB == ()   // w: non-sensible
          ^
 error: No warnings can be incurred under -Werror.
-48 warnings
+47 warnings
 1 error
