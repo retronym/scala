@@ -44,8 +44,10 @@ trait Plugins { global: Global =>
     val (goods, errors) = maybes partition (_.isSuccess)
     // Explicit parameterization of recover to avoid -Xlint warning about inferred Any
     errors foreach (_.recover[Any] {
-      // legacy behavior ignores altogether, so at least warn devs
-      case e: MissingPluginException => if (global.isDeveloper) runReporting.warning(NoPosition, e.getMessage, WarningCategory.OtherDebug, site = "")
+      // an explicit `-Xplugin` path with no plugin descriptor; jars in `-Xpluginsdir` that aren't plugins are skipped silently
+      case e: MissingPluginException =>
+        if (currentRun == null) reporter.warning(NoPosition, e.getMessage)  // -Xplugin-list
+        else runReporting.warning(NoPosition, e.getMessage, WarningCategory.Other, site = "")
       case e: Exception              => inform(e.getMessage)
     })
     val classes = goods map (_.get)  // flatten
