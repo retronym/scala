@@ -5,7 +5,7 @@ MeterCaseClass.scala:71: warning: comparing values of types a.Meter and Int usin
 Meter(4.0)
 false
 x.isInstanceOf[Meter]: true
-x.hashCode: 1072693248
+x.hashCode: 1
 x == 1: false
 x == y: true
 a == b: true
