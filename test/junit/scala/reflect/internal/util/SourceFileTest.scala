@@ -104,4 +104,62 @@ class SourceFileTest {
     assertEquals(2, f.offsetToLine(4))
     assertEquals(2, f.offsetToLine(5))
   }
+
+  private def linesOf(code: String) = new BatchSourceFile("", code).lines().toList
+
+  @Test def `lines omits line terminators`(): Unit = {
+    assertEquals(List("a", "b"), linesOf("a\nb\n"))
+    assertEquals(List("a", "b"), linesOf("a\r\nb\r\n"))
+    assertEquals(List("a", "b"), linesOf("a\rb\r"))
+    assertEquals(List("a", "", "b"), linesOf("a\n\nb\n"))
+    assertEquals(List("a", "", "b"), linesOf("a\r\n\r\nb\r\n"))
+    assertEquals(List("a", "", "b"), linesOf("a\r\rb"))
+    assertEquals(List("a", "b"), linesOf("a\nb"))
+    assertEquals(List("a", "b"), linesOf("a\r\nb"))
+    // form feed does not end a line, here or in lineToString
+    assertEquals(List("a\fb"), linesOf("a\fb\n"))
+    assertEquals(List("a\fb", "c"), linesOf("a\fb\r\nc"))
+  }
+
+  @Test def `lines has no line after the last terminator`(): Unit = {
+    assertEquals(List(""), linesOf(""))
+    assertEquals(List(""), linesOf("\n"))
+    assertEquals(List(""), linesOf("\r\n"))
+    assertEquals(List("", ""), linesOf("\n\n"))
+    assertEquals(List("a"), linesOf("a"))
+    assertEquals(List("a"), linesOf("a\n"))
+    // trailing whitespace that is not a line terminator belongs to the last line
+    assertEquals(List("a "), linesOf("a "))
+    assertEquals(List("a", " "), linesOf("a\n "))
+  }
+
+  @Test def `lines agrees with lineToString`(): Unit = {
+    for (code <- List("", "\n", "a", "a\n", "a\nb", "a\r\nb\r\n", "a\rb\r", "a\fb\n", "a \n\n b ", "\r\n\r\n")) {
+      val f = new BatchSourceFile("", code)
+      val lines = f.lines().toList
+      assertEquals(code, lines, lines.indices.map(f.lineToString).toList)
+      assertThrows[IndexOutOfBoundsException](f.lineToOffset(lines.length))
+      assertEquals(code, lines.length - 1, f.offsetToLine(f.length - 1))
+    }
+  }
+
+  @Test def `lines clips its bounds`(): Unit = {
+    val f = new BatchSourceFile("", "a\r\nb\r\nc\r\n")
+    assertEquals(List("b"), f.lines(1, 2).toList)
+    assertEquals(List("b", "c"), f.lines(1).toList)
+    assertEquals(List("a", "b", "c"), f.lines(-5, 100).toList)
+    assertEquals(Nil, f.lines(3, 100).toList)
+    assertEquals(Nil, f.lines(2, 1).toList)
+  }
+
+  @Test def `skipWhitespace stops at the end of the file`(): Unit = {
+    val f = new BatchSourceFile("", "ab  ")
+    assertEquals(0, f.skipWhitespace(0))
+    assertEquals(4, f.skipWhitespace(2))
+    assertEquals(4, f.skipWhitespace(4))
+    val g = new BatchSourceFile("", "ab")
+    assertEquals(g.length, g.skipWhitespace(2))
+    val e = new BatchSourceFile("", "")
+    assertEquals(e.length, e.skipWhitespace(0))
+  }
 }
