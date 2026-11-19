@@ -158,4 +158,23 @@ object TestUnreachable extends App {
     case c => println("matched c")
     case _ => println("matched neither")
   }
+
+  // unreachable cases found while emitting a switch
+  def switchInt(i: Int) = i match {
+    case 1 if i > 0 => 1
+    case 2 | 1      => 2
+    case 1          => 3 // unreachable
+    case _          => 4
+  }
+  def switchString(s: String) = s match {
+    case "a" if s.isEmpty => 1
+    case "b" | "a"        => 2
+    case "a"              => 3 // unreachable
+    case _                => 4
+  }
+  def typeSwitch(body: => Unit) = try body catch {
+    case e: Exception if e.getMessage == null => 1
+    case _: Exception                         => 2
+    case _: Exception                         => 3 // unreachable
+  }
 }
