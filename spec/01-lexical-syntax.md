@@ -634,11 +634,12 @@ foo(
 In order to allow literal inclusion of XML fragments, lexical analysis
 switches from Scala mode to XML mode when encountering an opening
 angle bracket ‘<’ in the following circumstance: The ‘<’ must be
-preceded either by whitespace, an opening parenthesis or an opening
-brace and immediately followed by a character starting an XML name.
+preceded either by whitespace, an opening parenthesis, an opening
+brace or a closing angle bracket ‘>’, and immediately followed by a
+character starting an XML name, or by ‘!’ or ‘?’.
 
 ```ebnf
- ( whitespace | ‘(’ | ‘{’ ) ‘<’ (XNameStart | ‘!’ | ‘?’)
+ ( whitespace | ‘(’ | ‘{’ | ‘>’ ) ‘<’ (XNameStart | ‘!’ | ‘?’)
 
   XNameStart ::= ‘_’ | BaseChar | Ideographic // as in W3C XML, but without ‘:’
 ```
