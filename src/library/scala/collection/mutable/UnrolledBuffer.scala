@@ -406,12 +406,17 @@ object UnrolledBuffer extends StrictOptimizedClassTagSeqFactory[UnrolledBuffer] 
         appended
       }
       else if (idx == size || (next eq null)) {
+        // `append` on a full node overwrites its `next`, so detach the rest of the list and relink it afterwards
+        val rest = next
+        next = null
         var curr = this
         var appended = 0
         for (elem <- t.iterator) {
           curr = curr append elem
           appended += 1
         }
+        curr.next = rest
+        if (rest eq null) buffer.lastPtr = curr
         appended
       }
       else next.insertAll(idx - size, t, buffer)

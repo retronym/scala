@@ -3,6 +3,7 @@ package scala.collection.mutable
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.junit.Test
+import org.junit.Assert.assertEquals
 
 @RunWith(classOf[JUnit4])
 class UnrolledBufferTestTest {
@@ -29,5 +30,28 @@ class UnrolledBufferTestTest {
     b -= 2
     assert(b == (1 :: 3 :: Nil))
     assert(b.size == 2)
+  }
+
+  private val nodeSize = 32
+
+  @Test
+  def insertAtNodeBoundary(): Unit = {
+    val b = UnrolledBuffer.tabulate(2 * nodeSize)(identity)
+    b.insert(nodeSize, -1)
+    val expected = ((0 until nodeSize) :+ -1) ++ (nodeSize until 2 * nodeSize)
+    assertEquals(expected.length, b.length)
+    assertEquals(expected.toList, b.iterator.toList)
+    assertEquals(expected(40), b(40))
+    assertEquals(expected.last, b.last)
+  }
+
+  @Test
+  def insertAllAtEndKeepsTail(): Unit = {
+    val b = UnrolledBuffer.tabulate(nodeSize)(identity)
+    b.insertAll(nodeSize, List(100, 101))
+    b += 200
+    assertEquals((0 until nodeSize).toList ::: List(100, 101, 200), b.toList)
+    b.concat(UnrolledBuffer(1, 2, 3))
+    assertEquals((0 until nodeSize).toList ::: List(100, 101, 200, 1, 2, 3), b.toList)
   }
 }
