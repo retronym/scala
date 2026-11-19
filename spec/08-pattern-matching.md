@@ -266,9 +266,20 @@ implicit parameter list) and one of the following applies:
   ´p_i´ matches the corresponding value ´t._1´ from
   ´t._1 , \ldots , t._n´.
 
+A type is said to be a _sequence type_ for some element type `S` if it
+conforms to `Seq[S]`, or if it has the following members:
+
+```scala
+def lengthCompare(len: Int): Int
+def apply(i: Int): S
+def drop(n: Int): Seq[S]
+def toSeq: Seq[S]
+```
+
 An `unapplySeq` method in an object ´x´ matches the pattern
 ´x(q_1 , \ldots , q_m, p_1 , \ldots , p_n)´ if it takes exactly one argument
-and its result type is of the form `Option[(´T_1 , \ldots , T_m´, Seq[S])]` (if `m = 0`, the type `Option[Seq[S]]` is also accepted).
+and its result type is an extractor type for a type `(´T_1 , \ldots , T_m´, Seq[S])`
+(if `m = 0`, an extractor type for a sequence type for `S` is also accepted).
 This case is further discussed [below](#pattern-sequences).
 
 ###### Example 1
@@ -333,7 +344,7 @@ SimplePattern ::= StableId ‘(’ [Patterns ‘,’] [varid ‘@’] ‘_’ �
 A _pattern sequence_ ´p_1 , \ldots , p_n´ appears in two contexts.
 First, in a constructor pattern ´c(q_1 , \ldots , q_m, p_1 , \ldots , p_n)´, where ´c´ is a case class which has ´m+1´ primary constructor parameters,  ending in a [repeated parameter](04-basic-declarations-and-definitions.html#repeated-parameters) of type `S*`.
 Second, in an extractor pattern ´x(q_1 , \ldots , q_m, p_1 , \ldots , p_n)´ if the extractor object ´x´ does not have an `unapply` method,
-but it does define an `unapplySeq` method with a result type that is an extractor type for type `(T_1, ... , T_m, Seq[S])` (if `m = 0`, an extractor type for the type `Seq[S]` is also accepted). The expected type for the patterns ´p_i´ is ´S´.
+but it does define an `unapplySeq` method with a result type that is an extractor type for type `(T_1, ... , T_m, Seq[S])` (if `m = 0`, an extractor type for a [sequence type](#extractor-patterns) for `S` is also accepted). The expected type for the patterns ´p_i´ is ´S´.
 
 The last pattern in a pattern sequence may be a _sequence wildcard_ `_*`.
 Each element pattern ´p_i´ is type-checked with
@@ -344,6 +355,16 @@ are sequences which start with elements matching patterns
 pattern matches all values ´v´ that are sequences of
 length ´n´ which consist of elements matching patterns ´p_1 , \ldots ,
 p_n´.
+
+If the value ´s´ extracted by an `unapplySeq` method is of a sequence type
+which does not conform to `Seq[S]`, its members are used in place of those of
+a sequence: ´s´ has length ´k´ if `´s´.lengthCompare(´k´)` yields `0` and at
+least length ´k´ if it yields a non-negative number, its elements are
+`´s´.apply(0)`, `´s´.apply(1)` and so on, and a final sequence wildcard
+which follows ´k´ element patterns is matched against `´s´.toSeq` if ´k = 0´
+and against `´s´.drop(´k´)` otherwise.
+The result type of `scala.Array.unapplySeq` is an extractor type for such
+a type.
 
 ### Infix Operation Patterns
 
