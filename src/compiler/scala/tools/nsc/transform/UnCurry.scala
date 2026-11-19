@@ -356,7 +356,9 @@ abstract class UnCurry extends InfoTransform
           arg setType functionType(Nil, arg.tpe)
         } else {
           log(s"Argument '$arg' at line ${arg.pos.line} is ${param.info} from ${fun.fullName}")
-          def canUseDirectly(qual: Tree) = qual.tpe.typeSymbol.isSubClass(FunctionClass(0)) && treeInfo.isExprSafeToInline(qual)
+          // `qual` is evaluated at the call site, even if the argument never is
+          def canUseDirectly(qual: Tree) =
+            qual.tpe.typeSymbol.isSubClass(FunctionClass(0)) && treeInfo.isExprSafeToInline(qual) && treeInfo.isExprSafeToElide(qual)
           arg match {
             // don't add a thunk for by-name argument if argument already is an application of
             // a Function0. We can then remove the application and use the existing Function0.
