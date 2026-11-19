@@ -3948,10 +3948,26 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   val arg1 = typedArg(arg, forArgMode(fun, mode), newmode, lenientPt)
                   val argtparams = context.extractUndetparams()
                   if (!argtparams.isEmpty) {
-                    val strictPt = formal.instantiateTypeParams(tparams, strictTargs)
-                    inferArgumentInstance(arg1, argtparams, strictPt, lenientPt)
+                    if (isDefaultGetterOfFun(arg1, argtparams)) {
+                      // Spec 6.6.1: the default getter takes the type arguments of the method. Instead of
+                      // inferring the getter's own type arguments (`Nothing` for a default of type `T`),
+                      // identify them with the method's undetermined type parameters, so that the arguments
+                      // inferred for the application, also from the expected type, are substituted into it.
+                      new TreeTypeSubstituter(argtparams, tparams.map(_.tpeHK)).traverse(arg1)
+                    } else {
+                      val strictPt = formal.instantiateTypeParams(tparams, strictTargs)
+                      inferArgumentInstance(arg1, argtparams, strictPt, lenientPt)
+                    }
                   }
                   arg1
+                }
+                // A call to a default getter of the applied method or constructor, inserted by `addDefaults`
+                // without type arguments, whose type parameters correspond to the method's.
+                def isDefaultGetterOfFun(arg: Tree, argtparams: List[Symbol]): Boolean = {
+                  val getter = arg.symbol
+                  getter != null && getter.isDefaultGetter && fun.symbol != null &&
+                    nme.defaultGetterToMethod(getter.name) == fun.symbol.name &&
+                    argtparams.corresponds(tparams)(_.name == _.name)
                 }
                 val args1 = map2(args, formals)(typedArgToPoly)
                 if (args1.exists(_.isErrorTyped)) duplErrTree
