@@ -17,6 +17,7 @@ package xsbt
 
 import scala.tools.nsc.Global
 import java.util.HashSet
+import scala.annotation.tailrec
 
 trait GlobalHelpers { self: Compat =>
   val global: Global
@@ -183,6 +184,31 @@ trait GlobalHelpers { self: Compat =>
   /** Return the enclosing class or the module class if it's a module. */
   def enclOrModuleClass(s: Symbol): Symbol =
     if (s.isModule) s.moduleClass else s.enclClass
+
+  /**
+   * The class that the names and dependencies found below `s` are recorded for.
+   *
+   * A refinement class is the enclosing class of its members and of the trees of their types,
+   * but Zinc only knows about the class that the refined type is written in.
+   */
+  def enclOrModuleClassSkippingRefinements(s: Symbol): Symbol = {
+    @tailrec def loop(cls: Symbol): Symbol = if (cls.isRefinementClass) loop(cls.owner.enclClass) else cls
+    loop(enclOrModuleClass(s))
+  }
+
+  /**
+   * Apply `func` to the typed parents and members of the template of a compound type tree.
+   *
+   * The typer leaves the template as the parser built it, apart from the symbols and types that
+   * typing happens to assign in place, and keeps the typed trees in an attachment.
+   */
+  def traverseTypedRefinement(templ: Template)(func: Tree => Unit): Unit =
+    templ.attachments.get[CompoundTypeTreeOriginalAttachment] match {
+      case Some(typed) =>
+        typed.parents.foreach(func)
+        typed.stats.foreach(func)
+      case _ =>
+    }
 
   /** Define common error messages for error reporting and assertions. */
   object Feedback {
