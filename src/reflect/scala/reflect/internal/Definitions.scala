@@ -1232,24 +1232,32 @@ trait Definitions extends api.StandardDefinitions {
     }
 
 
+    /** Is this a reference to class Object, perhaps through an alias such as AnyRef? A singleton type
+     *  `x.type` is not, even when `x: Object` and its `typeSymbol` is therefore `ObjectClass`.
+     */
+    private def isObjectRef(tp: Type): Boolean = tp.dealias match {
+      case TypeRef(_, ObjectClass, _) => true
+      case _                          => false
+    }
+
     /** Remove all but one reference to class Object from a list of parents. */
     def removeRedundantObjects(tps: List[Type]): List[Type] = tps match {
       case Nil      => Nil
       case x :: xs  =>
-        if (x.typeSymbol == ObjectClass)
-          x :: xs.filterNot(_.typeSymbol == ObjectClass)
+        if (isObjectRef(x))
+          x :: xs.filterNot(isObjectRef)
         else
           x :: removeRedundantObjects(xs)
     }
 
     /** The following transformations applied to a list of parents.
-     *  If any parent is a class/trait, all parents which normalize to
-     *  Object are discarded.  Otherwise, all parents which normalize
-     *  to Object except the first one found are discarded.
+     *  If any parent is a class/trait, all parents which are references
+     *  to Object are discarded.  Otherwise, all references to Object
+     *  except the first one found are discarded.
      */
     def normalizedParents(parents: List[Type]): List[Type] = {
       if (parents exists (t => (t.typeSymbol ne ObjectClass) && t.typeSymbol.isClass))
-        parents filterNot (_.typeSymbol eq ObjectClass)
+        parents filterNot isObjectRef
       else
         removeRedundantObjects(parents)
     }

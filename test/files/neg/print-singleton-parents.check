@@ -1,0 +1,51 @@
+print-singleton-parents.scala:9: error: type mismatch;
+ found   : Test.a.x.type with Test.b.x.type
+ required: Int
+  def singletons(i: a.x.type with b.x.type): Int = i
+                                                   ^
+print-singleton-parents.scala:10: error: type mismatch;
+ found   : Test.y.type with Serializable
+ required: Int
+  def singletonAndClass(i: y.type with Serializable): Int = i
+                                                            ^
+print-singleton-parents.scala:11: error: type mismatch;
+ found   : Serializable with Test.y.type
+ required: Int
+  def classAndSingleton(i: Serializable with y.type): Int = i
+                                                            ^
+print-singleton-parents.scala:12: error: type mismatch;
+ found   : Test.y.type with AnyRef
+ required: Int
+  def singletonAndObject(i: y.type with AnyRef): Int = i
+                                                       ^
+print-singleton-parents.scala:13: error: type mismatch;
+ found   : Test.y.type{def f: Int}
+ required: Int
+  def refined(i: y.type { def f: Int }): Int = i
+                                               ^
+print-singleton-parents.scala:14: error: type mismatch;
+ found   : T with Serializable
+ required: Int
+  def abstractAndClass[T <: AnyRef](i: T with Serializable): Int = i
+                                                                   ^
+print-singleton-parents.scala:15: error: type mismatch;
+ found   : T with U
+ required: Int
+  def abstracts[T <: AnyRef, U <: AnyRef](i: T with U): Int = i
+                                                              ^
+print-singleton-parents.scala:18: error: type mismatch;
+ found   : Serializable
+ required: Int
+  def objectAndClass(i: AnyRef with Serializable): Int = i
+                                                         ^
+print-singleton-parents.scala:19: error: type mismatch;
+ found   : Serializable
+ required: Int
+  def aliasAndClass(i: Alias with Serializable): Int = i
+                                                       ^
+print-singleton-parents.scala:20: error: type mismatch;
+ found   : AnyRef{def f: Int}
+ required: Int
+  def objects(i: AnyRef with Object { def f: Int }): Int = i
+                                                           ^
+10 errors
