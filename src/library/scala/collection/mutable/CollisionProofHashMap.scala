@@ -150,6 +150,12 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
             n = n.next
             remaining -= 1
           }
+          // The loop above stops at the insertion point, which is the head of the bucket for a key whose hash is
+          // smaller than all the others. Count the rest of the bucket so that it is treeified wherever the key goes.
+          while((n ne null) && remaining > 0) {
+            n = n.next
+            remaining -= 1
+          }
           if(remaining == 0) {
             treeify(old, idx)
             return put0(key, value, getOld, hash, idx)
