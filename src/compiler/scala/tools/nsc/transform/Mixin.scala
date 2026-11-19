@@ -336,7 +336,17 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
             (member.name == nme.readResolve || member.name == nme.writeReplace) && member.info.paramss == ListOfNil
           }
 
-          if (existsCompetingMethod(clazz.baseClasses) || generateJUnitForwarder || generateSerializationForwarder)
+          // OPT: with `-Xmixin-force-forwarders:true` the forwarder is generated in any case. Whether it
+          // is required only matters for a method of a Java interface that is not a direct parent of
+          // `clazz` (see `genForwarder`), so the search for a competing method can be skipped otherwise.
+          def isForced: Boolean = settings.mixinForwarderChoices.isTruthy && {
+            val owner = member.owner
+            !(owner.isJavaDefined && owner.isInterface) || clazz.parentSymbolsIterator.contains(owner)
+          }
+
+          if (isForced)
+            genForwarder(required = false)
+          else if (existsCompetingMethod(clazz.baseClasses) || generateJUnitForwarder || generateSerializationForwarder)
             genForwarder(required = true)
           else if (settings.mixinForwarderChoices.isTruthy)
             genForwarder(required = false)
