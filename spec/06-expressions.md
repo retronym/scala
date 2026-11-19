@@ -294,7 +294,8 @@ must be the same). Furthermore, the type of ´e´ must conform to
 `scala.Seq[´T´]`, for some type ´T´ which conforms to
 ´S´. In this case, the argument list is transformed by replacing the
 sequence ´e´ with its elements. When the application uses named
-arguments, the vararg parameter has to be specified exactly once.
+arguments, the repeated parameter may be specified by at most one named
+argument. If no argument specifies it, it receives an empty sequence.
 
 If only a single argument is supplied, it may be supplied as a block expression
 and parentheses can be omitted, in the form `´f´ { block }`. This is valid when
@@ -344,7 +345,8 @@ arguments, the following conditions must hold.
   argument defines a parameter which is already specified by a
   positional argument.
 - Every formal parameter ´p_j:T_j´ which is not specified by either a positional
-  or named argument has a default argument.
+  or named argument has a default argument or is a
+  [repeated parameter](04-basic-declarations-and-definitions.html#repeated-parameters).
 
 If the application uses named or default
 arguments the following transformation is applied to convert it into
@@ -435,7 +437,9 @@ type by [eta expansion](#eta-expansion-section). If ´e´ is a
 parameterless method or call-by-name parameter of type
 `=> ´T´`, `´e´ _` represents the function of type
 `() => ´T´`, which evaluates ´e´ when it is applied to the empty
-parameter list `()`.
+parameter list `()`. (This use of `´e´ _` for a parameterless method or
+call-by-name parameter is deprecated since Scala 2.13.2; the function
+literal `() => ´e´` can be written instead.)
 
 ###### Example
 The method values in the left column are each equivalent to the [eta-expanded expressions](#eta-expansion-section) on the right.
@@ -1327,7 +1331,8 @@ evaluating ´e´ and discarding the result of the evaluation.
 
 Block statements may be definitions which bind local names in the
 block. The only modifier allowed in all block-local definitions is
-`implicit`. When prefixing a class or object definition,
+`implicit`. A block-local value definition may also be prefixed by
+`lazy`. When prefixing a class or object definition,
 modifiers `abstract`, `final`, and `sealed` are also
 permitted.
 
@@ -1380,8 +1385,22 @@ that is, if conversion back to the original type produces the original value.
 
 ###### Numeric Literal Narrowing
 If the expected type is `Byte`, `Short` or `Char`, and
-the expression ´e´ is an integer literal fitting in the range of that
-type, it is converted to the same literal in that type.
+the expression ´e´ is a [constant expression](#constant-expressions) of type
+`Int` or `Char` whose value fits in the range of the expected type, it is
+converted to the literal of the same value in that type.
+Besides integer and character literals, this includes references to
+[constant value definitions](04-basic-declarations-and-definitions.html#value-declarations-and-definitions)
+and operations on constant expressions which the compiler evaluates to a constant.
+
+```scala
+val b: Byte = 1 + 2      // 3: Byte
+final val k = 3
+val c: Byte = k          // 3: Byte
+val s: Short = 'a'       // 97: Short
+val i = 3
+val d: Byte = i          // error: i is not a constant expression
+val e: Byte = 100 + 100  // error: 200 is not in the range of Byte
+```
 
 ###### Value Discarding
 If ´e´ has some value type and the expected type is `Unit`,
@@ -1407,10 +1426,8 @@ It follows that:
   - it must be possible to derive a fully-defined type `U` from `S` by inferring any unknown type parameters of `C`.
 
 Finally, we impose some implementation restrictions (these may be lifted in future releases):
-  - `C` must not be nested or local (it must not capture its environment, as that results in a nonzero-argument constructor)
   - `C`'s constructor must not have an implicit argument list (this simplifies type inference);
-  - `C` must not declare a self type (this simplifies type inference);
-  - `C` must not be `@specialized`.
+  - `C` must not declare a self type (this simplifies type inference).
 
 ###### View Application
 If none of the previous conversions applies, and ´e´'s type
@@ -1448,6 +1465,8 @@ is performed on the expression ´e´.
 ###### Empty Application
 Otherwise, if ´e´ has method type ´()T´, it is implicitly applied to the empty
 argument list, yielding ´e()´.
+(This implicit application is deprecated since Scala 2.13.3, unless the method,
+or a method it overrides, is defined in Java or is a member of `scala.Any`.)
 
 ### Overloading Resolution
 

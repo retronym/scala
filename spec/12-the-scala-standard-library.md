@@ -544,7 +544,7 @@ object Array {
   def iterate[T: ClassTag](start: T, len: Int)(f: T => T): Array[T] = ´\ldots´
 
   /** Enables pattern matching over arrays */
-  def unapplySeq[A](x: Array[A]): Option[IndexedSeq[A]] = Some(x)
+  def unapplySeq[A](x: Array[A]): UnapplySeqWrapper[A] = ´\ldots´
 }
 ```
 
