@@ -1686,54 +1686,71 @@ trait Scanners extends ScannersCommon {
       def markBalance() = for ((k, v) <- balance) oldBalance(k) = v
       markBalance()
 
-      def scan(bpbuf: ListBuffer[BracePair]): (Int, Int) = {
-        if (token != NEWLINE && token != NEWLINES) {
-          while (lastOffset < offset) {
-            if (buf(lastOffset) == LF) lineCount += 1
-            lastOffset += 1
-          }
-          while (lineCount > lineStart.length) {
-            lineStart += offset
-            // reset indentation unless there are new opening brackets or
-            // braces since last ident line and at the same time there
-            // are no new braces.
-            if (balance(RPAREN) >= oldBalance(RPAREN) &&
-                balance(RBRACKET) >= oldBalance(RBRACKET) ||
-                balance(RBRACE) != oldBalance(RBRACE)) {
-              indent = column(offset)
-              markBalance()
+      // An open brace whose matching brace has not been seen yet: where it is, and the buffer for its siblings.
+      final class Open(val lc: Int, val loff: Int, val lindent: Int, val bpbuf: ListBuffer[BracePair])
+
+      // Scans to the right brace (or EOF) that closes the level at which the scan starts and returns its offset
+      // and indentation, collecting the multi-line brace pairs found at that level in `bpbuf0`. Nested levels
+      // are kept in `open` rather than on the stack, so that the stack does not limit the nesting depth.
+      def scan(bpbuf0: ListBuffer[BracePair]): (Int, Int) = {
+        var bpbuf = bpbuf0
+        var open: List[Open] = Nil
+        // the brace that was opened last is closed at `roff`, by a right brace or by the end of the input
+        def close(roff: Int, rindent: Int): Unit = {
+          val o = open.head
+          if (o.lc != lineCount)
+            o.bpbuf += BracePair(o.loff, o.lindent, roff, rindent, bpbuf.toList)
+          bpbuf = o.bpbuf
+          open = open.tail
+        }
+        var result: (Int, Int) = null
+        while (result eq null) {
+          if (token != NEWLINE && token != NEWLINES) {
+            while (lastOffset < offset) {
+              if (buf(lastOffset) == LF) lineCount += 1
+              lastOffset += 1
+            }
+            while (lineCount > lineStart.length) {
+              lineStart += offset
+              // reset indentation unless there are new opening brackets or
+              // braces since last ident line and at the same time there
+              // are no new braces.
+              if (balance(RPAREN) >= oldBalance(RPAREN) &&
+                  balance(RBRACKET) >= oldBalance(RBRACKET) ||
+                  balance(RBRACE) != oldBalance(RBRACE)) {
+                indent = column(offset)
+                markBalance()
+              }
             }
           }
-        }
 
-        token match {
-          case LPAREN =>
-            balance(RPAREN) -= 1; nextToken(); scan(bpbuf)
-          case LBRACKET =>
-            balance(RBRACKET) -= 1; nextToken(); scan(bpbuf)
-          case RPAREN =>
-            balance(RPAREN) += 1; nextToken(); scan(bpbuf)
-          case RBRACKET =>
-            balance(RBRACKET) += 1; nextToken(); scan(bpbuf)
-          case LBRACE =>
-            balance(RBRACE) -= 1
-            val lc = lineCount
-            val loff = offset
-            val lindent = indent
-            val bpbuf1 = new ListBuffer[BracePair]
-            nextToken()
-            val (roff, rindent) = scan(bpbuf1)
-            if (lc != lineCount)
-              bpbuf += BracePair(loff, lindent, roff, rindent, bpbuf1.toList)
-            scan(bpbuf)
-          case RBRACE =>
-            balance(RBRACE) += 1
-            val off = offset; nextToken(); (off, indent)
-          case EOF =>
-            (-1, -1)
-          case _ =>
-            nextToken(); scan(bpbuf)
+          token match {
+            case LPAREN =>
+              balance(RPAREN) -= 1; nextToken()
+            case LBRACKET =>
+              balance(RBRACKET) -= 1; nextToken()
+            case RPAREN =>
+              balance(RPAREN) += 1; nextToken()
+            case RBRACKET =>
+              balance(RBRACKET) += 1; nextToken()
+            case LBRACE =>
+              balance(RBRACE) -= 1
+              open ::= new Open(lineCount, offset, indent, bpbuf)
+              bpbuf = new ListBuffer[BracePair]
+              nextToken()
+            case RBRACE =>
+              balance(RBRACE) += 1
+              val off = offset; nextToken()
+              if (open.isEmpty) result = (off, indent)
+              else close(off, indent)
+            case EOF =>
+              while (open.nonEmpty) close(-1, -1)
+              result = (-1, -1)
+            case _ =>
+              nextToken()
+          }
         }
+        result
       }
 
       val bpbuf = new ListBuffer[BracePair]
