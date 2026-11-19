@@ -726,7 +726,9 @@ abstract class RefChecks extends Transform {
 
       val opc = new overridingPairs.PairsCursor(clazz)
       while (opc.hasNext) {
-        if (!opc.high.isClass)
+        // A class that shadows a class of a parent is deprecated in checkNestedClassShadow.
+        // Any other member with the name of an inherited class is an error, reported by checkOverride.
+        if (!opc.high.isClass || !opc.low.isClass)
           checkOverride(opc.currentPair)
 
         opc.next()
