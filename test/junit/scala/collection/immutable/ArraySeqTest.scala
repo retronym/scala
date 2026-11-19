@@ -211,6 +211,42 @@ class ArraySeqTest {
   }
 
   @Test
+  def concatMixedPrimitives(): Unit = {
+    val seqs = List[ArraySeq[AnyVal]](
+      ArraySeq[Boolean](true, false),
+      ArraySeq[Byte](1, 2),
+      ArraySeq[Short](3, 4),
+      ArraySeq[Char]('a', 'b'),
+      ArraySeq[Int](5, 6),
+      ArraySeq[Long](7L, 8L),
+      ArraySeq[Float](1.5f, 2.5f),
+      ArraySeq[Double](3.5, 4.5),
+      ArraySeq[Unit]((), ()))
+    for (a <- seqs; b <- seqs) {
+      val expect = a.toList ::: b.toList
+      def check(op: String, actual: ArraySeq[AnyVal]): Unit = {
+        val msg = s"${a.unsafeArray.getClass.getSimpleName} $op ${b.unsafeArray.getClass.getSimpleName}"
+        assertEquals(msg, expect, actual.toList)
+        // not just equal, which a widened primitive would be as well: the elements are unchanged
+        expect.lazyZip(actual).foreach((e, x) => assertSame(msg, e.getClass, x.getClass))
+        val ac: Class[_] = a.unsafeArray.getClass
+        val bc: Class[_] = b.unsafeArray.getClass
+        val expectedArrayType: Class[_] = if ((ac eq bc) && ac.getComponentType.isPrimitive) ac else classOf[Array[AnyRef]]
+        assertSame(msg, expectedArrayType, actual.unsafeArray.getClass)
+      }
+      check("++", a ++ b)
+      check(":++", a :++ b)
+      check("concat", a.concat(b))
+      check("appendedAll", a.appendedAll(b))
+      check("++:", a ++: b)
+      check("prependedAll", b.prependedAll(a))
+    }
+    val (ints, doubles, chars) = (ArraySeq(1, 2), ArraySeq(1.5), ArraySeq('a'))
+    assertEquals(List[AnyVal](1, 2, 1.5), ints.appendedAll[AnyVal](doubles).toList)
+    assertEquals(List[AnyVal]('a', 1, 2), ints.prependedAll[AnyVal](chars).toList)
+  }
+
+  @Test
   def t13108(): Unit = {
     def checkBoth[A: ClassTag](check: (ArraySeq[A], ArraySeq[A]) => Unit, a: ArraySeq[A], b: ArraySeq[A]): Unit = {
       check(a, b)
