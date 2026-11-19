@@ -13,6 +13,12 @@ h(): 0
 h(Nil: _*): 0
 p(): 0
 p(Nil: _*): 0
+l(): 0
+l(Nil: _*): 0
+e(): 0
+e(Nil: _*): 0
+e(SECONDS): 1
+e(Seq(SECONDS): _*): 1
 new C[String].f(): 0
 new C[Nothing].f(): 0
 new C[Nothing].f(Nil: _*): 0
