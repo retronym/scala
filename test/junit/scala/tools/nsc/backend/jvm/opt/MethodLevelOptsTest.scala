@@ -155,7 +155,7 @@ class MethodLevelOptsTest extends BytecodeTesting {
         |    val b = (a, y)                            // Tuple2
         |    val c = (new Object, "krik", new String)  // unused java/lang/Object, java/lang/String allocation and string constant is also eliminated
         |    val d = new java.lang.Integer(x)
-        |    val e = new String(new Array[Char](23))   // array allocation not eliminated, as it may throw (negative size, scala/bug#8601)
+        |    val e = new Tuple1(new Array[Char](23))   // array allocation not eliminated, as it may throw (negative size, scala/bug#8601)
         |    val f = new scala.runtime.IntRef(11)
         |    x + y
         |  }
@@ -164,6 +164,34 @@ class MethodLevelOptsTest extends BytecodeTesting {
     val c = compileClass(code, allowMessage = ignoreDeprecations)
     assertSameCode(getMethod(c, "t"), List(
       IntOp(BIPUSH, 23), IntOp(NEWARRAY, 5), Op(POP), VarOp(ILOAD, 1), VarOp(ILOAD, 2), Op(IADD), Op(IRETURN)))
+  }
+
+  @Test
+  def noElimStringConstructorWithArgument(): Unit = {
+    // these constructors throw a NullPointerException if the argument is null
+    val code =
+      """class C {
+        |  def t1(a: Array[Char]): Unit = { new String(a); () }
+        |  def t2(s: String): Unit = { new String(s); () }
+        |}
+      """.stripMargin
+    val c = compileClass(code)
+    assertInvoke(getMethod(c, "t1"), "java/lang/String", "<init>")
+    assertInvoke(getMethod(c, "t2"), "java/lang/String", "<init>")
+  }
+
+  @Test
+  def noElimUnusedMultiANewArray(): Unit = {
+    // Like NEWARRAY and ANEWARRAY, MULTIANEWARRAY throws a NegativeArraySizeException. scalac
+    // doesn't emit the instruction, it can show up in a method through inlining from a classfile.
+    val code = List[Instruction](Op(ICONST_1), Op(ICONST_M1), NewArray(MULTIANEWARRAY, "[[I", 2), Op(POP), Op(RETURN))
+    val method = genMethod()(code: _*)
+    val run = new global.Run()
+    global.enteringPhase(run.jvmPhase) {
+      global.genBCode.postProcessor.initialize()
+      global.genBCode.postProcessor.localOpt.methodOptimizations(method, "C")
+    }
+    assertSameCode(convertMethod(method), code)
   }
 
   @Test
