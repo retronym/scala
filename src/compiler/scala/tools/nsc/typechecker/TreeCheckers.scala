@@ -312,7 +312,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
                   if (accessed != NoSymbol) {
                     val agetter = accessed.getterIn(sym.owner)
                     val asetter = accessed.setterIn(sym.owner)
-                    assertFn(agetter == sym || asetter == sym, s"$sym is getter or setter, but accessed sym $accessed shows $agetter and $asetter")
+                    // the setter of a trait val mixed into a class has its name expanded with the trait's (`T$_setter_$w_=`)
+                    def isMixedInTraitSetter = sym.isSetter && sym.owner.baseClasses.exists(bc =>
+                      bc.isTrait && sym.name == nme.expandedSetterName(accessed.setterName, bc))
+                    assertFn(agetter == sym || asetter == sym || isMixedInTraitSetter, s"$sym is getter or setter, but accessed sym $accessed shows $agetter and $asetter")
                   }
               }
             }
