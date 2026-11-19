@@ -31,7 +31,9 @@ class StringConcatTest extends BytecodeTesting {
         |         str: String,
         |         sbuf: java.lang.StringBuffer,
         |         chsq: java.lang.CharSequence,
-        |         chrs: Array[Char]) = str + this + v + z + c + b + s + i + f + l + d + sbuf + chsq + chrs
+        |         chrs: Array[Char],
+        |         jsb: java.lang.StringBuilder,
+        |         ssb: StringBuilder) = str + this + v + z + c + b + s + i + f + l + d + sbuf + chsq + chrs + jsb + ssb
         |
         |  def t2(
         |         v: Unit,
@@ -46,7 +48,9 @@ class StringConcatTest extends BytecodeTesting {
         |         str: String,
         |         sbuf: java.lang.StringBuffer,
         |         chsq: java.lang.CharSequence,
-        |         chrs: Array[Char]) = s"$str$this$v$z$c$b$s$i$f$l$d$sbuf$chsq$chrs"
+        |         chrs: Array[Char],
+        |         jsb: java.lang.StringBuilder,
+        |         ssb: StringBuilder) = s"$str$this$v$z$c$b$s$i$f$l$d$sbuf$chsq$chrs$jsb$ssb"
         |
         |  def t3(
         |         v: Unit,
@@ -61,7 +65,9 @@ class StringConcatTest extends BytecodeTesting {
         |         str: String,
         |         sbuf: java.lang.StringBuffer,
         |         chsq: java.lang.CharSequence,
-        |         chrs: Array[Char]) = raw"$str$this$v$z$c$b$s$i$f$l$d$sbuf$chsq$chrs"
+        |         chrs: Array[Char],
+        |         jsb: java.lang.StringBuilder,
+        |         ssb: StringBuilder) = raw"$str$this$v$z$c$b$s$i$f$l$d$sbuf$chsq$chrs$jsb$ssb"
         |
         |}
       """.stripMargin
@@ -86,6 +92,8 @@ class StringConcatTest extends BytecodeTesting {
       "append(Ljava/lang/StringBuffer;)Ljava/lang/StringBuilder;",
       "append(Ljava/lang/Object;)Ljava/lang/StringBuilder;", // nor the CharSequence overload, which doesn't call toString
       "append(Ljava/lang/Object;)Ljava/lang/StringBuilder;", // test that we're not using the [C overload
+      "append(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;", // java.lang.StringBuilder: final, its characters are its toString
+      "append(Ljava/lang/Object;)Ljava/lang/StringBuilder;", // scala StringBuilder: append(CharSequence) would copy it char by char
       "toString()Ljava/lang/String;")
     assertEquals(invokeNameDesc("t1"), t1Expected)
 

@@ -200,9 +200,12 @@ abstract class BCodeIdiomatic {
       val paramType: BType = elemType match {
         case ct: ClassBType if ct.isSubtypeOf(StringRef).get          => StringRef
         case ct: ClassBType if ct.isSubtypeOf(jlStringBufferRef).get  => jlStringBufferRef
-        // Don't match for `CharSequence`, even though StringBuilder has such an overload: it appends
-        // the characters of the sequence, which need not be the ones of its `toString`.
-        // Don't match for `ArrayBType(CHAR)` either: `"a" + Array('b')` should NOT be "ab", but "a[C@...".
+        // The `CharSequence` overload appends the characters of the sequence, which need not be the ones
+        // of its `toString`. They are for `java.lang.StringBuilder`, a final class, so use the overload
+        // there and save the copy that `toString` makes. Don't match for other `CharSequence`s.
+        case ct: ClassBType if ct.internalName == JavaStringBuilderClassName => jlCharSequenceRef
+        // Don't match for `ArrayBType(CHAR)`, even though StringBuilder has such an overload:
+        // `"a" + Array('b')` should NOT be "ab", but "a[C@...".
         case _: RefBType                                              => ObjectRef
         // jlStringBuilder does not have overloads for byte and short, but we can just use the int version
         case BYTE | SHORT                                             => INT

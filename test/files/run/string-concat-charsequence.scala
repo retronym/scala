@@ -25,6 +25,8 @@ object Test extends DirectTest {
         println(s"x$cs")
         println(String.valueOf(cs))
         println("x" + new java.lang.StringBuilder("sb") + new StringBuffer("buf") + java.nio.CharBuffer.wrap("chars"))
+        val nullSb: java.lang.StringBuilder = null
+        println("x" + nullSb + new StringBuilder("ssb"))
       }
     }
   """
