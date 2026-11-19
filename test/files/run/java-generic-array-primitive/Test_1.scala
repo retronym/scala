@@ -17,5 +17,6 @@ object Test {
     println(classOf[Holder].getMethod("ints").toGenericString)
     println(Mixed.ints.length)
     println(Mixed.results)
+    Arrays.results.foreach(println)
   }
 }

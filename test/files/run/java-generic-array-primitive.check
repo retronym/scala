@@ -12,3 +12,28 @@ List(7, 7)
 public java.lang.Object[] Holder.ints()
 3
 List(3, 2, 2, 8)
+0
+3
+2
+Object[]()
+2
+2
+Object[](1,2,3)
+Object[](1,2,1)
+Object[](1,2)
+Object[](2,1)
+Object[](2)
+int[](2,3)
+Object[](1,1)
+Object[](null,null)
+Object[][](Object[](null))
+Object[](1,1)
+Object[][](Object[](1,2),Object[](1,2))
+Object[](1,2)
+Object[][](Object[](1),Object[](2))
+Object[](null)
+Object[][](null)
+Object[](null)
+2
+-1
+public int ArrayUser.f(java.lang.Object[])
