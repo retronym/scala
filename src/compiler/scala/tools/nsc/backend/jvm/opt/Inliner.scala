@@ -1246,6 +1246,19 @@ abstract class Inliner {
       }
     }
 
+    // Are the classes named by `types` accessible? For a method type, the classes in its descriptor.
+    def allTypesAccessible(types: List[Type]): Either[OptimizerWarning, Boolean] = types match {
+      case Nil => Right(true)
+      case t :: ts =>
+        val r =
+          if (t.getSort == Type.METHOD) allTypesAccessible(t.getReturnType :: t.getArgumentTypes.toList)
+          else classIsAccessible(bTypeForDescriptorFromClassfile(t.getDescriptor), destinationClass)
+        r match {
+          case Right(true) => allTypesAccessible(ts)
+          case _ => r
+        }
+    }
+
     /*
      * Check if `instruction` can be transplanted to `destinationClass`.
      *
@@ -1334,7 +1347,15 @@ abstract class Inliner {
         // the implMethod is public, lambdaMetaFactory doesn't use the Lookup object's extended
         // capability, and we can safely inline the instruction into a different class.
 
-        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor)
+        //
+        // The classes named in the descriptor of the indy instruction (which includes the functional
+        // interface) and in the static arguments (the method types, and for `altMetafactory` the
+        // marker interfaces and bridge method types) are resolved in the class containing the
+        // instruction, so they need to be accessible as well.
+
+        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor).flatMap(implAccessible =>
+          if (!implAccessible) Right(false)
+          else allTypesAccessible(Type.getMethodType(indy.desc) :: indy.bsmArgs.toList.collect { case t: Type => t }))
 
       case _: InvokeDynamicInsnNode => Left(UnknownInvokeDynamicInstruction)
 
