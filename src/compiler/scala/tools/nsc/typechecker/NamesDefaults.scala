@@ -316,7 +316,11 @@ trait NamesDefaults { self: AbstractAnalyzer =>
               case _                     => seqType(arg.tpe.widen)      // avoid constant type
             }
           val s = context.owner.newValue(freshTermName(nme.NAMEDARG_PREFIX)(typer.fresh), arg.pos, newFlags = ARTIFACT) setInfo {
-            val tp = if (byName) functionType(Nil, argTpe) else argTpe
+            // The type of the function below: like `typedFunction` without an expected type, it widens
+            // a constant result type. (A lifted body `() => $anonfun()` does not conform to `() => 1`.)
+            val tp =
+              if (byName) functionType(Nil, argTpe match { case ct: ConstantType => ct.widen case t => t })
+              else argTpe
             uncheckedBounds(tp)
           }
           Some((context.scope.enter(s), byName, repeated))
