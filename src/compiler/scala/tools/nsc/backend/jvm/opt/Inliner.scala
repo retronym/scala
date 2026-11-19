@@ -1223,6 +1223,38 @@ abstract class Inliner {
       }
     }
 
+    // Are the classes named by `types` accessible? For a method type, the classes in its descriptor.
+    def allTypesAccessible(types: List[Type]): Either[OptimizerWarning, Boolean] = types match {
+      case Nil => Right(true)
+      case t :: ts =>
+        val r =
+          if (t.getSort == Type.METHOD) allTypesAccessible(t.getReturnType :: t.getArgumentTypes.toList)
+          else classIsAccessible(bTypeForDescriptorFromClassfile(t.getDescriptor), destinationClass)
+        r match {
+          case Right(true) => allTypesAccessible(ts)
+          case _ => r
+        }
+    }
+
+    // Bootstrap methods that don't use the Lookup object's access to members of the callsite class:
+    //  - StringConcatFactory converts the arguments to strings with public methods.
+    //  - SymbolLiteral calls the public `scala.Symbol.apply`, found through the class loader of
+    //    the callsite class.
+    // Not included: LambdaDeserialize looks up the lambda implementation methods of the callsite
+    // class, which may be private. StructuralCallSite would be fine, but scalac only emits it in a
+    // method together with a call to a private `reflMethod$Method` helper, so it is never inlined.
+    def isCopyableBootstrapMethod(bsm: asm.Handle): Boolean = bsm.getTag == H_INVOKESTATIC && ((bsm.getOwner, bsm.getName) match {
+      case ("java/lang/invoke/StringConcatFactory", "makeConcat" | "makeConcatWithConstants") => true
+      case ("scala/runtime/SymbolLiteral", "bootstrap") => true
+      case _ => false
+    })
+
+    // Method handles and dynamic constants could refer to members that are not accessible
+    def isCopyableBootstrapArgument(arg: Any): Boolean = arg match {
+      case _: String | _: Integer | _: java.lang.Long | _: java.lang.Float | _: java.lang.Double | _: Type => true
+      case _ => false
+    }
+
     /*
      * Check if `instruction` can be transplanted to `destinationClass`.
      *
@@ -1312,6 +1344,13 @@ abstract class Inliner {
         // capability, and we can safely inline the instruction into a different class.
 
         isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor)
+
+      case indy: InvokeDynamicInsnNode if isCopyableBootstrapMethod(indy.bsm) && indy.bsmArgs.forall(isCopyableBootstrapArgument) =>
+        // These bootstrap methods don't use the Lookup object to access members of the callsite
+        // class, so the instruction can be moved to a different class. The classes named in the
+        // descriptor and in class or method type arguments are resolved in the class containing
+        // the instruction, so they need to be accessible.
+        allTypesAccessible(Type.getMethodType(indy.desc) :: indy.bsmArgs.toList.collect { case t: Type => t })
 
       case _: InvokeDynamicInsnNode => Left(UnknownInvokeDynamicInstruction)
 
