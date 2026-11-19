@@ -1071,7 +1071,9 @@ The erasure mapping is defined as follows.
 - The erasure of an alias type is the erasure of its right-hand side.
 - The erasure of an abstract type is the erasure of its upper bound.
 - The erasure of the parameterized type `scala.Array´[T_1]´` is
- `scala.Array´[|T_1|]´`.
+  `scala.AnyRef` if ´T_1´ is a type parameter, an abstract type or a type
+  bound by an existential quantifier, and ´T_1´ does not conform to
+  `scala.AnyRef`. Otherwise, it is `scala.Array´[|T_1|]´`.
 - The erasure of every other parameterized type ´T[T_1 , \ldots , T_n]´ is ´|T|´.
 - The erasure of a singleton type `´p´.type` is the
   erasure of the type of ´p´.
