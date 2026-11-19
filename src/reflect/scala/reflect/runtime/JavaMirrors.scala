@@ -334,7 +334,7 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       def bind(newReceiver: Any) = new JavaFieldMirror(newReceiver, symbol, metadata)
       import metadata._
 
-      lazy val jfield = ensureAccessible(fieldToJava(symbol))
+      lazy val jfield = ensureAccessible(specializedFieldToJava(symbol, receiver))
       def get = {
         val value = jfield get receiver
         if (isDerivedValueClass) boxer.newInstance(value) else value
@@ -1348,6 +1348,22 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
       catch {
         case ex: NoSuchFieldException => jclazz getDeclaredField expandedName(fld)
       }
+    }
+
+    /** The Java field that holds the value of a given Scala field in a given instance.
+     *  An instance of a specialized subclass of the owner of the field inherits the generic field
+     *  but leaves it unset, and stores the value in a specialized variant of the field instead.
+     */
+    private def specializedFieldToJava(fld: TermSymbol, receiver: Any): jField = {
+      val jfield = fieldToJava(fld)
+      // e.g. `t$mcI$sp` for `t`
+      def isSpecializedVariant(jname: String) =
+        jname.startsWith(jfield.getName + "$mc") && jname.endsWith(nme.SPECIALIZED_SUFFIX.toString)
+      def specializedVariant(jclazz: jClass[_]): Option[jField] =
+        if (jclazz == null || jclazz == jfield.getDeclaringClass) None
+        else specializedVariant(jclazz.getSuperclass) orElse jclazz.getDeclaredFields.find(f => isSpecializedVariant(f.getName))
+      if (receiver == null || !fld.owner.typeParams.exists(_.isSpecialized)) jfield
+      else specializedVariant(receiver.getClass).getOrElse(jfield)
     }
 
     /** The Java method corresponding to a given Scala method.
