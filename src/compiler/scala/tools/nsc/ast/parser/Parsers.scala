@@ -1084,6 +1084,10 @@ self =>
       def argType(): Tree
       def functionArgType(): Tree
 
+      // Callers of the type parsers use the position of the result, so after reporting `()` written as
+      // a type, recover with the tree for the suggested replacement rather than with EmptyTree.
+      private def illegalUnitLiteralType(start: Offset): Tree = atPos(r2p(start, start, start + 2))(scalaUnitConstr)
+
       // () must be () => R; (types) could be tuple or (types) => R
       private def tupleInfixType(start: Offset) = {
         require(in.token == LPAREN, "first token must be a left parenthesis")
@@ -1094,7 +1098,7 @@ self =>
           val msg = "Illegal literal type (), use Unit instead"
           syntaxError(start, msg,
             runReporting.codeAction("use `Unit`", r2p(start, start, start + 2), "Unit", msg, expected = Some(("()", unit))))
-          EmptyTree
+          illegalUnitLiteralType(start)
         }
         else {
           ts foreach checkNotByNameOrVarargs
@@ -1180,7 +1184,7 @@ self =>
                 val msg = "Illegal literal type (), use Unit instead"
                 syntaxError(start, msg,
                   runReporting.codeAction("use `Unit`", r2p(start, start, start + 2), "Unit", msg, expected = Some(("()", unit))))
-                EmptyTree
+                illegalUnitLiteralType(start)
               }
               else
                 atPos(start)(makeSafeTupleType(inParens(types())))
