@@ -320,7 +320,15 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
           val checkedStats = stats flatMap {
             // Mark field as initialized after an assignment
             case stat@Assign(lhs@Select(This(_), _), _) =>
-              stat :: bitmapOf(lhs.symbol).toList.map(bitmap => typedPos(stat.pos.focus)(mkSetFlag(bitmap)))
+              stat :: bitmapOf(lhs.symbol).toList.map { bitmap =>
+                // A specialized subclass runs the constructor statements of its generic class
+                // (`guardSpecializedInitializer` in Constructors), which assign fields of the generic class.
+                // Their init bits are in the generic class's bitmap, which must then be accessible here,
+                // just like the fields themselves (see `SpecializeTypes.ImplementationAdapter`).
+                val bitmapOwner = bitmap.symbol.owner
+                if (bitmapOwner != clazz) bitmap.symbol.makeNotPrivate(bitmapOwner)
+                typedPos(stat.pos.focus)(mkSetFlag(bitmap))
+              }
 
             // remove initialization for default values
             // TODO is this case ever hit? constructors does not generate Assigns with EmptyTree for the rhs AFAICT

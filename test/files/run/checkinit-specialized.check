@@ -1,0 +1,8 @@
+Sp[Int]: 1
+Sp[String]: a
+Sp2[Int]: 1 s 1
+Sp2[String]: a s 1
+Sp3[Int]: UninitializedFieldError
+Sp3[String]: UninitializedFieldError
+Sp4[Int]: 0
+Sp4[String]: UninitializedFieldError
