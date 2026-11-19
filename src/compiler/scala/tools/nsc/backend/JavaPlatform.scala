@@ -50,6 +50,13 @@ trait JavaPlatform extends Platform {
   lazy val externalEqualsNumChar   = getDecl(BoxesRunTimeClass, nme.equalsNumChar)
   lazy val externalEqualsNumObject = getDecl(BoxesRunTimeClass, nme.equalsNumObject)
 
+  /** The interfaces that the boxes of numbers and characters implement since JDK 12. They are
+   *  absent on older JDKs and under `-release` 11 and below.
+   */
+  private lazy val constantInterfaces: List[Symbol] =
+    List("java.lang.constant.Constable", "java.lang.constant.ConstantDesc")
+      .map(rootMirror.getClassIfDefined(_)).filter(_ != NoSymbol)
+
   /** We could get away with excluding BoxedBooleanClass for the
    *  purpose of equality testing since it need not compare equal
    *  to anything but other booleans, but it should be present in
@@ -59,6 +66,7 @@ trait JavaPlatform extends Platform {
     (sym == ObjectClass) ||
     (sym == SerializableClass) ||
     (sym == ComparableClass) ||
+    constantInterfaces.contains(sym) ||
     (sym isNonBottomSubClass BoxedNumberClass) ||
     (sym isNonBottomSubClass BoxedCharacterClass) ||
     (sym isNonBottomSubClass BoxedBooleanClass)
