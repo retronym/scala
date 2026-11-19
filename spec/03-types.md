@@ -106,11 +106,13 @@ forms.
 SimpleType  ::=  Path ‘.’ ‘type’
 ```
 
-A _singleton type_ is of the form ´p.´`type`. Where ´p´ is a path pointing to a
-value which [conforms](06-expressions.html#expression-typing) to
-`scala.AnyRef`, the type denotes the set of values consisting of `null` and the
-value denoted by ´p´ (i.e., the value ´v´ for which `v eq p`). Where the path
-does not conform to `scala.AnyRef` the type denotes the set consisting of only
+A _singleton type_ is of the form ´p.´`type`. Where
+[`scala.Null` conforms](#conformance) to ´p.´`type`, the type denotes the set
+of values consisting of `null` and the value denoted by ´p´ (i.e., the value
+´v´ for which `v eq p`). This is the case if ´p´ is a path pointing to a value
+of a class type which conforms to `scala.AnyRef`, but not, for example, if the
+type of ´p´ is a type parameter or abstract type whose lower bound does not
+include `scala.Null`. Otherwise the type denotes the set consisting of only
 the value denoted by ´p´.
 
 <!-- a pattern match/type test against a singleton type `p.type` desugars to `_ eq p` -->
@@ -854,9 +856,20 @@ The conformance relation ´(<:)´ is the smallest transitive relation that satis
 - Conformance includes equivalence. If `T \equiv U` then `T <: U`.
 - For every value type `T`, `scala.Nothing <: ´T´ <: scala.Any`.
 - For every type constructor ´T´ (with any number of type parameters), `scala.Nothing <: ´T´ <: scala.Any`.
-- For every value type ´T´, `scala.Null <: ´T´` unless `´T´ <: scala.AnyVal`.
+- For every class type or parameterized type ´T´ other than `scala.Nothing`,
+  `scala.Null <: ´T´` unless the class of ´T´ is a subclass of `scala.AnyVal`.
+- `scala.Null` conforms to a compound type `´T_1´ with ´\ldots´ with ´T_n´ {´R\,´}`
+  if it conforms to each of the component types ´T_i´.
+- `scala.Null` conforms to a singleton type `´p´.type` or literal type if
+  the underlying non-singleton type ´U´ of that type conforms to `scala.AnyRef`
+  and `scala.Null <: ´U´`. Here, the underlying non-singleton type of
+  `´p´.type` is the type of the path ´p´ if that type is not a singleton type,
+  and the underlying non-singleton type of the type of ´p´ otherwise; the
+  underlying non-singleton type of a literal type is the type of its literal.
 - A type variable or abstract type ´t´ conforms to its upper bound and
-  its lower bound conforms to ´t´.
+  its lower bound conforms to ´t´. In particular, `scala.Null` conforms to
+  ´t´ only if it conforms to the lower bound of ´t´; an upper bound which
+  conforms to `scala.AnyRef` is not sufficient.
 - A class type or parameterized type conforms to any of its base-types.
 - A singleton type `´p´.type` conforms to the type of the path ´p´.
 - A singleton type `´p´.type` conforms to the type `scala.Singleton`.
