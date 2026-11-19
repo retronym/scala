@@ -775,12 +775,32 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
           case Some(NormalizedMember(tg)) => tg
           case _                          => m
         }
-        info(specMember) = Forward(om)
+        // `m1` must not override another member of `clazz`, such as an overload `def m(x: Int)` next to
+        // `def m(x: A)`. Without `m1`, `m` is inherited, which calls the generic implementation.
+        if (clashesWithOtherMember(m, specMember)) {
+          debuglog(s"not forwarding ${specMember.defString} in $sClass, it would override another member of $clazz")
+          decls1.unlink(specMember)
+        } else {
+          info(specMember) = Forward(om)
+          newOverload(specMember, om, typeEnv(om))
+        }
         info(om)         = if (original.isDeferred) Forward(original) else Implementation(original)
         typeEnv(om)      = env ++ typeEnv(m) // add the environment for any method tparams
 
-        newOverload(specMember, om, typeEnv(om))
         enterMember(om)
+      }
+
+      /* Whether `specMember`, the specialized clone of `m` in `sClass`, has the signature of a member of `clazz`
+       * other than `m`, so that it would override that member too.
+       */
+      def clashesWithOtherMember(m: Symbol, specMember: Symbol): Boolean = {
+        val specTpe = specMember.info
+        clazz.info.member(m.name).alternatives.exists { alt =>
+          (alt ne m) && alt.isMethod && {
+            val altTpe = sClass.thisType.memberType(alt)
+            (altTpe matches specTpe) || (erasure.erasure(alt)(altTpe) =:= erasure.erasure(specMember)(specTpe))
+          }
+        }
       }
 
       @tailrec def isTraitValSetter(sym: Symbol): Boolean =

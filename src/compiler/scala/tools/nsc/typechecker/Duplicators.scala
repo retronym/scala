@@ -314,6 +314,10 @@ abstract class Duplicators extends AbstractAnalyzer {
                 case ((alt, tpe)) :: Nil =>
                   log(s"Arrested overloaded type in Duplicators, narrowing to ${alt.defStringSeenAs(tpe)}\n  Overload was: $memberString")
                   Select(This(newClassOwner), alt)
+                case matching if matching.exists(_._1 == tree.symbol) =>
+                  // e.g. `def f(x: T)` and `def f(x: Int)` in a class specialized for `T = Int`
+                  log(s"Several alternatives match, keeping the original ${tree.symbol.defString}\n  Overload was: $memberString")
+                  Select(This(newClassOwner), tree.symbol)
                 case _ =>
                   alts filter (alt => (alt.paramss corresponds tree.symbol.paramss)(_.size == _.size)) match {
                     case alt :: Nil =>
