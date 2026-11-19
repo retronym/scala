@@ -50,6 +50,10 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.runtime.ArrayCharSequence.getChars"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.runtime.SeqCharSequence.getChars"),
 
+    // TreeSeqMap becomes serializable; only breaks forward compatibility
+    ProblemFilters.exclude[MissingTypesProblem]("scala.collection.immutable.TreeSeqMap"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSeqMap.writeReplace"),
+
     // scala/scala#11242
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.LazyList$MidEvaluation$"),
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.LazyList$InRace"),

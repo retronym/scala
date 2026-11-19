@@ -93,6 +93,28 @@ class TreeSeqMapTest {
     assertEquals(List(4 -> 5, 5 -> 4), ((m - 3) - 1 - 2).iterator.toList)
   }
   @Test
+  def serializable(): Unit = {
+    import java.io._
+    def roundTrip[A <: AnyRef](a: A): A = {
+      val bos = new ByteArrayOutputStream
+      new ObjectOutputStream(bos).writeObject(a)
+      new ObjectInputStream(new ByteArrayInputStream(bos.toByteArray)).readObject().asInstanceOf[A]
+    }
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, TreeSeqMap.OrderBy.Modification)) {
+      val m = (TreeSeqMap.empty[Int, String](orderBy) ++ List(1 -> "a", 2 -> "b", 3 -> "c", 4 -> "d")).updated(2, "B") - 3
+      val r = roundTrip(m)
+      assertEquals(m.toList, r.toList)
+      assertSame(orderBy, r.orderedBy)
+      assertEquals(m.updated(1, "A").updated(5, "e").toList, r.updated(1, "A").updated(5, "e").toList)
+      val e = roundTrip(TreeSeqMap.empty[Int, String](orderBy))
+      assertTrue(e.isEmpty)
+      assertSame(orderBy, e.orderedBy)
+      assertEquals(m.keySet.toList, roundTrip(m.keySet).toList)
+      assertEquals(m.values.toList, roundTrip(m.values).toList)
+    }
+  }
+
+  @Test
   def testSlice(): Unit = {
     val m = TreeSeqMap(3 -> 1, 2 -> 2, 1 -> 3, 4 -> 5, 5 -> 4)
     assertEquals(List(3 -> 1, 2 -> 2), ((m - 1) - 4).slice(0, 2).iterator.toList)
