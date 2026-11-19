@@ -109,7 +109,7 @@ abstract class TailCalls extends Transform {
       def tailLabels: Set[Symbol]
 
       def enclosingType = method.enclClass.typeOfThis
-      def isEligible    = method.isEffectivelyFinalOrNotOverridden
+      def isEligible: Boolean     // method can't be overridden
       def isMandatory   = method.hasAnnotation(TailrecClass)
       def isTransformed = isEligible && accessed(label)
 
@@ -139,6 +139,7 @@ abstract class TailCalls extends Transform {
       def tailPos    = false
       def label      = NoSymbol
       def tailLabels = Set.empty[Symbol]
+      def isEligible = method.isEffectivelyFinalOrNotOverridden
     }
 
     final class DefDefTailContext(dd: DefDef) extends TailContext {
@@ -147,6 +148,9 @@ abstract class TailCalls extends Transform {
       def methodPos = dd.pos
       def tailPos   = true
 
+      // OPT computed once per method: for a member of a sealed class this searches all descendants
+      // of the class for an override, and `rewriteApply` asks for every application in the method.
+      lazy val isEligible = method.isEffectivelyFinalOrNotOverridden
       lazy val label      = mkLabel()
       lazy val tailLabels = {
         // labels are local to a method, so only traverse the rhs of a defdef
@@ -187,6 +191,7 @@ abstract class TailCalls extends Transform {
       def methodPos  = that.methodPos
       def tailLabels = that.tailLabels
       def label      = that.label
+      def isEligible = that.isEligible
     }
 
     private var ctx: TailContext = EmptyTailContext
