@@ -1,0 +1,16 @@
+selftype-val-new-narrow.scala:6: error: class C cannot be instantiated because it does not conform to its self-type O.x.type
+  val y: C = new C              // error: y.type is not x.type
+             ^
+selftype-val-new-narrow.scala:11: error: class D cannot be instantiated because it does not conform to its self-type L.D with Singleton
+  var v: D = new D              // error: a var is not stable
+             ^
+selftype-val-new-narrow.scala:12: error: class D cannot be instantiated because it does not conform to its self-type L.D with Singleton
+  def m = new D                 // error: not a value definition
+          ^
+selftype-val-new-narrow.scala:22: error: class C cannot be instantiated because it does not conform to its self-type A.this.x.type
+  val x: C = new C              // error: x can be overridden
+             ^
+selftype-val-new-narrow.scala:25: error: class C cannot be instantiated because it does not conform to its self-type B.this.x.type
+  override val x: C = new C     // error
+                      ^
+5 errors
