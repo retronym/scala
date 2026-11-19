@@ -519,18 +519,25 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
           case Some(att) if att.expandee.symbol.name == nme.materializeClassTag && tree.isInstanceOf[ApplyToImplicitArgs] =>
             super.transform(arg)
           case _ =>
-            typedWithPos(tree.pos) {
-              gen.evalOnce(classTagEvidence, currentOwner, unit) { _ =>
-                val arr = typedWithPos(tree.pos)(gen.mkMethodCall(classTagEvidence, definitions.ClassTagClass.info.decl(nme.newArray), Nil, Literal(Constant(elems.size)) :: Nil))
-                gen.evalOnce(arr, currentOwner, unit) { arr =>
-                  val stats = ListBuffer[Tree]()
-                  foreachWithIndex(elems) { (elem, i) =>
-                    stats += gen.mkMethodCall(gen.mkAttributedRef(definitions.ScalaRunTimeModule), currentRun.runDefinitions.arrayUpdateMethod,
-                                              Nil, arr() :: Literal(Constant(i)) :: elem :: Nil)
-                  }
-                  super.transform(Block(stats.toList, arr()))
+            val tag    = transform(classTagEvidence)
+            val elems1 = transformTrees(elems)
+            def newArrayOf(tag: () => Tree, elems: List[() => Tree]): Tree = {
+              val arr = typedWithPos(tree.pos)(gen.mkMethodCall(tag(), definitions.ClassTagClass.info.decl(nme.newArray), Nil, Literal(Constant(elems.size)) :: Nil))
+              gen.evalOnce(arr, currentOwner, unit) { arr =>
+                val stats = ListBuffer[Tree]()
+                foreachWithIndex(elems) { (elem, i) =>
+                  stats += gen.mkMethodCall(gen.mkAttributedRef(definitions.ScalaRunTimeModule), currentRun.runDefinitions.arrayUpdateMethod,
+                                            Nil, arr() :: Literal(Constant(i)) :: elem() :: Nil)
                 }
+                Block(stats.toList, arr())
               }
+            }
+            typedWithPos(tree.pos) {
+              // The array is created before its elements are evaluated, which can't be told apart from the evaluation
+              // order of the original call if evaluating the class tag has no side effects. Otherwise, evaluate the
+              // elements first, and then the class tag, once.
+              if (treeInfo.isExprSafeToInline(tag)) newArrayOf(() => tag, elems1.map(elem => () => elem))
+              else gen.evalOnceAll(elems1 :+ tag, currentOwner, unit)(refs => newArrayOf(refs.last, refs.init))
             }
         }
 
