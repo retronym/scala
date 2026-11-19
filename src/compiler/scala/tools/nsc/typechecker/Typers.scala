@@ -5709,8 +5709,24 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       def checkReflectiveCallsFeature(tree: Tree): Unit = {
         val sym = tree.symbol
-        if (sym != null && sym.isOnlyRefinementMember && !sym.isMacro)
+        if (sym != null && sym.isOnlyRefinementMember && !sym.isMacro) {
           checkFeature(tree.pos, currentRun.runDefinitions.ReflectiveCallsFeature, sym.toString)
+          checkReflectiveCallParams(tree)
+        }
+      }
+
+      /* The type of an anonymous class abstracts over its member classes: `new { class C; def m(c: C) = 0 }` has the type
+       * `AnyRef { type C <: AnyRef; def m(c: this.C): Int }`. No refinement tree was typed for it, so `checkMethodStructuralCompatible`
+       * has not seen `m`. A reflective call would look `m` up with the erasure of the bound of `C`, rather than with the class.
+       */
+      def checkReflectiveCallParams(tree: Tree): Unit = {
+        val meth = tree.symbol
+        def refersToTypeMember(tp: Type): Boolean = tp.dealiasWidenChain.exists { t =>
+          val sym = t.typeSymbol
+          sym.isAbstractType && (sym.owner == meth.owner || refersToTypeMember(sym.info.upperBound))
+        }
+        if (meth.isMethod && meth.info.paramss.exists(_.exists(p => refersToTypeMember(p.tpe))))
+          context.error(tree.pos, "Parameter type in structural refinement may not refer to a type member of that refinement")
       }
 
       /* A symbol qualifies if:
