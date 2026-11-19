@@ -388,6 +388,7 @@ object View extends IterableFactory[View] {
 
   @SerialVersionUID(3L)
   class Updated[A](underlying: SomeIterableOps[A], index: Int, elem: A) extends AbstractView[A] {
+    if (index < 0) throw new IndexOutOfBoundsException(index.toString)
     def iterator: Iterator[A] = new AbstractIterator[A] {
       private[this] val it = underlying.iterator
       private[this] var i = 0

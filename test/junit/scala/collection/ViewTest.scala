@@ -146,4 +146,18 @@ class ViewTest {
     assertSame(xs, View.Filter(View.Filter(xs, even, true), big, true).underlying)
     assertEquals(List(1), View.Filter(View.Filter(View.Filter(xs, even, true), big, true), (_: Int) == 5, true).toList)
   }
+
+  @Test
+  def updatedRejectsNegativeIndex(): Unit = {
+    import scala.tools.testkit.AssertUtil.assertThrows
+    val xs = List(1, 2, 3)
+    assertEquals(List(1, 9, 3), new View.Updated(xs, 1, 9).toList)
+    // as in SeqOps.updated
+    assertThrows[IndexOutOfBoundsException](xs.view.updated(-1, 9), _ == "-1")
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, -1, 9).toList, _ == "-1")
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, Int.MinValue, 9).toList, _ == Int.MinValue.toString)
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs.iterator.to(Iterable), -1, 9).toList, _ == "-1")
+    // an index past the end is only found by iterating
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, 3, 9).toList, _ == "3")
+  }
 }
