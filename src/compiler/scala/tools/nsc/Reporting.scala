@@ -733,19 +733,21 @@ object Reporting {
 
     val VersionPattern: Regex = """(?:.*?\s+)??(\d+)(?:\.(\d+)(?:\.(\d+))?)?(?:\W.*)?""".r
     def fromString(s: String): Version = s match {
-      case VersionPattern(maj, min, pat) =>
-        ParseableVersion(s, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
-      case _ =>
-        NonParseableVersion(s)
+      case VersionPattern(maj, min, pat) => fromComponents(s, maj, min, pat)
+      case _ => NonParseableVersion(s)
     }
 
     val VersionNumberPattern: Regex = """(\d+)(?:\.(\d+)(?:\.(\d+))?)?""".r
     def fromNumberOnlyString(s: String): Version = s match {
-      case VersionNumberPattern(maj, min, pat) =>
-        ParseableVersion(s, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
-      case _ =>
-        NonParseableVersion(s)
+      case VersionNumberPattern(maj, min, pat) => fromComponents(s, maj, min, pat)
+      case _ => NonParseableVersion(s)
     }
+
+    // The patterns accept any number of digits. A component that doesn't fit an Int, as in
+    // `since = "20240131120000"`, makes the version non-parseable.
+    private def fromComponents(orig: String, maj: String, min: String, pat: String): Version =
+      try ParseableVersion(orig, maj.toInt, Option(min).map(_.toInt), Option(pat).map(_.toInt))
+      catch { case _: NumberFormatException => NonParseableVersion(orig) }
   }
 
   sealed trait MessageFilter {
