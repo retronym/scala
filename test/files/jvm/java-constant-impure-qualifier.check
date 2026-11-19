@@ -1,0 +1,30 @@
+mk
+make
+nullInst: NPE
+make
+nullStr: NPE
+mk
+nonNullInst: 42
+mk
+plusOne: 43
+mk
+literalTyped: 42
+finalVal: 42
+make C
+scalaPlusOne: NPE
+local: 42
+stablePath: 42
+static: 7
+pureFolded: 43
+viaThis: 42
+annotation: 42
+nullInst reads K field: true
+nullStr reads K field: true
+nonNullInst reads K field: true
+plusOne reads K field: true
+literalTyped reads K field: true
+local reads K field: false
+stablePath reads K field: false
+pureFolded reads K field: false
+Sub.viaThis reads K field: false
+Sub.viaIdent reads K field: false
