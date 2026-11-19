@@ -149,7 +149,9 @@ abstract class FormatInterpolator {
           def accept(op: Conversion): Unit = {
             if (!op.isLeading) errorLeading(op)
             op.accepts(argType(n-1, op.acceptableVariants: _*))
-            amended += part
+            // Drop the index of a conversion that refers to its own arg. An explicit index does not advance
+            // the formatter's ordinary index, so keeping it would shift the args of all the conversions that follow.
+            amended += (if (op.index.contains(n) && !op.hasFlag('<')) part.patch(op.descriptor.at(Index), "", op.descriptor.group(Index).get.length + 1) else part)
             op.lintToString(argTypes(n-1))
           }
 
@@ -157,7 +159,7 @@ abstract class FormatInterpolator {
           else if (!matches.hasNext) insertStringConversion()
           else {
             val cv = Conversion(matches.next(), part0.pos, argc)
-            if (cv.kind != Kind.StringXn || cv.cc.isUpper || cv.width.nonEmpty || cv.flags.nonEmpty)
+            if (cv.kind != Kind.StringXn || cv.cc.isUpper || cv.width.nonEmpty || cv.precision.nonEmpty || cv.flags.nonEmpty)
               formatting = true
             if (cv.isLiteral) insertStringConversion()
             else if (cv.isIndexed) {
@@ -166,6 +168,8 @@ abstract class FormatInterpolator {
                 // "$x$y%1" where "%1" follows a splice but does not apply to it
                 c.warning(cv.groupPosAt(Index, 0), "Index is not this arg")
                 insertStringConversion()
+                // the index is only understood by the formatter
+                formatting = true
               }
             }
             else if (!cv.isError) accept(cv)
