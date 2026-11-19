@@ -1,0 +1,5 @@
+duplicate-class-name.scala:1: error: Generated class A$B has the same name as another generated class.
+  One class file would overwrite the other.
+class A { class B { def who = "inner" } }
+                ^
+1 error
