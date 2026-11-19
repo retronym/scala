@@ -445,7 +445,7 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
                   // by `Select(q, outerAccessor(outerSym.owner)) OBJ_EQ expectedPrefix`
                   // if there's an outer accessor, otherwise the condition becomes `true`
                   // TODO: centralize logic whether there's an outer accessor and use here?
-                  val synthOuterGetter = expectedTp.typeSymbol.newMethod(nme.OUTER_SYNTH, newFlags = SYNTHETIC | ARTIFACT) setInfo expectedPrefix
+                  val synthOuterGetter = expectedTp.typeSymbol.newMethod(nme.OUTER_SYNTH, newFlags = SYNTHETIC | ARTIFACT) setInfo NullaryMethodType(expectedPrefix)
                   val outerTest = (Select(codegen._asInstanceOf(testedBinder, expectedTp), synthOuterGetter)) OBJ_EQ expectedOuterRef
                   and(orig, outerTest)
               }
