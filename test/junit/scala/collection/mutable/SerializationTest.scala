@@ -41,6 +41,23 @@ class SerializationTest {
   }
 
   @Test
+  def collisionProofHashMap(): Unit = {
+    assertEqualsAfterDeserialization(mutable.CollisionProofHashMap.empty[Int, String], classOf[mutable.CollisionProofHashMap[_, _]])
+    assertEqualsAfterDeserialization(mutable.CollisionProofHashMap(1 -> "one", 2 -> "two", 3 -> "three"), classOf[mutable.CollisionProofHashMap[_, _]])
+
+    // 32 keys with the same hash code, so that their bucket is a red-black tree, and a non-default ordering
+    val colliding = List("Aa", "BB").flatMap(a => List("Aa", "BB").flatMap(b => List("Aa", "BB").flatMap(c => List("Aa", "BB").flatMap(d => List("Aa", "BB").map(e => a + b + c + d + e)))))
+    assertEquals(1, colliding.map(_.hashCode).distinct.size)
+    val original = mutable.CollisionProofHashMap.from(colliding.zipWithIndex)(Ordering.String.reverse)
+    assertEqualsAfterDeserialization(original, classOf[mutable.CollisionProofHashMap[_, _]])
+    val after = serializeDeserialize(original)
+    for ((k, i) <- colliding.zipWithIndex) assertEquals(Some(i), after.remove(k))
+    assertTrue(after.isEmpty)
+    after ++= original
+    assertEquals(original, after)
+  }
+
+  @Test
   def treeMap(): Unit = {
     assertEqualsAfterDeserialization(mutable.TreeMap.empty[Int, String], classOf[mutable.TreeMap[_, _]])
     assertEqualsAfterDeserialization(mutable.TreeMap(1 -> "one", 2 -> "two", 3 -> "three"), classOf[mutable.TreeMap[_, _]])
