@@ -1007,8 +1007,19 @@ trait SortedSetFactoryDefaults[+A,
 trait MapFactoryDefaults[K, +V,
     +CC[x, y] <: IterableOps[(x, y), Iterable, Iterable[(x, y)]],
     +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Iterable[x]] extends MapOps[K, V, CC, CC[K, V @uncheckedVariance]] with IterableOps[(K, V), WithFilterCC, CC[K, V @uncheckedVariance]] {
-  override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): CC[K, V @uncheckedVariance] = mapFactory.from(coll)
-  override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), CC[K, V @uncheckedVariance]] = mapFactory.newBuilder[K, V]
+  // The TreeSeqMap cases keep its OrderBy, which `mapFactory` cannot know. They are implemented here
+  // instead of in TreeSeqMap since overriding these methods in TreeSeqMap is not forwards compatible (should be moved)
+  override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): CC[K, V @uncheckedVariance] = (this: AnyRef) match {
+    case self: immutable.TreeSeqMap[_, _] => (coll match {
+      case m: immutable.TreeSeqMap[K, V] @unchecked => m.orderingBy(self.orderedBy)
+      case _ => immutable.TreeSeqMap.newBuilder[K, V](self.orderedBy).addAll(coll).result()
+    }).asInstanceOf[CC[K, V]]
+    case _ => mapFactory.from(coll)
+  }
+  override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), CC[K, V @uncheckedVariance]] = (this: AnyRef) match {
+    case self: immutable.TreeSeqMap[_, _] => immutable.TreeSeqMap.newBuilder[K, V](self.orderedBy).asInstanceOf[mutable.Builder[(K, V), CC[K, V]]]
+    case _ => mapFactory.newBuilder[K, V]
+  }
   override def empty: CC[K, V @uncheckedVariance] = (this: AnyRef) match {
     // Implemented here instead of in TreeSeqMap since overriding empty in TreeSeqMap is not forwards compatible (should be moved)
     case self: immutable.TreeSeqMap[_, _] => immutable.TreeSeqMap.empty(self.orderedBy).asInstanceOf[CC[K, V]]
