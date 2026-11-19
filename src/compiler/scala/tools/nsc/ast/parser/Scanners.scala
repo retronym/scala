@@ -277,8 +277,13 @@ trait Scanners extends ScannersCommon {
 
     def resume(lastCode: Token) = {
       token = lastCode
-      if (next.token != EMPTY && !reporter.hasErrors)
-        syntaxError("unexpected end of input: possible missing '}' in XML block")
+      if (next.token != EMPTY) {
+        if (!reporter.hasErrors)
+          syntaxError("unexpected end of input: possible missing '}' in XML block")
+        // The token was scanned ahead before the XML parser took over the input, which has since
+        // moved past it. Drop it, or `nextToken` would deliver it at the wrong place.
+        next.token = EMPTY
+      }
 
       nextToken()
     }
