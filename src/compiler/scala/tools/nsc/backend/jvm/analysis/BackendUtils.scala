@@ -56,16 +56,16 @@ abstract class BackendUtils extends PerRunInit {
   private val indyLambdaImplMethods: ConcurrentHashMap[InternalName, mutable.Map[MethodNode, mutable.Map[InvokeDynamicInsnNode, asm.Handle]]] =
     recordPerRunJavaMapCache(new ConcurrentHashMap)
 
-  // unused objects created by these constructors are eliminated by pushPop
+  // unused objects created by these constructors are eliminated by pushPop. The constructors must not
+  // throw for any argument: `new String(null: String)` and `new String(null: Array[Char])` throw a
+  // NullPointerException, so only the nullary String constructor is listed.
   private[this] lazy val sideEffectFreeConstructors: LazyVar[Set[(String, String)]] = perRunLazy(this) {
     val ownerDesc = (p: (InternalName, MethodNameAndType)) => (p._1, p._2.methodType.descriptor)
     primitiveBoxConstructors.map(ownerDesc).toSet ++
       srRefConstructors.map(ownerDesc) ++
       tupleClassConstructors.map(ownerDesc) ++ Set(
       (ObjectRef.internalName, MethodBType(BType.emptyArray, UNIT).descriptor),
-      (StringRef.internalName, MethodBType(BType.emptyArray, UNIT).descriptor),
-      (StringRef.internalName, MethodBType(Array(StringRef), UNIT).descriptor),
-      (StringRef.internalName, MethodBType(Array(ArrayBType(CHAR)), UNIT).descriptor))
+      (StringRef.internalName, MethodBType(BType.emptyArray, UNIT).descriptor))
   }
 
   private[this] lazy val classesOfSideEffectFreeConstructors: LazyVar[Set[String]] = perRunLazy(this)(sideEffectFreeConstructors.get.map(_._1))
