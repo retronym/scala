@@ -1,0 +1,13 @@
+structural-refinement-in-fun.scala:9: error: Parameter type in structural refinement may not refer to a user-defined value class
+  def f = (new P: { def vc(v: VC): Int }).vc(new VC(3))
+                           ^
+structural-refinement-in-fun.scala:10: error: Result type in structural refinement may not refer to a user-defined value class
+  def g = (new P: { def rvc: VC }).rvc
+                             ^
+structural-refinement-in-fun.scala:11: error: Parameter type in structural refinement may not refer to a user-defined value class
+  def h(p: P) = p.asInstanceOf[{ def vc(v: VC): Int }].vc(new VC(3))
+                                        ^
+structural-refinement-in-fun.scala:12: error: Parameter type in structural refinement may not refer to an abstract type defined outside that refinement
+  def k[T](p: P, t: T) = p.asInstanceOf[{ def m(t: T): Int }].m(t)
+                                                ^
+4 errors
