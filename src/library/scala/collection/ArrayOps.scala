@@ -162,6 +162,7 @@ object ArrayOps {
 
   @SerialVersionUID(3L)
   private final class GroupedIterator[A](xs: Array[A], groupSize: Int) extends AbstractIterator[Array[A]] with Serializable {
+    require(groupSize >= 1, s"size=$groupSize, but it must be positive")
     private[this] var pos = 0
     def hasNext: Boolean = pos < xs.length
     def next(): Array[A] = {

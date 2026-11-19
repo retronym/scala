@@ -116,4 +116,14 @@ class StringOpsTest {
     assertEquals("", "a".tail)
     assertThrows[UnsupportedOperationException]("".tail)
   }
+
+  @Test def groupedRequiresPositiveSize(): Unit = {
+    for (s <- List("", "abc"); size <- List(0, -1, Int.MinValue)) {
+      assertThrows[IllegalArgumentException](s.toList.grouped(size))
+      assertThrows[IllegalArgumentException](s.grouped(size), _.contains(s"size=$size"))
+    }
+    assertEquals(List("ab", "c"), "abc".grouped(2).toList)
+    assertEquals(List("abc"), "abc".grouped(Int.MaxValue).toList)
+    assertEquals(Nil, "".grouped(1).toList)
+  }
 }
