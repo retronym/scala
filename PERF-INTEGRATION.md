@@ -39,6 +39,7 @@ Each PR head is merged onto the base with `--no-ff`, in this order. retronym/sca
 | retronym/scala#270 | Pack opaque range positions into one Int when they fit | clean |
 | retronym/scala#271 | Keep override-pair cursors' members in arrays; skip Object/Any pairs | its one commit, cherry-picked and merged: the PR is stacked on `claude/erasure-typeassigner-alloc`, whose other commits are not in this branch. Clean |
 | retronym/scala#272 | Test a member for ignoreDeferred only if it is deferred | clean |
+| retronym/scala#273 | Walk scope entries in Scope.exists/forall/count | clean |
 
 Cherry-picked from #11318 (`integration/2.13.x`), not in any PR above and not in 2.13.x:
 
