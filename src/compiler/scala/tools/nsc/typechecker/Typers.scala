@@ -4997,16 +4997,27 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         /* If current tree <tree> appears in <val x(: T)? = <tree>>
          * return `tp with x.type' else return `tp`.
          */
-        def narrowRhs(tp: Type) = { val sym = context.tree.symbol
-          context.tree match {
-            case ValDef(mods, _, _, Apply(Select(`tree`, _), _)) if !mods.isMutable && sym != null && sym != NoSymbol =>
+        def narrowRhs(tp: Type) = {
+          // `typedApply` types the function `new C(...).<init>` in a context whose tree is the `Apply`,
+          // so the value definition is the tree of the enclosing context.
+          val vdefContext = context.tree match {
+            case Apply(Select(`tree`, _), _) => context.outer
+            case _                           => context
+          }
+          val sym = vdefContext.tree.symbol
+          vdefContext.tree match {
+            case ValDef(mods, _, _, Apply(Select(`tree`, _), _)) if !mods.isMutable && sym != null && sym != NoSymbol && !tp.isErroneous =>
               val sym1 =
                 if (sym.owner.isClass && sym.getterIn(sym.owner) != NoSymbol) sym.getterIn(sym.owner)
                 else sym
-              val pre = if (sym1.owner.isClass) sym1.owner.thisType else NoPrefix
-              intersectionType(List(tp, singleType(pre, sym1)))
+              // If the value can be overridden, `x.type` may denote another object than the one created here.
+              if (sym1.isEffectivelyFinal || sym1.owner.isModuleClass || sym1.owner.isFinal) {
+                val pre = if (sym1.owner.isClass) sym1.owner.thisType else NoPrefix
+                intersectionType(List(tp, singleType(pre, sym1)))
+              } else tp
             case _ => tp
-          }}
+          }
+        }
 
         val tp = tpt1.tpe
         val sym = tp.typeSymbol.initialize
