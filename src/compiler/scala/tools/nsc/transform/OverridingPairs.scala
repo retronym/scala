@@ -50,6 +50,7 @@ abstract class OverridingPairs extends SymbolPairs {
          (low.owner != high.owner)     // don't try to form pairs from overloaded members
       && !bothJavaOwnedAndEitherIsField(low, high)
       && !high.isPrivate               // private or private[this] members never are overridden
+      && !isJavaPackagePrivateElsewhere(high, low) // as in Java, a package-private member is not overridden from another package
       && !exclude(low)                 // this admits private, as one can't have a private member that matches a less-private member.
       && (lowMemberType matches (self memberType high))
     ) // TODO we don't call exclude(high), should we?
@@ -69,6 +70,14 @@ abstract class OverridingPairs extends SymbolPairs {
       }
     }
   }
+
+  /** A Java member with package access, which is overridden only by members of classes in the same package (JVMS 5.4.5). */
+  def isJavaPackagePrivate(sym: Symbol): Boolean =
+    sym.isJavaDefined && sym.hasAccessBoundary && !sym.isProtected
+
+  /** Is `sym` a Java member with package access, and `other` defined outside that package? */
+  def isJavaPackagePrivateElsewhere(sym: Symbol, other: Symbol): Boolean =
+    isJavaPackagePrivate(sym) && sym.privateWithin != other.enclosingPackageClass
 
   private def bothJavaOwnedAndEitherIsField(low: Symbol, high: Symbol): Boolean = {
     low.owner.isJavaDefined && high.owner.isJavaDefined &&

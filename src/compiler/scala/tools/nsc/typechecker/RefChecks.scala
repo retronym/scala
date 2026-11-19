@@ -878,11 +878,32 @@ abstract class RefChecks extends Transform {
             }
             (ps, qs)
           }
+          // An abstract Java method with package access is implemented only by a method of a class in the same
+          // package, or one that overrides such a method (JVMS 5.4.5). Scala's member lookup ignores that, so
+          // the member that hides it may not implement it at run time (javac: "S is not abstract and does not
+          // override abstract method foo() in J").
+          def checkJavaPackagePrivateImplemented(): Unit =
+            for (bc <- clazz.baseClasses.tail if bc.isJavaDefined && !bc.isInterface; decl <- bc.info.decls)
+              if (decl.isMethod && decl.isDeferred && overridingPairs.isJavaPackagePrivate(decl)) {
+                val impl = decl.matchingSymbol(clazz.thisType, admit = VBRIDGE)
+                // A trait's method is not a candidate: the JVM selects the abstract method of class `bc` before default methods.
+                def implementedInPackage = clazz.baseClasses.iterator.takeWhile(_ != bc).exists { c =>
+                  !c.isTrait && c.enclosingPackageClass == decl.privateWithin && {
+                    val m = decl.matchingSymbol(c, clazz.thisType)
+                    m.exists && !m.isDeferred
+                  }
+                }
+                if (impl.exists && !impl.isDeferred && !implementedInPackage)
+                  abstractClassError(sm"""|${infoStringWithLocation(decl)} has package access, so it is not implemented by
+                                          |${infoStringWithLocation(impl)}; only a method of a class in ${decl.privateWithin} can implement it""")
+              }
+
           val nonPrivateMembers = clazz.info.nonPrivateMembersAdmitting(VBRIDGE)
           // Avoid extra allocations with reverseIterator. Filter for abstract members of interest, and bad abstract override.
           val (missing, abstractIncomplete): (List[Symbol], List[Symbol]) =
             filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred & !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
           if (missing.nonEmpty) emitErrors(missing, nonPrivateMembers)
+          else checkJavaPackagePrivateImplemented()
           // Check the remainder for invalid absoverride.
           for (member <- abstractIncomplete) {
             val explanation = member.superSymbolIn(clazz) match {
@@ -963,12 +984,7 @@ abstract class RefChecks extends Transform {
          * The member IS accessible to classes in package a.b.c.  The javaAccessCheck logic
          * is restricting the set of matching signatures according to the above semantics.
          */
-        def javaAccessCheck(sym: Symbol) = (
-             !inclazz.isJavaDefined                             // not a java defined member
-          || !sym.hasAccessBoundary                             // no access boundary
-          || sym.isProtected                                    // marked protected in java, thus accessible to subclasses
-          || sym.privateWithin == member.enclosingPackageClass  // exact package match
-        )
+        def javaAccessCheck(sym: Symbol) = !overridingPairs.isJavaPackagePrivateElsewhere(sym, member)
         def classDecl = inclazz.info.nonPrivateDecl(member.name)
                         .orElse(inclazz.info.nonPrivateDecl(member.unexpandedName))
         def matchingSyms = classDecl.filter(sym => isSignatureMatch(sym) && javaAccessCheck(sym))

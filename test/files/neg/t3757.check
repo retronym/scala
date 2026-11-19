@@ -1,4 +1,9 @@
+B.scala:3: error: class B needs to be abstract.
+private[package a] def foo(): String (defined in class A) has package access, so it is not implemented by
+override def foo(): String (defined in class B); only a method of a class in package a can implement it
+class B extends a.A {
+      ^
 B.scala:4: error: method foo overrides nothing
   override def foo = "B"
                ^
-1 error
+2 errors
