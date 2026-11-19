@@ -1123,7 +1123,10 @@ abstract class Erasure extends InfoTransform
           log(s"${fn.symbol.fullLocationString} originates in refinement class - call will be implemented via reflection.")
           ApplyDynamic(qualifier, args) setSymbol fn.symbol setPos tree.pos
         } else if (fn.symbol.isMethodWithExtension && !fn.symbol.tpe.isErroneous) {
-          Apply(gen.mkAttributedRef(extensionMethods.extensionMethod(fn.symbol)), qualifier :: args)
+          extensionMethods.extensionMethod(fn.symbol) match {
+            case NoSymbol   => tree // an error was reported
+            case extension  => Apply(gen.mkAttributedRef(extension), qualifier :: args)
+          }
         } else {
           tree
         }

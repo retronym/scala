@@ -38,12 +38,14 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
     sym.companionModule
   }
 
-  /** Return the extension method that corresponds to given instance method `meth`. */
+  /** Return the extension method that corresponds to given instance method `meth`,
+   *  or `NoSymbol` if there is none because of an error that was already reported.
+   */
   def extensionMethod(imeth: Symbol): Symbol = enteringPhase(currentRun.refchecksPhase) {
     val companionInfo = companionModuleForce(imeth.owner).info
     val candidates = companionInfo.decl(imeth.name.extensionName).alternatives
     val matching = candidates filter (alt => normalize(alt.tpe, imeth.owner) matches imeth.tpe)
-    assert(matching.nonEmpty,
+    assert(matching.nonEmpty || reporter.hasErrors,
       sm"""|no extension method found for:
            |
            |  $imeth:${imeth.tpe}
@@ -55,7 +57,7 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
            | Candidates (signatures normalized):
            |
            | ${candidates.map(c => s"${c.name}:${normalize(c.tpe, imeth.owner)}").mkString("\n")}" """)
-    matching.head
+    matching.headOption.getOrElse(NoSymbol)
   }
 
   /** Recognize a MethodType which represents an extension method.
@@ -126,6 +128,12 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
           val origTpeParams = tparams.map(_.symbol) ::: origThis.typeParams   // method type params ++ class type params
           val origParams    = vparamss.flatten map (_.symbol)
           val companion     = origThis.companionModule
+
+          // The extension method is looked up in the companion by name and signature (see `extensionMethod`).
+          // A member declared in the source with the signature of `origMeth` would be found instead.
+          for (clash <- companion.info.decl(origMeth.name.extensionName).alternatives)
+            if (!extensionDefs(companion).exists(_.symbol == clash) && normalize(clash.tpe, origThis).matches(origMeth.tpe))
+              reporter.error(clash.pos, s"$clash clashes with the extension method generated for $origMeth in $origThis")
 
           val extensionMeth = origMeth.newExtensionMethodSymbol(companion, tree.pos.focus)
           val newInfo       = extensionMethInfo(currentOwner, extensionMeth, origMeth.info, origThis)
