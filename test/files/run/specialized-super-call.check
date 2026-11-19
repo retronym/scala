@@ -1,0 +1,10 @@
+class: 2
+class, generic call site: 2
+two levels: 12
+other method: 1
+trait: 2
+anonymous: 2
+two type params: 3
+specialized method: 2
+specialized method, reference arg: 2
+generic subclass, String: s
