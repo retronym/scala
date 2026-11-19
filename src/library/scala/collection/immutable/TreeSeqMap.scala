@@ -15,7 +15,6 @@ package collection
 package immutable
 
 import scala.annotation.tailrec
-import scala.annotation.unchecked.uncheckedVariance
 
 /** This class implements an immutable map that preserves order using
   * a hash map for the key to value mapping to provide efficient lookup,
@@ -61,13 +60,6 @@ final class TreeSeqMap[K, +V] private (
   override protected[this] def className: String = "TreeSeqMap"
 
   override def mapFactory: MapFactory[TreeSeqMap] = TreeSeqMap
-
-  // The defaults in MapFactoryDefaults build through `mapFactory`, which always orders by insertion.
-  override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): TreeSeqMap[K, V] = coll match {
-    case m: TreeSeqMap[K, V] => m.orderingBy(orderedBy)
-    case _ => newBuilder[K, V](orderedBy).addAll(coll).result()
-  }
-  override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), TreeSeqMap[K, V]] = newBuilder[K, V](orderedBy)
 
   override val size = mapping.size
 
