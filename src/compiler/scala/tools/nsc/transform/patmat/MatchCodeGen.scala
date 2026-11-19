@@ -83,7 +83,10 @@ trait MatchCodeGen extends Interface {
 
       def mkZero(tp: Type): Tree = gen.mkConstantZero(tp) match {
         case Constant(null) => gen.mkAsInstanceOf(Literal(Constant(null)), tp, any = true, wrapInApply = false) // the magic incantation is true/false here
-        case const          => Literal(const)
+        case const          =>
+          // a singleton type of a primitive value, e.g. `one.type` for `val one: 1 = 1`, is not inhabited by the zero
+          if (const.tpe <:< tp) Literal(const)
+          else gen.mkAsInstanceOf(Literal(const), tp, any = true, wrapInApply = false)
       }
     }
   }
