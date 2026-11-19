@@ -219,7 +219,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       val sym = tree.symbol
 
       def mayNeedProtectedAccessor(sel: Select, args: List[Tree], goToSuper: Boolean) =
-        if (needsProtectedAccessor(sym, tree.pos)) {
+        if (needsProtectedAccessor(sym, sel.qualifier, tree.pos)) {
           debuglog("Adding protected accessor for " + tree)
 
           transform(makeAccessor(sel, args))
@@ -347,7 +347,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
                     && sym.owner.enclosingPackageClass != currentClass.enclosingPackageClass
                     && qual.symbol.info.member(sym.name).exists
                     && !(currentClass.typeOfThis.typeSymbol.isSubClass(sym.owner)) // scala/bug#11924
-                    && !needsProtectedAccessor(sym, tree.pos)
+                    && !needsProtectedAccessor(sym, qual, tree.pos)
                   )
                   if (shouldEnsureAccessor) {
                     log("Ensuring accessor for call to protected " + sym.fullLocationString + " from " + currentClass)
@@ -382,7 +382,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
           def transformAssign = {
             if (lhs.symbol.isVariable &&
                 lhs.symbol.isJavaDefined &&
-                needsProtectedAccessor(lhs.symbol, tree.pos)) {
+                needsProtectedAccessor(lhs.symbol, qual, tree.pos)) {
               debuglog("Adding protected setter for " + tree)
               val setter = makeSetter(lhs)
               debuglog("Replaced " + tree + " with " + setter)
@@ -448,7 +448,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
     private def makeAccessor(tree: Select, targs: List[Tree]): Tree = {
       val Select(qual, _) = tree
       val sym = tree.symbol
-      val clazz = hostForAccessorOf(sym, currentClass)
+      val clazz = hostForAccessorOf(sym, qual, currentClass)
 
       assert(clazz != NoSymbol, sym)
       debuglog("Decided for host class: " + clazz)
@@ -528,7 +528,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
      */
     private def makeSetter(tree: Select): Tree = {
       val field = tree.symbol
-      val clazz = hostForAccessorOf(field, currentClass)
+      val clazz = hostForAccessorOf(field, tree.qualifier, currentClass)
       assert(clazz != NoSymbol, field)
       debuglog("Decided for host class: " + clazz)
 
@@ -561,10 +561,12 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
      * inherit anything. Since we can't (yet) add accessors for 'required'
      * classes, this has to be signaled as error.
      */
-    private def needsProtectedAccessor(sym: Symbol, pos: Position): Boolean = {
+    private def needsProtectedAccessor(sym: Symbol, qual: Tree, pos: Position): Boolean = {
       val clazz = currentClass
+      // JVMS 5.4.4: besides `clazz` being a subclass of the owner, the receiver of an instance
+      // member must be an instance of `clazz`. `Outer.this.m` in a nested subclass is not.
       def accessibleThroughSubclassing =
-        validCurrentOwner && clazz.thisSym.isSubClass(sym.owner) && !clazz.isTrait
+        validCurrentOwner && clazz.thisSym.isSubClass(sym.owner) && !clazz.isTrait && qualifierConformsTo(qual, clazz)
 
       val isCandidate = (
            sym.isProtected
@@ -575,7 +577,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         && (sym.enclosingPackageClass == sym.accessBoundary(sym.enclosingPackageClass))
       )
       isCandidate && {
-        val host = hostForAccessorOf(sym, clazz)
+        val host = hostForAccessorOf(sym, qual, clazz)
         def isSelfType = !(host.tpe <:< host.typeOfThis) && {
           if (host.typeOfThis.typeSymbol.isJavaDefined)
             restrictionError(pos, unit,
@@ -596,19 +598,23 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
 
     /** Return the innermost enclosing class C of referencingClass for which either
      *  of the following holds:
-     *     - C is a subclass of sym.owner or
+     *     - C is a subclass of sym.owner and the receiver `qual` is an instance of C, or
      *     - C is declared in the same package as sym's owner
      */
-    private def hostForAccessorOf(sym: Symbol, referencingClass: Symbol): Symbol = {
-      if (referencingClass.isSubClass(sym.owner.enclClass)
-          || referencingClass.thisSym.isSubClass(sym.owner.enclClass)
+    private def hostForAccessorOf(sym: Symbol, qual: Tree, referencingClass: Symbol): Symbol = {
+      if ((referencingClass.isSubClass(sym.owner.enclClass) || referencingClass.thisSym.isSubClass(sym.owner.enclClass))
+            && qualifierConformsTo(qual, referencingClass)
           || referencingClass.enclosingPackageClass == sym.owner.enclosingPackageClass) {
         assert(referencingClass.isClass, referencingClass)
         referencingClass
       } else if(referencingClass.owner.enclClass != NoSymbol)
-        hostForAccessorOf(sym, referencingClass.owner.enclClass)
+        hostForAccessorOf(sym, qual, referencingClass.owner.enclClass)
       else referencingClass
     }
+
+    /** Is the receiver `qual` of a selection of a protected member statically an instance of `clazz`? */
+    private def qualifierConformsTo(qual: Tree, clazz: Symbol): Boolean =
+      qual.symbol == clazz || qual.tpe.typeSymbol.isSubClass(clazz)
 
     /** For a path-dependent type, return the this type. */
     private def thisTypeOfPath(path: Type): Symbol = path match {
