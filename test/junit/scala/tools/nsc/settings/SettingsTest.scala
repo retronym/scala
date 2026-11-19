@@ -160,6 +160,23 @@ class SettingsTest {
     assertThrows[IllegalArgumentException](check("-m:a,ac,-uber,uber")(_ => true), _ contains "'uber' cannot be negated")
   }
 
+  @Test def `malformed values are reported, not thrown`(): Unit = {
+    def errorsFor(args: String*): List[String] = {
+      val errors = List.newBuilder[String]
+      val s = new MutableSettings(errors += _)
+      s.processArguments(args.toList, processAll = true)
+      errors.result()
+    }
+    assertEquals(List("'l:bogus' is not a valid choice for '-opt'"), errorsFor("-opt:l:bogus"))
+    assertEquals(Nil, errorsFor("-opt:l:method"))
+    assertEquals("invalid setting for -Ypatmat-exhaust-depth must be greater than or equal to 10", errorsFor("-Ypatmat-exhaust-depth", "banana").head)
+    assertEquals(Nil, errorsFor("-Ypatmat-exhaust-depth", "off"))
+    assertEquals(Nil, errorsFor("-Ypatmat-exhaust-depth", "40"))
+    assertEquals(List("illegal argument for -system: /nonexistent (lib/jrt-fs.jar not found)"), errorsFor("-system", "/nonexistent"))
+    if (scala.util.Properties.isJavaAtLeast("9"))
+      assertEquals(Nil, errorsFor("-system", System.getProperty("java.home")))
+  }
+
   @Test def xSourceTest(): Unit = {
     def check(expected: String, args: String*): Unit = {
       val s = new MutableSettings(msg => throw new IllegalArgumentException(msg))
