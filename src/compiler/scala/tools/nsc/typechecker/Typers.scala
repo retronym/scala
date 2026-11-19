@@ -3273,7 +3273,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
       val funSym = FunctionClass(vparams.length)
       val funTp =
-        if (phase.erasedTypes) funSym.tpe
+        if (phase.erasedTypes)
+          fun.attachments.get[SAMFunction] match {
+            // Erasure gives a function that targets a SAM the erased SAM type. Keep it when the function is typed
+            // again (-Ycheck): after erasure, nothing converts a FunctionN to the SAM type.
+            case Some(SAMFunction(samTp, _, _)) => erasure.specialScalaErasure(samTp)
+            case _                              => funSym.tpe
+          }
         else {
           val resTp =
             packedType(bodyTyped, fun.symbol).resultType.deconst match {
