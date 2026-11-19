@@ -409,8 +409,14 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         val treeInfo = infoOf(tree)
         val treeTpe  = typeOf(tree)
 
+        // The parameter of the pattern matcher's `matchEnd` label has no owner (`MatchCodeGen`): it is in
+        // the scope of the innermost enclosing definition. (When uncurry moves the label into a function,
+        // nothing would move an owned parameter with it.)
+        val scopeSym =
+          if (treeSym.isValueParameter && treeSym.owner == NoSymbol) enclosingMemberDefs.headOption.fold(treeSym)(_.symbol)
+          else treeSym
         // Is `tree` within the owner of `sym`, skipping (higher-order) type parameters and skolems?
-        def isOk(sym: Symbol) = treeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)
+        def isOk(sym: Symbol) = scopeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)
         def isEligible(sym: Symbol) = (sym ne NoSymbol) && (
              sym.isTypeParameter
           || sym.isLocalToBlock
@@ -454,9 +460,16 @@ abstract class TreeCheckers extends AbstractAnalyzer {
 
       private def checkReturnReferencesDirectlyEnclosingDef(tree: Tree): Unit = tree match {
         case _: Return =>
+          // Until uncurry, a non-local return may be nested in the method of a synthetic class,
+          // such as the `applyOrElse` of a partial function literal.
+          def isNonLocal = phase.id <= currentRun.uncurryPhase.id && path.exists {
+            case dd: DefDef => dd.symbol == tree.symbol
+            case _          => false
+          }
           path collectFirst { case dd: DefDef => dd } match {
             case None                                 => errorFn(s"Return node ($tree) must be enclosed in a DefDef")
-            case Some(dd) if tree.symbol != dd.symbol => errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
+            case Some(dd) if tree.symbol != dd.symbol && !isNonLocal =>
+              errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
             case _                                    =>
           }
         case _ =>
