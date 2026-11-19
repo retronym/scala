@@ -1,0 +1,191 @@
+T_try_catch: try {
+  1
+} catch {
+  case (_: Exception) => 2
+}
+T_try_finally: try {
+  1
+} finally scala.Predef.println()
+T_try_catch_finally: try {
+  1
+} catch {
+  case (e @ (_: IllegalStateException)) => 2
+  case (_: Exception) => 3
+} finally scala.Predef.println()
+T_super: T_super.super.m
+T_this: this
+T_local_class: {
+  class L extends scala.AnyRef {
+    <paramaccessor> private[this] val x: Int = _;
+    <stable> <accessor> <paramaccessor> def x: Int = L.this.x;
+    def <init>(x: Int): L = {
+      L.super.<init>();
+      ()
+    };
+    def y: Int = L.this.x
+  };
+  new L(1).y
+}
+T_local_class_var: {
+  class L extends scala.AnyRef {
+    def <init>(): L = {
+      L.super.<init>();
+      ()
+    };
+    private[this] var z: Int = _;
+    def y: Int = L.this.z
+  };
+  new L().y
+}
+T_self_name: {
+  class L extends scala.AnyRef { self: L => 
+    def <init>(): L = {
+      L.super.<init>();
+      ()
+    };
+    def y: Int = L.this.hashCode()
+  };
+  new L().y
+}
+T_self_type: {
+  abstract trait S extends scala.AnyRef;
+  class L extends scala.AnyRef { self: L with S => 
+    def <init>(): L = {
+      L.super.<init>();
+      ()
+    };
+    def y: Int = 1
+  };
+  {
+  final class $anon extends L with S {
+    def <init>(): <$anon: L with S> = {
+      $anon.super.<init>();
+      ()
+    }
+  };
+  new $anon()
+}.y
+}
+T_local_trait: {
+  abstract trait Tr extends scala.AnyRef {
+    <stable> <accessor> val v: Int
+  };
+  {
+  final class $anon extends AnyRef with Tr {
+    def <init>(): <$anon: Tr> = {
+      $anon.super.<init>();
+      ()
+    };
+    private[this] val v: Int = 1;
+    <stable> <accessor> def v: Int = $anon.this.v
+  };
+  new $anon()
+}.v
+}
+T_local_object: {
+  object O extends scala.AnyRef {
+    def <init>(): O.type = {
+      O.super.<init>();
+      ()
+    };
+    def x: Int = 1
+  };
+  O.x
+}
+T_anon_class: {
+  final class $anon extends java.lang.Object {
+    def <init>(): <$anon: Object> = {
+      $anon.super.<init>();
+      ()
+    };
+    override def toString: String = "anon"
+  };
+  new $anon()
+}
+T_collect: scala.`package`.Seq.apply[Int](1, 2).collect[Int](({
+  @SerialVersionUID(value = 0) final <synthetic> class $anonfun extends scala.runtime.AbstractPartialFunction[Int,Int] with java.io.Serializable {
+    def <init>(): <$anon: Int => Int> = {
+      $anonfun.super.<init>();
+      ()
+    };
+    final override def applyOrElse[A1 <: Int, B1 >: Int](x1: A1, default: A1 => B1): B1 = ((x1.asInstanceOf[Int]: Int): Int) match {
+      case (x @ _) if x.>(1) => x
+      case (defaultCase$ @ _) => default.apply(x1)
+    };
+    final def isDefinedAt(x1: Int): Boolean = ((x1.asInstanceOf[Int]: Int): Int) match {
+      case (x @ _) if x.>(1) => true
+      case (defaultCase$ @ _) => false
+    }
+  };
+  new $anonfun()
+}: PartialFunction[Int,Int]))
+T_if: if (java.lang.System.nanoTime().>(0))
+  1
+else
+  2
+T_block: {
+  val x: Int = 1;
+  x.+(1)
+}
+T_function: ((x: Int) => x.+(1))
+T_match: (1: Any) match {
+  case (1| 2) => "a"
+  case (s @ (_: String)) if s.length().>(0) => s
+  case _ => "c"
+}
+T_unapply: 1 match {
+  case Ex.unapply(<unapply-selector>) <unapply> ((y @ _)) => y
+}
+T_unapply_seq: scala.`package`.List.apply[Int](1) match {
+  case scala.`package`.List.unapplySeq[Int](<unapply-selector>) <unapply> ((a @ _), (_)*) => a
+  case _ => 0
+}
+T_throw: throw new scala.`package`.RuntimeException("x")
+T_new: new scala.`package`.StringBuilder("x")
+T_vararg: scala.`package`.List.apply[Int]((scala.`package`.Seq.apply[Int](1, 2): _*))
+T_assign: {
+  var v: Int = 1;
+  v = 2;
+  v
+}
+T_typed: (1: Any)
+T_annotated: (1: Int(1))
+T_local_def: {
+  def id[T](t: T): T = t;
+  id[Int](1)
+}
+T_local_type: {
+  type T = Int;
+  (1: T)
+}
+T_dynamic: new Dyn().selectDynamic("foo")
+T_while: {
+  var i: Int = 0;
+  while$1(){
+    if (i.<(2))
+      {
+        i = i.+(1);
+        while$1()
+      }
+    else
+      ()
+  };
+  i
+}
+T_return: {
+  def g(): Int = return 1;
+  g()
+}
+T_existential: (null: java.util.List[_])
+T_forSome: (null: java.util.List[_ <: AnyRef])
+T_refinement: (null: AnyRef{def foo: Int})
+T_refinement_val: (null: AnyRef{val foo: Int})
+T_applied_type: (null: List[Int])
+T_type_projection: (null: Outer#Inner)
+T_singleton_type: {
+  val x: String = "a";
+  (x: x.type)
+}
+T_interpolation: "a".+(1).+("b")
+T_literals: scala.`package`.List.apply[Any]((), true, 1.toByte, 1.toShort, 'c', 1, 1L, 1.5, 2.5, "s", null, classOf[java.lang.String])
+T_literal_top: classOf[java.lang.String]

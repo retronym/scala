@@ -546,6 +546,29 @@ abstract class UnPickler {
         case t          => errorBadSignature("RefTree expected, found " + t.shortClass)
       }
       def selectorsRef() = all(ImportSelector(nameRef(), -1, nameRef(), -1))
+      def caseDef(t: Tree): CaseDef = t match {
+        case t: CaseDef => t
+        case t          => errorBadSignature("expected a case def (" + t + ")")
+      }
+
+      // The pickler writes the trees of a `Try` in traversal order, without a count of the catches.
+      def readTry(): Try = all(ref()) match {
+        case block :: (catches :+ finalizer) => Try(block, catches.map(caseDef), finalizer)
+        case ts                              => errorBadSignature("expected the block and finalizer of a Try (" + ts + ")")
+      }
+
+      // The pickler writes the trees of a `Template` in traversal order: the parents without a count, then the
+      // self ValDef unless it is `noSelfType`, then the body. The body of a typed template starts with a definition
+      // (a constructor, field, or member declaration) or an import, which ends the parents. The self ValDef is told
+      // apart from a field by its symbol, the synthetic `thisSym` of the class, and its empty right-hand side.
+      def readTemplate(): Template = {
+        def isParent(t: Tree) = !(t.isInstanceOf[DefTree] || t.isInstanceOf[Import] || t.isEmpty)
+        val (parents, rest) = all(ref()).span(isParent)
+        rest match {
+          case (self: ValDef) :: body if self.rhs.isEmpty && self.symbol.isSynthetic => Template(parents, self, body)
+          case body                                                                  => Template(parents, noSelfType, body)
+        }
+      }
 
       // For ASTs we pickle the `tpe` and the `symbol`. References to symbols (`EXTref`) are pickled as owner + name,
       // which means overloaded symbols cannot be resolved.
@@ -595,10 +618,10 @@ abstract class UnPickler {
         case SINGLETONTYPEtree   => SingletonTypeTree(ref())
         case STARtree            => Star(ref())
         case SUPERtree           => Super(ref(), typeNameRef())
-        case TEMPLATEtree        => Template(rep(ref()), vparamRef(), all(ref()))
+        case TEMPLATEtree        => readTemplate()
         case THIStree            => This(typeNameRef())
         case THROWtree           => Throw(ref())
-        case TREtree             => Try(ref(), rep(caseRef()), ref())
+        case TREtree             => readTry()
         case TYPEBOUNDStree      => TypeBoundsTree(ref(), ref())
         case TYPEDEFtree         => TypeDef(modsRef(), typeNameRef(), rep(tparamRef()), ref())
         case TYPEtree            => TypeTree()
