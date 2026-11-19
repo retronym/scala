@@ -15,6 +15,7 @@ package collection
 package immutable
 
 import scala.annotation.tailrec
+import scala.annotation.unchecked.uncheckedVariance
 
 /** This class implements an immutable map that preserves order using
   * a hash map for the key to value mapping to provide efficient lookup,
@@ -59,6 +60,13 @@ final class TreeSeqMap[K, +V] private (
   override protected[this] def className: String = "TreeSeqMap"
 
   override def mapFactory: MapFactory[TreeSeqMap] = TreeSeqMap
+
+  // The defaults in MapFactoryDefaults build through `mapFactory`, which always orders by insertion.
+  override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): TreeSeqMap[K, V] = coll match {
+    case m: TreeSeqMap[K, V] => m.orderingBy(orderedBy)
+    case _ => newBuilder[K, V](orderedBy).addAll(coll).result()
+  }
+  override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), TreeSeqMap[K, V]] = newBuilder[K, V](orderedBy)
 
   override val size = mapping.size
 
@@ -170,11 +178,13 @@ final class TreeSeqMap[K, +V] private (
   override def lastOption: Option[(K, V)] = ordering.lastOption.map(binding)
 
   override def tail: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.tail")
     val (head, tail) = ordering.headTail
     new TreeSeqMap(tail, mapping.removed(head), ordinal, orderedBy)
   }
 
   override def init: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.init")
     val (init, last) = ordering.initLast
     new TreeSeqMap(init, mapping.removed(last), ordinal, orderedBy)
   }
@@ -519,7 +529,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
     }
 
     final def headTail: (T, Ordering[T]) = this match {
-      case Zero => throw new NoSuchElementException("init of empty map")
+      case Zero => throw new NoSuchElementException("tail of empty map")
       case Tip(_, v) => (v, Zero)
       case Bin(p, m, l, r) =>
         val (head, tail) = l.headTail
