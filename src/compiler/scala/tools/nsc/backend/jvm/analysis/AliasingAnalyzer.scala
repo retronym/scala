@@ -167,8 +167,8 @@ class AliasingFrame[V <: Value](nLocals: Int, nStack: Int) extends Frame[V](nLoc
           newAlias(assignee = top,     source = top - 2)
           newAlias(assignee = top - 1, source = top - 3)
           newAlias(assignee = top - 2, source = top - 4)
-          newAlias(assignee = top - 4, source = top)
-          newAlias(assignee = top - 5, source = top - 1)
+          newAlias(assignee = top - 3, source = top)
+          newAlias(assignee = top - 4, source = top - 1)
         }
 
       case DUP2_X2 =>
