@@ -83,7 +83,7 @@ that value.
 ### Pattern Binders
 
 ```ebnf
-  Pattern2        ::=  varid ‘@’ Pattern3
+  Pattern2        ::=  id ‘@’ Pattern3
 ```
 
 A _pattern binder_ `´x´@´p´` consists of a pattern variable ´x´ and a
@@ -91,6 +91,8 @@ pattern ´p´. The type of the variable ´x´ is the static type ´T´ implied
 by the pattern ´p´.
 This pattern matches any value ´v´ matched by the pattern ´p´,
 and it binds the variable name to that value.
+The identifier ´x´ always introduces a new variable, even if it does not
+start with a lower case letter or is enclosed in backquotes.
 
 A pattern ´p´ _implies_ a type ´T´ if the pattern matches only values of the type ´T´.
 
@@ -338,7 +340,7 @@ object Extractor {
 ### Pattern Sequences
 
 ```ebnf
-SimplePattern ::= StableId ‘(’ [Patterns ‘,’] [varid ‘@’] ‘_’ ‘*’ ‘)’
+SimplePattern ::= StableId ‘(’ [Patterns ‘,’] [id ‘@’] ‘_’ ‘*’ ‘)’
 ```
 
 A _pattern sequence_ ´p_1 , \ldots , p_n´ appears in two contexts.

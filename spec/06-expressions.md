@@ -1329,7 +1329,8 @@ evaluating ´e´ and discarding the result of the evaluation.
 
 Block statements may be definitions which bind local names in the
 block. The only modifier allowed in all block-local definitions is
-`implicit`. When prefixing a class or object definition,
+`implicit`. A block-local value definition may also be prefixed by
+`lazy`. When prefixing a class or object definition,
 modifiers `abstract`, `final`, and `sealed` are also
 permitted.
 
