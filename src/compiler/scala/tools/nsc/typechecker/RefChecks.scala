@@ -289,7 +289,13 @@ abstract class RefChecks extends Transform {
 
           val newFlags = (member.flags | VBRIDGE | ARTIFACT) & ~(PRIVATE | OVERRIDE | ABSOVERRIDE)
           val bridge   = member.cloneSymbolImpl(clazz, newFlags) setPos clazz.pos
-          bridge.setInfo(javaErased.cloneInfo(bridge))
+          // An erased type refers to a generic class without type arguments (`Array[Comparable]` for a parameter
+          // bounded by `Comparable<T>`), which is not a type that a tree can have. Apply such classes to wildcards.
+          val applied = javaErased.map {
+            case tp @ TypeRef(pre, sym, Nil) if tp.isHigherKinded => classExistentialType(pre, sym)
+            case tp => tp
+          }
+          bridge.setInfo(applied.cloneInfo(bridge))
           clazz.info.decls enter bridge
 
           val memberTpe = self.memberType(member)
@@ -298,7 +304,13 @@ abstract class RefChecks extends Transform {
           val params  = bridge.paramss.head
           val args    = map2(params.init, memberTpe.params.init)((p, mp) => castTo(mp.tpe)(Ident(p), p.tpe))
           val elemtp  = memberTpe.params.last.tpe.typeArgs.head
-          val wrapped = gen.mkWrapVarargsArray(Ident(params.last), params.last.tpe.typeArgs.head)
+          val array   = Ident(params.last)
+          val arrElem = params.last.tpe.typeArgs.head
+          // `wrapRefArray[T <: AnyRef]` can't be applied to a class that is a universal trait in Scala (`Comparable`,
+          // `Serializable`). The array is one of references all the same.
+          val wrapped =
+            if (isPrimitiveValueType(arrElem) || arrElem <:< AnyRefTpe) gen.mkWrapVarargsArray(array, arrElem)
+            else gen.mkWrapVarargsArray(gen.mkAsInstanceOf(array, arrayType(AnyRefTpe), wrapInApply = false), AnyRefTpe)
           val lastarg = gen.wildcardStar(gen.mkAsInstanceOf(wrapped, existentialAbstraction(memberTpe.typeParams, seqType(elemtp)), wrapInApply = false))
           val call    = localTyper typed Apply(Select(This(clazz), member), args :+ lastarg)
           val body    = castTo(bridge.tpe.resultType)(call, call.tpe)

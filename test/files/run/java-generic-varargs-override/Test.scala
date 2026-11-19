@@ -13,6 +13,13 @@ class SG3 extends SG2 { override def g(xs: String*): String = "SG3.g" + xs.mkStr
 class SGI extends JV[Int] { override def g(xs: Int*): String = "SGI.g" + xs.sum }
 // bounded type parameter, erases to CharSequence[]
 class SB extends JB[String] { override def g(xs: String*): String = "SB.g" + xs.mkString }
+// bounded by a generic class, erases to the raw Supplier[]
+class Sup(s: String) extends java.util.function.Supplier[String] { def get = s }
+class SC extends JC[Sup] {
+  override def g(xs: Sup*): String = "SC.g" + xs.map(_.get).mkString
+  override def r(xs: Sup*): Sup = new Sup("SC.r" + xs.map(_.get).mkString)
+  override def h(a: Sup, xs: Sup*): String = "SC.h" + a.get + xs.map(_.get).mkString
+}
 // method-level type parameter next to a class-level one
 class SW extends JW[String] { override def k[U](t: String, us: U*): String = "SW.k" + t + us.mkString }
 // implementing an abstract method
@@ -47,6 +54,11 @@ object Test {
     t("SB g from Java")(new SB().callG1("q"))
     t("SB g from Java, non-generic call")(new SB().callGS("q"))
     t("SB g Java caller")(JavaCaller.sb(new SB))
+    t("SC g via JC")((new SC: JC[Sup]).g(new Sup("a"), new Sup("b")))
+    t("SC g from Java")(new SC().callG(new Sup("q")))
+    t("SC r via JC")((new SC: JC[Sup]).r(new Sup("a")).get)
+    t("SC r from Java")(new SC().callR(new Sup("q")).asInstanceOf[Sup].get)
+    t("SC h from Java")(new SC().callH(new Sup("q")))
     t("SW k via JW")((new SW: JW[String]).k[Int]("t", 1, 2))
     t("SW k from Java")(new SW().callK("q"))
     t("SA a via JA")((new SA: JA[String]).a("x"))
