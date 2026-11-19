@@ -537,8 +537,14 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
         val units = currentRun.units
         while (units.hasNext)
           applyPhase(units.next())
+        meanwhile()
       }
     }
+
+    /** Work of the phase that is independent of the order of its units: after them in a serial run, on the calling
+     *  thread while the workers run them on the parallel typer's pool. */
+    protected def meanwhile(): Unit = ()
+    private[nsc] final def runMeanwhile(): Unit = meanwhile()
 
     def apply(unit: CompilationUnit): Unit
 
@@ -1530,14 +1536,15 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
           case null => units.toList
           case seed => new scala.util.Random(seed.toLong + ph.id).shuffle(units.toList)
         }
-        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true, largestFirst = System.getProperty("scalac.parallelTyper.lateOrderSeed") == null)(ph.applyPhase(_))
+        analyzer.parallelPhase(ph, us, ph.name, unitOrder = true, largestFirst = System.getProperty("scalac.parallelTyper.lateOrderSeed") == null,
+          meanwhile = _ => ph.runMeanwhile())(ph.applyPhase(_))
         if (System.getProperty("scalac.parallelTyper.log") != null)
           Console.err.println(f"[parallel-typer] ${ph.name} on the pool in ${(System.nanoTime() - t0) / 1e6}%.1f ms")
         if (ph.name == "jvm" && System.getProperty("scalac.parallelTyper.lockSites") != null)
           Console.err.println(s"[parallel-typer] coarse claim by site, since the typer: ${completionLock.siteSummary}")
         true
       }
-      else if (postTyperPhases(ph.name)) { analyzer.parallelPhase(ph, units.toList, ph.name)(ph.applyPhase(_)); true }
+      else if (postTyperPhases(ph.name)) { analyzer.parallelPhase(ph, units.toList, ph.name, meanwhile = _ => ph.runMeanwhile())(ph.applyPhase(_)); true }
       else false
 
     def advanceUnit(): Unit = synchronized {

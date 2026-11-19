@@ -196,12 +196,15 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
   override def newPhase(prev: scala.tools.nsc.Phase): StdPhase = new SpecializationPhase(prev)
   class SpecializationPhase(prev: scala.tools.nsc.Phase) extends InfoPhase(prev) {
     override def checkable = false
-    override def run(): Unit = {
-      super.run()
+    // The specialized classes of the function and tuple classes, which a unit may also ask for.
+    override protected def meanwhile(): Unit =
       exitingSpecialize {
         FunctionClass.seq.take(MaxFunctionAritySpecialized + 1).foreach(_.info)
         TupleClass.seq.take(MaxTupleAritySpecialized).foreach(_.info)
       }
+
+    override def run(): Unit = {
+      super.run()
 
       // Remove the final modifier and @inline annotation from anything in the
       // original class (since it's being overridden in at least one subclass).
