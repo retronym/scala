@@ -170,11 +170,13 @@ final class TreeSeqMap[K, +V] private (
   override def lastOption: Option[(K, V)] = ordering.lastOption.map(binding)
 
   override def tail: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.tail")
     val (head, tail) = ordering.headTail
     new TreeSeqMap(tail, mapping.removed(head), ordinal, orderedBy)
   }
 
   override def init: TreeSeqMap[K, V] = {
+    if (isEmpty) throw new UnsupportedOperationException("empty.init")
     val (init, last) = ordering.initLast
     new TreeSeqMap(init, mapping.removed(last), ordinal, orderedBy)
   }
@@ -519,7 +521,7 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
     }
 
     final def headTail: (T, Ordering[T]) = this match {
-      case Zero => throw new NoSuchElementException("init of empty map")
+      case Zero => throw new NoSuchElementException("tail of empty map")
       case Tip(_, v) => (v, Zero)
       case Bin(p, m, l, r) =>
         val (head, tail) = l.headTail
