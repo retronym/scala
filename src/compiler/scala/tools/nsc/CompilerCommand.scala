@@ -122,11 +122,34 @@ class CompilerCommand(arguments: List[String], val settings: Settings) {
     else allSettings.valuesIterator.filter(_.isHelping).map(_.help).mkString("\n\n")
   }
 
-  /** Expands all arguments starting with @ to the contents of the file named like each argument. */
+  /** Expands all arguments starting with @ to the contents of the file named like each argument.
+   *
+   *  Each line is split into arguments at whitespace, where an argument may be quoted with `"` or `'`.
+   *  As in an argument file of `javac`, a `#` at the start of an argument begins a comment that extends
+   *  to the end of the line. Elsewhere, a `#` is part of the argument: `-Wconf:msg=C#:e`, `out#dir`, `"a # b"`.
+   */
   def expandArg(arg: String): List[String] = {
     import java.nio.file.{Files, Paths}
     import scala.jdk.CollectionConverters._
-    def stripComment(s: String) = s.takeWhile(_ != '#').trim()
+    // tracks quotes and escapes the way `splitParams` does
+    def stripComment(s: String) = {
+      var i = 0
+      var end = -1
+      var quote = 0
+      var escaped = false
+      var atStart = true  // of an argument
+      while (end < 0 && i < s.length) {
+        val c = s.charAt(i)
+        if (escaped) escaped = false
+        else if (c == '\\') { escaped = true; atStart = false }
+        else if (quote != 0) { if (c == quote) quote = 0 }
+        else if (c == '"' || c == '\'') { quote = c; atStart = false }
+        else if (c == '#' && atStart) end = i
+        else atStart = Character.isWhitespace(c)
+        i += 1
+      }
+      (if (end < 0) s else s.substring(0, end)).trim()
+    }
     val file = Paths.get(arg.stripPrefix("@"))
     if (!Files.exists(file))
       throw new java.io.FileNotFoundException(s"argument file $file could not be found")

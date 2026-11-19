@@ -186,7 +186,8 @@ object scalac extends Command {
           "Print product version and exit."),
         Definition(
           Mono(Bold("@") & Argument("file")),
-          "A text file containing compiler arguments (options and source files)")
+          "A text file containing compiler arguments (options and source files). " &
+          "An argument can be quoted, " & Mono("#") & " at the start of an argument begins a comment.")
 
         // TODO - Add macros and such here.
       )
