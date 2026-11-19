@@ -147,6 +147,66 @@ class TreeSeqMapTest {
       assertEquals(s"$i", o3, o5)
     }
   }
+  // A builder whose next ordinal is `ord`, as it would be after that many additions.
+  private def builderAt(ord: Int, orderBy: TreeSeqMap.OrderBy): mutable.Builder[(Int, String), TreeSeqMap[Int, String]] = {
+    val b = TreeSeqMap.newBuilder[Int, String](orderBy)
+    val f = b.getClass.getDeclaredFields.find(_.getName.endsWith("ord")).get
+    f.setAccessible(true)
+    f.setInt(b, ord)
+    b
+  }
+
+  @Test
+  def ordinalWraparoundInBuilder(): Unit = {
+    import TreeSeqMap.OrderBy.{Insertion, Modification}
+    // ordinals are ordered as unsigned, Int.MinValue follows Int.MaxValue
+    for (start <- List(Int.MaxValue - 1, Int.MaxValue, -3, -2, -1)) {
+      val b = builderAt(start, Modification)
+      b ++= List(1 -> "a", 2 -> "b", 1 -> "c", 2 -> "d", 3 -> "e")
+      val m = b.result()
+      assertEquals(s"from $start", List(1 -> "c", 2 -> "d", 3 -> "e"), m.toList)
+      assertEquals(s"from $start", List(2 -> "d", 3 -> "e", 1 -> "f", 4 -> "g"), m.updated(1, "f").updated(4, "g").toList)
+      b += (1 -> "h")
+      assertEquals(s"from $start", List(2 -> "d", 3 -> "e", 1 -> "h"), b.result().toList)
+
+      val b2 = builderAt(start, Insertion)
+      b2 ++= List(1 -> "a", 2 -> "b", 1 -> "c", 3 -> "d", 4 -> "e")
+      assertEquals(s"from $start", List(1 -> "c", 2 -> "b", 3 -> "d", 4 -> "e"), b2.result().toList)
+      assertEquals(s"from $start", List(1 -> "f", 2 -> "b", 3 -> "d", 4 -> "e", 5 -> "g"), b2.result().updated(1, "f").updated(5, "g").toList)
+    }
+  }
+
+  @Test
+  def ordinalWraparound(): Unit = {
+    import TreeSeqMap.OrderBy.Modification
+    for (orderBy <- List(TreeSeqMap.OrderBy.Insertion, Modification); start <- List(Int.MaxValue - 2, -5, -4, -3)) {
+      def msg = s"$orderBy from $start"
+      def move(kvs: List[(Int, String)], k: Int, v: String) =
+        if (orderBy == Modification) kvs.filter(_._1 != k) :+ (k -> v) else kvs.map(kv => if (kv._1 == k) (k, v) else kv)
+      val m0 = builderAt(start, orderBy).addAll(List(1 -> "a", 2 -> "b")).result()
+      val l3 = List(1 -> "a", 2 -> "b", 3 -> "c")
+      val m3 = m0.updated(3, "c")
+      assertEquals(msg, l3, m3.toList)
+
+      assertEquals(msg, l3 ::: List(4 -> "d", 5 -> "e"), (m3 ++ List(4 -> "d", 5 -> "e")).toList)
+      assertEquals(msg, move(l3, 1, "A") :+ (4 -> "d"), (m3 ++ List(1 -> "A", 4 -> "d")).toList)
+      assertEquals(msg, List(2 -> "b", 3 -> "c", 1 -> "a"), m3.refresh(1).toList)
+
+      val l6 = move(move(l3, 2, "B"), 1, "A") ::: List(4 -> "d", 5 -> "e", 6 -> "f")
+      val m6 = m0 ++ List(3 -> "c", 2 -> "B", 1 -> "A", 4 -> "d", 5 -> "e", 6 -> "f")
+      assertEquals(msg, l6, m6.toList)
+      assertEquals(msg, 6, m6.size)
+      assertEquals(msg, move(l6, 3, "C") :+ (7 -> "g"), m6.updated(3, "C").updated(7, "g").toList)
+      assertEquals(msg, move(l6, 3, "C") :+ (7 -> "g"), (m6 ++ List(3 -> "C", 7 -> "g")).toList)
+      assertEquals(msg, l6.filter(_._1 != 4), m6.removed(4).toList)
+      for (i <- 0 to 7) {
+        assertEquals(msg, l6.splitAt(i), { val (a, b) = m6.splitAt(i); (a.toList, b.toList) })
+        assertEquals(msg, l6.slice(i, i + 2), m6.slice(i, i + 2).toList)
+        assertEquals(msg, l6.slice(i, i + 4), m6.slice(i, i + 4).toList)
+      }
+    }
+  }
+
   @Test
   def testEmpty(): Unit = {
     {
