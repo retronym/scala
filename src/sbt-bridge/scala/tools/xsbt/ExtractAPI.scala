@@ -363,8 +363,20 @@ class ExtractAPI[GlobalType <: Global](
           (tpe.typeArgs.head, ByName)
         else
           (tpe, Plain)
-      xsbti.api.MethodParameter.of(name, processType(in, t), hasDefault(paramSym), special)
+      xsbti.api.MethodParameter.of(name, withDefaultArg(processType(in, t), paramSym), hasDefault(paramSym), special)
     }
+
+    // A parameter with a default of a constructor of an annotation class has the tree of the default in a
+    // `@defaultArg` annotation. A use of the annotation that omits the argument gets a copy of that tree, which
+    // is pickled with the annotated definition, so the tree is part of the API of the annotation class. Parameters
+    // have no annotations in the API, so it is added as an annotation of the type of the parameter.
+    def withDefaultArg(tpe: xsbti.api.Type, paramSym: Symbol): xsbti.api.Type =
+      if (!hasDefault(paramSym)) tpe
+      else
+        paramSym.getAnnotation(definitions.DefaultArgAttr) match {
+          case Some(defaultArg) => xsbti.api.Annotated.of(tpe, mkAnnotations(in, defaultArg :: Nil))
+          case None             => tpe
+        }
     val t = viewer(in).memberInfo(s)
     build(t, Array(), Nil)
   }
