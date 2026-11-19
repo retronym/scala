@@ -220,8 +220,9 @@ trait Scanners extends ScannersCommon {
     final protected def putCommentChar(): Unit = { processCommentChar(); nextChar() }
 
     @tailrec private def skipLineComment(): Unit = ch match {
-      case SU | CR | LF =>
-      case _            => nextChar() ; skipLineComment()
+      case CR | LF       =>
+      case SU if isAtEnd =>
+      case _             => nextChar() ; skipLineComment()
     }
     private def maybeOpen(): Unit = {
       putCommentChar()
@@ -241,7 +242,7 @@ trait Scanners extends ScannersCommon {
     @tailrec final def skipNestedComments(): Unit = ch match {
       case '/' => maybeOpen() ; skipNestedComments()
       case '*' => if (!maybeClose()) skipNestedComments()
-      case SU  => incompleteInputError("unclosed comment")
+      case SU if isAtEnd => incompleteInputError("unclosed comment")
       case _   => putCommentChar() ; skipNestedComments()
     }
 
@@ -273,6 +274,10 @@ trait Scanners extends ScannersCommon {
     }
 
 
+    /** The input is exhausted. The reader then delivers SU, so `ch == SU && isAtEnd` tells the end of the input
+     *  from a U+001A character in the source, which is an error between tokens but is an ordinary character
+     *  in a comment or a literal.
+     */
     def isAtEnd = charOffset >= buf.length
 
     def resume(lastCode: Token) = {
@@ -764,7 +769,7 @@ trait Scanners extends ScannersCommon {
               nextChar()
               charLitOrSymbolAfter(() => getOperatorRest())
             }
-            else if (!isAtEnd && (ch != SU && ch != CR && ch != LF)) {
+            else if (!isAtEnd && (ch != CR && ch != LF)) {
               val isEmptyCharLit = (ch == '\'')
               getLitChar()
               if (ch == '\'') {
@@ -1002,7 +1007,7 @@ trait Scanners extends ScannersCommon {
           token = STRINGLIT
         } else
           getRawStringLit()
-      } else if (ch == SU) {
+      } else if (ch == SU && isAtEnd) {
         incompleteInputError("unclosed multi-line string literal")
       } else {
         putChar(ch)
@@ -1089,7 +1094,7 @@ trait Scanners extends ScannersCommon {
           getStringPart(multiLine, seenEscapedQuote)  // consume rest of interpolation, taking $ as literal
         }
       } else {
-        val isUnclosedLiteral = (ch == SU || (!multiLine && (ch == CR || ch == LF)))
+        val isUnclosedLiteral = ((ch == SU && isAtEnd) || (!multiLine && (ch == CR || ch == LF)))
         if (isUnclosedLiteral)
           if (multiLine)
             incompleteInputError("unclosed multi-line string literal")
@@ -1212,7 +1217,7 @@ trait Scanners extends ScannersCommon {
     }
 
     private def getLitChars(delimiter: Char) = {
-      while (ch != delimiter && !isAtEnd && (ch != SU && ch != CR && ch != LF))
+      while (ch != delimiter && !isAtEnd && (ch != CR && ch != LF))
         getLitChar()
     }
 
