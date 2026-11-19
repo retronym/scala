@@ -754,12 +754,18 @@ trait JavaParsers extends ast.parser.ParsersCommon with JavaScanners {
         in.nextToken()
         if (in.token == IDENTIFIER) { // if there's an ident after the comma ...
           val name = ident()
+          // ... the ident may have array brackets of its own, as in `int a, b[]`. An empty pair of brackets can also
+          // end a type argument in the initializer of the previous var def, `new C<A, B[]>()`, but that is followed
+          // by `>` or `,`. An index expression, `f(x), y[0]`, has something between the brackets.
+          val tpt1 =
+            if (in.token == LBRACKET && in.lookaheadToken == RBRACKET) optArrayBrackets(tpt.duplicate)
+            else tpt.duplicate
           if (in.token == EQUALS || in.token == SEMI) { // ... followed by a `=` or `;`, we know it's a real variable definition
             buf ++= maybe
-            buf += varDecl(in.currentPos, mods, tpt.duplicate, name.toTermName)
+            buf += varDecl(in.currentPos, mods, tpt1, name.toTermName)
             maybe.clear()
           } else if (in.token == COMMA) { // ... if there's a comma after the ident, it could be a real vardef or not.
-            maybe += varDecl(in.currentPos, mods, tpt.duplicate, name.toTermName)
+            maybe += varDecl(in.currentPos, mods, tpt1, name.toTermName)
           } else { // ... if there's something else we were still in the initializer of the
                    // previous var def; skip to next comma or semicolon.
             skipTo(COMMA, SEMI)
