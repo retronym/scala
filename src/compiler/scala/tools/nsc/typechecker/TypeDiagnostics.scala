@@ -957,18 +957,30 @@ trait TypeDiagnostics extends splain.SplainDiagnostics {
           emitUnusedWarning(v.symbol.pos, s"pattern var ${v.symbol.name.dropLocal} in ${v.symbol.owner} is never used", WarningCategory.UnusedPatVars, v.symbol)
       if (settings.warnUnusedParams) {
         // don't warn unused args of overriding methods (or methods matching in self-type)
+        // The overriding pairs of a class, which are computed as far as needed to answer the queries so far.
+        // A class is asked about once per unused parameter of each of its methods.
+        final class Implementations(clazz: Symbol) {
+          private[this] val isSelfTyped = clazz.hasSelfType
+          private[this] val pairs =
+            if (isSelfTyped)
+              new overridingPairs.PairsCursor(clazz) {
+                override protected def bases: List[Symbol] = self.baseClasses
+              }.iterator
+            else new overridingPairs.PairsCursor(clazz).iterator
+          private[this] val seen = mutable.Set.empty[Symbol]
+          @tailrec def contains(m: Symbol): Boolean =
+            seen(m) || pairs.hasNext && {
+              val pair = pairs.next()
+              seen += pair.low
+              if (isSelfTyped) seen += pair.high
+              contains(m)
+            }
+        }
+        val implementations = mutable.HashMap.empty[Symbol, Implementations]
         def isImplementation(m: Symbol): Boolean = m.isMethod && {
           def classOf(s: Symbol): Symbol = if (s.isClass || s == NoSymbol) s else classOf(s.owner)
           val classOfM = classOf(m)
-          if (classOfM.hasSelfType) {
-            val opc = new overridingPairs.PairsCursor(classOfM) {
-              override protected def bases: List[Symbol] = self.baseClasses
-            }
-            opc.iterator.exists(pair => pair.low == m || pair.high == m)
-          } else {
-            val opc = new overridingPairs.PairsCursor(classOfM)
-            opc.iterator.exists(_.low == m)
-          }
+          implementations.getOrElseUpdate(classOfM, new Implementations(classOfM)).contains(m)
         }
         def isEmptyMarker(p: Symbol): Boolean = p.info.members.reverseIterator.forall(isUniversalMember(_)) // nonTrivialMembers(p).isEmpty
         def isConvention(p: Symbol): Boolean = (
