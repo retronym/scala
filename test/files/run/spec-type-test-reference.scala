@@ -31,6 +31,16 @@ object Test {
     case _          => "other"
   }
 
+  // singleton types are tested with `eq` (or `==` for a literal type), not by class
+  val ref: AnyRef = "x"
+  val one: Any = 1
+  def isRef[@specialized(Int) T](t: T): Boolean = t.isInstanceOf[ref.type]
+  def isOne[@specialized(Int) T](t: T): Boolean = t.isInstanceOf[one.type]
+  def isThis[@specialized(Int) T](t: T): Boolean = t.isInstanceOf[this.type]
+  def isRefSer[@specialized(Int) T](t: T): Boolean = t.isInstanceOf[ref.type with java.io.Serializable]
+  def isLitString[@specialized(Int) T](t: T): Boolean = t.isInstanceOf["x"]
+  def isLitInt[@specialized(Int) T](t: T): Boolean = t.isInstanceOf[1]
+
   var effects = 0
   def effect[@specialized(Int) T](t: T): T = { effects += 1; t }
   def effectful[@specialized(Int) T](t: T): Boolean = effect(t).isInstanceOf[String]
@@ -49,5 +59,7 @@ object Test {
       matching(1), matchingInteger(1)))
     println((effectful(1), effects))
     println(unit(()))
+    println(List(isRef(1), isRef(ref), isOne(1), isOne(2), isThis(1), isRefSer(1), isRefSer(ref),
+      isLitString(1), isLitString("x"), isLitInt(1), isLitInt(2)))
   }
 }

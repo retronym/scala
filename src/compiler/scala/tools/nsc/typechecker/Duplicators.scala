@@ -364,10 +364,12 @@ abstract class Duplicators extends AbstractAnalyzer {
           if (!isPrimitiveValueClass(qualSym) || isPrimitiveValueClass(targTpe.typeSymbol))
             super.typed(atPos(tree.pos)(Apply(TypeApply(Select(qual1, nme.isInstanceOf_), List(TypeTree(targTpe))), Nil)), mode, pt)
           else {
-            val testedClasses = targTpe.dealiasWiden match {
-              case RefinedType(parents, _) => parents.map(_.typeSymbol)
-              case tp                      => List(tp.typeSymbol)
+            // A singleton type, `x.type` or a literal type, is not a class type: the original tests it with `eq` or `==`.
+            val testedTypes = targTpe.dealias match {
+              case RefinedType(parents, _) => parents.map(_.dealias)
+              case tp                      => List(tp)
             }
+            val testedClasses = testedTypes.map(tp => if (tp.isInstanceOf[SingletonType]) NoSymbol else tp.typeSymbol)
             val tree1 =
               if (testedClasses.forall(_.isClass)) {
                 val boxed = if (qualSym == UnitClass) BoxedUnitClass else boxedClass(qualSym)
