@@ -1,0 +1,27 @@
+SG2 g via JV: SG2.gab
+SG2 g from Java: SG2.gq
+SG2 g Java caller: SG2.gab
+SG2 m via JV: SG2.m12
+SG2 m from Java: SG2.mqq
+SG2 r via JV: SG2.ra
+SG2 r from Java: SG2.rqq
+SG2 h from Java: SG2.hqq
+SG3 g via JV: SG3.ga
+SG3 g via SG2: SG3.ga
+SG3 g from Java: SG3.gq
+SGI g via JV: SGI.g3
+SGI g from Java: SGI.g5
+SB g via JB: SB.ga
+SB g from Java: SB.gq
+SB g from Java, non-generic call: SB.gq
+SB g Java caller: SB.gab
+SW k via JW: SW.kt12
+SW k from Java: SW.kq12
+SA a via JA: SA.ax
+SA a from Java: SA.aqq
+CI g via JI: TI.ga
+CI g from Java: TI.gqq
+CC g via JV: TC.ga
+CC g from Java: TC.gq
+CC2 g via JV: TC.ga
+CC2 g from Java: TC.gq
