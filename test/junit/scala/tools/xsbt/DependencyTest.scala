@@ -96,6 +96,25 @@ class DependencyTest extends BridgeTesting {
     }
 
   @Test
+  def `Dependency phase should extract class dependencies from annotations of types`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcSelf = "class OnSelf { self: OnSelf with Serializable @MyAnn(Consts.I) => }"
+    // An inferred type only keeps the annotations that are type constraints
+    val srcConstraint =
+      "class MyConstraint(x: Int) extends scala.annotation.StaticAnnotation with scala.annotation.TypeConstraint"
+    val srcLib = "class Lib { def g: Foo @MyConstraint(Consts.I) = null }"
+    val srcInferred = "class Inferred { def f = (new Lib).g }"
+    val memberRef =
+      extractDependenciesFromSrcs(srcConsts, srcAnn, srcConstraint, "class Foo", srcSelf, srcLib, srcInferred).memberRef
+    def includes(name: String, expected: Set[String]): Unit =
+      assertTrue(s"memberRef($name) = ${memberRef(name)}", expected.subsetOf(memberRef(name)))
+    includes("OnSelf", Set("MyAnn", "Consts"))
+    includes("Lib", Set("Foo", "MyConstraint", "Consts"))
+    includes("Inferred", Set("Lib", "Foo", "MyConstraint", "Consts"))
+  }
+
+  @Test
   def `Dependency phase should extract class dependencies with trait as first parent`(): Unit = {
     val classDependencies = extractClassDependenciesTraitAsFirstPatent
     val memberRef = classDependencies.memberRef
