@@ -546,6 +546,9 @@ lazy val compiler = configureAsSubproject(project)
       "-doc-root-content", (Compile / sourceDirectory).value + "/rootdoc.txt"
     ),
     Osgi.headers ++= Seq(
+      // java-diff-utils is included for the compiler's own use, under its original package names:
+      // keep those packages private rather than exporting them with the version of Scala.
+      "Export-Package" -> raw"""!com.github.difflib.*,*;version=$${ver};-noimport:=true;-split-package:=merge-first""",
       "Import-Package" -> raw"""org.jline.reader.*;resolution:=optional
                             |org.jline.terminal;resolution:=optional
                             |org.jline.terminal.impl;resolution:=optional
@@ -566,7 +569,8 @@ lazy val compiler = configureAsSubproject(project)
       "/project/packaging" -> <packaging>jar</packaging>
     ),
     apiURL := Some(url(s"https://www.scala-lang.org/api/${versionProperties.value.mavenVersion}/scala-${projectFolder.value}/")),
-    pomDependencyExclusions += (("org.scala-lang.modules", "scala-asm"))
+    // the classes of these dependencies are included in scala-compiler.jar, see `packageBin / products` above
+    pomDependencyExclusions ++= List(("org.scala-lang.modules", "scala-asm"), (diffUtilsDep.organization, diffUtilsDep.name))
   )
   .dependsOn(library, reflect)
 
