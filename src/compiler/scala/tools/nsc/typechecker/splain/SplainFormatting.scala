@@ -173,14 +173,15 @@ trait SplainFormatters {
 
     def matchDecls(left: List[Symbol], right: List[Symbol]): List[Formatted] = {
       val (common, uniqueLeft, uniqueRight) = separate(filterDecls(left), filterDecls(right))
-      val diffs = uniqueLeft
-          .map(Some(_))
-          .zipAll(uniqueRight.map(Some(_)), None, None)
-          .collect {
-            case (Some((sym, l)), Some((_, r))) => DeclDiff(sym, l, r)
-            case (None, Some((sym, r)))         => DeclDiff(sym, none, r)
-            case (Some((sym, l)), None)         => DeclDiff(sym, l, none)
-          }
+      // pair the members that differ by name; a member missing on one side is shown as `<none>`
+      def rhsByName(decls: List[(Formatted, Formatted)]) = decls.groupMap(_._1)(_._2)
+      val leftByName = rhsByName(uniqueLeft)
+      val rightByName = rhsByName(uniqueRight)
+      val diffs = (uniqueLeft ::: uniqueRight).map(_._1).distinct.flatMap { sym =>
+        leftByName.getOrElse(sym, Nil).zipAll(rightByName.getOrElse(sym, Nil), none, none).map {
+          case (l, r) => DeclDiff(sym, l, r)
+        }
+      }
       common.map {
         case (sym, rhs) => Decl(sym, rhs)
       } ++ diffs
@@ -200,7 +201,7 @@ trait SplainFormatters {
     def apply[A](
         tpe: Type, simple: String, args: List[A], formattedArgs: => List[Formatted], top: Boolean,
     )(rec: (A, Boolean) => Formatted): Option[Formatted] = tpe match {
-      case TypeRef(_, ByNameParamClass, List(a)) => Some(ByName(formatType(a, top = true)))
+      case TypeRef(_, ByNameParamClass, List(_)) => args.map(rec(_, true)).headOption.map(ByName(_))
       case _                                     => None
     }
 
