@@ -1,0 +1,10 @@
+int: Int 42, no, no, no, no, no, no, no, no, no
+double: no, no, Double 2.0, no, no, no, no, no, no, no
+char: no, no, no, no, no, no, Char A, no, no, no
+valueClass: V v, no, no, no
+unit: Unit (), no, no
+literal: 1 42, no, no, no, no, no, no, no, no, no
+narrow: Int 42, no
+long: no
+isInstanceOf[i.type]: true, false, false, false, false, false, false, false, false, false
+isInstanceOf[d.type]: false, false, true, false, false, false, false, false, false, false

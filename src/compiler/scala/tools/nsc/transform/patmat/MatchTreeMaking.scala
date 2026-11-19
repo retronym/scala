@@ -543,6 +543,9 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
           case SingleType(_, sym)                       =>
             val expected = gen.mkAttributedQualifier(expectedTp) // scala/bug#4577, scala/bug#4897
             if (expectedTp <:< AnyRefTpe) mkEqTest(expected)
+            // `==` is cooperative for boxed numbers and chars: `1 == 1L`. The binder is unboxed as the primitive type
+            // of the path, so the scrutinee must be tested to be a box of that type, as `isInstanceOf[p.type]` does.
+            else if (isPrimitiveValueType(expectedWide) && !(testedWide <:< expectedWide)) and(typeTest(testedBinder, expectedWide.deconst), mkEqualsTest(expected))
             else mkEqualsTest(expected)
           // Should revisit if we end up lifting `eq`'s definition to `Any`, as discussed here:
           // https://groups.google.com/d/msg/scala-internals/jsVlJI4H5OQ/8emZWRmgzcoJ
