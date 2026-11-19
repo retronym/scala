@@ -133,11 +133,18 @@ abstract class PostProcessor extends PerRunInit {
           s" (defined in ${dupPos.source.file.name})"
         else ""
       def nicify(name: String): String = name.replace('/', '.')
-      backendReporting.warning(
-        clazz.position,
-        sm"""Generated class ${nicify(name)} differs only in case from ${nicify(dupName)}$locationAddendum.
-            |  Such classes will overwrite one another on case-insensitive filesystems."""
-      )
+      if (name == dupName)
+        backendReporting.error(
+          clazz.position,
+          sm"""Generated class ${nicify(name)} has the same name as another generated class$locationAddendum.
+              |  One class file would overwrite the other."""
+        )
+      else
+        backendReporting.warning(
+          clazz.position,
+          sm"""Generated class ${nicify(name)} differs only in case from ${nicify(dupName)}$locationAddendum.
+              |  Such classes will overwrite one another on case-insensitive filesystems."""
+        )
     }
   }
 
