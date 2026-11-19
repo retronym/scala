@@ -36,7 +36,8 @@ final class PhaseAssembly[U <: Global with Singleton](val self: U) {
     val warn = !settings.isScaladoc || settings.isDebug || settings.showPhases.value
     val graph = DependencyGraph(phasesSet, warn)
     for (n <- settings.genPhaseGraph.valueSetByUser; d <- settings.outputDirs.getSingleOutput if !d.isVirtual)
-      DependencyGraph.graphToDotFile(graph, Path(d.file) / File(s"$n.dot"))
+      try DependencyGraph.graphToDotFile(graph, Path(d.file) / File(s"$n.dot"))
+      catch { case e: java.io.IOException => reporter.error(NoPosition, s"error writing phase graph: ${e.getMessage}") }
     graph.compilerPhaseList().tap(_ => graph.warnings.foreach(msg => reporter.warning(NoPosition, msg)))
   }
 }

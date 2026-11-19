@@ -130,7 +130,9 @@ class CompilerCommand(arguments: List[String], val settings: Settings) {
     val file = Paths.get(arg.stripPrefix("@"))
     if (!Files.exists(file))
       throw new java.io.FileNotFoundException(s"argument file $file could not be found")
-    val lines = Files.readAllLines(file).asScala.map(stripComment).filterNot(_.isEmpty).toList
+    val lines =
+      try Files.readAllLines(file).asScala.map(stripComment).filterNot(_.isEmpty).toList
+      catch { case e: java.io.IOException => throw new java.io.IOException(s"argument file $file could not be read: $e", e) }
     lines.flatMap(settings.splitParams)
   }
 
@@ -139,10 +141,12 @@ class CompilerCommand(arguments: List[String], val settings: Settings) {
 
   def processArguments: (Boolean, List[String]) = {
     // expand out @filename to the contents of that filename
-    val expandedArguments = arguments flatMap {
-      case x if x startsWith "@"  => expandArg(x)
-      case x                      => List(x)
-    }
+    val expandedArguments =
+      try arguments.flatMap {
+        case x if x.startsWith("@") => expandArg(x)
+        case x                      => List(x)
+      }
+      catch { case e: java.io.IOException => settings.errorFn(e.getMessage); return (false, Nil) }
 
     settings.processArguments(expandedArguments, processAll = true)
   }

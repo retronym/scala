@@ -441,14 +441,15 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
     // kludge alert: will be invoked twice, with selections available 2nd time
     // for -opt:l:method reset the ell selections then enable local
     if (ss.contains(optChoices.ell) && optChoices.ell.selections.nonEmpty) {
-      val todo = optChoices.ell.selections.map {
-        case "none"    => "none"
-        case "default" => "default"
-        case "method"  => "local"
-        case "inline"  => "local"   // enable all except inline, see -opt-inline-from
+      val todo = optChoices.ell.selections.flatMap {
+        case "none"    => Some("none")
+        case "default" => Some("default")
+        case "method"  => Some("local")
+        case "inline"  => Some("local")   // enable all except inline, see -opt-inline-from
+        case bad       => errorFn(s"'l:$bad' is not a valid choice for '-opt'"); None
       }
       optChoices.ell.selections = Nil
-      ss.tryToSetColon(todo)
+      if (todo.nonEmpty) ss.tryToSetColon(todo)
     }
   }
 
@@ -564,7 +565,14 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
 
   val YprofileEnabled = BooleanSetting("-Yprofile-enabled", "Enable profiling.")
   val YprofileDestination = StringSetting("-Yprofile-destination", "file", "Profiling output - specify a file or `-` for console.", "").
-    withPostSetHook( _ => YprofileEnabled.value = true )
+    withPostSetHook { s =>
+      YprofileEnabled.value = true
+      // the file is opened when a run starts, where a failure would be an exception
+      if (s.value != "-") {
+        val file = new java.io.File(s.value).getAbsoluteFile
+        if (file.isDirectory || !file.getParentFile.isDirectory) errorFn(s"cannot write to ${s.name} ${s.value}")
+      }
+    }
   val YprofileTrace = StringSetting("-Yprofile-trace", "file", "Capture trace of compilation in Chrome Trace format", "profile.trace").
     withPostSetHook( _ => YprofileEnabled.value = true )
   val YprofileExternalTool = PhasesSetting("-Yprofile-external-tool", "Enable profiling for a phase using an external tool hook. Generally only useful for a single phase", "typer").
@@ -573,7 +581,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
     withPostSetHook( _ => YprofileEnabled.value = true )
 
   val YpatmatExhaustdepth     = IntSetting("-Ypatmat-exhaust-depth", "off", 20, Some((10, Int.MaxValue)),
-    str => Some(if(str.equalsIgnoreCase("off")) Int.MaxValue else str.toInt))
+    str => if (str.equalsIgnoreCase("off")) Some(Int.MaxValue) else None)
 
   /**
    * -V "Verbose" settings
