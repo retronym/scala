@@ -13,10 +13,7 @@ sip23-no-unit-type.scala:10: error: Illegal literal type (), use Unit instead [q
 sip23-no-unit-type.scala:11: error: Illegal literal type (), use Unit instead [quickfixable]
   val unit: ().type = ()
             ^
-sip23-no-unit-type.scala:11: error: '=' expected but '.' found.
+sip23-no-unit-type.scala:11: error: ';' expected but '.' found.
   val unit: ().type = ()
               ^
-sip23-no-unit-type.scala:12: error: illegal start of simple expression
-}
-^
-7 errors
+6 errors
