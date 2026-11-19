@@ -1,0 +1,13 @@
+public java.lang.Object A.last(java.lang.Object,java.lang.Object...)
+public int A.lowerBounded(java.lang.Object...)
+public int A.refBounded(java.lang.Object...)
+public int A.unbounded(java.lang.Object...)
+public int A.valBounded(java.lang.Object...)
+2
+3
+1
+0
+c
+3
+3
+2
