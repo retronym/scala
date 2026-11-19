@@ -264,6 +264,10 @@ abstract class TailCalls extends Transform {
         else if (!matchesTypeArgs)      failHere("it is called recursively with different specialized type arguments")
         else if (receiver == EmptyTree) rewriteTailCall(This(currentClass))
         else if (!receiverIsSame)       failHere("it changes type of 'this' on a polymorphic recursive call")
+        // UnCurry has turned a body of `this.synchronized { ... }` into the SYNCHRONIZED flag, so the monitor is
+        // that of the instance on which the method was entered. A jump with a new `this` would not lock its monitor.
+        else if (ctx.method.hasFlag(Flags.SYNCHRONIZED) && !receiver.isInstanceOf[This])
+                                        failHere("it is synchronized and the recursive call is on a different instance")
         else                            rewriteTailCall(receiver)
       }
       
