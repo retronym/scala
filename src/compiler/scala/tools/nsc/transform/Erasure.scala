@@ -524,19 +524,20 @@ abstract class Erasure extends InfoTransform
      *  @param  member   The original member
      *  @param  other    The overridden symbol for which the bridge was generated
      *  @param  bridge   The bridge
+     *  @return the clashes, each with the position and message of its error and the definition the bridge clashes with
      */
-    def checkBridgeOverrides(member: Symbol, other: Symbol, bridge: Symbol): scala.collection.Seq[(Position, String)] = {
+    def checkBridgeOverrides(member: Symbol, other: Symbol, bridge: Symbol): scala.collection.Seq[(Position, String, Symbol)] = {
       def fulldef(sym: Symbol) =
         if (sym == NoSymbol) sym.toString
         else s"$sym: ${sym.tpe} in ${sym.owner}"
-      val clashErrors = mutable.Buffer[(Position, String)]()
-      def clashError(what: String) = {
+      val clashErrors = mutable.Buffer[(Position, String, Symbol)]()
+      def clashError(clashee: Symbol, what: String) = {
         val pos = if (member.owner == root) member.pos else root.pos
         val msg = sm"""bridge generated for member ${fulldef(member)}
                       |which overrides ${fulldef(other)}
                       |clashes with definition of $what;
                       |both have erased type ${exitingPostErasure(bridge.tpe)}"""
-        clashErrors += Tuple2(pos, msg)
+        clashErrors += Tuple3(pos, msg, clashee)
       }
       for (bc <- root.baseClasses) {
         if (settings.isDebug)
@@ -551,12 +552,12 @@ abstract class Erasure extends InfoTransform
           sym.matchingSymbol(bc, site).alternatives filter (sym => !sym.isBridge)
         for (overBridge <- exitingPostErasure(overriddenBy(bridge))) {
           if (overBridge == member) {
-            clashError("the member itself")
+            clashError(member, "the member itself")
           } else {
             val overMembers = overriddenBy(member)
             if (!overMembers.exists(overMember =>
               exitingPostErasure(overMember.tpe =:= overBridge.tpe))) {
-              clashError(fulldef(overBridge))
+              clashError(overBridge, fulldef(overBridge))
             }
           }
         }
@@ -575,7 +576,8 @@ abstract class Erasure extends InfoTransform
 
       val bridgeNeeded = exitingErasure {
         def hasBridge = {
-          var e = bridgesScope.lookupEntry(member.name)
+          // Look up by `other.name`: `resolveAnonymousBridgeClash` may have renamed `member`, but not its bridges.
+          var e = bridgesScope.lookupEntry(other.name)
           while ((e ne null) && !(e.sym.tpe =:= otpe && bridgeTarget(e.sym) == member))
             e = bridgesScope.lookupNextEntry(e)
           e ne null
@@ -605,8 +607,11 @@ abstract class Erasure extends InfoTransform
           def bridgeMayClash = exitingErasure(!(other.tpe.paramTypes corresponds member.tpe.paramTypes)(_ =:= _))
           def bridgeIsAOK = checkBridgeOverrides(member, other, bridge) match {
             case Nil => true
-            case _ if member.owner.isAnonymousClass => resolveAnonymousBridgeClash(member, bridge); true
-            case es => for ((pos, msg) <- es) reporter.error(pos, msg); false
+            // Renaming the member resolves a clash with the member itself. A clash with `other` (which the bridge
+            // is meant to override; seen in SAM classes for refined types, pos/sammy_refined) is spurious.
+            // A clash with any other definition is an error, as in a named class.
+            case es if member.owner.isAnonymousClass && es.forall(e => e._3 == member || e._3 == other) => resolveAnonymousBridgeClash(member, bridge); true
+            case es => for ((pos, msg, _) <- es) reporter.error(pos, msg); false
           }
           !sigContainsValueClass && !bridgeMayClash || bridgeIsAOK
         }

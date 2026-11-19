@@ -1,0 +1,7 @@
+anon-bridge-clash.scala:8: error: bridge generated for member method f: (a: String): String in <$anon: T[String]>
+which overrides method f: (a: A): String in trait T
+clashes with definition of method f: (a: Object): String in <$anon: T[String]>;
+both have erased type (a: Object): String
+  val t = new T[String] { def f(a: String) = "s"; def f(a: Object) = "o" }
+                              ^
+1 error
