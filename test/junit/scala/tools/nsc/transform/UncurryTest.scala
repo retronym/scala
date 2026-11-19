@@ -58,19 +58,30 @@ class UncurryTest {
         |  def assignField(s: String): Unit = field = try f(s) catch { case _: NumberFormatException => 0 }
         |  def assignLocal(s: String): Int = { var r = 0; r = try f(s) catch { case _: NumberFormatException => 0 }; r }
         |  def assignCaptured(s: String): Int = { var r = 0; r = try f(s) catch { case _: NumberFormatException => 0 }; val g = () => r; g() }
+        |  // the receiver of a String concatenation: the StringBuilder (target 8) is on the stack
+        |  def concatSync(s: String): String = lock.synchronized { try s catch { case _: NumberFormatException => "" } } + s
+        |  def concatTry(s: String): String = (try f(s) catch { case _: NumberFormatException => 0 }).toString + s
+        |  def concatIntRecv(s: String): String = (try f(s) catch { case _: NumberFormatException => 0 }) + s
+        |  def concatNested(s: String): String = (lock.synchronized { try s catch { case _: NumberFormatException => "" } } + s) + s
+        |  def concatArg(s: String): String = s + lock.synchronized { try f(s) catch { case _: NumberFormatException => 0 } }
+        |  def arrayStore(s: String): Unit = { val a = new Array[Int](1); a(0) = lock.synchronized { try f(s) catch { case _: NumberFormatException => 0 } } }
+        |  def newArg(s: String): Option[String] = new Some(lock.synchronized { try s catch { case _: NumberFormatException => "" } })
         |}
       """.stripMargin
-    val c = newCompiler().compileClass(code)
-    def callsLiftedTree(m: Method) = m.instructions.exists { case i: Invoke => i.name.startsWith("liftedTree") case _ => false }
-    for (name <- List("syncStat", "syncExpr", "syncVal", "syncNested", "syncBlock", "syncQual")) {
-      val m = getMethod(c, name)
-      assertTrue(name, m.handlers.exists(_.desc.contains("java/lang/NumberFormatException")))
-      assertFalse(name, callsLiftedTree(m))
-      // no IntRef for `count`
-      assertFalse(name, m.instructions.exists { case TypeOp(_, desc) => desc.startsWith("scala/runtime/") case _ => false })
+    for (release <- List("8", "17")) {
+      val c = newCompiler(extraArgs = s"-release $release -Wconf:cat=deprecation:s").compileClass(code)
+      def callsLiftedTree(m: Method) = m.instructions.exists { case i: Invoke => i.name.startsWith("liftedTree") case _ => false }
+      for (name <- List("syncStat", "syncExpr", "syncVal", "syncNested", "syncBlock", "syncQual")) {
+        val m = getMethod(c, name)
+        assertTrue(name, m.handlers.exists(_.desc.contains("java/lang/NumberFormatException")))
+        assertFalse(name, callsLiftedTree(m))
+        // no IntRef for `count`
+        assertFalse(name, m.instructions.exists { case TypeOp(_, desc) => desc.startsWith("scala/runtime/") case _ => false })
+      }
+      for (name <- List("syncArg", "syncOperand", "syncInArg", "assignField", "assignLocal", "assignCaptured",
+                        "concatSync", "concatTry", "concatIntRecv", "concatNested", "concatArg", "arrayStore", "newArg"))
+        assertTrue(s"$name -release $release", callsLiftedTree(getMethod(c, name)))
     }
-    for (name <- List("syncArg", "syncOperand", "syncInArg", "assignField", "assignLocal", "assignCaptured"))
-      assertTrue(name, callsLiftedTree(getMethod(c, name)))
   }
 
 }
