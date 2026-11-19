@@ -79,6 +79,9 @@ package object reify {
       case TypeRef(_, ArrayClass, componentTpe :: Nil) =>
         val componentErasure = reifyRuntimeClass(global)(typer0, componentTpe, concrete)
         gen.mkMethodCall(currentRun.runDefinitions.arrayClassMethod, List(componentErasure))
+      case _ if erasure.isPrimitiveValueClassWithObject(tpe) =>
+        // the element class of `Array[Int with Object]`, see `isPrimitiveValueClassWithObject`
+        gen.mkClassOf(ObjectTpe)
       case _ =>
         gen.mkClassOf(tpe)
     }
