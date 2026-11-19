@@ -5676,9 +5676,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
        */
       def checkReflectiveCallParams(tree: Tree): Unit = {
         val meth = tree.symbol
+        // The element type of an array is the only type argument that survives erasure.
+        // A repeated or by-name parameter erases to `Seq` or `Function0`, whatever its element type.
         def refersToTypeMember(tp: Type): Boolean = tp.dealiasWidenChain.exists { t =>
           val sym = t.typeSymbol
-          sym.isAbstractType && (sym.owner == meth.owner || refersToTypeMember(sym.info.upperBound))
+          if (sym == ArrayClass) t.typeArgs.exists(refersToTypeMember)
+          else sym.isAbstractType && (sym.owner == meth.owner || refersToTypeMember(sym.info.upperBound))
         }
         if (meth.isMethod && meth.info.paramss.exists(_.exists(p => refersToTypeMember(p.tpe))))
           context.error(tree.pos, "Parameter type in structural refinement may not refer to a type member of that refinement")
