@@ -924,7 +924,9 @@ trait Symbols extends api.Symbols { self: SymbolTable =>
     def deprecationMessage     = getAnnotation(DeprecatedAttr) flatMap (_ stringArg 0)
     def deprecationVersion     = getAnnotation(DeprecatedAttr).flatMap(_.stringArg(1)) match {
                                    case v @ Some(_) => v
-                                   case _ => getAnnotation(JavaDeprecatedAttr).flatMap(_.stringArg(0))
+                                   case _ => getAnnotation(JavaDeprecatedAttr).flatMap(_.assocs.collectFirst {
+                                     case (nme.since, LiteralAnnotArg(Constant(since: String))) => since
+                                   })
                                  }
     def deprecatedParamName    = getAnnotation(DeprecatedNameAttr).flatMap(ann => ann.symbolArg(0).orElse(ann.stringArg(0).map(newTermName)).orElse(Some(nme.NO_NAME)))
     def deprecatedParamVersion = getAnnotation(DeprecatedNameAttr) flatMap (_ stringArg 1)
