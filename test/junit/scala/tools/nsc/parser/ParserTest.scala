@@ -5,6 +5,7 @@ import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 import org.junit.Assert._
 
+import scala.tools.nsc.reporters.StoreReporter
 import scala.tools.testkit.BytecodeTesting
 
 @RunWith(classOf[JUnit4])
@@ -64,5 +65,55 @@ class ParserTest extends BytecodeTesting {
     assertTrue(run.reporting.allConditionalWarnings.isEmpty)
     run.reporting.reportSuspendedMessages(unit)
     assertFalse(run.reporting.allConditionalWarnings.isEmpty)
+  }
+
+  /** Parses `code` in a thread with a small stack of a fixed size, and returns what was reported. */
+  private def parseWithSmallStack(code: String): List[StoreReporter.Info] = {
+    import compiler._, global._
+    // let the first run initialize the compiler on the test's own stack
+    newRun().compileSources(newSourceFile("class Init") :: Nil)
+    assertFalse(reporter.hasErrors)
+
+    var result: Either[Throwable, List[StoreReporter.Info]] = null
+    val body: Runnable = () => result =
+      try {
+        newRun().compileSources(newSourceFile(code) :: Nil)
+        Right(reporter.asInstanceOf[StoreReporter].infos.toList)
+      } catch {
+        case t: Throwable => Left(t)
+      }
+    val thread = new Thread(null, body, "parser-small-stack", 512 * 1024L)
+    thread.start()
+    thread.join()
+    reporter.reset() // the compiler is shared with tests that start a `new Run` without resetting it
+    result.fold(t => throw new AssertionError(s"parser crashed with $t", t), identity)
+  }
+
+  @Test
+  def deepNestingIsReportedAsAnError(): Unit = {
+    // far deeper than the stack allows
+    val depth = 20000
+    def check(prefix: String, open: String, mid: String, close: String, suffix: String): Unit = {
+      val infos = parseWithSmallStack(prefix + open * depth + mid + close * depth + suffix)
+      assertEquals(infos.mkString("\n"), 1, infos.size)
+      val info = infos.head
+      assertTrue(info.msg, info.msg.startsWith("nesting too deep: the parser ran out of stack here."))
+      assertTrue(info.pos.toString, info.pos.isDefined)
+      val nestingStart = prefix.length
+      val nestingEnd = nestingStart + open.length * depth
+      assertTrue(s"${info.pos.point} not in $nestingStart to $nestingEnd", info.pos.point > nestingStart && info.pos.point <= nestingEnd)
+    }
+    check("object A { val x = ", "(", "1", ")", " }")
+    check("object A { val x = ", "{", "1", "}", " }")
+    check("object A { val x: ", "List[", "Int", "]", " = null }")
+    check("object A { def x(a: Int) = ", "if (a == 0) 1 else ", "2", "", " }")
+    check("object A { val x = ", "a => ", "1", "", " }")
+  }
+
+  @Test
+  def manyPatternAlternatives(): Unit = {
+    val alternatives = List.tabulate(100000)(_.toString).mkString(" | ")
+    val infos = parseWithSmallStack(s"object A { def f(x: Int) = x match { case $alternatives => 1 } }")
+    assertEquals(infos.mkString("\n"), Nil, infos)
   }
 }

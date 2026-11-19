@@ -65,11 +65,23 @@ trait ParsersCommon extends ScannersCommon {
     @inline final def inGroupers[T](left: Token)(body: => T): T = {
       accept(left)
       try body
-      finally {
+      catch {
+        case e: StackOverflowError =>
+          noteStackOverflow()
+          throw e
+      }
+      finally if (!stackOverflowed) {
         in.skipTrailingComma(left + 1)
         accept(left + 1)
       }
     }
+
+    /** Called for each enclosing grouping as the stack unwinds after the parser ran out of it, innermost
+     *  first. Once `stackOverflowed`, the closing delimiters are not looked for: the input is wherever
+     *  the overflow left it, and each `accept` would report a spurious error and skip ahead.
+     */
+    def noteStackOverflow(): Unit = ()
+    def stackOverflowed: Boolean = false
     @inline final def inParens[T](body: => T): T                  = inGroupers(LPAREN)(body)
     @inline final def inParensOrError[T](body: => T, alt: T): T   = if (in.token == LPAREN) inParens(body) else { accept(LPAREN) ; alt }
     @inline final def inParensOrUnit[T](body: => Tree): Tree      = inParensOrError(body, literalUnit)
@@ -365,14 +377,34 @@ self =>
       t
     }
 
+    /** The offset of the token the parser was at when it ran out of stack, or -1. */
+    private[this] var stackOverflowOffset: Offset = -1
+    override def stackOverflowed: Boolean = stackOverflowOffset >= 0
+    override def noteStackOverflow(): Unit = if (stackOverflowOffset < 0) stackOverflowOffset = in.offset
+
+    /** This parser recurses for each level of nesting in the source, so a deeply nested source exhausts
+     *  the stack. Report that as an error at the token that was reached, rather than letting the
+     *  StackOverflowError escape as a compiler crash.
+     */
+    private def handlingStackOverflow[T](alt: => T)(body: => T): T =
+      try body
+      catch {
+        case _: StackOverflowError =>
+          val offset = if (stackOverflowed) stackOverflowOffset else in.offset
+          val msg = "nesting too deep: the parser ran out of stack here.\n" +
+            "Restructure the code to reduce the nesting, or give the compiler a larger stack with the JVM option -Xss."
+          syntaxError(offset, msg, Nil)
+          alt
+      }
+
     /** This is the general parse entry point.
      */
-    def parse(): Tree = parseRule(_.parseStartRule())
+    def parse(): Tree = handlingStackOverflow[Tree](makeEmptyPackage(0, Nil))(parseRule(_.parseStartRule()))
 
     /** These are alternative entry points for repl, script runner, toolbox and parsing in macros.
      */
-    def parseStats(): List[Tree] = parseRule(_.templateStats())
-    def parseStatsOrPackages(): List[Tree] = parseRule(_.templateOrTopStatSeq())
+    def parseStats(): List[Tree] = handlingStackOverflow(List.empty[Tree])(parseRule(_.templateStats()))
+    def parseStatsOrPackages(): List[Tree] = handlingStackOverflow(List.empty[Tree])(parseRule(_.templateOrTopStatSeq()))
 
     /** This is the parse entry point for code which is not self-contained, e.g.
      *  a script which is a series of template statements.  They will be
@@ -2183,11 +2215,13 @@ self =>
        */
       def pattern(): Tree = {
         val start = in.offset
-        def loop(): List[Tree] = pattern1() :: {
-          if (isRawBar) { in.nextToken() ; loop() }
-          else Nil
+        val alts = new ListBuffer[Tree]
+        alts += pattern1()
+        while (isRawBar) {
+          in.nextToken()
+          alts += pattern1()
         }
-        loop() match {
+        alts.toList match {
           case pat :: Nil => pat
           case xs         => atPos(start)(makeAlternative(xs))
         }
