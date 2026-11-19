@@ -857,9 +857,30 @@ trait Definitions extends api.StandardDefinitions {
           }
 
           if (samSym.exists && tp.typeSymbol != correspondingFunctionSymbol) // don't treat Functions as SAMs
-            wildcardExtrapolation(methodToExpressionTp(tp memberInfo samSym))
+            wildcardExtrapolation(samMethodToFunctionType(tp memberInfo samSym))
           else NoType
       }
+
+    /** The function type for the method type of a SAM.
+      *
+      * A function literal implementing a Java varargs method `m(T... xs)` receives the array, so `xs`
+      * gets the type `Array[T]`, not `T*`. (A Scala `T*` parameter adapts to `Seq[T]` where it is used.)
+      * A Java array is a reference array: if `T` is a primitive value class, as in `J[Int]` for
+      * `interface J<T> { String m(T... xs); }`, the elements arrive boxed in an `Object[]`, so `xs` is an `Array[Object]`.
+      */
+    def samMethodToFunctionType(samMethodTp: Type): Type = samMethodTp match {
+      case mt @ MethodType(params, restpe) if !phase.erasedTypes && params.exists(p => isJavaRepeatedParamType(p.tpe)) =>
+        val paramTypes = mt.paramTypes.map { tp =>
+          if (!isJavaRepeatedParamType(tp)) tp
+          else {
+            val elem = tp.typeArgs.head
+            arrayType(if (isPrimitiveValueType(elem)) ObjectTpeJava else elem)
+          }
+        }
+        functionType(paramTypes, methodToExpressionTp(restpe))
+      case _ =>
+        methodToExpressionTp(samMethodTp)
+    }
 
     /** Automatically perform the following conversions on expression types:
       *  A method type becomes the corresponding function type.
