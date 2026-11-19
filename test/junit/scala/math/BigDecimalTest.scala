@@ -319,4 +319,18 @@ class BigDecimalTest {
     val bdValue: BigDecimal = (BD.ONE: java.math.BigDecimal): BigDecimal
     assertEquals(BD.ONE, bdValue.bigDecimal)
   }
+
+  // `precision - scale` exceeds Int.MaxValue for these
+  @Test
+  def hashCodeWithExtremeExponent(): Unit = {
+    for (s <- List("1E+2147483647", "123E+2147483645", "-5E+2147483647", "1.5E+2147483647", "1E+2147483646", "1E-2147483647")) {
+      val a = BigDecimal(s)
+      val b = BigDecimal(new BD(s))
+      assertEquals(a, b)
+      assertEquals(s, a.##, b.##)
+      assertTrue(s, Set(a, BigDecimal(2), BigDecimal(3), BigDecimal(4), BigDecimal(5)).contains(b))
+    }
+    assertEquals(BigDecimal("1E+2147483647").##, BigDecimal("10E+2147483646").##)
+    assertNotEquals(BigDecimal("1E+2147483647").##, BigDecimal("1E+2147483646").##)
+  }
 }
