@@ -10,7 +10,8 @@ object Test {
     new T_typed, new T_annotated, new T_local_def, new T_local_type, new T_dynamic, new T_while,
     new T_return, new T_existential, new T_forSome, new T_refinement, new T_refinement_val,
     new T_applied_type, new T_type_projection, new T_singleton_type, new T_interpolation,
-    new T_literals, new T_literal_top)
+    new T_literals, new T_literal_top, new T_import, new T_import_unused, new T_import_selectors,
+    new T_import_in_class)
 
   def main(args: Array[String]): Unit = {
     val m = runtimeMirror(getClass.getClassLoader)

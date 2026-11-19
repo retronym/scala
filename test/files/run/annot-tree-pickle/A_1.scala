@@ -48,3 +48,7 @@ class T_singleton_type { @ann({ val x = "a"; (x: x.type) }) def f = 0 }
 class T_interpolation { @ann(s"a${1}b") def f = 0 }
 class T_literals { @ann(List((), true, 1.toByte, 1.toShort, 'c', 1, 1L, 1.5f, 2.5d, "s", null, classOf[String])) def f = 0 }
 class T_literal_top { @ann(classOf[String]) def f = 0 }
+class T_import { @ann({ import scala.collection.mutable.ListBuffer; new ListBuffer[Int] }) def f = 0 }
+class T_import_unused { @ann({ import scala.collection.mutable.ListBuffer; 1 + 1 }) def f = 0 }
+class T_import_selectors { @ann({ import scala.collection.mutable.{ListBuffer => LB, ArrayBuffer => _, _}; (new LB[Int], new HashMap[Int, Int]) }) def f = 0 }
+class T_import_in_class { @ann({ class L { import scala.collection.mutable._; def y = new ListBuffer[Int] }; new L().y }) def f = 0 }

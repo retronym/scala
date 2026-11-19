@@ -545,7 +545,11 @@ abstract class UnPickler {
         case t: RefTree => t
         case t          => errorBadSignature("RefTree expected, found " + t.shortClass)
       }
-      def selectorsRef() = all(ImportSelector(nameRef(), -1, nameRef(), -1))
+      def selectorsRef() = all {
+        val name = nameRef()
+        val rename = nameRef()
+        ImportSelector(name, -1, if (rename.isEmpty) null else rename, -1) // a wildcard is pickled with an empty rename
+      }
       def caseDef(t: Tree): CaseDef = t match {
         case t: CaseDef => t
         case t          => errorBadSignature("expected a case def (" + t + ")")

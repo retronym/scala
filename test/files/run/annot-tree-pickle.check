@@ -189,3 +189,26 @@ T_singleton_type: {
 T_interpolation: "a".+(1).+("b")
 T_literals: scala.`package`.List.apply[Any]((), true, 1.toByte, 1.toShort, 'c', 1, 1L, 1.5, 2.5, "s", null, classOf[java.lang.String])
 T_literal_top: classOf[java.lang.String]
+T_import: {
+  import scala.collection.mutable.ListBuffer;
+  new scala.collection.mutable.ListBuffer[Int]()
+}
+T_import_unused: {
+  import scala.collection.mutable.ListBuffer;
+  2
+}
+T_import_selectors: {
+  import scala.collection.mutable.{ListBuffer=>LB, ArrayBuffer=>_, _};
+  scala.Tuple2.apply[scala.collection.mutable.ListBuffer[Int], scala.collection.mutable.HashMap[Int,Int]](new scala.collection.mutable.ListBuffer[Int](), new scala.collection.mutable.HashMap[Int,Int]())
+}
+T_import_in_class: {
+  class L extends scala.AnyRef {
+    def <init>(): L = {
+      L.super.<init>();
+      ()
+    };
+    import scala.collection.mutable._;
+    def y: scala.collection.mutable.ListBuffer[Int] = new scala.collection.mutable.ListBuffer[Int]()
+  };
+  new L().y
+}
