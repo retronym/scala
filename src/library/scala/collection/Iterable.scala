@@ -1007,13 +1007,18 @@ trait SortedSetFactoryDefaults[+A,
 trait MapFactoryDefaults[K, +V,
     +CC[x, y] <: IterableOps[(x, y), Iterable, Iterable[(x, y)]],
     +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Iterable[x]] extends MapOps[K, V, CC, CC[K, V @uncheckedVariance]] with IterableOps[(K, V), WithFilterCC, CC[K, V @uncheckedVariance]] {
-  // A TrieMap must build maps of its own type with its own hashing and equality, which `mapFactory` does not know.
-  // Implemented here (also in `empty`) since overriding these methods in TrieMap is not forwards compatible (should be moved)
+  // The TreeSeqMap cases keep its OrderBy, and the TrieMap cases its hashing and equality, which `mapFactory` cannot know.
+  // They are implemented here (also in `empty`) since overriding these methods in TreeSeqMap or TrieMap is not forwards compatible (should be moved)
   override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): CC[K, V @uncheckedVariance] = (this: AnyRef) match {
+    case self: immutable.TreeSeqMap[_, _] => (coll match {
+      case m: immutable.TreeSeqMap[K, V] @unchecked => m.orderingBy(self.orderedBy)
+      case _ => immutable.TreeSeqMap.newBuilder[K, V](self.orderedBy).addAll(coll).result()
+    }).asInstanceOf[CC[K, V]]
     case self: concurrent.TrieMap[K, V] @unchecked => new concurrent.TrieMap[K, V](self.hashing, self.equality).addAll(coll).asInstanceOf[CC[K, V]]
     case _ => mapFactory.from(coll)
   }
   override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), CC[K, V @uncheckedVariance]] = (this: AnyRef) match {
+    case self: immutable.TreeSeqMap[_, _] => immutable.TreeSeqMap.newBuilder[K, V](self.orderedBy).asInstanceOf[mutable.Builder[(K, V), CC[K, V]]]
     case self: concurrent.TrieMap[K, V] @unchecked =>
       new mutable.GrowableBuilder[(K, V), concurrent.TrieMap[K, V]](new concurrent.TrieMap[K, V](self.hashing, self.equality)).asInstanceOf[mutable.Builder[(K, V), CC[K, V]]]
     case _ => mapFactory.newBuilder[K, V]

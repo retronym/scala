@@ -66,9 +66,6 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[MissingClassProblem]("scala.reflect.runtime.SynchronizedSymbols$SynchronizedStubTermSymbol"),
     ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedSymbols.newStubSymbol"),
 
-    // TreeSeqMap overrides fromSpecific to keep orderedBy: a protected method of a final class, only breaks forward compatibility
-    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSeqMap.fromSpecific"),
-
     // scala/bug#13202: lub/glb memo tables grouped into one holder, a single thread-local in the private[reflect] trait SynchronizedTypes
     ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedTypes.lubResults"),
     ProblemFilters.exclude[NewMixinForwarderProblem]("scala.reflect.runtime.SynchronizedTypes.glbResults"),
