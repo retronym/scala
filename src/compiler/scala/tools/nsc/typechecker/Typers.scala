@@ -2572,7 +2572,18 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
     def typedBlock(block0: Block, mode: Mode, pt: Type): Block = {
       val syntheticPrivates = new ListBuffer[Symbol]
       try {
-        namer.enterSyms(block0.stats)
+        block0.stats match {
+          case call :: rest if context.owner.isConstructor && !context.inConstructorSuffix && treeInfo.isSelfConstrCall(call) =>
+            // Definitions that follow the self-constructor call of a secondary constructor may refer to
+            // the instance, so they are not `INCONSTRUCTOR` (see `Namer.inConstructorFlag`).
+            // `typedStats` sets `inConstructorSuffix` only once the call is typed, after all statements are entered.
+            namer.enterSyms(call :: Nil)
+            context.inConstructorSuffix = true
+            try namer.enterSyms(rest)
+            finally context.inConstructorSuffix = false
+          case stats =>
+            namer.enterSyms(stats)
+        }
         val block = treeCopy.Block(block0, pluginsEnterStats(this, namer.expandMacroAnnotations(block0.stats)), block0.expr)
         for (stat <- block.stats) enterLabelDef(stat)
 
