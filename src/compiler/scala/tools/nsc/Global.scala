@@ -1427,6 +1427,7 @@ class Global(var currentSettings: Settings, reporter0: Reporter)
       compiledFiles += unit.source.file.path
     }
     private def warnDeprecatedAndConflictingSettings(): Unit = {
+      reporting.checkConfiguration()
       // issue warnings for any usage of deprecated settings
       settings.userSetSettings filter (_.isDeprecated) foreach { s =>
         runReporting.deprecationWarning(NoPosition, s.name + " is deprecated: " + s.deprecationMessage.get, "", "", "")
