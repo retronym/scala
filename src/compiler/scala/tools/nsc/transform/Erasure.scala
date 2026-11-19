@@ -108,13 +108,31 @@ abstract class Erasure extends InfoTransform
   // * higher-order type parameters
   // * type parameters appearing in method parameters
   // * type members not visible in an enclosing template
+  // * type parameters of a class that javac cannot see (see `hiddenByModuleClass`)
   private def isTypeParameterInSig(sym: Symbol, initialSymbol: Symbol) = (
     !sym.isHigherOrderTypeParameter &&
     sym.isTypeParameterOrSkolem && (
       (initialSymbol.isMethod && initialSymbol.typeParams.contains(sym)) ||
-      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)))
+      (initialSymbol.ownersIterator.exists(encl => encl.isClass && !encl.hasPackageFlag && sym.isNestedIn(encl)) &&
+        !hiddenByModuleClass(sym, initialSymbol))
     )
   )
+
+  // javac rejects a class file that refers to a type parameter of an outer class through a module
+  // class, as in `class C[T] { object O { class D { def t: T } } }` ("undeclared type variable: T"
+  // when reading `C$O$D`). A member of the module class itself is fine. So walk outward from the
+  // class enclosing `initialSymbol` to the owner of `tparam`: if a module class is passed on the
+  // way, the type parameter is erased in the signature.
+  private def hiddenByModuleClass(tparam: Symbol, initialSymbol: Symbol): Boolean = {
+    val tparamOwner = tparam.owner
+    @tailrec def loop(cls: Symbol): Boolean =
+      if (cls == tparamOwner || cls == NoSymbol || cls.hasPackageFlag) false
+      else cls.isModuleClass || loop(cls.owner.enclClass)
+    tparamOwner.isClass && {
+      val start = initialSymbol.enclClass
+      start != tparamOwner && loop(start.owner.enclClass)
+    }
+  }
 
   /** This object is only used for confidence checking when -check:genjvm is set.
    *  In that case we make sure that the erasure of the `normalized` type
