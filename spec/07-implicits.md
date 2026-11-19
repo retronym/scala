@@ -415,7 +415,8 @@ method.
 A type parameter ´A´ of a method or non-trait class may have one or more view
 bounds `´A´ <% ´T´`. In this case the type parameter may be
 instantiated to any type ´S´ which is convertible by application of a
-view to the bound ´T´.
+view to the bound ´T´. (View bounds are deprecated; an implicit parameter
+of function type can be used instead.)
 
 A type parameter ´A´ of a method or non-trait class may also have one
 or more context bounds `´A´ : ´T´`. In this case the type parameter may be

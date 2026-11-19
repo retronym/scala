@@ -124,6 +124,7 @@ _    :    =    =>    <-    <:    <%     >:    #    @
 
 The Unicode operators `\u21D2` ‘´\Rightarrow´’ and `\u2190` ‘´\leftarrow´’, which have the ASCII
 equivalents `=>` and `<-`, are also reserved.
+(The use of these Unicode operators is deprecated since Scala 2.13.0.)
 
 > Here are examples of identifiers:
 > ```scala

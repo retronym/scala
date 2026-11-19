@@ -437,7 +437,9 @@ type by [eta expansion](#eta-expansion-section). If ´e´ is a
 parameterless method or call-by-name parameter of type
 `=> ´T´`, `´e´ _` represents the function of type
 `() => ´T´`, which evaluates ´e´ when it is applied to the empty
-parameter list `()`.
+parameter list `()`. (This use of `´e´ _` for a parameterless method or
+call-by-name parameter is deprecated since Scala 2.13.2; the function
+literal `() => ´e´` can be written instead.)
 
 ###### Example
 The method values in the left column are each equivalent to the [eta-expanded expressions](#eta-expansion-section) on the right.
@@ -1463,6 +1465,8 @@ is performed on the expression ´e´.
 ###### Empty Application
 Otherwise, if ´e´ has method type ´()T´, it is implicitly applied to the empty
 argument list, yielding ´e()´.
+(This implicit application is deprecated since Scala 2.13.3, unless the method,
+or a method it overrides, is defined in Java or is a member of `scala.Any`.)
 
 ### Overloading Resolution
 

@@ -366,6 +366,9 @@ A special rule concerns parameterless methods. If a parameterless
 method defined as `def ´f´: ´T´ = ...` or `def ´f´ = ...` overrides a method of
 type ´()T'´ which has an empty parameter list, then ´f´ is also
 assumed to have an empty parameter list.
+A warning is issued if a parameterless method overrides a method with an
+empty parameter list, or _vice versa_, unless one of the two methods, or
+a method they override, is defined in Java or is a member of `scala.Any`.
 
 An overriding method inherits all default arguments from the definition
 in the superclass. By specifying default arguments in the overriding method
@@ -421,7 +424,9 @@ EarlyDef          ::=  {Annotation} {Modifier} PatVarDef
 
 A template may start with an _early field definition_ clause,
 which serves to define certain field values before the supertype
-constructor is called. In a template
+constructor is called.
+(Early definitions are deprecated since Scala 2.13.0.)
+In a template
 
 ```scala
 { val ´p_1´: ´T_1´ = ´e_1´
