@@ -76,6 +76,12 @@ class JavaConstantsTest {
     |  public static final Integer BOXED = 1 + 1;
     |  public static final Object OBJ = "a" + "b";
     |  public final int INSTANCE = 1 + 1;
+    |  public final int INSTANCE2 = INSTANCE + 1, INSTANCE3 = this.INSTANCE + 1;
+    |  public static final J SELF = new J();
+    |  public static final int VIAOBJ = SELF.INSTANCE, VIAOBJ2 = SELF.I1 + 1, VIAOBJ3 = J.SELF.INSTANCE, VIAOBJ4 = (J.SELF.I1);
+    |  public static final String VIAOBJS = "" + SELF.S4S;
+    |  public static class N { public static final int NC = 1; public static final N NSELF = null; }
+    |  public static final int NESTED = N.NC + J.N.NC, VIANESTED = N.NSELF.NC, VIANESTED2 = J.N.NSELF.NC;
     |  public static int NONFINAL = 1 + 1;
     |}
     |interface I { int IC = 7 * 6; String IS = "i" + IC; }
