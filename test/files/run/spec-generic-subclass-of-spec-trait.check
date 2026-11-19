@@ -1,0 +1,6 @@
+Int: 1 
+Int, via trait: 2 
+String: s 
+other method: 4 
+two traits: 5 GC.m TC.m
+two traits, String: c GC.m TC.m

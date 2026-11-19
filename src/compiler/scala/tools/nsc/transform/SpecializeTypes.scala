@@ -1614,7 +1614,18 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
 
         val qual1                     = transform(qual)
         def copySelect                = treeCopy.Select(tree, qual1, name)
-        def newSelect(member: Symbol) = atPos(tree.pos)(Select(qual1, member))
+        def newSelect(member: Symbol) = {
+          // `member` is the specialized overload of the method in its owner. For a super call, select the
+          // member that overrides it in the superclasses, as the typer would: in a specialized subclass of a
+          // class extending a specialized trait, that is the trait's specialized subtrait, which implements
+          // the overload. Mixin calls the implementation in the owner of the selected symbol, and the
+          // overload in the generic trait forwards to the generic method, which dispatches back here.
+          val member1 = qual1 match {
+            case _: Super => qual1.tpe.member(member.name).suchThat(alt => (alt eq member) || alt.allOverriddenSymbols.contains(member)).orElse(member)
+            case _        => member
+          }
+          atPos(tree.pos)(Select(qual1, member1))
+        }
         def typedOp(member: Symbol)   = localTyper typedOperator newSelect(member)
         def typedTree(member: Symbol) = localTyper typed newSelect(member)
 
