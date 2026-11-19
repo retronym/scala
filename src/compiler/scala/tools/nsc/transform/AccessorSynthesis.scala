@@ -348,11 +348,20 @@ trait AccessorSynthesis extends Transform with ast.TreeDSL {
           else bitmapOf(field) match {
             case Some(bitmap) =>
               if (sym.isGetter) mkCheckedAccessorRhs(if (isUnitGetter(sym)) UNIT else rhs, rhs.pos, bitmap) // TODO: why not always use rhs?
+              // The trait setter for a trait val that is overridden in the class has a unit body (see Fields),
+              // it must not mark the overriding field as initialized.
+              else if (!assignsField(rhs, field)) rhs
               else Block(List(rhs, typedPos(rhs.pos.focus)(mkSetFlag(bitmap))), UNIT)
             case _            => rhs
           }
         }
         else rhs
+
+      private def assignsField(rhs: Tree, field: Symbol): Boolean =
+        rhs.exists {
+          case Assign(lhs, _) => lhs.symbol == field
+          case _              => false
+        }
 
       private def mkCheckedAccessorRhs(retVal: Tree, pos: Position, bitmap: BitmapInfo): Tree = {
         val msg = s"Uninitialized field: ${clazz.sourceFile.name}: ${pos.line}"
