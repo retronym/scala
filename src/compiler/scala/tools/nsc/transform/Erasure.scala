@@ -1035,7 +1035,13 @@ abstract class Erasure extends InfoTransform
               case _ => false
             }
           if(containsSingleton(pt)) {
-            val cmpOp  = if (pt.typeSymbol.isSubClass(AnyValClass)) Any_equals else Object_eq
+            // As in the pattern matcher: `==` for literal types (SLS 3.2.1) and for singletons of value types,
+            // `eq` for other singletons.
+            val cmpOp  = pt.dealias match {
+              case ConstantType(_)                             => Any_==
+              case _ if pt.typeSymbol.isSubClass(AnyValClass)  => Any_==
+              case _                                           => Object_eq
+            }
             val cmpArg = gen.mkAttributedQualifier(pt)
             Some((cmpOp, cmpArg))
           } else None
