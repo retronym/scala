@@ -178,6 +178,9 @@ class SettingsTest {
     assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xsource"), _ == "-Xsource requires an argument, the syntax is -Xsource:<version>")
     assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xsource", "2.11"), _ == "-Xsource requires an argument, the syntax is -Xsource:<version>")
     assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xsource:2.invalid"), _ contains "Bad version (2.invalid)")
+    assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xsource:99999999999"), _ contains "Bad version (99999999999)")
+    assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xsource:3.0.0-RC99999999999"), _ contains "Bad version (3.0.0-RC99999999999)")
+    assertThrows[IllegalArgumentException](check(expected = "2.11", "-Xmigration:99999999999"), _ contains "Bad version (99999999999)")
   }
 
   // equal with stripped margins and normalized line endings
