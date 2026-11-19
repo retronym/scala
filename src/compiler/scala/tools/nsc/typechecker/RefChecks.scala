@@ -1773,7 +1773,9 @@ abstract class RefChecks extends Transform {
         }
 
       def checkIsElidable(sym: Symbol): Unit = if (sym ne null) sym.elisionLevel.foreach { _ =>
-        if (!sym.isMethod || sym.isAccessor || sym.isLazy || sym.isDeferred) {
+        if (sym.isConstructor)
+          reporter.error(sym.pos, s"constructor ${sym.owner.name}: Only concrete methods can be marked @elidable. A constructor cannot be elided.")
+        else if (!sym.isMethod || sym.isAccessor || sym.isLazy || sym.isDeferred) {
           val rest = if (sym.isDeferred) " The annotation affects only the annotated method, not overriding methods in subclasses." else ""
           reporter.error(sym.pos, s"${sym.name}: Only concrete methods can be marked @elidable.$rest")
         }

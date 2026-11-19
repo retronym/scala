@@ -13,4 +13,10 @@ t10068.scala:9: error: f: Only concrete methods can be marked @elidable. The ann
 t10068.scala:11: error: D: Only concrete methods can be marked @elidable.
 @elidable(INFO) class D
                       ^
-5 errors
+t10068.scala:13: error: constructor E: Only concrete methods can be marked @elidable. A constructor cannot be elided.
+class E @elidable(INFO) () { val z = 5 }
+        ^
+t10068.scala:15: error: constructor F: Only concrete methods can be marked @elidable. A constructor cannot be elided.
+  @elidable(INFO) def this(x: Int) = this()
+                      ^
+7 errors
