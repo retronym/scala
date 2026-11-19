@@ -159,6 +159,87 @@ class CollisionProofHashMapTest {
   }
 
   @Test
+  def nanIsOneKey(): Unit = {
+    val m = mutable.CollisionProofHashMap.empty[Double, Int]
+    m(Double.NaN) = 1
+    m(Double.NaN) = 2
+    assertEquals(1, m.size)
+    assertEquals(Some(2), m.get(Double.NaN))
+    assertEquals(Some(2), m.remove(Double.NaN))
+    assertEquals(0, m.size)
+    m(Double.NaN) = 3
+    m -= Double.NaN
+    assertTrue(m.isEmpty)
+  }
+
+  @Test
+  def keysAreIdentifiedByHashCodeAndOrdering(): Unit = {
+    // by design, unlike mutable.HashMap: no universal equality, the Ordering decides
+    val z = mutable.CollisionProofHashMap.empty[Double, Int]
+    z(0.0) = 1
+    z(-0.0) = 2
+    assertEquals(2, z.size)
+    assertEquals(Some(1), z.get(0.0))
+    assertEquals(Some(2), z.remove(-0.0))
+    assertEquals(Some(1), z.get(0.0))
+
+    implicit val byValue: Ordering[Any] = Ordering.by((x: Any) => x.asInstanceOf[Number].doubleValue)
+    val a = mutable.CollisionProofHashMap.empty[Any, Int]
+    a(1) = 1
+    a(1L) = 2  // same hashCode, equal under the ordering
+    a(1.0) = 3 // equal under the ordering, but another hashCode
+    assertEquals(2, a.size)
+    assertEquals(Some(2), a.get(1))
+    assertEquals(Some(2), a.get(1L))
+    assertEquals(Some(3), a.get(1.0))
+    assertEquals(Some(2), a.remove(1))
+    assertEquals(None, a.remove(1L))
+    assertEquals(Some(3), a.remove(1.0))
+  }
+
+  @Test
+  def nullKeyInListBucket(): Unit = {
+    val m = mutable.CollisionProofHashMap.empty[String, Int]
+    m("") = 1 // shares hash code 0 with null
+    m(null) = 2
+    assertEquals(2, m.size)
+    m(null) = 3
+    assertEquals(2, m.size)
+    assertEquals(Some(1), m.get(""))
+    assertEquals(Some(3), m.get(null))
+    assertEquals(Some(3), m.remove(null))
+    assertEquals(None, m.get(null))
+    assertEquals(Some(1), m.remove(""))
+  }
+
+  /** Runs the same operations on keys that sit in a short list bucket and on keys that sit in a treeified bucket.
+   *  `Folded` keys are equal under the ordering when they differ only in case, which `equals` does not agree with.
+   */
+  @Test
+  def listAndTreeBucketsAgreeOnKeyIdentity(): Unit = {
+    for (treeified <- List(false, true)) {
+      val m = new mutable.CollisionProofHashMap[Folded, Int](64, 0.75)
+      // bucket 0 holds hash codes 0 and 64; with `treeified` enough other keys to make it a tree
+      if (treeified) for (i <- 0 until 40) m(new Folded("filler" + i, (i % 2) * 64)) = -1
+      def msg = s"treeified=$treeified"
+      m(new Folded("a", 0)) = 1
+      // same hash code, equal under the ordering: the same key
+      m(new Folded("A", 0)) = 2
+      assertEquals(msg, Some(2), m.get(new Folded("a", 0)))
+      // another hash code in the same bucket: another key, although the ordering says equal
+      m(new Folded("A", 64)) = 3
+      assertEquals(msg, None, m.get(new Folded("a", 128)))
+      assertEquals(msg, Some(2), m.get(new Folded("A", 0)))
+      assertEquals(msg, Some(3), m.get(new Folded("a", 64)))
+      assertEquals(msg, if (treeified) 42 else 2, m.size)
+      assertEquals(msg, Some(2), m.remove(new Folded("a", 0)))
+      assertEquals(msg, None, m.remove(new Folded("A", 0)))
+      assertEquals(msg, Some(3), m.remove(new Folded("a", 64)))
+      assertEquals(msg, if (treeified) 40 else 0, m.size)
+    }
+  }
+
+  @Test
   def differentialAgainstHashMap(): Unit = {
     for (seed <- 0 until 200) {
       val rnd = new Random(seed)
@@ -210,5 +291,15 @@ object CollisionProofHashMapTest {
   }
   object Key {
     implicit val ordering: Ordering[Key] = Ordering.by(_.id)
+  }
+
+  /** A key with a chosen hash code that is ordered ignoring case, but `equals` only the same string. */
+  final class Folded(val s: String, val hash: Int) {
+    override def hashCode: Int = hash
+    override def equals(o: Any): Boolean = o match { case f: Folded => f.s == s; case _ => false }
+    override def toString = s"Folded($s, $hash)"
+  }
+  object Folded {
+    implicit val ordering: Ordering[Folded] = Ordering.by(_.s.toLowerCase)
   }
 }
