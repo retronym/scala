@@ -179,7 +179,12 @@ abstract class LambdaLift extends InfoTransform {
 //      println(s"mark free: ${sym.fullLocationString} marked free in $enclosure")
       (enclosure == logicallyEnclosingMember(sym.owner)) || {
         debuglog("%s != %s".format(enclosure, logicallyEnclosingMember(sym.owner)))
-        if (enclosure.isPackageClass || !markFree(sym, logicallyEnclosingMember(enclosure.skipConstructor.owner))) false
+        // A class local to a constructor has no outer pointer to its enclosing class, so it cannot
+        // reach a field of that class (or of a class further in): it needs its own copy. This happens
+        // when the class is nested in another local class, e.g. the function class that uncurry
+        // creates for a by-name argument of a super constructor call.
+        def outerUnreachable = enclosure.skipConstructor.isClassLocalToConstructor
+        if (enclosure.isPackageClass || !markFree(sym, logicallyEnclosingMember(enclosure.skipConstructor.owner)) && !outerUnreachable) false
         else {
           val ss = symSet(free, enclosure)
           if (!ss(sym)) {
