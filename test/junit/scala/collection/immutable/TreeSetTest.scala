@@ -366,6 +366,9 @@ class TreeSetTest extends AllocationTest {
     val expected = TreeSet[Any]((1, 2), (3, 4))(o)
     assertEquals(expected, TreeSet.from[Any](tm)(o))
     assertEquals(expected, tm.to(TreeSet.evidenceIterableFactory[Any](o)))
+  }
+
+  @Test
   def rangeTo(): Unit = {
     val set = TreeSet(2, 4, 6, 8)
     for (to <- 0 to 10) {
