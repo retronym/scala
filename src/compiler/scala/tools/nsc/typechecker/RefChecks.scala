@@ -584,9 +584,11 @@ abstract class RefChecks extends Transform {
             // Other synthetic members that may override are created with the OVERRIDE flag, as the methods of a case class are.
             // The conversion method of an implicit class is not: it has the name of the class, which cannot be given the modifier.
             def isDefaultGetter = member.isSynthetic && member.isDefaultGetter
-            def isImplicitClassConversion = member.isSynthetic && member.isImplicit && member.isMethod
-            if (!memberOverrides && !other.isDeferred && !isDefaultGetter) {
-              if (isImplicitClassConversion && isMemberClass)
+            def isImplicitClassConversion(sym: Symbol) = sym.isSynthetic && sym.isImplicit && sym.isMethod
+            // An implicit class may override the implicit class of a parent, as its conversion overrides the parent's.
+            def overridesImplicitClassConversion = isImplicitClassConversion(member) && isImplicitClassConversion(other)
+            if (!memberOverrides && !other.isDeferred && !isDefaultGetter && !overridesImplicitClassConversion) {
+              if (isImplicitClassConversion(member) && isMemberClass)
                 overrideErrorWithMemberInfo(s"the conversion method of implicit class ${member.name} cannot override a concrete member, rename the class:")
               else
                 overrideErrorConcreteMissingOverride()

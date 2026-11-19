@@ -8,4 +8,14 @@ implicit-class-overrides-method.scala:11: error: class C inherits conflicting me
   (note: this can be resolved by declaring an `override` in class C.)
 class C extends T1 with T2                  // error
       ^
-2 errors
+implicit-class-overrides-method.scala:27: error: incompatible type in overriding
+implicit def Foo(x: Int): C2.this.Foo (defined in class A2);
+ found   : (x: Int): C2.this.Foo(in class C2)
+ required: (x: Int): C2.this.Foo(in class A2)
+  implicit class Foo(val x: Int)            // error, the result type of the conversion does not conform
+                 ^
+implicit-class-overrides-method.scala:30: error: `override` modifier required to override concrete member:
+implicit def Foo(x: Int): D2.this.Foo (defined in class A2)
+  def Foo(x: Int): Foo = null               // error, a user-written method still needs `override`
+      ^
+4 errors
