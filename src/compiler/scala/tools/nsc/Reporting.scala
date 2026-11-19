@@ -218,7 +218,7 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
         def ifNonEmpty(kind: String, filter: String) = if (filter.nonEmpty) s", $kind=$filter" else ""
         def maybeSite = ifNonEmpty("site", warning.site)
         def maybeOrigin = warning match {
-          case Message.Deprecation(_, _, _, origin, version, _) =>
+          case Message.Deprecation(_, _, _, origin, version, _, _) =>
             ifNonEmpty("origin", origin) + ifNonEmpty("version", version.filterString)
           case _ => ""
         }
@@ -327,6 +327,12 @@ trait Reporting extends internal.Reporting { self: ast.Positions with Compilatio
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions)
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol, msg: String, since: String): Unit =
       deprecationWarning(pos, msg, since, siteName(site), siteName(origin), actions = Nil)
+
+    /** A warning in the deprecation category about the definition of the deprecated symbol `origin`.
+     *  Unlike a reference to a deprecated symbol, it is reported although it is positioned in a deprecated definition.
+     */
+    def deprecatedDefinitionWarning(pos: Position, origin: Symbol, site: Symbol, msg: String): Unit =
+      issueIfNotSuppressed(Message.Deprecation(pos, msg, siteName(site), siteName(origin), Version.fromString(""), Nil, ofDefinition = true))
 
     def deprecationWarning(pos: Position, origin: Symbol, site: Symbol): Unit = {
       val version = origin.deprecationVersion.getOrElse("")
@@ -546,7 +552,9 @@ object Reporting {
     final case class Origin(pos: Position, msg: String, category: WarningCategory, site: String, origin: String, actions: List[CodeAction]) extends Message
 
     // `site` and `origin` may be empty
-    final case class Deprecation(pos: Position, msg: String, site: String, origin: String, since: Version, actions: List[CodeAction]) extends Message {
+    // `ofDefinition` marks a warning about a `@deprecated` definition itself, as opposed to a reference to a deprecated symbol.
+    // It is not subject to the suppression that the definition's `@deprecated` annotation implies for the references in its body.
+    final case class Deprecation(pos: Position, msg: String, site: String, origin: String, since: Version, actions: List[CodeAction], ofDefinition: Boolean = false) extends Message {
       def category: WarningCategory = WarningCategory.Deprecation
     }
   }
@@ -801,7 +809,7 @@ object Reporting {
 
     final case class DeprecatedSince(comp: Int, version: ParseableVersion) extends MessageFilter {
       def matches(message: Message): Boolean = message match {
-        case Message.Deprecation(_, _, _, _, mv: ParseableVersion, _) =>
+        case Message.Deprecation(_, _, _, _, mv: ParseableVersion, _, _) =>
           if (comp == -1) mv.smaller(version)
           else if (comp == 0) mv.same(version)
           else mv.greater(version)
@@ -921,7 +929,11 @@ object Reporting {
 
     def matches(message: Message): Boolean = {
       val pos = message.pos
-      pos.isDefined && start <= pos.start && pos.end <= end && filters.forall(_.matches(message))
+      def exempt = synthetic && (message match {
+        case d: Message.Deprecation => d.ofDefinition
+        case _ => false
+      })
+      pos.isDefined && start <= pos.start && pos.end <= end && !exempt && filters.forall(_.matches(message))
     }
   }
 }
