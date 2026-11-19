@@ -52,7 +52,8 @@ final class TreeSeqMap[K, +V] private (
     with MapOps[K, V, TreeSeqMap, TreeSeqMap[K, V]]
     with StrictOptimizedIterableOps[(K, V), Iterable, TreeSeqMap[K, V]]
     with StrictOptimizedMapOps[K, V, TreeSeqMap, TreeSeqMap[K, V]]
-    with MapFactoryDefaults[K, V, TreeSeqMap, Iterable] {
+    with MapFactoryDefaults[K, V, TreeSeqMap, Iterable]
+    with Serializable {
 
   import TreeSeqMap._
 
@@ -283,6 +284,9 @@ final class TreeSeqMap[K, +V] private (
     new TreeSeqMap[K, V2](ong, mng, ord, orderedBy)
   }
 
+  // Not DefaultSerializable, which rebuilds through `mapFactory` and so would always order by insertion.
+  protected[this] def writeReplace(): AnyRef = new generic.DefaultSerializationProxy(new TreeSeqMap.DeserializationFactory[K, V](orderedBy), this)
+
   @`inline` private[this] def value(p: (_, V)) = p._2
   @`inline` private[this] def binding(k: K) = mapping(k).copy(_1 = k)
 }
@@ -354,6 +358,12 @@ object TreeSeqMap extends MapFactory[TreeSeqMap] {
       }
       aliased
     }
+  }
+
+  @SerialVersionUID(3L)
+  private final class DeserializationFactory[K, V](val orderedBy: OrderBy) extends Factory[(K, V), TreeSeqMap[K, V]] with Serializable {
+    def fromSpecific(it: IterableOnce[(K, V)]): TreeSeqMap[K, V] = newBuilder.addAll(it).result()
+    def newBuilder: mutable.Builder[(K, V), TreeSeqMap[K, V]] = TreeSeqMap.newBuilder[K, V](orderedBy)
   }
 
   private type Mapping[K, +V] = Map[K, (Int, V)]
