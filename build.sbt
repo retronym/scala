@@ -517,7 +517,7 @@ lazy val compiler = configureAsSubproject(project)
         (LocalProject("replFrontend")  / Compile / packageBin / products).value,
     Compile / unmanagedResources / includeFilter :=
       "*.tmpl" | "*.xml" | "*.js" | "*.css" | "*.html" | "*.properties" | "*.swf" |
-      "*.png" | "*.gif" | "*.gif" | "*.txt",
+      "*.png" | "*.gif" | "*.txt",
     // Also include the selected unmanaged resources and source files from the additional projects in the source JAR:
     Compile / packageSrc / mappings ++= {
       val base = (Compile / unmanagedResourceDirectories).value ++
