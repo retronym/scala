@@ -373,7 +373,7 @@ extends ScalaNumber with ScalaNumericConversions with Serializable with Ordered[
   private final var computedHashCode: Int = BigDecimal.hashCodeNotComputed
   private final def computeHashCode(): Unit = {
     computedHashCode =
-      if (isWhole && (precision - scale) < BigDecimal.maximumHashScale) toBigInt.hashCode
+      if (isWhole && (precision.toLong - scale) < BigDecimal.maximumHashScale) toBigInt.hashCode
       else if (isDecimalDouble) doubleValue.##
       else {
         val temp = bigDecimal.stripTrailingZeros
