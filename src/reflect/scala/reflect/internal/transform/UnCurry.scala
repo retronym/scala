@@ -74,13 +74,22 @@ trait UnCurry {
   }
 
   object DesugaredParameterType {
+    // Java erases `T...` to an array of the erasure of `T`'s bound, which is `Object[]` only if the bound
+    // is empty. `isUnboundedGeneric` tests `!(T <:< AnyRef)` instead, which also holds for
+    // `<T extends Comparable<T>>` because `Comparable`, `Serializable` and `Cloneable` are universal traits
+    // in Scala; Java erases that to `Comparable[]`.
+    private def isObjectArrayInJava(tp: Type) = tp match {
+      case TypeRef(_, sym, _) if sym.isAbstractType => typeIsAnyOrJavaObject(tp.upperBound)
+      case _                                         => false
+    }
+
     def unapply(tpe: Type): Option[Type] = tpe match {
       case TypeRef(pre, ByNameParamClass, arg :: Nil) =>
         Some(functionType(List(), arg))
       case TypeRef(pre, RepeatedParamClass, arg :: Nil) =>
         Some(seqType(arg))
       case TypeRef(pre, JavaRepeatedParamClass, arg :: Nil) =>
-        Some(arrayType(if (isUnboundedGeneric(arg)) ObjectTpeJava else arg))
+        Some(arrayType(if (isObjectArrayInJava(arg)) ObjectTpeJava else arg))
       case _ =>
         None
       }
