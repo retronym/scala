@@ -1,0 +1,7 @@
+su-between-tokens.scala:2: error: illegal character
+  val a = 1 \u001a + 2
+            ^
+su-between-tokens.scala:5: error: unclosed comment
+/* unclosed
+^
+2 errors
