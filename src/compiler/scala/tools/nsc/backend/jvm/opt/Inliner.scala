@@ -1113,13 +1113,17 @@ abstract class Inliner {
 
   /**
    * Check if a type is accessible to some class, as defined in JVMS 5.4.4.
-   *  (A1) C is public
+   *  (A1) C is public, and its package is exported to the module of D. Code compiled by scalac is
+   *       in the unnamed module, so for classes of the JDK the package must be exported to all
+   *       modules.
    *  (A2) C and D are members of the same run-time package
    */
   @tailrec
   final def classIsAccessible(accessed: BType, from: ClassBType): Either[OptimizerWarning, Boolean] = (accessed: @unchecked) match {
     // TODO: A2 requires "same run-time package", which seems to be package + classloader (JVMS 5.3.). is the below ok?
-    case c: ClassBType     => c.isPublic.map(_ || c.packageInternalName == from.packageInternalName)
+    case c: ClassBType     => c.isPublic.map(isPublic =>
+      c.packageInternalName == from.packageInternalName ||
+        isPublic && !byteCodeRepository.isInNonExportedSystemPackage(c.internalName))
     case a: ArrayBType     => classIsAccessible(a.elementType, from)
     case _: PrimitiveBType => Right(true)
   }
