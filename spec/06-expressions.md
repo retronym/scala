@@ -294,7 +294,8 @@ must be the same). Furthermore, the type of ´e´ must conform to
 `scala.Seq[´T´]`, for some type ´T´ which conforms to
 ´S´. In this case, the argument list is transformed by replacing the
 sequence ´e´ with its elements. When the application uses named
-arguments, the vararg parameter has to be specified exactly once.
+arguments, the repeated parameter may be specified by at most one named
+argument. If no argument specifies it, it receives an empty sequence.
 
 If only a single argument is supplied, it may be supplied as a block expression
 and parentheses can be omitted, in the form `´f´ { block }`. This is valid when
@@ -344,7 +345,8 @@ arguments, the following conditions must hold.
   argument defines a parameter which is already specified by a
   positional argument.
 - Every formal parameter ´p_j:T_j´ which is not specified by either a positional
-  or named argument has a default argument.
+  or named argument has a default argument or is a
+  [repeated parameter](04-basic-declarations-and-definitions.html#repeated-parameters).
 
 If the application uses named or default
 arguments the following transformation is applied to convert it into
