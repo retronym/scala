@@ -1,0 +1,7 @@
+value-class-extension-double-def.scala:1: error: double definition:
+def f$extension(v: V, a: Int): Int at line 2 and
+final def f$extension($this: V)(a: Int): Int at line 1
+have same type after erasure: (v: Int, a: Int): Int
+class V(val x: Int) extends AnyVal { def f(a: Int) = x }
+                                         ^
+1 error
