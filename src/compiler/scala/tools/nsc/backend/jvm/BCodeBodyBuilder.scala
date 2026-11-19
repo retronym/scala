@@ -1219,6 +1219,20 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
             var totalArgSlots = 0
             var countConcats = 1     // ie. 1 + how many times we spilled
 
+            /* `makeConcatWithConstants` converts its arguments to strings when it is invoked, after
+             * all operands have been evaluated. An operand whose string representation can change
+             * (anything but a primitive, a box of a primitive or a `String`) is converted before
+             * the next operand is evaluated, as the `StringBuilder` encoding does. This is not
+             * needed when evaluating the remaining operands cannot run any code: the conversions
+             * then happen in the same order and observe the same state inside the bootstrap.
+             */
+            val lastEffect = concatArguments.lastIndexWhere {
+              case Literal(_) | This(_) => false
+              case id: Ident            => id.symbol.isModule
+              case _                    => true
+            }
+            var elemIndex = 0
+
             for (elem <- concatArguments) {
               val tpe = tpeTK(elem)
               val elemSlots = tpe.size
@@ -1246,10 +1260,13 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
                 case _ =>
                   totalArgSlots += elemSlots
                   recipe.append(TagArg)
-                  val tpe = tpeTK(elem)
-                  argTypes += tpe.toASMType
                   genLoad(elem, tpe)
+                  val convertEagerly =
+                    elemIndex < lastEffect && tpe.isRef && tpe != StringRef && !tpe.isBoxed && !tpe.isNullType && !tpe.isNothingType
+                  if (convertEagerly) genCallMethod(String_valueOf, InvokeStyle.Static, elem.pos)
+                  argTypes += (if (convertEagerly) StringRef else tpe).toASMType
               }
+              elemIndex += 1
             }
             bc.genIndyStringConcat(recipe.toString, argTypes.result(), constVals.result())
 
