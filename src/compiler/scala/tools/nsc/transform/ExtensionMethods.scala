@@ -13,7 +13,6 @@
 package scala.tools.nsc
 package transform
 
-import scala.annotation.tailrec
 import scala.collection.mutable
 
 /**
@@ -98,22 +97,10 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
   class Extender(unit: CompilationUnit) extends TypingTransformer(unit) {
     private val extensionDefs = mutable.Map[Symbol, mutable.ListBuffer[Tree]]()
 
-    @tailrec
-    final def checkNonCyclic(pos: Position, seen: Set[Symbol], clazz: Symbol): Unit =
-      if (seen contains clazz)
-        reporter.error(pos, "value class may not unbox to itself")
-      else {
-        val unboxed = definitions.underlyingOfValueClass(clazz).typeSymbol
-        if (unboxed.isDerivedValueClass) checkNonCyclic(pos, seen + clazz, unboxed)
-      }
-
     override def transform(tree: Tree): Tree = {
       tree match {
         case Template(_, _, _) =>
           if (currentOwner.isDerivedValueClass) {
-            /* This is currently redundant since value classes may not
-              wrap over other value classes anyway.
-            checkNonCyclic(currentOwner.pos, Set(), currentOwner) */
             extensionDefs(currentOwner.companionModule) = new mutable.ListBuffer[Tree]
             currentOwner.primaryConstructor.makeNotPrivate(NoSymbol)
             // scala/bug#7859 make param accessors accessible so the erasure can generate unbox operations.
