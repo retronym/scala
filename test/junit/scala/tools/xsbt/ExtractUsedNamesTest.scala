@@ -226,6 +226,21 @@ class ExtractUsedNamesTest extends BridgeTesting {
       assertTrue(usedNames.toString, Set("MyAnn", "Consts", "I").subsetOf(usedNames))
     }
 
+  @Test
+  def `Used names extraction should extract the class named by a classOf literal`(): Unit = {
+    val usedNames = extractUsedNamesFromSrc("class Foo", "class A { def g = classOf[Foo] }")
+    assertTrue(usedNames("A").toString, usedNames("A").contains("Foo"))
+  }
+
+  @Test
+  def `Used names extraction should extract names from annotations in a classOf literal`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcUse = "class A { def g = classOf[Foo @MyAnn(Consts.I)] }"
+    val usedNames = extractUsedNamesFromSrc(srcConsts, srcAnn, "class Foo", srcUse)
+    assertTrue(usedNames("A").toString, Set("Foo", "MyAnn", "Consts", "I").subsetOf(usedNames("A")))
+  }
+
   // pending test for https://issues.scala-lang.org/browse/SI-7173
   @Test @Ignore
   def `Used names extraction should extract names of constants`(): Unit = {
