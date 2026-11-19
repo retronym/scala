@@ -199,9 +199,14 @@ private[scala] trait JavaMirrors extends internal.SymbolTable with api.JavaUnive
           staticPartOfEnum.info.declaration(TermName(`enum`.name))
         }
 
+        // `classToScala` maps every array class to `ArrayClass`, which loses the element type
+        def classToType(jclazz: jClass[_]): Type =
+          if (jclazz.isArray) arrayType(classToType(jclazz.getComponentType))
+          else classToScala(jclazz).toType
+
         def unapply(schemaAndValue: (jClass[_], Any)): Option[Any] = schemaAndValue match {
           case (StringClass | PrimitiveClass(), value) => Some(value)
-          case (ClassClass, value: jClass[_])          => Some(classToScala(value).toType)
+          case (ClassClass, value: jClass[_])          => Some(classToType(value))
           case (EnumClass(), value: Enum[_])           => Some(enumToSymbol(value))
           case _                                       => None
         }
