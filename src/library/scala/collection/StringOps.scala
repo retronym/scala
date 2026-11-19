@@ -51,6 +51,7 @@ object StringOps {
   }
 
   private class GroupedIterator(s: String, groupSize: Int) extends AbstractIterator[String] {
+    require(groupSize >= 1, s"size=$groupSize, but it must be positive")
     private[this] var pos = 0
     def hasNext: Boolean = pos < s.length
     def next(): String = {
