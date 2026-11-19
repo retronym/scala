@@ -1,0 +1,19 @@
+syncStat: 1 0
+syncExpr: 1 -1
+syncVal: 2 0
+syncNested: 1 -1
+syncBlock: 2 0
+syncQual: 1 1
+syncReturn: 1 -1
+syncFinally: 1 -1
+syncRethrow: 1 ISE
+syncLong: 2 0
+syncThis: 1 -1
+syncLambda: 1 -1
+syncArg: 1 
+syncOperand: 2 0
+syncInArg: 1 
+assignField: 1 -1
+assignLocal: 1 -1
+assignCaptured: 1 -1
+-1

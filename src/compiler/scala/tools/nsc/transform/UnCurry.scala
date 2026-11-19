@@ -537,16 +537,19 @@ abstract class UnCurry extends InfoTransform
             val transformedFn = transform(fn)
             // scala/bug#6479: no need to lift in args to label jumps
             // scala/bug#11127: boolean && / || are emitted using jumps, the lhs stack value is consumed by the conditional jump
-            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or
+            // `synchronized` is emitted as monitorenter / body / monitorexit: the backend stores the monitor in a local
+            // before it evaluates the body, so the body starts with the stack that the `synchronized` expression started with.
+            val noReceiverOnStack = fn.symbol.isLabel || fn.symbol == currentRun.runDefinitions.Boolean_and || fn.symbol == currentRun.runDefinitions.Boolean_or ||
+              fn.symbol == Object_synchronized
             val needLift = needTryLift || !noReceiverOnStack
             withNeedLift(needLift) {
               treeCopy.Apply(tree, transformedFn, transformTrees(transformArgs(tree.pos, fn.symbol, args, fnParams)))
             }
 
-          case Assign(_: RefTree, _) =>
-            withNeedLift(needLift = true) { super.transform(tree) }
-
-          case Assign(lhs, _) if lhs.symbol.owner != currentMethod || lhs.symbol.hasFlag(LAZY | ACCESSOR) =>
+          case Assign(_, _) =>
+            // An assignment to a field has the receiver on the stack while the rhs is evaluated. So does an assignment to
+            // a local variable that is captured, which becomes `v.elem = rhs` in lambdalift (scala/bug#6154). Whether a
+            // local will be captured is not known here, so a `try` is lifted in the rhs of every assignment.
             withNeedLift(needLift = true) { super.transform(tree) }
 
           case ret @ Return(_) if isNonLocalReturn(ret) =>
