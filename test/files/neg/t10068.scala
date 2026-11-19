@@ -9,3 +9,8 @@ abstract class C {
   @elidable(INFO) def f: Int
 }
 @elidable(INFO) class D
+
+class E @elidable(INFO) () { val z = 5 }
+class F {
+  @elidable(INFO) def this(x: Int) = this()
+}
