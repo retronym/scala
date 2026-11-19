@@ -78,4 +78,25 @@ object Test extends App {
 
   // 8) other brain failures
   f"${d}random-leading-junk%d"
+
+  // 9) malformed specifiers
+  f"$d%1$$"
+  f"$d%2147483648d"
+  f"$d%99999999999999999999d"
+  f"$f%.2147483648f"
+  f"$d%2147483648$$d"
+  f"$d\u"
+  f"$d\u00"
+
+  // 10) flags the formatter rejects
+  f"$d%-d"
+  f"$d%0d"
+  f"$d%-0 5d"
+  f"$d%+ d"
+  f"$f%-015f"
+  f"$f%0f"
+  f"$s%-s"
+  f"$c%-c"
+  f"$t%-tT"
+  f"$d%d%1$$-d"
 }
