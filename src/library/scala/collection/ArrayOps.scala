@@ -1322,6 +1322,8 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
           first
         } else asArray(xs)
 
+        if (subArray.length != first.length)
+          throw new IllegalArgumentException("transpose requires all collections have the same size")
         for (x <- new ArrayOps(subArray)) {
           bs(i) += x
           i += 1
