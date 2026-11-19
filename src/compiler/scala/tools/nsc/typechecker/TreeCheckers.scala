@@ -261,9 +261,19 @@ abstract class TreeCheckers extends AbstractAnalyzer {
     override def typed(tree: Tree, mode: Mode, pt: Type): Tree = (
       if (passThrough(tree))
         super.typed(tree, mode, pt)
-      else
-        checkedTyped(tree, mode, pt)
+      else tree match {
+        case UnApply(_, args) => checkedUnApply(tree, args, mode)
+        case _                => checkedTyped(tree, mode, pt)
+      }
     )
+    // Typer does not accept an `UnApply`: it creates them fully attributed from an `Apply` pattern,
+    // and they remain in the tree until patmat. The extractor call cannot be typed again as its
+    // argument is a dummy, so only check the sub-patterns, each against the type it had. That also
+    // enters their binders into scope for the guard and the body of the case.
+    private def checkedUnApply(tree: Tree, args: List[Tree], mode: Mode): Tree = {
+      args.foreach(arg => typed(arg, mode, if (arg.tpe eq null) WildcardType else arg.tpe))
+      tree
+    }
     private def checkedTyped(tree: Tree, mode: Mode, pt: Type): Tree = {
       val typed = wrap(tree)(super.typed(tree.clearType(), mode, pt))
 
@@ -380,7 +390,10 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         val treeInfo = infoOf(tree)
         val treeTpe  = typeOf(tree)
 
-        def isOk(sym: Symbol) = treeSym hasTransOwner sym.enclosingSuchThat(x => !x.isTypeParameterOrSkolem) // account for higher order type params
+        def isOk(sym: Symbol) = (
+             treeSym.hasTransOwner(sym.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)) // account for higher order type params
+          || sym.hasTransOwner(treeSym) // an existential in the signature of the referenced method, e.g. `def f(c: Class[_])`
+        )
         def isEligible(sym: Symbol) = (sym ne NoSymbol) && (
              sym.isTypeParameter
           || sym.isLocalToBlock
