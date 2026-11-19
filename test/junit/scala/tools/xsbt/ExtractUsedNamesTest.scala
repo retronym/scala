@@ -241,6 +241,18 @@ class ExtractUsedNamesTest extends BridgeTesting {
     assertTrue(usedNames("A").toString, Set("Foo", "MyAnn", "Consts", "I").subsetOf(usedNames("A")))
   }
 
+  @Test
+  def `Used names extraction should extract names from annotations of an inferred type`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    // An inferred type only keeps the annotations that are type constraints
+    val srcAnn =
+      "class MyConstraint(x: Int) extends scala.annotation.StaticAnnotation with scala.annotation.TypeConstraint"
+    val srcLib = "class Lib { def g: Foo @MyConstraint(Consts.I) = null }"
+    val srcUse = "class Use { def f = (new Lib).g }"
+    val usedNames = extractUsedNamesFromSrc(srcConsts, srcAnn, "class Foo", srcLib, srcUse)
+    assertTrue(usedNames("Use").toString, Set("Foo", "MyConstraint", "Consts", "I").subsetOf(usedNames("Use")))
+  }
+
   // pending test for https://issues.scala-lang.org/browse/SI-7173
   @Test @Ignore
   def `Used names extraction should extract names of constants`(): Unit = {
