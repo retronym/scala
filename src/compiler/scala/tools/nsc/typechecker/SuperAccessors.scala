@@ -190,8 +190,8 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         }
       }
 
-      def mixIsTrait = sup.tpe match {
-        case SuperType(_, superTpe) => superTpe.typeSymbol.isTrait
+      def mixIsScalaTrait = sup.tpe match {
+        case SuperType(_, superTpe) => superTpe.typeSymbol.isTrait && !superTpe.typeSymbol.isJavaDefined
         case x                      => throw new MatchError(x)
       }
 
@@ -200,7 +200,8 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         // scala/bug#8803. If we access super[A] from an inner class (!= currentClass) or closure (validCurrentOwner),
         // where A is the superclass we need an accessor. If A is a parent trait we don't: in this case mixin
         // will re-route the super call directly to the impl class (it's statically known).
-        !mix.isEmpty && (clazz != currentClass || !validCurrentOwner) && !mixIsTrait
+        // A Java interface has no such static forwarder; `invokespecial` must be emitted in `clazz`.
+        !mix.isEmpty && (clazz != currentClass || !validCurrentOwner) && !mixIsScalaTrait
       }
 
       if (needAccessor)
