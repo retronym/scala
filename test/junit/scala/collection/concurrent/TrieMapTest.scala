@@ -760,4 +760,49 @@ class TrieMapTest {
     assertEquals(Some(1), default.filter(_ => true).get("Key"))
     assertEquals(classOf[TrieMap.MangledHashing[_]], default.empty.hashing.getClass)
   }
+
+  private def serialize(o: AnyRef): Array[Byte] = {
+    val bytes = new java.io.ByteArrayOutputStream
+    val out = new java.io.ObjectOutputStream(bytes)
+    out.writeObject(o)
+    out.close()
+    bytes.toByteArray
+  }
+  private def deserialize[T](bytes: Array[Byte]): T =
+    new java.io.ObjectInputStream(new java.io.ByteArrayInputStream(bytes)).readObject().asInstanceOf[T]
+
+  @Test
+  def serializationKeepsHashingAndEquiv(): Unit = {
+    for (hashing <- List(constantHash, lowerCaseHash)) {
+      val t = new TrieMap[String, Int](hashing, caseInsensitive)
+      t("Key") = 1
+      t("other") = 2
+      val d = deserialize[TrieMap[String, Int]](serialize(t))
+      assertEquals(2, d.size)
+      assertEquals(Some(1), d.get("KEY"))
+      assertEquals(Some(2), d.get("OTHER"))
+      assertEquals(hashing.hash("xyz"), d.hashing.hash("xyz"))
+      d("KEY") = 3
+      assertEquals(2, d.size)
+      assertEquals(Some(1), deserialize[TrieMap[String, Int]](serialize(d.snapshot())).remove("OTHER").map(_ - 1))
+    }
+  }
+
+  @Test
+  def serializedFormOfDefaultTrieMapIsUnchanged(): Unit = {
+    val t = TrieMap("Key" -> 1, "other" -> 2)
+    val bytes = serialize(t)
+    // the default proxy names the MapFactory, not a factory with hashing and equality
+    val text = new String(bytes, java.nio.charset.StandardCharsets.ISO_8859_1)
+    assertEquals(true, text.contains("scala.collection.MapFactory$ToFactory"))
+    assertEquals(false, text.contains("Hashing"))
+    assertEquals(false, text.contains("Equiv"))
+    val d = deserialize[TrieMap[String, Int]](bytes)
+    assertEquals(t, d)
+    assertEquals(None, d.get("KEY"))
+    assertEquals(classOf[TrieMap.MangledHashing[_]], d.hashing.getClass)
+    // clones, snapshots and filtered copies of a default map are default maps too
+    for (m <- List(t.clone(), t.snapshot(), t.filter(_ => true), t.empty))
+      assertEquals(true, new String(serialize(m), java.nio.charset.StandardCharsets.ISO_8859_1).contains("scala.collection.MapFactory$ToFactory"))
+  }
 }

@@ -18,7 +18,7 @@ import java.util.concurrent.atomic._
 import scala.{unchecked => uc}
 import scala.annotation.tailrec
 import scala.collection.concurrent.TrieMap.RemovalPolicy
-import scala.collection.generic.DefaultSerializable
+import scala.collection.generic.{DefaultSerializable, DefaultSerializationProxy}
 import scala.collection.immutable.{List, Nil}
 import scala.collection.mutable.GrowableBuilder
 import scala.util.Try
@@ -718,6 +718,12 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
 
   /* internal methods */
 
+  // The default proxy rebuilds the map with `TrieMap.newBuilder`, which is right, and keeps the serialized form
+  // unchanged, for a map with default hashing and equality. Other maps need a factory that carries the two.
+  override protected[this] def writeReplace(): AnyRef =
+    if (TrieMap.isDefault(hashingobj, equalityobj)) super.writeReplace()
+    else new DefaultSerializationProxy(new TrieMap.DeserializationFactory[K, V](hashingobj, equalityobj), this)
+
   private def CAS_ROOT(ov: AnyRef, nv: AnyRef) = rootupdater.compareAndSet(this, ov, nv)
 
   private[collection] def readRoot(abort: Boolean = false): INode[K, V] = RDCSS_READ_ROOT(abort)
@@ -1022,6 +1028,20 @@ object TrieMap extends MapFactory[TrieMap] {
 
   class MangledHashing[K] extends Hashing[K] {
     def hash(k: K): Int = scala.util.hashing.byteswap32(k.##)
+  }
+
+  private[this] val universalEquivClass: Class[_] = Equiv.universal[Any].getClass
+
+  /** Are these the hashing and equality of a map created with `new TrieMap()`? An `Equiv.universal` that is not
+   *  recognized as such (one that has been deserialized, for instance) is treated as custom, which is always correct.
+   */
+  private def isDefault(hashing: Hashing[_], equality: Equiv[_]): Boolean =
+    (hashing.getClass eq classOf[MangledHashing[_]]) && (equality.getClass eq universalEquivClass)
+
+  @SerialVersionUID(3L)
+  private final class DeserializationFactory[K, V](val hashing: Hashing[K], val equality: Equiv[K]) extends Factory[(K, V), TrieMap[K, V]] with Serializable {
+    def fromSpecific(it: IterableOnce[(K, V)]): TrieMap[K, V] = new TrieMap[K, V](hashing, equality) ++= it
+    def newBuilder: mutable.Builder[(K, V), TrieMap[K, V]] = new GrowableBuilder(new TrieMap[K, V](hashing, equality))
   }
 
   private[concurrent] object RemovalPolicy {
