@@ -832,7 +832,7 @@ abstract class RefChecks extends Transform {
           val nonPrivateMembers = clazz.info.nonPrivateMembersAdmitting(VBRIDGE)
           // Avoid extra allocations with reverseIterator. Filter for abstract members of interest, and bad abstract override.
           val (missing, abstractIncomplete): (List[Symbol], List[Symbol]) =
-            filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred & !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
+            filtered(nonPrivateMembers.reverseIterator)(m => m.isDeferred && !ignoreDeferred(m))(m => m.isAbstractOverride && m.isIncompleteIn(clazz))
           if (missing.nonEmpty) emitErrors(missing, nonPrivateMembers)
           // Check the remainder for invalid absoverride.
           for (member <- abstractIncomplete) {
