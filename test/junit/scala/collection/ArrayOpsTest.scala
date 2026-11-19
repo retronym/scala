@@ -204,4 +204,14 @@ class ArrayOpsTest {
     check(List(Nil, List(1)))
     assertEquals(0, Array(Array[Int](), Array[Int]()).transpose.length)
   }
+
+  @Test def groupedRequiresPositiveSize(): Unit = {
+    for (a <- List(Array[Int](), Array(1, 2, 3)); size <- List(0, -1, Int.MinValue)) {
+      assertThrows[IllegalArgumentException](a.toList.grouped(size))
+      assertThrows[IllegalArgumentException](a.grouped(size), _.contains(s"size=$size"))
+    }
+    assertEquals(List(List(1, 2), List(3)), Array(1, 2, 3).grouped(2).map(_.toList).toList)
+    assertEquals(List(List(1, 2, 3)), Array(1, 2, 3).grouped(Int.MaxValue).map(_.toList).toList)
+    assertEquals(Nil, Array[Int]().grouped(1).toList)
+  }
 }
