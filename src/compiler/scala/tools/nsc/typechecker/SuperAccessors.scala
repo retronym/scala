@@ -480,16 +480,34 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         }
       }
 
-      val protAcc = clazz.info.decl(accName).suchThat(s => s == NoSymbol || s.tpe =:= accType(s)) orElse {
+      // A Java static is selected from the module, so the accessor takes no receiver.
+      // A static field is read through an empty parameter list.
+      val isStatic = isJavaStatic(sym)
+      val staticAccType = (protAcc: Symbol) => memberType match {
+        case PolyType(tparams, restpe) =>
+          val accTparams = cloneSymbolsAtOwner(tparams, protAcc)
+          PolyType(accTparams, restpe.substSym(tparams, accTparams).cloneInfo(protAcc))
+        case mt: MethodType            => mt.cloneInfo(protAcc)
+        case tp                        => MethodType(Nil, tp)
+      }
+      def accTypeOf(protAcc: Symbol) = if (isStatic) staticAccType(protAcc) else accType(protAcc)
+
+      val protAcc = clazz.info.decl(accName).suchThat(s => s == NoSymbol || s.tpe =:= accTypeOf(s)) orElse {
         val newAcc = clazz.newMethod(nme.protName(sym.unexpandedName), tree.pos, newFlags = ARTIFACT)
-        newAcc setInfoAndEnter accType(newAcc)
+        newAcc setInfoAndEnter accTypeOf(newAcc)
 
         val code = DefDef(newAcc, {
-          val (receiver :: _) :: tail = newAcc.paramss: @unchecked
-          val base: Tree              = Select(Ident(receiver), sym)
-          foldLeft2(tail, sym.info.paramss)(base){ (acc, params, pps) =>
-            val y = map2(params, pps)( (param, pp) =>  makeArg(param, receiver, pp.tpe))
-            Apply(acc, y)
+          if (isStatic) {
+            val base: Tree = Select(qual.duplicate, sym)
+            if (!hasArgs) base
+            else foldLeft2(newAcc.paramss, sym.info.paramss)(base)((acc, params, _) => Apply(acc, params.map(gen.paramToArg)))
+          } else {
+            val (receiver :: _) :: tail = newAcc.paramss: @unchecked
+            val base: Tree              = Select(Ident(receiver), sym)
+            foldLeft2(tail, sym.info.paramss)(base){ (acc, params, pps) =>
+              val y = map2(params, pps)( (param, pp) =>  makeArg(param, receiver, pp.tpe))
+              Apply(acc, y)
+            }
           }
         })
 
@@ -498,8 +516,11 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         newAcc
       }
       val selection = Select(This(clazz), protAcc)
-      val (receiver, hostTargs) = if (isPoly) receiverAndHostTypeArgs(clazz, qual) else (qual, Nil)
-      def mkApply(fn: Tree) = Apply(fn, receiver :: Nil)
+      val (receiver, hostTargs) = if (isPoly && !isStatic) receiverAndHostTypeArgs(clazz, qual) else (qual, Nil)
+      def mkApply(fn: Tree) =
+        if (!isStatic) Apply(fn, receiver :: Nil)
+        else if (hasArgs) fn
+        else Apply(fn, Nil)
       val allTargs = hostTargs ::: targs.filterNot(_ == EmptyTree)
       val res = atPos(tree.pos) {
         if (allTargs.isEmpty) mkApply(selection)
@@ -542,24 +563,37 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       assert(clazz != NoSymbol, field)
       debuglog("Decided for host class: " + clazz)
 
+      // A Java static is assigned through the module, so the setter takes no receiver.
+      val isStatic = isJavaStatic(field)
       val accName = nme.protSetterName(field.unexpandedName)
       val protectedAccessor = clazz.info decl accName orElse {
         val protAcc      = clazz.newMethod(accName, field.pos, newFlags = ARTIFACT)
-        val (tparams, objType) = hostTypeParamsAndObjType(clazz, protAcc)
-        val paramTypes   = List(objType, field.tpe.asSeenFrom(objType, field.owner))
-        val params       = protAcc newSyntheticValueParams paramTypes
-        val accessorType = MethodType(params, UnitTpe)
+        if (isStatic) {
+          val value = protAcc.newSyntheticValueParam(field.tpe)
+          protAcc setInfoAndEnter MethodType(List(value), UnitTpe)
+          storeAccessorDefinition(clazz, DefDef(protAcc, Assign(Select(tree.qualifier.duplicate, field), Ident(value))))
+        } else {
+          val (tparams, objType) = hostTypeParamsAndObjType(clazz, protAcc)
+          val paramTypes   = List(objType, field.tpe.asSeenFrom(objType, field.owner))
+          val params       = protAcc newSyntheticValueParams paramTypes
+          val accessorType = MethodType(params, UnitTpe)
 
-        protAcc setInfoAndEnter (if (tparams.isEmpty) accessorType else PolyType(tparams, accessorType))
-        val obj :: value :: Nil = params: @unchecked
-        storeAccessorDefinition(clazz, DefDef(protAcc, Assign(Select(Ident(obj), field.name), Ident(value))))
+          protAcc setInfoAndEnter (if (tparams.isEmpty) accessorType else PolyType(tparams, accessorType))
+          val obj :: value :: Nil = params: @unchecked
+          storeAccessorDefinition(clazz, DefDef(protAcc, Assign(Select(Ident(obj), field.name), Ident(value))))
+        }
 
         protAcc
       }
-      val (receiver, hostTargs) = receiverAndHostTypeArgs(clazz, tree.qualifier)
       val selection = Select(This(clazz), protectedAccessor)
-      val fn = if (hostTargs.isEmpty) selection else TypeApply(selection, hostTargs)
-      atPos(tree.pos)(Apply(fn, List(receiver, rhs)))
+      atPos(tree.pos) {
+        if (isStatic) Apply(selection, List(rhs))
+        else {
+          val (receiver, hostTargs) = receiverAndHostTypeArgs(clazz, tree.qualifier)
+          val fn = if (hostTargs.isEmpty) selection else TypeApply(selection, hostTargs)
+          Apply(fn, List(receiver, rhs))
+        }
+      }
     }
 
     /** Type parameters for an accessor in `clazz` that abstract over those of `clazz`,
@@ -600,7 +634,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       // JVMS 5.4.4: besides `clazz` being a subclass of the owner, the receiver of an instance
       // member must be an instance of `clazz`. `Outer.this.m` in a nested subclass is not.
       def accessibleThroughSubclassing =
-        validCurrentOwner && clazz.thisSym.isSubClass(sym.owner) && !clazz.isTrait && qualifierConformsTo(qual, clazz)
+        validCurrentOwner && clazz.thisSym.isSubClass(protectedAccessOwner(sym)) && !clazz.isTrait && qualifierConformsTo(sym, qual, clazz)
 
       val isCandidate = (
            sym.isProtected
@@ -626,7 +660,14 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
           )
           true
         }
-        !host.isPackageClass && !isSelfType && !isJavaProtected
+        // Scala permits the companion of a subclass to access a protected static, the JVM does not,
+        // and the companion has no instance of the subclass on which to call an accessor.
+        def isStaticFromCompanion = host.isPackageClass && isJavaStatic(sym) && {
+          restrictionError(pos, unit,
+            s"$clazz accesses protected static $sym of ${protectedAccessOwner(sym)}, which the JVM only permits from a subclass of it.")
+          true
+        }
+        !isStaticFromCompanion && !host.isPackageClass && !isSelfType && !isJavaProtected
       }
     }
 
@@ -636,9 +677,10 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
      *     - C is declared in the same package as sym's owner
      */
     private def hostForAccessorOf(sym: Symbol, qual: Tree, referencingClass: Symbol): Symbol = {
-      if ((referencingClass.isSubClass(sym.owner.enclClass) || referencingClass.thisSym.isSubClass(sym.owner.enclClass))
-            && qualifierConformsTo(qual, referencingClass)
-          || referencingClass.enclosingPackageClass == sym.owner.enclosingPackageClass) {
+      val owner = protectedAccessOwner(sym)
+      if ((referencingClass.isSubClass(owner) || referencingClass.thisSym.isSubClass(owner))
+            && qualifierConformsTo(sym, qual, referencingClass)
+          || referencingClass.enclosingPackageClass == owner.enclosingPackageClass) {
         assert(referencingClass.isClass, referencingClass)
         referencingClass
       } else if(referencingClass.owner.enclClass != NoSymbol)
@@ -646,9 +688,19 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
       else referencingClass
     }
 
-    /** Is the receiver `qual` of a selection of a protected member statically an instance of `clazz`? */
-    private def qualifierConformsTo(qual: Tree, clazz: Symbol): Boolean =
-      qual.symbol == clazz || qual.tpe.typeSymbol.isSubClass(clazz)
+    /** Is the receiver `qual` of a selection of a protected member `sym` statically an instance of `clazz`?
+     *  A Java static is selected from the companion module and has no receiver to constrain.
+     */
+    private def qualifierConformsTo(sym: Symbol, qual: Tree, clazz: Symbol): Boolean =
+      isJavaStatic(sym) || qual.symbol == clazz || qual.tpe.typeSymbol.isSubClass(clazz)
+
+    /** Is `sym` a static member of a Java class? Its owner is then the companion module class. */
+    private def isJavaStatic(sym: Symbol): Boolean = sym.isJavaDefined && sym.owner.isModuleClass
+
+    /** The class that the JVM requires an accessing class to extend to access the protected `sym`. */
+    private def protectedAccessOwner(sym: Symbol): Symbol =
+      if (isJavaStatic(sym)) sym.owner.linkedClassOfClass orElse sym.owner
+      else sym.owner.enclClass
 
     /** For a path-dependent type, return the this type. */
     private def thisTypeOfPath(path: Type): Symbol = path match {
