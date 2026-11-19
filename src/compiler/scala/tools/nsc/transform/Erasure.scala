@@ -339,7 +339,7 @@ abstract class Erasure extends InfoTransform
             if (unboundedGenericArrayLevel(tp) == 1) jsig1(ObjectTpe)
             else {
               builder.append(ARRAY_TAG)
-              args.foreach(jsig1(_))
+              args.foreach(arg => jsig1(if (isPrimitiveValueClassWithObject(arg)) ObjectTpe else arg))
             }
           }
           else if (isTypeParameterInSig(sym, sym0)) {
