@@ -340,10 +340,8 @@ trait ParallelTyper {
     force(currentRun.runDefinitions, 0)
     force(this, 0) // e.g. `caseObjectSymbols`, which reads `Object_equals` under the analyzer's monitor
     // private lazy vals of the cake that complete symbols, e.g. `TypeConstraints.numericLoBound`
-    for (m <- global.getClass.getMethods ++ global.getClass.getDeclaredMethods
-         if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")) {
-      try { m.setAccessible(true); m.invoke(global) } catch { case _: Throwable => () }
-    }
+    for (m <- ParallelTyper.cakeLazyVals.get(global.getClass))
+      try m.invoke(global) catch { case _: Throwable => () }
   }
 
   /** The lazy vals of a phase's component, before its workers start: as `forceLazyVals`. */
@@ -355,19 +353,11 @@ trait ParallelTyper {
     if (obj != null && depth < 3 && seen.add(obj)) {
       var cls: Class[_] = obj.getClass
       while (cls != null && cls != classOf[Object]) {
-        val methods = cls.getDeclaredMethods
-        val names = methods.iterator.map(_.getName).toSet
-        val fields = cls.getDeclaredFields.iterator.map(_.getName).toSet
-        for (m <- methods if m.getParameterCount == 0 && !m.getName.endsWith("$lzycompute")) {
-          val isLazy = names(m.getName + "$lzycompute")
-          val isModule = fields(m.getName + "$module")
-          if (isLazy || isModule) {
-            try {
-              m.setAccessible(true)
-              val v = m.invoke(obj)
-              if (isModule) forceLazyValsOf(v.asInstanceOf[AnyRef], depth + 1, seen)
-            } catch { case _: Throwable => () }
-          }
+        for (a <- ParallelTyper.lazyAccessors.get(cls)) {
+          try {
+            val v = a.method.invoke(obj)
+            if (a.isModule) forceLazyValsOf(v.asInstanceOf[AnyRef], depth + 1, seen)
+          } catch { case _: Throwable => () }
         }
         cls = cls.getSuperclass
       }
@@ -527,6 +517,35 @@ trait ParallelTyper {
 }
 
 object ParallelTyper {
+  private[typechecker] final class LazyAccessor(val method: java.lang.reflect.Method, val isModule: Boolean)
+
+  /** The accessors of a class's lazy vals and nested objects (`forceLazyValsOf`), found by reflection once per class
+   *  rather than once per compile. */
+  private[typechecker] val lazyAccessors: ClassValue[Array[LazyAccessor]] = new ClassValue[Array[LazyAccessor]] {
+    def computeValue(cls: Class[_]): Array[LazyAccessor] = {
+      val methods = cls.getDeclaredMethods
+      val names = methods.iterator.map(_.getName).toSet
+      val fields = cls.getDeclaredFields.iterator.map(_.getName).toSet
+      for {
+        m <- methods
+        if m.getParameterCount == 0 && !m.getName.endsWith("$lzycompute")
+        isModule = fields(m.getName + "$module")
+        if isModule || names(m.getName + "$lzycompute")
+        if scala.util.Try(m.setAccessible(true)).isSuccess
+      } yield new LazyAccessor(m, isModule)
+    }
+  }
+
+  /** The private lazy vals of the cake that `forceLazyVals` forces, per class of `Global`. */
+  private[typechecker] val cakeLazyVals: ClassValue[Array[java.lang.reflect.Method]] = new ClassValue[Array[java.lang.reflect.Method]] {
+    def computeValue(cls: Class[_]): Array[java.lang.reflect.Method] =
+      for {
+        m <- cls.getMethods ++ cls.getDeclaredMethods
+        if m.getParameterCount == 0 && m.getName.contains("$reflect$internal$") && !m.getName.endsWith("$lzycompute")
+        if scala.util.Try(m.setAccessible(true)).isSuccess
+      } yield m
+  }
+
   /** The thread of every compiler's watchdogs (`newWatchdog`). One thread kept across phases and compiles, rather than
    *  one per phase: a new thread's first allocation (here, the `InterruptedException` that stopped it) takes a fresh
    *  TLAB, which the JVM sizes for the threads already running and which is lost when the thread ends. With a large
