@@ -340,6 +340,10 @@ trait Mirrors { self: Universe =>
      *  a backing field and corresponding accessor/accessors, which means that a single
      *  declaration might correspond to up to three different symbols. Nevertheless
      *  the `FieldMirror.symbol` field always points to a backing field symbol.
+     *
+     *  The exception is a field whose getter is a member of a trait or is abstract. Such a getter has
+     *  no backing field symbol, the field is added to a class that implements the getter, and
+     *  `FieldMirror.symbol` is the getter symbol.
      */
     def symbol: TermSymbol
 
