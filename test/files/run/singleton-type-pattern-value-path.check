@@ -1,10 +1,21 @@
-int: Int 42, no, no, no, no, no, no, no, no, no
-double: no, no, Double 2.0, no, no, no, no, no, no, no
-char: no, no, no, no, no, no, Char A, no, no, no
+singleton-type-pattern-value-path.scala:100: warning: abstract type pattern T (the underlying of t.type) is unchecked since it is eliminated by erasure
+    case y: t.type => "T " + y + " " + (y: Any).getClass.getSimpleName
+             ^
+int: Int 42, Int 42, Int 42, Int 42, Int 42, Int 42, no, no, no, no, no, no
+double: Double 2.0, Double 2.0, Double 2.0, Double 2.0, Double 2.0, Double 2.0, no, no, no, no, no, no
+char: no, no, no, no, no, no, Char A, Char A, no, no, no, no
 valueClass: V v, no, no, no
 unit: Unit (), no, no
-literal: 1 42, no, no, no, no, no, no, no, no, no
+literal: 1 42, 1 42, 1 42, 1 42, 1 42, 1 42, no, no, no, no, no, no
 narrow: Int 42, no
-long: no
-isInstanceOf[i.type]: true, false, false, false, false, false, false, false, false, false
-isInstanceOf[d.type]: false, false, true, false, false, false, false, false, false, false
+long: Int 42, no
+guard: guard 42, guard 42, guard 42, guard 42, guard 42, guard 42, no, no, no, no, no, no
+nested: Some 42, Some 42, no, Tuple 42A, no, no, no
+bind: bind 42, bind 42, bind 42, bind 42, bind 42, bind 42, no, no, no, no, no, no
+alternative: alt, alt, alt, alt, alt, alt, alt, alt, no, no, no, no
+wildcard: yes, yes, yes, yes, yes, yes, no, no, no, no, no, no
+local: Long 42, Long 42, Long 42, Long 42, Long 42, Long 42, no, no, no, no, no, no
+member: o 42, o 42, o 42, o 42, o 42, o 42, no, no, no, no, no, no
+inner member: o 42, o 42, o 42, o 42, o 42, o 42, no, no, no, no, no, no
+string: String 1, no, no, no, no
+abstractType: T 1 Integer, T 1 Long, no, no
