@@ -452,10 +452,13 @@ abstract class ExplicitOuter extends InfoTransform
               assert(outerParam != NoSymbol, tree)
               outerValue
             case _        =>
-              gen.mkAttributedQualifier(qual.tpe.prefix match {
+              val outer = gen.mkAttributedQualifier(qual.tpe.prefix match {
                 case NoPrefix => sym.owner.outerClass.thisType
                 case x        => x
               })
+              // A Scala inner class checks its outer argument in the constructor (see `copyParam` in Constructors).
+              // A Java inner class doesn't: javac emits the check required by JLS 15.9.4 at the call site.
+              if (sym.owner.isJavaDefined && !outer.isInstanceOf[This]) nullCheckedOuter(outer) else outer
           })
           super.transform(treeCopy.Apply(tree, sel, outerVal :: args))
 
@@ -511,6 +514,18 @@ abstract class ExplicitOuter extends InfoTransform
           val x = super.transform(tree)
           if (x.tpe eq null) x
           else x setType transformInfo(currentOwner, x.tpe)
+      }
+    }
+
+    /** `{ val outer$1 = outer; if (outer$1 eq null) throw null else outer$1 }` */
+    private def nullCheckedOuter(outer: Tree): Tree = {
+      val temp = currentOwner.newValue(unit.freshTermName("outer$"), outer.pos, SYNTHETIC | ARTIFACT) setInfo outer.tpe.widen
+      localTyper.typedPos(outer.pos) {
+        Block(
+          ValDef(temp, outer) :: Nil,
+          // `throw null` has the same effect as `throw new NullPointerException`, see JVM spec on instruction `athrow`
+          IF (REF(temp) OBJ_EQ NULL) THEN Throw(gen.mkZero(ThrowableTpe)) ELSE REF(temp)
+        )
       }
     }
 
