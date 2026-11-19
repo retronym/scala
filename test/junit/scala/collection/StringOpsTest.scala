@@ -116,4 +116,13 @@ class StringOpsTest {
     assertEquals("", "a".tail)
     assertThrows[UnsupportedOperationException]("".tail)
   }
+
+  @Test def indexWhereNegativeFrom(): Unit = {
+    val s = "abcab"
+    for (from <- List(Int.MinValue, -1, 0, 1, 2, 4, 5, 6, Int.MaxValue); c <- "abcx") {
+      val msg = s"indexWhere(_ == '$c', $from)"
+      assertEquals(msg, s.toList.indexWhere(_ == c, from), s.indexWhere(_ == c, from))
+      assertEquals(msg, s.toList.indexOf(c, from), s.indexOf(c, from))
+    }
+  }
 }

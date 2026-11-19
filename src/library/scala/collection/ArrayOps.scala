@@ -674,7 +674,7 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
     *           to `elem`, or `-1`, if none exists.
     */
   def indexOf(elem: A, from: Int = 0): Int = {
-    var i = from
+    var i = max(from, 0)
     while(i < xs.length) {
       if(elem == xs(i)) return i
       i += 1
@@ -690,7 +690,7 @@ final class ArrayOps[A](private val xs: Array[A]) extends AnyVal {
     *           or `-1`, if none exists.
     */
   def indexWhere(@deprecatedName("f", "2.13.3") p: A => Boolean, from: Int = 0): Int = {
-    var i = from
+    var i = max(from, 0)
     while(i < xs.length) {
       if(p(xs(i))) return i
       i += 1

@@ -192,4 +192,15 @@ class ArrayOpsTest {
     val res = vs.collectFirst { case n if n > 4 => 10*n }
     assertEquals(Some(50), res)
   }
+
+  @Test def indexOfNegativeFrom(): Unit = {
+    val a = Array(1, 2, 3, 1, 2)
+    for (from <- List(Int.MinValue, -1, 0, 1, 2, 4, 5, 6, Int.MaxValue); x <- List(1, 2, 3, 9)) {
+      val msg = s"elem $x from $from"
+      assertEquals(msg, a.toList.indexOf(x, from), a.indexOf(x, from))
+      assertEquals(msg, a.toList.indexWhere(_ == x, from), a.indexWhere(_ == x, from))
+      assertEquals(msg, a.toList.lastIndexOf(x, from), a.lastIndexOf(x, from))
+      assertEquals(msg, a.toList.lastIndexWhere(_ == x, from), a.lastIndexWhere(_ == x, from))
+    }
+  }
 }
