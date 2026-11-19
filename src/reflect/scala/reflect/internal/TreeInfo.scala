@@ -711,7 +711,7 @@ abstract class TreeInfo {
 
   private def isSimpleThrowable(tp: Type): Boolean = tp match {
     case TypeRef(pre, sym, args) =>
-      (sym.isJavaDefined || isStaticPrefix(pre)) &&
+      (sym.isJavaDefined || isStaticPrefix(pre) || hasNoOuterTest(sym)) &&
       (sym isNonBottomSubClass ThrowableClass) &&  /* bq */ !sym.isTrait
     case _ =>
       false
@@ -728,6 +728,13 @@ abstract class TreeInfo {
     val sym  = wide.typeSymbol
     sym.isPackageClass || nme.isReplWrapperName(sym.name) || (sym.isModuleClass && isStaticPrefix(wide.prefix))
   }
+
+  /** The pattern matcher emits an outer test for a type test against an inner class, but `explicitouter`
+   *  drops it (with an "outer reference cannot be checked" warning) if the class is effectively final, as
+   *  the outer pointer of such a class may be elided by `constructors`. A catch for such a class tests no
+   *  more than the exception table does.
+   */
+  private def hasNoOuterTest(sym: Symbol): Boolean = sym.isEffectivelyFinal
 
   /* If we have run-time types, and these are used for pattern matching,
      we should replace this  by something like:
