@@ -197,6 +197,23 @@ class WConfTest extends BytecodeTesting {
   }
 
   @Test
+  def deprecatedSinceOverflowsInt(): Unit = {
+    val code =
+      """class A {
+        |  @deprecated("use g", since = "20240131120000") def f = 0
+        |  def g = f
+        |}
+        |""".stripMargin
+    val l3 = (3, "method f in class A is deprecated (since 20240131120000): use g")
+    check(infos(code, "cat=deprecation:i"), List(l3))
+    check(infos(code, "since>1:i,cat=deprecation:s"), Nil)
+    assertEquals(Version.NonParseableVersion("20240131120000"), Version.fromString("20240131120000"))
+    assertEquals(Version.NonParseableVersion("1.99999999999"), Version.fromString("1.99999999999"))
+    assertEquals(Version.NonParseableVersion("1.2.99999999999"), Version.fromNumberOnlyString("1.2.99999999999"))
+    assertTrue(Reporting.WConf.parseFilter("since>99999999999", rootDir = "").left.exists(_.startsWith("invalid since filter")))
+  }
+
+  @Test
   def filterUnchecked(): Unit = {
     check(infos(code, "cat=unchecked:i"), List(l13, l16))
   }
