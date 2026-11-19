@@ -307,7 +307,16 @@ abstract class UnCurry extends InfoTransform
           }
           def iterableClassTag(tpe: Type): Tree = {
             (tpe baseType IterableClass).typeArgs match {
-              case targ :: _  => getClassTag(javaVarargsElemType(targ))
+              case targ :: _  =>
+                val elemtp = javaVarargsElemType(targ)
+                // The erasure of a generic class is a raw type, which has no ClassTag: use its existential, e.g. `List[_]`.
+                val tagtp = elemtp match {
+                  case TypeRef(pre, sym, Nil) if (elemtp ne targ) && sym.typeParams.nonEmpty =>
+                    val eparams = typeParamsToExistentials(sym)
+                    existentialAbstraction(eparams, typeRef(pre, sym, eparams.map(_.tpe)))
+                  case _ => elemtp
+                }
+                getClassTag(tagtp)
               case _          => EmptyTree
             }
           }
