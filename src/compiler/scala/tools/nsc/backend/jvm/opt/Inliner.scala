@@ -1066,6 +1066,23 @@ abstract class Inliner {
       callsiteStackHeight > expectedArgs
     }
 
+    // The catch types of the callee's handlers are resolved in the callsite class when an exception
+    // is matched against them, so they need to be accessible there. Unlike an instruction, a handler
+    // cannot be fixed by inlining further, so it is not reported as `IllegalAccessInstructions`.
+    def illegalAccessHandler: Option[CannotInlineWarning] =
+      callee.tryCatchBlocks.asScala.iterator.filter(_.`type` != null).map(h =>
+        (h, classIsAccessible(bTypeForDescriptorOrInternalNameFromClassfile(h.`type`), callsiteClass))
+      ).collectFirst {
+        case (h, Right(false)) =>
+          IllegalAccessHandler(
+            calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
+            callsiteClass.internalName, h.`type`)
+        case (h, Left(cause)) =>
+          IllegalAccessCheckFailed(
+            calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
+            callsiteClass.internalName, h.handler, cause)
+      }
+
     if (callsiteTooLargeAfterInlining(callsiteMethod, callee)) {
       val warning = ResultingMethodTooLarge(
         calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
@@ -1076,7 +1093,7 @@ abstract class Inliner {
         calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
         callsiteClass.internalName, callsiteMethod.name, callsiteMethod.desc)
       Some(warning)
-    } else findIllegalAccess(callee.instructions, calleeDeclarationClass, callsiteClass) match {
+    } else illegalAccessHandler orElse (findIllegalAccess(callee.instructions, calleeDeclarationClass, callsiteClass) match {
       case Right(Nil) =>
         None
 
@@ -1091,7 +1108,7 @@ abstract class Inliner {
           calleeDeclarationClass.internalName, callee.name, callee.desc, callsite.isInlineAnnotated,
           callsiteClass.internalName, illegalAccessIns, cause)
         Some(warning)
-    }
+    })
   }
 
   /**
@@ -1173,7 +1190,13 @@ abstract class Inliner {
       }
     }
 
-    classIsAccessible(memberDeclClass, from) match { // B0
+    // B0 is about memberRefClass. Requiring memberDeclClass to be accessible as well is stricter than the JVMS.
+    val classesAccessible = for {
+      refClassAccessible  <- classIsAccessible(memberRefClass, from)
+      declClassAccessible <- if (refClassAccessible) classIsAccessible(memberDeclClass, from) else Right(false)
+    } yield declClassAccessible
+
+    classesAccessible match {
       case Right(true) => memberIsAccessibleImpl
       case r => r
     }
@@ -1221,6 +1244,19 @@ abstract class Inliner {
         }
         res
       }
+    }
+
+    // Are the classes named by `types` accessible? For a method type, the classes in its descriptor.
+    def allTypesAccessible(types: List[Type]): Either[OptimizerWarning, Boolean] = types match {
+      case Nil => Right(true)
+      case t :: ts =>
+        val r =
+          if (t.getSort == Type.METHOD) allTypesAccessible(t.getReturnType :: t.getArgumentTypes.toList)
+          else classIsAccessible(bTypeForDescriptorFromClassfile(t.getDescriptor), destinationClass)
+        r match {
+          case Right(true) => allTypesAccessible(ts)
+          case _ => r
+        }
     }
 
     /*
@@ -1311,7 +1347,15 @@ abstract class Inliner {
         // the implMethod is public, lambdaMetaFactory doesn't use the Lookup object's extended
         // capability, and we can safely inline the instruction into a different class.
 
-        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor)
+        //
+        // The classes named in the descriptor of the indy instruction (which includes the functional
+        // interface) and in the static arguments (the method types, and for `altMetafactory` the
+        // marker interfaces and bridge method types) are resolved in the class containing the
+        // instruction, so they need to be accessible as well.
+
+        isAccessibleMethod(implMethod.getOwner, implMethod.getName, implMethod.getDesc, Type.getReturnType(indy.desc).getDescriptor).flatMap(implAccessible =>
+          if (!implAccessible) Right(false)
+          else allTypesAccessible(Type.getMethodType(indy.desc) :: indy.bsmArgs.toList.collect { case t: Type => t }))
 
       case _: InvokeDynamicInsnNode => Left(UnknownInvokeDynamicInstruction)
 
