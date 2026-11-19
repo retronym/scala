@@ -1526,7 +1526,11 @@ trait Namers extends MethodSynthesis {
           val toCheck = if (currentRun.isScala3) computeOverridden(immediate = true) else overridden
           // must check `.info.isInstanceOf[MethodType]`, not `.isMethod`, to exclude NullaryMethodType.
           // Note that the matching MethodType of a NullaryMethodType must be nilary not nelary.
-          toCheck != NoSymbol && toCheck.alternatives.exists(_.info.isInstanceOf[MethodType])
+          def isMethodType(tp: Type): Boolean = tp match {
+            case PolyType(_, restpe) => isMethodType(restpe)
+            case _                   => tp.isInstanceOf[MethodType]
+          }
+          toCheck != NoSymbol && toCheck.alternatives.exists(alt => isMethodType(alt.info))
         }
         if (vparamSymss.isEmpty && overridesNilary) {
           meth.updateAttachment(NullaryOverrideAdapted)

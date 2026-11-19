@@ -66,6 +66,9 @@ abstract class RefChecks extends Transform {
   def overridesTypeInPrefix(tp1: Type, tp2: Type, prefix: Type): Boolean = (tp1.dealiasWiden, tp2.dealiasWiden) match {
     case (MethodType(List(), rtp1), NullaryMethodType(rtp2)) => rtp1 <:< rtp2
     case (NullaryMethodType(rtp1), MethodType(List(), rtp2)) => rtp1 <:< rtp2
+    // the same for polymorphic methods: give the nullary method an empty parameter list, and let `<:<` relate the type parameters
+    case (PolyType(_, MethodType(List(), _)), PolyType(tparams2, NullaryMethodType(rtp2))) => tp1 <:< PolyType(tparams2, MethodType(Nil, rtp2))
+    case (PolyType(tparams1, NullaryMethodType(rtp1)), PolyType(_, MethodType(List(), _))) => PolyType(tparams1, MethodType(Nil, rtp1)) <:< tp2
     case (TypeRef(_, sym, _), _) if sym.isModuleClass        => overridesTypeInPrefix(NullaryMethodType(tp1), tp2, prefix)
     case (_, TypeRef(_, sym, _)) if sym.isModuleClass        => overridesTypeInPrefix(tp1, NullaryMethodType(tp2), prefix)
     case _                                                   => tp1 <:< tp2
@@ -545,7 +548,8 @@ abstract class RefChecks extends Transform {
                 val msg = s"$mbr without a parameter list overrides ${other.fullLocationString} defined with a single empty parameter list"
                 val namePos = member.pos
                 val action =
-                  if (namePos.isDefined && namePos.source.sourceAt(namePos) == member.decodedName)
+                  // the parameter list of a polymorphic method goes after its type parameters, not after its name
+                  if (namePos.isDefined && namePos.source.sourceAt(namePos) == member.decodedName && member.typeParams.isEmpty)
                     runReporting.codeAction("add empty parameter list", namePos.focusEnd, "()", msg)
                   else Nil
                 overrideErrorOrNullaryWarning(msg, action)
