@@ -1,0 +1,21 @@
+Test.scala:6: warning: method removal in class J is deprecated (since 2.5)
+  J.removal()
+    ^
+Test.scala:7: warning: method since in class J is deprecated (since 3.0)
+  J.since()
+    ^
+Test.scala:8: warning: method removalOnly in class J is deprecated
+  J.removalOnly()
+    ^
+Test.scala:9: warning: method plain in class J is deprecated
+  J.plain()
+    ^
+Test.scala:10: warning: class C in class J is deprecated (since 1.1)
+  new J.C
+        ^
+Test.scala:11: warning: variable field in class J is deprecated (since 1.2)
+  J.field
+    ^
+error: No warnings can be incurred under -Werror.
+6 warnings
+1 error

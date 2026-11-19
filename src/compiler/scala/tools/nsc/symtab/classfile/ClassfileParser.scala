@@ -952,8 +952,16 @@ abstract class ClassfileParser(reader: ReusableInstance[ReusableDataReader]) {
     tag match {
       case STRING_TAG =>
         Some(LiteralAnnotArg(Constant(pool.getName(index).value)))
-      case BOOL_TAG | BYTE_TAG | CHAR_TAG | SHORT_TAG | INT_TAG |
-           LONG_TAG | FLOAT_TAG | DOUBLE_TAG =>
+      // these are stored as CONSTANT_Integer
+      case BOOL_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).intValue != 0)))
+      case BYTE_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).byteValue)))
+      case CHAR_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).charValue)))
+      case SHORT_TAG =>
+        Some(LiteralAnnotArg(Constant(pool.getConstant(index).shortValue)))
+      case INT_TAG | LONG_TAG | FLOAT_TAG | DOUBLE_TAG =>
         Some(LiteralAnnotArg(pool.getConstant(index)))
       case CLASS_TAG  =>
         Some(LiteralAnnotArg(Constant(pool.getType(index))))
