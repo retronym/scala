@@ -21,5 +21,19 @@ class NumericTest {
     val num = scala.math.Numeric.BigDecimalAsIfIntegral
     assertTrue(num.quot(BigDecimal(2.5), BigDecimal(0.5)) equals BigDecimal(5.0))
     assertTrue(num.quot(BigDecimal(5.0), BigDecimal(2.0)) equals BigDecimal(2.0))
-  }}
+  }
 
+  @Test
+  def charParseStringRejectsOutOfRange(): Unit = {
+    val num = implicitly[Numeric[Char]]
+    assertEquals(Some('a'), num.parseString("97"))
+    assertEquals(Some(Char.MinValue), num.parseString("0"))
+    assertEquals(Some(Char.MaxValue), num.parseString("65535"))
+    assertEquals(None, num.parseString("65536"))
+    assertEquals(None, num.parseString("70000"))
+    assertEquals(None, num.parseString("-1"))
+    assertEquals(None, num.parseString("x"))
+    assertEquals(None, num.parseString(""))
+    assertEquals(None, implicitly[Numeric[Short]].parseString("70000"))
+  }
+}
