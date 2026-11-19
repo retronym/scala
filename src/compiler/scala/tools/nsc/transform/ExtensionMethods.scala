@@ -193,8 +193,27 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
   final class SubstututeRecursion(origMeth: Symbol, extensionMeth: Symbol,
                             unit: CompilationUnit) extends TypingTransformer(unit) {
     private val origThis = extensionMeth.owner.companionClass
-    private def suppliesClassTypeArgs(qual: Tree) =
-      !isExistentialType(qual.tpe.baseType(origThis).withoutAnnotations)
+
+    /** The type arguments of the value class for a call on `qual`, if there are any that the extension method
+     *  can be called with. For an existentially typed qualifier, each quantified variable in the position of a
+     *  covariant (contravariant) type parameter is replaced by its upper (lower) bound, e.g. `Any` for `V[_]`
+     *  if `V[+T]`. If the result does not conform, e.g. for an invariant type parameter, there are none.
+     */
+    private def classTypeArgs(qual: Tree, targs: List[Tree]): Option[List[Type]] =
+      qual.tpe.baseType(origThis).withoutAnnotations match {
+        case ExistentialType(quantified, underlying) =>
+          def mentionsQuantified(tp: Type) = tp.exists(t => quantified.contains(t.typeSymbol))
+          val args = map2(underlying.typeArgs, origThis.typeParams) { (arg, tparam) =>
+            if (!quantified.contains(arg.typeSymbol)) arg
+            else if (tparam.isCovariant) arg.bounds.hi
+            else if (tparam.isContravariant) arg.bounds.lo
+            else arg
+          }
+          if (args.exists(mentionsQuantified) || targs.exists(t => mentionsQuantified(t.tpe))) None
+          else if (qual.tpe <:< appliedType(origThis, args)) Some(args)
+          else None
+        case baseType => Some(baseType.typeArgs)
+      }
 
     override def transform(tree: Tree): Tree = tree match {
       // scala/bug#6574 Rewrite recursive calls against the extension method so they can
@@ -210,17 +229,20 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       //         object C   { def meth$extension[M, C](this$: C[C], a: A)
       //                        = { meth$extension[M', C']({ <expr>: C[C'] })(a1) } }
       //
-      //         The class type arguments `C'` are read from the type of the qualifier. An existentially
-      //         typed qualifier, e.g. `C[_]`, does not supply them: its type arguments are the quantified
-      //         variables, which are not in scope here. Such a call is left alone, so it is not a candidate
-      //         for tail call optimization.
-      case treeInfo.Applied(sel @ Select(qual, _), targs, argss) if sel.symbol == origMeth && suppliesClassTypeArgs(qual) =>
-        localTyper.typedPos(tree.pos) {
-          val allArgss = List(qual) :: argss
-          val baseType = qual.tpe.baseType(origThis)
-          val allTargs = targs.map(_.tpe) ::: baseType.typeArgs
-          val fun = gen.mkAttributedTypeApply(gen.mkAttributedThis(extensionMeth.owner), extensionMeth, allTargs)
-          allArgss.foldLeft(fun)(Apply(_, _))
+      //         The class type arguments `C'` are read from the type of the qualifier. For an existentially
+      //         typed qualifier, e.g. `C[_]`, its type arguments are the quantified variables, which are not
+      //         in scope here; see `classTypeArgs`. If there are no type arguments that the qualifier conforms
+      //         to, the call is left alone, so it is not a candidate for tail call optimization.
+      case treeInfo.Applied(sel @ Select(qual, _), targs, argss) if sel.symbol == origMeth =>
+        classTypeArgs(qual, targs) match {
+          case Some(classTargs) =>
+            localTyper.typedPos(tree.pos) {
+              val allArgss = List(qual) :: argss
+              val allTargs = targs.map(_.tpe) ::: classTargs
+              val fun = gen.mkAttributedTypeApply(gen.mkAttributedThis(extensionMeth.owner), extensionMeth, allTargs)
+              allArgss.foldLeft(fun)(Apply(_, _))
+            }
+          case None => super.transform(tree)
         }
       case _ => super.transform(tree)
     }
