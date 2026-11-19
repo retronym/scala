@@ -301,8 +301,8 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
   @tailrec
   final override def apply(key: Long): T = this match {
     case LongMap.Bin(prefix, mask, left, right) => if (zero(key, mask)) left(key) else right(key)
-    case LongMap.Tip(key2, value) => if (key == key2) value else throw new IllegalArgumentException("Key not found")
-    case LongMap.Nil => throw new IllegalArgumentException("key not found")
+    case LongMap.Tip(key2, value) => if (key == key2) value else default(key)
+    case LongMap.Nil => default(key)
   }
 
   override def + [S >: T] (kv: (Long, S)): LongMap[S] = updated(kv._1, kv._2)
@@ -349,8 +349,13 @@ sealed abstract class LongMap[+T] extends AbstractMap[Long, T]
   def removed(key: Long): LongMap[T] = this match {
     case LongMap.Bin(prefix, mask, left, right) =>
       if (!hasMatch(key, prefix, mask)) this
-      else if (zero(key, mask)) bin(prefix, mask, left - key, right)
-      else bin(prefix, mask, left, right - key)
+      else if (zero(key, mask)) {
+        val newleft = left.removed(key)
+        if (newleft eq left) this else bin(prefix, mask, newleft, right)
+      } else {
+        val newright = right.removed(key)
+        if (newright eq right) this else bin(prefix, mask, left, newright)
+      }
     case LongMap.Tip(key2, _) =>
       if (key == key2) LongMap.Nil
       else this
