@@ -18,7 +18,7 @@ import org.junit.Test
 import java.io.{File => JFile}
 
 import scala.collection.mutable.ListBuffer
-import scala.reflect.internal.util.{BatchSourceFile, Position}
+import scala.reflect.internal.util.{BatchSourceFile, NoSourceFile, Position}
 import scala.reflect.internal.{Reporter => InternalReporter}
 import scala.reflect.io.AbstractFile
 import scala.reflect.io.File
@@ -329,6 +329,17 @@ class WConfTest extends BytecodeTesting {
     check(v123, v124, s)
     check(v123, v124, ne)
     check(v123, v124, ng)
+  }
+
+  @Test
+  def deprecationMessageShape(): Unit = {
+    // Tools construct and match on `Message.Deprecation`, keep its shape.
+    val m: Reporting.Message = Reporting.Message.Deprecation(Position.offset(NoSourceFile, 0), "msg", "site", "origin", Version.fromString("1.0"), Nil)
+    m match {
+      case Reporting.Message.Deprecation(_, msg, site, origin, since, actions) =>
+        assertEquals(List("msg", "site", "origin", "1.0", "List()"), List(msg, site, origin, since.filterString, actions.toString))
+      case _ => fail(s"unexpected $m")
+    }
   }
 
   def wrapFileInMessage(file: AbstractFile) = Reporting.Message.Plain(
