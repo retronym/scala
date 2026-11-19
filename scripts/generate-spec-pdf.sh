@@ -28,7 +28,10 @@ echo $SPEC_PDF_BUILD_DIR/index.html $HTML_FILES
 
 # first goes index.html, then TOC, then rest
 rm -f $PDF
-wkhtmltopdf "${WKHTML_OPTS[@]}" $SPEC_PDF_BUILD_DIR/index.html "${WKHTML_TOC[@]}" $HTML_FILES $PDF
+# The exit status of wkhtmltopdf is not trusted: it exits with 1 when a subresource fails to load,
+# such as a script the spec layouts load from a CDN, even with `--load-error-handling ignore`,
+# and still writes the PDF. Check for the PDF instead.
+wkhtmltopdf "${WKHTML_OPTS[@]}" $SPEC_PDF_BUILD_DIR/index.html "${WKHTML_TOC[@]}" $HTML_FILES $PDF || true
 
-# fail if we didn't get a PDF file out
-if [ ! -f $PDF ] ; then exit 1 ; fi
+# fail if we didn't get a PDF file out, or an empty one
+if [ ! -s $PDF ] ; then echo "wkhtmltopdf produced no PDF, or an empty one: $PDF" >&2 ; exit 1 ; fi
