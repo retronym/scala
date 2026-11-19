@@ -1385,8 +1385,9 @@ abstract class Erasure extends InfoTransform
             case EmptyTree | TypeTree() =>
               tree1 setType specialScalaErasure(tree1.tpe)
             case ArrayValue(elemtpt, trees) =>
-              treeCopy.ArrayValue(
-                tree1, elemtpt setType specialScalaErasure.applyInArray(elemtpt.tpe), trees map transform).clearType()
+              // like the erasure of `Array[Int with Object]`, see `isPrimitiveValueClassWithObject`
+              val elemErased = if (isPrimitiveValueClassWithObject(elemtpt.tpe)) ObjectTpe else specialScalaErasure.applyInArray(elemtpt.tpe)
+              treeCopy.ArrayValue(tree1, elemtpt setType elemErased, trees map transform).clearType()
             case ValDef(_, _, tpt, rhs) =>
               val vd1 = super.transform(tree1).clearType().asInstanceOf[ValDef]
               vd1.tpt.tpe match {
