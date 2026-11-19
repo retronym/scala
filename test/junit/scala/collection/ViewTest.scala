@@ -130,4 +130,34 @@ class ViewTest {
     val v3 = Nil.view.patch(0, List(1).iterator, 0)
     assert(v3.knownSize != 0)
   }
+
+  @Test
+  def filterMergesNestedFilters(): Unit = {
+    val xs = List(1, 2, 3, 4, 5, 6)
+    val even = (_: Int) % 2 == 0
+    val big = (_: Int) > 2
+    for (flip1 <- List(false, true); flip2 <- List(false, true)) {
+      def keep(p: Int => Boolean, flipped: Boolean)(x: Int) = p(x) != flipped
+      val v = View.Filter(View.Filter(xs, even, flip1), big, flip2)
+      assertEquals(s"isFlipped=$flip1, then isFlipped=$flip2", xs.filter(keep(even, flip1)).filter(keep(big, flip2)), v.toList)
+    }
+    // filters of the same polarity are merged into one view
+    assertSame(xs, View.Filter(View.Filter(xs, even, false), big, false).underlying)
+    assertSame(xs, View.Filter(View.Filter(xs, even, true), big, true).underlying)
+    assertEquals(List(1), View.Filter(View.Filter(View.Filter(xs, even, true), big, true), (_: Int) == 5, true).toList)
+  }
+
+  @Test
+  def updatedRejectsNegativeIndex(): Unit = {
+    import scala.tools.testkit.AssertUtil.assertThrows
+    val xs = List(1, 2, 3)
+    assertEquals(List(1, 9, 3), new View.Updated(xs, 1, 9).toList)
+    // as in SeqOps.updated
+    assertThrows[IndexOutOfBoundsException](xs.view.updated(-1, 9), _ == "-1")
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, -1, 9).toList, _ == "-1")
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, Int.MinValue, 9).toList, _ == Int.MinValue.toString)
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs.iterator.to(Iterable), -1, 9).toList, _ == "-1")
+    // an index past the end is only found by iterating
+    assertThrows[IndexOutOfBoundsException](new View.Updated(xs, 3, 9).toList, _ == "3")
+  }
 }
