@@ -3518,7 +3518,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
 
         // As packages are open, it doesn't make sense to check double definitions here. Furthermore,
         // it is expensive if the package is large. Instead, such double definitions are checked in `Namers.enterInScope`
-        if (!context.owner.isPackageClass && !unit.isJava)
+        //
+        // After typer, later phases add members that share a name with an existing one, such as the accessor that
+        // fields adds next to a static `object f` to implement an inherited `def f`. Retyping a template after typer
+        // (as `-Ycheck` does) must not report those as double definitions and unlink them from the class.
+        if (!context.owner.isPackageClass && !unit.isJava && !isPastTyper)
           checkNoDoubleDefs(scope)
 
         // Note that Java units don't have synthetics, but there's no point in making a special case (for performance or correctness),
