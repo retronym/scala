@@ -241,18 +241,15 @@ trait SyntheticMethods extends ast.TreeDSL {
       equalsCore(m, List(clazz.derivedValueClassUnbox))
     }
 
-    /* The hashcode method for value classes. If the value is primitive:
-     *  def hashCode(): Int = this.underlying.hashCode
-     * otherwise, the null-safe variant:
-     *   def hashCode(): Int = java.util.Objects.hashCode(this.underlying)
+    /* The hashcode method for value classes
+     *   def hashCode(): Int = <hash of this.underlying>
+     * using the hash that a case class uses for an element of that type, e.g. `Statics.doubleHash`
+     * or the null-safe `Statics.anyHash`. Like `##`, and unlike `hashCode`, it is consistent with
+     * the `==` on the underlying value in `equals`.
      */
     def hashCodeDerivedValueClassMethod: Tree = createMethod(nme.hashCode_, Nil, IntTpe) { m =>
       val acc = clazz.derivedValueClassUnbox
-      val tp = acc.info.resultType
-      if (isPrimitiveValueType(tp))
-        Select(mkThisSelect(acc), nme.hashCode_)
-      else
-        gen.mkMethodCall(Objects_hashCode, List(mkThisSelect(acc)))
+      hashcodeImplementation(acc, mkThisSelect(acc))
     }
 
     /* The _1, _2, etc. methods to implement ProductN, disabled
@@ -293,16 +290,16 @@ trait SyntheticMethods extends ast.TreeDSL {
       productMethods ::: elementName
     }
 
-    def hashcodeImplementation(sym: Symbol): Tree = {
+    def hashcodeImplementation(sym: Symbol, ref: Tree): Tree = {
       sym.tpe.finalResultType.typeSymbol match {
         case UnitClass | NullClass              => Lit(0)
-        case BooleanClass                       => If(Ident(sym), Lit(1231), Lit(1237))
-        case IntClass                           => Ident(sym)
-        case ShortClass | ByteClass | CharClass => Select(Ident(sym), nme.toInt)
-        case LongClass                          => callStaticsMethodName(nme.longHash)(Ident(sym))
-        case DoubleClass                        => callStaticsMethodName(nme.doubleHash)(Ident(sym))
-        case FloatClass                         => callStaticsMethodName(nme.floatHash)(Ident(sym))
-        case _                                  => callStaticsMethodName(nme.anyHash)(Ident(sym))
+        case BooleanClass                       => If(ref, Lit(1231), Lit(1237))
+        case IntClass                           => ref
+        case ShortClass | ByteClass | CharClass => Select(ref, nme.toInt)
+        case LongClass                          => callStaticsMethodName(nme.longHash)(ref)
+        case DoubleClass                        => callStaticsMethodName(nme.doubleHash)(ref)
+        case FloatClass                         => callStaticsMethodName(nme.floatHash)(ref)
+        case _                                  => callStaticsMethodName(nme.anyHash)(ref)
       }
     }
 
@@ -317,7 +314,7 @@ trait SyntheticMethods extends ast.TreeDSL {
         val mixes       = accessors map (acc =>
           Assign(
             Ident(accumulator),
-            callStaticsMethod("mix")(Ident(accumulator), hashcodeImplementation(acc))
+            callStaticsMethod("mix")(Ident(accumulator), hashcodeImplementation(acc, Ident(acc)))
           )
         )
         val finish = callStaticsMethod("finalizeHash")(Ident(accumulator), Lit(arity))
