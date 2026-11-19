@@ -1,4 +1,6 @@
-#!/bin/bash -e -v -x
+#!/bin/bash
+
+set -evx
 
 source scripts/common
 

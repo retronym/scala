@@ -22,7 +22,8 @@ object ScaladocSettings {
       val jarFile = classpathEntry.data
       IO.unzip(jarFile, dest)
     }
-    (files ** "*.min.js").get()
+    // the webjar also has the slim build of jQuery, which scaladoc does not use
+    (files ** ("*.min.js" -- "*.slim.min.js")).get()
   }
 
 }
