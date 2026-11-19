@@ -14,7 +14,15 @@ object Test {
   def nested(a: Any)  = a match { case Some(_: s.type) => "eq"; case Some("x") => "lit"; case _ => "no" }
   def twice(a: Any)   = a match { case (_: s.type, 1) => "eq1"; case (_: s.type, 2) => "eq2"; case ("x", _) => "lit"; case _ => "no" }
 
+  // Both cases test `1 == a`, and the second reuses the result of the first, stored along with the value cast to `one.type`.
+  val one: 1 = 1
+  def reused(a: Any, b: Boolean) = a match { case _: one.type if b => "path"; case _: 1 => "lit"; case _ => "no" }
+
   def main(args: Array[String]): Unit = {
+    assert(reused(1, true) == "path")
+    assert(reused(1, false) == "lit")
+    assert(reused(2, true) == "no")
+
     val fs = List[(String, Any => String)]("litPat" -> litPat, "litTp" -> litTp, "stable" -> stable, "alias" -> alias, "guarded" -> guarded)
     val x = new String("x")
     assert(x ne s)
