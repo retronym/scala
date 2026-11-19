@@ -339,7 +339,14 @@ abstract class Erasure extends InfoTransform
             if (unboundedGenericArrayLevel(tp) == 1) jsig1(ObjectTpe)
             else {
               builder.append(ARRAY_TAG)
-              args.foreach(jsig1(_))
+              // The element type erases as in `eraseArray`: arrays of bottom types are `Object[]`,
+              // arrays of value classes keep the class (`applyInArray`), primitives stay unboxed.
+              args.foreach { elem =>
+                val elemSym = elem.typeSymbol
+                if (elemSym.isBottomClass) jsig1(ObjectTpe)
+                else if (elemSym.isDerivedValueClass) jsig(elem, unboxedVCs = false)
+                else jsig1(elem)
+              }
             }
           }
           else if (isTypeParameterInSig(sym, sym0)) {
