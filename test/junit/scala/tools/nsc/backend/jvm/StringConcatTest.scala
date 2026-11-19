@@ -84,7 +84,7 @@ class StringConcatTest extends BytecodeTesting {
       "append(J)Ljava/lang/StringBuilder;",
       "append(D)Ljava/lang/StringBuilder;",
       "append(Ljava/lang/StringBuffer;)Ljava/lang/StringBuilder;",
-      "append(Ljava/lang/CharSequence;)Ljava/lang/StringBuilder;",
+      "append(Ljava/lang/Object;)Ljava/lang/StringBuilder;", // nor the CharSequence overload, which doesn't call toString
       "append(Ljava/lang/Object;)Ljava/lang/StringBuilder;", // test that we're not using the [C overload
       "toString()Ljava/lang/String;")
     assertEquals(invokeNameDesc("t1"), t1Expected)
