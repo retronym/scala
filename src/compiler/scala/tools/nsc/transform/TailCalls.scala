@@ -220,6 +220,30 @@ abstract class TailCalls extends Transform {
 
     private var ctx: TailContext = EmptyTailContext
 
+    /** Immutable locals and parameters of the current method that the enclosing `if`s have tested to be non-null. */
+    private var nonNull: List[Symbol] = Nil
+
+    private def withNonNull[T](syms: List[Symbol])(body: => T): T = {
+      val saved = nonNull
+      nonNull = syms
+      try body
+      finally nonNull = saved
+    }
+
+    /** The local of which `cond` tests that it is null (`x eq null`, `x == null`) if `isNull`, or that it
+     *  is not null (`x ne null`, `x != null`) otherwise. `x == null` is false only if `x` is not null,
+     *  whatever its `equals` method does.
+     */
+    private def nullTested(cond: Tree, isNull: Boolean): Symbol = cond match {
+      case Apply(Select(id: Ident, _), Literal(Constant(null)) :: Nil) =>
+        val op   = cond.symbol
+        val sym  = id.symbol
+        val isOp = if (isNull) op == Object_eq || op == Object_== else op == Object_ne || op == Object_!=
+        if (isOp && sym.isTerm && sym.isLocalToBlock && !sym.isMutable && !sym.isLazy && !sym.isMethod && !sym.isModule) sym
+        else NoSymbol
+      case _ => NoSymbol
+    }
+
     override def transformUnit(unit: CompilationUnit): Unit =
       try super.transformUnit(unit)
       finally {
@@ -278,7 +302,12 @@ abstract class TailCalls extends Transform {
           accessed += ctx.label
           // Like the call it replaces, a jump that passes another instance as the new `this` throws
           // a NullPointerException if that instance is null, after the arguments have been evaluated.
-          val nullCheck = !recv.isInstanceOf[This]
+          // The check is omitted for a receiver that an enclosing `if` has tested: `if (c eq null) x else c.f(y)`.
+          val nullCheck = recv match {
+            case _: This   => false
+            case id: Ident => !nonNull.contains(id.symbol)
+            case _         => true
+          }
           val temps = ListBuffer.empty[Tree]
           def evaluated(t: Tree): Tree =
             if (!nullCheck || treeInfo.isExprSafeToInline(t)) t
@@ -341,7 +370,7 @@ abstract class TailCalls extends Transform {
           }
           val newCtx = new DefDefTailContext(dd, body)
           debuglog(s"Considering $name for tailcalls, with labels in tailpos: ${newCtx.tailLabels}")
-          val newRHS = transform(body, newCtx)
+          val newRHS = withNonNull(Nil)(transform(body, newCtx))
 
           deriveDefDef(tree) { _ =>
             def unreported = !failPositions.contains(newCtx) && !failReasons.contains(newCtx)
@@ -414,10 +443,14 @@ abstract class TailCalls extends Transform {
           deriveCaseDef(tree)(transform)
 
         case If(cond, thenp, elsep) =>
+          def branch(tree: Tree, isNull: Boolean) = nullTested(cond, isNull) match {
+            case NoSymbol => transform(tree)
+            case sym      => withNonNull(sym :: nonNull)(transform(tree))
+          }
           treeCopy.If(tree,
             noTailTransform(cond),
-            transform(thenp),
-            transform(elsep)
+            branch(thenp, isNull = false),
+            branch(elsep, isNull = true)
           )
 
         case Match(selector, cases) =>
