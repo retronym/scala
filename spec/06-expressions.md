@@ -1380,8 +1380,22 @@ that is, if conversion back to the original type produces the original value.
 
 ###### Numeric Literal Narrowing
 If the expected type is `Byte`, `Short` or `Char`, and
-the expression ´e´ is an integer literal fitting in the range of that
-type, it is converted to the same literal in that type.
+the expression ´e´ is a [constant expression](#constant-expressions) of type
+`Int` or `Char` whose value fits in the range of the expected type, it is
+converted to the literal of the same value in that type.
+Besides integer and character literals, this includes references to
+[constant value definitions](04-basic-declarations-and-definitions.html#value-declarations-and-definitions)
+and operations on constant expressions which the compiler evaluates to a constant.
+
+```scala
+val b: Byte = 1 + 2      // 3: Byte
+final val k = 3
+val c: Byte = k          // 3: Byte
+val s: Short = 'a'       // 97: Short
+val i = 3
+val d: Byte = i          // error: i is not a constant expression
+val e: Byte = 100 + 100  // error: 200 is not in the range of Byte
+```
 
 ###### Value Discarding
 If ´e´ has some value type and the expected type is `Unit`,

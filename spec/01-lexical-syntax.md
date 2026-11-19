@@ -365,7 +365,9 @@ However, if the expected type [_pt_](06-expressions.html#expression-typing) of a
 in an expression is either `Byte`, `Short`, or `Char`
 and the integer number fits in the numeric range defined by the type,
 then the number is converted to type _pt_ and the literal's type
-is _pt_. The numeric ranges given by these types are:
+is _pt_. The same [conversion](06-expressions.html#numeric-literal-narrowing)
+applies to other constant expressions of type `Int` or `Char`.
+The numeric ranges given by these types are:
 
 |                |                          |
 |----------------|--------------------------|
