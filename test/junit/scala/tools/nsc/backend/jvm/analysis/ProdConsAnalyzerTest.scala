@@ -277,4 +277,69 @@ class ProdConsAnalyzerTest extends BytecodeTesting {
     testSingleInsn(a.consumersOfOutputsFrom(firstLoad), "IADD")
     testSingleInsn(a.consumersOfOutputsFrom(secondLoad), "ISTORE")
   }
+
+  // `t = x; x = y; y = t` in a loop: the copy operations form a cycle through three locals
+  def swapLoop() = {
+    import Opcodes._
+    val m = genMethod(descriptor = "(II)I")(
+      Label(1),
+      VarOp(ILOAD, 1),
+      VarOp(ISTORE, 3),  // t = x
+      VarOp(ILOAD, 2),
+      VarOp(ISTORE, 1),  // x = y
+      VarOp(ILOAD, 3),
+      VarOp(ISTORE, 2),  // y = t
+      VarOp(ILOAD, 1),
+      Jump(IFNE, Label(1)),
+      VarOp(ILOAD, 2),
+      Op(IRETURN)
+    )
+    m.maxLocals = 4
+    m.maxStack = 1
+    m
+  }
+
+  @Test
+  def cyclicCopiesInitialProducers(): Unit = {
+    val m = swapLoop()
+    val storeX = findInstrs(m, "ISTORE 1").head
+    val ret = findInstr(m, "IRETURN")
+    val expected = List("ParameterProducer(1)", "ParameterProducer(2)")
+
+    testMultiInsns(new ProdConsAnalyzer(m, "C").initialProducersForInputsOf(storeX), expected)
+
+    val a = new ProdConsAnalyzer(m, "C")
+    testMultiInsns(a.initialProducersForInputsOf(ret), expected)
+    testMultiInsns(a.initialProducersForInputsOf(storeX), expected)
+
+    assertQueryOrderIndependent(m, _.initialProducersForInputsOf(_))
+  }
+
+  @Test
+  def cyclicCopiesUltimateConsumers(): Unit = {
+    val m = swapLoop()
+    val List(loadX, _) = findInstrs(m, "ILOAD 1"): @unchecked
+    val loadY = findInstrs(m, "ILOAD 2").head
+    val expected = List("IFNE", "IRETURN")
+
+    testMultiInsns(new ProdConsAnalyzer(m, "C").ultimateConsumersOfOutputsFrom(loadY), expected)
+
+    val a = new ProdConsAnalyzer(m, "C")
+    testMultiInsns(a.ultimateConsumersOfOutputsFrom(loadX), expected)
+    testMultiInsns(a.ultimateConsumersOfOutputsFrom(loadY), expected)
+
+    assertQueryOrderIndependent(m, _.ultimateConsumersOfOutputsFrom(_), _.getOpcode != Opcodes.IRETURN)
+  }
+
+  // the answer for every instruction is the same from a fresh analyzer as from one that has already answered queries
+  // for the other instructions, in either order
+  def assertQueryOrderIndependent(m: scala.tools.asm.tree.MethodNode, query: (ProdConsAnalyzer, AbstractInsnNode) => Set[AbstractInsnNode], include: AbstractInsnNode => Boolean = _ => true): Unit = {
+    val insns = m.instructions.toArray.toList.filter(i => i.getOpcode >= 0 && include(i))
+    val fresh = insns.map(i => query(new ProdConsAnalyzer(m, "C"), i))
+    for (order <- List(insns.indices.toList, insns.indices.reverse.toList)) {
+      val a = new ProdConsAnalyzer(m, "C")
+      for (i <- order)
+        assertEquals(s"${textify(insns(i))} queried in order $order", fresh(i), query(a, insns(i)))
+    }
+  }
 }
