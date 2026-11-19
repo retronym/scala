@@ -47,23 +47,6 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
     classSym.isSpecialized ||
       classSym.isSynthetic && classSym.name.containsName(nme.delayedInitArg.toTypeName)
 
-  /**
-   * Cache the value of delambdafy == "inline" for each run. We need to query this value many
-   * times, so caching makes sense.
-   */
-  object delambdafyInline {
-    private var runId = -1
-    private var value = false
-
-    def apply(): Boolean = {
-      if (runId != global.currentRunId) {
-        runId = global.currentRunId
-        value = settings.Ydelambdafy.value == "inline"
-      }
-      value
-    }
-  }
-
   def needsStaticImplMethod(sym: Symbol) = sym.hasAttachment[global.mixer.NeedStaticImpl.type]
 
   final def traitSuperAccessorName(sym: Symbol): String = {
@@ -92,15 +75,17 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
   }
 
   /**
-   * The next enclosing definition in the source structure. Includes anonymous function classes
-   * under delambdafy:inline, even though they are only generated during UnCurry.
+   * The next enclosing definition in the source structure. Includes anonymous function classes,
+   * even though they are only generated during UnCurry. UnCurry expands a function into a class
+   * under delambdafy:inline, and in every mode for functions and by-name arguments in a self- or
+   * super-constructor call.
    */
   def nextEnclosing(sym: Symbol): Symbol = {
     val origOwner = sym.originalOwner
     // phase travel necessary: after flatten, the name includes the name of outer classes.
     // if some outer name contains $anon, a non-anon class is considered anon.
-    if (delambdafyInline() && exitingPickler(sym.rawowner.isAnonymousFunction)) {
-      // scala/bug#9105: special handling for anonymous functions under delambdafy:inline.
+    if (exitingPickler(sym.rawowner.isAnonymousFunction)) {
+      // scala/bug#9105: special handling for anonymous functions that are expanded into a class.
       //
       //   class C { def t = () => { def f { class Z } } }
       //
@@ -125,8 +110,8 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
       // originalOwner of `f` is the anonfun-term-symbol, whose rawowner is C. So the nextEnclosing
       // of `f` is its rawowner, the anonFunClassSym.
       //
-      // In delambdafy:method we don't have that problem. The f method is lambda-lifted into C,
-      // not into the anonymous function class. The originalOwner chain is Z - f - C.
+      // A function that is not expanded into a class doesn't have that problem. The f method is
+      // lambda-lifted into C, there is no anonymous function class. The originalOwner chain is Z - f - C.
       if (sym.originalOwner.rawowner == sym.rawowner) sym.originalOwner
       else sym.rawowner
     } else {
