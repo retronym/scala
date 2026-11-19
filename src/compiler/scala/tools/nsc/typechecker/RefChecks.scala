@@ -239,10 +239,6 @@ abstract class RefChecks extends Transform {
 
 // Override checking ------------------------------------------------------------
 
-    /** A Java member with package access, which only members of classes in the same package override. */
-    private def isJavaPackagePrivate(sym: Symbol): Boolean =
-      sym.isJavaDefined && sym.hasAccessBoundary && !sym.isProtected
-
     /** Add bridges for vararg methods that extend Java vararg methods
      */
     def addVarargBridges(clazz: Symbol): List[Tree] = {
@@ -833,7 +829,7 @@ abstract class RefChecks extends Transform {
           // override abstract method foo() in J").
           def checkJavaPackagePrivateImplemented(): Unit =
             for (bc <- clazz.baseClasses.tail if bc.isJavaDefined && !bc.isInterface; decl <- bc.info.decls)
-              if (decl.isMethod && decl.isDeferred && isJavaPackagePrivate(decl)) {
+              if (decl.isMethod && decl.isDeferred && overridingPairs.isJavaPackagePrivate(decl)) {
                 val impl = decl.matchingSymbol(clazz.thisType, admit = VBRIDGE)
                 // A trait's method is not a candidate: the JVM selects the abstract method of class `bc` before default methods.
                 def implementedInPackage = clazz.baseClasses.iterator.takeWhile(_ != bc).exists { c =>
@@ -933,12 +929,7 @@ abstract class RefChecks extends Transform {
          * The member IS accessible to classes in package a.b.c.  The javaAccessCheck logic
          * is restricting the set of matching signatures according to the above semantics.
          */
-        def javaAccessCheck(sym: Symbol) = (
-             !inclazz.isJavaDefined                             // not a java defined member
-          || !sym.hasAccessBoundary                             // no access boundary
-          || sym.isProtected                                    // marked protected in java, thus accessible to subclasses
-          || sym.privateWithin == member.enclosingPackageClass  // exact package match
-        )
+        def javaAccessCheck(sym: Symbol) = !overridingPairs.isJavaPackagePrivateElsewhere(sym, member)
         def classDecl = inclazz.info.nonPrivateDecl(member.name)
                         .orElse(inclazz.info.nonPrivateDecl(member.unexpandedName))
         def matchingSyms = classDecl.filter(sym => isSignatureMatch(sym) && javaAccessCheck(sym))
