@@ -105,6 +105,9 @@ object MimaFilters extends AutoPlugin {
     // CollisionProofHashMap gains the Serializable parent that its writeReplace method was written for; this is
     // only a forwards incompatibility
     ProblemFilters.exclude[MissingTypesProblem]("scala.collection.mutable.CollisionProofHashMap"),
+    // new overrides in 2.13.19: rangeTo implemented directly with RedBlackTree.to
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeMap.rangeTo"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.TreeSet.rangeTo"),
   )
 
   override val buildSettings = Seq(
