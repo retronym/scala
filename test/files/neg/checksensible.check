@@ -85,19 +85,19 @@ checksensible.scala:65: warning: comparing a fresh object using `!=` will always
 checksensible.scala:68: warning: comparing values of types Int and Null using `==` will always yield false
   if (foo.length == null) "plante" else "plante pas" // w
                  ^
-checksensible.scala:73: warning: comparing values of types Bip and Bop using `==` will always yield false
+checksensible.scala:73: warning: comparing non-null values of types Bip and Bop using `==` will always yield false
   (x1 == x2) // w
       ^
-checksensible.scala:83: warning: comparing values of types EqEqRefTest.this.C3 and EqEqRefTest.this.Z1 using `==` will always yield false
+checksensible.scala:83: warning: comparing non-null values of types EqEqRefTest.this.C3 and EqEqRefTest.this.Z1 using `==` will always yield false
   c3 == z1    // w
      ^
-checksensible.scala:84: warning: comparing values of types EqEqRefTest.this.Z1 and EqEqRefTest.this.C3 using `==` will always yield false
+checksensible.scala:84: warning: comparing non-null values of types EqEqRefTest.this.Z1 and EqEqRefTest.this.C3 using `==` will always yield false
   z1 == c3    // w
      ^
-checksensible.scala:85: warning: comparing values of types EqEqRefTest.this.Z1 and EqEqRefTest.this.C3 using `!=` will always yield true
+checksensible.scala:85: warning: comparing non-null values of types EqEqRefTest.this.Z1 and EqEqRefTest.this.C3 using `!=` will always yield true
   z1 != c3    // w
      ^
-checksensible.scala:86: warning: comparing values of types EqEqRefTest.this.C3 and String using `!=` will always yield true
+checksensible.scala:86: warning: comparing non-null values of types EqEqRefTest.this.C3 and String using `!=` will always yield true
   c3 != "abc" // w
      ^
 checksensible.scala:97: warning: comparing values of types Unit and Int using `!=` will always yield true
