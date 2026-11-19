@@ -274,5 +274,19 @@ class TreeMapTest extends AllocationTest {
     val ciMap = TreeMap.from(List("b" -> 1, "a" -> 2, "B" -> 3, "A" -> 4))(ci)
     assertEquals(List("a" -> 4, "b" -> 3), ciMap.toList)
     assertEquals(List("a" -> 4, "b" -> 3), TreeMap.from(collection.mutable.LinkedHashMap("b" -> 1, "a" -> 2, "B" -> 3, "A" -> 4))(ci).toList)
+  def rangeTo(): Unit = {
+    val map = TreeMap(2 -> "2", 4 -> "4", 6 -> "6", 8 -> "8")
+    for (to <- 0 to 10) {
+      val expected = map.filter(_._1 <= to)
+      val actual = map.rangeTo(to)
+      assertEquals(s"rangeTo($to)", expected, actual)
+      assertEquals(s"rangeTo($to)", map.rangeUntil(to + 1), actual)
+    }
+    assertSame(map, map.rangeTo(8))
+    assertSame(map, map.rangeTo(100))
+    assertEquals(TreeMap.empty[Int, String], TreeMap.empty[Int, String].rangeTo(1))
+    val big = TreeMap((1 to 1000).map(i => i -> i): _*)
+    for (to <- List(Int.MinValue, 0, 1, 2, 500, 999, 1000, Int.MaxValue))
+      assertEquals(s"rangeTo($to)", big.filter(_._1 <= to), big.rangeTo(to))
   }
 }
