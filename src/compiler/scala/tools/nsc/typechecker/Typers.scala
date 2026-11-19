@@ -2671,13 +2671,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       var body1: Tree = typed(cdef.body, pt)
 
       if (context.enclosingCaseDef.savedTypeBounds.nonEmpty) {
+        val bodyTpUnderConstraints = body1.tpe
         body1 modifyType context.enclosingCaseDef.restoreTypeBounds
         // insert a cast if something typechecked under the GADT constraints,
         // but not in real life (i.e., now that's we've reset the method's type skolems'
         //   infos back to their pre-GADT-constraint state)
         if (isFullyDefined(pt) && !(body1.tpe <:< pt)) {
-          log(s"Adding cast to pattern because ${body1.tpe} does not conform to expected type $pt")
-          body1 = typedPos(body1.pos)(gen.mkCast(body1, pt.dealiasWiden))
+          // `restoreTypeBounds` replaced a skolem by the type it was constrained to, but the type
+          // that mentions the skolem conforms in real life (e.g., the body is the cast inserted below)
+          if (bodyTpUnderConstraints <:< pt) body1 setType bodyTpUnderConstraints
+          else {
+            log(s"Adding cast to pattern because ${body1.tpe} does not conform to expected type $pt")
+            body1 = typedPos(body1.pos)(gen.mkCast(body1, pt.dealiasWiden))
+          }
         }
       }
 
