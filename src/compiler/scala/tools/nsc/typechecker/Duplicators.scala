@@ -350,29 +350,30 @@ abstract class Duplicators extends AbstractAnalyzer {
           log("changed " + tree + " to " + tree1)
           super.typed(atPos(tree.pos)(tree1))
 */
-        case Match(scrut, cases) =>
-          val scrut1   = typedByValueExpr(scrut)
-          val scrutTpe = scrut1.tpe.widen
-          val cases1 = {
-            if (scrutTpe.isFinalType) cases filter {
-              case CaseDef(Bind(_, Typed(_, tpt)), EmptyTree, body) =>
-                // the typed pattern is not incompatible with the scrutinee type
-                scrutTpe matchesPattern fixType(tpt.tpe)
-              case CaseDef(Typed(_, tpt), EmptyTree, body) =>
-                // the typed pattern is not incompatible with the scrutinee type
-                scrutTpe matchesPattern fixType(tpt.tpe)
-              case _ => true
+        case Apply(fun @ TypeApply(Select(qual, nme.isInstanceOf_), List(targ)), Nil) if fun.symbol == Any_isInstanceOf =>
+          // In a specialized copy, the qualifier can have a primitive type where the original had a type parameter.
+          // A test against a reference type is then rejected by erasure. Give the answer of the original, which
+          // tests the boxed value: as the box classes are final, it is known statically for class types.
+          val qual1   = typedByValueExpr(qual)
+          val qualSym = qual1.tpe.widen.typeSymbol
+          val targTpe = fixType(targ.tpe)
+          if (!isPrimitiveValueClass(qualSym) || isPrimitiveValueClass(targTpe.typeSymbol))
+            super.typed(atPos(tree.pos)(Apply(TypeApply(Select(qual1, nme.isInstanceOf_), List(TypeTree(targTpe))), Nil)), mode, pt)
+          else {
+            // A singleton type, `x.type` or a literal type, is not a class type: the original tests it with `eq` or `==`.
+            val testedTypes = targTpe.dealias match {
+              case RefinedType(parents, _) => parents.map(_.dealias)
+              case tp                      => List(tp)
             }
-            // Without this, AnyRef specializations crash on patterns like
-            //   case _: Boolean => ...
-            // Not at all sure this is safe.
-            else if (scrutTpe <:< AnyRefTpe)
-              cases filterNot (_.pat.tpe <:< AnyValTpe)
-            else
-              cases
+            val testedClasses = testedTypes.map(tp => if (tp.isInstanceOf[SingletonType]) NoSymbol else tp.typeSymbol)
+            val tree1 =
+              if (testedClasses.forall(_.isClass)) {
+                val boxed = if (qualSym == UnitClass) BoxedUnitClass else boxedClass(qualSym)
+                Block(List(qual1), Literal(Constant(testedClasses.forall(boxed.isSubClass))))
+              }
+              else Apply(TypeApply(Select(Typed(qual1, TypeTree(AnyTpe)), nme.isInstanceOf_), List(TypeTree(targTpe))), Nil)
+            super.typed(atPos(tree.pos)(tree1), mode, pt)
           }
-
-          super.typed(atPos(tree.pos)(Match(scrut, cases1)), mode, pt)
 
         case EmptyTree =>
           // no need to do anything, in particular, don't set the type to null, EmptyTree.tpe_= asserts
