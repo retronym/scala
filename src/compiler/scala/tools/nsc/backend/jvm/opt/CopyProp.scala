@@ -500,10 +500,6 @@ abstract class CopyProp {
               else popAfterProd()
           }
 
-          case MULTIANEWARRAY =>
-            toRemove += prod
-            handleInputs(prod, prod.asInstanceOf[MultiANewArrayInsnNode].dims)
-
           case _ =>
             popAfterProd()
         }
