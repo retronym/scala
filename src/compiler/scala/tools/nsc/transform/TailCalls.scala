@@ -142,7 +142,8 @@ abstract class TailCalls extends Transform {
       def isEligible = method.isEffectivelyFinalOrNotOverridden
     }
 
-    final class DefDefTailContext(dd: DefDef) extends TailContext {
+    /** The `body` of `dd` is its `rhs`, or the part of it that is in tail position (see `NonLocalReturnTry`). */
+    final class DefDefTailContext(dd: DefDef, body: Tree) extends TailContext {
       def method    = dd.symbol
       def tparams   = dd.tparams map (_.symbol)
       def methodPos = dd.pos
@@ -155,7 +156,7 @@ abstract class TailCalls extends Transform {
       lazy val tailLabels = {
         // labels are local to a method, so only traverse the rhs of a defdef
         val collector = new TailPosLabelsTraverser
-        collector traverse dd.rhs
+        collector traverse body
         collector.tailLabels.toSet
       }
 
@@ -192,6 +193,29 @@ abstract class TailCalls extends Transform {
       def tailLabels = that.tailLabels
       def label      = that.label
       def isEligible = that.isEligible
+    }
+
+    /** UnCurry wraps the body of a method that contains a non-local return in
+     *
+     *  {{{
+     *  { val key = new Object(); try body catch { case ex: NonLocalReturnControl[T] => if (ex.key eq key) ex.value else throw ex } }
+     *  }}}
+     *
+     *  The body is in tail position. A recursive call `f(args)` in it would return the value of the
+     *  nested call, or throw a NonLocalReturnControl that the nested call's handler did not catch.
+     *  Such an exception passes the handler of every frame but the one that allocated its key.
+     *  So the loop must stay inside the `try`, with the key allocated once before it: a
+     *  NonLocalReturnControl from any iteration is then caught by the one handler, which returns its
+     *  value, as the frame that allocated its key would have, and every frame above it would have
+     *  returned that value in turn.
+     */
+    private object NonLocalReturnTry {
+      def unapply(tree: Tree): Option[(ValDef, Try)] = tree match {
+        case Block(List(keyDef: ValDef), tryTree @ Try(_, List(CaseDef(Bind(_, Typed(_, tpt)), EmptyTree, _)), EmptyTree))
+          if keyDef.symbol.isSynthetic && keyDef.name.startsWith(nme.NON_LOCAL_RETURN_KEY_STRING) && tpt.tpe.typeSymbol == NonLocalReturnControlClass =>
+          Some((keyDef, tryTree))
+        case _ => None
+      }
     }
 
     private var ctx: TailContext = EmptyTailContext
@@ -338,9 +362,15 @@ abstract class TailCalls extends Transform {
           tree.transform(this)
 
         case dd @ DefDef(_, name, _, vparamss, _, rhs) if isEligible(dd) =>
-          val newCtx = new DefDefTailContext(dd)
+          val (body, withBody) = rhs match {
+            case NonLocalReturnTry(keyDef, tryTree) =>
+              (tryTree.block, (b: Tree) => treeCopy.Block(rhs, keyDef :: Nil, treeCopy.Try(tryTree, b, tryTree.catches, EmptyTree)))
+            case _ =>
+              (rhs, (b: Tree) => b)
+          }
+          val newCtx = new DefDefTailContext(dd, body)
           debuglog(s"Considering $name for tailcalls, with labels in tailpos: ${newCtx.tailLabels}")
-          val newRHS = withNonNull(Nil)(transform(rhs, newCtx))
+          val newRHS = withNonNull(Nil)(transform(body, newCtx))
 
           deriveDefDef(tree) { _ =>
             def unreported = !failPositions.contains(newCtx) && !failReasons.contains(newCtx)
@@ -355,10 +385,10 @@ abstract class TailCalls extends Transform {
               val newThis = newCtx.newThis(tree.pos)
               val vpSyms  = vparamss.flatten.map(_.symbol)
 
-              typedPos(tree.pos)(Block(
+              withBody(typedPos(tree.pos)(Block(
                 List(ValDef(newThis, This(currentClass))),
                 LabelDef(newCtx.label, newThis :: vpSyms, mkAttributedCastHack(newRHS, newCtx.label.tpe.resultType))
-              ))
+              )))
             }
             else {
               if (newCtx.isMandatory) {
@@ -372,7 +402,7 @@ abstract class TailCalls extends Transform {
                 if (!unreported)
                   tailrecFailure(newCtx)
               }
-              newRHS
+              withBody(newRHS)
             }
           }.tap { _ =>
             failPositions.remove(newCtx)
