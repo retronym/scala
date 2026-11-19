@@ -56,7 +56,7 @@ trait ScalaSettings extends StandardScalaSettings with Warnings { _: MutableSett
    *  Standard settings
    */
   // argfiles is only for the help message
-  /*val argfiles = */ BooleanSetting("@<file>", "A text file containing compiler arguments (options and source files)")
+  /*val argfiles = */ BooleanSetting("@<file>", "A text file containing compiler arguments (options and source files). An argument can be quoted, `#` at the start of an argument begins a comment.")
   val classpath     = PathSetting   ("-classpath", "Specify where to find user class files.", defaultClasspath) withAbbreviation "-cp" withAbbreviation "--class-path"
   val outdir        = OutputSetting (".").withPostSetHook(s => try outputDirs.setSingleOutput(s.value) catch { case FatalError(msg) => errorFn(msg) }).tap(_.postSetHook())
 
