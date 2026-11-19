@@ -265,7 +265,7 @@ trait Infer extends Checkable {
           if (settings.check.isDefault)
             analyzer.lastAccessCheckDetails
           else
-            ptBlock("because of an internal error (no accessible symbol)",
+            ptBlock("\n because of an internal error (no accessible symbol)",
               "sym.ownerChain"                -> sym.ownerChain,
               "underlyingSymbol(sym)"         -> underlyingSymbol(sym),
               "pre"                           -> pre,
