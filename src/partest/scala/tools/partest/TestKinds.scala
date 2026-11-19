@@ -64,10 +64,20 @@ class TestKinds(pathSettings: PathSettings) {
     val (ti, others) = (pathSettings.srcDir / kind).toDirectory.list.partition(denotesTestPath)
     val ts = ti.toList
     val names = ts.toSet
-    def warnable(p: Path) = ((p.hasExtension("flags") || p.hasExtension("check"))
-      && List("scala", "res").forall(x => !names(p.changeExtension(x)))
-      && !names(p.parent / p.stripExtension)
-    )
+    // A file that is not a test must belong to one: `t1.check`, `t1.script` or `t1-input.txt` for the test `t1`.
+    // Anything else is not used by any test, for instance a lone `t1.java`, which was probably meant to be a test.
+    val testNames = ts.map(_.stripExtension).toSet
+    def belongsToTest(p: Path) = {
+      val name = p.stripExtension
+      testNames(name) || name.indices.exists(i => name.charAt(i) == '-' && testNames(name.substring(0, i)))
+    }
+    // The kind directory is the `java.library.path` of its tests
+    def isNativeLibrary(p: Path) = p.hasExtension("so", "dll", "jnilib", "dylib")
+    def isIncidental(p: Path)    = p.name.startsWith(".") || p.name == "README" || p.hasExtension("log", "obj")
+    def warnable(p: Path) =
+      if (p.hasExtension("flags") || p.hasExtension("check"))
+        List("scala", "res").forall(x => !names(p.changeExtension(x))) && !names(p.parent / p.stripExtension)
+      else !belongsToTest(p) && !isNativeLibrary(p) && !isIncidental(p)
     (ts, others.filter(warnable).toList)
   }
   def grepFor(expr: String): List[Path]  = standardTests filter (t => pathMatchesExpr(t, expr))
