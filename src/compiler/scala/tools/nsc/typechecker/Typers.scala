@@ -4789,10 +4789,19 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           TypeTree(tpe) setOriginal original setPos tree.pos.focus
         }
 
+        // A macro annotation is only expanded on a definition; on a type or an expression,
+        // it would otherwise be reported by its `@compileTimeOnly` "could not be expanded" message.
+        def typedAnnotationNotMacro(): AnnotationInfo = {
+          val ainfo = typedAnnotation(ann, Some(atd), annotMode)
+          val annSym = ainfo.atp.typeSymbol
+          if (annSym.isClass && annSym.hasFlag(MACRO)) MacroAnnotationOnlyDefinitionError(ann)
+          ainfo
+        }
+
         if (arg1.isType) {
           // make sure the annotation is only typechecked once
           if (ann.tpe == null) {
-            val ainfo = typedAnnotation(ann, Some(atd), annotMode)
+            val ainfo = typedAnnotationNotMacro()
             val atype = arg1.tpe.withAnnotation(ainfo)
 
             if (ainfo.isErroneous)
@@ -4809,7 +4818,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         }
         else {
           if (ann.tpe == null) {
-            val annotInfo = typedAnnotation(ann, Some(atd), annotMode)
+            val annotInfo = typedAnnotationNotMacro()
             ann setType arg1.tpe.withAnnotation(annotInfo)
           }
           val atype = ann.tpe
