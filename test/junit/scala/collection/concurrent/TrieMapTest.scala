@@ -1,7 +1,7 @@
 package scala.collection.concurrent
 
 import org.junit.Test
-import org.junit.Assert.assertEquals
+import org.junit.Assert.{assertEquals, assertSame}
 
 import scala.util.hashing.Hashing
 import scala.tools.testkit.AssertUtil.assertThrows
@@ -704,5 +704,60 @@ class TrieMapTest {
     assert(!TrieMap.from((1 to 5).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 10).map(x => x -> x)).isEmpty)
     assert(!TrieMap.from((1 to 100).map(x => x -> x)).isEmpty)
+  }
+
+  private val caseInsensitive: Equiv[String] = Equiv.fromFunction(_.equalsIgnoreCase(_))
+  private val constantHash: Hashing[String] = Hashing.fromFunction(_ => 42)
+  private val lowerCaseHash: Hashing[String] = Hashing.fromFunction(_.toLowerCase.hashCode)
+
+  @Test
+  def readOnlySnapshotLookupUsesEquiv(): Unit = {
+    val t = new TrieMap[String, Int](constantHash, caseInsensitive)
+    t("a") = 1
+    t("b") = 2
+    t.remove("b") // the two keys collide; removing one leaves the other in a tomb node until the next access
+    val ro = t.readOnlySnapshot()
+    assertEquals(Some(1), ro.get("a"))
+    assertEquals(Some(1), ro.get("A"))
+    assertEquals(true, ro.contains("A"))
+    assertEquals(None, ro.get("b"))
+    assertEquals(Some(1), t.get("A"))
+  }
+
+  @Test
+  def derivedMapsKeepHashingAndEquiv(): Unit = {
+    for (hashing <- List(constantHash, lowerCaseHash)) {
+      val t = new TrieMap[String, Int](hashing, caseInsensitive)
+      t("Key") = 1
+      t("other") = 2
+      def check(what: String, m: collection.Map[String, Int]): Unit = {
+        val tm = m.asInstanceOf[TrieMap[String, Int]]
+        assertSame(what, hashing, tm.hashing)
+        assertSame(what, caseInsensitive, tm.equality)
+        assertEquals(what, Some(1), m.get("KEY"))
+        assertEquals(what, Some(2), m.get("OTHER"))
+        assertEquals(what, 2, m.size)
+      }
+      check("original", t)
+      check("snapshot", t.snapshot())
+      check("clone", t.clone())
+      check("empty", t.empty.addAll(t))
+      check("filter", t.filter(_ => true))
+      check("filterNot", t.filterNot(_ => false))
+      check("partition", t.partition(_ => true)._1)
+      check("take", t.take(2))
+      check("tail", (t.clone() += ("x" -> 0)).filterInPlace((k, _) => k != "x"))
+      check("filter of a read-only snapshot", t.readOnlySnapshot().filter(_ => true))
+      check("groupBy", t.groupBy(_ => 0)(0))
+      val updated = t.clone()
+      updated("KEY") = 3
+      assertEquals(2, updated.size)
+      assertEquals(Some(3), updated.get("key"))
+      assertEquals(Some(1), t.get("key"))
+    }
+    val default = TrieMap("Key" -> 1)
+    assertEquals(None, default.clone().get("KEY"))
+    assertEquals(Some(1), default.filter(_ => true).get("Key"))
+    assertEquals(classOf[TrieMap.MangledHashing[_]], default.empty.hashing.getClass)
   }
 }

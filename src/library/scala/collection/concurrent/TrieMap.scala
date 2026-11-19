@@ -285,7 +285,7 @@ private[collection] final class INode[K, V](bn: MainNode[K, V], g: Gen, equiv: E
           clean(parent, ct, lev - 5)
           RESTART
         } else {
-          if (tn.hc == hc && tn.k == k) tn.v.asInstanceOf[AnyRef]
+          if (tn.hc == hc && equal(tn.k, k, ct)) tn.v.asInstanceOf[AnyRef]
           else NO_SUCH_ELEMENT_SENTINEL
         }
         cleanReadOnly(tn)
@@ -697,10 +697,10 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
     with scala.collection.MapFactoryDefaults[K, V, TrieMap, mutable.Iterable]
     with DefaultSerializable {
 
-  private[this] var hashingobj = if (hashf.isInstanceOf[Hashing.Default[_]]) new TrieMap.MangledHashing[K] else hashf
-  private[this] var equalityobj = ef
+  private[this] val hashingobj = if (hashf.isInstanceOf[Hashing.Default[_]]) new TrieMap.MangledHashing[K] else hashf
+  private[this] val equalityobj = ef
   @transient
-  private[this] var rootupdater = rtupd
+  private[this] val rootupdater = rtupd
   def hashing = hashingobj
   def equality = equalityobj
   @volatile private var root = r
@@ -717,38 +717,6 @@ final class TrieMap[K, V] private (r: AnyRef, rtupd: AtomicReferenceFieldUpdater
   override def mapFactory: MapFactory[TrieMap] = TrieMap
 
   /* internal methods */
-
-  private def writeObject(out: java.io.ObjectOutputStream): Unit = {
-    out.writeObject(hashingobj)
-    out.writeObject(equalityobj)
-
-    val it = iterator
-    while (it.hasNext) {
-      val (k, v) = it.next()
-      out.writeObject(k)
-      out.writeObject(v)
-    }
-    out.writeObject(TrieMapSerializationEnd)
-  }
-
-  private def readObject(in: java.io.ObjectInputStream): Unit = {
-    root = INode.newRootNode(equality)
-    rootupdater = AtomicReferenceFieldUpdater.newUpdater(classOf[TrieMap[K, V]], classOf[AnyRef], "root")
-
-    hashingobj = in.readObject().asInstanceOf[Hashing[K]]
-    equalityobj = in.readObject().asInstanceOf[Equiv[K]]
-
-    var obj: AnyRef = in.readObject()
-
-    while (obj != TrieMapSerializationEnd) {
-      obj = in.readObject()
-      if (obj != TrieMapSerializationEnd) {
-        val k = obj.asInstanceOf[K]
-        val v = in.readObject().asInstanceOf[V]
-        update(k, v)
-      }
-    }
-  }
 
   private def CAS_ROOT(ov: AnyRef, nv: AnyRef) = rootupdater.compareAndSet(this, ov, nv)
 
@@ -1201,4 +1169,6 @@ private[collection] class TrieMapIterator[K, V](var level: Int, private var ct: 
 
 /** Only used for ctrie serialization. */
 @SerialVersionUID(3L)
+// Unused: it terminated the stream written by TrieMap's former `writeObject`. A TrieMap is serialized through
+// `DefaultSerializable`'s proxy. Kept for binary compatibility.
 private[concurrent] case object TrieMapSerializationEnd
