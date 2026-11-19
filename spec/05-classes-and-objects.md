@@ -866,7 +866,7 @@ parameters ´\mathit{tps}´ and value parameters ´\mathit{ps}´ with type ascri
 the definition of a companion object, which serves as an [extractor object](08-pattern-matching.html#extractor-patterns). It has the following shape:
 
 ```scala
-object ´c´ extends Function´\mathit{n}\,´[´\mathit{pt}_1\,\ldots\,\mathit{pt}_n´\,´c´[´\mathit{tps}\,´]]{
+object ´c´ {
   def apply[´\mathit{tps}\,´](´\mathit{ps}_1\,´)´\ldots´(´\mathit{ps}_n´): ´c´[´\mathit{tps}\,´] = new ´c´[´\mathit{Ts}\,´](´\mathit{xs}_1\,´)´\ldots´(´\mathit{xs}_n´)
   def unapply[´\mathit{tps}\,´](´x´: ´c´[´\mathit{tps}\,´]) =
     if (x eq null) scala.None
@@ -882,13 +882,26 @@ section ´\mathit{ps}\_i´, and
 in the first parameter section ´\mathit{xs}\_1´.
 If a type parameter section is missing in the class, it is also missing in the `apply` and `unapply` methods.
 
+The implied companion object additionally extends
+`Function´k´[´\mathit{pt}_{11}, \ldots , \mathit{pt}_{1k}´, ´c´]`,
+where ´\mathit{pt}\_{11}, \ldots , \mathit{pt}\_{1k}´ are the types of the parameters
+´\mathit{xs}\_{11}, \ldots , \mathit{xs}\_{1k}´, if all of the following hold:
+
+- the class ´c´ is not `abstract`,
+- the class ´c´ has no type parameters,
+- the class ´c´ has exactly one parameter section, and
+- that parameter section has at most 22 parameters.
+
+The type of a [repeated parameter](04-basic-declarations-and-definitions.html#repeated-parameters)
+`´T´*` is taken to be `scala.Seq[´T´]` for this purpose.
+
 If the companion object ´c´ is already defined,
 the  `apply` and `unapply` methods are added to the existing object.
 If the object ´c´ already has a [matching](#definition-matching)
 `apply` (or `unapply`) member, no new definition is added.
 The definition of `apply` is omitted if class ´c´ is `abstract`.
 
-It will not be modified to extend Function if the existing definition doesn't extend it.
+An existing companion object is not modified to extend `Function´k´`.
 
 If the case class definition contains an empty value parameter list, the
 `unapply` method returns a `Boolean` instead of an `Option` type and
