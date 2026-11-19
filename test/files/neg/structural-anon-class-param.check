@@ -1,16 +1,22 @@
-structural-anon-class-param.scala:17: error: Parameter type in structural refinement may not refer to a type member of that refinement
+structural-anon-class-param.scala:21: error: Parameter type in structural refinement may not refer to a type member of that refinement
   def a = x.m(x.mk(1))             // error
             ^
-structural-anon-class-param.scala:18: error: Parameter type in structural refinement may not refer to a type member of that refinement
+structural-anon-class-param.scala:22: error: Parameter type in structural refinement may not refer to a type member of that refinement
   def b = x.curried("")(x.mk(1))   // error
             ^
-structural-anon-class-param.scala:19: error: Parameter type in structural refinement may not refer to a type member of that refinement
+structural-anon-class-param.scala:23: error: Parameter type in structural refinement may not refer to a type member of that refinement
   def c = x.poly(x.mk(1))          // error
             ^
-structural-anon-class-param.scala:20: error: Parameter type in structural refinement may not refer to a type member of that refinement
+structural-anon-class-param.scala:24: error: Parameter type in structural refinement may not refer to a type member of that refinement
   def d = x.m _                    // error
             ^
 structural-anon-class-param.scala:28: error: Parameter type in structural refinement may not refer to a type member of that refinement
+  def j = x.arr(null)              // error, the element class is part of the array's erasure
+            ^
+structural-anon-class-param.scala:29: error: Parameter type in structural refinement may not refer to a type member of that refinement
+  def k = x.arr2(null)             // error
+            ^
+structural-anon-class-param.scala:36: error: Parameter type in structural refinement may not refer to a type member of that refinement
   def i = y.m(y.mk(1))             // error
             ^
-5 errors
+7 errors
