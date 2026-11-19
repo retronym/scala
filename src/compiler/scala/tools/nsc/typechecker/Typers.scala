@@ -2991,8 +2991,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
           if (!samMatchesFunctionBasedOnArity(sam, vparams)) false
           else {
             def fullyDefinedMeetsExpectedFunTp(pt: Type): Boolean = isFullyDefined(pt) && {
-              val samMethType = pt memberInfo sam
-              fun.tpe <:< functionType(samMethType.paramTypes, samMethType.resultType)
+              fun.tpe <:< samMethodToFunctionType(pt memberInfo sam)
             }
 
             val samTp =
@@ -3069,7 +3068,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
             case _                                     =>
               val sam = samOf(pt)
               if (sam.exists && sam.info.params.lengthCompare(numVparams) == 0)
-                wildcardExtrapolation(methodToExpressionTp(pt memberInfo sam))
+                wildcardExtrapolation(samMethodToFunctionType(pt memberInfo sam))
               else pt // allow type slack (pos/6221)
           }
 
