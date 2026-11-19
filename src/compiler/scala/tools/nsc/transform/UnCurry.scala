@@ -262,6 +262,17 @@ abstract class UnCurry extends InfoTransform
         def mkArrayValue(ts: List[Tree], elemtp: Type) =
           ArrayValue(TypeTree(elemtp), ts) setType arrayType(elemtp)
 
+        /* The element type of the array passed to a Java varargs method. Erasure casts the array to the
+         * erased formal parameter type, so an array of a bottom type (`Nothing$[]`, `Null$[]`, or the
+         * `Object[]` built for a `ClassTag[Nothing]`) only works if that formal erases to `Object[]`.
+         * For `<B extends CharSequence> int f(B... bs)`, `f()` infers `B = Nothing`; use the erasure
+         * of the declared element type instead, as javac does.
+         */
+        def javaVarargsElemType(elemtp: Type): Type =
+          if (erasure.scalaErasure(elemtp).typeSymbol.isBottomClass)
+            erasure.erasure(fun)(fun.info.params.last.info.typeArgs.head)
+          else elemtp
+
         // when calling into scala varargs, make sure it's a sequence.
         def arrayToSequence(tree: Tree, elemtp: Type, copy: Boolean): Tree = {
           exitingUncurry {
@@ -296,7 +307,7 @@ abstract class UnCurry extends InfoTransform
           }
           def iterableClassTag(tpe: Type): Tree = {
             (tpe baseType IterableClass).typeArgs match {
-              case targ :: _  => getClassTag(targ)
+              case targ :: _  => getClassTag(javaVarargsElemType(targ))
               case _          => EmptyTree
             }
           }
@@ -327,7 +338,7 @@ abstract class UnCurry extends InfoTransform
             def mkArray = mkArrayValue(args drop (params.length - 1), varargsElemType)
             // if args.length < params.length the repeated argument is empty
             def emptyVarargs = compareLengths(args, params) < 0
-            if (javaStyleVarArgs) mkArray
+            if (javaStyleVarArgs) mkArrayValue(args drop (params.length - 1), javaVarargsElemType(varargsElemType))
             else if (emptyVarargs) gen.mkNil  // avoid needlessly double-wrapping an empty argument list
             else arrayToSequence(mkArray, varargsElemType, copy = false) // fresh array, no need to copy
           }
