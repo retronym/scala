@@ -5,6 +5,7 @@ object Test {
     assert(t1 == "hi")
     assert(t2 == 1)
     t3()
+    t4()
   }
 
   def t1: Object = {
@@ -18,6 +19,43 @@ object Test {
 
     val namedFunction = namer(byName _)
     namedFunction(1)
+  }
+
+  // A parameter of primitive type in the refinement is `Object` in the method of the receiver if that is a lambda
+  // for a specialized function or one with a boxing adapter, or if its class declares it with a type parameter.
+  def t4(): Unit = {
+    def as[T](t: T): T = t
+    assert(as[{ def apply(x: Int): Int }]((x: Int) => x + 1).apply(3) == 4)
+    assert(as[{ def apply(x: Char): Char }]((x: Char) => x).apply('c') == 'c')
+    assert(as[{ def apply(x: Int): String }]((x: Int) => "s" + x).apply(1) == "s1")
+    assert(as[{ def apply(x: String): Int }]((x: String) => x.length).apply("s") == 1)
+    assert(as[{ def apply(): Int }](() => 1).apply() == 1)
+    assert(as[{ def apply(x: Int, y: Int): Int }]((x: Int, y: Int) => x + y).apply(1, 2) == 3)
+    assert(as[{ def apply(x: Int, y: String): Int }]((x: Int, y: String) => x + y.length).apply(1, "s") == 2)
+    assert(as[{ def apply(x: Long, y: Double): Boolean }]((x: Long, y: Double) => x < y).apply(1L, 2d))
+    assert(as[{ def apply(x: Boolean): Unit }]((x: Boolean) => assert(x)).apply(true) == ((): Any))
+
+    val sam: Sam[Int] = _ + 1
+    assert(as[{ def ap(x: Int): Int }](sam).ap(1) == 2)
+    assert(as[{ def ap(x: Int): Int }](new Sam[Int] { def ap(x: Int) = x + 1 }).ap(1) == 2)
+    assert(as[{ def ap(x: Int): Int }](new Gen[Int]).ap(1) == 1)
+
+    // one call site, receivers that need either lookup
+    def call(f: { def apply(x: Int): Int }): Int = f(1)
+    val fs = List[Int => Int](_ + 1, new (Int => Int) { def apply(x: Int) = x + 1 }, _ + 1)
+    assert(fs.map(call(_)) == List(2, 2, 2))
+
+    // the method with the primitive parameter is preferred
+    class Overloaded { def m(x: Any): String = "any"; def m(x: Int): String = "int" }
+    assert(as[{ def m(x: Int): String }](new Overloaded).m(1) == "int")
+
+    // the exception names the method of the refinement
+    try {
+      "".asInstanceOf[{ def m(x: Int, y: String): Int }].m(1, "")
+      throw new Error()
+    } catch {
+      case e: NoSuchMethodException => assert(e.getMessage == "java.lang.String.m(int,java.lang.String)", e.getMessage)
+    }
   }
 
   // Not sure how to fix this one.. https://github.com/scala/bug/issues/10334
@@ -64,6 +102,9 @@ object Test {
 class A
 class B extends A
 class C extends B
+
+trait Sam[A] { def ap(a: A): A }
+class Gen[A] { def ap(a: A): A = a }
 
 trait T[-A] {
   def m(a: A): Object
