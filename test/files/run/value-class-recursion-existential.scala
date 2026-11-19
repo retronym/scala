@@ -1,0 +1,32 @@
+// A recursive call in a method of a generic value class, on a qualifier whose type does not
+// supply the type arguments of the class.
+
+class V[T](val t: T) extends AnyVal {
+  def f(o: V[_], n: Int): Int = if (n == 0) 0 else 1 + o.f(o, n - 1)
+  def tail(o: V[_], n: Int, acc: Int): Int = if (n == 0) acc else o.tail(this, n - 1, acc + 1)
+  def poly[A](o: V[_], as: List[A]): List[A] = if (as.isEmpty) Nil else as.head :: o.poly[A](o, as.tail)
+  def bounded[O <: V[_]](o: O, n: Int): Int = if (n == 0) 0 else 1 + o.bounded(o, n - 1)
+  def ownArgs(o: V[T], n: Int): Int = if (n == 0) 0 else 1 + o.ownArgs(o, n - 1)
+}
+
+class W[A, B](val a: A) extends AnyVal {
+  def f(o: W[_, _], n: Int): Int = if (n == 0) 0 else 1 + o.f(o, n - 1)
+  def half(o: W[A, _], n: Int): Int = if (n == 0) 0 else 1 + o.half(o, n - 1)
+}
+
+class HK[M[_]](val v: Int) extends AnyVal {
+  def f(o: HK[F] forSome { type F[_] }, n: Int): Int = if (n == 0) v else 1 + o.f(o, n - 1)
+}
+
+object Test extends App {
+  val v = new V(1)
+  println(v.f(new V(""), 3))
+  println(v.tail(new V(""), 3, 0))
+  println(v.poly(new V(""), List(1, 2, 3)))
+  println(v.bounded(new V(""), 3))
+  println(v.ownArgs(v, 3))
+  val w = new W[Int, String](1)
+  println(w.f(new W[String, Int](""), 3))
+  println(w.half(w, 3))
+  println(new HK[List](1).f(new HK[Option](2), 3))
+}

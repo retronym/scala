@@ -1,0 +1,4 @@
+value-class-recursion-existential.scala:6: error: @tailrec annotated method contains no recursive calls
+  @tailrec final def f(o: V[_], n: Int): Int = if (n == 0) 0 else o.f(o, n - 1)
+                     ^
+1 error

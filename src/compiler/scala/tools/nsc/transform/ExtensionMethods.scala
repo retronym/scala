@@ -192,6 +192,10 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
 
   final class SubstututeRecursion(origMeth: Symbol, extensionMeth: Symbol,
                             unit: CompilationUnit) extends TypingTransformer(unit) {
+    private val origThis = extensionMeth.owner.companionClass
+    private def suppliesClassTypeArgs(qual: Tree) =
+      !isExistentialType(qual.tpe.baseType(origThis).withoutAnnotations)
+
     override def transform(tree: Tree): Tree = tree match {
       // scala/bug#6574 Rewrite recursive calls against the extension method so they can
       //         be tail call optimized later. The tailcalls phases comes before
@@ -205,10 +209,14 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
       //         class C[C] { def meth[M](a: A) = { { <expr>: C[C'] }.meth[M'](a1) } }
       //         object C   { def meth$extension[M, C](this$: C[C], a: A)
       //                        = { meth$extension[M', C']({ <expr>: C[C'] })(a1) } }
-      case treeInfo.Applied(sel @ Select(qual, _), targs, argss) if sel.symbol == origMeth =>
+      //
+      //         The class type arguments `C'` are read from the type of the qualifier. An existentially
+      //         typed qualifier, e.g. `C[_]`, does not supply them: its type arguments are the quantified
+      //         variables, which are not in scope here. Such a call is left alone, so it is not a candidate
+      //         for tail call optimization.
+      case treeInfo.Applied(sel @ Select(qual, _), targs, argss) if sel.symbol == origMeth && suppliesClassTypeArgs(qual) =>
         localTyper.typedPos(tree.pos) {
           val allArgss = List(qual) :: argss
-          val origThis = extensionMeth.owner.companionClass
           val baseType = qual.tpe.baseType(origThis)
           val allTargs = targs.map(_.tpe) ::: baseType.typeArgs
           val fun = gen.mkAttributedTypeApply(gen.mkAttributedThis(extensionMeth.owner), extensionMeth, allTargs)
