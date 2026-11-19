@@ -67,7 +67,7 @@ final class WrappedString(private val self: String) extends AbstractSeq[Char] wi
 
   override def startsWith[B >: Char](that: IterableOnce[B], offset: Int = 0): Boolean =
     that match {
-      case s: WrappedString => self.startsWith(s.self, offset)
+      case s: WrappedString => self.startsWith(s.self, Math.min(Math.max(offset, 0), length))
       case _                => super.startsWith(that, offset)
     }
 
@@ -92,7 +92,7 @@ final class WrappedString(private val self: String) extends AbstractSeq[Char] wi
     (xs: Any) match {
       case chs: Array[Char] =>
         val copied = IterableOnce.elemsToCopyToArray(length, chs.length, start, len)
-        self.getChars(0, copied, chs, start)
+        if (copied > 0) self.getChars(0, copied, chs, start)
         copied
       case _                => super.copyToArray(xs, start, len)
     }
