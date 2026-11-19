@@ -286,7 +286,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
           val Template(parents, self, body) = super.transform(deriveTemplate(tree)(_.mapConserve(pretransform))): @unchecked
           Template(parents, self, body ++ boxingBridgeMethods)
         } finally boxingBridgeMethods.clear()
-      case dd: DefDef if dd.symbol.isLiftedMethod && !dd.symbol.isDelambdafyTarget =>
+      case dd: DefDef if isLiftedMethod(dd.symbol) && !dd.symbol.isDelambdafyTarget =>
         // scala/bug#9390 emit lifted methods that don't require a `this` reference as STATIC
         // delambdafy targets are excluded as they are made static by `transformFunction`.
         // a synchronized method cannot be static (`methodReferencesThis` will not see the implicit this reference due to `this.synchronized`)
@@ -337,6 +337,10 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     }
   }
 
+  // A method lifted out of a term by lambdalift. That includes the accessor of a local object, whose symbol is the
+  // module and not a method symbol, so `isLiftedMethod` is false for it.
+  private def isLiftedMethod(sym: Symbol) = sym.isLiftedMethod || sym.hasAllFlags(LIFTED | MODULE | METHOD)
+
   // finds all methods that reference 'this'
   class ThisReferringMethodsTraverser extends InternalTraverser {
     // the set of methods that refer to this
@@ -377,7 +381,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
     override def traverse(tree: Tree) = tree match {
       case _: DefDef if tree.symbol.hasFlag(SYNCHRONIZED) =>
         thisReferringMethods add tree.symbol
-      case DefDef(_, _, _, _, _, _) if tree.symbol.isDelambdafyTarget || tree.symbol.isLiftedMethod =>
+      case DefDef(_, _, _, _, _, _) if tree.symbol.isDelambdafyTarget || isLiftedMethod(tree.symbol) =>
         // we don't expect defs within defs. At this phase trees should be very flat
         if (currentMethod.exists) devWarning("Found a def within a def at a phase where defs are expected to be flattened out.")
         currentMethod = tree.symbol
@@ -388,7 +392,7 @@ abstract class Delambdafy extends Transform with TypingTransformers with ast.Tre
         // They'll be of the form {(args...) => this.anonfun(args...)}
         // but we do need to make note of the lifted body method in case it refers to 'this'
         if (currentMethod.exists) liftedMethodReferences.getOrElseUpdate(currentMethod, mutable.Set()) += targetMethod(fun)
-      case Apply(sel @ Select(This(_), _), args) if sel.symbol.isLiftedMethod =>
+      case Apply(sel @ Select(This(_), _), args) if isLiftedMethod(sel.symbol) =>
         if (currentMethod.exists) liftedMethodReferences.getOrElseUpdate(currentMethod, mutable.Set()) += sel.symbol
         super.traverseTrees(args)
       case Apply(fun, outer :: rest) if shouldElideOuterArg(fun.symbol, outer) =>
