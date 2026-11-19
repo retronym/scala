@@ -37,7 +37,6 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.concurrent.impl.FutureConvertersImpl#P.apply"),
     ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.concurrent.impl.FutureConvertersImpl#P.andThen"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.concurrent.impl.FutureConvertersImpl#P.accept"),
-    ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.concurrent.impl.FutureConvertersImpl#P.andThen"),
 
     // KEEP: the CommonErrors object is not a public API
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.generic.CommonErrors"),

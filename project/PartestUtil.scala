@@ -34,12 +34,13 @@ object PartestUtil {
   /** A parser for the custom `partest` command */
   def partestParser(globalBase: File, testBase: File): Parser[String] = {
     val knownUnaryOptions = List(
-      "--pos", "--neg", "--run", "--jvm", "--res", "--ant", "--scalap", "--specialized",
+      "--pos", "--neg", "--run", "--jvm", "--res", "--scalap", "--specialized",
       "--instrumented", "--presentation", "--failed", "--update-check", "--no-exec",
       "--show-diff", "--show-log", "--verbose", "--terse", "--debug", "--realeasy", "--branch", "--version",
       "--help")
     val srcPathOption = "--srcpath"
     val compilerPathOption = "--compilerpath"
+    val timeoutOption = "--timeout"
     val grepOption = "--grep"
 
     // HACK: if we parse `--srcpath scaladoc`, we overwrite this var. The parser for test file paths
@@ -110,9 +111,13 @@ object PartestUtil {
         opt + " " + path
     }
 
+    val Timeout = ((token(timeoutOption) <~ Space) ~ token(NotSpace.examples("30m", "4h"))) map {
+      case opt ~ duration => opt + " " + duration
+    }
+
     val ScalacOpts = (token("-Dpartest.scalac_opts=") ~ token(NotSpace)) map { case opt ~ v => opt + v }
 
-    val P = oneOf(knownUnaryOptions.map(x => token(x))) | SrcPath | CompilerPath | TestPath | KindTestPath | Grep | ScalacOpts
+    val P = oneOf(knownUnaryOptions.map(x => token(x))) | SrcPath | CompilerPath | Timeout | TestPath | KindTestPath | Grep | ScalacOpts
     Opt((Space ~> repsep(P, oneOrMore(Space))).map(_.mkString(" ")))
   }
 }
