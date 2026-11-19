@@ -1,0 +1,37 @@
+not-anyref-note-bounded.scala:3: error: value eq is not a member of B.this.T
+Note that T is bounded only by java.io.Serializable, which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def f(x: T) = x.eq(x)
+                  ^
+not-anyref-note-bounded.scala:6: error: value eq is not a member of B.this.U
+Note that U is unbounded, which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def g(x: U) = x.eq(x)
+                  ^
+not-anyref-note-bounded.scala:9: error: value eq is not a member of B.this.V
+Note that V is unbounded, which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def h(x: V) = x.eq(x)
+                  ^
+not-anyref-note-bounded.scala:12: error: value eq is not a member of B.this.W
+Note that W is bounded only by java.io.Serializable, Comparable[B.this.W], which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def i(x: W) = x.eq(x)
+                  ^
+not-anyref-note-bounded.scala:14: error: value eq is not a member of type parameter X
+Note that X is bounded only by Comparable[X], which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def j[X <: Comparable[X]](x: X) = x.eq(x)
+                                      ^
+not-anyref-note-bounded.scala:16: error: value eq is not a member of type parameter Y
+Note that Y is bounded only by AnyVal, which means AnyRef is not a known parent.
+Such types can participate in value classes, but instances
+cannot appear in singleton types or in reference comparisons.
+  def k[Y <: AnyVal](y: Y) = y.eq(y)
+                               ^
+6 errors
