@@ -791,6 +791,9 @@ and the equals sign are omitted; its defining expression must be a block.
 E.g., `def ´f´(´\mathit{ps}´) {´\mathit{stats}´}` is equivalent to
 `def ´f´(´\mathit{ps}´): Unit = {´\mathit{stats}´}`.
 
+Procedure syntax, for both declarations and definitions, is deprecated
+since Scala 2.13.0.
+
 ###### Example
 Here is a declaration and a definition of a procedure named `write`:
 

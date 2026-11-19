@@ -179,6 +179,7 @@ grammar:
                       |  XmlExpr
   Exprs             ::=  Expr {‘,’ Expr}
   ArgumentExprs     ::=  ‘(’ [Exprs] ‘)’
+                      |  ‘(’ ‘using’ Exprs ‘)’
                       |  ‘(’ [Exprs ‘,’] PostfixExpr ‘:’ ‘_’ ‘*’ ‘)’
                       |  [nl] BlockExpr
   BlockExpr         ::=  ‘{’ CaseClauses ‘}’
