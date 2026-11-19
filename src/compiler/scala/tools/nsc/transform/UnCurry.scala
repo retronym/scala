@@ -398,6 +398,13 @@ abstract class UnCurry extends InfoTransform
     private def replaceElidableTree(tree: Tree): Tree = {
       def elisionOf(t: Type): Tree = t.typeSymbol match {
         case StringClass => Literal(Constant("")) setType t
+        case clazz if clazz.isDerivedValueClass =>
+          // `null` is not a value of a value class: selecting a member from it throws a NullPointerException.
+          // Wrap the zero of the underlying type instead, erasure removes the box where it is not needed.
+          val tp   = t.dealiasWiden
+          val ctor = clazz.primaryConstructor
+          val fun  = Select(New(TypeTree(tp)) setType tp, nme.CONSTRUCTOR) setSymbol ctor setType tp.memberType(ctor)
+          Apply(fun, elisionOf(tp.memberType(clazz.derivedValueClassUnbox).finalResultType) :: Nil) setType tp
         case _ => gen.mkZero(t)
       }
       tree match {
