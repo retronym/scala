@@ -2,6 +2,8 @@ package a {
   // same package: implements `J.foo`
   class InA extends J { def foo(): Unit = () }
   trait TA extends J { def foo(): Unit = () }
+  // redeclares `J.foo` as public and abstract
+  abstract class InA2 extends J { def foo(): Unit }
 }
 
 package b {
@@ -18,4 +20,12 @@ package b {
 
   abstract class S6 extends a.J { def foo(): Unit = () }
   object O extends S6
+
+  // implemented through a redeclaration in package `a` with wider access, which overrides `J.foo` (JVMS 5.4.5, transitively)
+  class S7 extends a.K2 { def foo(): Unit = () }
+  class S8 extends a.K4 { def foo(): Unit = () }
+  class S9 extends a.InA2 { def foo(): Unit = () }
+
+  // a redeclaration with package access doesn't help
+  class S10 extends a.K3 { def foo(): Unit = () }
 }

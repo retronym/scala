@@ -831,14 +831,14 @@ abstract class RefChecks extends Transform {
             for (bc <- clazz.baseClasses.tail if bc.isJavaDefined && !bc.isInterface; decl <- bc.info.decls)
               if (decl.isMethod && decl.isDeferred && overridingPairs.isJavaPackagePrivate(decl)) {
                 val impl = decl.matchingSymbol(clazz.thisType, admit = VBRIDGE)
+                // A redeclaration in a class of the same package overrides `decl`. If it is concrete, it implements `decl`.
+                // If it has wider access, abstract or not, it is overridden in turn from any package, so `impl` overrides
+                // `decl` transitively (JVMS 5.4.5). If it is abstract with package access, it is checked on its own.
                 // A trait's method is not a candidate: the JVM selects the abstract method of class `bc` before default methods.
-                def implementedInPackage = clazz.baseClasses.iterator.takeWhile(_ != bc).exists { c =>
-                  !c.isTrait && c.enclosingPackageClass == decl.privateWithin && {
-                    val m = decl.matchingSymbol(c, clazz.thisType)
-                    m.exists && !m.isDeferred
-                  }
+                def redeclaredInPackage = clazz.baseClasses.iterator.takeWhile(_ != bc).exists { c =>
+                  !c.isTrait && c.enclosingPackageClass == decl.privateWithin && decl.matchingSymbol(c, clazz.thisType).exists
                 }
-                if (impl.exists && !impl.isDeferred && !implementedInPackage)
+                if (impl.exists && !impl.isDeferred && !redeclaredInPackage)
                   abstractClassError(sm"""|${infoStringWithLocation(decl)} has package access, so it is not implemented by
                                           |${infoStringWithLocation(impl)}; only a method of a class in ${decl.privateWithin} can implement it""")
               }
