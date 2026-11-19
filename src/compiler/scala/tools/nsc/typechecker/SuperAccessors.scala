@@ -470,9 +470,9 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
         val view = if (isPoly) objType else qual.tpe
         memberType match {
           case PolyType(tparams, restpe) =>
-            // luc: question to author: should the tparams symbols not be cloned and get a new owner (protAcc)?
-            PolyType(hostTparams ::: tparams, MethodType(List(protAcc.newSyntheticValueParam(objType)),
-                                                         restpe.cloneInfo(protAcc).asSeenFrom(view, sym.owner)))
+            val accTparams = cloneSymbolsAtOwnerAndModify(tparams, protAcc, _.asSeenFrom(view, sym.owner))
+            PolyType(hostTparams ::: accTparams, MethodType(List(protAcc.newSyntheticValueParam(objType)),
+                                                            restpe.substSym(tparams, accTparams).cloneInfo(protAcc).asSeenFrom(view, sym.owner)))
           case _ =>
             val mt = MethodType(List(protAcc.newSyntheticValueParam(objType)),
                                 memberType.cloneInfo(protAcc).asSeenFrom(view, sym.owner))
