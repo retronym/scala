@@ -128,10 +128,13 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
     put0(key, value, getOld, hash, idx)
   }
 
+  // returns `Some(oldValue)` if `getOld` is set and the key was present, `null` otherwise
   private[this] def put0(key: K, value: V, getOld: Boolean, hash: Int, idx: Int): Some[V] = {
-    val res = table(idx) match {
+    table(idx) match {
       case n: RBNode @uc =>
-        insert(n, idx, key, hash, value)
+        val old = insertIntoExisting(n, idx, key, hash, value, n)
+        if(old.asInstanceOf[AnyRef] ne Statics.pfMarker)
+          return (if(getOld) Some(old.asInstanceOf[V]) else null)
       case _old =>
         val old: LLNode = _old.asInstanceOf[LLNode]
         if(old eq null) {
@@ -157,10 +160,9 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
           if(prev eq null) table(idx) = new LLNode(key, hash, value, old)
           else prev.next = new LLNode(key, hash, value, prev.next)
         }
-        true
     }
-    if(res) contentSize += 1
-    if(res) Some(null.asInstanceOf[V]) else null //TODO
+    contentSize += 1
+    null
   }
 
   private[this] def treeify(old: LLNode, idx: Int): Unit = {
@@ -474,28 +476,23 @@ final class CollisionProofHashMap[K, V](initialCapacity: Int, loadFactor: Double
 
   // ---- insertion ----
 
-  @tailrec private[this] final def insertIntoExisting(_root: RBNode, bucket: Int, key: K, hash: Int, value: V, x: RBNode): Boolean = {
+  // returns the old value or Statics.pfMarker if the key was added
+  @tailrec private[this] final def insertIntoExisting(_root: RBNode, bucket: Int, key: K, hash: Int, value: V, x: RBNode): Any = {
     val cmp = compare(key, hash, x)
     if(cmp == 0) {
+      val old = x.value
       x.value = value
-      false
+      old
     } else {
       val next = if(cmp < 0) x.left else x.right
       if(next eq null) {
         val z = CollisionProofHashMap.leaf(key, hash, value, red = true, x)
         if (cmp < 0) x.left = z else x.right = z
         table(bucket) = fixAfterInsert(_root, z)
-        return true
+        return Statics.pfMarker
       }
       else insertIntoExisting(_root, bucket, key, hash, value, next)
     }
-  }
-
-  private[this] final def insert(tree: RBNode, bucket: Int, key: K, hash: Int, value: V): Boolean = {
-    if(tree eq null) {
-      table(bucket) = CollisionProofHashMap.leaf(key, hash, value, red = false, null)
-      true
-    } else insertIntoExisting(tree, bucket, key, hash, value, tree)
   }
 
   private[this] def fixAfterInsert(_root: RBNode, node: RBNode): RBNode = {
