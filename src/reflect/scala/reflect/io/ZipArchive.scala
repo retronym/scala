@@ -376,8 +376,8 @@ final class ManifestResources(val url: URL) extends ZipArchive(null) {
     val root     = new DirEntry(RootEntry)
     val dirs     = new java.util.HashMap[String, DirEntry]
     dirs.put(RootEntry, root)
-    val manifest = new Manifest(input)
-    closeables ::= input
+    val in       = input
+    val manifest = try new Manifest(in) finally in.close()
     val iter     = manifest.getEntries().keySet().iterator.asScala.filter(_.endsWith(".class")).map(new ZipEntry(_))
 
     for (zipEntry <- iter) {
@@ -401,7 +401,7 @@ final class ManifestResources(val url: URL) extends ZipArchive(null) {
   def path: String = {
     val s = url.getPath
     val n = s.lastIndexOf('!')
-    s.substring(0, n)
+    if (n < 0) s else s.substring(0, n)
   }
   def input = url.openStream()
   def lastModified =
@@ -416,21 +416,25 @@ final class ManifestResources(val url: URL) extends ZipArchive(null) {
   }
 
   private def resourceInputStream(path: String): InputStream = {
+    // The resource is opened on first use, so every method of FilterInputStream that uses `in` is overridden.
     new FilterInputStream(null) {
-      override def read(): Int = {
+      private def ensureOpen(): Unit = {
         if(in == null) in = Thread.currentThread().getContextClassLoader().getResourceAsStream(path)
         if(in == null) throw new RuntimeException(path + " not found")
-        super.read()
       }
+      override def read(): Int = { ensureOpen(); super.read() }
+      override def read(b: Array[Byte], off: Int, len: Int): Int = { ensureOpen(); super.read(b, off, len) }
+      override def skip(n: Long): Long = { ensureOpen(); super.skip(n) }
+      override def available(): Int = { ensureOpen(); super.available() }
+      override def mark(readlimit: Int): Unit = { ensureOpen(); super.mark(readlimit) }
+      override def reset(): Unit = { ensureOpen(); super.reset() }
+      override def markSupported(): Boolean = { ensureOpen(); super.markSupported() }
 
       override def close(): Unit = {
-        super.close()
+        if (in != null) super.close()
         in = null
       }
     }
   }
-  private[this] var closeables: List[java.io.Closeable] = Nil
-  override def close(): Unit = {
-    closeables.foreach(_.close())
-  }
+  override def close(): Unit = ()
 }

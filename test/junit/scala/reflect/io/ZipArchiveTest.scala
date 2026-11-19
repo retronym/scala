@@ -63,6 +63,60 @@ class ZipArchiveTest {
     }
   }
 
+  @Test def `manifest resources path of a URL that is not into a jar`(): Unit = {
+    val jar = createTestJar()
+    Using.resources(ForDeletion(jar), new ManifestResources(jar.toUri.toURL)) { (_, archive) =>
+      assertEquals(jar.toUri.toURL.getPath, archive.path)
+      assertEquals(archive.path, archive.name)
+    }
+  }
+
+  @Test def `manifest resources entry streams can be read in bulk`(): Unit = {
+    val jar = createTestJar()
+    val thread = Thread.currentThread
+    val saved = thread.getContextClassLoader
+    Using.resources(ForDeletion(jar), new java.net.URLClassLoader(Array(jar.toUri.toURL), null), new ManifestResources(manifestAt(jar.toAbsolutePath))) { (_, loader, archive) =>
+      thread.setContextClassLoader(loader)
+      try {
+        val f = archive.iterator.next()
+        assertEquals("hello, world", new String(f.toByteArray))
+        Using.resource(f.input) { in =>
+          val buf = new Array[Byte](64)
+          val n = in.read(buf)
+          assertEquals("hello, world", new String(buf, 0, n))
+          assertEquals(-1, in.read(buf))
+        }
+        Using.resource(f.input) { in =>
+          assertEquals(5L, in.skip(5))
+          assertEquals(',', in.read().toChar)
+        }
+        f.input.close() // never read
+      } finally thread.setContextClassLoader(saved)
+    }
+  }
+
+  @annotation.nowarn("cat=deprecation")
+  @Test def `manifest resources closes the stream it opens`(): Unit = {
+    val jar = createTestJar()
+    var opened, closed = 0
+    val handler = new java.net.URLStreamHandler {
+      override def openConnection(url: URL): java.net.URLConnection = new java.net.URLConnection(url) {
+        override def connect() = ()
+        override def getInputStream = {
+          opened += 1
+          new java.io.FilterInputStream(manifestAt(jar.toAbsolutePath).openStream()) {
+            override def close(): Unit = { closed += 1; super.close() }
+          }
+        }
+      }
+    }
+    Using.resources(ForDeletion(jar), new ManifestResources(new URL(null, "test:archive.jar!/META-INF/MANIFEST.MF", handler))) { (_, archive) =>
+      assertEquals("foo.class", archive.iterator.next().name)
+      assertEquals(1, opened)
+      assertEquals(1, closed)
+    }
+  }
+
   private def createTestJar(): Path = Files.createTempFile("junit", ".jar").tap { f =>
     val man = new Manifest()
     man.getMainAttributes().put(Attributes.Name.MANIFEST_VERSION, "1.0")
