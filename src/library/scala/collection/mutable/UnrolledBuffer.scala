@@ -180,10 +180,17 @@ sealed class UnrolledBuffer[T](implicit val tag: ClassTag[T])
       headptr.remove(idx, this)
     } else throw CommonErrors.indexOutOfBounds(index = idx, max = sz - 1)
 
-  @tailrec final def remove(idx: Int, count: Int): Unit =
+  final def remove(idx: Int, count: Int): Unit =
     if (count > 0) {
-      remove(idx)
-      remove(idx, count-1)
+      if (idx < 0) throw CommonErrors.indexOutOfBounds(index = idx, max = sz - 1)
+      if (idx > sz - count) throw CommonErrors.indexOutOfBounds(index = idx + count - 1, max = sz - 1)
+      var i = 0
+      while (i < count) {
+        remove(idx)
+        i += 1
+      }
+    } else if (count < 0) {
+      throw new IllegalArgumentException("removing negative number of elements: " + count)
     }
 
   def prepend(elem: T) = {
@@ -208,8 +215,10 @@ sealed class UnrolledBuffer[T](implicit val tag: ClassTag[T])
   }
 
   def patchInPlace(from: Int, patch: collection.IterableOnce[T], replaced: Int): this.type = {
-    remove(from, replaced)
-    insertAll(from, patch)
+    val from0 = math.min(math.max(from, 0), sz)
+    val replaced0 = math.min(math.max(replaced, 0), sz - from0)
+    remove(from0, replaced0)
+    insertAll(from0, patch)
     this
   }
 
