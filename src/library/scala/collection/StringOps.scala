@@ -1315,7 +1315,7 @@ final class StringOps(private val s: String) extends AnyVal {
     */
   def indexWhere(p: Char => Boolean, from: Int = 0): Int = {
     val len = s.length
-    var i = from
+    var i = max(from, 0)
     while(i < len) {
       if(p(s.charAt(i))) return i
       i += 1
