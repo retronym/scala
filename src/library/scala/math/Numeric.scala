@@ -110,7 +110,8 @@ object Numeric {
     def rem(x: Char, y: Char): Char = (x % y).toChar
     def negate(x: Char): Char = (-x).toChar
     def fromInt(x: Int): Char = x.toChar
-    def parseString(str: String): Option[Char] = Try(str.toInt.toChar).toOption
+    def parseString(str: String): Option[Char] =
+      Try(str.toInt).toOption.collect { case i if i >= Char.MinValue && i <= Char.MaxValue => i.toChar }
     def toInt(x: Char): Int = x.toInt
     def toLong(x: Char): Long = x.toLong
     def toFloat(x: Char): Float = x.toFloat
