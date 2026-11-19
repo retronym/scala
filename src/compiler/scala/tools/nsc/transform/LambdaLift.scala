@@ -296,11 +296,6 @@ abstract class LambdaLift extends InfoTransform {
               val proxy =
                 if (owner.isTrait) {
                   val accessorFlags = newFlags | ACCESSOR | SYNTHESIZE_IMPL_IN_SUBCLASS
-                  // scala-dev#408: fields for locals captured in a trait are non-final (created in mixin), as they are
-                  // assigned in a trait setter. For safe publication, subclass constructors need to call releaseFence.
-                  // We need to add the attachment in lambdalift, as mixin runs after the constructors phase.
-                  owner.children.foreach(_.primaryConstructor.updateAttachment(ConstructorNeedsFence))
-
                   // TODO do we need to preserve pre-erasure info for the accessors (and a NullaryMethodType for the getter)?
                   // can't have a field in the trait, so add a setter
                   val setter = owner.newMethod(nme.expandedSetterName(proxyName.setterName, owner), fv.pos, accessorFlags)
@@ -415,6 +410,13 @@ abstract class LambdaLift extends InfoTransform {
           }
 
         case ClassDef(_, _, _, _) =>
+          // scala-dev#408: fields for locals captured in a trait are non-final (created in mixin), as they are
+          // assigned in a trait setter. For safe publication, the constructor of each class that gets such a field
+          // needs to call releaseFence. That is every class that mixes the trait in, directly or through another trait.
+          // We need to add the attachment in lambdalift, as mixin runs after the constructors phase.
+          if (!sym.isTrait && sym.mixinClasses.exists(freeParams(_).nonEmpty))
+            sym.primaryConstructor.updateAttachment(ConstructorNeedsFence)
+
           val freeParamSyms = freeParams(sym)
           val freeParamDefs =
             if (tree.symbol.isTrait) {
