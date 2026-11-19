@@ -383,7 +383,7 @@ abstract class SuperAccessors extends transform.Transform with transform.TypingT
           def transformAssign = {
             if (lhs.symbol.isVariable &&
                 lhs.symbol.isJavaDefined &&
-                needsProtectedAccessor(lhs.symbol, qual, tree.pos)) {
+                needsProtectedAccessor(lhs.symbol, qual, lhs.pos)) {
               debuglog("Adding protected setter for " + tree)
               val setter = makeSetter(lhs, rhs)
               debuglog("Replaced " + tree + " with " + setter)
