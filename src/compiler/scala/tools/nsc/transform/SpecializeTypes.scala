@@ -308,6 +308,17 @@ abstract class SpecializeTypes extends InfoTransform with TypingTransformers {
     */
   def possiblySpecialized(sym: Symbol) = specializedTypeVars(sym).nonEmpty
 
+  /** The specialized overloads of `sym`, such as `m$mcI$sp` for `def m(t: T): T` in `class B[@specialized(Int) T]`. */
+  def specializedOverloads(sym: Symbol): List[Symbol] = overloads(sym).map(_.sym)
+
+  /** Is `sym` a specialized overload in the class that declares its generic original, which forwards to that
+   *  original, as `m$mcI$sp` in `class B[@specialized(Int) T] { def m(t: T): T }` calls `m`?
+   */
+  def isForwarderToGeneric(sym: Symbol): Boolean = info.get(sym) match {
+    case Some(SpecialOverload(_, _)) => true
+    case _                           => false
+  }
+
   /** Refines possiblySpecialized taking into account the instantiation of the specialized type variables at `site` */
   def isSpecializedIn(sym: Symbol, site: Type) =
     specializedTypeVars(sym) exists { tvar =>

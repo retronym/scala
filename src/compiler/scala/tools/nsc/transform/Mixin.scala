@@ -138,6 +138,39 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
       sym
     }
 
+  /** The specialized overload to call from the super accessor `acc` of the trait `mixinClass`, mixed into `base`, instead
+   * of `generic`, the member that `rebindSuper` found for the generic alias of `acc`; or `generic` if there is none.
+   *
+   *   abstract class B[@specialized(Int) T] { def m(t: T): T }
+   *   class C extends B[Int] { def m(t: Int) = t }
+   *   trait M extends B[Int] { abstract override def m(t: Int) = super.m(t) + 1 }
+   *   new C with M
+   *
+   * Specialization moves the body of `C.m` into `C.m$mcI$sp` and that of `M.m`, with the call to the super accessor,
+   * into `M.m$mcI$sp`. `C.m` now calls `m$mcI$sp` virtually, which lands in the override from `M` and calls the super
+   * accessor again. The super accessor must call `C.m$mcI$sp`. Likewise, when the implementation is in a specialized
+   * subclass such as `B$mcI$sp`, whose generic `m` `rebindSuper` skips, that subclass' `m$mcI$sp` is the one to call.
+   *
+   * Search the classes from `mixinClass` up to the owner of `generic` for a concrete specialized overload of the alias
+   * of `acc` with the type of `acc`, skipping the overloads that forward to the generic method in the class that
+   * declares it.
+   */
+  private def rebindSuperSpecialized(base: Symbol, acc: Symbol, mixinClass: Symbol, generic: Symbol): Symbol =
+    exitingSpecialize {
+      val alias = acc.alias
+      specializeTypes.specializedOverloads(alias).find(_.tpe matches acc.tpe) match {
+        case Some(overload) if !alias.isSpecialized && !generic.isSpecialized =>
+          val superTargetClass = if (mixinClass.isSpecialized) unspecializedSymbol(mixinClass) else mixinClass
+          val bcs = base.info.baseClasses.dropWhile(superTargetClass != _).tail
+          val (before, rest) = bcs.span(_ != generic.owner)
+          (before ::: rest.take(1)).iterator.map { bc =>
+            bc.info.decl(overload.name).suchThat(sym =>
+              !sym.isDeferred && !specializeTypes.isForwarderToGeneric(sym) && (sym.tpe matches overload.tpe))
+          }.find(_.exists).getOrElse(generic)
+        case _ => generic
+      }
+    }
+
 // --------- type transformation -----------------------------------------------
 
   @inline final def notDeferred(sym: Symbol) = fields.notDeferredOrSynthImpl(sym)
@@ -357,11 +390,12 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis {
               reporter.error(clazz.pos, "Member %s of mixin %s is missing a concrete super implementation.".format(
                 mixinMember.alias, mixinClass))
             case alias1 =>
-              registerRequiredDirectInterface(alias1, clazz, parent =>
+              val alias2 = rebindSuperSpecialized(clazz, mixinMember, mixinClass, alias1)
+              registerRequiredDirectInterface(alias2, clazz, parent =>
                 s"Unable to implement a super accessor required by trait ${mixinClass.name} unless $parent is directly extended by $clazz.")
               if (alias1.isValue && !alias1.isMethod || alias1.isAccessor)
                 reporter.error(clazz.pos, s"parent $mixinClass has a super call to method ${mixinMember.alias.fullNameString}, which binds to the value ${alias1.fullNameString}. Super calls can only target methods.")
-              superAccessor.asInstanceOf[TermSymbol] setAlias alias1
+              superAccessor.asInstanceOf[TermSymbol] setAlias alias2
           }
         }
         else if (mixinMember.hasFlag(ACCESSOR) && notDeferred(mixinMember)
