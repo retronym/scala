@@ -1,0 +1,12 @@
+typepat-bounded-wildcard.scala:3: warning: non-variable type argument Int in type pattern List[Int] (the underlying of List[_ <: Int]) is unchecked since it is eliminated by erasure
+  def list(x: Any) = x match { case _: List[_ <: Int] => "list"; case _ => "other" }
+                                       ^
+typepat-bounded-wildcard.scala:5: warning: non-variable type argument Int in type pattern List[Int] (the underlying of List[_ <: Int]) is unchecked since it is eliminated by erasure
+  def head(x: Any) = x match { case y: List[_ <: Int] => y.headOption; case _ => None }
+                                       ^
+typepat-bounded-wildcard.scala:10: warning: non-variable type argument Int in type List[Int] (the underlying of List[_ <: Int]) is unchecked since it is eliminated by erasure
+      assert((list(v) == "list") == v.isInstanceOf[List[_ <: Int]])
+                                                  ^
+List(list, list, other, other, other)
+Some(1)
+None

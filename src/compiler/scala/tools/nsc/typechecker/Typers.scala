@@ -6201,7 +6201,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       }
 
       def typedExistentialTypeTree(tree: ExistentialTypeTree) = {
-        val tree1 = typerWithLocalContext(context.makeNewScope(tree, context.owner)){
+        val quantifierContext = context.makeNewScope(tree, context.owner)
+        // In a pattern, `typedIdent` starts its lookup in `context.outer` to skip the pattern's own variables.
+        // Nest one more context sharing the quantifiers' scope, so that `case _: List[_ <: Int]` still sees `_$1`.
+        val localContext = if (mode.typingPatternOrTypePat) quantifierContext.make(tree) else quantifierContext
+        val tree1 = typerWithLocalContext(localContext){
           typer =>
             if (context.inTypeConstructorAllowed)
               typer.context.withinTypeConstructorAllowed(typer.typedExistentialTypeTree(tree, mode))
