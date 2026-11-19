@@ -95,6 +95,10 @@ object MimaFilters extends AutoPlugin {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.completeTypeParams"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$typeParams"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.reflect.runtime.SynchronizedSymbols#SynchronizedSymbol.scala$reflect$runtime$SynchronizedSymbols$SynchronizedSymbol$$super$completeTypeParams"),
+
+    // CollisionProofHashMap gains the Serializable parent that its writeReplace method was written for; this is
+    // only a forwards incompatibility
+    ProblemFilters.exclude[MissingTypesProblem]("scala.collection.mutable.CollisionProofHashMap"),
   )
 
   override val buildSettings = Seq(
