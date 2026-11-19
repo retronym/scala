@@ -409,8 +409,14 @@ abstract class TreeCheckers extends AbstractAnalyzer {
         val treeInfo = infoOf(tree)
         val treeTpe  = typeOf(tree)
 
+        // The parameter of the pattern matcher's `matchEnd` label has no owner (`MatchCodeGen`): it is in
+        // the scope of the innermost enclosing definition. (When uncurry moves the label into a function,
+        // nothing would move an owned parameter with it.)
+        val scopeSym =
+          if (treeSym.isValueParameter && treeSym.owner == NoSymbol) enclosingMemberDefs.headOption.fold(treeSym)(_.symbol)
+          else treeSym
         // Is `tree` within the owner of `sym`, skipping (higher-order) type parameters and skolems?
-        def isOk(sym: Symbol) = treeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)
+        def isOk(sym: Symbol) = scopeSym hasTransOwner sym.safeOwner.enclosingSuchThat(x => !x.isTypeParameterOrSkolem && !x.isExistentialSkolem)
         def isEligible(sym: Symbol) = (sym ne NoSymbol) && (
              sym.isTypeParameter
           || sym.isLocalToBlock
