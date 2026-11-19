@@ -460,9 +460,16 @@ abstract class TreeCheckers extends AbstractAnalyzer {
 
       private def checkReturnReferencesDirectlyEnclosingDef(tree: Tree): Unit = tree match {
         case _: Return =>
+          // Until uncurry, a non-local return may be nested in the method of a synthetic class,
+          // such as the `applyOrElse` of a partial function literal.
+          def isNonLocal = phase.id <= currentRun.uncurryPhase.id && path.exists {
+            case dd: DefDef => dd.symbol == tree.symbol
+            case _          => false
+          }
           path collectFirst { case dd: DefDef => dd } match {
             case None                                 => errorFn(s"Return node ($tree) must be enclosed in a DefDef")
-            case Some(dd) if tree.symbol != dd.symbol => errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
+            case Some(dd) if tree.symbol != dd.symbol && !isNonLocal =>
+              errorFn(s"Return symbol (${tree.symbol}} does not reference directly enclosing DefDef (${dd.symbol})")
             case _                                    =>
           }
         case _ =>
