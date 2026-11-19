@@ -2,11 +2,9 @@
 # this must be first so later entries will override it
 * text=auto
 
-# check out text files with lf, not crlf, on Windows.  (especially
+# These files are text and should be normalized (convert crlf => lf),
+# and checked out with lf, not crlf, on Windows. (especially
 # important for Scala source files, since """ preserves line endings)
-text eol=lf
-
-# These files are text and should be normalized (convert crlf => lf)
 *.c       eol=lf
 *.check   eol=lf
 *.css     eol=lf
