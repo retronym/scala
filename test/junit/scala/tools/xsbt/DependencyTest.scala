@@ -240,6 +240,15 @@ class DependencyTest extends BridgeTesting {
   }
 
   @Test
+  def `Dependency phase should extract class dependencies from annotations in a 'classOf' literal`(): Unit = {
+    val srcConsts = "object Consts { final val I = 1 }"
+    val srcAnn = "class MyAnn(x: Int) extends scala.annotation.StaticAnnotation"
+    val srcA = "class A { def g = classOf[B @MyAnn(Consts.I)] }"
+    val memberRef = extractDependenciesFromSrcs(srcConsts, srcAnn, "class B", srcA).memberRef
+    assertEquals(Set("B", "MyAnn", "Consts"), memberRef("A"))
+  }
+
+  @Test
   def `Dependency phase should handle top level import dependencies`(): Unit = {
     val srcA =
       """

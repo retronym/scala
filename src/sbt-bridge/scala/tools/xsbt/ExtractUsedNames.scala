@@ -179,16 +179,24 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
     private def handleAnnotations(tree: Tree): Unit = tree match {
       case md: MemberDef if md.symbol != null && md.symbol != NoSymbol =>
         val annotations = md.symbol.annotations
-        if (annotations.nonEmpty) atOwner(md.symbol) {
-          annotations.foreach { annot =>
-            if (annot.original != EmptyTree) traverse(annot.original)
-            else {
-              addTypeNames(annot.atp)
-              annot.args.foreach(traverse)
-            }
-          }
-        }
+        if (annotations.nonEmpty) atOwner(md.symbol)(annotations.foreach(handleAnnotation))
       case _ =>
+    }
+
+    private def handleAnnotation(annot: AnnotationInfo): Unit =
+      if (annot.original != EmptyTree) traverse(annot.original)
+      else {
+        addTypeNames(annot.atp)
+        annot.args.foreach(traverse)
+      }
+
+    /** The type of a class literal, `classOf[C @ann]`, is the only place its annotations live. */
+    private def handleClassLiteral(tpe: Type): Unit = {
+      addTypeNames(tpe)
+      tpe.foreach {
+        case AnnotatedType(annotations, _) => annotations.foreach(handleAnnotation)
+        case _                             =>
+      }
     }
 
     val addSymbol: (JavaSet[Name], Symbol) => Unit = { (names: JavaSet[Name], symbol: Symbol) =>
@@ -308,6 +316,7 @@ class ExtractUsedNames[GlobalType <: CallbackGlobal](val global: GlobalType)
         addTypeNames(t.tpe)
       case l: Literal =>
         processOriginalTreeAttachment(l)(traverse)
+        if (l.value.tag == ClazzTag) handleClassLiteral(l.value.typeValue)
       case _ =>
     }
 
