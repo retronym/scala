@@ -411,7 +411,15 @@ abstract class UnCurry extends InfoTransform
         deriveDefDef(dd)(_ => body)
       case _ => tree
     }
-    def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || currentOwner.isLazy || currentOwner.isAnonymousFunction
+    /** A return is non-local if it is not in the body of the method it returns from, or if a lazy val (or
+     *  a function) intervenes: the initializer of a local lazy val is later moved to a `lzycompute` method
+     *  by the fields phase. The lazy val need not be the direct owner, as in `lazy val x = { val y = { return 1 }; y }`.
+     */
+    def isNonLocalReturn(ret: Return) = ret.symbol != currentOwner.enclMethod || {
+      @tailrec def inLazyOrFunction(owner: Symbol): Boolean =
+        owner.isLazy || owner.isAnonymousFunction || (owner != ret.symbol && owner != NoSymbol && inLazyOrFunction(owner.owner))
+      inLazyOrFunction(currentOwner)
+    }
 
 // ------ The tree transformers --------------------------------------------------------
 
