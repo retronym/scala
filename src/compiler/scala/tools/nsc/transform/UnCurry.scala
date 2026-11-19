@@ -849,7 +849,15 @@ abstract class UnCurry extends InfoTransform
           if (!isRep) Ident(param)
           else {
             val parTp = elementType(ArrayClass, param.tpe)
-            val wrap = gen.mkWrapVarargsArray(Ident(param), parTp)
+            val wrap = param.tpe match {
+              case _: ExistentialType =>
+                // A repeated parameter whose type depends on an earlier parameter, `(a: A)(xs: a.T*)`, has the type
+                // `Array[a.T] forSome { val a: A }` after uncurry. `parTp` then refers to the quantified `a`, which is
+                // not the skolem that the typer introduces for the reference to `param`. Let the element type be inferred.
+                gen.mkMethodCall(wrapVarargsArrayMethod(parTp), Nil, List(Ident(param)))
+              case _ =>
+                gen.mkWrapVarargsArray(Ident(param), parTp)
+            }
             param.attachments.get[TypeParamVarargsAttachment] match {
               case Some(TypeParamVarargsAttachment(tp)) => gen.mkCast(wrap, seqType(tp))
               case _ => wrap
