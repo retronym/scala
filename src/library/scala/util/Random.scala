@@ -143,7 +143,7 @@ class Random(val self: java.util.Random) extends AnyRef with Serializable {
     var _n = n
 
     while (_n >= Integer.MAX_VALUE) {
-      val bits = nextInt(2)
+      val bits = nextInt(4)
       val halfn = _n >>> 1
       val nextn =
         if ((bits & 2) == 0) halfn
