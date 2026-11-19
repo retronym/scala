@@ -149,7 +149,10 @@ object View extends IterableFactory[View] {
   object Filter {
     def apply[A](underlying: Iterable[A], p: A => Boolean, isFlipped: Boolean): Filter[A] =
       underlying match {
-        case filter: Filter[A] if filter.isFlipped == isFlipped => new Filter(filter.underlying, a => filter.p(a) && p(a), isFlipped)
+        case filter: Filter[A] if filter.isFlipped == isFlipped =>
+          // two flipped filters keep the elements that satisfy neither predicate: `!(p1 || p2)`
+          val merged: A => Boolean = if (isFlipped) a => filter.p(a) || p(a) else a => filter.p(a) && p(a)
+          new Filter(filter.underlying, merged, isFlipped)
         case _ => new Filter(underlying, p, isFlipped)
       }
   }
