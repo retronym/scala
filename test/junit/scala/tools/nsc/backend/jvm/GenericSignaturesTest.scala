@@ -26,7 +26,8 @@ class GenericSignaturesTest extends BytecodeTesting {
     val List(c, o, i, j, k) = compileClasses(code)
     assertEquals(o.name, "C$O$")
     assertEquals(o.methods.asScala.find(_.name == "I").get.signature, "()LC<TT;>.O$I$;")
-    assertEquals(k.signature, "<V:Ljava/lang/Object;>LC<TT;>.O$J<TV;>;")
+    // `T` is erased: javac cannot resolve it from a class nested in the module class `C$O$`
+    assertEquals(k.signature, "<V:Ljava/lang/Object;>LC<Ljava/lang/Object;>.O$J<TV;>;")
   }
 
   @Test
