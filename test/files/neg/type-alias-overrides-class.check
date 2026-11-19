@@ -1,0 +1,39 @@
+type-alias-overrides-class.scala:8: error: class definitions cannot be overridden:
+class X extends AnyRef (defined in class A)
+class B extends A { type X = Int }             // error
+                         ^
+type-alias-overrides-class.scala:9: error: class definitions cannot be overridden:
+class X extends AnyRef (defined in class A)
+class C extends A { override type X = Int }    // error
+                                  ^
+type-alias-overrides-class.scala:10: error: class definitions cannot be overridden:
+abstract trait Y extends AnyRef (defined in class A)
+class D extends A { type Y = String }          // error
+                         ^
+type-alias-overrides-class.scala:13: error: class definitions cannot be overridden:
+class Z extends AnyRef (defined in class A)
+  with type Z = Int (defined in trait T)
+class E extends A with T                       // error
+      ^
+type-alias-overrides-class.scala:16: error: class definitions cannot be overridden:
+class W extends AnyRef (defined in trait U)
+  with type W = Int (defined in trait V)
+class UV extends U with V                      // error
+      ^
+type-alias-overrides-class.scala:17: error: classes can only override abstract types; cannot override:
+type W = Int (defined in trait V)
+  with class W extends AnyRef (defined in trait U)
+class VU extends V with U                      // error
+      ^
+type-alias-overrides-class.scala:18: error: classes can only override abstract types; cannot override:
+type Z = Int (defined in trait T)
+class F extends T { class Z }                  // error
+                          ^
+type-alias-overrides-class.scala:21: error: incompatible type in overriding
+type X <: Int (defined in class H)
+  with class X extends AnyRef (defined in class A);
+  (note that type X <: Int (defined in class H) is abstract,
+  and is therefore overridden by concrete class X extends AnyRef (defined in class A))
+abstract class H extends A { type X <: Int }   // error, the class is not within the bounds
+               ^
+8 errors
