@@ -1,0 +1,15 @@
+truncated:
+  error while loading Foo, class file '<out>/Foo.class' is broken
+  (<exception>)
+wrong magic:
+  error while loading Foo, class file '<out>/Foo.class' is broken
+  (wrong magic number 0x6e6f7420)
+old version:
+  error while loading Foo, class file '<out>/Foo.class' is broken
+  (unknown version 44.0, should be at least 45.3)
+bad pool tag:
+  error while loading Foo, class file '<out>/Foo.class' is broken
+  (bad constant pool tag 99 at byte 10)
+bad pool entry:
+  error while loading Foo, class file '<out>/Foo.class' is broken
+  (bad constant pool tag -54 at byte 0)
