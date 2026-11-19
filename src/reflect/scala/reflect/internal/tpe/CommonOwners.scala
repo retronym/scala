@@ -30,9 +30,11 @@ private[internal] final class CommonOwners[U <: SymbolTable with Singleton](val 
   protected[internal] def commonOwner(tps: List[Type]): Symbol =
     if (tps.isEmpty) NoSymbol
     else {
-      commonOwnerMap.clear()
-      tps foreach (commonOwnerMap)
-      if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+      scratch.commonOwnerMaps.using { commonOwnerMap =>
+        commonOwnerMap.clear()
+        tps foreach (commonOwnerMap)
+        if (commonOwnerMap.result ne null) commonOwnerMap.result else NoSymbol
+      }
     }
 
   class CommonOwnerMap extends TypeCollector[Symbol](null) {
@@ -53,6 +55,4 @@ private[internal] final class CommonOwners[U <: SymbolTable with Singleton](val 
       case _                            => tp.foldOver(this)
     }
   }
-
-  private[internal] lazy val commonOwnerMapObj = new CommonOwnerMap
 }

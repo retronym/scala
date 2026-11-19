@@ -178,7 +178,6 @@ trait StdAttachments {
   final class PermittedSubclassSymbols(permitted: => List[Symbol], val declared: Boolean) extends PlainAttachment {
     lazy val symbols: List[Symbol] = permitted
     private[reflect] var children: Set[Symbol] = null
-    private[reflect] var completing: Symbol = null
   }
 
   case class NamePos(pos: Position) extends PlainAttachment

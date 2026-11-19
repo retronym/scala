@@ -63,7 +63,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
     private def mkTerm(prefix: String): TermName = unit.freshTermName(prefix)
 
     // A typer for the template being transformed, made when `localTyper` is next read.
-    private val typers = new analyzer.TyperStack(typer)
+    private val typers = new analyzer.TyperStack(typerHere)
     private def localTyper: analyzer.Typer = typers.typer
 
     private def typedWithPos(pos: Position)(tree: Tree) =
@@ -661,7 +661,7 @@ abstract class CleanUp extends Statics with Transform with ast.TreeDSL {
       case _: ClassDef if genBCode.codeGen.CodeGenImpl.isJavaEntryPoint(tree.symbol, currentUnit, settings.mainClass.valueSetByUser.map(_.toString)) =>
         // collecting symbols for entry points here (as opposed to GenBCode where they are used)
         // has the advantage of saving an additional pass over all ClassDefs.
-        entryPoints += tree.symbol
+        lockedIfConcurrent(entryPoints)(entryPoints += tree.symbol)
         tree.transform(this)
 
       /* Transforms dynamic calls (i.e. calls to methods that are undefined

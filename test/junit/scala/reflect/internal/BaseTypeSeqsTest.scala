@@ -10,8 +10,12 @@ import scala.tools.nsc.symtab.SymbolTableForUnitTesting
 @RunWith(classOf[JUnit4])
 class BaseTypeSeqsTest {
   object symbolTable extends SymbolTableForUnitTesting {
+    private[this] var forcedId = 0
+    private[this] var forcing = false
     /** As if the `Int` counter of symbol ids had wrapped around and come back to `id`. */
-    def nextIdWillBe(id: Int): Unit = ids = id - 1
+    def nextIdWillBe(id: Int): Unit = { forcedId = id - 1; forcing = true }
+    override protected def nextId(): Int =
+      if (forcing) { forcedId += 1; forcedId } else super.nextId()
   }
   import symbolTable._, definitions._
 

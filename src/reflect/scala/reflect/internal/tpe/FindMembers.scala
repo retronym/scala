@@ -13,7 +13,6 @@
 package scala.reflect.internal
 package tpe
 
-import util.ReusableInstance
 import Flags._
 import scala.runtime.Statics.releaseFence
 
@@ -261,8 +260,6 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
       if (isNew) members.enter(sym)
     }
   }
-  private[reflect] val findMemberInstance: ReusableInstance[FindMember] = ReusableInstance(new FindMember, enabled = isCompilerUniverse)
-
   private[reflect] final class FindMember
     extends FindMemberBase[Symbol] {
 
@@ -351,9 +348,11 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
     private[this] var _result = false
     override protected def result: Boolean = _result
 
+    // A member `LOCKED` by a completion on another thread of a concurrent compiler is not one whose completion this
+    // thread is inside, which is what the namer asks when it looks for a locked user-defined `apply`: it does not count.
     protected def shortCircuit(sym: Symbol): Boolean = {
-      _result = true
-      true // prevents call to addMemberIfNew
+      if ((requiredFlags & LOCKED) == 0L || sym.isCompletingHere) _result = true
+      _result // when true, ends the walk and prevents the call to addMemberIfNew
     }
 
     // Not used

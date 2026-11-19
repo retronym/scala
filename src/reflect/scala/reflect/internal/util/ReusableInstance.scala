@@ -38,6 +38,22 @@ final class ReusableInstance[T <: AnyRef] private (make: => T, initialSize: Int)
       taken += 1
       try action(cache(taken-1)) finally taken -= 1
     }
+
+  /** As `using`, for call sites that should not depend on the JIT to eliminate the closure:
+   *  `val x = take(); try ... finally release()`.
+   */
+  def take(): T =
+    if (cache == null) make
+    else {
+      if (taken == cache.size)
+        cache += make
+      taken += 1
+      cache(taken-1)
+    }
+
+  /** Give back the instance from the matching `take`. */
+  def release(): Unit =
+    if (cache != null) taken -= 1
 }
 
 object ReusableInstance {

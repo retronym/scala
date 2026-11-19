@@ -46,6 +46,9 @@ class FreshNameCreator(creatorPrefix: String = "") {
     creatorPrefix + safePrefix + idx
   }
 
+  /** Start again from 1, for a unit that is parsed again from the start. */
+  private[scala] def reset(): Unit = counters.clear()
+
   private def allocateCounter(safePrefix: String): AtomicLong = {
     counters.computeIfAbsent(safePrefix, (s: String) => new AtomicLong(0))
   }

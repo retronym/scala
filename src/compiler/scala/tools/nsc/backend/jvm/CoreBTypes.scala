@@ -324,7 +324,7 @@ abstract class CoreBTypesFromSymbols[G <: Global] extends CoreBTypes {
 
   private def specializedSubclasses(cls: Symbol): List[Symbol] = {
     exitingSpecialize(cls.info) // the `transformInfo` method of specialization adds specialized subclasses to the `specializedClass` map
-    val map = specializeTypes.specializedClass.getOrNull(cls)
+    val map = specializeTypes.specializedClass.getOrElse(cls, null)
     if (map == null) Nil
     else map.values.toList
   }

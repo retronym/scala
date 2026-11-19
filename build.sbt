@@ -453,6 +453,20 @@ lazy val library = configureAsSubproject(project)
   )
   .settings(filterDocSources("*.scala" -- regexFileFilter(".*/scala/runtime/.*")))
 
+// The macro implementations of the vendored scala-sharing (src/sharing/README.md): compiled by STARR, with STARR's
+// library and reflect, and needed only to compile `reflect` and `compiler`, whose sources call the macros.
+lazy val sharingMacros = configureAsSubproject(project, srcdir = Some("sharing-macros"))
+  .settings(disableDocs)
+  .settings(publish / skip := true)
+  .settings(
+    name := "scala-sharing-macros",
+    libraryDependencies ++= Seq(
+      scalaOrganization.value % "scala-library" % scalaVersion.value % Provided,
+      scalaOrganization.value % "scala-reflect" % scalaVersion.value % Provided,
+    ),
+    Compile / scalacOptions ++= Seq("-language:experimental.macros"),
+  )
+
 lazy val reflect = configureAsSubproject(project)
   .settings(generatePropertiesFileSettings)
   .settings(Osgi.settings)
@@ -482,8 +496,11 @@ lazy val reflect = configureAsSubproject(project)
     ),
     apiURL := Some(url(s"https://www.scala-lang.org/api/${versionProperties.value.mavenVersion}/scala-${projectFolder.value}/")),
     MimaFilters.mimaSettings,
+    // the vendored scala-sharing runtime ships in scala-reflect (src/sharing/README.md)
+    Compile / unmanagedSourceDirectories += (ThisBuild / baseDirectory).value / "src" / "sharing",
+    Compile / scalacOptions ++= Seq("-language:experimental.macros", "-Wconf:src=src/sharing/.*:s"),
   )
-  .dependsOn(library)
+  .dependsOn(library, sharingMacros % "compile-internal->compile")
 
 lazy val compiler = configureAsSubproject(project)
   .settings(generatePropertiesFileSettings)
@@ -568,7 +585,7 @@ lazy val compiler = configureAsSubproject(project)
     apiURL := Some(url(s"https://www.scala-lang.org/api/${versionProperties.value.mavenVersion}/scala-${projectFolder.value}/")),
     pomDependencyExclusions += (("org.scala-lang.modules", "scala-asm"))
   )
-  .dependsOn(library, reflect)
+  .dependsOn(library, reflect, sharingMacros % "compile-internal->compile")
 
 lazy val interactive = configureAsSubproject(project)
   .settings(disableDocs)

@@ -70,6 +70,7 @@ abstract class UnCurry extends InfoTransform
 
   def newTransformer(unit: CompilationUnit): AstTransformer = new UnCurryTransformer(unit)
   override def changesBaseClasses = false
+  override protected def transformInfoIfLocal(sym: Symbol, tpe: Type): Type = if (sym.isClass) null else transformInfo(sym, tpe)
 
 // ------ Type transformation --------------------------------------------------------
 
@@ -598,7 +599,7 @@ abstract class UnCurry extends InfoTransform
         case Template(_, _, _) =>
           useNewMembers(currentClass) {
             newMembers =>
-              if (newMembers.nonEmpty) localTyper = typer.atOwner(tree, currentClass)
+              if (newMembers.nonEmpty) localTyper = typerHere.atOwner(tree, currentClass)
               deriveTemplate(tree)(transformTrees(newMembers) ::: _)
           }
 
@@ -846,7 +847,7 @@ abstract class UnCurry extends InfoTransform
       val isRepeated = enteringUncurry(dd.symbol.info.paramss.flatten.map(sym => definitions.isRepeatedParamType(sym.tpe)))
       val oldPs = flatdd.symbol.paramss.head
 
-      val theTyper = typer.atOwner(dd, currentClass)
+      val theTyper = typerHere.atOwner(dd, currentClass)
       val forwTree = theTyper.typedPos(dd.pos) {
         val seqArgs = map3(newPs, oldPs, isRepeated)((param, _, isRep) => {
           if (!isRep) Ident(param)

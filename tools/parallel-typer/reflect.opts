@@ -1,0 +1,8 @@
+-feature
+-Xlint
+"-Wconf:cat=unchecked&msg=The outer reference in this type test cannot be checked at run time.:s"
+-Wconf:cat=optimizer:is
+-Wconf:cat=unused-nowarn:s
+"-Wconf:cat=deprecation&msg=in class Thread :s"
+-Wunnamed-boolean-literal-strict
+"-Wconf:cat=deprecation&msg=early initializers:s"

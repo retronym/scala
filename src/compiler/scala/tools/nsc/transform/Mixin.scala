@@ -66,7 +66,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
   /** This map contains a binding (class -> info) if
    *  the class with this info at phase mixinPhase has been treated for mixin composition
    */
-  private val treatedClassInfos = perRunCaches.newMap[Symbol, Type]() withDefaultValue NoType
+  private val treatedClassInfos = perRunCaches.newConcurrentMap[Symbol, Type]() withDefaultValue NoType
 
 
 // --------- helper functions -----------------------------------------------
@@ -225,7 +225,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
     }
   }
 
-  def publicizeTraitMethods(clazz: Symbol): Unit = {
+  def publicizeTraitMethods(clazz: Symbol): Unit = mixinClaim(clazz) {
     if (treatedClassInfos(clazz) != clazz.info) {
       treatedClassInfos(clazz) = clazz.info
       assert(phase == currentRun.mixinPhase, phase)
@@ -250,7 +250,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
         val suggestedParent = exitingTyper(clazz.info.baseType(owner))
         reporter.error(clazz.pos, msg(suggestedParent))
       } else
-        erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
+        erasure.addRequiredDirectInterface(clazz, owner)
     }
   }
 
@@ -265,7 +265,23 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
    *      - for every super accessor in T, add an implementation of that accessor
    *      - for every module in T, add a module
    */
-  def addMixedinMembers(clazz: Symbol, unit: CompilationUnit): Unit = {
+  def addMixedinMembers(clazz: Symbol, unit: CompilationUnit): Unit =
+    mixinClaim(clazz)(addMixedinMembers0(clazz, unit))
+
+  /** A claim of this phase's own on a class, on the pool. A class's superclass, which is completed from
+   *  here, may be in another unit, and so may a trait that `publicizeTraitMethods` changes. A class only reads its base
+   *  classes, which are done by then: traits never get members added here, and a superclass comes first. So the waits
+   *  go up the inheritance graph. The key is not the symbol, whose claim a thread holding the coarse root may want (an
+   *  annotation of the class being forced), when a holder of this one may want the root (the class info of a member).
+   */
+  private final case class MixinClaim(clazz: Symbol)
+  private def mixinClaim(clazz: Symbol)(body: => Unit): Unit = {
+    val lock = completionLock
+    if (lock eq null) body
+    else lock.claim(MixinClaim(clazz), scala.reflect.internal.util.CompletionLock.completing, clazz)(body)
+  }
+
+  private def addMixedinMembers0(clazz: Symbol, unit: CompilationUnit): Unit = {
     def cloneAndAddMixinMember(mixinClass: Symbol, mixinMember: Symbol): Symbol = (
       cloneAndAddMember(mixinClass, mixinMember, clazz)
            setPos clazz.pos
@@ -288,7 +304,7 @@ abstract class Mixin extends Transform with ast.TreeDSL with AccessorSynthesis w
               }
             } else {
               if (isJavaInterface)
-                erasure.requiredDirectInterfaces.getOrElseUpdate(clazz, mutable.Set.empty) += owner
+                erasure.addRequiredDirectInterface(clazz, owner)
               cloneAndAddMixinMember(mixinClass, member).asInstanceOf[TermSymbol] setAlias member
             }
           }

@@ -19,12 +19,13 @@ import scala.annotation.{nowarn, tailrec}
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.reflect.macros.Attachments
-import util.{ReusableInstance, Statistics, StringContextStripMarginOps}
+import util.{Statistics, StringContextStripMarginOps}
 
 trait Trees extends api.Trees {
   self: SymbolTable =>
 
-  private[scala] var nodeCount = 0
+  /** The number of trees made on this thread (`Scratch.nodeCount`). */
+  private[scala] def nodeCount: Int = scratch.nodeCount
 
   protected def treeLine(t: Tree): String =
     if (t.pos.isDefined && t.pos.isRange) t.pos.lineContent.drop(t.pos.column - 1).take(t.pos.end - t.pos.start + 1)
@@ -56,7 +57,7 @@ trait Trees extends api.Trees {
   }
 
   abstract class Tree extends TreeContextApiImpl with Attachable with Product {
-    nodeCount += 1
+    scratch.nodeCount += 1
 
     final override def pos: Position = rawatt.pos
 
@@ -206,7 +207,7 @@ trait Trees extends api.Trees {
 
     /** Equivalent to `this.children.headOption.getOrElse(EmptyTree)`, but more efficient. */
     final def onlyChild: Tree = {
-      onlyChildAccumulator.using(accum => { foreachChild(accum); accum.result()})
+      scratch.onlyChildAccumulators.using(accum => { foreachChild(accum); accum.result()})
     }
 
     def freeTerms: List[FreeTermSymbol] = freeSyms(terms = true, types = false).asInstanceOf[List[FreeTermSymbol]]
@@ -2100,7 +2101,7 @@ trait Trees extends api.Trees {
       throw new IllegalStateException("Not a Function: " + t + "/" + t.getClass)
   }
 
-  private final class OnlyChildAccumulator extends (Tree => Boolean) {
+  private[internal] final class OnlyChildAccumulator extends (Tree => Boolean) {
     private[this] var only: Tree = _
     def apply(t: Tree): Boolean = {
       if (only == null) {
@@ -2119,7 +2120,6 @@ trait Trees extends api.Trees {
       }
     }
   }
-  private val onlyChildAccumulator = ReusableInstance[OnlyChildAccumulator](new OnlyChildAccumulator, enabled = isCompilerUniverse)
 
 // -------------- Classtags --------------------------------------------------------
 

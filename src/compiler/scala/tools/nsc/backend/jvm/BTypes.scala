@@ -597,12 +597,34 @@ abstract class BTypes {
     // like classic double checked lock in java
     @volatile private var _info: Either[NoClassBTypeInfo, ClassInfo] = null
 
+    /**
+     * With the units of a compiler on a pool, how to compute `_info`, until it is assigned. Nobody waits for another
+     * thread's computation: a thread that wants the info computes it as well, and the first result is kept. It only reads
+     * symbols, and the classes in the result are the ones in the map, so the results are equal. Waiting would need a
+     * monitor held across the computation, which can need the completion lock, while a holder of that lock asks for this
+     * info. This does not recurse for ever: a computation that asks for its own class's info, which is the only way to
+     * do so, would fail the assertion in `info` in a serial compiler.
+     */
+    private var pendingInfo: () => Either[NoClassBTypeInfo, ClassInfo] = null
+
     def info: Either[NoClassBTypeInfo, ClassInfo] = {
-      if (_info eq null)
+      if (_info eq null) {
+        val pending = pendingInfo
+        if (pending ne null) {
+          val computed = pending()
+          val won = this.synchronized {
+            val first = _info eq null
+            if (first) _info = computed
+            pendingInfo = null
+            first
+          }
+          if (won) checkInfoConsistency()
+        }
         // synchronization required to ensure the apply is finished
         // which populates info. ClassBType does not escape apart from via the map
         // and the object mutex is locked prior to insertion. See apply
-        this.synchronized {}
+        else this.synchronized {}
+      }
       assert(_info != null, s"ClassBType.info not yet assigned: $this")
       _info
     }
@@ -825,7 +847,25 @@ abstract class BTypes {
     final def apply[T](internalName: InternalName, t: T, fromSymbol: Boolean)(init: (ClassBType, T) => Either[NoClassBTypeInfo, ClassInfo]): ClassBType = {
       val cached = classBTypeCache.get(internalName)
       if (cached ne null) cached
-      else {
+      // From symbols, one at a time: a class's info refers to other classes, and with the units on a pool two threads
+      // could each hold the monitor of one (below) while asking for the info of the other.
+      else if (!fromSymbol) create(internalName, t, fromSymbol)(init)
+      else if (frontendAccess.classBTypesOffLock) createForPool(internalName, t)(init)
+      else frontendSynch(create(internalName, t, fromSymbol)(init))
+    }
+
+    /** See `ClassBType.pendingInfo`. */
+    private def createForPool[T](internalName: InternalName, t: T)(init: (ClassBType, T) => Either[NoClassBTypeInfo, ClassInfo]): ClassBType = {
+      val newRes: ClassBType = new ClassBTypeFromSymbol(internalName)
+      newRes.pendingInfo = () => init(newRes, t)
+      classBTypeCache.putIfAbsent(internalName, newRes) match {
+        case null => newRes.info; newRes
+        case old  => old
+      }
+    }
+
+    private def create[T](internalName: InternalName, t: T, fromSymbol: Boolean)(init: (ClassBType, T) => Either[NoClassBTypeInfo, ClassInfo]): ClassBType = {
+      {
         val newRes =
           if (fromSymbol) new ClassBTypeFromSymbol(internalName)
           else new ClassBTypeFromClassfile(internalName)
