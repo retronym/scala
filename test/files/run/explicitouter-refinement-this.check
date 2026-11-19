@@ -1,0 +1,23 @@
+newSource1.scala:3: warning: a pattern match on a refinement type is unchecked
+    def f(x: Any) = x.isInstanceOf[AnyRef { type A; def foo: List[A]; def me: this.type }]
+                                  ^
+[[syntax trees at end of             explicitouter]] // newSource1.scala
+package <empty> {
+  class C extends Object {
+    def <init>(): C = {
+      C.super.<init>();
+      ()
+    };
+    class D extends Object {
+      def <init>($outer: C.this.type): C.this.D = {
+        D.super.<init>();
+        ()
+      };
+      def f(x: Any): Boolean = x.isInstanceOf[Object{type A; def foo(): List[this.A]; def me(): this.type}]();
+      def g(x: Any): Boolean = x.isInstanceOf[D.this.$outer.type]();
+      <synthetic> <paramaccessor> <artifact> protected val $outer: C.this.type = _;
+      <synthetic> <stable> <artifact> def $outer(): C.this.type = D.this.$outer
+    }
+  }
+}
+

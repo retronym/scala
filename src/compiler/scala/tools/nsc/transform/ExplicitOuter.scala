@@ -487,7 +487,8 @@ abstract class ExplicitOuter extends InfoTransform
         case TypeApply(fun, targs) =>
           val rewriteTypeToExplicitOuter = new TypeMap { typeMap =>
             def apply(tp: Type) = tp match {
-              case ThisType(sym) if sym != currentClass && !(sym.hasModuleFlag && sym.isStatic) =>
+              // only an enclosing class is reached through outer accessors, e.g., not the `this` of a refinement
+              case ThisType(sym) if sym != currentClass && !(sym.hasModuleFlag && sym.isStatic) && currentClass.hasTransOwner(sym) =>
                 var cls = currentClass
                 var tpe = cls.thisType
                 do {
