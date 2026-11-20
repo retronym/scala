@@ -244,7 +244,7 @@ If you'd like to test your patch before having everything polished for review,
 feel free to submit a draft PR. Note that inactive draft PRs will be closed
 eventually, which does not mean the change is being rejected.
 
-CI performs a compiler bootstrap. The first task, `validatePublishCore`, publishes
+CI performs a compiler bootstrap. The first job, `validate/publish-core`, publishes
 a build of your commit to the temporary repository
 https://scala-ci.typesafe.com/artifactory/scala-pr-validation-snapshots.
 Note that this build is not yet bootstrapped, its bytecode is built using the
