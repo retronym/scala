@@ -192,21 +192,24 @@ abstract class ExtensionMethods extends Transform with TypingTransformers {
     /** The type arguments of the value class for a call on `qual`, if there are any that the extension method
      *  can be called with. For an existentially typed qualifier, each quantified variable in the position of a
      *  covariant (contravariant) type parameter is replaced by its upper (lower) bound, e.g. `Any` for `V[_]`
-     *  if `V[+T]`. If the result does not conform, e.g. for an invariant type parameter, there are none.
+     *  if `V[+T]`. An argument that only mentions a quantified variable is taken existentially abstracted over
+     *  it, e.g. `List[_]` for `V[List[X]] forSome { type X }`. If the result does not conform, e.g. for an
+     *  invariant type parameter, there are none.
      */
     private def classTypeArgs(qual: Tree, targs: List[Tree]): Option[List[Type]] =
       qual.tpe.baseType(origThis).withoutAnnotations match {
-        case ExistentialType(quantified, underlying) =>
+        case existential @ ExistentialType(quantified, underlying) =>
           def mentionsQuantified(tp: Type) = tp.exists(t => quantified.contains(t.typeSymbol))
-          val args = map2(underlying.typeArgs, origThis.typeParams) { (arg, tparam) =>
-            if (!quantified.contains(arg.typeSymbol)) arg
-            else if (tparam.isCovariant) arg.bounds.hi
-            else if (tparam.isContravariant) arg.bounds.lo
-            else arg
+          val args = map3(underlying.typeArgs, existential.typeArgs, origThis.typeParams) { (arg, rewrapped, tparam) =>
+            if (quantified.contains(arg.typeSymbol)) {
+              val bound = if (tparam.isCovariant) arg.bounds.hi else if (tparam.isContravariant) arg.bounds.lo else arg
+              if (mentionsQuantified(bound)) None else Some(bound)
+            }
+            else if (mentionsQuantified(arg)) Some(rewrapped)
+            else Some(arg)
           }
-          if (args.exists(mentionsQuantified) || targs.exists(t => mentionsQuantified(t.tpe))) None
-          else if (qual.tpe <:< appliedType(origThis, args)) Some(args)
-          else None
+          if (targs.exists(t => mentionsQuantified(t.tpe))) None
+          else sequenceOpt(args).filter(args => qual.tpe <:< appliedType(origThis, args))
         case baseType => Some(baseType.typeArgs)
       }
 

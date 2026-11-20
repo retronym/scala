@@ -2,6 +2,7 @@
 // supply the type arguments of the class.
 
 import scala.annotation.tailrec
+import scala.language.existentials
 
 class V[T](val t: T) extends AnyVal {
   def f(o: V[_], n: Int): Int = if (n == 0) 0 else 1 + o.f(o, n - 1)
@@ -9,6 +10,7 @@ class V[T](val t: T) extends AnyVal {
   def poly[A](o: V[_], as: List[A]): List[A] = if (as.isEmpty) Nil else as.head :: o.poly[A](o, as.tail)
   def bounded[O <: V[_]](o: O, n: Int): Int = if (n == 0) 0 else 1 + o.bounded(o, n - 1)
   def ownArgs(o: V[T], n: Int): Int = if (n == 0) 0 else 1 + o.ownArgs(o, n - 1)
+  def nested(o: V[List[X]] forSome { type X }, n: Int): Int = if (n == 0) 0 else 1 + o.nested(o, n - 1)
 }
 
 class W[A, B](val a: A) extends AnyVal {
@@ -21,6 +23,8 @@ class W[A, B](val a: A) extends AnyVal {
 class Cov[+T](val t: T) extends AnyVal {
   @tailrec final def f(o: Cov[_], n: Int): Int = if (n == 0) 0 else o.f(o, n - 1)
   @tailrec final def bounded(o: Cov[_ <: CharSequence], n: Int): Int = if (n == 0) o.t.length else o.bounded(o, n - 1)
+  // an argument that mentions a quantified variable is taken as `List[_]`
+  @tailrec final def nested(o: Cov[List[X]] forSome { type X }, n: Int): Int = if (n == 0) o.t.length else o.nested(o, n - 1)
 }
 
 class Contra[-T](val t: Any) extends AnyVal {
@@ -45,4 +49,6 @@ object Test extends App {
   println(new Cov(1).f(new Cov(""), 100000))
   println(new Cov(1).bounded(new Cov("abc"), 100000))
   println(new Contra[Int](1).f(new Contra[String](""), 100000))
+  println(v.nested(new V(List("")), 3))
+  println(new Cov(1).nested(new Cov(List("a", "b")), 100000))
 }
