@@ -18,7 +18,7 @@ import scala.PartialFunction.cond
 import scala.annotation.{tailrec, unused}
 import scala.tools.asm, asm.{ClassWriter, Label}
 import scala.tools.nsc.Reporting.WarningCategory
-import scala.tools.nsc.backend.jvm.BCodeHelpers.ScalaSigBytes
+import scala.tools.nsc.backend.jvm.BCodeHelpers.{GenericSignatureErasure, ScalaSigBytes}
 import scala.tools.nsc.backend.jvm.BackendReporting._
 import scala.tools.nsc.reporters.NoReporter
 import scala.util.chaining._
@@ -716,16 +716,28 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
         }
       }
 
-      if (settings.check containsName genBCode.phaseName) {
-        val normalizedTpe = enteringErasure(erasure.prepareSigMap(memberTpe))
+      if (settings.check.containsName(genBCode.phaseName) && !sym.isType && !sym.isConstructor) {
+        // Compare the descriptor with the erasure of the signature as Java sees it, which is what matters
+        // to javac and to core reflection.
         val bytecodeTpe = owner.thisType.memberInfo(sym)
-        if (!sym.isType && !sym.isConstructor && !(erasure.erasure(sym)(normalizedTpe) =:= bytecodeTpe)) {
+        val descriptor =
+          if (sym.isMethod) methodBTypeFromMethodType(bytecodeTpe, isConstructor = false).descriptor
+          else typeToBType(bytecodeTpe).descriptor
+        // The type parameters of the classes and methods that enclose the member, innermost first. These
+        // are the original owners: lambdalift and flatten make local and nested classes owned by others.
+        lazy val enclosingTypeParams: List[Map[String, String]] =
+          Iterator.iterate(owner)(_.originalOwner).takeWhile(o => !o.hasPackageFlag && o != NoSymbol).filter(o => o.isClass || o.isMethod).toList.map { o =>
+            val oSig = erasure.javaSig(o, enteringErasure(o.owner.thisType.memberInfo(o)), enterReferencedClass)
+            oSig.map(s => GenericSignatureErasure.typeParams(s).toMap).getOrElse(Map.empty)
+          }
+        val erasedSig = GenericSignatureErasure.descriptor(sig, sym.isMethod, enclosingTypeParams)
+        if (erasedSig != descriptor) {
           runReporting.warning(sym.pos,
             sm"""|compiler bug: created generic signature for $sym in ${sym.owner.skipPackageObject.fullName} that does not conform to its erasure
                  |signature: $sig
+                 |erased signature: $erasedSig
+                 |descriptor: $descriptor
                  |original type: $memberTpe
-                 |normalized type: $normalizedTpe
-                 |erasure type: $bytecodeTpe
                  |if this is reproducible, please report bug at https://github.com/scala/bug/issues
               """.trim,
             WarningCategory.Other,
@@ -1171,6 +1183,109 @@ object BCodeHelpers {
         idx += 1
       }
       ca
+    }
+  }
+
+  /** The erasure of a generic signature (JVMS 4.7.9.1) as javac and core reflection compute it: type
+   *  arguments are dropped, `.` between the classes of an inner class type becomes `$`, and a type
+   *  variable is replaced by the erasure of its leftmost bound. Used by `-Ycheck:jvm` to compare the
+   *  generic signature of a field or method with its descriptor.
+   */
+  object GenericSignatureErasure {
+    /** The type parameters declared at the start of a class or method signature, with their leftmost
+     *  bound (as a reference type signature).
+     */
+    def typeParams(sig: String): List[(String, String)] = new Reader(sig).typeParams()
+
+    /** The descriptor that `sig` erases to. `enclosing` gives the type parameters (as `typeParams`
+     *  returns them) of the classes and methods that enclose the member, innermost first; it is only
+     *  evaluated if `sig` mentions a type variable that it does not declare.
+     */
+    def descriptor(sig: String, isMethod: Boolean, enclosing: => List[Map[String, String]]): String = {
+      type Scopes = LazyList[Map[String, String]]
+      val r = new Reader(sig)
+      val own = if (isMethod) r.typeParams().toMap else Map.empty[String, String]
+      val scopes: Scopes = own #:: enclosing.to(LazyList)
+      // The bound of a type variable is resolved in the scope that declares the variable, not in the
+      // scope where the variable is used: in `class C[A, B <: A] { def f[A <: String](b: B): A }`
+      // the `A` in the bound of `B` is the class's `A`, not the method's.
+      @tailrec def declaring(name: String, ss: Scopes): Option[(String, Scopes)] =
+        if (ss.isEmpty) None
+        else ss.head.get(name) match {
+          case Some(b) => Some((b, ss))
+          case _       => declaring(name, ss.tail)
+        }
+      def eraseVar(name: String, ss: Scopes, depth: Int): String = declaring(name, ss) match {
+        case Some((b, declScopes)) if depth < 32 => erase(new Reader(b), declScopes, depth + 1)
+        case _                                  => "Ljava/lang/Object;"
+      }
+      def erase(r: Reader, ss: Scopes, depth: Int): String = r.next match {
+        case '[' => r.i += 1; "[" + erase(r, ss, depth)
+        case 'T' => eraseVar(r.typeVariable(), ss, depth)
+        case 'L' => r.classType()
+        case c   => r.i += 1; c.toString // base type or V
+      }
+      if (isMethod) {
+        val sb = new java.lang.StringBuilder("(")
+        r.i += 1 // '('
+        while (r.next != ')') sb.append(erase(r, scopes, 0))
+        r.i += 1
+        sb.append(')').append(erase(r, scopes, 0)).toString // ignores the throws clause
+      } else erase(r, scopes, 0)
+    }
+
+    private final class Reader(sig: String) {
+      var i = 0
+      def next: Char = sig.charAt(i)
+      def typeParams(): List[(String, String)] =
+        if (i >= sig.length || next != '<') Nil
+        else {
+          i += 1
+          val res = List.newBuilder[(String, String)]
+          while (next != '>') {
+            val colon = sig.indexOf(':', i)
+            val name = sig.substring(i, colon)
+            i = colon
+            var leftmost: String = null
+            while (i < sig.length && next == ':') {
+              i += 1
+              if (next == 'L' || next == 'T' || next == '[') {
+                val start = i
+                skipType()
+                if (leftmost == null) leftmost = sig.substring(start, i)
+              }
+            }
+            res += ((name, if (leftmost == null) "Ljava/lang/Object;" else leftmost))
+          }
+          i += 1
+          res.result()
+        }
+      def typeVariable(): String = { // at 'T'
+        val end = sig.indexOf(';', i)
+        val name = sig.substring(i + 1, end)
+        i = end + 1
+        name
+      }
+      def classType(): String = { // at 'L'; returns the erased descriptor
+        val sb = new java.lang.StringBuilder
+        while (next != ';') next match {
+          case '<' => skipTypeArgs()
+          case '.' => sb.append('$'); i += 1
+          case c   => sb.append(c); i += 1
+        }
+        i += 1
+        sb.append(';').toString
+      }
+      private def skipTypeArgs(): Unit = { // at '<'
+        var depth = 0
+        while ({ if (next == '<') depth += 1 else if (next == '>') depth -= 1; i += 1; depth > 0 }) ()
+      }
+      private def skipType(): Unit = next match {
+        case '[' => i += 1; skipType()
+        case 'T' => typeVariable()
+        case 'L' => classType()
+        case _   => i += 1
+      }
     }
   }
 }
