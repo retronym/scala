@@ -539,9 +539,9 @@ trait MatchTreeMaking extends MatchCodeGen with Debugging {
         //  - the isInstanceOf test includes a test for the element type
         //  - Scala's arrays are invariant (so we don't drop type tests unsoundly)
         if (extractorArgTypeTest) mkDefault
-        else expectedTp match {
-          case SingleType(_, sym)                       =>
-            val expected = gen.mkAttributedQualifier(expectedTp) // scala/bug#4577, scala/bug#4897
+        else expectedTp.dealias match { // an alias of a singleton type is tested like the singleton type
+          case expectedSingle @ SingleType(_, sym)      =>
+            val expected = gen.mkAttributedQualifier(expectedSingle) // scala/bug#4577, scala/bug#4897
             if (expectedTp <:< AnyRefTpe) mkEqTest(expected)
             else mkEqualsTest(expected)
           // Should revisit if we end up lifting `eq`'s definition to `Any`, as discussed here:
