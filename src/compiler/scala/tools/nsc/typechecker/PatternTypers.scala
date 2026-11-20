@@ -402,6 +402,10 @@ trait PatternTypers {
         // only look at top-level type, can't (reliably) do anything about unchecked type args (in general)
         // but at least make a proper type before passing it elsewhere
         val pt1 = applyTypeToWildcards(pt.dealiasWiden)
+        // TODO scala/scala review X3: `ClassTag.unapply` tests only the runtime class. When the tag found
+        // here was materialized for a literal or singleton type (`viaTag["lit"]` with `case a: A`), any
+        // String matches and is bound as `a: A` (run/classtag-singleton-pattern); SIP-23 says a literal
+        // type pattern compares with `==`. The materializer could refuse or warn for singleton types.
         if (isCheckable(pt1)) EmptyTree
         else resolveClassTag(pos, pt1) match {
           case tree if unapplyMember(tree.tpe).exists => tree
