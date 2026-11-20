@@ -1716,10 +1716,12 @@ trait Namers extends MethodSynthesis {
       def compute(): AnnotationInfo = enteringTyper {
         if (typing) throw new TypeError(vparam.rhs.pos, s"recursive default argument: annotation parameter ${vparam.name} is needed to type its own default")
         typing = true
-        val ann = typer.typedDefaultArgAnnotation(vparam)
-        sym.removeAttachment[DefaultArgAnnotationCompleter]
-        sym.addAnnotation(ann)
-        ann
+        try {
+          val ann = typer.typedDefaultArgAnnotation(vparam)
+          sym.removeAttachment[DefaultArgAnnotationCompleter]
+          sym.addAnnotation(ann)
+          ann
+        } finally typing = false // the lazy val in the completer retries after an exception
       }
       sym.updateAttachment(new DefaultArgAnnotationCompleter(compute()))
     }
