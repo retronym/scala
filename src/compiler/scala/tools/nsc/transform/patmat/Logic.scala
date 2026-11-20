@@ -873,6 +873,10 @@ trait ScalaLogic extends Interface with Logic with TreeAndTypeAnalysis {
         else {
           val wideTp = widenToClass(tp)
 
+          // TODO scala/scala review Z4: for `val p2: o.type = o`, the `==` test of the pattern `p2` gets the Const of the
+          // `eq` test of `_: o.type`, so after `case _: o.type` the case `p2` is unreachable and never matches a value
+          // that is only `equals` to `o`. A Const of its own for the `==` test loses "eq implies ==", on which
+          // exhaustivity of `case Nil` (a val of type `Nil.type`) relies; the logic needs that implication between values.
           val narrowTp =
             if (tp.isInstanceOf[SingletonType]) tp
             else p match {
