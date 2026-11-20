@@ -395,6 +395,11 @@ abstract class BoxUnbox {
         val insn = it.next()
         if (!knownHandled(insn)) BoxKind.valueCreationKind(insn, prodConsCache) match {
           case Some((boxCreation, boxKind)) =>
+            // TODO scala/scala review O10: when the exploration aborts, the creations it visited are not added to
+            // `knownHandled`, so each creation of the group explores it again. With an escaping consumer the abort comes
+            // after the second creation and this stays linear; with a producer that is not a box creation it comes late,
+            // and a group of N creations visits about 2N^2 creations (19,608 for N = 100). Recording the visited
+            // creations on abort would avoid the repeats; it depends on O1 being settled first.
             allCreationsConsumers(boxCreation, boxKind, prodConsCache) match {
               case Some((allCreations, allConsumers)) =>
                 val (escapingConsumers, boxConsumers) = allConsumers.partition(_.isEscaping)
