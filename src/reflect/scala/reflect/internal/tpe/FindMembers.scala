@@ -102,6 +102,7 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
       var seenFirstNonRefinementClass = false
 
       val findAll = name == nme.ANYname
+      val filterNames = findAll && hasNameFilter
 
       // The number of decls visited, and of potential members among them, for statistics
       var visited, considered = 0
@@ -121,7 +122,7 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
               sym.rawflags & phaseFlagMask
             else
               sym.flags(phaseFlagMask)
-          val meetsRequirements = (flags & required) == required && (!findAll || admitsName(sym.name))
+          val meetsRequirements = (flags & required) == required && (!filterNames || admitsName(sym.name))
           if (meetsRequirements) {
             val excl: Long = flags & excluded
             val isExcluded: Boolean = excl != 0L
@@ -156,6 +157,8 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
       deferredSeen
     }
 
+    /* Does `admitsName` reject any names? */
+    protected def hasNameFilter: Boolean = false
     /* Should members with this name be considered when finding all members? */
     protected def admitsName(name: Name): Boolean = true
 
@@ -233,6 +236,7 @@ final class FindMembers[U <: SymbolTable with Singleton](val self: U) {
     extends FindMemberBase[Scope]() {
     init(tpe0, nme.ANYname, excludedFlags0, requiredFlags0)
 
+    override protected def hasNameFilter: Boolean = nameFilter ne null
     override protected def admitsName(name: Name): Boolean = (nameFilter eq null) || nameFilter(name)
 
     private[this] var _membersScope: Scope   = null
