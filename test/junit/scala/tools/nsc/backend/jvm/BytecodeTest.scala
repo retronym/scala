@@ -1156,6 +1156,31 @@ class BytecodeTest extends BytecodeTesting {
     check("moduleViaScalaPackageAlias", n = true)
   }
 
+  @Test
+  def cooperativeEqualityNumberAndTrait(): Unit = {
+    val code =
+      """trait T
+        |class C {
+        |  def intTrait(o: Ordered[BigInt]) = 1 == o
+        |  def traitInt(o: Ordered[BigInt]) = o == 1
+        |  def charTrait(o: Ordered[BigInt]) = 'a' == o
+        |  def boxedTrait(i: Integer, o: T) = i == o
+        |  def numberIterable(n: Number, o: Iterable[Int]) = n == o
+        |  def stringTrait(s: String, o: Ordered[BigInt]) = s == o
+        |  def classTrait(c: C, o: Ordered[BigInt]) = c == o
+        |}
+        |""".stripMargin
+    val c = compileClasses(code, allowMessage = _ => true).find(_.name == "C").get
+    // A number or character compared with a trait-typed value that could be a ScalaNumber
+    for (m <- List("boxedTrait", "numberIterable"))
+      assertInvoke(getMethod(c, m), "scala/runtime/BoxesRunTime", "equalsNumObject")
+    for (m <- List("intTrait", "traitInt", "charTrait"))
+      assertInvoke(getMethod(c, m), "scala/runtime/BoxesRunTime", "equals")
+    // Neither side is a number, or the other side is a class that cannot be a ScalaNumber
+    for (m <- List("stringTrait", "classTrait"))
+      assertInvoke(getMethod(c, m), "java/util/Objects", "equals")
+  }
+
   @Test def tailCallsThrowAssign(): Unit = {
     val code =
       """class C {

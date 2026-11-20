@@ -1270,6 +1270,9 @@ abstract class RefChecks extends Transform {
       def isMaybeAnyValue(s: Symbol) = isPrimitiveValueClass(unboxedValueClass(s)) || isMaybeValue(s)
       // used to short-circuit unrelatedTypes check if both sides are special
       def isSpecial(s: Symbol) = isMaybeAnyValue(s) || isAnyNumber(s)
+      // A value of a trait type can be a ScalaNumber, so the backend compares it with a number or character
+      // cooperatively: `5 == (BigInt(5): Ordered[BigInt])`
+      def isNumericAndTrait = isNumeric(receiver) && actual.isTrait || isNumeric(actual) && receiver.isTrait
       val nullCount            = onSyms(_.filter(_ == NullClass).size)
       def isNonsenseValueClassCompare = (
            !haveSubclassRelationship
@@ -1340,7 +1343,7 @@ abstract class RefChecks extends Transform {
       }
       else if (isNumeric(receiver)) {
         if (!isNumeric(actual))
-          if (isUnit(actual) || isBoolean(actual) || !isMaybeValue(actual))   // 5 == "abc"
+          if (isUnit(actual) || isBoolean(actual) || !(isMaybeValue(actual) || isNumericAndTrait))   // 5 == "abc"
             nonSensiblyNeq()
       }
       else if (receiver == StringClass) {
@@ -1380,7 +1383,7 @@ abstract class RefChecks extends Transform {
       else if (isWarnable && nullCount == 0 && !(isSpecial(receiver) && isSpecial(actual))) {
         // Warn if types are unrelated, without interesting lub. (Don't bother if we don't know anything about the values we're comparing.)
         def warnIfLubless(): Unit = {
-          if (isMaybeValue(actual) || isMaybeValue(receiver) || haveSubclassRelationship) {} // ignore trivial or related types
+          if (isMaybeValue(actual) || isMaybeValue(receiver) || haveSubclassRelationship || isNumericAndTrait) {} // ignore trivial or related types
           else {
             // better to have lubbed and lost
             // We erase the lub because the erased type is closer to what happens at run time.
