@@ -41,6 +41,6 @@ class Test {
   def tried: Int = try 1 catch { case scala.util.control.NonFatal(e) => e.getMessage.length }
   // existentials in the signature of the method called
   def wild(c: Class[_], xs: List[_ <: AnyRef]): Int = xs.size
-  def callWild: Int = wild(classOf[C], Nil) + java.util.Objects.requireNonNullElse[String]("", "").length
+  def callWild: Int = wild(classOf[C], Nil) + java.util.Objects.requireNonNull[String]("").length
   def comprehension(xs: List[Option[(Int, C)]]) = for (Some((i, Pair(n, _))) <- xs) yield i + n
 }
