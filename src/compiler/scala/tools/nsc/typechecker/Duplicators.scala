@@ -344,6 +344,23 @@ abstract class Duplicators extends AbstractAnalyzer {
           val tree1 = super.typed(ntree, mode, pt)
           // log("plain this typed to: " + tree1)
           tree1
+        // `super[T]` in a body duplicated into a specialized subclass, which extends the specialized
+        // variant of the trait `T` rather than `T` itself: select the variant. Only for a `super` of the class
+        // being duplicated; a `super[T]` in a local class of the body refers to that class's own parents.
+        case Super(qual, mix) if (oldClassOwner ne null) && (qual.symbol == oldClassOwner) && mix.nonEmpty =>
+          val mixClass = tree.tpe match {
+            case SuperType(_, supertpe) => supertpe.typeSymbol
+            case _                      => NoSymbol
+          }
+          val parents = newClassOwner.info.parents.map(_.typeSymbol)
+          val newMix =
+            if (mixClass == NoSymbol || parents.contains(mixClass)) mix
+            else parents.filter(p => p.isNonBottomSubClass(mixClass) && !p.isNonBottomSubClass(oldClassOwner)) match {
+              case variant :: Nil => variant.name.toTypeName
+              case _              => mix
+            }
+          super.typed(atPos(tree.pos)(Super(qual, newMix)), mode, pt)
+
 /* no longer needed, because Super now contains a This(...)
         case Super(qual, mix) if (oldClassOwner ne null) && (tree.symbol == oldClassOwner) =>
           val tree1 = Super(qual, mix)
