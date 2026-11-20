@@ -319,6 +319,26 @@ class BytecodeTest extends BytecodeTesting {
   }
 
   @Test
+  def localSubclassReusesOuterField(): Unit = {
+    // A local or anonymous subclass of an inner class has the same outer instance as its parent,
+    // so it uses the parent's `$outer` field rather than declaring its own.
+    val code =
+      """class O {
+        |  class B
+        |  def f = new B { def g = O.this }
+        |  def h = { class L extends B { def g = O.this }; new L }
+        |  def k(o: O) = new o.B { def g = O.this } // a different outer instance
+        |}
+        |""".stripMargin
+    val cs = compileClasses(code)
+    def fields(name: String) = cs.find(_.name == name).get.fields.asScala.toList.map(_.name)
+    assertEquals(List("$outer"), fields("O$B"))
+    assertEquals(Nil, fields("O$$anon$1"))
+    assertEquals(Nil, fields("O$L$1"))
+    assertEquals(List("$outer"), fields("O$$anon$2"))
+  }
+
+  @Test
   def t11641(): Unit = {
     val code =
       """class B { val b = 0 }
