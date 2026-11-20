@@ -54,7 +54,8 @@ object Test {
       "".asInstanceOf[{ def m(x: Int, y: String): Int }].m(1, "")
       throw new Error()
     } catch {
-      case e: NoSuchMethodException => assert(e.getMessage == "java.lang.String.m(int,java.lang.String)", e.getMessage)
+      // JDK 8 separates the parameter types with ", ", later JDKs with ","
+      case e: NoSuchMethodException => assert(e.getMessage.replace(" ", "") == "java.lang.String.m(int,java.lang.String)", e.getMessage)
     }
   }
 
