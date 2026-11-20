@@ -26,6 +26,17 @@ List()
 CC(List(),null)
 None
 a
+List()
+List()
+List()
+List()
+List()
+List()
+List()
+List()
+List()
+ListBuffer(1)
+a
 a
 3
 x
@@ -35,3 +46,7 @@ CC(a,null)
 CC(1,null)
 1nullx
 1nullx
+a
+a
+a
+a

@@ -3980,7 +3980,14 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   if (targ == WildcardType) tparam.tpeHK else targ)
                 var remainingParams = paramTypes
                 def typedArgToPoly(arg: Tree, formal: Type): Tree = { //TR TODO: cleanup
-                  val lenientPt = formal.instantiateTypeParams(tparams, lenientTargs)
+                  val isDefault = isDefaultGetterOfFun(arg)
+                  // A default getter is typed against the formal with the method's type parameters left open.
+                  // Its type parameters are identified with the method's below; typing it against a prototype
+                  // derived from the expected type would instead let `adapt` instantiate them on its own
+                  // (`Nothing` for a getter of type `T` and the prototype `String`).
+                  val lenientPt =
+                    if (isDefault) formal.instantiateTypeParams(tparams, tparams.map(_ => WildcardType))
+                    else formal.instantiateTypeParams(tparams, lenientTargs)
                   val newmode =
                     if (isByNameParamType(remainingParams.head)) POLYmode
                     else POLYmode | BYVALmode
@@ -3988,7 +3995,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   val arg1 = typedArg(arg, forArgMode(fun, mode), newmode, lenientPt)
                   val argtparams = context.extractUndetparams()
                   if (!argtparams.isEmpty) {
-                    if (isDefaultGetterOfFun(arg1, argtparams)) {
+                    if (isDefault && sameLength(argtparams, tparams)) {
                       // Spec 6.6.1: the default getter takes the type arguments of the method. Instead of
                       // inferring the getter's own type arguments (`Nothing` for a default of type `T`),
                       // identify them with the method's undetermined type parameters, so that the arguments
@@ -4002,12 +4009,18 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                   arg1
                 }
                 // A call to a default getter of the applied method or constructor, inserted by `addDefaults`
-                // without type arguments, whose type parameters correspond to the method's.
-                def isDefaultGetterOfFun(arg: Tree, argtparams: List[Symbol]): Boolean = {
-                  val getter = arg.symbol
+                // without type arguments (and applied to the previous argument lists), whose type parameters
+                // correspond to the method's by position. Not by name: an overriding method that inherits the
+                // default may rename them.
+                def isDefaultGetterOfFun(arg: Tree): Boolean = {
+                  def getterRef(t: Tree): Tree = t match {
+                    case Apply(f, _) => getterRef(f)
+                    case _           => t
+                  }
+                  val getter = getterRef(arg).symbol
                   getter != null && getter.isDefaultGetter && fun.symbol != null &&
                     nme.defaultGetterToMethod(getter.name) == fun.symbol.name &&
-                    argtparams.corresponds(tparams)(_.name == _.name)
+                    sameLength(getter.typeParams, tparams)
                 }
                 val args1 = map2(args, formals)(typedArgToPoly)
                 if (args1.exists(_.isErrorTyped)) duplErrTree
