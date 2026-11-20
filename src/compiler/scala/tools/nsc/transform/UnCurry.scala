@@ -360,6 +360,9 @@ abstract class UnCurry extends InfoTransform
           arg match {
             // don't add a thunk for by-name argument if argument already is an application of
             // a Function0. We can then remove the application and use the existing Function0.
+            // TODO scala/scala review Z16: this evaluates `qual` at the call site, so `never(a.f())` throws an NPE for a
+            // null `a`, and an uninitialized `val f` is captured as null; keeping the elision only for a `qual` that needs
+            // no evaluation (a local or parameter) would fix it, at the cost of a thunk for `a.f()`.
             case Apply(Select(qual, nme.apply), Nil) if canUseDirectly(qual) => qual
             case body =>
               val thunkFun = localTyper.typedPos(body.pos)(Function(Nil, body)).asInstanceOf[Function]
