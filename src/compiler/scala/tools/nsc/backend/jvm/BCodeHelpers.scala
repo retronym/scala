@@ -715,8 +715,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic {
             val oSig = erasure.javaSig(o, enteringErasure(o.owner.thisType.memberInfo(o)), enterReferencedClass)
             oSig.map(s => GenericSignatureErasure.typeParams(s).toMap).getOrElse(Map.empty)
           }
-        def outer(name: String) = enclosingTypeParams.iterator.flatMap(_.get(name)).nextOption()
-        val erasedSig = GenericSignatureErasure.descriptor(sig, sym.isMethod, outer)
+        val erasedSig = GenericSignatureErasure.descriptor(sig, sym.isMethod, enclosingTypeParams)
         if (erasedSig != descriptor) {
           runReporting.warning(sym.pos,
             sm"""|compiler bug: created generic signature for $sym in ${sym.owner.skipPackageObject.fullName} that does not conform to its erasure
@@ -1183,30 +1182,41 @@ object BCodeHelpers {
      */
     def typeParams(sig: String): List[(String, String)] = new Reader(sig).typeParams()
 
-    /** The descriptor that `sig` erases to. `outer` gives the leftmost bound of a type variable that
-     *  `sig` does not declare, or `None` if no enclosing declaration has a type parameter of that name.
+    /** The descriptor that `sig` erases to. `enclosing` gives the type parameters (as `typeParams`
+     *  returns them) of the classes and methods that enclose the member, innermost first; it is only
+     *  evaluated if `sig` mentions a type variable that it does not declare.
      */
-    def descriptor(sig: String, isMethod: Boolean, outer: String => Option[String]): String = {
+    def descriptor(sig: String, isMethod: Boolean, enclosing: => List[Map[String, String]]): String = {
+      type Scopes = LazyList[Map[String, String]]
       val r = new Reader(sig)
       val own = if (isMethod) r.typeParams().toMap else Map.empty[String, String]
-      def bound(name: String): Option[String] = own.get(name).orElse(outer(name))
-      def eraseVar(name: String, depth: Int): String = bound(name) match {
-        case Some(b) if depth < 32 => erase(new Reader(b), depth + 1)
-        case _                    => "Ljava/lang/Object;"
+      val scopes: Scopes = own #:: enclosing.to(LazyList)
+      // The bound of a type variable is resolved in the scope that declares the variable, not in the
+      // scope where the variable is used: in `class C[A, B <: A] { def f[A <: String](b: B): A }`
+      // the `A` in the bound of `B` is the class's `A`, not the method's.
+      @tailrec def declaring(name: String, ss: Scopes): Option[(String, Scopes)] =
+        if (ss.isEmpty) None
+        else ss.head.get(name) match {
+          case Some(b) => Some((b, ss))
+          case _       => declaring(name, ss.tail)
+        }
+      def eraseVar(name: String, ss: Scopes, depth: Int): String = declaring(name, ss) match {
+        case Some((b, declScopes)) if depth < 32 => erase(new Reader(b), declScopes, depth + 1)
+        case _                                  => "Ljava/lang/Object;"
       }
-      def erase(r: Reader, depth: Int): String = r.next match {
-        case '[' => r.i += 1; "[" + erase(r, depth)
-        case 'T' => eraseVar(r.typeVariable(), depth)
+      def erase(r: Reader, ss: Scopes, depth: Int): String = r.next match {
+        case '[' => r.i += 1; "[" + erase(r, ss, depth)
+        case 'T' => eraseVar(r.typeVariable(), ss, depth)
         case 'L' => r.classType()
         case c   => r.i += 1; c.toString // base type or V
       }
       if (isMethod) {
         val sb = new java.lang.StringBuilder("(")
         r.i += 1 // '('
-        while (r.next != ')') sb.append(erase(r, 0))
+        while (r.next != ')') sb.append(erase(r, scopes, 0))
         r.i += 1
-        sb.append(')').append(erase(r, 0)).toString // ignores the throws clause
-      } else erase(r, 0)
+        sb.append(')').append(erase(r, scopes, 0)).toString // ignores the throws clause
+      } else erase(r, scopes, 0)
     }
 
     private final class Reader(sig: String) {
