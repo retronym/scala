@@ -1461,11 +1461,11 @@ abstract class Erasure extends InfoTransform
    * Otherwise, the lambda is expanded to an anonymous class.
    */
   private def lmfOverridesOk(samSym: Symbol): Boolean = {
-    val samParamTypes = exitingErasure(samSym.info.paramTypes)
-    val samResult = exitingErasure(samSym.info.resultType)
+    val samParamTypes = atPostErasure(samSym.info.paramTypes)
+    val samResult = atPostErasure(samSym.info.resultType)
     samSym.allOverriddenSymbols.forall { overridden =>
-      val overriddenParamTypes = exitingErasure(overridden.info.paramTypes)
-      val overriddenResult = exitingErasure(overridden.info.resultType)
+      val overriddenParamTypes = atPostErasure(overridden.info.paramTypes)
+      val overriddenResult = atPostErasure(overridden.info.resultType)
       val (paramsOk, resultOk) = lmfAdaptationOk(samParamTypes, samResult, overriddenParamTypes, overriddenResult)
       paramsOk && resultOk
     }
