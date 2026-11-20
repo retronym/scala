@@ -1308,6 +1308,10 @@ abstract class BCodeBodyBuilder extends BCodeSkelBuilder {
       val receiverBType = classBTypeFromSymbol(receiverClass)
       val receiverName = receiverBType.internalName
 
+      // TODO scala/scala review P3: the name and descriptor are rebuilt at every call site: 46,575 builds for
+      // 8,458 distinct (method, receiver) pairs, 2.15M descriptor chars, compiling the typechecker sources. A
+      // memo keyed on the method symbol would remove the allocation; it must be per run and safe for the backend's
+      // parallel class generation.
       val jname  = method.javaSimpleName.toString
       val bmType = methodBTypeFromSymbol(method)
       val mdescr = bmType.descriptor
