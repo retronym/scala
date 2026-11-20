@@ -254,6 +254,9 @@ final class FileZipArchive(file: JFile, release: Option[String]) extends ZipArch
     try {
       while (entries.hasMoreElements) {
         val zipEntry = entries.nextElement
+        // TODO scala/scala review F9: with -release N, a class that exists only under
+        // META-INF/versions/M (M <= N) is never listed, so it is not found; javac and the JVM see it.
+        // Listing the versioned names with their prefix stripped would fix that.
         if (!zipEntry.getName.startsWith("META-INF/versions/")) {
           if (!zipEntry.isDirectory) {
             val dir = getDir(dirs, zipEntry)
