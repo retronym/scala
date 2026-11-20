@@ -218,7 +218,7 @@ class ZipArchiveTest {
     val z = Files.createTempFile("junit", ".zip").tap { f =>
       Using.resource(new java.util.zip.ZipOutputStream(Files.newOutputStream(f))) { zout =>
         zout.putNextEntry(new java.util.zip.ZipEntry(path))
-        Using.resource(getClass.getClassLoader.getResourceAsStream(path))(_.transferTo(zout))
+        Using.resource(getClass.getClassLoader.getResourceAsStream(path))(in => zout.write(Streamable.bytes(in)))
         zout.closeEntry()
       }
     }
