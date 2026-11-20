@@ -68,8 +68,10 @@ class UncurryTest {
         |  def newArg(s: String): Option[String] = new Some(lock.synchronized { try s catch { case _: NumberFormatException => "" } })
         |}
       """.stripMargin
-    for (release <- List("8", "17")) {
-      val c = newCompiler(extraArgs = s"-release $release -Wconf:cat=deprecation:s").compileClass(code)
+    // Target 9 and later concatenate Strings with `StringConcatFactory`, which the compiler needs on the classpath (JDK 9+).
+    val targets = if (scala.util.Properties.isJavaAtLeast("9")) List("8", "17") else List("8")
+    for (target <- targets) {
+      val c = newCompiler(extraArgs = s"-target:$target -Wconf:cat=deprecation:s").compileClass(code)
       def callsLiftedTree(m: Method) = m.instructions.exists { case i: Invoke => i.name.startsWith("liftedTree") case _ => false }
       for (name <- List("syncStat", "syncExpr", "syncVal", "syncNested", "syncBlock", "syncQual")) {
         val m = getMethod(c, name)
@@ -80,7 +82,7 @@ class UncurryTest {
       }
       for (name <- List("syncArg", "syncOperand", "syncInArg", "assignField", "assignLocal", "assignCaptured",
                         "concatSync", "concatTry", "concatIntRecv", "concatNested", "concatArg", "arrayStore", "newArg"))
-        assertTrue(s"$name -release $release", callsLiftedTree(getMethod(c, name)))
+        assertTrue(s"$name -target:$target", callsLiftedTree(getMethod(c, name)))
     }
   }
 
