@@ -111,6 +111,25 @@ object Test {
     case _         => "no"
   }
 
+  // an alias of `p.type` is tested and bound like `p.type`
+  type IA  = i.type
+  type IAA = IA
+  def alias(x: Any): String = x match {
+    case y: IA => "IA " + (y + 41)
+    case _     => "no"
+  }
+  def aliasTwice(x: Any): String = x match {
+    case y: IAA => "IAA " + (y + 41)
+    case _      => "no"
+  }
+  def boundedAlias[B <: Int](b: B, x: Any): String = {
+    type BA = b.type
+    x match {
+      case y: BA => "BA " + (y + 41)
+      case _     => "no"
+    }
+  }
+
   def show(label: String, f: Any => String, xs: Any*): Unit =
     println(label + xs.map(x => Try(f(x)).fold(_.getClass.getSimpleName, identity)).mkString(": ", ", ", ""))
 
@@ -137,5 +156,8 @@ object Test {
     show("abstractType", abstractType(1, _), 1, 1L, 2, null)
     show("bounded", bounded(1, _), inputs: _*)
     show("boundedTwice", boundedTwice(1, _), inputs: _*)
+    show("alias", alias, inputs: _*)
+    show("aliasTwice", aliasTwice, inputs: _*)
+    show("boundedAlias", boundedAlias(1, _), inputs: _*)
   }
 }
