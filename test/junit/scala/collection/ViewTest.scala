@@ -142,9 +142,9 @@ class ViewTest {
       assertEquals(s"isFlipped=$flip1, then isFlipped=$flip2", xs.filter(keep(even, flip1)).filter(keep(big, flip2)), v.toList)
     }
     // filters of the same polarity are merged into one view
-    assertSame(xs, View.Filter(View.Filter(xs, even, false), big, false).underlying)
-    assertSame(xs, View.Filter(View.Filter(xs, even, true), big, true).underlying)
-    assertEquals(List(1), View.Filter(View.Filter(View.Filter(xs, even, true), big, true), (_: Int) == 5, true).toList)
+    assertSame(xs, View.Filter(View.Filter(xs, even, isFlipped = false), big, isFlipped = false).underlying)
+    assertSame(xs, View.Filter(View.Filter(xs, even, isFlipped = true), big, isFlipped = true).underlying)
+    assertEquals(List(1), View.Filter(View.Filter(View.Filter(xs, even, isFlipped = true), big, isFlipped = true), (_: Int) == 5, isFlipped = true).toList)
   }
 
   @Test
