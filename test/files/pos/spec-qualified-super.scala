@@ -8,3 +8,11 @@ class H[@specialized(Int) T] extends TB[T] with TC[T] {
   override def m(t: T) = super[TC].n(t)
   override def n(t: T) = super[TB].m(t)
 }
+
+// A `super[TB]` in a local class of a duplicated body refers to the local class's own parent `TB`.
+class K[@specialized(Int) T] extends TB[T] {
+  def k(t: T) = {
+    class Loc extends TB[String] { override def m(x: String) = super[TB].m(x) + "!" }
+    new Loc().m(t.toString)
+  }
+}
